@@ -81,10 +81,12 @@ This guide covers common issues and their solutions for The Logbook deployment.
 ## Onboarding Failures
 
 ### Problem: Onboarding fails at first step
+
 **Error:** `Failed to load resource: net::ERR_NAME_NOT_RESOLVED`
 **URL:** `http//10.187.9.2:7880:7881/onboarding/status`
 
 ### Root Cause
+
 Incorrect port mapping in docker-compose.yml - frontend container port mapped to wrong internal port.
 
 ### Solution
@@ -96,9 +98,17 @@ Edit `docker-compose.yml` (or `unraid/docker-compose-unraid.yml` for Unraid):
 ```yaml
 frontend:
   ports:
-    - "${FRONTEND_PORT:-7880}:80"  # NOT :3000
+    - "${FRONTEND_PORT:-7880}:80" # NOT :3000
   healthcheck:
-    test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+    test:
+      [
+        "CMD",
+        "wget",
+        "--quiet",
+        "--tries=1",
+        "--spider",
+        "http://localhost:80/",
+      ]
 ```
 
 **Why:** Nginx listens on port 80, not 3000. The mapping `7880:3000` creates a mismatch.
@@ -134,9 +144,11 @@ curl http://YOUR-IP:7880/api/v1/onboarding/status
 ## Redis Container Unhealthy
 
 ### Problem: Redis container marked as unhealthy, blocking other containers
+
 **Error:** `dependency failed to start: container intranet-redis is unhealthy`
 
 **Redis Logs Show:**
+
 ```
 WARNING Memory overcommit must be enabled!
 Redis is starting...
@@ -144,6 +156,7 @@ Ready to accept connections tcp
 ```
 
 ### Root Cause
+
 The Redis health check command outputs a warning message when using password authentication with the `-a` flag. This warning interferes with the `grep PONG` command, causing Docker to mark the container as unhealthy even though Redis is actually running fine.
 
 ### Solution
@@ -155,7 +168,11 @@ The health check should include `--no-auth-warning` to suppress the warning:
 ```yaml
 redis:
   healthcheck:
-    test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-change_me_in_production} --no-auth-warning ping | grep PONG"]
+    test:
+      [
+        "CMD-SHELL",
+        "redis-cli -a $${REDIS_PASSWORD:-change_me_in_production} --no-auth-warning ping | grep PONG",
+      ]
     interval: 10s
     timeout: 5s
     retries: 5
@@ -183,6 +200,7 @@ docker exec intranet-redis redis-cli -a YOUR_PASSWORD --no-auth-warning ping
 ```
 
 ### Note on Memory Overcommit Warning
+
 The warning about `vm.overcommit_memory` is informational and doesn't prevent Redis from working. To resolve it (optional):
 
 ```bash
@@ -196,9 +214,11 @@ sudo sysctl vm.overcommit_memory=1
 ## Frontend Not Rendering
 
 ### Problem: Blank page, React app doesn't load
+
 **Symptoms:** HTML loads but React doesn't render, 200/304 responses in nginx logs
 
 ### Root Cause
+
 Missing or incorrect frontend `.env` file. Vite needs environment variables at **BUILD TIME**.
 
 ### Solution
@@ -223,6 +243,7 @@ EOF
 ```
 
 **Important:**
+
 - Use `VITE_API_URL=/api/v1` (relative URL) for Docker deployments
 - The nginx proxy in the frontend container routes `/api` requests to the backend
 - **Do NOT use** `http://localhost:3001` - this causes redirect issues
@@ -240,6 +261,7 @@ docker-compose up -d frontend
 **3. Check Browser Console**
 
 Press F12 in browser and look for:
+
 - ❌ "Failed to load module script" → Rebuild needed
 - ❌ "NetworkError" or "Failed to fetch" → Check VITE_API_URL
 - ❌ "CORS policy" blocking → Check backend CORS config
@@ -247,16 +269,19 @@ Press F12 in browser and look for:
 **4. Verify Backend CORS**
 
 Check root `.env` file:
+
 ```bash
 cat .env | grep ALLOWED_ORIGINS
 ```
 
 Should contain:
+
 ```env
 ALLOWED_ORIGINS=["http://YOUR-IP:7880"]
 ```
 
 If not, update and restart backend:
+
 ```bash
 docker-compose restart backend
 ```
@@ -266,9 +291,11 @@ docker-compose restart backend
 ## Malformed API URLs
 
 ### Problem: URLs show `http//` instead of `http://`
+
 **Error:** `http//10.187.9.2:7880:7881/onboarding/status`
 
 ### Root Cause
+
 Frontend was built with wrong `VITE_API_URL`. Vite bakes environment variables into JavaScript at build time - they **cannot** be changed at runtime.
 
 ### Solution
@@ -276,6 +303,7 @@ Frontend was built with wrong `VITE_API_URL`. Vite bakes environment variables i
 **1. Use Correct Docker Compose File**
 
 For Unraid deployments:
+
 ```bash
 # ✅ CORRECT
 docker-compose -f unraid/docker-compose-unraid.yml up -d
@@ -285,9 +313,10 @@ docker-compose up -d
 ```
 
 The Unraid compose file uses build args correctly:
+
 ```yaml
 args:
-  VITE_API_URL: /api/v1  # Build-time argument for relative URLs
+  VITE_API_URL: /api/v1 # Build-time argument for relative URLs
 ```
 
 **2. Remove Old Image**
@@ -307,6 +336,7 @@ docker-compose -f unraid/docker-compose-unraid.yml up -d
 **4. Verify Build Args**
 
 Check what's actually built into the container:
+
 ```bash
 docker exec logbook-frontend sh -c "cat /usr/share/nginx/html/assets/index-*.js" | grep -o "http[^\"']*" | head -5
 ```
@@ -322,12 +352,13 @@ Should show **relative URLs** only (`/api/v1/...`), not absolute URLs.
 const url = import.meta.env.VITE_API_URL;
 
 // After build with VITE_API_URL=/api/v1:
-const url = "/api/v1";  // ✅ Hardcoded into bundle
+const url = "/api/v1"; // ✅ Hardcoded into bundle
 
 // Runtime env vars have NO effect!
 ```
 
 **Docker ARG vs ENV:**
+
 - `ARG`: Used during `docker build` → ✅ Works with Vite
 - `ENV`: Used during `docker run` → ❌ Ignored by Vite
 
@@ -336,9 +367,11 @@ const url = "/api/v1";  // ✅ Hardcoded into bundle
 ## Database Issues
 
 ### Problem: "Table doesn't exist" errors
+
 **Error:** `Table 'the_logbook.onboarding_status' doesn't exist`
 
 ### Root Cause
+
 Database tables haven't been created yet. This happens on fresh installations.
 
 ### Solution
@@ -368,14 +401,17 @@ The MySQL container will automatically run the initial schema from `database/sch
 ---
 
 ### Problem: MySQL healthcheck fails on first start
+
 **Error:** `container intranet-mysql is unhealthy`
 
 ### Root Cause
+
 MySQL first-time initialization takes longer than the healthcheck timeout, especially when running schema files.
 
 ### Solution
 
 The healthcheck has been configured with:
+
 - `start_period: 60s` - Allows MySQL time to initialize
 - `retries: 12` - Total ~3 minute timeout
 
@@ -394,12 +430,15 @@ docker compose up -d
 ---
 
 ### Problem: SQLAlchemy relationship error
+
 **Error:** `Could not determine join condition between parent/child tables on relationship User.roles`
 
 ### Root Cause
+
 The `user_roles` table has two foreign keys to the `users` table (`user_id` and `assigned_by`), causing SQLAlchemy to be unable to determine which to use for the relationship.
 
 ### Solution
+
 This has been fixed in the codebase. Pull the latest changes:
 
 ```bash
@@ -410,12 +449,15 @@ docker compose restart backend
 ---
 
 ### Problem: Greenlet library missing
+
 **Error:** `the greenlet library is required to use this function. No module named 'greenlet'`
 
 ### Root Cause
+
 SQLAlchemy's async operations require the `greenlet` library, which was missing from dependencies.
 
 ### Solution
+
 This has been fixed in the codebase. Pull and rebuild:
 
 ```bash
@@ -427,14 +469,17 @@ docker compose up -d
 ---
 
 ### Problem: "Duplicate key name" error on startup
+
 **Error:** `(1061, "Duplicate key name 'ix_locations_organization_id'")` or `"Duplicate key name 'ix_voting_tokens_token'"`
 
 **Symptom:** Backend crashes immediately with `Application startup failed. Exiting.`
 
 ### Root Cause
+
 SQLAlchemy models had a column with `index=True` AND an explicit `Index()` with the same auto-generated name (`ix_<tablename>_<columnname>`) in `__table_args__`. MySQL rejects the duplicate index name during `create_all()`.
 
 ### Solution
+
 This has been fixed in the codebase. Pull the latest changes:
 
 ```bash
@@ -445,6 +490,7 @@ docker compose up -d
 ```
 
 **If developing new models**, use only one indexing method per column:
+
 ```python
 # Option A: index=True on column (simple)
 col = Column(String(36), index=True)
@@ -459,17 +505,22 @@ __table_args__ = (Index("ix_table_col", "col"),)
 ---
 
 ### Problem: MySQL deprecation warnings in logs
+
 **Warnings:**
+
 - `'default_authentication_plugin' is deprecated`
 - `'mysql_native_password' is deprecated`
 - `innodb_log_file_size and/or innodb_log_files_in_group have been used`
 - `'--skip-host-cache' is deprecated`
 
 ### Root Cause
+
 MySQL 8.0.34+ deprecated several configuration options that were commonly used.
 
 ### Solution
+
 This has been fixed in the codebase. The docker-compose.yml now uses:
+
 - `--innodb_redo_log_capacity` instead of `--innodb_log_file_size`
 - `--host-cache-size=0` instead of `--skip-host-cache`
 - `caching_sha2_password` as the default authentication (MySQL 8.0 native)
@@ -490,12 +541,15 @@ docker compose up -d
 ## Onboarding Module Issues
 
 ### Problem: "Invalid modules" error during onboarding
+
 **Error:** `Invalid modules: members, events, documents`
 
 ### Root Cause
+
 The backend's module validation list was outdated and didn't include all the module IDs used by the frontend.
 
 ### Solution
+
 This has been fixed in the codebase. Pull the latest changes:
 
 ```bash
@@ -504,6 +558,7 @@ docker compose restart backend
 ```
 
 The valid module IDs now include:
+
 - **Essential:** `members`, `events`, `documents`
 - **Operations:** `training`, `inventory`, `scheduling`
 - **Governance:** `elections`, `minutes`, `reports`
@@ -514,15 +569,20 @@ The valid module IDs now include:
 ---
 
 ### Problem: Organization setup fails at Step 1
+
 **Error:** `Invalid ZIP/postal code format` or `Organization name contains invalid characters`
 
 ### Root Cause
+
 The new comprehensive organization setup has strict validation:
+
 - ZIP codes must be 5 digits (12345) or 9 digits with dash (12345-6789)
 - Organization names cannot contain special characters like `<`, `>`, `;`, `--`
 
 ### Solution
+
 Ensure you're entering valid data:
+
 - Use proper US ZIP code format
 - Avoid SQL injection-like characters in organization name
 - All required fields (name, mailing address) must be filled
@@ -530,13 +590,17 @@ Ensure you're entering valid data:
 ---
 
 ### Problem: Database migration conflicts
+
 **Error:** `Target database is not up to date` or `Can't locate revision`
 
 ### Root Cause
+
 Multiple migration files may have conflicting revision IDs or missing parent revisions.
 
 ### Solution
+
 1. Check migration chain:
+
 ```bash
 cd backend/alembic/versions
 grep -E "^(revision|down_revision)" *.py
@@ -547,6 +611,7 @@ grep -E "^(revision|down_revision)" *.py
 3. If conflicts exist, contact support or check for duplicate migration files
 
 4. Run migrations:
+
 ```bash
 docker exec intranet-backend alembic upgrade head
 ```
@@ -554,17 +619,22 @@ docker exec intranet-backend alembic upgrade head
 ---
 
 ### Problem: Organization type or identifier type enum errors
+
 **Error:** `Invalid enum value` for organization_type or identifier_type
 
 ### Root Cause
+
 The database enum types don't match the API values.
 
 ### Solution
+
 Valid values are:
+
 - **organization_type:** `fire_department`, `ems_only`, `fire_ems_combined`
 - **identifier_type:** `fdid`, `state_id`, `department_id`
 
 If database was created before enum migration, run:
+
 ```bash
 docker exec intranet-backend alembic upgrade head
 ```
@@ -572,12 +642,15 @@ docker exec intranet-backend alembic upgrade head
 ---
 
 ### Problem: Module selections not persisting when navigating back
+
 **Symptom:** After selecting modules and clicking Continue, going back shows default selections again.
 
 ### Root Cause
+
 The frontend was using local React state instead of the persistent Zustand store.
 
 ### Solution
+
 This has been fixed in the codebase. Module configurations now persist in localStorage via the Zustand store. Pull the latest changes:
 
 ```bash
@@ -589,12 +662,15 @@ docker compose up -d
 ---
 
 ### Problem: IT Team information not persisting when navigating back (Step 7)
+
 **Symptom:** IT team members, backup email, and phone information disappear when going back.
 
 ### Root Cause
+
 Same issue - using local state instead of persistent store.
 
 ### Solution
+
 Fixed in the codebase. Pull the latest changes:
 
 ```bash
@@ -606,9 +682,11 @@ docker compose up -d
 ---
 
 ### Problem: Need to reset onboarding and start over
+
 **Symptom:** Want to clear all onboarding progress and start fresh.
 
 ### Solution
+
 A "Reset Progress" button is now available on all onboarding pages (top right, opposite the Back button). Clicking it will:
 
 1. Show a confirmation dialog warning about data deletion
@@ -634,12 +712,15 @@ docker exec -it intranet-mysql mysql -u root -p
 ---
 
 ### Problem: Admin user creation "Create Admin" button stays disabled
+
 **Symptom:** All required fields are filled in, password meets all requirements, but the "Create Admin & Complete Setup" button remains grayed out and disabled.
 
 ### Root Cause
+
 The form validation was checking that **all** fields (including the optional Badge Number) had non-empty values using `Object.values(formData).every(...)`. Since Badge Number is optional, leaving it empty caused the form to appear invalid.
 
 ### Solution
+
 This has been fixed in the codebase. The validation now checks only the 6 required fields: username, email, firstName, lastName, password, confirmPassword. Pull the latest changes:
 
 ```bash
@@ -651,12 +732,15 @@ docker compose up -d
 ---
 
 ### Problem: Organization setup "Continue" button shows no loading indicator
+
 **Symptom:** After clicking "Continue" on the Organization Setup page, the button doesn't change appearance or show a spinner during the save operation.
 
 ### Root Cause
+
 The loading state (`isSaving`) was wired to the `useApiRequest` hook, but the actual API call used `useOnboardingSession.saveOrganization()` which tracks its loading state separately. The button checked the wrong variable.
 
 ### Solution
+
 This has been fixed in the codebase. Pull the latest changes:
 
 ```bash
@@ -668,12 +752,15 @@ docker compose up -d
 ---
 
 ### Problem: Security check passes even with default/insecure keys
+
 **Symptom:** Onboarding security verification shows all checks passed, but you never changed the default `SECRET_KEY` or `ENCRYPTION_KEY` in your `.env` file.
 
 ### Root Cause
+
 The onboarding security check was comparing keys against stale default strings (`"change_me_to_random_64_character_string"`) that didn't match the actual defaults in `config.py` (`"INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION"`). This caused the check to silently pass.
 
 ### Solution
+
 This has been fixed in the codebase. The security check now uses substring matching for `"INSECURE_DEFAULT"`, consistent with `config.py`. Pull the latest changes:
 
 ```bash
@@ -682,6 +769,7 @@ docker compose restart backend
 ```
 
 To verify your security configuration after the fix:
+
 ```bash
 curl http://YOUR-IP:7881/api/v1/onboarding/security-check | jq
 ```
@@ -689,12 +777,15 @@ curl http://YOUR-IP:7881/api/v1/onboarding/security-check | jq
 ---
 
 ### Problem: Welcome page shows blank screen for several seconds
+
 **Symptom:** On first visit, the Welcome page (`/`) displays a completely dark/blank screen before any text appears.
 
 ### Root Cause
+
 The title animation had a 3-second delay before appearing, with the body content following at 4 seconds.
 
 ### Solution
+
 This has been fixed in the codebase. The title now appears after 300ms and the body after 800ms — still animated but without the blank-screen wait. Pull the latest changes:
 
 ```bash
@@ -706,12 +797,15 @@ docker compose up -d
 ---
 
 ### Problem: Onboarding returns 403 "Access denied from your location"
+
 **Symptom:** All onboarding API calls fail with a 403 status code and the message "Access denied from your location" / error code `GEO_BLOCKED`.
 
 ### Root Cause
+
 The GeoIP middleware (`IPBlockingMiddleware`) was blocking ALL API requests from countries in the `BLOCKED_COUNTRIES` list — including onboarding endpoints. Since onboarding runs before any configuration exists, there's no way for a blocked user to allowlist their IP or disable geo-blocking.
 
 ### Solution
+
 This has been fixed in the codebase. Onboarding endpoints (`/api/v1/onboarding/*`) are now exempt from GeoIP blocking. Pull the latest changes:
 
 ```bash
@@ -720,12 +814,14 @@ docker compose restart backend
 ```
 
 **If you need to disable GeoIP blocking entirely:**
+
 ```bash
 # In your .env file:
 GEOIP_ENABLED=false
 ```
 
 **If you want to customize blocked countries:**
+
 ```bash
 # In your .env file (comma-separated ISO 3166-1 alpha-2 codes):
 BLOCKED_COUNTRIES=KP,IR,SY,CU
@@ -734,12 +830,15 @@ BLOCKED_COUNTRIES=KP,IR,SY,CU
 ---
 
 ### Problem: Email configuration test hangs indefinitely
+
 **Symptom:** Clicking "Test Connection" on the email configuration page causes the UI to spin forever with no response. The browser may eventually show a timeout or the request stays pending.
 
 ### Root Cause
+
 The email test endpoint (`POST /api/v1/onboarding/test/email`) runs SMTP connection tests in a thread pool without a timeout. If the mail server is unreachable, firewalled, or slow, the connection attempt can hang for minutes (limited only by OS TCP timeout).
 
 ### Solution
+
 This has been fixed in the codebase. Email tests now have a 30-second timeout. If the server doesn't respond within 30 seconds, the user gets a clear timeout message. Pull the latest changes:
 
 ```bash
@@ -752,18 +851,23 @@ docker compose restart backend
 ---
 
 ### Problem: Onboarding reset endpoint accessible without authentication
+
 **Symptom:** Security concern — the `POST /api/v1/onboarding/reset` endpoint could be called by anyone, even without a valid session, potentially wiping all data.
 
 ### Root Cause
+
 The reset endpoint was catching and ignoring session validation errors to handle the case where a session expired during a failed onboarding attempt. However, this also allowed unauthenticated callers to trigger a full data wipe.
 
 ### Solution
+
 This has been fixed in the codebase. The reset endpoint now:
+
 1. Checks if onboarding has been completed — if so, reset is blocked entirely
 2. Only allows reset without a session if onboarding is still in progress (needs_onboarding returns True)
 3. After onboarding is complete, system data can only be managed through the admin panel
 
 Pull the latest changes:
+
 ```bash
 git pull origin main
 docker compose restart backend
@@ -813,14 +917,17 @@ docker-compose up -d
 ## Docker Issues
 
 ### Issue: MySQL image missing
+
 **Error:** `No such image: mysql:8.0`
 
 **Fix:**
+
 ```bash
 docker pull mysql:8.0
 ```
 
 ### Issue: npm not found in container
+
 **Error:** `exec: "npm": executable file not found in $PATH`
 
 **Cause:** Wrong container being used for npm command, or Node.js not installed.
@@ -828,6 +935,7 @@ docker pull mysql:8.0
 **Fix:** Ensure you're running npm commands in the frontend build stage, not the runtime container.
 
 ### Issue: Frontend image pull denied
+
 **Error:** `pull access denied for the-logbook-frontend`
 
 **Cause:** Docker trying to pull from Docker Hub instead of building locally.
@@ -910,11 +1018,13 @@ docker-compose logs -f
 ## Expected Successful State
 
 ### Frontend Logs
+
 ```
 /docker-entrypoint.sh: Configuration complete; ready for start up
 ```
 
 ### Backend Logs
+
 ```
 INFO:     Started server process
 INFO:     Application startup complete.
@@ -922,11 +1032,13 @@ INFO:     Uvicorn running on http://0.0.0.0:3001
 ```
 
 ### Browser
+
 - Welcome page with animated logo loads
 - No errors in console (F12)
 - Click "Begin Setup" to start onboarding
 
 ### API
+
 - `http://YOUR-IP:7881/docs` → FastAPI documentation
 - `http://YOUR-IP:7881/health` → Health status JSON
 
@@ -935,24 +1047,27 @@ INFO:     Uvicorn running on http://0.0.0.0:3001
 ## Security Configuration Issues
 
 ### Problem: Backend fails to start with "SECURITY FAILURE" error
+
 **Error:** `SECURITY FAILURE: Cannot start with insecure default configuration`
 
 ### Root Cause
+
 The backend validates security configuration on startup in production mode. If critical security variables are missing or use default values, the application will refuse to start when `SECURITY_BLOCK_INSECURE_DEFAULTS=true` (the default).
 
 ### Required Security Variables
 
-| Variable | Purpose | How to Generate |
-|----------|---------|-----------------|
-| `SECRET_KEY` | JWT signing key (min 32 chars) | `openssl rand -hex 32` |
-| `ENCRYPTION_KEY` | AES encryption key (32 bytes hex) | `openssl rand -hex 32` |
-| `ENCRYPTION_SALT` | Key derivation salt (unique per installation) | `openssl rand -hex 16` |
-| `DB_PASSWORD` | Database password (not `change_me_in_production`) | `openssl rand -base64 32` |
-| `REDIS_PASSWORD` | Redis password (required in production) | `openssl rand -base64 32` |
+| Variable          | Purpose                                           | How to Generate           |
+| ----------------- | ------------------------------------------------- | ------------------------- |
+| `SECRET_KEY`      | JWT signing key (min 32 chars)                    | `openssl rand -hex 32`    |
+| `ENCRYPTION_KEY`  | AES encryption key (32 bytes hex)                 | `openssl rand -hex 32`    |
+| `ENCRYPTION_SALT` | Key derivation salt (unique per installation)     | `openssl rand -hex 16`    |
+| `DB_PASSWORD`     | Database password (not `change_me_in_production`) | `openssl rand -base64 32` |
+| `REDIS_PASSWORD`  | Redis password (required in production)           | `openssl rand -base64 32` |
 
 ### Solution
 
 **1. Generate all required secrets:**
+
 ```bash
 # Generate and display all secrets at once
 echo "SECRET_KEY=$(openssl rand -hex 32)"
@@ -963,6 +1078,7 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 ```
 
 **2. Add to your `.env` file:**
+
 ```bash
 # Security Keys (REQUIRED - Generate unique values!)
 SECRET_KEY=your_generated_64_char_hex_string
@@ -975,6 +1091,7 @@ REDIS_PASSWORD=your_generated_secure_password
 ```
 
 **3. Restart the backend:**
+
 ```bash
 docker-compose restart backend
 ```
@@ -982,11 +1099,13 @@ docker-compose restart backend
 ### Verifying Security Configuration
 
 Check the backend health endpoint for security status:
+
 ```bash
 curl http://YOUR-IP:7881/health | jq '.checks.security'
 ```
 
 Expected response for a properly configured system:
+
 ```json
 {
   "status": "ok"
@@ -994,6 +1113,7 @@ Expected response for a properly configured system:
 ```
 
 If security issues exist:
+
 ```json
 {
   "status": "issues_detected",
@@ -1005,6 +1125,7 @@ If security issues exist:
 ### Development Mode Override
 
 For local development only, you can disable the security block:
+
 ```bash
 # In .env (NEVER use in production!)
 ENVIRONMENT=development
@@ -1016,17 +1137,21 @@ SECURITY_BLOCK_INSECURE_DEFAULTS=false
 ---
 
 ### Problem: "ENCRYPTION_SALT not set" warning in logs
+
 **Warning:** `SECURITY WARNING: ENCRYPTION_SALT not set. Using derived salt (less secure).`
 
 ### Root Cause
+
 The `ENCRYPTION_SALT` environment variable is missing. While the application will start and derive a salt from other values, this is less secure and not recommended for production.
 
 ### Why ENCRYPTION_SALT Matters
+
 - Used for secure key derivation (PBKDF2) when encrypting sensitive data
 - Each installation should have a unique salt
 - Without it, the derived salt depends on other configuration values which may be predictable
 
 ### Solution
+
 Add `ENCRYPTION_SALT` to your `.env` file:
 
 ```bash
@@ -1038,6 +1163,7 @@ ENCRYPTION_SALT=your_generated_32_char_hex_string
 ```
 
 For Docker Compose, ensure it's passed to the backend:
+
 ```yaml
 # In docker-compose.yml
 backend:
@@ -1048,12 +1174,15 @@ backend:
 ---
 
 ### Problem: Configuration validation shows critical issues but app still runs
+
 **Symptom:** Health check shows `critical_issues: X` but application is running
 
 ### Root Cause
+
 `SECURITY_BLOCK_INSECURE_DEFAULTS` may be set to `false`, or the environment is set to `development`.
 
 ### Solution
+
 1. Set `ENVIRONMENT=production` in `.env`
 2. Ensure `SECURITY_BLOCK_INSECURE_DEFAULTS=true` (or remove it, as true is the default)
 3. Fix all critical security issues listed above
@@ -1062,12 +1191,15 @@ backend:
 ---
 
 ### Problem: 500 error responses show internal exception details
+
 **Symptom:** API 500 errors return raw Python exception messages like `"detail": "Failed to create organization: IntegrityError(...)"`, which reveals database schema, table names, or query structure.
 
 ### Root Cause
+
 Some error handlers were passing `str(e)` directly into the HTTPException `detail` field, leaking internal error information to clients.
 
 ### Solution
+
 This has been fixed in the codebase. Error handlers now log full details internally (via `logger.error()`) and return generic messages to clients: `"Failed to create organization. Please check the server logs for details."` Pull the latest changes:
 
 ```bash
@@ -1076,6 +1208,7 @@ docker compose restart backend
 ```
 
 **If you need to debug a 500 error:** Check the backend container logs instead of the API response:
+
 ```bash
 docker compose logs backend --tail=50
 ```
@@ -1083,12 +1216,15 @@ docker compose logs backend --tail=50
 ---
 
 ### Problem: Temporary passwords visible in application logs
+
 **Symptom:** When creating a new user with `send_welcome_email: true`, the temporary password was previously written to the application log in plaintext.
 
 ### Root Cause
+
 A development-only logging statement (`logger.info(f"Temporary password for {username}: {temp_password}")`) was left in the user creation endpoint.
 
 ### Solution
+
 This has been fixed in the codebase. Temporary passwords are no longer logged. The email service should be used to deliver temporary passwords or password reset links. Pull the latest changes:
 
 ```bash
@@ -1099,12 +1235,15 @@ docker compose restart backend
 ---
 
 ### Problem: Health endpoint reveals database/Redis connection error details
+
 **Symptom:** The `/health` endpoint returns raw exception messages like `"database": "error: (2003, \"Can't connect to MySQL server...\")"`, revealing internal infrastructure details.
 
 ### Root Cause
+
 Exception strings were included directly in the health check response, potentially exposing database hostnames, ports, or connection configuration.
 
 ### Solution
+
 This has been fixed in the codebase. The health endpoint now returns only the status (`"error"`, `"connected"`, `"disconnected"`) without raw exception details. Full errors are logged internally. Pull the latest changes:
 
 ```bash
@@ -1115,12 +1254,15 @@ docker compose restart backend
 ---
 
 ### Problem: Authentication failure logs reveal whether username exists
+
 **Symptom:** Backend logs show different messages for different failure modes: `"user not found"` vs `"invalid password"` vs `"no password set"`. An attacker with log access could enumerate valid usernames.
 
 ### Root Cause
+
 Authentication failure logging used distinct messages for each failure type, which is an information disclosure vulnerability.
 
 ### Solution
+
 This has been fixed in the codebase. All authentication failures now log a uniform message: `"Authentication failed for login attempt"` (pre-login) or `"Authentication failed: invalid credentials"` (wrong password). Account lockout events still log the username for security incident response. Pull the latest changes:
 
 ```bash
@@ -1131,12 +1273,15 @@ docker compose restart backend
 ---
 
 ### Problem: `.env` file accidentally committed to git
+
 **Symptom:** Secrets (database passwords, encryption keys, API keys) are visible in the git repository history.
 
 ### Root Cause
+
 The `.gitignore` file did not include `.env` entries, so `.env` files could be accidentally committed.
 
 ### Solution
+
 `.env` files are now excluded via `.gitignore`. Pull the latest changes:
 
 ```bash
@@ -1144,6 +1289,7 @@ git pull origin main
 ```
 
 If a `.env` file was already committed, remove it from tracking:
+
 ```bash
 git rm --cached .env
 git commit -m "Remove .env from tracking"
@@ -1151,6 +1297,7 @@ git push
 ```
 
 **IMPORTANT:** If secrets were committed, consider them compromised. Rotate all affected secrets immediately:
+
 ```bash
 echo "SECRET_KEY=$(openssl rand -hex 32)"
 echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
@@ -1164,6 +1311,7 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 ## Quick Diagnostic Checklist
 
 ### Security Configuration
+
 - [ ] `SECRET_KEY` is set (min 32 characters, does not contain `INSECURE_DEFAULT`)
 - [ ] `ENCRYPTION_KEY` is set (64 hex characters, does not contain `INSECURE_DEFAULT`)
 - [ ] `ENCRYPTION_SALT` is set (32 hex characters, unique per installation)
@@ -1173,6 +1321,7 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 > **Note**: The onboarding security check uses substring matching — any key containing `"INSECURE_DEFAULT"` is flagged as critical. The factory defaults (`INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION` for SECRET_KEY, `INSECURE_DEFAULT_KEY_CHANGE_ME` for ENCRYPTION_KEY) will both be caught. This matches the validation in `backend/app/core/config.py`.
 
 ### Secret Handling
+
 - [ ] `.env` files are in `.gitignore` (never committed to version control)
 - [ ] No passwords logged in application output (temporary passwords are never logged)
 - [ ] Health endpoint does not expose raw error strings (shows only "error" status)
@@ -1181,6 +1330,7 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 - [ ] Authentication failure logs do not reveal whether username exists or password was wrong
 
 ### Application Configuration
+
 - [ ] Frontend `.env` exists with correct `VITE_API_URL`
 - [ ] Backend `.env` has `ALLOWED_ORIGINS` with frontend URL
 - [ ] Root `.env` has correct `FRONTEND_PORT` and `BACKEND_PORT`
@@ -1197,13 +1347,17 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 ## Authentication & Login Issues
 
 ### Problem: "Invalid credentials" when logging in
+
 **Error:** `Authentication failed: Invalid credentials`
 
 ### Root Cause
+
 The password or email entered doesn't match the database records, or the user account doesn't exist.
 
 ### Solution
+
 1. **Verify user exists:**
+
 ```bash
 docker exec -it intranet-mysql mysql -u root -p
 > USE the_logbook;
@@ -1211,11 +1365,13 @@ docker exec -it intranet-mysql mysql -u root -p
 ```
 
 2. **Check if account is active:**
+
 ```sql
 > SELECT active, failed_login_attempts, locked_until FROM users WHERE email = 'user@example.com';
 ```
 
 3. **Reset password (if needed):**
+
 ```bash
 # Generate a new password hash in Python
 docker exec -it intranet-backend python -c "from passlib.context import CryptContext; pwd = CryptContext(schemes=['bcrypt']); print(pwd.hash('newpassword'))"
@@ -1227,12 +1383,15 @@ docker exec -it intranet-backend python -c "from passlib.context import CryptCon
 ---
 
 ### Problem: Account locked after failed login attempts
+
 **Error:** `Account locked. Try again later.`
 
 ### Root Cause
+
 Too many failed login attempts triggered the account lockout security feature.
 
 ### Solution
+
 ```bash
 docker exec -it intranet-mysql mysql -u root -p
 > USE the_logbook;
@@ -1242,14 +1401,17 @@ docker exec -it intranet-mysql mysql -u root -p
 ---
 
 ### Problem: JWT token errors
+
 **Error:** `Token expired` or `Invalid token signature`
 
 ### Root Cause
+
 - Token has expired (default: 24 hours)
 - JWT secret key changed between token issuance and validation
 - Token was tampered with
 
 ### Solution
+
 1. **Clear browser storage and re-login:**
    - Open browser DevTools (F12)
    - Go to Application → Local Storage
@@ -1257,6 +1419,7 @@ docker exec -it intranet-mysql mysql -u root -p
    - Refresh and login again
 
 2. **Verify JWT secret consistency:**
+
 ```bash
 # Check backend .env
 cat .env | grep JWT_SECRET
@@ -1265,6 +1428,7 @@ cat .env | grep JWT_SECRET
 ```
 
 3. **Check token expiration setting:**
+
 ```bash
 cat .env | grep ACCESS_TOKEN_EXPIRE
 # Default: ACCESS_TOKEN_EXPIRE_MINUTES=1440 (24 hours)
@@ -1275,20 +1439,24 @@ cat .env | grep ACCESS_TOKEN_EXPIRE
 ## Session Management Issues
 
 ### Problem: Session lost after page refresh
+
 **Symptom:** User gets logged out after refreshing the page
 
 ### Root Cause
+
 - LocalStorage or cookies being cleared
 - Frontend not persisting session token correctly
 - Backend session validation failing
 
 ### Solution
+
 1. **Check browser storage:**
    - DevTools (F12) → Application → Local Storage
    - Look for `auth-token` or similar keys
    - Verify token exists after login
 
 2. **Verify session in backend:**
+
 ```bash
 # Check active sessions
 docker exec -it intranet-mysql mysql -u root -p
@@ -1297,6 +1465,7 @@ docker exec -it intranet-mysql mysql -u root -p
 ```
 
 3. **Check for CORS issues:**
+
 ```bash
 # Verify credentials are being sent
 curl -v -X OPTIONS http://YOUR-IP:7881/api/v1/auth/me \
@@ -1308,20 +1477,25 @@ curl -v -X OPTIONS http://YOUR-IP:7881/api/v1/auth/me \
 ---
 
 ### Problem: "Session expired" popup appears unexpectedly
+
 **Symptom:** User gets session expired message while actively using the app
 
 ### Root Cause
+
 - Backend token refresh not working
 - Network issues causing failed token validation
 - Clock skew between frontend and backend
 
 ### Solution
+
 1. **Check backend logs for token errors:**
+
 ```bash
 docker logs intranet-backend 2>&1 | grep -i "token\|session\|auth"
 ```
 
 2. **Verify system time sync:**
+
 ```bash
 # On host
 date
@@ -1330,6 +1504,7 @@ docker exec intranet-backend date
 ```
 
 3. **Check for network timeouts:**
+
 ```bash
 # Increase timeout in frontend if needed
 # Check network tab in DevTools for slow API responses
@@ -1340,13 +1515,17 @@ docker exec intranet-backend date
 ## Role & Permission Issues
 
 ### Problem: "Permission denied" when accessing a feature
+
 **Error:** `You don't have permission to access this resource`
 
 ### Root Cause
+
 User's role doesn't have the required permission for the requested action.
 
 ### Solution
+
 1. **Check user's current roles:**
+
 ```bash
 docker exec -it intranet-mysql mysql -u root -p
 > USE the_logbook;
@@ -1357,6 +1536,7 @@ docker exec -it intranet-mysql mysql -u root -p
 ```
 
 2. **Check role permissions:**
+
 ```sql
 > SELECT rp.permission, rp.access_level
   FROM role_permissions rp
@@ -1365,13 +1545,15 @@ docker exec -it intranet-mysql mysql -u root -p
 ```
 
 3. **Verify permission naming:**
-Valid permission format: `module.action` (e.g., `members.view`, `events.manage`)
+   Valid permission format: `module.action` (e.g., `members.view`, `events.manage`)
 
 Access levels:
+
 - `view` - Read-only access
 - `manage` - Full CRUD operations
 
 4. **Add missing permission to role:**
+
 ```sql
 > INSERT INTO role_permissions (role_id, permission, access_level)
   SELECT id, 'members.view', 'view' FROM roles WHERE slug = 'member';
@@ -1380,16 +1562,20 @@ Access levels:
 ---
 
 ### Problem: Role changes not taking effect
+
 **Symptom:** After changing a user's role, they still have old permissions
 
 ### Root Cause
+
 - Cached permissions in frontend
 - User token contains old role claims
 
 ### Solution
+
 1. **User should log out and log back in** to get a new token with updated roles
 
 2. **Clear frontend cache:**
+
 ```javascript
 // In browser console
 localStorage.clear();
@@ -1398,6 +1584,7 @@ location.reload();
 ```
 
 3. **Verify role assignment in database:**
+
 ```sql
 > SELECT * FROM user_roles WHERE user_id = YOUR_USER_ID;
 ```
@@ -1405,13 +1592,16 @@ location.reload();
 ---
 
 ### Problem: Custom role not appearing in role list
+
 **Symptom:** A newly created role doesn't show up in the UI
 
 ### Root Cause
+
 - Role not marked as active
 - Role not associated with the current organization
 
 ### Solution
+
 ```sql
 > SELECT id, name, slug, active, organization_id FROM roles WHERE name LIKE '%role_name%';
 
@@ -1427,15 +1617,19 @@ location.reload();
 ## Training Module Issues
 
 ### Problem: Training categories not loading
+
 **Symptom:** Category dropdown is empty or shows error
 
 ### Root Cause
+
 - Categories not created for the organization
 - API endpoint returning error
 - Categories marked as inactive
 
 ### Solution
+
 1. **Check if categories exist:**
+
 ```bash
 docker exec -it intranet-mysql mysql -u root -p
 > USE the_logbook;
@@ -1443,18 +1637,21 @@ docker exec -it intranet-mysql mysql -u root -p
 ```
 
 2. **Create initial categories if none exist:**
+
 ```sql
 > INSERT INTO training_categories (id, organization_id, name, code, active, created_at)
   VALUES (UUID(), 'YOUR_ORG_ID', 'Firefighting', 'FF', 1, NOW());
 ```
 
 3. **Check API response:**
+
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
   http://YOUR-IP:7881/api/v1/training/categories
 ```
 
 4. **Verify user has training permissions:**
+
 ```sql
 > SELECT rp.permission FROM role_permissions rp
   JOIN user_roles ur ON ur.role_id = rp.role_id
@@ -1464,15 +1661,19 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 ---
 
 ### Problem: Training requirement due date calculation incorrect
+
 **Symptom:** Due dates show wrong values or don't update after completion
 
 ### Root Cause
+
 - Incorrect `due_date_type` configuration
 - Missing `rolling_period_months` for rolling requirements
 - Incorrect `period_start_month`/`period_start_day` for calendar period
 
 ### Solution
+
 1. **Check requirement configuration:**
+
 ```bash
 docker exec -it intranet-mysql mysql -u root -p
 > USE the_logbook;
@@ -1481,13 +1682,15 @@ docker exec -it intranet-mysql mysql -u root -p
 ```
 
 2. **Verify due date type values:**
-Valid values are:
+   Valid values are:
+
 - `calendar_period` (default) - Due by end of calendar period
 - `rolling` - Due X months from last completion
 - `certification_period` - Due when certification expires
 - `fixed_date` - Due by specific date
 
 3. **For calendar period issues:**
+
 ```sql
 -- Example: Annual requirement due Dec 31
 > UPDATE training_requirements
@@ -1498,6 +1701,7 @@ Valid values are:
 ```
 
 4. **For rolling period issues:**
+
 ```sql
 -- Example: CPR every 2 years (24 months)
 > UPDATE training_requirements
@@ -1509,15 +1713,19 @@ Valid values are:
 ---
 
 ### Problem: Training records not counting toward category-based requirement
+
 **Symptom:** Completed training not showing progress on requirement
 
 ### Root Cause
+
 - Course not assigned to required category
 - Requirement's `category_ids` not configured
 - Training record status not "completed"
 
 ### Solution
+
 1. **Check requirement's category configuration:**
+
 ```bash
 docker exec -it intranet-mysql mysql -u root -p
 > USE the_logbook;
@@ -1525,14 +1733,16 @@ docker exec -it intranet-mysql mysql -u root -p
 ```
 
 2. **Check course's category assignment:**
+
 ```sql
 > SELECT name, category_ids FROM training_courses WHERE id = 'COURSE_ID';
 ```
 
 3. **Verify categories match:**
-The course's `category_ids` must include at least one category from the requirement's `category_ids`.
+   The course's `category_ids` must include at least one category from the requirement's `category_ids`.
 
 4. **Update course categories if needed:**
+
 ```sql
 > UPDATE training_courses
   SET category_ids = '["category-uuid-1", "category-uuid-2"]'
@@ -1540,6 +1750,7 @@ The course's `category_ids` must include at least one category from the requirem
 ```
 
 5. **Verify training record is completed:**
+
 ```sql
 > SELECT status, completion_date FROM training_records
   WHERE user_id = 'USER_ID' AND course_id = 'COURSE_ID';
@@ -1548,21 +1759,26 @@ The course's `category_ids` must include at least one category from the requirem
 ---
 
 ### Problem: Training officer dashboard not showing data
+
 **Symptom:** Dashboard widgets empty or showing loading forever
 
 ### Root Cause
+
 - API endpoints not responding
 - User lacks training officer permissions
 - No training data exists yet
 
 ### Solution
+
 1. **Check API health:**
+
 ```bash
 curl http://YOUR-IP:7881/api/v1/training/requirements
 curl http://YOUR-IP:7881/api/v1/training/records
 ```
 
 2. **Verify training officer role:**
+
 ```sql
 > SELECT r.name, r.slug FROM roles r
   JOIN user_roles ur ON ur.role_id = r.id
@@ -1571,6 +1787,7 @@ curl http://YOUR-IP:7881/api/v1/training/records
 ```
 
 3. **Check for required permissions:**
+
 ```sql
 > SELECT permission, access_level FROM role_permissions
   WHERE role_id IN (SELECT role_id FROM user_roles WHERE user_id = 'YOUR_USER_ID')
@@ -1578,6 +1795,7 @@ curl http://YOUR-IP:7881/api/v1/training/records
 ```
 
 4. **Verify backend logs for errors:**
+
 ```bash
 docker logs intranet-backend 2>&1 | grep -i "training\|error"
 ```
@@ -1585,9 +1803,11 @@ docker logs intranet-backend 2>&1 | grep -i "training\|error"
 ---
 
 ### Problem: Cannot create training category - validation error
+
 **Error:** `Invalid color format` or `Parent category not found`
 
 ### Solution
+
 1. **Color validation:**
    - Color must be a valid hex code: `#RRGGBB`
    - Example: `#FF5733` (valid), `FF5733` (invalid - missing #)
@@ -1606,13 +1826,17 @@ docker logs intranet-backend 2>&1 | grep -i "training\|error"
 ---
 
 ### Problem: Training requirement deletion fails
+
 **Error:** `Cannot delete requirement with active enrollments`
 
 ### Root Cause
+
 The requirement is linked to active program enrollments or has progress records.
 
 ### Solution
+
 1. **Check for linked enrollments:**
+
 ```sql
 > SELECT pe.id, pe.status, u.email
   FROM program_enrollments pe
@@ -1622,12 +1846,14 @@ The requirement is linked to active program enrollments or has progress records.
 ```
 
 2. **Option A: Soft delete (recommended):**
-Instead of deleting, deactivate the requirement:
+   Instead of deleting, deactivate the requirement:
+
 ```sql
 > UPDATE training_requirements SET active = 0 WHERE id = 'REQUIREMENT_ID';
 ```
 
 3. **Option B: Complete or withdraw enrollments first:**
+
 ```sql
 -- Mark enrollments as completed or withdrawn before deleting
 > UPDATE program_enrollments SET status = 'withdrawn'
@@ -1641,21 +1867,26 @@ Instead of deleting, deactivate the requirement:
 ---
 
 ### Problem: Alembic migration fails for training tables
+
 **Error:** `Can't locate revision` or `Table already exists`
 
 ### Solution
+
 1. **Check current migration state:**
+
 ```bash
 docker exec intranet-backend alembic current
 docker exec intranet-backend alembic history
 ```
 
 2. **If training_categories table missing:**
+
 ```bash
 docker exec intranet-backend alembic upgrade head
 ```
 
 3. **If migration conflicts:**
+
 ```bash
 # Check for the specific training migration
 docker exec intranet-backend alembic history | grep training
@@ -1665,6 +1896,7 @@ docker exec intranet-backend alembic stamp 20260205_0100
 ```
 
 4. **Manual table creation (emergency only):**
+
 ```sql
 -- Only use if migration system is broken
 CREATE TABLE training_categories (
@@ -1693,15 +1925,19 @@ CREATE INDEX idx_category_parent ON training_categories(parent_category_id);
 ---
 
 ### Problem: Training hours not accumulating correctly
+
 **Symptom:** Total hours in dashboard don't match expected values
 
 ### Root Cause
+
 - Training records missing `hours_completed` field
 - Records with wrong status (not "completed")
 - Date filtering excluding relevant records
 
 ### Solution
+
 1. **Check training records:**
+
 ```sql
 > SELECT id, course_name, hours_completed, status, completion_date
   FROM training_records
@@ -1710,6 +1946,7 @@ CREATE INDEX idx_category_parent ON training_categories(parent_category_id);
 ```
 
 2. **Verify hours are set:**
+
 ```sql
 -- Records without hours
 > SELECT id, course_name FROM training_records
@@ -1717,6 +1954,7 @@ CREATE INDEX idx_category_parent ON training_categories(parent_category_id);
 ```
 
 3. **Check status values:**
+
 ```sql
 -- Should be 'completed' to count
 > SELECT status, COUNT(*) FROM training_records
@@ -1724,7 +1962,7 @@ CREATE INDEX idx_category_parent ON training_categories(parent_category_id);
 ```
 
 4. **Verify date range:**
-For period-based requirements, ensure records fall within the current period.
+   For period-based requirements, ensure records fall within the current period.
 
 ---
 
@@ -1733,12 +1971,14 @@ For period-based requirements, ensure records fall within the current period.
 ### Testing API Endpoints
 
 **Health Check:**
+
 ```bash
 curl http://YOUR-IP:7881/health
 # Expected: {"status":"healthy","database":"connected",...}
 ```
 
 **Authentication Test:**
+
 ```bash
 # Login and get token
 curl -X POST http://YOUR-IP:7881/api/v1/auth/login \
@@ -1751,6 +1991,7 @@ curl http://YOUR-IP:7881/api/v1/auth/me \
 ```
 
 **Onboarding Status:**
+
 ```bash
 curl http://YOUR-IP:7881/api/v1/onboarding/status
 ```
@@ -1758,15 +1999,19 @@ curl http://YOUR-IP:7881/api/v1/onboarding/status
 ---
 
 ### Problem: API returns 500 Internal Server Error
+
 **Symptom:** API calls fail with generic 500 error
 
 ### Solution
+
 1. **Check backend logs for detailed error:**
+
 ```bash
 docker logs intranet-backend --tail 100 2>&1 | grep -A 5 "ERROR\|Exception\|Traceback"
 ```
 
 2. **Enable debug mode (development only):**
+
 ```bash
 # In backend .env
 DEBUG=true
@@ -1776,6 +2021,7 @@ docker compose restart backend
 ```
 
 3. **Test database connectivity:**
+
 ```bash
 docker exec intranet-backend python -c "
 from app.database import get_db
@@ -1791,13 +2037,17 @@ asyncio.run(test())
 ---
 
 ### Problem: API returns 422 Unprocessable Entity
+
 **Symptom:** POST/PUT requests fail with validation errors
 
 ### Root Cause
+
 Request body doesn't match expected Pydantic schema.
 
 ### Solution
+
 1. **Check API documentation:**
+
 ```bash
 # Open in browser
 http://YOUR-IP:7881/docs  # Swagger UI
@@ -1805,6 +2055,7 @@ http://YOUR-IP:7881/redoc # ReDoc
 ```
 
 2. **Verify request format:**
+
 ```bash
 # Example with verbose output
 curl -v -X POST http://YOUR-IP:7881/api/v1/endpoint \
@@ -1813,21 +2064,25 @@ curl -v -X POST http://YOUR-IP:7881/api/v1/endpoint \
 ```
 
 3. **Check for required fields in error response:**
-The 422 response includes details about which fields failed validation.
+   The 422 response includes details about which fields failed validation.
 
 ---
 
 ### Problem: CORS errors blocking API requests
+
 **Error:** `Access to fetch has been blocked by CORS policy`
 
 ### Solution
+
 1. **Verify ALLOWED_ORIGINS in backend .env:**
+
 ```bash
 cat .env | grep ALLOWED_ORIGINS
 # Should include your frontend URL: ["http://YOUR-IP:7880"]
 ```
 
 2. **Test CORS preflight:**
+
 ```bash
 curl -v -X OPTIONS http://YOUR-IP:7881/api/v1/auth/login \
   -H "Origin: http://YOUR-IP:7880" \
@@ -1835,7 +2090,8 @@ curl -v -X OPTIONS http://YOUR-IP:7881/api/v1/auth/login \
 ```
 
 3. **Check response headers:**
-Should include:
+   Should include:
+
 - `Access-Control-Allow-Origin`
 - `Access-Control-Allow-Methods`
 - `Access-Control-Allow-Headers`
@@ -1844,31 +2100,34 @@ Should include:
 
 ## Common Error Codes Reference
 
-| Code | Meaning | Common Causes | Frontend Error Message | Solution |
-|------|---------|---------------|----------------------|----------|
-| 400 | Bad Request | Malformed JSON, invalid parameters | Server detail or "An unexpected error occurred" | Check request body format |
-| 401 | Unauthorized | Missing/expired token | Server detail or "An unexpected error occurred" | Re-login to get new token |
-| 403 | Forbidden | CSRF validation failed, insufficient permissions | "Security validation failed. Please refresh the page and try again." | Refresh page to get new CSRF token |
-| 404 | Not Found | Resource doesn't exist, wrong URL | Server detail or "An unexpected error occurred" | Verify endpoint path |
-| 409 | Conflict | Duplicate entry, constraint violation | Server detail or "This record already exists. Please check for duplicates." | Check for existing records |
-| 422 | Validation Error | Schema mismatch, invalid field values | Server detail or "Invalid data submitted. Please check your input and try again." | Check API docs for required fields |
-| 429 | Too Many Requests | Rate limit exceeded | "Too many requests. Please wait a moment before trying again." | Wait and retry later |
-| 500 | Server Error | Backend exception | "A server error occurred. Please try again or check the server logs." | Check backend logs |
-| 502 | Bad Gateway | Backend not running | "An unexpected error occurred" | Restart backend container |
-| 503 | Service Unavailable | Database/Redis down, still starting up | "The server is temporarily unavailable. It may still be starting up — please try again shortly." | Check dependency containers |
-| 0 | Network Error | Backend unreachable, DNS failure | "Unable to reach the server. Please verify the backend is running and check your network connection." | Check Docker containers and network |
-| 403 (GEO_BLOCKED) | Geo-Blocked | Request from blocked country | "Access denied from your location" | Onboarding endpoints bypass geo-blocking; for other endpoints, add IP to allowlist or set GEOIP_ENABLED=false |
-| N/A | Email Test Timeout | SMTP server unreachable or firewalled | "Email connection test timed out after 30 seconds." | Check outbound SMTP ports (25, 465, 587) are not blocked |
+| Code              | Meaning             | Common Causes                                    | Frontend Error Message                                                                                | Solution                                                                                                      |
+| ----------------- | ------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 400               | Bad Request         | Malformed JSON, invalid parameters               | Server detail or "An unexpected error occurred"                                                       | Check request body format                                                                                     |
+| 401               | Unauthorized        | Missing/expired token                            | Server detail or "An unexpected error occurred"                                                       | Re-login to get new token                                                                                     |
+| 403               | Forbidden           | CSRF validation failed, insufficient permissions | "Security validation failed. Please refresh the page and try again."                                  | Refresh page to get new CSRF token                                                                            |
+| 404               | Not Found           | Resource doesn't exist, wrong URL                | Server detail or "An unexpected error occurred"                                                       | Verify endpoint path                                                                                          |
+| 409               | Conflict            | Duplicate entry, constraint violation            | Server detail or "This record already exists. Please check for duplicates."                           | Check for existing records                                                                                    |
+| 422               | Validation Error    | Schema mismatch, invalid field values            | Server detail or "Invalid data submitted. Please check your input and try again."                     | Check API docs for required fields                                                                            |
+| 429               | Too Many Requests   | Rate limit exceeded                              | "Too many requests. Please wait a moment before trying again."                                        | Wait and retry later                                                                                          |
+| 500               | Server Error        | Backend exception                                | "A server error occurred. Please try again or check the server logs."                                 | Check backend logs                                                                                            |
+| 502               | Bad Gateway         | Backend not running                              | "An unexpected error occurred"                                                                        | Restart backend container                                                                                     |
+| 503               | Service Unavailable | Database/Redis down, still starting up           | "The server is temporarily unavailable. It may still be starting up — please try again shortly."      | Check dependency containers                                                                                   |
+| 0                 | Network Error       | Backend unreachable, DNS failure                 | "Unable to reach the server. Please verify the backend is running and check your network connection." | Check Docker containers and network                                                                           |
+| 403 (GEO_BLOCKED) | Geo-Blocked         | Request from blocked country                     | "Access denied from your location"                                                                    | Onboarding endpoints bypass geo-blocking; for other endpoints, add IP to allowlist or set GEOIP_ENABLED=false |
+| N/A               | Email Test Timeout  | SMTP server unreachable or firewalled            | "Email connection test timed out after 30 seconds."                                                   | Check outbound SMTP ports (25, 465, 587) are not blocked                                                      |
 
 ---
 
 ## Development Environment Issues
 
 ### Problem: Hot reload not working in development
+
 **Symptom:** Code changes not reflected without manual restart
 
 ### Solution
+
 1. **For backend (Uvicorn):**
+
 ```bash
 # Ensure running with --reload flag
 cd backend
@@ -1876,6 +2135,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
 ```
 
 2. **For frontend (Vite):**
+
 ```bash
 # Ensure running in dev mode
 cd frontend
@@ -1883,6 +2143,7 @@ npm run dev
 ```
 
 3. **Docker volume mounting:**
+
 ```yaml
 # In docker-compose.yml for development
 volumes:
@@ -1893,19 +2154,23 @@ volumes:
 ---
 
 ### Problem: TypeScript errors not showing in IDE
+
 **Symptom:** IDE doesn't show type errors that appear during build
 
 ### Solution
+
 1. **Ensure TypeScript server is running:**
    - VSCode: Cmd/Ctrl + Shift + P → "TypeScript: Restart TS Server"
 
 2. **Check tsconfig.json paths:**
+
 ```bash
 cd frontend
 cat tsconfig.json | grep -A 10 "paths"
 ```
 
 3. **Regenerate node_modules:**
+
 ```bash
 rm -rf node_modules package-lock.json
 npm install
@@ -1914,10 +2179,13 @@ npm install
 ---
 
 ### Problem: Local database different from production schema
+
 **Symptom:** Code works locally but fails in production
 
 ### Solution
+
 1. **Sync migrations:**
+
 ```bash
 # Check current migration state
 docker exec intranet-backend alembic current
@@ -1928,6 +2196,7 @@ docker exec intranet-backend alembic upgrade head
 ```
 
 2. **Compare schemas:**
+
 ```bash
 # Export local schema
 mysqldump -u root -p --no-data the_logbook > local_schema.sql
@@ -1939,9 +2208,11 @@ diff local_schema.sql production_schema.sql
 ---
 
 ### Problem: npm install fails with permission errors
+
 **Error:** `EACCES: permission denied`
 
 ### Solution
+
 ```bash
 # Fix npm cache permissions
 sudo chown -R $(whoami) ~/.npm
@@ -1960,10 +2231,13 @@ nvm use --lts
 ## Performance Issues
 
 ### Problem: Slow API responses
+
 **Symptom:** API calls take several seconds to complete
 
 ### Solution
+
 1. **Check database query performance:**
+
 ```bash
 docker exec -it intranet-mysql mysql -u root -p
 > USE the_logbook;
@@ -1972,6 +2246,7 @@ docker exec -it intranet-mysql mysql -u root -p
 ```
 
 2. **Enable slow query log:**
+
 ```sql
 > SET GLOBAL slow_query_log = 'ON';
 > SET GLOBAL long_query_time = 1;
@@ -1979,11 +2254,13 @@ docker exec -it intranet-mysql mysql -u root -p
 ```
 
 3. **Check Redis performance:**
+
 ```bash
 docker exec intranet-redis redis-cli -a YOUR_PASSWORD --no-auth-warning info stats
 ```
 
 4. **Monitor container resources:**
+
 ```bash
 docker stats intranet-backend intranet-mysql intranet-redis
 ```
@@ -1991,10 +2268,13 @@ docker stats intranet-backend intranet-mysql intranet-redis
 ---
 
 ### Problem: Frontend loads slowly
+
 **Symptom:** Initial page load takes a long time
 
 ### Solution
+
 1. **Check bundle size:**
+
 ```bash
 cd frontend
 npm run build -- --report
@@ -2002,6 +2282,7 @@ npm run build -- --report
 ```
 
 2. **Enable gzip compression in nginx:**
+
 ```nginx
 # In nginx.conf
 gzip on;
@@ -2017,9 +2298,11 @@ gzip_types text/plain application/json application/javascript text/css;
 ## Security & SSL Issues
 
 ### Problem: HTTPS not working or certificate errors
+
 **Error:** `ERR_CERT_AUTHORITY_INVALID` or `NET::ERR_CERT_COMMON_NAME_INVALID`
 
 ### Root Cause
+
 - Self-signed certificate not trusted by browser
 - Certificate doesn't match domain name
 - Certificate expired
@@ -2027,6 +2310,7 @@ gzip_types text/plain application/json application/javascript text/css;
 ### Solution
 
 **For development (self-signed):**
+
 ```bash
 # Generate self-signed certificate
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
@@ -2036,6 +2320,7 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 ```
 
 **For production (Let's Encrypt):**
+
 ```bash
 # Install certbot
 apt-get install certbot
@@ -2047,6 +2332,7 @@ certbot certonly --standalone -d your-domain.com
 ```
 
 **Update nginx configuration:**
+
 ```nginx
 server {
     listen 443 ssl;
@@ -2062,24 +2348,30 @@ server {
 ---
 
 ### Problem: Mixed content warnings
+
 **Error:** `Mixed Content: The page was loaded over HTTPS, but requested an insecure resource`
 
 ### Root Cause
+
 Frontend loaded via HTTPS but making HTTP API requests.
 
 ### Solution
+
 1. **Update frontend .env:**
+
 ```bash
 VITE_API_URL=https://your-domain.com/api/v1
 ```
 
 2. **Rebuild frontend:**
+
 ```bash
 docker-compose build --no-cache frontend
 docker-compose up -d
 ```
 
 3. **Ensure backend CORS allows HTTPS origin:**
+
 ```bash
 # In .env
 ALLOWED_ORIGINS=["https://your-domain.com"]
@@ -2088,9 +2380,11 @@ ALLOWED_ORIGINS=["https://your-domain.com"]
 ---
 
 ### Problem: Security headers missing
+
 **Symptom:** Security scan reports missing headers (CSP, X-Frame-Options, etc.)
 
 ### Solution
+
 Add security headers to nginx configuration:
 
 ```nginx
@@ -2109,6 +2403,7 @@ add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsaf
 ### Creating Database Backups
 
 **Manual backup:**
+
 ```bash
 # Full database backup
 docker exec intranet-mysql mysqldump -u root -p the_logbook > backup_$(date +%Y%m%d_%H%M%S).sql
@@ -2121,6 +2416,7 @@ docker exec intranet-mysql mysqldump -u root -p the_logbook | gzip > backup_$(da
 ```
 
 **Automated backup script:**
+
 ```bash
 #!/bin/bash
 # Save as /opt/scripts/backup-logbook.sh
@@ -2138,6 +2434,7 @@ echo "Backup completed: backup_${DATE}.sql.gz"
 ```
 
 **Schedule with cron:**
+
 ```bash
 # Run daily at 2 AM
 0 2 * * * /opt/scripts/backup-logbook.sh >> /var/log/logbook-backup.log 2>&1
@@ -2148,6 +2445,7 @@ echo "Backup completed: backup_${DATE}.sql.gz"
 ### Restoring from Backup
 
 **Restore full database:**
+
 ```bash
 # Stop the application first
 docker-compose stop backend
@@ -2163,6 +2461,7 @@ docker-compose start backend
 ```
 
 **Restore specific tables:**
+
 ```bash
 # Extract specific table from backup (if you have a full backup)
 grep -A 9999 "CREATE TABLE \`users\`" full_backup.sql | grep -B 9999 -m 1 "^--" > users_only.sql
@@ -2175,9 +2474,11 @@ docker exec -i intranet-mysql mysql -u root -p test_restore < backup.sql
 ---
 
 ### Problem: Backup fails with "Access denied"
+
 **Error:** `mysqldump: Got error: 1045: Access denied for user`
 
 ### Solution
+
 ```bash
 # Check MySQL credentials
 docker exec intranet-mysql mysql -u root -p -e "SELECT 1"
@@ -2192,9 +2493,11 @@ docker exec intranet-mysql mysqldump -u root -p${MYSQL_ROOT_PASSWORD} the_logboo
 ## File Upload Issues
 
 ### Problem: Logo upload fails
+
 **Error:** `File too large` or `Upload failed`
 
 ### Root Cause
+
 - File exceeds size limit
 - Nginx request body size limit
 - Storage directory permissions
@@ -2202,18 +2505,21 @@ docker exec intranet-mysql mysqldump -u root -p${MYSQL_ROOT_PASSWORD} the_logboo
 ### Solution
 
 1. **Check nginx client_max_body_size:**
+
 ```nginx
 # In nginx.conf
 client_max_body_size 10M;  # Adjust as needed
 ```
 
 2. **Check backend upload settings:**
+
 ```bash
 # In backend .env
 MAX_UPLOAD_SIZE=10485760  # 10MB in bytes
 ```
 
 3. **Verify storage directory permissions:**
+
 ```bash
 docker exec intranet-backend ls -la /app/uploads
 # Should be writable by the application user
@@ -2225,9 +2531,11 @@ docker exec intranet-backend chmod 755 /app/uploads
 ---
 
 ### Problem: Uploaded files not displaying
+
 **Symptom:** Files upload successfully but don't appear in the UI
 
 ### Root Cause
+
 - Static file serving not configured
 - Volume not mounted correctly
 - Wrong URL path
@@ -2235,6 +2543,7 @@ docker exec intranet-backend chmod 755 /app/uploads
 ### Solution
 
 1. **Check volume mounting:**
+
 ```yaml
 # In docker-compose.yml
 backend:
@@ -2243,6 +2552,7 @@ backend:
 ```
 
 2. **Verify nginx serves static files:**
+
 ```nginx
 location /uploads/ {
     alias /app/uploads/;
@@ -2252,6 +2562,7 @@ location /uploads/ {
 ```
 
 3. **Check file exists:**
+
 ```bash
 docker exec intranet-backend ls -la /app/uploads/
 ```
@@ -2259,9 +2570,11 @@ docker exec intranet-backend ls -la /app/uploads/
 ---
 
 ### Problem: "Disk quota exceeded" on file upload
+
 **Error:** `OSError: [Errno 28] No space left on device`
 
 ### Solution
+
 ```bash
 # Check disk space
 df -h
@@ -2281,9 +2594,11 @@ du -sh /var/lib/docker/volumes/the-logbook_uploads/
 ## Email & Notification Issues
 
 ### Problem: Emails not being sent
+
 **Symptom:** Password reset emails, notifications not arriving
 
 ### Root Cause
+
 - SMTP not configured
 - SMTP credentials incorrect
 - Email blocked by spam filter
@@ -2291,6 +2606,7 @@ du -sh /var/lib/docker/volumes/the-logbook_uploads/
 ### Solution
 
 1. **Check SMTP configuration in .env:**
+
 ```bash
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
@@ -2301,6 +2617,7 @@ SMTP_TLS=true
 ```
 
 2. **Test SMTP connection:**
+
 ```bash
 docker exec intranet-backend python -c "
 import smtplib
@@ -2322,10 +2639,13 @@ smtp.quit()
 ---
 
 ### Problem: Emails going to spam
+
 **Symptom:** Emails arrive but go to spam folder
 
 ### Solution
+
 1. **Set up SPF record** for your domain:
+
 ```
 v=spf1 include:_spf.google.com ~all
 ```
@@ -2333,6 +2653,7 @@ v=spf1 include:_spf.google.com ~all
 2. **Set up DKIM** (varies by email provider)
 
 3. **Set up DMARC record:**
+
 ```
 v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com
 ```
@@ -2345,9 +2666,11 @@ v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com
 ---
 
 ### Problem: Email queue building up
+
 **Symptom:** Emails delayed or not sent, queue growing
 
 ### Solution
+
 ```bash
 # Check Redis queue (if using Redis for job queue)
 docker exec intranet-redis redis-cli -a YOUR_PASSWORD --no-auth-warning LLEN email_queue
@@ -2364,6 +2687,7 @@ docker-compose restart worker
 ## Quick Commands Cheatsheet
 
 ### Container Management
+
 ```bash
 # View all containers
 docker-compose ps
@@ -2386,6 +2710,7 @@ docker exec -it intranet-mysql /bin/bash
 ```
 
 ### Database Commands
+
 ```bash
 # Connect to MySQL
 docker exec -it intranet-mysql mysql -u root -p the_logbook
@@ -2401,6 +2726,7 @@ docker exec intranet-backend alembic history
 ```
 
 ### Health Checks
+
 ```bash
 # Backend health
 curl http://localhost:7881/health
@@ -2416,6 +2742,7 @@ docker exec intranet-mysql mysqladmin -u root -p ping
 ```
 
 ### Debugging
+
 ```bash
 # Check container resource usage
 docker stats
@@ -2432,6 +2759,7 @@ docker exec intranet-frontend wget -qO- http://backend:3001/health
 ```
 
 ### Cleanup Commands
+
 ```bash
 # Remove stopped containers
 docker container prune
@@ -2447,6 +2775,7 @@ docker system prune -a
 ```
 
 ### Log Analysis
+
 ```bash
 # Search for errors in backend logs
 docker logs intranet-backend 2>&1 | grep -i "error\|exception"
@@ -2481,18 +2810,23 @@ If issues persist after trying these solutions:
 ## Prospective Members Module Issues
 
 ### Problem: Pipeline stages not saving
+
 **Symptom:** Creating or reordering pipeline stages doesn't persist after page refresh.
 
 ### Root Cause
+
 The pipeline builder sends updates to the backend API. If the API call fails silently, changes won't persist.
 
 ### Solution
+
 1. **Check backend logs for errors:**
+
 ```bash
 docker logs intranet-backend 2>&1 | grep -i "pipeline\|stage"
 ```
 
 2. **Verify user permissions:**
+
 ```sql
 SELECT rp.permission FROM role_permissions rp
   JOIN user_roles ur ON ur.role_id = rp.role_id
@@ -2502,6 +2836,7 @@ SELECT rp.permission FROM role_permissions rp
 User needs `prospective_members.manage` permission to modify pipeline stages.
 
 3. **Check API response:**
+
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
   http://YOUR-IP:7881/api/v1/prospective-members/pipelines
@@ -2510,14 +2845,17 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 ---
 
 ### Problem: Inactivity timeout not deactivating applicants
+
 **Symptom:** Applicants remain active despite exceeding the configured inactivity period.
 
 ### Root Cause
+
 - Timeout preset set to "never"
 - Per-stage timeout override extending beyond the pipeline default
 - `last_activity_at` being updated by background processes
 
 ### Solution
+
 1. **Check pipeline inactivity settings:**
    - Navigate to Pipeline Settings page
    - Verify timeout preset is not "never"
@@ -2529,6 +2867,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
    - Background check stages may have intentionally longer timeouts
 
 3. **Verify applicant activity timestamps:**
+
 ```bash
 # Check backend logs for activity updates
 docker logs intranet-backend 2>&1 | grep -i "activity\|inactiv"
@@ -2537,19 +2876,23 @@ docker logs intranet-backend 2>&1 | grep -i "activity\|inactiv"
 ---
 
 ### Problem: Cannot reactivate inactive applicant
+
 **Symptom:** Reactivate button grayed out or returns error.
 
 ### Root Cause
+
 - Missing `prospective_members.manage` permission
 - Applicant has been permanently purged
 - API error during reactivation
 
 ### Solution
+
 1. **Check permissions:** User needs `prospective_members.manage` to reactivate.
 
 2. **Check if applicant was purged:** Purged applicants are permanently deleted. The individual must resubmit an interest form to create a new application.
 
 3. **Check backend logs:**
+
 ```bash
 docker logs intranet-backend 2>&1 | grep -i "reactivat"
 ```
@@ -2557,21 +2900,27 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 ---
 
 ### Problem: Bulk purge deleting wrong applicants
+
 **Symptom:** Purge operation affected applicants that shouldn't have been included.
 
 ### Root Cause
+
 Purge operates on all inactive applicants matching the criteria, or the selected set in bulk mode.
 
 ### Solution
+
 **Prevention (before purging):**
+
 - Always review the inactive applicants list before purging
 - Use the checkbox selection to select specific applicants for purge
 - Read the confirmation modal carefully — it shows the count of applicants to be purged
 - Purge is **permanent and irreversible**
 
 **Recovery:**
+
 - Purged data cannot be recovered from the application
 - If database backups exist, contact your administrator for point-in-time recovery:
+
 ```bash
 # Restore from backup (see Backup & Recovery section)
 docker exec -i intranet-mysql mysql -u root -p the_logbook < backup.sql
@@ -2580,14 +2929,17 @@ docker exec -i intranet-mysql mysql -u root -p the_logbook < backup.sql
 ---
 
 ### Problem: Applicant conversion fails
+
 **Symptom:** Converting an applicant to member (administrative or probationary) returns an error.
 
 ### Root Cause
+
 - Target membership type not configured
 - Backend membership module not available
 - Applicant data incomplete for conversion
 
 ### Solution
+
 1. **Verify membership module is enabled:**
    - Check that the membership module was selected during onboarding
    - API endpoint requires membership module to be active
@@ -2597,6 +2949,7 @@ docker exec -i intranet-mysql mysql -u root -p the_logbook < backup.sql
    - The conversion modal shows which membership type to assign
 
 3. **Check backend logs:**
+
 ```bash
 docker logs intranet-backend 2>&1 | grep -i "convert\|conversion"
 ```
@@ -2604,13 +2957,17 @@ docker logs intranet-backend 2>&1 | grep -i "convert\|conversion"
 ---
 
 ### Problem: Pipeline statistics show unexpected values
+
 **Symptom:** Stats bar shows counts that don't match visible applicants.
 
 ### Root Cause
+
 Statistics are calculated based on specific inclusion rules.
 
 ### Solution
+
 **Understand what's included:**
+
 - **Total Active**: Only applicants with `status = 'active'`
 - **Converted**: Applicants successfully converted to members
 - **Avg Days to Convert**: Average across all converted applicants (excludes active/inactive)
@@ -2625,13 +2982,17 @@ The stats annotation at the bottom of the stats bar explains: "Statistics includ
 ## TypeScript Build Issues
 
 ### Problem: `rank` property not found on User type
+
 **Symptom:** Docker build fails with `Property 'rank' does not exist on type 'User'` in `CreateTrainingSessionPage.tsx`
 
 ### Root Cause
+
 The `User` interface in `types/user.ts` was missing the `rank` field even though the backend model and API schemas include it.
 
 ### Solution
+
 Ensure `rank?: string` is defined in the `User` interface in `frontend/src/types/user.ts`. Pull latest changes and rebuild:
+
 ```bash
 git pull origin main
 docker compose build --no-cache frontend
@@ -2641,24 +3002,31 @@ docker compose up -d
 ---
 
 ### Problem: `BookOpen` not found in MinutesPage
+
 **Symptom:** Docker build fails with `Cannot find name 'BookOpen'` in `MinutesPage.tsx`
 
 ### Root Cause
+
 The `BookOpen` icon was used in the template but not imported from `lucide-react`.
 
 ### Solution
+
 Ensure `BookOpen` is included in the lucide-react import at the top of `MinutesPage.tsx`. Pull latest changes and rebuild.
 
 ---
 
 ### Problem: My Training "Requirements" box shows N/A
+
 **Symptom:** The Requirements stat card on the My Training page shows "N/A" even though training requirements have been created.
 
 ### Root Cause
+
 The backend query for the My Training summary was filtering requirements to `frequency = 'annual'` only. Requirements with other frequencies (biannual, quarterly, monthly, one_time) were excluded from the compliance calculation, resulting in zero applicable requirements and an N/A display.
 
 ### Solution
+
 Pull latest changes which fix the query to include all active requirements regardless of frequency:
+
 ```bash
 git pull origin main
 docker compose build --no-cache backend
@@ -2668,12 +3036,15 @@ docker compose up -d
 ---
 
 ### Problem: Rank, station, or membership number can be changed by any member
+
 **Symptom:** Members can change their own rank, station, or membership number through profile editing
 
 ### Root Cause
+
 The profile update endpoint did not restrict these fields — any authenticated user could modify them via self-profile update.
 
 ### Solution
+
 Pull latest changes. Rank, station, and membership number updates are now restricted to users with `members.manage` permission (leadership, secretary, membership coordinator). Unauthorized attempts return a 403 error, and the corresponding fields are disabled in the UI for regular members.
 
 ---
@@ -2681,15 +3052,19 @@ Pull latest changes. Rank, station, and membership number updates are now restri
 ## Inventory Module Issues
 
 ### Problem: "Duplicate entry" error when creating an item with barcode or asset tag
+
 **Error:** `IntegrityError: Duplicate entry for key 'uq_item_org_barcode'`
 
 ### Root Cause
+
 Another item in the same organization already has that barcode or asset tag. Barcodes and asset tags must be unique within each organization (but different organizations can reuse the same codes).
 
 ### Solution
+
 1. Search for the existing item with the same barcode/asset tag.
 2. Either change the new item's code or update the existing item.
 3. If this error appears after upgrading, run the migration:
+
 ```bash
 docker exec intranet-backend alembic upgrade head
 ```
@@ -2697,12 +3072,15 @@ docker exec intranet-backend alembic upgrade head
 ---
 
 ### Problem: Inventory checkout/return race condition
+
 **Symptom:** Two users simultaneously checking out or returning the same item causes inconsistent state (e.g., item shows "available" but still has an active checkout).
 
 ### Root Cause
+
 Prior to the latest update, inventory operations did not use row-level locking, allowing concurrent modifications to create inconsistent state.
 
 ### Solution
+
 This has been fixed in the codebase. All inventory mutation operations (`update_item`, `unassign_item`, `return_to_pool`, `checkin_item`) now use `SELECT FOR UPDATE` row-level locking. Pull the latest changes:
 
 ```bash
@@ -2713,34 +3091,43 @@ docker compose restart backend
 ---
 
 ### Problem: Batch return fails with "Item is not assigned to the expected user"
+
 **Symptom:** A batch return operation reports this error for one or more items.
 
 ### Root Cause
+
 Between the time the batch return was initiated and when it was processed, the item was concurrently reassigned to a different user. The system now validates the expected assignee to prevent accidental unassignment.
 
 ### Solution
+
 Refresh the page and retry. If the item is now assigned to a different user, that user should return it. This error is a safety feature preventing stale-read races.
 
 ---
 
 ### Problem: Overdue checkouts not showing up
+
 **Symptom:** Items past their expected return date don't appear in the overdue list.
 
 ### Root Cause
+
 The overdue checkout query now computes overdue status at read time using `expected_return_at < now`. It no longer performs a bulk UPDATE on each call.
 
 ### Solution
+
 Items with `expected_return_at` in the past and `is_returned = false` will appear in the overdue list automatically. If you need to bulk-update the `is_overdue` flag (for external reporting or scheduled tasks), use the `mark_overdue_checkouts` method via a scheduled task.
 
 ---
 
 ### Problem: Departure clearance line item returns error "not found"
+
 **Symptom:** Resolving a line item in a departure clearance fails with a "not found" error.
 
 ### Root Cause
+
 The `clearance_id` validation ensures line items can only be resolved within the correct clearance. If the line item belongs to a different clearance, it will not be found.
 
 ### Solution
+
 Verify you are resolving items within the correct clearance record. Navigate to the departure clearance detail page and resolve items from there.
 
 ---
@@ -2748,12 +3135,15 @@ Verify you are resolving items within the correct clearance record. Navigate to 
 ## Events Module Issues
 
 ### Problem: Past events still showing on the main events page
+
 **Symptom:** Events that have already occurred are cluttering the events page.
 
 ### Root Cause
+
 This was the old default behavior. Past events are now hidden from the main events view.
 
 ### Solution
+
 Pull the latest changes. Past events are now hidden by default. Officers and managers see a **Past Events** tab for browsing historical events.
 
 ```bash
@@ -2765,14 +3155,17 @@ docker compose up -d
 ---
 
 ### Problem: Event reminders not being sent
+
 **Symptom:** Members don't receive reminders before events even though reminders are configured.
 
 ### Root Cause
+
 - The event must have a `reminder_schedule` configured (array of minutes-before values).
 - The notification scheduled task must be running.
 - Members must have RSVP'd "Going" or "Maybe".
 
 ### Solution
+
 1. Edit the event and verify reminder times are set.
 2. Check that the notification scheduled task is enabled in **Administration > Scheduled Tasks**.
 3. Verify the member has RSVP'd to the event.
@@ -2782,13 +3175,16 @@ docker compose up -d
 ## Notification Issues
 
 ### Problem: Notifications not appearing in the inbox
+
 **Symptom:** Expected notifications are not visible in the user's notification center.
 
 ### Root Cause
+
 - Notifications may have expired (past their `expires_at` date).
 - The notification may have been cancelled by a netting event (e.g., an assign followed by unassign cancels the original notification).
 
 ### Solution
+
 1. Check the notification logs via the admin panel.
 2. Expired notifications are automatically hidden. This is by design.
 3. Notification netting is intentional — offsetting actions cancel pending notifications to prevent duplicate alerts.
@@ -2798,15 +3194,19 @@ docker compose up -d
 ## Admin Hours Module Issues
 
 ### Problem: QR code clock-in shows "Category not found"
+
 **Fix:** The QR code URL references a deleted or wrong-org category. Regenerate from **Administration > Admin Hours > QR Codes** and reprint.
 
 ### Problem: Clock-out button not appearing
+
 **Fix:** Verify an active session exists on your **My Hours** page. Sessions older than 24 hours may be auto-closed; submit a manual entry instead.
 
 ### Problem: Hours stuck in "pending" with no reviewer
+
 **Fix:** Ensure at least one role has `admin_hours.manage` permission. Check the category's auto-approve threshold.
 
 ### Problem: Manual entry rejected with "Overlapping session"
+
 **Fix:** The time range overlaps with an existing entry on that date. Adjust times to avoid overlap.
 
 ---
@@ -2814,15 +3214,19 @@ docker compose up -d
 ## Scheduling Shift Pattern Issues
 
 ### Problem: Weekly pattern generates shifts on wrong days
+
 **Status (Fixed 2026-02-27):** JS weekday convention (0=Sunday) vs Python convention (0=Monday) mismatch. Backend now converts correctly.
 
 ### Problem: Multiple shifts per day blocked
+
 **Status (Fixed 2026-02-27):** Duplicate guard now checks date + start_time, allowing multiple shift types on the same day.
 
 ### Problem: Dashboard "Upcoming Shifts" is empty
+
 **Status (Fixed 2026-02-27):** Dashboard now uses `getShifts()` to show all org shifts instead of only user-assigned ones.
 
 ### Problem: Shift times show "Invalid Date"
+
 **Status (Fixed 2026-02-27):** `formatTime()` now handles bare time strings from backend.
 
 ---
@@ -2830,12 +3234,15 @@ docker compose up -d
 ## Elections Module Issues (2026-02-27)
 
 ### Problem: Election detail page hangs on loading
+
 **Status (Fixed):** Route param mismatch caused `fetchElection()` to never fire. Pull latest.
 
 ### Problem: Cannot open ballot-item-only elections
+
 **Status (Fixed):** `open_election` now supports elections with only ballot items (no candidates required).
 
 ### Problem: Closing election shows "Election not found"
+
 **Status (Fixed):** Returns descriptive errors for wrong-status elections.
 
 ---
@@ -2843,13 +3250,17 @@ docker compose up -d
 ## Backend Logging & Observability
 
 ### Request Correlation IDs (2026-02-27)
+
 All log entries include a UUID4 correlation ID for tracing requests:
+
 ```bash
 docker-compose logs backend | grep "req_id=<UUID>"
 ```
 
 ### Sentry Not Receiving Errors
+
 Verify `SENTRY_ENABLED=true` and `SENTRY_DSN` is set. Test:
+
 ```bash
 docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_initialized())"
 ```
@@ -2859,9 +3270,11 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Organization Settings Issues
 
 ### Problem: Cannot edit email/storage/auth settings after onboarding
+
 **Status (Fixed 2026-02-27):** These are now in **Administration > Organization Settings** under Email, Storage, and Authentication tabs.
 
 ### Problem: SMTP changes not taking effect
+
 **Fix:** Restart backend after saving: `docker-compose restart backend`.
 
 ---
@@ -2869,9 +3282,11 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Member ID Card Issues (2026-02-28)
 
 ### Problem: QR code not scanning
+
 **Fix:** Increase screen brightness or print the card (`Ctrl+P`). The QR code encodes the member's UUID.
 
 ### Problem: Barcode scanner not finding member
+
 **Fix:** Open the scanner page from the Member ID Card page. Ensure the member's account is active.
 
 ---
@@ -2879,6 +3294,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Dynamic Import / Chunk Load Issues (2026-02-28)
 
 ### Problem: Blank page or "Loading chunk failed" after deployment
+
 **Status (Fixed):** All lazy-loaded pages use `lazyWithRetry()` which retries chunk loads with cache-busting. User workaround: `Ctrl+Shift+R`.
 
 ---
@@ -2886,6 +3302,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Platform Analytics Issues (2026-02-28)
 
 ### Problem: Dashboard shows empty data
+
 **Status (Fixed):** Response schemas now use camelCase serialization. Pull latest changes.
 
 ---
@@ -2893,12 +3310,15 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Skills Testing Updates (2026-02-28)
 
 ### Problem: Completed test times show UTC
+
 **Status (Fixed):** All timestamps display in local timezone. Pull latest.
 
 ### Problem: Non-critical criteria show "FAIL"
+
 **Status (Fixed):** Now displays "Not Completed" for non-critical unchecked criteria.
 
 ### Problem: Cannot delete test record
+
 **Fix:** Requires `training.manage` permission. Contact your training officer.
 
 ---
@@ -2906,10 +3326,12 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Brute-Force & Rate Limiting Issues (2026-02-28)
 
 ### Problem: "Too many attempts" on login page
+
 **Cause:** Client-side and server-side rate limiting. Frontend enforces a cooldown after rapid submissions; backend locks IPs/users after repeated failures.
 **Fix:** Wait for the cooldown timer (30s client-side, 30min server-side lockout). Contact admin if persistent.
 
 ### Problem: Forgot password page shows rate limit error
+
 **Fix:** The forgot-password page also enforces rate limiting. Wait for the displayed countdown timer before retrying.
 
 ---
@@ -2917,9 +3339,11 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Navigation & Module Enablement Issues (2026-02-28)
 
 ### Problem: Disabled modules still appear in navigation
+
 **Status (Fixed):** Both SideNavigation and TopNavigation now dynamically check module enablement settings. Clear browser cache if stale items remain.
 
 ### Problem: TopNavigation missing pages
+
 **Status (Fixed):** TopNavigation synced with SideNavigation. Both show the same pages based on permissions and module settings.
 
 ---
@@ -2927,6 +3351,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Frontend Cache Refresh Issues (2026-02-28)
 
 ### Problem: Users don't see new version after deployment
+
 **Status (Improved):** `useAppUpdate` hook now proactively detects new versions via build timestamps. An `UpdateNotification` bar prompts users to refresh. Fallback: `Ctrl+Shift+R`.
 
 ---
@@ -2934,10 +3359,12 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Scheduling Module Architecture (2026-02-28)
 
 ### Problem: Scheduling API imports broken after refactor
+
 **Cause:** Scheduling API moved from `services/api.ts` to `modules/scheduling/services/api.ts`.
 **Fix:** Update imports to use the new module-scoped service path.
 
 ### Problem: Scheduling state not updating
+
 **Cause:** State moved from component-level to a dedicated Zustand store.
 **Fix:** Use `useSchedulingStore()` hook and ensure store actions (`fetchShifts`, etc.) are called on mount.
 
@@ -2946,10 +3373,12 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Security Alert & Audit Issues (2026-02-28)
 
 ### Problem: Security alerts not persisting
+
 **Cause:** New `security_alerts` database table requires migration.
 **Fix:** `alembic upgrade head` then restart backend.
 
 ### Problem: Audit log integrity check fails after archival
+
 **Fix:** Use the `rehash_chain` API endpoint to rebuild the hash chain after audit archival.
 
 ---
@@ -2957,9 +3386,11 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Accessibility & Theme Issues (2026-02-28)
 
 ### Problem: Poor contrast in dark mode
+
 **Status (Fixed):** Comprehensive accessibility audit fixed contrast across QR pages, forms, onboarding, error boundary, and more.
 
 ### Problem: Mobile layout issues
+
 **Status (Improved):** Responsiveness improved across 17+ pages. Use landscape for tables, ensure zoom is 100%.
 
 ---
@@ -2967,12 +3398,15 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Mobile Member ID Scanner Issues (2026-03-02)
 
 ### Problem: "Scan Member ID" button hidden on mobile
+
 **Status (Fixed):** Mobile toolbar layout updated for proper button accessibility. Clear cache and reload.
 
 ### Problem: Camera not activating for member scan
+
 **Fix:** Grant camera permissions in browser settings. Use Chrome or Safari for BarcodeDetector support.
 
 ### Problem: Scanned member not found
+
 **Fix:** Verify the member has a `membership_number` assigned and the ID card was generated by The Logbook.
 
 ---
@@ -2980,6 +3414,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## API Service Split Issues (2026-03-02)
 
 ### Problem: Import errors — "Cannot find module 'services/api'"
+
 **Cause:** `services/api.ts` (5,330 lines) split into 13 domain files.
 **Fix:** Update imports: `import { eventService } from '@/services/eventServices'` (see CHANGELOG for full mapping). Legacy `services/api.ts` re-exports for backward compatibility.
 
@@ -2988,6 +3423,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## exactOptionalPropertyTypes Issues (2026-03-02)
 
 ### Problem: TypeScript errors about `undefined` not assignable
+
 **Cause:** `exactOptionalPropertyTypes` enabled in `tsconfig.json`.
 **Fix:** Omit properties instead of assigning `undefined`. Run `npm run typecheck` to find all affected locations.
 
@@ -2996,6 +3432,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Route Module Extraction Issues (2026-03-02)
 
 ### Problem: Routes not rendering after update
+
 **Cause:** Inline routes extracted from `App.tsx` into module `routes.tsx` files.
 **Fix:** Check `frontend/src/modules/<module>/routes.tsx`. New modules: action-items, admin, documents, forms, integrations, notifications, settings.
 
@@ -3004,6 +3441,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Python Typing Modernization (2026-03-02)
 
 ### Problem: Backend type errors after updating
+
 **Cause:** `pyupgrade --py313-plus` applied to 56 files. Requires Python 3.10+ (project requires 3.13+).
 
 ---
@@ -3011,9 +3449,11 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## IP Spoofing & Security Middleware (2026-03-02)
 
 ### Problem: IP addresses incorrect in audit logs
+
 **Status (Fixed):** Security middleware hardened — only rightmost untrusted IP from `X-Forwarded-For` used.
 
 ### Problem: Deprecated startup warnings
+
 **Status (Fixed):** `on_event()` handlers replaced with FastAPI lifespan context manager.
 
 ---
@@ -3021,6 +3461,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Module Component Decomposition (2026-03-02)
 
 ### Problem: Custom CSS targeting old component structure broken
+
 **Cause:** Large components decomposed: `AdminHoursManagePage` → 5 tabs, `ApparatusDetailPage` → 7 tabs, `ShiftSettingsPanel` → 6 cards.
 **Fix:** Update CSS selectors. The UI behavior is unchanged — only internal structure changed.
 
@@ -3029,10 +3470,12 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Tailwind CSS v4 Migration (2026-03-03)
 
 ### Problem: Styles broken or different after update
+
 **Cause:** Tailwind CSS upgraded from v3.4 to v4.2. `tailwind.config.js` removed; CSS-first config via `@theme` in `index.css`. 200+ files updated.
 **Fix:** Clear browser cache, hard refresh. Move custom theme to `@theme` block in `index.css`.
 
 ### Problem: `tailwind.config.js` changes not applied
+
 **Cause:** Tailwind v4 no longer reads `tailwind.config.js`. Config is in CSS `@theme` blocks.
 
 ---
@@ -3040,10 +3483,12 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## React 19 Upgrade (2026-03-03)
 
 ### Problem: `ref` prop warnings or `forwardRef` deprecation
+
 **Cause:** React upgraded 18 → 19. `ref` is now a regular prop; `forwardRef` still works but is deprecated.
 **Fix:** Clear `node_modules`, reinstall. Update IDE React plugin.
 
 ### Problem: Tests failing after React 19 upgrade
+
 **Fix:** `rm -rf node_modules package-lock.json && npm install && npm test`
 
 ---
@@ -3051,6 +3496,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## ESLint v9 Flat Config (2026-03-03)
 
 ### Problem: ESLint config not found
+
 **Cause:** Migrated from `.eslintrc.json` to `eslint.config.js` (flat config). Update IDE ESLint plugin.
 
 ---
@@ -3058,6 +3504,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Vitest 4 & Zod 4 (2026-03-03)
 
 ### Problem: Test or schema validation errors after upgrade
+
 **Cause:** Vitest 3 → 4 and Zod 3 → 4 have breaking changes.
 **Fix:** `rm -rf node_modules package-lock.json && npm install`
 
@@ -3066,13 +3513,16 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Forms Module Issues (2026-03-02)
 
 ### Problem: Form builder drag-and-drop broken
+
 **Cause:** Builder upgraded to `@dnd-kit`. Ensure `@dnd-kit/core` and `@dnd-kit/sortable` installed.
 **Fix:** `cd frontend && npm install`
 
 ### Problem: Public form no longer collects name/email automatically
+
 **Cause:** Forced name/email section removed. Now optional per form config. Add explicit fields in form builder.
 
 ### Problem: Integration health dashboard shows no data
+
 **Fix:** Ensure backend is latest version. New endpoints: `GET /forms/{id}/integrations/health`, `POST /forms/{id}/submissions/{sid}/reprocess`.
 
 ---
@@ -3080,9 +3530,11 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Pipeline Stage Reorder & New Types (2026-03-02)
 
 ### Problem: 500 error when reordering pipeline stages
+
 **Status (Fixed):** Race condition in sort order calculation fixed with database-level locking.
 
 ### Problem: New stage types not appearing
+
 **Cause:** New types (`automated_email`, `form_dropdown`, `meeting`) require latest frontend. Pull, rebuild, clear cache.
 
 ---
@@ -3090,6 +3542,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Inventory CSV Import (2026-03-02)
 
 ### Problem: CSV import fails
+
 **Fix:** Download sample template from import page. Required columns: `name`, `category`. Check for duplicate serials.
 
 ---
@@ -3097,6 +3550,7 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Events Settings 422 (2026-03-02)
 
 ### Problem: Events settings page fails to load
+
 **Status (Fixed):** API endpoint refactored to fix validation errors. Pull latest and restart backend.
 
 ---
@@ -3104,9 +3558,11 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Onboarding Auth Cookies (2026-03-04)
 
 ### Problem: Onboarding redirects to /login after system owner creation
+
 **Status (Fixed):** Step 7 endpoint now sets httpOnly auth cookies via `_set_auth_cookies()`. Previously tokens were in response body only — cookies were never set, so `loadUser()` → 401 → session cleared.
 
 ### Edge Case: Steps 8–10 lose auth state
+
 **Cause:** Same root cause — without cookies, each subsequent step's API call fails with 401. Fix resolves the entire chain.
 
 ---
@@ -3114,12 +3570,15 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Docker Frontend Build (2026-03-04)
 
 ### Problem: Frontend Docker build fails with peer dependency conflict
+
 **Status (Fixed):** Dockerfile now uses `npm install --legacy-peer-deps`. Lock file made optional via glob pattern.
 
 ### Problem: Docker build context is 343MB+
+
 **Status (Fixed):** Added `backend/.dockerignore` to exclude test files, venvs, etc.
 
 ### Edge Case: Build succeeds locally but fails in Docker
+
 **Cause:** Local npm uses existing `node_modules` and cached resolution. Docker starts fresh. The `--legacy-peer-deps` flag handles this discrepancy.
 
 ---
@@ -3127,15 +3586,19 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 ## Alembic Migration Graph Walk (2026-03-04)
 
 ### Problem: Alembic fails with duplicate revision or broken chain
+
 **Status (Fixed):** Three issues resolved:
+
 1. Duplicate revision IDs — cleanup script now handles `.stale` file recovery
 2. Type-annotated migration format (`revision: str = "..."`) — regex updated to match both formats
 3. Regex deprecation warnings fixed
 
 ### Problem: SQLAlchemy relationship overlap warnings at startup
+
 **Status (Fixed):** Added missing `back_populates` on `Event.recurrence_children`/`recurrence_parent` and `StorageArea.parent`/`children`.
 
 ### Edge Case: Custom migrations using type-annotated format
+
 If your custom migrations use `revision: str = "..."` format, they are now correctly detected by the cleanup script.
 
 ---
@@ -3143,9 +3606,11 @@ If your custom migrations use `revision: str = "..."` format, they are now corre
 ## WebSocket CSRF (2026-03-04)
 
 ### Problem: Inventory WebSocket connection fails with 500
+
 **Status (Fixed):** `verify_csrf_token` middleware changed from `Request` to `HTTPConnection` parameter type, with early return for WebSocket scope.
 
 ### Edge Case: Custom WebSocket endpoints
+
 If you add custom WebSocket endpoints under the API router, they automatically benefit from this fix. No CSRF token needed for WebSocket connections (already authenticated via JWT).
 
 ---
@@ -3153,18 +3618,23 @@ If you add custom WebSocket endpoints under the API router, they automatically b
 ## Form-to-Pipeline Integration (2026-03-04)
 
 ### Problem: Form submissions not creating prospects
+
 **Status (Fixed):** Label-based field mapping fallback added for all integration types. Server-side validation now catches mapping errors.
 
 ### Problem: Reprocessed submissions don't update prospects
+
 **Status (Fixed):** Reprocessing now re-evaluates pipeline stage assignment.
 
 ### Problem: Cannot delete form linked to pipeline
+
 **Cause:** Deletion protection added for forms linked to active pipelines. Remove pipeline integration first, then delete form.
 
 ### Problem: Duplicate prospect not detected
+
 **Status (Fixed):** Duplicate detection by email with coordinator notification.
 
 ### Edge Case: Field mapping fails silently
+
 If form fields don't match pipeline field expectations, a compatibility check now runs before save and warns about mismatches. Check backend logs for "Field mapping" warnings.
 
 ---
@@ -3172,9 +3642,11 @@ If form fields don't match pipeline field expectations, a compatibility check no
 ## Facility Address Display (2026-03-04)
 
 ### Problem: Facility addresses showing as blank
+
 **Status (Fixed):** Frontend types updated from snake_case to camelCase to match API response (`addressLine1`, `zipCode`, `facilityNumber`).
 
 ### Edge Case: Custom facility integrations
+
 If custom code reads facility API data, update property access to camelCase.
 
 ---
@@ -3182,9 +3654,11 @@ If custom code reads facility API data, update property access to camelCase.
 ## Admin Hours camelCase (2026-03-04)
 
 ### Problem: Admin hours summary categories show undefined
+
 **Status (Fixed):** `AdminHoursSummary.byCategory` type and 3 components updated to camelCase (`categoryId`, `categoryName`, `totalHours`).
 
 ### Edge Case: Other snake_case/camelCase mismatches
+
 Pattern: backend `alias_generator=to_camel` → API returns camelCase → frontend types must match. Check fixed modules: admin hours, facilities, apparatus.
 
 ---
@@ -3192,9 +3666,11 @@ Pattern: backend `alias_generator=to_camel` → API returns camelCase → fronte
 ## Custom Event Categories (2026-03-04)
 
 ### Problem: Custom categories not appearing in event form
+
 **Fix:** Configure categories in Events Settings → Custom Event Categories section. Toggle visibility in Event Type & Category Visibility section.
 
 ### Problem: TS2345 type error in category color (dev only)
+
 **Status (Fixed):** `CategoryColor` union type added to widen `useState` generic.
 
 ---
@@ -3202,9 +3678,11 @@ Pattern: backend `alias_generator=to_camel` → API returns camelCase → fronte
 ## ProspectResponse Metadata (2026-03-04)
 
 ### Problem: Prospect metadata returns complex SQLAlchemy object
+
 **Status (Fixed):** Changed from `alias="metadata"` to `serialization_alias="metadata"` so Pydantic reads `metadata_` attribute (the actual JSON column) instead of `metadata` (SQLAlchemy MetaData object).
 
-### Edge Case: Direct metadata_ access
+### Edge Case: Direct metadata\_ access
+
 Access the JSON column via `prospect.metadata_` in custom queries, not `prospect.metadata`.
 
 ---
@@ -3212,6 +3690,7 @@ Access the JSON column via `prospect.metadata_` in custom queries, not `prospect
 ## Modal Click-Through (2026-03-04)
 
 ### Problem: Modal dialog buttons unresponsive
+
 **Status (Fixed):** Backdrop overlay no longer intercepts click events intended for dialog children.
 
 ---
@@ -3219,9 +3698,11 @@ Access the JSON column via `prospect.metadata_` in custom queries, not `prospect
 ## Theme Variable Compliance (2026-03-04)
 
 ### Problem: Pages display wrong colors in light/high-contrast mode
+
 **Status (Fixed):** EventRequestStatusPage and ApparatusListPage updated from hardcoded colors to theme-aware CSS variables.
 
 ### Edge Case: Custom themes missing variables
+
 Ensure `:root` and `.dark` selectors define all `--theme-*` CSS variables. Missing variables cause transparent backgrounds/borders.
 
 ---
@@ -3229,10 +3710,12 @@ Ensure `:root` and `.dark` selectors define all `--theme-*` CSS variables. Missi
 ## Email Template Enum Drift (2026-03-04)
 
 ### Problem: Email templates 500 error
+
 **Status (Fixed):** Missing `duplicate_application` enum value added to DB. Sync test prevents future drift.
 **Fix:** `docker exec logbook-backend alembic upgrade head`
 
 ### Problem: Email templates missing CC/BCC
+
 **Status (2026-03-04):** CC/BCC fields now available per template. BCC supported for scheduled emails. Run latest migration.
 
 ---
@@ -3350,6 +3833,7 @@ Ensure `:root` and `.dark` selectors define all `--theme-*` CSS variables. Missi
 ---
 
 **Most Common Fix:** 90% of issues are resolved by:
+
 1. Updating `frontend/.env` with correct `VITE_API_URL`
 2. Running `docker-compose build --no-cache frontend`
 3. Running `docker-compose up -d`
