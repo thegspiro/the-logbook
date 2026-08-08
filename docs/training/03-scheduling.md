@@ -171,11 +171,9 @@ Calls logged against a shift contribute to **call-based training requirements** 
 
 > **Note:** Once a shift is **finalized**, the Calls / Runs section becomes read-only — the **+ Log Call**, edit, and delete controls disappear. Log calls before finalizing the shift.
 
-> **Screenshot needed:**
-> _[Screenshot of the Calls / Runs section on the shift detail panel showing the "+ Log Call" button, the count badge, and two logged-call cards — one with an amber "Cancelled en route" badge and one with a blue "Refusal" badge, each showing the incident type, incident number, a dispatched→cleared time range, and edit/delete icons]_
+![Calls and runs logged against a shift](./images/03-08-calls-runs-section.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the inline Log Call form expanded, showing the two-column layout: incident type + incident number on top, dispatched + cleared datetime-local pickers in the middle, the "Cancelled en route" and "Refusal (medical)" checkboxes, a notes textarea, and Cancel/Save buttons]_
+![Inline log call form with incident type and times](./images/03-09-log-call-form.png)
 
 ---
 

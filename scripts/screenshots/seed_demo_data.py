@@ -770,6 +770,61 @@ class Seeder:
             "shifts": shifts,
         }
 
+    # -- scheduling: logged calls ------------------------------------
+
+    def seed_shift_calls(self) -> list[dict]:
+        """Runs logged against past shifts.
+
+        The Calls / Runs panel on a shift reads as "No calls logged for this
+        shift" without these, and the shift-report hour totals are computed from
+        them, so several downstream figures stay at zero too.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=100"), "shifts")
+        past = [
+            s
+            for s in shifts
+            if pick(s, "id")
+            and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+        ]
+        if not past:
+            return []
+
+        existing = items(
+            self.api.get(f"/scheduling/shifts/{pick(past[0], 'id')}/calls"), "calls"
+        )
+        if existing:
+            return existing
+
+        runs = [
+            ("Structure Fire", "Working fire, second alarm struck.", 3),
+            ("EMS — Chest Pain", "ALS transport to Oakville General.", 1),
+            ("Motor Vehicle Collision", "Two vehicles, one extrication.", 2),
+            ("Automatic Fire Alarm", "Burnt food, no incident.", 1),
+            ("Odor Investigation", "Natural gas odor, utility notified.", 1),
+        ]
+        created = []
+        for index, shift in enumerate(past[:5]):
+            incident_type, notes, hours = runs[index % len(runs)]
+            dispatched = datetime.combine(
+                date.fromisoformat(str(pick(shift, "shift_date", "shiftDate"))),
+                time(hour=9 + index),
+                tzinfo=ORG_TIMEZONE,
+            ).astimezone(timezone.utc)
+            created.append(
+                self.api.post(
+                    f"/scheduling/shifts/{pick(shift, 'id')}/calls",
+                    {
+                        "incident_number": f"2026-{1200 + index:04d}",
+                        "incident_type": incident_type,
+                        "dispatched_at": iso(dispatched),
+                        "on_scene_at": iso(dispatched + timedelta(minutes=6)),
+                        "cleared_at": iso(dispatched + timedelta(hours=hours)),
+                        "notes": notes,
+                    },
+                )
+            )
+        return created
+
     # -- training ----------------------------------------------------
 
     def seed_training(self) -> dict[str, list[dict]]:
@@ -2761,6 +2816,7 @@ class Seeder:
             "scheduling",
             lambda: self.seed_scheduling(stations, apparatus, members),
         )
+        self.step("shift calls", self.seed_shift_calls)
         training = self.step("training", self.seed_training) or {}
         self.step(
             "training records",

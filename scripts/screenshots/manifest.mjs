@@ -114,7 +114,7 @@ export const isUpcoming = (event) => {
  * openFirstFromApi: the id is minted per seed, so it has to be discovered at
  * capture time.
  */
-export function withQueryFromApi(apiPath, listKey, paramsFor) {
+export function withQueryFromApi(apiPath, listKey, paramsFor, match) {
   return async (page) => {
     const records = await page.evaluate(
       async ([path, key]) => {
@@ -129,16 +129,25 @@ export function withQueryFromApi(apiPath, listKey, paramsFor) {
       },
       [apiPath, listKey ?? ""],
     );
-    if (!records.length) {
-      throw new Error(`withQueryFromApi: ${apiPath} returned no records`);
+    const chosen = match ? records.find(match) : records[0];
+    if (!chosen) {
+      throw new Error(
+        `withQueryFromApi: ${apiPath} returned no ${match ? "matching " : ""}records`,
+      );
     }
     const url = new URL(page.url());
-    for (const [key, value] of Object.entries(paramsFor(records[0]))) {
+    for (const [key, value] of Object.entries(paramsFor(chosen))) {
       if (value != null) url.searchParams.set(key, String(value));
     }
     await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
   };
 }
+
+/** True for a shift whose date has passed — where the logged runs are. */
+export const isPastShift = (shift) => {
+  const day = shift.shift_date ?? shift.shiftDate ?? "";
+  return day && day < new Date().toISOString().slice(0, 10);
+};
 
 export const SHOTS = [
   // ── 00 Getting Started ──────────────────────────────────────────────
@@ -1676,6 +1685,40 @@ export const SHOTS = [
         shift: shift.id,
       }),
     ),
+    fullPage: true,
+  },
+  {
+    id: "03-08-calls-runs-section",
+    doc: "03-scheduling.md",
+    line: 174,
+    anchor: "Screenshot of the Calls / Runs section on the shift detail panel",
+    alt: "Calls and runs logged against a shift",
+    route: "/scheduling",
+    prepare: withQueryFromApi(
+      "/scheduling/shifts?limit=100",
+      "shifts",
+      (shift) => ({ shift: shift.id }),
+      isPastShift,
+    ),
+    fullPage: true,
+  },
+  {
+    id: "03-09-log-call-form",
+    doc: "03-scheduling.md",
+    line: 177,
+    anchor:
+      "Screenshot of the inline Log Call form expanded, showing the two-column layout:",
+    alt: "Inline log call form with incident type and times",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await withQueryFromApi(
+        "/scheduling/shifts?limit=100",
+        "shifts",
+        (shift) => ({ shift: shift.id }),
+        isPastShift,
+      )(page);
+      await clickByName(/log call/i)(page);
+    },
     fullPage: true,
   },
 ];
