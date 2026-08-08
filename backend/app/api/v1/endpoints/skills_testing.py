@@ -69,6 +69,12 @@ from app.services.skills_testing_service import (
 
 router = APIRouter()
 
+# Candidate lookup is a search, never a listing — see search_candidates. The
+# floor stops a one-character fragment from matching most of the roster; the cap
+# bounds what any single search can return.
+CANDIDATE_SEARCH_MIN_CHARS = 2
+CANDIDATE_SEARCH_MAX_RESULTS = 15
+
 
 # ============================================
 # Skill Templates
@@ -653,30 +659,73 @@ async def duplicate_template(
 
 
 @router.get("/candidates", response_model=list[SkillTestCandidateResponse])
-async def list_candidates(
+async def search_candidates(
+    q: str = Query(
+        ...,
+        min_length=CANDIDATE_SEARCH_MIN_CHARS,
+        max_length=100,
+        description="Name fragment to match; required",
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("training.view", "training.manage")
+    ),
 ):
     """
-    Active members of the caller's organization, as candidate options.
+    Look up a member by name to test them.
 
-    Examining is open to every member, so every member needs to be able to name
-    the person they are testing — and ``GET /users`` requires ``users.view``,
-    which the baseline member position does not carry. Rather than widen that
-    permission (it opens the full member admin payload, contact details
-    included), this returns the minimum the picker needs: id and display name,
-    inside the caller's own organization.
+    Examining is open to every member, so every member needs to name the person
+    they are testing — and ``GET /users`` requires ``users.view``, which the
+    baseline member position does not carry. Widening that permission was the
+    wrong trade: it opens the full member admin payload, contact details
+    included.
+
+    Deliberately a *lookup*, not a listing. ``q`` is required, so there is no
+    request that returns the roster: a caller can confirm a name they already
+    know, which is what the picker needs, but cannot enumerate the department.
+    The result cap holds even for a broad fragment, so a caller cannot widen a
+    match into a bulk export by searching for a single common letter — and
+    because the cap truncates silently, a short fragment is a worse way to
+    harvest names than it looks.
+
+    Matching is on the full display name rather than the two columns
+    separately, so "john s" finds John Smith; a first-name-only or
+    surname-only search still matches because the fragment can sit anywhere.
 
     **Authentication required**
+    **Requires permission: training.view or training.manage**
     """
+    fragment = q.strip()
+    if len(fragment) < CANDIDATE_SEARCH_MIN_CHARS:
+        # A query of only whitespace passes min_length but would match the whole
+        # roster through the LIKE below.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"Search for at least {CANDIDATE_SEARCH_MIN_CHARS} characters "
+                "of the member's name"
+            ),
+        )
+
+    # Escape the LIKE wildcards a member could otherwise type: a bare "%" would
+    # match every row, turning the search-only rule back into a full listing.
+    escaped = fragment.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"%{escaped}%"
+
+    full_name = func.concat(
+        func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, "")
+    )
+
     rows = await db.execute(
         select(User)
         .where(
             User.organization_id == current_user.organization_id,
             User.status == UserStatus.ACTIVE,
             User.deleted_at.is_(None),
+            full_name.like(pattern, escape="\\"),
         )
         .order_by(User.last_name, User.first_name)
+        .limit(CANDIDATE_SEARCH_MAX_RESULTS)
     )
 
     return [
