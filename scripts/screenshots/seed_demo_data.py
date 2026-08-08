@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -35,6 +36,12 @@ DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 
 # Screenshots must not look stale, so dated records are generated relative to
 # the run date rather than hard-coded.
+# An RSVP the app refuses because the window has closed is the rule working, not
+# a seeding error — matched on the message because the status code is a plain 400.
+RSVP_CLOSED = re.compile(
+    r"deadline has passed|already ended|no longer accepting", re.IGNORECASE
+)
+
 TODAY = date.today()
 NOW = datetime.now(timezone.utc)
 
@@ -518,6 +525,14 @@ class Seeder:
         existing = items(self.api.get("/events?limit=100"), "events")
         titles = {e.get("title") for e in existing}
         planned = [
+            # Negative offsets are deliberate: attendance reports, the check-in
+            # monitor and the analytics charts all read events that have already
+            # happened, and a calendar of nothing but future dates leaves them
+            # empty. The in-progress drill is what the check-in monitor pictures.
+            ("Winter Drill Series", "training", -21, 3),
+            ("Quarterly Business Meeting", "business_meeting", -14, 2),
+            ("Hose Testing Day", "training", -7, 4),
+            ("Company Drill — In Progress", "training", 0, 4),
             ("Monthly Business Meeting", "business_meeting", 3, 2),
             ("Q3 Ladder Operations Drill", "training", 6, 3),
             ("Pump Operations Refresher", "training", 10, 2),
@@ -530,9 +545,14 @@ class Seeder:
         for title, event_type, days_out, hours in planned:
             if title in titles:
                 continue
-            start = (NOW + timedelta(days=days_out)).replace(
-                hour=19, minute=0, second=0, microsecond=0
-            )
+            if days_out == 0:
+                start = (NOW - timedelta(hours=2)).replace(
+                    minute=0, second=0, microsecond=0
+                )
+            else:
+                start = (NOW + timedelta(days=days_out)).replace(
+                    hour=19, minute=0, second=0, microsecond=0
+                )
             created.append(
                 self.api.post(
                     "/events",
@@ -544,7 +564,11 @@ class Seeder:
                         "start_datetime": iso(start),
                         "end_datetime": iso(start + timedelta(hours=hours)),
                         "requires_rsvp": True,
-                        "rsvp_deadline": iso(start - timedelta(days=1)),
+                        "rsvp_deadline": iso(
+                            start - timedelta(days=1)
+                            if days_out > 0
+                            else start - timedelta(hours=1)
+                        ),
                         "is_mandatory": event_type == "business_meeting",
                         "send_reminders": True,
                         "is_draft": False,
@@ -1062,6 +1086,125 @@ class Seeder:
             )
         return {"storage_areas": areas, "kits": kits, "allowances": allowances}
 
+    # -- inventory: variants and reorder requests --------------------
+
+    def seed_inventory_variants(
+        self, categories: list[dict], stations: list[dict]
+    ) -> dict[str, list[dict]]:
+        """Sized/coloured stock, which the variant-group pages render.
+
+        `create-variants` expands a base product into one item per size and
+        colour and groups them, which is how the guides picture the page — a
+        bare variant group with no member items still reads as empty.
+        """
+        groups = items(self.api.get("/inventory/variant-groups"), "variant_groups")
+        existing = {g.get("name") for g in groups}
+        category_ids = {c.get("name"): pick(c, "id") for c in categories}
+        location_id = pick(stations[0], "id") if stations else None
+
+        for base_name, category, sizes, colors, style, price in [
+            (
+                "Structural Coat",
+                "Structural PPE",
+                ["s", "m", "l", "xl", "xxl"],
+                None,
+                None,
+                895.00,
+            ),
+            (
+                "Department Polo",
+                "Uniforms",
+                ["s", "m", "l", "xl"],
+                ["Navy", "White"],
+                "polo",
+                32.00,
+            ),
+        ]:
+            if base_name in existing:
+                continue
+            payload = {
+                "base_name": base_name,
+                "sizes": sizes,
+                "quantity_per_variant": 6,
+                "purchase_price": price,
+                "replacement_cost": price,
+                "tracking_type": "pool",
+                "create_variant_group": True,
+                "station": "Station 1 - Headquarters",
+                "notes": f"{base_name} stock held by the quartermaster.",
+            }
+            if colors:
+                payload["colors"] = colors
+            if style:
+                payload["styles"] = [style]
+            if category_ids.get(category):
+                payload["category_id"] = category_ids[category]
+            if location_id:
+                payload["location_id"] = location_id
+            self.api.post("/inventory/items/create-variants", payload)
+        groups = items(self.api.get("/inventory/variant-groups"), "variant_groups")
+
+        requests = items(
+            self.api.get("/inventory/reorder-requests"), "reorder_requests"
+        )
+        if not requests:
+            for item_name, quantity, vendor, cost, urgency in [
+                ("Firefighting Gloves", 12, "Atlantic Fire Equipment", 89.00, "normal"),
+                ("SCBA Spare Cylinder", 4, "MSA Direct", 1_200.00, "high"),
+                ("Class B Uniform Shirt", 20, "Elbeco Supply", 58.00, "low"),
+                ("Portable Radio", 2, "Motorola Solutions", 4_300.00, "critical"),
+            ]:
+                requests.append(
+                    self.api.post(
+                        "/inventory/reorder-requests",
+                        {
+                            "item_name": item_name,
+                            "quantity_requested": quantity,
+                            "vendor": vendor,
+                            "estimated_unit_cost": cost,
+                            "urgency": urgency,
+                            "expected_delivery_date": str(TODAY + timedelta(days=21)),
+                            "notes": f"Restock {item_name.lower()} for the coming year.",
+                        },
+                    )
+                )
+        return {"variant_groups": groups, "reorder_requests": requests}
+
+    # -- events: check-ins -------------------------------------------
+
+    def seed_event_check_ins(
+        self, events: list[dict], members: list[dict]
+    ) -> list[dict]:
+        """Check members in to an event that has already started.
+
+        The check-in monitoring page is a live attendance view, so it needs an
+        event whose window is open — a future event shows nothing however many
+        members have RSVP'd.
+        """
+        started = [
+            e
+            for e in events
+            if str(pick(e, "start_datetime", "startDatetime") or "") < iso(NOW)
+        ]
+        if not started:
+            return []
+        event_id = pick(started[-1], "id")
+        checked_in = []
+        for member in members[:9]:
+            user_id = pick(member, "id")
+            if not user_id:
+                continue
+            try:
+                checked_in.append(
+                    self.api.post(f"/events/{event_id}/check-in", {"user_id": user_id})
+                )
+            except ApiError as exc:
+                # A member who never RSVP'd may be refused; that is the app's
+                # rule, not a seeding failure.
+                if exc.code not in (400, 409):
+                    raise
+        return checked_in
+
     # -- documents ---------------------------------------------------
 
     def seed_documents(self) -> list[dict]:
@@ -1499,7 +1642,16 @@ class Seeder:
         # Events created without an explicit allowed_rsvp_statuses list accept
         # only going / not_going, so "maybe" is deliberately absent here.
         statuses = ["going", "going", "going", "going", "not_going"]
-        event_ids = [pick(e, "id") for e in events if pick(e, "id")]
+
+        # Skip the clearly-finished events up front; the per-call handler
+        # below catches the rest, since the list response omits rsvp_deadline.
+        def still_open(event: dict) -> bool:
+            ends = str(pick(event, "end_datetime", "endDatetime") or "")
+            deadline = str(pick(event, "rsvp_deadline", "rsvpDeadline") or "")
+            now = iso(NOW)
+            return ends > now and (not deadline or deadline > now)
+
+        event_ids = [pick(e, "id") for e in events if pick(e, "id") and still_open(e)]
         if not event_ids:
             return
 
@@ -1522,15 +1674,23 @@ class Seeder:
                 member_api = Api(base_url)
                 member_api.login_as(username, DEMO_MEMBER_PASSWORD)
             for event_index, event_id in enumerate(event_ids):
-                member_api.post(
-                    f"/events/{event_id}/rsvp",
-                    {
-                        "status": statuses[
-                            (event_index + member_index) % len(statuses)
-                        ],
-                        "notes": "Confirmed with the duty officer.",
-                    },
-                )
+                try:
+                    member_api.post(
+                        f"/events/{event_id}/rsvp",
+                        {
+                            "status": statuses[
+                                (event_index + member_index) % len(statuses)
+                            ],
+                            "notes": "Confirmed with the duty officer.",
+                        },
+                    )
+                except ApiError as exc:
+                    # The list response omits rsvp_deadline, so the filter above
+                    # cannot always tell whether answering is still allowed. Let
+                    # the app be the authority: a refusal on those grounds is the
+                    # rule working, not a seeding failure.
+                    if exc.code != 400 or not RSVP_CLOSED.search(exc.detail):
+                        raise
 
     # -- skills tests --------------------------------------------------
 
@@ -2383,6 +2543,13 @@ class Seeder:
                 members,
             ),
         )
+        self.step(
+            "inventory variants",
+            lambda: self.seed_inventory_variants(
+                inventory.get("categories", []), stations
+            ),
+        )
+        self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)
         self.step("forms", self.seed_forms)
         self.step("event templates", self.seed_event_templates)

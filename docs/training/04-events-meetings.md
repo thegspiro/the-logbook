@@ -100,8 +100,7 @@ Officers can view real-time check-in activity from the event's **Monitoring** vi
 - Total attendee count
 - Members who RSVP'd but have not checked in
 
-> **Screenshot placeholder:**
-> _[Screenshot of the check-in monitoring page showing a real-time list of checked-in members with timestamps, and a sidebar showing RSVP'd members who haven't arrived yet]_
+![Event check-in monitoring page with the live attendee list](./images/04-06-check-in-monitoring.png)
 
 > **Hint:** Officers can also manually check in members or override check-in/check-out times from the monitoring view, useful for members who forgot to scan.
 
