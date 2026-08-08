@@ -524,6 +524,19 @@ class TrainingRequirement(Base):
     #   False -> stop at the end of the previous month for this requirement
     include_current_month = Column(Boolean, nullable=True)
 
+    # Freshness window: a completion older than this many days does not count
+    # toward the requirement, even though it happened.
+    #
+    # Distinct from `rolling_period_months`, which sets a recurring obligation
+    # ("redo it every N months"). This is a validity window on the completion
+    # itself — a recruit school can demand CPR taken within the last 180 days
+    # while the department's own CPR requirement stays a one-time item. NULL
+    # means any completion counts however old, which is the prior behavior.
+    #
+    # When both apply, the narrower window wins: this only ever removes records
+    # from consideration, never adds them.
+    recency_days = Column(Integer, nullable=True)
+
     # Categories - which training categories count towards this requirement
     category_ids = Column(
         JSON
@@ -2044,6 +2057,17 @@ class TrainingModuleConfig(Base):
     show_areas_for_improvement = Column(Boolean, default=True, server_default="1")
     show_skills_observed = Column(Boolean, default=True, server_default="1")
 
+    # Skills-test results: the department-wide default for what the person
+    # tested may see of their own scorecard, and when. Templates and individual
+    # tests may override both. Defaults preserve the behavior members already
+    # have — the full scorecard as soon as the examiner submits — so enabling
+    # nothing changes nothing; a department that wants results withheld or
+    # redacted opts in.
+    skills_result_disclosure = Column(String(20), default="full", server_default="full")
+    skills_result_release = Column(
+        String(20), default="on_completion", server_default="on_completion"
+    )
+
     # Self-reported submissions
     show_submission_history = Column(Boolean, default=True, server_default="1")
 
@@ -2148,6 +2172,8 @@ class TrainingModuleConfig(Base):
             "show_areas_for_improvement": _b(self.show_areas_for_improvement),
             "show_skills_observed": _b(self.show_skills_observed),
             "show_submission_history": _b(self.show_submission_history),
+            "skills_result_disclosure": self.skills_result_disclosure or "full",
+            "skills_result_release": self.skills_result_release or "on_completion",
             "allow_member_report_export": _b(self.allow_member_report_export),
             "report_review_required": _b(self.report_review_required, False),
             "report_review_role": self.report_review_role or "training_officer",
@@ -4254,12 +4280,12 @@ class ShiftEquipmentCheck(Base):
         nullable=True,
     )
     # Deliberately unconstrained, matching Shift.apparatus_id, which this is
-    # copied from in create_shift_check. That column is a bare String(36)
-    # holding a scheduling BasicApparatus id, so a foreign key to apparatus.id
-    # here failed on every check submitted for a shift with an apparatus
-    # assigned. The two apparatus tables are the underlying problem; until they
-    # are reconciled, the reference is untyped on both sides rather than
-    # enforced against the wrong one.
+    # copied from in create_shift_check. That column is a bare String(36) and
+    # the reference is polymorphic: it may hold a full Apparatus id or a
+    # lightweight basic_apparatus one, resolved by priority in
+    # app/utils/apparatus_ref.py. A foreign key to apparatus.id therefore cannot
+    # hold for every value the column legitimately carries, and used to fail on
+    # every check submitted for a shift with an apparatus assigned.
     apparatus_id = Column(String(36), nullable=True)
     checked_by = Column(
         String(36),

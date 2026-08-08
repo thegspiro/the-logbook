@@ -9,10 +9,11 @@ Revises: 20260222_0600
 Create Date: 2026-02-22 07:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260222_0700"
@@ -25,7 +26,9 @@ def upgrade() -> None:
     # --- Users table: referral data preserved from prospect ---
     op.add_column("users", sa.Column("referral_source", sa.String(255), nullable=True))
     op.add_column("users", sa.Column("interest_reason", sa.Text(), nullable=True))
-    op.add_column("users", sa.Column("referred_by_user_id", sa.String(36), nullable=True))
+    op.add_column(
+        "users", sa.Column("referred_by_user_id", sa.String(36), nullable=True)
+    )
     op.create_foreign_key(
         "fk_users_referred_by_user_id",
         "users",
@@ -44,7 +47,12 @@ def upgrade() -> None:
         "prospective_members",
         sa.Column("status_token_created_at", sa.DateTime(timezone=True), nullable=True),
     )
-    op.create_index("idx_prospect_status_token", "prospective_members", ["status_token"], unique=True)
+    op.create_index(
+        "idx_prospect_status_token",
+        "prospective_members",
+        ["status_token"],
+        unique=True,
+    )
 
 
 def downgrade() -> None:

@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import type { MeetingRecord, MeetingAttendee, MeetingActionItem, MeetingsSummary } from './documentsService';
+import { asArray } from '../utils/asArray';
 
 export const meetingsService = {
   async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; from_date?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
@@ -65,7 +66,7 @@ export const meetingsService = {
 
   async getOpenActionItems(params?: { assigned_to?: string }): Promise<MeetingActionItem[]> {
     const response = await api.get<MeetingActionItem[]>('/meetings/action-items/open', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getAttendanceDashboard(params?: { period_months?: number; meeting_type?: string }): Promise<Record<string, unknown>> {

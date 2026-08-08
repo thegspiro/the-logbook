@@ -85,7 +85,7 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
         id={id}
         value={hour12Index !== null ? String(hour12Index) : ''}
         onChange={handleHourChange}
-        className={className}
+        className={`${className ?? ''} max-md:min-w-[44px]`}
         required={required}
         aria-label={`${label} hour`}
       >
@@ -104,7 +104,7 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
       <select
         value={minute !== null ? String(minute).padStart(2, '0') : ''}
         onChange={handleMinuteChange}
-        className={className}
+        className={`${className ?? ''} max-md:min-w-[44px]`}
         required={required}
         aria-label={`${label} minute`}
       >
@@ -121,7 +121,7 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
       <select
         value={period}
         onChange={handlePeriodChange}
-        className={className}
+        className={`${className ?? ''} max-md:min-w-[44px]`}
         aria-label={`${label} AM/PM`}
       >
         <option value="AM">AM</option>

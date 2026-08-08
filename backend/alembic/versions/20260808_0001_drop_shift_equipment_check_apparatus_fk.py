@@ -21,18 +21,17 @@ it stops the mismatch from breaking the daily equipment check, which is a core
 workflow in the shift guides.
 
 Revision ID: 20260808_0001
-Revises: 20260807_0002
+Revises: 20260807_0009
 Create Date: 2026-08-08 00:00:00.000000
 
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260808_0001"
-down_revision = "20260807_0002"
+down_revision = "20260807_0009"
 branch_labels = None
 depends_on = None
 

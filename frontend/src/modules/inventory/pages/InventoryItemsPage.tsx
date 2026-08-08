@@ -37,6 +37,7 @@ import {
   STATUS_OPTIONS, ITEM_TYPES, STANDARD_SIZES, GARMENT_STYLES,
   getStatusStyle, getConditionColor,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const PAGE_SIZE = 50;
 const SORT_COLS = [
@@ -255,8 +256,9 @@ const InventoryItemsPage: React.FC = () => {
     const s = reset ? 0 : skip;
     try {
       const res = await inventoryService.getItems({ ...filterParams(), skip: s, limit: PAGE_SIZE });
-      setItems(reset || s === 0 ? res.items : (prev) => [...prev, ...res.items]);
-      setTotal(res.total);
+      const items = asArray(res.items);
+      setItems(reset || s === 0 ? items : (prev) => [...prev, ...items]);
+      setTotal(res.total ?? 0);
       if (reset) setSkip(0);
     } catch (err: unknown) { toast.error(getErrorMessage(err, 'Failed to load items')); }
   }, [filterParams, skip]);
@@ -317,7 +319,7 @@ const InventoryItemsPage: React.FC = () => {
     const ns = skip + PAGE_SIZE; setSkip(ns); setLoadingMore(true);
     try {
       const res = await inventoryService.getItems({ ...filterParams(), skip: ns, limit: PAGE_SIZE });
-      setItems((prev) => [...prev, ...res.items]); setTotal(res.total);
+      setItems((prev) => [...prev, ...asArray(res.items)]); setTotal(res.total ?? 0);
     } catch (err: unknown) { toast.error(getErrorMessage(err, 'Failed to load more')); }
     finally { setLoadingMore(false); }
   };
@@ -406,7 +408,7 @@ const InventoryItemsPage: React.FC = () => {
   /* ================================================================ */
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-6">
+      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center max-md:min-h-[44px] gap-1 mb-6">
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
       </Link>

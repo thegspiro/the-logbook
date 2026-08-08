@@ -5,8 +5,9 @@ Revises: 20260308_0300
 Create Date: 2026-03-13 01:00:00.000000
 
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260313_0101"
@@ -61,9 +62,7 @@ def upgrade() -> None:
             nullable=True,
             comment="JSON list of role names this requirement applies to.",
         ),
-        sa.Column(
-            "is_active", sa.Boolean, nullable=False, server_default=sa.text("1")
-        ),
+        sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("1")),
         sa.Column(
             "grace_period_days",
             sa.Integer,
@@ -159,15 +158,9 @@ def upgrade() -> None:
             onupdate=sa.func.now(),
         ),
     )
-    op.create_index(
-        "idx_screening_rec_org", "screening_records", ["organization_id"]
-    )
-    op.create_index(
-        "idx_screening_rec_user", "screening_records", ["user_id"]
-    )
-    op.create_index(
-        "idx_screening_rec_prospect", "screening_records", ["prospect_id"]
-    )
+    op.create_index("idx_screening_rec_org", "screening_records", ["organization_id"])
+    op.create_index("idx_screening_rec_user", "screening_records", ["user_id"])
+    op.create_index("idx_screening_rec_prospect", "screening_records", ["prospect_id"])
     op.create_index(
         "idx_screening_rec_status",
         "screening_records",

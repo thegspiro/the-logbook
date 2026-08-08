@@ -17,6 +17,7 @@ import type {
   UpdateConfigRequest,
   AccessLogFilters,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient('/api/v1/public-portal');
 
@@ -47,7 +48,7 @@ export const listAPIKeys = async (
   const response = await api.get<PublicPortalAPIKey[]>('/api-keys', {
     params: { include_inactive: includeInactive },
   });
-  return response.data;
+  return asArray(response.data);
 };
 
 export const createAPIKey = async (
@@ -75,7 +76,7 @@ export const getAccessLogs = async (
   const response = await api.get<PublicPortalAccessLog[]>('/access-logs', {
     params: filters,
   });
-  return response.data;
+  return asArray(response.data);
 };
 
 export const getUsageStats = async (): Promise<PublicPortalUsageStats> => {
@@ -93,7 +94,7 @@ export const getWhitelist = async (
   const response = await api.get<PublicPortalDataWhitelist[]>('/whitelist', {
     params: category ? { category } : {},
   });
-  return response.data;
+  return asArray(response.data);
 };
 
 

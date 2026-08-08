@@ -10,12 +10,13 @@ type definitions all agree:
 - program_enrollments.status: add 'on_hold', 'failed'
 - requirement_progress.status: add 'waived'
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260220_0200'
-down_revision = '20260220_0100'
+revision = "20260220_0200"
+down_revision = "20260220_0100"
 branch_labels = None
 depends_on = None
 
@@ -34,7 +35,7 @@ def upgrade() -> None:
     row = result.fetchone()
     if row:
         col_type = row[0]
-        if 'on_hold' not in col_type or 'failed' not in col_type:
+        if "on_hold" not in col_type or "failed" not in col_type:
             conn.execute(sa.text("""
                 ALTER TABLE program_enrollments
                 MODIFY COLUMN status
@@ -53,7 +54,7 @@ def upgrade() -> None:
     row = result.fetchone()
     if row:
         col_type = row[0]
-        if 'waived' not in col_type:
+        if "waived" not in col_type:
             conn.execute(sa.text("""
                 ALTER TABLE requirement_progress
                 MODIFY COLUMN status
@@ -74,7 +75,7 @@ def downgrade() -> None:
         AND COLUMN_NAME = 'status'
     """))
     row = result.fetchone()
-    if row and ('on_hold' in row[0] or 'failed' in row[0]):
+    if row and ("on_hold" in row[0] or "failed" in row[0]):
         conn.execute(sa.text("""
             ALTER TABLE program_enrollments
             MODIFY COLUMN status
@@ -91,7 +92,7 @@ def downgrade() -> None:
         AND COLUMN_NAME = 'status'
     """))
     row = result.fetchone()
-    if row and 'waived' in row[0]:
+    if row and "waived" in row[0]:
         conn.execute(sa.text("""
             ALTER TABLE requirement_progress
             MODIFY COLUMN status

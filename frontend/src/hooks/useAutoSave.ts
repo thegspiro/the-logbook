@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { AUTO_SAVE_INTERVAL_MS } from '../../../constants/config';
+import { AUTO_SAVE_INTERVAL_MS } from '../constants/config';
 
 interface UseAutoSaveOptions<T> {
   data: T;
@@ -36,7 +36,7 @@ export function useAutoSave<T>({
   data,
   onSave,
   interval = AUTO_SAVE_INTERVAL_MS,
-  enabled = true
+  enabled = true,
 }: UseAutoSaveOptions<T>) {
   const savedDataRef = useRef<string>(JSON.stringify(data));
   const dataRef = useRef<T>(data);

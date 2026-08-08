@@ -303,7 +303,7 @@ function LocationSetupWizard({
               {onDismiss && (
                 <button
                   onClick={onDismiss}
-                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors max-md:mobile-touch-target"
                   aria-label="Close wizard"
                 >
                   <X className="w-4 h-4" />

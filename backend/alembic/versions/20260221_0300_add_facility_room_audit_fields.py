@@ -8,8 +8,8 @@ Revises: 20260221_0200
 Create Date: 2026-02-21
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers
 revision = "20260221_0300"
@@ -19,8 +19,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("facility_rooms", sa.Column("created_by", sa.String(36), nullable=True))
-    op.add_column("facility_rooms", sa.Column("updated_by", sa.String(36), nullable=True))
+    op.add_column(
+        "facility_rooms", sa.Column("created_by", sa.String(36), nullable=True)
+    )
+    op.add_column(
+        "facility_rooms", sa.Column("updated_by", sa.String(36), nullable=True)
+    )
 
 
 def downgrade() -> None:

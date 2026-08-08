@@ -12,78 +12,96 @@ Features:
 - Improved error handling
 """
 
-from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-from alembic import context
-import sys
-import os
 import logging
+import os
+import sys
+from logging.config import fileConfig
+
+from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.config import settings
 from app.core.database import Base
-
-# Import all models to ensure they're registered with Base.metadata
-# User & Auth
-from app.models.user import Organization, User, Role, Session, user_roles
 from app.models.audit import AuditLog, AuditLogCheckpoint
-from app.models.onboarding import OnboardingStatus, OnboardingSessionModel
-
-# Location
-from app.models.location import Location
-
-# Training
-from app.models.training import (
-    TrainingCourse, TrainingRecord, TrainingRequirement, TrainingSession,
-    TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement,
-    ProgramMilestone, ProgramEnrollment, RequirementProgress,
-    SkillEvaluation, SkillCheckoff, Shift, ShiftAttendance, ShiftCall
-)
-
-# Events
-from app.models.event import Event, EventRSVP
-
-# Minutes
-from app.models.minute import MeetingMinutes, MinutesTemplate, Motion, ActionItem
 
 # Documents
 from app.models.document import Document, DocumentFolder
 
 # Elections
-from app.models.election import Election, Candidate, VotingToken, Vote
+from app.models.election import Candidate, Election, Vote, VotingToken
+
+# Events
+from app.models.event import Event, EventRSVP
 
 # Inventory
 from app.models.inventory import (
-    InventoryCategory, InventoryItem, ItemAssignment,
-    CheckOutRecord, MaintenanceRecord
+    CheckOutRecord,
+    InventoryCategory,
+    InventoryItem,
+    ItemAssignment,
+    MaintenanceRecord,
 )
 
 # IP Security
 from app.models.ip_security import (
-    IPException, BlockedAccessAttempt, CountryBlockRule, IPExceptionAuditLog
+    BlockedAccessAttempt,
+    CountryBlockRule,
+    IPException,
+    IPExceptionAuditLog,
 )
+
+# Location
+from app.models.location import Location
+
+# Minutes
+from app.models.minute import ActionItem, MeetingMinutes, MinutesTemplate, Motion
+from app.models.onboarding import OnboardingSessionModel, OnboardingStatus
+
+# Operational Ranks
+from app.models.operational_rank import OperationalRank  # noqa: F401
 
 # Security Alerts
 from app.models.security_alert import SecurityAlertRecord  # noqa: F401
 
-# Operational Ranks
-from app.models.operational_rank import OperationalRank  # noqa: F401
+# Training
+from app.models.training import (
+    ProgramEnrollment,
+    ProgramMilestone,
+    ProgramPhase,
+    ProgramRequirement,
+    RequirementProgress,
+    Shift,
+    ShiftAttendance,
+    ShiftCall,
+    SkillCheckoff,
+    SkillEvaluation,
+    TrainingApproval,
+    TrainingCourse,
+    TrainingProgram,
+    TrainingRecord,
+    TrainingRequirement,
+    TrainingSession,
+)
+
+# Import all models to ensure they're registered with Base.metadata
+# User & Auth
+from app.models.user import Organization, Role, Session, User, user_roles
 
 # This is the Alembic Config object
 config = context.config
 
 # Set the database URL from our settings
-config.set_main_option('sqlalchemy.url', settings.SYNC_DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.SYNC_DATABASE_URL)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Get logger for this module
-logger = logging.getLogger('alembic.env')
+logger = logging.getLogger("alembic.env")
 
 # Add your model's MetaData object here for 'autogenerate' support
 target_metadata = Base.metadata
@@ -143,7 +161,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
     """
     configuration = config.get_section(config.config_ini_section)
-    configuration['sqlalchemy.url'] = settings.SYNC_DATABASE_URL
+    configuration["sqlalchemy.url"] = settings.SYNC_DATABASE_URL
 
     logger.info("Connecting to database for migrations...")
 
@@ -165,6 +183,7 @@ def run_migrations_online() -> None:
             # These are re-enabled after migrations complete. This is safe because
             # migration DDL is applied in dependency order by Alembic.
             from sqlalchemy import text
+
             connection.execute(text("SET SESSION foreign_key_checks = 0"))
             connection.execute(text("SET SESSION unique_checks = 0"))
             connection.commit()

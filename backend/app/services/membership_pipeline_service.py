@@ -12,13 +12,14 @@ import re
 import secrets
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from loguru import logger
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.election import Election, ElectionStatus
 from app.models.event import Event
@@ -39,6 +40,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
 from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
@@ -48,6 +50,12 @@ from app.utils.prospect_fields import (
 
 class MembershipPipelineService:
     """Service for membership pipeline management"""
+
+    # Ceiling on cards returned by the kanban board. Well above any real
+    # department's active pipeline, so it is a guard against an unbounded
+    # response rather than a paging size — per-column counts stay exact even
+    # when it bites.
+    MAX_KANBAN_CARDS = 500
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -504,6 +512,49 @@ class MembershipPipelineService:
     # Prospect CRUD
     # =========================================================================
 
+    @staticmethod
+    def _apply_prospect_exclusions(
+        query, exclude_prospect_ids: Optional[Iterable[str]]
+    ):
+        """Drop specific prospect rows from a query over ``ProspectiveMember``.
+
+        Used to keep a caller's own prospective-membership record out of the
+        lists, boards and counts they can see (see app/api/prospect_privacy.py).
+        """
+        ids = [str(i) for i in (exclude_prospect_ids or []) if i]
+        if not ids:
+            return query
+        return query.where(ProspectiveMember.id.notin_(ids))
+
+    @staticmethod
+    def _prospect_search_filter(search: str) -> ColumnElement[bool]:
+        """Build the name/email search predicate for a prospect list query.
+
+        Each whitespace-separated term must match somewhere, so "smith john"
+        finds the same person as "john smith" — coordinators type the full
+        name far more often than a single field, and matching the raw string
+        against each column individually never hits.
+        """
+
+        def _escape(value: str) -> str:
+            return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+        terms = [t for t in search.split() if t]
+        if not terms:
+            terms = [search]
+
+        clauses = []
+        for term in terms:
+            pattern = f"%{_escape(term)}%"
+            clauses.append(
+                or_(
+                    ProspectiveMember.first_name.ilike(pattern),
+                    ProspectiveMember.last_name.ilike(pattern),
+                    ProspectiveMember.email.ilike(pattern),
+                )
+            )
+        return and_(*clauses)
+
     async def list_prospects(
         self,
         organization_id: str,
@@ -512,6 +563,7 @@ class MembershipPipelineService:
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> tuple[List[ProspectiveMember], int]:
         """List prospects with filters"""
         query = (
@@ -528,16 +580,9 @@ class MembershipPipelineService:
             query = query.where(ProspectiveMember.pipeline_id == pipeline_id)
         if status:
             query = query.where(ProspectiveMember.status == status)
+        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
-            query = query.where(
-                ProspectiveMember.first_name.ilike(search_term)
-                | ProspectiveMember.last_name.ilike(search_term)
-                | ProspectiveMember.email.ilike(search_term)
-            )
+            query = query.where(self._prospect_search_filter(search))
 
         # Count query
         count_query = select(func.count()).select_from(query.subquery())
@@ -728,6 +773,19 @@ class MembershipPipelineService:
             if await self.get_pipeline(pipeline_id, organization_id) is None:
                 raise ValueError("Invalid pipeline")
 
+        # Same reasoning for the referring member. It is copied onto the User
+        # record at transfer (see _do_transfer), so an unvalidated id does not
+        # just dangle on the prospect — it lands in the members table as a
+        # cross-tenant reference that outlives the application.
+        await assert_in_org(
+            self.db,
+            User,
+            data.get("referred_by"),
+            organization_id,
+            allow_none=True,
+            label="referring member",
+        )
+
         # Use org default pipeline if none specified
         if not pipeline_id:
             default_pipeline = await self._get_default_pipeline(organization_id)
@@ -838,6 +896,18 @@ class MembershipPipelineService:
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
+
+        # referred_by is the one client-supplied foreign key this update
+        # accepts; every other FK is in _PROSPECT_PROTECTED_FIELDS.
+        if "referred_by" in data:
+            await assert_in_org(
+                self.db,
+                User,
+                data.get("referred_by"),
+                organization_id,
+                allow_none=True,
+                label="referring member",
+            )
 
         changes = {}
         for key, value in data.items():
@@ -1170,8 +1240,15 @@ class MembershipPipelineService:
             -1,
         )
 
-        if current_idx < 0 or current_idx >= len(sorted_steps) - 1:
-            return prospect  # Already at the end or no current step
+        # Report a no-op as a no-op. Returning the untouched prospect made
+        # "advance" indistinguishable from "advanced": the caller got a 200,
+        # the UI reported success, and an audit entry claimed a movement that
+        # never happened — which matters for a log kept to reconstruct who
+        # moved whom through membership.
+        if current_idx < 0:
+            raise ValueError("Prospect has no current stage to advance from")
+        if current_idx >= len(sorted_steps) - 1:
+            raise ValueError("Prospect is already at the final stage")
 
         next_step = sorted_steps[current_idx + 1]
         prospect.current_step_id = next_step.id
@@ -1215,6 +1292,174 @@ class MembershipPipelineService:
             await self._send_stage_email(prospect, next_step)
 
         return await self.get_prospect(prospect_id, organization_id)
+
+    # =========================================================================
+    # Bulk Actions
+    # =========================================================================
+
+    async def _bulk_apply(
+        self,
+        prospect_ids: Iterable[str],
+        organization_id: str,
+        apply,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Run ``apply`` over each prospect id, itemizing per-id outcomes.
+
+        One failure never aborts the rest — a coordinator acting on thirty
+        applicants should not lose twenty-nine because one is at the final
+        stage. ``apply`` owns its own commit, so each prospect is durable
+        before the next is attempted; a rejected one is refused before it
+        writes anything.
+
+        ``exclude_prospect_ids`` carries the caller's own prospect record
+        (see app/api/prospect_privacy.py). Bulk ids arrive in the request
+        body, so the router's path-parameter guard cannot see them; they are
+        reported as "not found", identical to an id that does not exist, so
+        the response discloses nothing either way.
+        """
+        # Local import: app.api imports the service layer, so a module-level
+        # import here would close the cycle.
+        from app.api.prospect_privacy import normalize_prospect_id
+
+        hidden = {str(i) for i in (exclude_prospect_ids or []) if i}
+        results: List[Dict[str, Any]] = []
+
+        for raw_id in prospect_ids:
+            prospect_id = str(raw_id)
+            if normalize_prospect_id(prospect_id) in hidden:
+                results.append(
+                    {
+                        "prospect_id": prospect_id,
+                        "name": None,
+                        "succeeded": False,
+                        "error": "Prospect not found",
+                    }
+                )
+                continue
+
+            prospect = await self.get_prospect(prospect_id, organization_id)
+            if not prospect:
+                results.append(
+                    {
+                        "prospect_id": prospect_id,
+                        "name": None,
+                        "succeeded": False,
+                        "error": "Prospect not found",
+                    }
+                )
+                continue
+
+            name = prospect.full_name
+            try:
+                await apply(prospect)
+            except ValueError as exc:
+                results.append(
+                    {
+                        "prospect_id": prospect_id,
+                        "name": name,
+                        "succeeded": False,
+                        "error": str(exc),
+                    }
+                )
+                continue
+            except Exception as exc:  # pragma: no cover - defensive
+                # Leave the session usable for the ids still queued behind
+                # this one, rather than failing the whole batch.
+                await self.db.rollback()
+                logger.exception(
+                    f"Bulk action failed for prospect {prospect_id}: {exc}"
+                )
+                results.append(
+                    {
+                        "prospect_id": prospect_id,
+                        "name": name,
+                        "succeeded": False,
+                        "error": "Action failed",
+                    }
+                )
+                continue
+
+            results.append(
+                {
+                    "prospect_id": prospect_id,
+                    "name": name,
+                    "succeeded": True,
+                    "error": None,
+                }
+            )
+
+        return results
+
+    async def bulk_advance_prospects(
+        self,
+        prospect_ids: Iterable[str],
+        organization_id: str,
+        advanced_by: str,
+        notes: Optional[str] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Advance several prospects, reporting each one's outcome."""
+
+        async def _advance(prospect: ProspectiveMember) -> None:
+            await self.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=organization_id,
+                advanced_by=advanced_by,
+                notes=notes,
+            )
+
+        return await self._bulk_apply(
+            prospect_ids, organization_id, _advance, exclude_prospect_ids
+        )
+
+    async def bulk_set_prospect_status(
+        self,
+        prospect_ids: Iterable[str],
+        organization_id: str,
+        status: str,
+        changed_by: str,
+        reason: Optional[str] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Set the status of several prospects, reporting each one's outcome.
+
+        ``reason`` is written to the activity log only. The previous bulk
+        path sent it through ``update_prospect`` as ``notes``, which
+        *overwrote* the coordinator notes on every selected record — a bulk
+        rejection silently destroyed whatever had been written about each
+        applicant.
+        """
+        try:
+            target = ProspectStatus(status)
+        except ValueError:
+            raise ValueError(f"Invalid status: {status}")
+
+        async def _set_status(prospect: ProspectiveMember) -> None:
+            previous = (
+                prospect.status.value
+                if hasattr(prospect.status, "value")
+                else str(prospect.status)
+            )
+            if previous == target.value:
+                raise ValueError(f"Prospect is already {target.value}")
+            prospect.status = target
+            await self._log_activity(
+                prospect_id=str(prospect.id),
+                action="prospect_status_changed",
+                details={
+                    "from": previous,
+                    "to": target.value,
+                    "reason": reason,
+                    "bulk": True,
+                },
+                performed_by=changed_by,
+            )
+            await self.db.commit()
+
+        return await self._bulk_apply(
+            prospect_ids, organization_id, _set_status, exclude_prospect_ids
+        )
 
     async def regress_prospect(
         self,
@@ -1468,6 +1713,20 @@ class MembershipPipelineService:
         primary_email = department_email or prospect.email
         personal_email = prospect.email if department_email else None
 
+        # Records created before referred_by was validated on write may carry a
+        # referrer from another org. Drop it rather than fail the transfer —
+        # legacy data must not block a member being elected — but do not let it
+        # cross into the users table, where it would outlive the application.
+        referred_by = prospect.referred_by
+        if referred_by and not await is_in_org(
+            self.db, User, referred_by, prospect.organization_id
+        ):
+            logger.warning(
+                f"Dropping out-of-org referred_by {referred_by} while "
+                f"transferring prospect {prospect.id}"
+            )
+            referred_by = None
+
         user_id = generate_uuid()
         new_user = User(
             id=user_id,
@@ -1498,7 +1757,7 @@ class MembershipPipelineService:
             # Preserve referral data from prospect
             referral_source=prospect.referral_source,
             interest_reason=prospect.interest_reason,
-            referred_by_user_id=prospect.referred_by,
+            referred_by_user_id=referred_by,
         )
         self.db.add(new_user)
 
@@ -2220,26 +2479,58 @@ class MembershipPipelineService:
     # =========================================================================
 
     async def get_kanban_board(
-        self, pipeline_id: str, organization_id: str
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Get the kanban board view for a pipeline"""
+        """Get the kanban board view for a pipeline.
+
+        Card loading is capped at :data:`MAX_KANBAN_CARDS`; the per-column
+        ``count`` values come from a separate aggregate, so a truncated board
+        still reports the true size of every column rather than quietly
+        under-reporting it. ``truncated`` says whether any card was withheld.
+        """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return None
 
-        # Get all active prospects for this pipeline
+        scope = and_(
+            ProspectiveMember.organization_id == organization_id,
+            ProspectiveMember.pipeline_id == pipeline_id,
+            ProspectiveMember.status == ProspectStatus.ACTIVE,
+        )
+
+        # True per-column totals, independent of how many cards are loaded.
+        count_query = self._apply_prospect_exclusions(
+            select(
+                ProspectiveMember.current_step_id,
+                func.count(ProspectiveMember.id),
+            ).where(scope),
+            exclude_prospect_ids,
+        ).group_by(ProspectiveMember.current_step_id)
+        count_rows = (await self.db.execute(count_query)).all()
+        counts = {
+            (str(step_id) if step_id else None): (count or 0)
+            for step_id, count in count_rows
+        }
+        total_prospects = sum(counts.values())
+
         query = (
             select(ProspectiveMember)
-            .where(
-                and_(
-                    ProspectiveMember.organization_id == organization_id,
-                    ProspectiveMember.pipeline_id == pipeline_id,
-                    ProspectiveMember.status == ProspectStatus.ACTIVE,
-                )
+            .where(scope)
+            # Same eager loads as the prospect list: the card projection reads
+            # pipeline name and step progress, and a lazy load out of the async
+            # response path raises MissingGreenlet rather than just being slow.
+            .options(
+                selectinload(ProspectiveMember.current_step),
+                selectinload(ProspectiveMember.pipeline),
+                selectinload(ProspectiveMember.step_progress),
             )
-            .options(selectinload(ProspectiveMember.current_step))
             .order_by(ProspectiveMember.created_at)
+            .limit(self.MAX_KANBAN_CARDS)
         )
+        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         result = await self.db.execute(query)
         prospects = list(result.scalars().all())
 
@@ -2253,26 +2544,29 @@ class MembershipPipelineService:
                 {
                     "step": step,
                     "prospects": step_prospects,
-                    "count": len(step_prospects),
+                    "count": counts.get(str(step.id), 0),
                 }
             )
 
         # Add column for prospects with no current step
         unassigned = [p for p in prospects if not p.current_step_id]
-        if unassigned:
+        unassigned_count = counts.get(None, 0)
+        if unassigned or unassigned_count:
             columns.insert(
                 0,
                 {
                     "step": None,
                     "prospects": unassigned,
-                    "count": len(unassigned),
+                    "count": unassigned_count,
                 },
             )
 
         return {
             "pipeline": pipeline,
             "columns": columns,
-            "total_prospects": len(prospects),
+            "total_prospects": total_prospects,
+            "returned_prospects": len(prospects),
+            "truncated": total_prospects > len(prospects),
         }
 
     # =========================================================================
@@ -2941,63 +3235,81 @@ class MembershipPipelineService:
     # =========================================================================
 
     async def get_pipeline_stats(
-        self, pipeline_id: str, organization_id: str
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get statistics for a pipeline"""
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return None
 
-        # Count prospects by status
-        status_counts = {}
-        for status_val in ProspectStatus:
-            count_query = select(func.count(ProspectiveMember.id)).where(
-                and_(
-                    ProspectiveMember.pipeline_id == pipeline_id,
-                    ProspectiveMember.status == status_val,
-                )
-            )
-            result = await self.db.execute(count_query)
-            status_counts[status_val.value] = result.scalar() or 0
+        # One grouped query per axis rather than one per status and one per
+        # step: a 12-stage pipeline previously cost ~20 round trips to render
+        # a single stat header.
+        base_scope = and_(
+            ProspectiveMember.organization_id == organization_id,
+            ProspectiveMember.pipeline_id == pipeline_id,
+        )
+
+        status_query = self._apply_prospect_exclusions(
+            select(
+                ProspectiveMember.status,
+                func.count(ProspectiveMember.id),
+            ).where(base_scope),
+            exclude_prospect_ids,
+        ).group_by(ProspectiveMember.status)
+        status_rows = (await self.db.execute(status_query)).all()
+
+        status_counts = {s.value: 0 for s in ProspectStatus}
+        for status_val, count in status_rows:
+            key = status_val.value if hasattr(status_val, "value") else str(status_val)
+            status_counts[key] = count or 0
 
         total = sum(status_counts.values())
 
-        # Count prospects by current step
-        by_step = []
-        for step in sorted(pipeline.steps, key=lambda s: s.sort_order):
-            step_count_query = select(func.count(ProspectiveMember.id)).where(
-                and_(
-                    ProspectiveMember.pipeline_id == pipeline_id,
-                    ProspectiveMember.current_step_id == step.id,
-                    ProspectiveMember.status == ProspectStatus.ACTIVE,
-                )
-            )
-            result = await self.db.execute(step_count_query)
-            by_step.append(
-                {
-                    "stage_id": step.id,
-                    "stage_name": step.name,
-                    "count": result.scalar() or 0,
-                }
-            )
+        step_query = self._apply_prospect_exclusions(
+            select(
+                ProspectiveMember.current_step_id,
+                func.count(ProspectiveMember.id),
+            ).where(
+                and_(base_scope, ProspectiveMember.status == ProspectStatus.ACTIVE)
+            ),
+            exclude_prospect_ids,
+        ).group_by(ProspectiveMember.current_step_id)
+        step_rows = (await self.db.execute(step_query)).all()
+        step_counts = {str(step_id): count or 0 for step_id, count in step_rows}
+
+        by_step = [
+            {
+                "stage_id": step.id,
+                "stage_name": step.name,
+                "count": step_counts.get(str(step.id), 0),
+            }
+            for step in sorted(pipeline.steps, key=lambda s: s.sort_order)
+        ]
 
         # Calculate avg days to transfer
         avg_days = None
         transferred_count = status_counts.get("transferred", 0)
         if transferred_count > 0:
-            avg_query = select(
-                func.avg(
-                    func.datediff(
-                        ProspectiveMember.transferred_at,
-                        ProspectiveMember.created_at,
+            avg_query = self._apply_prospect_exclusions(
+                select(
+                    func.avg(
+                        func.datediff(
+                            ProspectiveMember.transferred_at,
+                            ProspectiveMember.created_at,
+                        )
                     )
-                )
-            ).where(
-                and_(
-                    ProspectiveMember.pipeline_id == pipeline_id,
-                    ProspectiveMember.status == ProspectStatus.TRANSFERRED,
-                    ProspectiveMember.transferred_at.isnot(None),
-                )
+                ).where(
+                    and_(
+                        base_scope,
+                        ProspectiveMember.status == ProspectStatus.TRANSFERRED,
+                        ProspectiveMember.transferred_at.isnot(None),
+                    )
+                ),
+                exclude_prospect_ids,
             )
             result = await self.db.execute(avg_query)
             avg_days = result.scalar()
@@ -3377,6 +3689,7 @@ class MembershipPipelineService:
         organization_id: str,
         pipeline_id: Optional[str] = None,
         status_filter: Optional[str] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> List[ProspectElectionPackage]:
         """List election packages, optionally filtered by pipeline and status"""
         query = (
@@ -3387,6 +3700,7 @@ class MembershipPipelineService:
             )
             .where(ProspectiveMember.organization_id == organization_id)
         )
+        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if pipeline_id:
             query = query.where(ProspectElectionPackage.pipeline_id == pipeline_id)
         if status_filter:
@@ -3767,85 +4081,66 @@ class MembershipPipelineService:
         Process inactivity warnings: mark critical prospects as inactive,
         send coordinator emails for warnings.
         Returns count of warnings and actions taken.
+
+        Prior-activity lookups are batched rather than run per prospect: this
+        runs over every stale prospect in the organization, so a department
+        with a long-neglected pipeline paid one SELECT per prospect plus one
+        UPDATE each just to decide it had nothing new to do.
         """
         warnings = await self.check_inactivity(organization_id)
+        if not warnings:
+            return {"warnings_sent": 0, "marked_inactive": 0, "total_checked": 0}
+
+        critical = [w for w in warnings if w["alert_level"] == "critical"]
+        warned = [w for w in warnings if w["alert_level"] != "critical"]
+
+        already_marked = await self._prospects_with_action(
+            [w["prospect_id"] for w in critical], "marked_inactive_by_system"
+        )
+        last_warned_at = await self._latest_action_times(
+            [w["prospect_id"] for w in warned], "inactivity_warning_sent"
+        )
+
+        now = datetime.now(timezone.utc)
         warning_count = 0
         inactive_count = 0
 
-        for w in warnings:
-            prospect_id = w["prospect_id"]
+        to_mark = [w for w in critical if w["prospect_id"] not in already_marked]
+        if to_mark:
+            # One UPDATE for the whole batch instead of one per prospect.
+            await self.db.execute(
+                update(ProspectiveMember)
+                .where(ProspectiveMember.id.in_([w["prospect_id"] for w in to_mark]))
+                .values(status=ProspectStatus.INACTIVE)
+            )
+            for w in to_mark:
+                await self._log_activity(
+                    prospect_id=w["prospect_id"],
+                    action="marked_inactive_by_system",
+                    details={
+                        "days_inactive": w["days_inactive"],
+                        "timeout_days": w["timeout_days"],
+                    },
+                    performed_by=processed_by,
+                )
+            inactive_count = len(to_mark)
 
-            if w["alert_level"] == "critical":
-                # Check if we already logged an inactivity warning recently
-                recent_log = await self.db.execute(
-                    select(ProspectActivityLog)
-                    .where(
-                        and_(
-                            ProspectActivityLog.prospect_id == prospect_id,
-                            ProspectActivityLog.action == "marked_inactive_by_system",
-                        )
-                    )
-                    .limit(1)
-                )
-                if not recent_log.scalars().first():
-                    # Mark as inactive
-                    await self.db.execute(
-                        update(ProspectiveMember)
-                        .where(ProspectiveMember.id == prospect_id)
-                        .values(status=ProspectStatus.INACTIVE)
-                    )
-                    await self._log_activity(
-                        prospect_id=prospect_id,
-                        action="marked_inactive_by_system",
-                        details={
-                            "days_inactive": w["days_inactive"],
-                            "timeout_days": w["timeout_days"],
-                        },
-                        performed_by=processed_by,
-                    )
-                    inactive_count += 1
-            else:
-                # Warning level — log it (email would be sent here)
-                recent_warning = await self.db.execute(
-                    select(ProspectActivityLog)
-                    .where(
-                        and_(
-                            ProspectActivityLog.prospect_id == prospect_id,
-                            ProspectActivityLog.action == "inactivity_warning_sent",
-                        )
-                    )
-                    .order_by(ProspectActivityLog.created_at.desc())
-                    .limit(1)
-                )
-                existing_warning = recent_warning.scalars().first()
-                # Only warn once per 7-day period
-                warning_created = (
-                    existing_warning.created_at.replace(tzinfo=timezone.utc)
-                    if existing_warning
-                    and existing_warning.created_at
-                    and existing_warning.created_at.tzinfo is None
-                    else (
-                        existing_warning.created_at
-                        if existing_warning and existing_warning.created_at
-                        else None
-                    )
-                )
-                if (
-                    not existing_warning
-                    or not warning_created
-                    or (datetime.now(timezone.utc) - warning_created).days >= 7
-                ):
-                    await self._log_activity(
-                        prospect_id=prospect_id,
-                        action="inactivity_warning_sent",
-                        details={
-                            "days_inactive": w["days_inactive"],
-                            "timeout_days": w["timeout_days"],
-                            "alert_level": w["alert_level"],
-                        },
-                        performed_by=processed_by,
-                    )
-                    warning_count += 1
+        for w in warned:
+            previous = last_warned_at.get(w["prospect_id"])
+            # Warn at most once per 7-day period.
+            if previous is not None and (now - previous).days < 7:
+                continue
+            await self._log_activity(
+                prospect_id=w["prospect_id"],
+                action="inactivity_warning_sent",
+                details={
+                    "days_inactive": w["days_inactive"],
+                    "timeout_days": w["timeout_days"],
+                    "alert_level": w["alert_level"],
+                },
+                performed_by=processed_by,
+            )
+            warning_count += 1
 
         if warning_count > 0 or inactive_count > 0:
             await self.db.commit()
@@ -3855,6 +4150,48 @@ class MembershipPipelineService:
             "marked_inactive": inactive_count,
             "total_checked": len(warnings),
         }
+
+    async def _prospects_with_action(self, prospect_ids: List[str], action: str) -> set:
+        """Which of ``prospect_ids`` already have an activity entry for ``action``."""
+        if not prospect_ids:
+            return set()
+        result = await self.db.execute(
+            select(ProspectActivityLog.prospect_id)
+            .where(
+                ProspectActivityLog.prospect_id.in_(prospect_ids),
+                ProspectActivityLog.action == action,
+            )
+            .distinct()
+        )
+        return {str(pid) for pid in result.scalars().all()}
+
+    async def _latest_action_times(
+        self, prospect_ids: List[str], action: str
+    ) -> Dict[str, datetime]:
+        """Most recent ``action`` timestamp per prospect, as aware UTC."""
+        if not prospect_ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                ProspectActivityLog.prospect_id,
+                func.max(ProspectActivityLog.created_at),
+            )
+            .where(
+                ProspectActivityLog.prospect_id.in_(prospect_ids),
+                ProspectActivityLog.action == action,
+            )
+            .group_by(ProspectActivityLog.prospect_id)
+        )
+        times: Dict[str, datetime] = {}
+        for prospect_id, created_at in result.all():
+            if created_at is None:
+                continue
+            # func.max() can come back naive depending on the driver, and the
+            # comparison below is against an aware "now".
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            times[str(prospect_id)] = created_at
+        return times
 
     # =========================================================================
     # Interview Management

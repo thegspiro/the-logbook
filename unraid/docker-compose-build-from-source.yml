@@ -165,8 +165,10 @@ services:
   # ============================================
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      # Root context: the workspace lockfile lives at the repo root and
+      # `npm ci` needs it inside the context. See frontend/Dockerfile.
+      context: .
+      dockerfile: frontend/Dockerfile
       target: production
       args:
         VITE_API_URL: /api/v1

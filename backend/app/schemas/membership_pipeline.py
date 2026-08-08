@@ -384,6 +384,100 @@ class AdvanceProspectRequest(BaseModel):
     notes: Optional[str] = Field(None, description="Optional notes for the advancement")
 
 
+# --- Kanban Board Schemas ---
+
+
+class KanbanColumnResponse(BaseModel):
+    """One stage column of the kanban board"""
+
+    model_config = _response_config
+
+    step: Optional[PipelineStepResponse] = None
+    prospects: List[ProspectListResponse] = []
+    count: int = Field(
+        0,
+        description=(
+            "True number of prospects in this column, which can exceed the "
+            "number of cards returned when the board is truncated."
+        ),
+    )
+
+
+class KanbanBoardResponse(BaseModel):
+    """Kanban board for a pipeline.
+
+    Declared explicitly rather than returned as a bare dict: without a
+    response model the endpoint serialized every ``ProspectiveMember``
+    column, which put ``status_token`` — the credential behind the public
+    application-status page — plus coordinator notes, date of birth and home
+    address into a board view. Cards carry the same fields as the prospect
+    list and nothing more.
+    """
+
+    model_config = _response_config
+
+    pipeline: PipelineResponse
+    columns: List[KanbanColumnResponse] = []
+    total_prospects: int = 0
+    returned_prospects: int = 0
+    truncated: bool = False
+
+
+# --- Bulk Action Schemas ---
+
+# A coordinator selecting 30 applicants should cost one request, not 30. The
+# cap is a guardrail against an unbounded request body, not a UI page size.
+_MAX_BULK_PROSPECTS = 200
+
+
+class BulkAdvanceRequest(BaseModel):
+    """Schema for advancing several prospects in one request"""
+
+    prospect_ids: List[UUID] = Field(..., min_length=1, max_length=_MAX_BULK_PROSPECTS)
+    notes: Optional[str] = Field(None, description="Optional notes for the advancement")
+
+
+class BulkStatusRequest(BaseModel):
+    """Schema for changing the status of several prospects in one request"""
+
+    prospect_ids: List[UUID] = Field(..., min_length=1, max_length=_MAX_BULK_PROSPECTS)
+    status: str = Field(
+        ...,
+        description="Target status: active, on_hold, approved, rejected, withdrawn",
+    )
+    reason: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description=(
+            "Why the status changed. Recorded in the prospect's activity log — "
+            "it deliberately does not overwrite the coordinator notes field."
+        ),
+    )
+
+
+class BulkActionItemResult(BaseModel):
+    """Per-prospect outcome of a bulk action"""
+
+    model_config = _response_config
+
+    prospect_id: str
+    name: Optional[str] = None
+    succeeded: bool
+    error: Optional[str] = Field(
+        None, description="Why this prospect was skipped, when succeeded is false"
+    )
+
+
+class BulkActionResponse(BaseModel):
+    """Outcome of a bulk action, itemized so the caller can name the failures"""
+
+    model_config = _response_config
+
+    succeeded_count: int
+    failed_count: int
+    results: List[BulkActionItemResult]
+
+
 # --- Transfer Schema ---
 
 

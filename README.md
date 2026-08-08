@@ -21,13 +21,13 @@ An open-source, modular intranet platform designed for fire departments, emergen
 
 ## Core Modules
 
-| Module | Description |
-|--------|-------------|
-| **User Management & Authentication** | Member profiles, roles, permissions, OAuth 2.0 SSO (Google, Microsoft), MFA |
-| **Document Management** | 7 system folders (SOPs, Policies, Forms, Reports, Training Materials, Meeting Minutes, General), custom folders, grid/list views, document viewer |
-| **Communication Tools** | Announcements, messaging, notifications |
-| **Calendar & Scheduling** | Week/month views, shift templates (day, night, morning), staffing requirements, optional platoon rotations (A/B/C) with leave-aware staffing and hold-over roster |
-| **Dashboard** | Organization stats, training progress widget, member overview |
+| Module                               | Description                                                                                                                                                       |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **User Management & Authentication** | Member profiles, roles, permissions, OAuth 2.0 SSO (Google, Microsoft), MFA                                                                                       |
+| **Document Management**              | 7 system folders (SOPs, Policies, Forms, Reports, Training Materials, Meeting Minutes, General), custom folders, grid/list views, document viewer                 |
+| **Communication Tools**              | Announcements, messaging, notifications                                                                                                                           |
+| **Calendar & Scheduling**            | Week/month views, shift templates (day, night, morning), staffing requirements, optional platoon rotations (A/B/C) with leave-aware staffing and hold-over roster |
+| **Dashboard**                        | Organization stats, training progress widget, member overview                                                                                                     |
 
 ## Modules
 
@@ -103,23 +103,23 @@ Reports catalog with member, training, event, and compliance report categories.
 
 ### Additional Modules
 
-| Module | Description |
-|--------|-------------|
-| **Department Storefront** | Optional store for member merchandise: catalog, sizes, name embroidery, ordering windows, and payment tracking (Venmo/PayPal/Cash App/Zelle), with a per-department rule for whether an unpaid order reaches the vendor or can be collected. The platform never takes a payment — it records what is owed and settles it. Nine notices, each with its own switch, a preview and a test send, and all of them editable in Email Templates. |
-| **Module Configuration** | Priority-based module overview system |
-| **Navigation Options** | Configurable top and side navigation layouts |
-| Vehicle/Apparatus Management | Vehicle and apparatus tracking |
-| Fundraising & Grants | Grant application tracking and fundraising/donation management |
-| Budget & Finance Tracking | Fiscal years, budgets, purchase/expense/check requests, and approval chains |
-| Medical Screening | Member medical screening records and compliance (PHI) |
-| Prospective Members | Applicant intake and membership pipeline |
-| Public Portal | Public-facing event request and form submission portal |
-| Integrations | Salesforce sync and third-party integration management |
-| Skills Testing | Skill test templates, sessions, and official record management |
-| Admin Hours | Member administrative-hours tracking and clock-in records |
-| Operational Ranks | Rank definitions and default rank permissions |
-| Incident Reporting | *Planned* |
-| Equipment Maintenance | *Planned* |
+| Module                       | Description                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Department Storefront**    | Optional store for member merchandise: catalog, sizes, name embroidery, ordering windows, and payment tracking (Venmo/PayPal/Cash App/Zelle), with a per-department rule for whether an unpaid order reaches the vendor or can be collected. The platform never takes a payment — it records what is owed and settles it. Nine notices, each with its own switch, a preview and a test send, and all of them editable in Email Templates. |
+| **Module Configuration**     | Priority-based module overview system                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Navigation Options**       | Configurable top and side navigation layouts                                                                                                                                                                                                                                                                                                                                                                                              |
+| Vehicle/Apparatus Management | Vehicle and apparatus tracking                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Fundraising & Grants         | Grant application tracking and fundraising/donation management                                                                                                                                                                                                                                                                                                                                                                            |
+| Budget & Finance Tracking    | Fiscal years, budgets, purchase/expense/check requests, and approval chains                                                                                                                                                                                                                                                                                                                                                               |
+| Medical Screening            | Member medical screening records and compliance (PHI)                                                                                                                                                                                                                                                                                                                                                                                     |
+| Prospective Members          | Applicant intake and membership pipeline                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Public Portal                | Public-facing event request and form submission portal                                                                                                                                                                                                                                                                                                                                                                                    |
+| Integrations                 | Salesforce sync and third-party integration management                                                                                                                                                                                                                                                                                                                                                                                    |
+| Skills Testing               | Skill test templates, sessions, and official record management                                                                                                                                                                                                                                                                                                                                                                            |
+| Admin Hours                  | Member administrative-hours tracking and clock-in records                                                                                                                                                                                                                                                                                                                                                                                 |
+| Operational Ranks            | Rank definitions and default rank permissions                                                                                                                                                                                                                                                                                                                                                                                             |
+| Incident Reporting           | _Planned_                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Equipment Maintenance        | _Planned_                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## Quick Start
 
@@ -132,6 +132,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
 ```
 
 This automatically:
+
 - ✅ Detects your OS and architecture (x86_64, ARM64, ARMv7)
 - ✅ Installs Docker if needed
 - ✅ Generates secure secrets
@@ -144,11 +145,11 @@ This automatically:
 
 Choose a profile based on your hardware:
 
-| Profile | RAM | Best For |
-|---------|-----|----------|
-| `minimal` | 1-2GB | Raspberry Pi, small VPS |
-| `standard` | 4GB | Most deployments (default) |
-| `full` | 8GB+ | Large organizations, all features |
+| Profile    | RAM   | Best For                          |
+| ---------- | ----- | --------------------------------- |
+| `minimal`  | 1-2GB | Raspberry Pi, small VPS           |
+| `standard` | 4GB   | Most deployments (default)        |
+| `full`     | 8GB+  | Large organizations, all features |
 
 ```bash
 # Raspberry Pi / Low memory
@@ -180,6 +181,7 @@ docker compose up -d
 ```
 
 > **Which `.env` file?** `.env.example` is the quick-start config (~30 variables) — fill in your secrets and go. If you need cloud storage (S3, Azure, GCS), OAuth/SSO (Google, Microsoft), SMS (Twilio), HIPAA tuning, or advanced security settings, copy `.env.example.full` instead. See [Choosing Your Configuration File](#choosing-your-configuration-file) below for details.
+
 </details>
 
 <details>
@@ -195,6 +197,7 @@ cd the-logbook
 cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-compose.arm.yml up -d
 ```
+
 </details>
 
 <details>
@@ -212,6 +215,7 @@ docker compose up -d backend frontend
 ```
 
 See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions or [Deployment Guide](wiki/Deployment-Guide.md) for other cloud platforms.
+
 </details>
 
 <details>
@@ -224,6 +228,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 Access: `http://YOUR-UNRAID-IP:7880`
 
 See [Unraid Quick Start](unraid/QUICK-START.md) for details.
+
 </details>
 
 <details>
@@ -244,6 +249,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 Access: `http://YOUR-LXC-IP:3000`
 
 See [Proxmox Deployment Guide](docs/deployment/proxmox.md) for details.
+
 </details>
 
 <details>
@@ -263,6 +269,7 @@ sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 Access: `http://YOUR-NAS-IP:3000`
 
 See [Synology Deployment Guide](docs/deployment/synology.md) for details.
+
 </details>
 
 <details>
@@ -275,18 +282,19 @@ cd the-logbook
 ```
 
 Installs directly with systemd services (Ubuntu/Debian only).
+
 </details>
 
 ### Choosing Your Configuration File
 
 Two environment templates are provided. Choose the one that fits your deployment:
 
-| | `.env.example` | `.env.example.full` |
-|---|---|---|
-| **Best for** | Quick setup, most deployments | Production hardening, advanced integrations |
-| **Variables** | ~30 | ~100+ |
-| **Default env** | `production` | `development` |
-| **Setup time** | 5 minutes | 15–30 minutes |
+|                 | `.env.example`                | `.env.example.full`                         |
+| --------------- | ----------------------------- | ------------------------------------------- |
+| **Best for**    | Quick setup, most deployments | Production hardening, advanced integrations |
+| **Variables**   | ~30                           | ~100+                                       |
+| **Default env** | `production`                  | `development`                               |
+| **Setup time**  | 5 minutes                     | 15–30 minutes                               |
 
 **Use `.env.example` (recommended start)** if you want to get running quickly with sensible defaults. It covers security keys, database, Redis, CORS, ports, timezone, basic module toggles, email, and backups. This is sufficient for most single-server deployments.
 
@@ -295,6 +303,7 @@ cp .env.example .env
 ```
 
 **Use `.env.example.full`** if you need any of the following:
+
 - Cloud file storage (AWS S3, Azure Blob, Google Cloud Storage)
 - OAuth / SSO providers (Microsoft Azure AD, Google OAuth)
 - SMS notifications (Twilio)
@@ -326,31 +335,33 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 
 ## Supported Platforms
 
-| Platform | Architecture | Profile | Status |
-|----------|--------------|---------|--------|
-| **Linux** (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch) | x86_64 | All | ✅ Full support |
-| **macOS** (Intel & Apple Silicon) | x86_64, ARM64 | All | ✅ Full support |
-| **Windows** (WSL2) | x86_64 | All | ✅ Full support |
-| **Raspberry Pi 4/5** | ARM64 | minimal, standard | ✅ Full support |
-| **Raspberry Pi 3** | ARMv7 | minimal | ⚠️ Limited (1GB RAM) |
-| **AWS** (EC2, ECS, Fargate) | x86_64, ARM64 | All | ✅ Full support |
-| **Azure** (VMs, Container Instances) | x86_64 | All | ✅ Full support |
-| **Google Cloud** (Compute, Cloud Run) | x86_64 | All | ✅ Full support |
-| **DigitalOcean** (Droplets, App Platform) | x86_64 | All | ✅ Full support |
-| **Proxmox VE** (LXC, VM) | x86_64 | All | ✅ Full support |
-| **Synology NAS** (DS+, XS+ series) | x86_64 | minimal, standard | ✅ Full support |
-| **Unraid** | x86_64 | standard | ✅ Optimized |
-| **Kubernetes** | x86_64, ARM64 | standard, full | ✅ Helm chart available |
+| Platform                                                 | Architecture  | Profile           | Status                  |
+| -------------------------------------------------------- | ------------- | ----------------- | ----------------------- |
+| **Linux** (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch) | x86_64        | All               | ✅ Full support         |
+| **macOS** (Intel & Apple Silicon)                        | x86_64, ARM64 | All               | ✅ Full support         |
+| **Windows** (WSL2)                                       | x86_64        | All               | ✅ Full support         |
+| **Raspberry Pi 4/5**                                     | ARM64         | minimal, standard | ✅ Full support         |
+| **Raspberry Pi 3**                                       | ARMv7         | minimal           | ⚠️ Limited (1GB RAM)    |
+| **AWS** (EC2, ECS, Fargate)                              | x86_64, ARM64 | All               | ✅ Full support         |
+| **Azure** (VMs, Container Instances)                     | x86_64        | All               | ✅ Full support         |
+| **Google Cloud** (Compute, Cloud Run)                    | x86_64        | All               | ✅ Full support         |
+| **DigitalOcean** (Droplets, App Platform)                | x86_64        | All               | ✅ Full support         |
+| **Proxmox VE** (LXC, VM)                                 | x86_64        | All               | ✅ Full support         |
+| **Synology NAS** (DS+, XS+ series)                       | x86_64        | minimal, standard | ✅ Full support         |
+| **Unraid**                                               | x86_64        | standard          | ✅ Optimized            |
+| **Kubernetes**                                           | x86_64, ARM64 | standard, full    | ✅ Helm chart available |
 
 ## Documentation
 
 **[The Logbook Wiki](https://github.com/thegspiro/the-logbook/wiki)** — Comprehensive documentation including installation, configuration, troubleshooting, and development guides.
 
 ### Getting Started
+
 - [Onboarding Guide](ONBOARDING.md) — First-time setup wizard
 - [Contributing Guide](CONTRIBUTING.md) — How to contribute
 
 ### Deployment
+
 - [General Deployment Guide](docs/DEPLOYMENT.md) — Overview of all deployment methods
 - [AWS Deployment](docs/deployment/aws.md) — EC2, RDS, and ElastiCache
 - [Proxmox Deployment](docs/deployment/proxmox.md) — LXC and VM
@@ -359,6 +370,7 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 - [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) — Docker image management
 
 ### Modules & Features
+
 - [Training Programs](docs/TRAINING_PROGRAMS.md) — Training management, requirements, certifications
 - [Training Module Backend](backend/app/docs/TRAINING_MODULE.md) — Backend API for training
 - [Meeting Minutes](docs/MEETING_MINUTES_MODULE.md) — Minutes management, templates, document publishing
@@ -369,29 +381,31 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 - [Role System](ROLE_SYSTEM_README.md) — Role-based access control (16 system roles)
 
 ### Development
+
 - [Python Backend Guide](docs/backend/python-backend.md) — Backend development
 - [TypeScript Safeguards](docs/TYPESCRIPT_SAFEGUARDS.md) — Multi-layer build protection
 - [Testing Guide](TESTING.md) — Test suites for onboarding and event components
 
 ### Security & Troubleshooting
+
 - [Security Guide](SECURITY.md) — Security policy and compliance
 - [Compliance Hub](docs/COMPLIANCE.md) — Framework alignment, control inventory, known gaps
 - [Backup & Disaster Recovery](docs/BACKUP.md) — Backups, restore drills, RTO/RPO
 - [Key Rotation](docs/KEY_ROTATION.md) — Rotating encryption keys safely
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) — All modules including locations, kiosk, and training
-- [Deployment Troubleshooting](docs/troubleshooting/README.md) — Docker and deployment issues
+- [Deployment Troubleshooting](docs/TROUBLESHOOTING.md#docker-issues) — Docker and deployment issues (same guide, Docker section)
 
 ## Technology Stack
 
-| Layer | Technologies |
-|-------|-------------|
-| **Backend** | Python 3.13, FastAPI, SQLAlchemy (async), Alembic |
-| **Frontend** | React 19, TypeScript, Tailwind CSS |
-| **Database** | MySQL 8.0+ |
-| **Cache** | Redis 7+ |
-| **Search** | Elasticsearch (optional) |
-| **File Storage** | Local, S3, Azure Blob, Google Cloud Storage |
-| **Authentication** | OAuth 2.0 (Google, Microsoft), TOTP-based MFA |
+| Layer              | Technologies                                      |
+| ------------------ | ------------------------------------------------- |
+| **Backend**        | Python 3.13, FastAPI, SQLAlchemy (async), Alembic |
+| **Frontend**       | React 19, TypeScript, Tailwind CSS                |
+| **Database**       | MySQL 8.0+                                        |
+| **Cache**          | Redis 7+                                          |
+| **Search**         | Elasticsearch (optional)                          |
+| **File Storage**   | Local, S3, Azure Blob, Google Cloud Storage       |
+| **Authentication** | OAuth 2.0 (Google, Microsoft), TOTP-based MFA     |
 
 ## Security & Compliance
 

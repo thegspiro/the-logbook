@@ -15,19 +15,24 @@ enroll failed the same way.
 The model now declares the column, which fixes fresh installs built by
 ``create_all()``. This migration covers databases that already exist.
 
-Revision ID: 20260807_0002
-Revises: 20260807_0001
+Originally numbered ``20260807_0002``, which a concurrently-merged pull
+request had already taken (the same collision ``20260807_0003`` was written to
+repair). Two files answering to one revision id leaves the graph unresolvable,
+so this one moves past the merge point instead. Adding a column is
+order-independent, so nothing about the chain below it matters here.
+
+Revision ID: 20260807_0004
+Revises: 20260807_0003
 Create Date: 2026-08-07 00:00:00.000000
 
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260807_0002"
-down_revision = "20260807_0001"
+revision = "20260807_0004"
+down_revision = "20260807_0003"
 branch_labels = None
 depends_on = None
 

@@ -263,6 +263,69 @@ class TestProspectManagement:
             for p in hold_list
         )
 
+    async def test_search_matches_a_full_name_in_either_order(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+
+        pipeline = await svc.create_pipeline(
+            organization_id=org_id, name="Search Pipeline"
+        )
+        target = await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "John",
+                "last_name": "Smith",
+                "email": "jsmith@example.com",
+                "pipeline_id": pipeline.id,
+            },
+            created_by=admin_id,
+        )
+        await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "John",
+                "last_name": "Baker",
+                "email": "jbaker@example.com",
+                "pipeline_id": pipeline.id,
+            },
+            created_by=admin_id,
+        )
+
+        for query in ("John Smith", "smith john", "  john   smith  "):
+            found, total = await svc.list_prospects(
+                org_id, pipeline_id=pipeline.id, search=query
+            )
+            assert [p.id for p in found] == [target.id], query
+            assert total == 1
+
+    async def test_search_still_matches_a_single_field(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+
+        pipeline = await svc.create_pipeline(
+            organization_id=org_id, name="Single Term Pipeline"
+        )
+        target = await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "Priya",
+                "last_name": "Nandi",
+                "email": "priya.nandi@example.com",
+                "pipeline_id": pipeline.id,
+            },
+            created_by=admin_id,
+        )
+
+        for query in ("Priya", "nandi", "priya.nandi@example.com"):
+            found, _ = await svc.list_prospects(
+                org_id, pipeline_id=pipeline.id, search=query
+            )
+            assert [p.id for p in found] == [target.id], query
+
     async def test_get_prospect_detail(
         self, db_session: AsyncSession, setup_org_and_admin
     ):

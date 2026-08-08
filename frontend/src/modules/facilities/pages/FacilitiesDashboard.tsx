@@ -149,7 +149,7 @@ export default function FacilitiesDashboard() {
                 </div>
                 <button
                   onClick={() => void navigate('/facilities/maintenance?status=overdue')}
-                  className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors"
+                  className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors max-md:min-h-[44px]"
                 >
                   View all <ArrowRight className="w-3 h-3" />
                 </button>
@@ -200,7 +200,7 @@ export default function FacilitiesDashboard() {
                 </div>
                 <button
                   onClick={() => void navigate('/facilities/inspections')}
-                  className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors"
+                  className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors max-md:min-h-[44px]"
                 >
                   View all <ArrowRight className="w-3 h-3" />
                 </button>
@@ -280,7 +280,7 @@ export default function FacilitiesDashboard() {
               <h2 className="text-lg font-semibold text-theme-text-primary">All Facilities</h2>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="text-sm text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors"
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors max-md:min-h-[44px]"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Facility
               </button>

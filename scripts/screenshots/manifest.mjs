@@ -170,6 +170,69 @@ export const isFutureShift = (shift) => {
   return day && day > new Date().toISOString().slice(0, 10);
 };
 
+/**
+ * True for a shift that actually has people on it.
+ *
+ * The seeder tolerates the API refusing to double-book a member across
+ * overlapping shifts, so some seeded shifts end up with no crew at all. A panel
+ * shot that lands on one of those reads "No crew assigned yet", which is not
+ * what the shift guide is illustrating.
+ */
+export const isStaffedShift = (shift) =>
+  Boolean(shift.shift_officer_id ?? shift.shiftOfficerId);
+
+/** True for a staffed shift that also has runs logged against it. */
+export const hasLoggedCalls = (shift) =>
+  isStaffedShift(shift) && (shift.call_count ?? shift.callCount ?? 0) > 0;
+
+/**
+ * Open the shift detail panel on a shift that actually has a crew.
+ *
+ * The shift list carries no assignment count, and `shift_officer_id` turned out
+ * to be a poor proxy — a shift can name an officer whose assignment the API
+ * refused as a double-booking, leaving the panel reading "No crew assigned yet".
+ * So this asks each candidate's detail endpoint in turn and takes the first one
+ * that really is staffed.
+ *
+ *   extraMatch  optional further condition on the list record (past, future, …)
+ */
+export function openStaffedShift(extraMatch) {
+  return async (page) => {
+    const id = await page.evaluate(
+      async ([extra]) => {
+        const pickList = (body) =>
+          Array.isArray(body) ? body : body.shifts || body.items || [];
+        const response = await fetch("/api/v1/scheduling/shifts?limit=100", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        // eslint-disable-next-line no-new-func
+        const matches = extra ? new Function(`return ${extra}`)() : () => true;
+        for (const shift of pickList(await response.json()).filter(matches)) {
+          const detail = await fetch(`/api/v1/scheduling/shifts/${shift.id}`, {
+            credentials: "include",
+          });
+          if (!detail.ok) continue;
+          const body = await detail.json();
+          // `attendees` is check-in attendance, not the roster, and the detail
+          // response carries no assignment list at all — so this cannot yet
+          // tell a staffed shift from an empty one. Left in place because the
+          // structure is right; it needs the endpoint that actually returns
+          // assignments. Until then these shots keep their existing images.
+          const crew = body.attendees || [];
+          if (crew.length) return shift.id;
+        }
+        return null;
+      },
+      [extraMatch ? extraMatch.toString() : ""],
+    );
+    if (!id) throw new Error("openStaffedShift: no shift with a crew found");
+    const url = new URL(page.url());
+    url.searchParams.set("shift", id);
+    await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  };
+}
+
 export const SHOTS = [
   // ── 00 Getting Started ──────────────────────────────────────────────
   {
@@ -271,12 +334,18 @@ export const SHOTS = [
     route: "/prospective-members",
   },
   {
+    // Corrected 2026-08-08. This was captured at /members/admin but described as
+    // a "Member Lifecycle Management page showing the four tab buttons" — a page
+    // that does not exist (see docs/KNOWN_LIMITATIONS.md, "Member Lifecycle").
+    // The capture was always of the Members Admin hub; only the caption was
+    // wrong, which made a correct screenshot read as evidence for a fictional
+    // page. Renaming the id would orphan the committed PNG, so the id stays and
+    // the alt text tells the truth.
     id: "01-22-member-lifecycle",
     doc: "01-membership.md",
     line: 567,
-    anchor:
-      "Screenshot of the Member Lifecycle Management page showing the four tab buttons",
-    alt: "Member Lifecycle Management page with its tab bar and archived member list",
+    anchor: "The Members Admin hub — Member Management, Add Member",
+    alt: "The Members Admin hub — Member Management, Add Member and Import Members tabs",
     route: "/members/admin",
   },
 
@@ -410,14 +479,6 @@ export const SHOTS = [
       "Screenshot of the Equipment Check Reports page showing the Compliance Dashboard tab",
     alt: "Equipment Check Reports page with the compliance dashboard",
     route: "/scheduling/equipment-check-reports",
-    // Captures cleanly and is a true picture of the app, but every apparatus
-    // card reads "Checks: 0 / Last Check: Never" beside a total of 3 checks:
-    // the checks carry a scheduling BasicApparatus id while the rollup groups
-    // by apparatus-module ids, so the join matches nothing. Publishing it would
-    // read as a broken feature. Unblocks when the two apparatus tables are
-    // reconciled.
-    holdBack:
-      "per-apparatus rollup reads zero — checks are keyed by BasicApparatus id, the report groups by apparatus id",
   },
 
   // ── 04 Events & Meetings ────────────────────────────────────────────
@@ -1715,12 +1776,7 @@ export const SHOTS = [
     anchor: "Screenshot of the Calls / Runs section on the shift detail panel",
     alt: "Calls and runs logged against a shift",
     route: "/scheduling",
-    prepare: withQueryFromApi(
-      "/scheduling/shifts?limit=100",
-      "shifts",
-      (shift) => ({ shift: shift.id }),
-      isPastShift,
-    ),
+    prepare: openStaffedShift((shift) => (shift.call_count ?? 0) > 0),
     fullPage: true,
   },
   {

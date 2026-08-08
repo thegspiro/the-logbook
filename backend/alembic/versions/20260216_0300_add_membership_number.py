@@ -9,8 +9,8 @@ users table. Unique per organization so that no two active members share the
 same membership number.
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers
 revision = "20260216_0300"

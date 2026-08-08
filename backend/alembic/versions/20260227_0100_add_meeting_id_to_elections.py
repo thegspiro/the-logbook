@@ -7,9 +7,9 @@ Create Date: 2026-02-27
 Allows linking an election to a formal meeting record so that
 attendance and context are shared between the two.
 """
-from alembic import op
-import sqlalchemy as sa
 
+import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers
 revision = "20260227_0100"

@@ -2,9 +2,13 @@
 
 ## Overview
 
-This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
+This is **the** troubleshooting guide for The Logbook — every module, plus deployment, build, migration and CI issues. It is the single source: there is nowhere else to add a troubleshooting entry, and nothing else to keep in sync with it.
 
-**Last Updated**: 2026-03-12 (added finance module; recurring events with monthly-by-weekday and annual patterns; prospective members event linking; minutes module refactoring; QR check-in timezone fixes; timezone standardization across 34 files; ballot email notifications with org logo; auth cookie LAN HTTP fix; events settings refactor and JSON persistence fix; custom categories schema fix; form value `??` to `||` migration; 94 TypeScript error fixes; ESLint zero errors; slug internalization; plus all previous updates)
+> **Seven troubleshooting documents were consolidated into this one (2026-08-08).** `docs/troubleshooting/README.md`, a hand-edited `wiki/Troubleshooting.md`, and the four per-area wiki pages (`Troubleshooting-Containers`, `-Backend`, `-Frontend`, `-Database`) all covered overlapping ground and drifted apart — the digest and the wiki copy froze at 2026-03-12 while this file kept moving, and each held entries the others lacked. The per-area pages were never even in `setup-wiki.sh`'s publish list, so the wiki sidebar links to them were dead. Their diagnostics now live here as [Container & Docker](#container--docker-diagnostics), [Backend Service](#backend-service-diagnostics), [Frontend & Browser](#frontend--browser-diagnostics) and [Database](#database-diagnostics), and the wiki page is **generated** from this file at publish time, so none of it can drift again. Add new entries here.
+
+**Last Updated**: 2026-08-08 (consolidated the three troubleshooting documents into this one; added the 2026-04 → 2026-08 entries that had only ever been written into the deployment digest — deployment posture and compose overrides, host-header and reverse-proxy trust, DB/Redis TLS verification, OAuth sign-in failure codes, the forced-password-change trap, audit retention and shipping, privacy rights, the offline-queue and skills-testing entries, and the rest)
+
+**Previously**: 2026-03-12 (finance module; recurring events with monthly-by-weekday and annual patterns; prospective members event linking; minutes module refactoring; QR check-in timezone fixes; timezone standardization across 34 files; ballot email notifications with org logo; auth cookie LAN HTTP fix; events settings refactor and JSON persistence fix; custom categories schema fix; form value `??` to `||` migration; 94 TypeScript error fixes; ESLint zero errors; slug internalization; plus all previous updates)
 
 ---
 
@@ -18,108 +22,189 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 6. [Network & Connection Problems](#network--connection-problems)
 7. [Image Upload Issues](#image-upload-issues)
 8. [Database & Migration Issues](#database--migration-issues)
-9. [Startup Sequence Issues](#startup-sequence-issues)
-10. [Prospective Members Module Issues](#prospective-members-module-issues)
-11. [Elections Module Issues](#elections-module-issues)
-12. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
-13. [Documents Module Issues](#documents-module-issues)
-14. [Events Module Issues](#events-module-issues)
-15. [Facilities Module](#facilities-module)
-16. [Locations & Kiosk Display](#locations--kiosk-display)
-17. [Theme & Display Issues](#theme--display-issues)
-18. [Dashboard Issues](#dashboard-issues)
-19. [TypeScript Build Issues](#typescript-build-issues)
-20. [Error Message Reference](#error-message-reference)
-21. [Error Handling Patterns](#error-handling-patterns)
-22. [Centralized Constants & Enum Usage Issues](#centralized-constants--enum-usage-issues)
-23. [CSS Variable & Theming Issues](#css-variable--theming-issues)
-24. [Dependency Version Management](#dependency-version-management)
-25. [Skills Testing Module Issues](#skills-testing-module-issues)
-26. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
-27. [Admin Hours Module Issues](#admin-hours-module-issues)
-28. [Scheduling Shift Pattern Issues](#scheduling-shift-pattern-issues)
-29. [Elections Module — Voting & Detail Page Issues](#elections-module--voting--detail-page-issues)
-30. [Backend Logging & Observability](#backend-logging--observability)
-31. [Organization Settings Issues](#organization-settings-issues)
-32. [Member ID Card Issues](#member-id-card-issues)
-33. [Dynamic Import / Chunk Load Issues](#dynamic-import--chunk-load-issues)
-34. [Platform Analytics Issues](#platform-analytics-issues)
-35. [Brute-Force & Rate Limiting Issues](#brute-force--rate-limiting-issues)
-36. [Navigation & Module Enablement Issues](#navigation--module-enablement-issues)
-37. [Frontend Cache Refresh Issues](#frontend-cache-refresh-issues)
-38. [Scheduling Module Refactor Issues](#scheduling-module-refactor-issues)
-39. [Security Alert & Audit Issues](#security-alert--audit-issues)
-40. [Accessibility & Theme Issues](#accessibility--theme-issues)
-41. [Email Notification Templates Issues](#email-notification-templates-issues)
-42. [Session & Login Resilience Issues](#session--login-resilience-issues)
-43. [Admin Hours Edit & Sessions Issues](#admin-hours-edit--sessions-issues)
-44. [Shift Editing & Position Change Issues](#shift-editing--position-change-issues)
-45. [Training Registry & Import Issues](#training-registry--import-issues)
-46. [CSS Migration & Inline Style Issues](#css-migration--inline-style-issues)
-47. [MySQL Connection Resilience](#mysql-connection-resilience)
-48. [Mobile Member ID Scanner Issues](#mobile-member-id-scanner-issues)
-49. [API Service Split & Import Issues](#api-service-split--import-issues)
-50. [exactOptionalPropertyTypes Issues](#exactoptionalpropertytypes-issues)
-51. [Route Module Extraction Issues](#route-module-extraction-issues)
-52. [Python Typing Modernization Issues](#python-typing-modernization-issues)
-53. [IP Spoofing & Security Middleware](#ip-spoofing--security-middleware)
-54. [Module Component Decomposition Issues](#module-component-decomposition-issues)
-55. [Tailwind CSS v4 Migration Issues](#tailwind-css-v4-migration-issues)
-56. [React 19 Upgrade Issues](#react-19-upgrade-issues)
-57. [ESLint v9 Flat Config Issues](#eslint-v9-flat-config-issues)
-58. [Vitest 4 & Zod 4 Upgrade Issues](#vitest-4--zod-4-upgrade-issues)
-59. [Forms Module — Integration & Builder Issues](#forms-module--integration--builder-issues)
-60. [Pipeline Stage Reorder & New Stage Types](#pipeline-stage-reorder--new-stage-types)
-61. [Member CSV Import Issues](#member-csv-import-issues)
-62. [Inventory CSV Import Issues](#inventory-csv-import-issues)
-63. [Events Settings 422 Errors](#events-settings-422-errors)
-64. [Onboarding Auth Cookie Issues](#onboarding-auth-cookie-issues)
-65. [Docker Frontend Build Issues](#docker-frontend-build-issues)
-66. [Alembic Migration Graph Walk Failures](#alembic-migration-graph-walk-failures)
-67. [WebSocket CSRF Dependency Errors](#websocket-csrf-dependency-errors)
-68. [Form-to-Pipeline Integration Issues](#form-to-pipeline-integration-issues)
-69. [Facility Address Display Issues](#facility-address-display-issues)
-70. [Admin Hours camelCase Mismatch](#admin-hours-camelcase-mismatch)
-71. [Custom Event Categories Issues](#custom-event-categories-issues)
-72. [ProspectResponse Metadata Serialization](#prospectresponse-metadata-serialization)
-73. [Modal Click-Through Issues](#modal-click-through-issues)
-74. [Theme Variable Compliance Issues](#theme-variable-compliance-issues)
-75. [Email Template Enum Drift](#email-template-enum-drift)
-76. [Inventory Empty String Clearing Issues](#inventory-empty-string-clearing-issues)
-77. [Inventory WebSocket 403 & 422 Errors](#inventory-websocket-403--422-errors)
-78. [Inventory Charges & Return Request Issues](#inventory-charges--return-request-issues)
-79. [Barcode Label Printing Issues](#barcode-label-printing-issues)
-80. [Training Recertification & xAPI Issues](#training-recertification--xapi-issues)
-81. [Compliance Officer Dashboard Issues](#compliance-officer-dashboard-issues)
-82. [Grants Module Serialization Issues](#grants-module-serialization-issues)
-83. [GrantNote Metadata Attribute Conflict](#grantnote-metadata-attribute-conflict)
-84. [Reports Rank Display Issues](#reports-rank-display-issues)
-85. [Prospective Member Stage History Issues](#prospective-member-stage-history-issues)
-86. [Clipboard Copy Fallback Issues](#clipboard-copy-fallback-issues)
-87. [Onboarding Auth State Reset Issues](#onboarding-auth-state-reset-issues)
-88. [Unraid App Removal Cleanup](#unraid-app-removal-cleanup)
-89. [Facilities MissingGreenlet Error](#facilities-missinggreenlet-error)
-90. [Login Cookie Delivery & Auth Flow Issues](#login-cookie-delivery--auth-flow-issues)
-91. [Security Middleware ASGI & Memory Issues](#security-middleware-asgi--memory-issues)
-92. [Elections Ballot Position Matching Issues](#elections-ballot-position-matching-issues)
-93. [Events Attendance Finalization Issues](#events-attendance-finalization-issues)
-94. [Facilities Container Startup Crash Chain](#facilities-container-startup-crash-chain)
-95. [Facilities Route Ordering & Seed Data Issues](#facilities-route-ordering--seed-data-issues)
-96. [Facilities Room-Location Integration Issues](#facilities-room-location-integration-issues)
-97. [Facilities NFPA Compliance Fields](#facilities-nfpa-compliance-fields)
-98. [Onboarding Empty String 422 Errors](#onboarding-empty-string-422-errors)
-99. [Pydantic 422 Error Display Issues](#pydantic-422-error-display-issues)
-100. [QR Check-In Timezone & ISO String Issues](#qr-check-in-timezone--iso-string-issues)
-101. [Recurring Event Pattern Issues](#recurring-event-pattern-issues)
-102. [Events Settings JSON Persistence Issues](#events-settings-json-persistence-issues)
-103. [Custom Event Categories Schema Issues](#custom-event-categories-schema-issues)
-104. [Form Value Empty String 422 Errors](#form-value-empty-string-422-errors)
-105. [Minutes Module Table Name Issues](#minutes-module-table-name-issues)
-106. [Auth Cookie LAN HTTP Issues](#auth-cookie-lan-http-issues)
-107. [TypeScript Build Error Batch Fix](#typescript-build-error-batch-fix)
-108. [Prospective Members Event Linking](#prospective-members-event-linking)
-109. [Dues Payment & Waiver Issues](#dues-payment--waiver-issues)
-110. [Getting Help](#getting-help)
+9. [Error Message Reference](#error-message-reference)
+10. [Security & Session Management](#security--session-management)
+11. [Documents Module](#documents-module)
+12. [Meetings & Minutes Module](#meetings--minutes-module)
+13. [Scheduling Module](#scheduling-module)
+14. [Facilities Module](#facilities-module)
+15. [Reports Module](#reports-module)
+16. [Inventory Module & Property Return Reports](#inventory-module--property-return-reports)
+17. [Training Module](#training-module)
+18. [Notifications Module](#notifications-module)
+19. [Error Handling Patterns](#error-handling-patterns)
+20. [Skills Testing Module Issues](#skills-testing-module-issues)
+21. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
+22. [Admin Hours Module Issues](#admin-hours-module-issues)
+23. [Scheduling Shift Pattern Issues](#scheduling-shift-pattern-issues)
+24. [Elections Module — Voting & Detail Page Issues](#elections-module--voting--detail-page-issues)
+25. [Backend Logging & Observability](#backend-logging--observability)
+26. [Organization Settings Issues](#organization-settings-issues)
+27. [Member ID Card Issues](#member-id-card-issues)
+28. [Dynamic Import / Chunk Load Issues](#dynamic-import--chunk-load-issues)
+29. [Platform Analytics Issues](#platform-analytics-issues)
+30. [Brute-Force & Rate Limiting Issues](#brute-force--rate-limiting-issues)
+31. [Navigation & Module Enablement Issues](#navigation--module-enablement-issues)
+32. [Frontend Cache Refresh Issues](#frontend-cache-refresh-issues)
+33. [Scheduling Module Refactor Issues](#scheduling-module-refactor-issues)
+34. [Security Alert & Audit Issues](#security-alert--audit-issues)
+35. [Accessibility & Theme Issues](#accessibility--theme-issues)
+36. [Email Notification Templates Issues](#email-notification-templates-issues)
+37. [Session & Login Resilience Issues](#session--login-resilience-issues)
+38. [Admin Hours Edit & Sessions Issues](#admin-hours-edit--sessions-issues)
+39. [Shift Editing & Position Change Issues](#shift-editing--position-change-issues)
+40. [Training Registry & Import Issues](#training-registry--import-issues)
+41. [CSS Migration & Inline Style Issues](#css-migration--inline-style-issues)
+42. [MySQL Connection Resilience](#mysql-connection-resilience)
+43. [Getting Help](#getting-help)
+44. [Appendix: Common Scenarios](#appendix-common-scenarios)
+45. [Prospective Members Module Issues](#prospective-members-module-issues)
+46. [Elections Module Issues](#elections-module-issues)
+47. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
+48. [Documents Module Issues](#documents-module-issues)
+49. [Events Module Issues](#events-module-issues)
+50. [Locations & Kiosk Display](#locations--kiosk-display)
+51. [Theme & Display Issues](#theme--display-issues)
+52. [Dashboard Issues](#dashboard-issues)
+53. [TypeScript Build Issues](#typescript-build-issues)
+54. [Centralized Constants & Enum Usage Issues](#centralized-constants--enum-usage-issues)
+55. [CSS Variable & Theming Issues](#css-variable--theming-issues)
+56. [Dependency Version Management](#dependency-version-management)
+57. [Docker Compose Profile Issues](#docker-compose-profile-issues)
+58. [Frontend Dependency Issues](#frontend-dependency-issues)
+59. [Migration Issues on Unraid](#migration-issues-on-unraid)
+60. [Insider Threat Security Fixes](#insider-threat-security-fixes)
+61. [Version History](#version-history)
+62. [Backend Configuration Issues (Added 2026-02-08)](#backend-configuration-issues-added-2026-02-08)
+63. [Database Migration Best Practices](#database-migration-best-practices)
+64. [Startup Sequence Issues](#startup-sequence-issues)
+65. [Recent Fixes Summary](#recent-fixes-summary)
+66. [Mobile Member ID Scanner Issues](#mobile-member-id-scanner-issues)
+67. [API Service Split & Import Issues](#api-service-split--import-issues)
+68. [exactOptionalPropertyTypes Issues](#exactoptionalpropertytypes-issues)
+69. [Route Module Extraction Issues](#route-module-extraction-issues)
+70. [Python Typing Modernization Issues](#python-typing-modernization-issues)
+71. [IP Spoofing & Security Middleware](#ip-spoofing--security-middleware)
+72. [Module Component Decomposition Issues](#module-component-decomposition-issues)
+73. [Tailwind CSS v4 Migration Issues](#tailwind-css-v4-migration-issues)
+74. [React 19 Upgrade Issues](#react-19-upgrade-issues)
+75. [ESLint v9 Flat Config Issues](#eslint-v9-flat-config-issues)
+76. [Vitest 4 & Zod 4 Upgrade Issues](#vitest-4--zod-4-upgrade-issues)
+77. [Forms Module — Integration & Builder Issues](#forms-module--integration--builder-issues)
+78. [Pipeline Stage Reorder & New Stage Types](#pipeline-stage-reorder--new-stage-types)
+79. [Member CSV Import Issues](#member-csv-import-issues)
+80. [Inventory CSV Import Issues](#inventory-csv-import-issues)
+81. [Events Settings 422 Errors](#events-settings-422-errors)
+82. [Onboarding Auth Cookie Issues](#onboarding-auth-cookie-issues)
+83. [Docker Frontend Build Issues](#docker-frontend-build-issues)
+84. [Alembic Migration Graph Walk Failures](#alembic-migration-graph-walk-failures)
+85. [WebSocket CSRF Dependency Errors](#websocket-csrf-dependency-errors)
+86. [Form-to-Pipeline Integration Issues](#form-to-pipeline-integration-issues)
+87. [Facility Address Display Issues](#facility-address-display-issues)
+88. [Admin Hours camelCase Mismatch](#admin-hours-camelcase-mismatch)
+89. [Custom Event Categories Issues](#custom-event-categories-issues)
+90. [ProspectResponse Metadata Serialization](#prospectresponse-metadata-serialization)
+91. [Modal Click-Through Issues](#modal-click-through-issues)
+92. [Theme Variable Compliance Issues](#theme-variable-compliance-issues)
+93. [Email Template Enum Drift](#email-template-enum-drift)
+94. [Inventory Empty String Clearing Issues](#inventory-empty-string-clearing-issues)
+95. [Inventory WebSocket 403 & 422 Errors](#inventory-websocket-403--422-errors)
+96. [Inventory Charges & Return Request Issues](#inventory-charges--return-request-issues)
+97. [Barcode Label Printing Issues](#barcode-label-printing-issues)
+98. [Training Recertification & xAPI Issues](#training-recertification--xapi-issues)
+99. [Compliance Officer Dashboard Issues](#compliance-officer-dashboard-issues)
+100. [Grants Module Serialization Issues](#grants-module-serialization-issues)
+101. [GrantNote Metadata Attribute Conflict](#grantnote-metadata-attribute-conflict)
+102. [Reports Rank Display Issues](#reports-rank-display-issues)
+103. [Prospective Member Stage History Issues](#prospective-member-stage-history-issues)
+104. [Clipboard Copy Fallback Issues](#clipboard-copy-fallback-issues)
+105. [Onboarding Auth State Reset Issues](#onboarding-auth-state-reset-issues)
+106. [Unraid App Removal Cleanup](#unraid-app-removal-cleanup)
+107. [Facilities MissingGreenlet Error](#facilities-missinggreenlet-error)
+108. [Login Cookie Delivery & Auth Flow Issues](#login-cookie-delivery--auth-flow-issues)
+109. [Security Middleware ASGI & Memory Issues](#security-middleware-asgi--memory-issues)
+110. [Elections Ballot Position Matching Issues](#elections-ballot-position-matching-issues)
+111. [Events Attendance Finalization Issues](#events-attendance-finalization-issues)
+112. [Facilities Container Startup Crash Chain](#facilities-container-startup-crash-chain)
+113. [Facilities Route Ordering & Seed Data Issues](#facilities-route-ordering--seed-data-issues)
+114. [Facilities Room-Location Integration Issues](#facilities-room-location-integration-issues)
+115. [Facilities NFPA Compliance Fields](#facilities-nfpa-compliance-fields)
+116. [Onboarding Empty String 422 Errors](#onboarding-empty-string-422-errors)
+117. [Pydantic 422 Error Display Issues](#pydantic-422-error-display-issues)
+118. [QR Check-In Timezone & ISO String Issues](#qr-check-in-timezone--iso-string-issues)
+119. [Recurring Event Pattern Issues](#recurring-event-pattern-issues)
+120. [Events Settings JSON Persistence Issues](#events-settings-json-persistence-issues)
+121. [Custom Event Categories Schema Issues](#custom-event-categories-schema-issues)
+122. [Form Value Empty String 422 Errors](#form-value-empty-string-422-errors)
+123. [Minutes Module Table Name Issues](#minutes-module-table-name-issues)
+124. [Auth Cookie LAN HTTP Issues](#auth-cookie-lan-http-issues)
+125. [TypeScript Build Error Batch Fix](#typescript-build-error-batch-fix)
+126. [Prospective Members Event Linking](#prospective-members-event-linking)
+127. [Dues Payment & Waiver Issues](#dues-payment--waiver-issues)
+128. [Complete Fresh Rebuild (Nuclear Option)](#complete-fresh-rebuild-nuclear-option)
+129. [Expected Successful State](#expected-successful-state)
+130. [Quick Diagnostic Checklist](#quick-diagnostic-checklist)
+131. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
+132. [Equipment Checks & Shift Reports](#equipment-checks--shift-reports-2026-04-04--2026-04-09)
+133. [Training Program 500s](#training-program-500s-2026-04-04)
+134. [Salesforce Sync](#salesforce-sync-2026-04-10--2026-04-12)
+135. [Cloudflare Email Platform](#cloudflare-email-platform-2026-04-26)
+136. [Offline Queue & Pending Sync](#offline-queue--pending-sync-2026-05-01--2026-05-02)
+137. [Training Attachments & Exports](#training-attachments--exports-2026-05-24--2026-05-25)
+138. [Prospect Documents & the Coordinator Role Rename](#prospect-documents--the-coordinator-role-rename-2026-05-28)
+139. [OAuth Sign-In Failures](#oauth-sign-in-failures-2026-05-29)
+140. [Compliance Evaluation Period](#compliance-evaluation-period-2026-05-29)
+141. [Login Blocked Until Configured](#login-blocked-until-configured-2026-06-25)
+142. [Forced Password Change Rejected as "Changed Recently"](#forced-password-change-rejected-as-changed-recently-2026-06-25)
+143. [Inventory Impact Planner](#inventory-impact-planner-2026-06-22--2026-06-23)
+144. [Training Pipelines: Self-Service Limits & Alerts](#training-pipelines-self-service-limits--alerts-2026-07-14--2026-07-16)
+145. [Shift Finalize Gates](#shift-finalize-gates-2026-07-16)
+146. [Messaging Escalation & Acknowledgment](#messaging-escalation--acknowledgment-2026-07-17)
+147. [Field Encryption Upgrade](#field-encryption-upgrade-2026-07-21--2026-08-01)
+148. [Shared-Device Data Leaks](#shared-device-data-leaks-2026-07-21--2026-07-27)
+149. [Production Posture & Compose Overrides](#production-posture--compose-overrides-2026-07-27)
+150. [Host Header & Reverse-Proxy Trust](#host-header--reverse-proxy-trust-2026-07-27)
+151. [DB / Redis TLS Verification](#db--redis-tls-verification-2026-07-27--2026-08-01)
+152. [MODULE\_\*\_ENABLED Flags Do Nothing](#module__enabled-flags-do-nothing-2026-07-27)
+153. [Elections: Eligibility, Test Ballots & Runoffs](#elections-eligibility-test-ballots--runoffs-2026-07-28--2026-07-29)
+154. [FastAPI / Starlette Upgrade](#fastapi--starlette-upgrade-2026-07-30)
+155. [Audit Log Retention, Archival & Shipping](#audit-log-retention-archival--shipping-2026-07-30--2026-07-31)
+156. [Privacy Rights: Export, Consent & Anonymization](#privacy-rights-export-consent--anonymization-2026-07-31)
+157. [Assorted July Fixes](#assorted-july-fixes-2026-07-21--2026-07-31)
+158. [Offline Queues Across Tabs](#offline-queues-across-tabs-2026-08-01)
+159. [Approvals Require a Second Person](#approvals-require-a-second-person-2026-08-01)
+160. [Last Administrator Lockout](#last-administrator-lockout-2026-08-01)
+161. [Frontend Env Vars That Do Nothing](#frontend-env-vars-that-do-nothing-2026-08-01)
+162. [Room Kiosk Time & Check-In Window](#room-kiosk-time--check-in-window-2026-08-05)
+163. [Migration Chain Has Two Heads](#migration-chain-has-two-heads-2026-08-05)
+164. [Member PII Visibility](#member-pii-visibility-2026-08-04)
+165. [Member Delete & Role Save Failures](#member-delete--role-save-failures-2026-08-07)
+166. [422 Errors Reading "Invalid value"](#422-errors-reading-invalid-value-2026-08-07)
+167. [Web Push Notifications](#web-push-notifications-2026-08-07)
+168. [Pages Crashing to the Error Boundary](#pages-crashing-to-the-error-boundary-2026-08-07)
+169. [Frontend Container Unhealthy](#frontend-container-unhealthy-2026-08-07)
+170. [Frontend Build Pulls Unpinned Dependencies](#frontend-build-pulls-unpinned-dependencies-2026-08-07)
+171. [Alembic Duplicate Revision IDs](#alembic-duplicate-revision-ids-2026-08-07)
+172. [Push Subscriptions Table Collation](#push-subscriptions-table-collation-2026-08-07)
+173. [Skills Testing: Attempts, Conflicts & Result Visibility](#skills-testing-attempts-conflicts--result-visibility-2026-08-08)
+174. [Equipment Check Submission Fails](#equipment-check-submission-fails-2026-08-08)
+175. [Development Environment: Tests, Hooks & Node Version](#development-environment-tests-hooks--node-version-2026-08-08)
+176. [Container & Docker Diagnostics](#container--docker-diagnostics)
+177. [Backend Service Diagnostics](#backend-service-diagnostics)
+178. [Frontend & Browser Diagnostics](#frontend--browser-diagnostics)
+179. [Database Diagnostics](#database-diagnostics)
+180. [Backend Memory Growth](#backend-memory-growth-2026-03-06)
+181. [Organization Settings Crash](#organization-settings-crash-2026-03-01)
+182. [SMTP Credential Decryption Failure](#smtp-credential-decryption-failure-2026-03-13)
+183. [SMTP Provider Compatibility](#smtp-provider-compatibility-2026-03-13)
+184. [Scheduled Email Pipeline Bugs](#scheduled-email-pipeline-bugs-2026-03-1314)
+185. [Automated Email Not Sending on Pipeline Advance](#automated-email-not-sending-on-pipeline-advance-2026-03-14)
+186. [IntegrityError on Prospect Activity Log](#integrityerror-on-prospect-activity-log-2026-03-13)
+187. [Custom Section Add/Edit in Pipeline Email Config](#custom-section-addedit-in-pipeline-email-config-2026-03-13)
+188. [Email Config Not Persisting from Onboarding](#email-config-not-persisting-from-onboarding-2026-03-13)
+189. [Module Enablement Defaults](#module-enablement-defaults-2026-03-01)
+190. [Post-Login 401 Cascade](#post-login-401-cascade-2026-03-06)
+191. [Still Stuck?](#still-stuck)
 
 ---
 
@@ -155,6 +240,7 @@ If you encounter an error, follow these steps:
 **Cause**: Database enum values don't match application expectations (case mismatch)
 
 **Fix**:
+
 ```bash
 # Run the enum fix migration
 cd backend
@@ -175,23 +261,27 @@ docker-compose restart backend
 **Message**: `"Username 'admin' is already taken. Try a different username like 'admin2' or 'admin_fcvfd'."`
 
 **Causes**:
+
 1. Someone else in your organization has this username
 2. You previously created an account with this username
 
 **Solutions**:
 
 **Option 1: Use suggested variation**
+
 ```
 Original: admin
 Try: admin2, admin_fcvfd, admin_chief, john_admin
 ```
 
 **Option 2: Check existing accounts**
+
 1. Contact your organization administrator
 2. Ask if username is from a deleted account
 3. Administrator can verify in database
 
 **Option 3: Use different username**
+
 ```
 ✅ Good usernames:
 - firstname.lastname (john.smith)
@@ -209,6 +299,7 @@ Try: admin2, admin_fcvfd, admin_chief, john_admin
 **Message**: `"Email 'user@example.com' is already registered. Use a different email address or contact your administrator if this is your account."`
 
 **Causes**:
+
 1. Email already in use by active account
 2. You forgot you have an account
 3. Trying to reuse email from deleted account
@@ -216,11 +307,13 @@ Try: admin2, admin_fcvfd, admin_chief, john_admin
 **Solutions**:
 
 **If this IS your email:**
+
 1. Try password reset (if login page available)
 2. Contact administrator to verify account status
 3. Check if account was soft-deleted (can now be reused)
 
 **If you need to use different email:**
+
 ```
 ✅ Options:
 - Work email: john@department.org
@@ -229,6 +322,7 @@ Try: admin2, admin_fcvfd, admin_chief, john_admin
 ```
 
 **Administrator Actions**:
+
 ```bash
 # Check if email is from deleted user
 SELECT username, email, deleted_at
@@ -247,14 +341,15 @@ See detailed guide: [`ERROR_MESSAGES_LOGO_UPLOAD.md`](./ERROR_MESSAGES_LOGO_UPLO
 
 #### Quick Reference:
 
-| Issue | Limit | Solution |
-|-------|-------|----------|
-| File too large | 5MB max | Compress or resize image |
-| Wrong format | PNG/JPEG only | Convert from SVG/GIF/WebP |
-| Dimensions too large | 4096x4096 max | Resize image |
-| Dimensions too small | 16x16 min | Use larger image |
+| Issue                | Limit         | Solution                  |
+| -------------------- | ------------- | ------------------------- |
+| File too large       | 5MB max       | Compress or resize image  |
+| Wrong format         | PNG/JPEG only | Convert from SVG/GIF/WebP |
+| Dimensions too large | 4096x4096 max | Resize image              |
+| Dimensions too small | 16x16 min     | Use larger image          |
 
 **Common Tools**:
+
 - Online: tinypng.com, compressor.io
 - Desktop: GIMP, Paint.NET, Preview (Mac)
 - Command line: `convert logo.png -resize 2048x2048 logo_small.png`
@@ -270,6 +365,7 @@ See detailed guide: [`ERROR_MESSAGES_LOGO_UPLOAD.md`](./ERROR_MESSAGES_LOGO_UPLO
 **Message**: `"SMTP authentication failed. Verify your username and password are correct. For Gmail or Outlook, you may need an app-specific password."`
 
 **Causes**:
+
 1. Wrong username or password
 2. Need app-specific password (Gmail/Outlook)
 3. Two-factor authentication enabled
@@ -278,6 +374,7 @@ See detailed guide: [`ERROR_MESSAGES_LOGO_UPLOAD.md`](./ERROR_MESSAGES_LOGO_UPLO
 **Solutions by Provider**:
 
 #### **Gmail**
+
 1. **Enable 2FA** (required for app passwords)
    - Go to: myaccount.google.com/security
    - Enable 2-Step Verification
@@ -299,6 +396,7 @@ See detailed guide: [`ERROR_MESSAGES_LOGO_UPLOAD.md`](./ERROR_MESSAGES_LOGO_UPLO
    ```
 
 #### **Microsoft 365 / Outlook**
+
 1. **Enable 2FA** (if required)
    - Go to: account.microsoft.com/security
    - Security basics → Advanced security options
@@ -319,6 +417,7 @@ See detailed guide: [`ERROR_MESSAGES_LOGO_UPLOAD.md`](./ERROR_MESSAGES_LOGO_UPLO
    ```
 
 #### **Custom/Self-hosted**
+
 ```
 Check with your email provider for:
 - Correct SMTP server address
@@ -338,6 +437,7 @@ Check with your email provider for:
 **Diagnostic Steps**:
 
 **1. Test connectivity**
+
 ```bash
 # Test if port is reachable
 telnet smtp.gmail.com 587
@@ -349,6 +449,7 @@ nc -zv smtp.gmail.com 587
 ```
 
 **2. Check firewall**
+
 ```bash
 # Check if SMTP ports are blocked
 sudo iptables -L -n | grep -E "587|465|25"
@@ -360,6 +461,7 @@ sudo iptables -L -n | grep -E "587|465|25"
 ```
 
 **3. Verify DNS**
+
 ```bash
 # Ensure hostname resolves
 nslookup smtp.gmail.com
@@ -370,11 +472,13 @@ nslookup smtp.gmail.com
 **Common Fixes**:
 
 **Corporate/Firewall Block**:
+
 - Contact IT department
 - Request outbound SMTP access
 - Ports needed: 587 (primary), 465 (backup)
 
 **Docker Network Issues**:
+
 ```bash
 # Check container can reach internet
 docker exec the-logbook-backend-1 ping -c 3 8.8.8.8
@@ -384,11 +488,12 @@ docker exec the-logbook-backend-1 nslookup smtp.gmail.com
 ```
 
 **Wrong Port**:
-| Port | Encryption | When to Use |
-|------|-----------|-------------|
-| 587 | STARTTLS | **Recommended** - Modern standard |
-| 465 | SSL/TLS | Alternative if 587 blocked |
-| 25 | None | **Avoid** - Often blocked, insecure |
+
+| Port | Encryption | When to Use                         |
+| ---- | ---------- | ----------------------------------- |
+| 587  | STARTTLS   | **Recommended** - Modern standard   |
+| 465  | SSL/TLS    | Alternative if 587 blocked          |
+| 25   | None       | **Avoid** - Often blocked, insecure |
 
 ---
 
@@ -402,14 +507,15 @@ docker exec the-logbook-backend-1 nslookup smtp.gmail.com
 
 **Solution**: Match port to encryption
 
-| If using Port | Use Encryption | Setting |
-|---------------|----------------|---------|
-| 587 | STARTTLS | `use_tls: true`, `use_ssl: false` |
-| 465 | SSL/TLS | `use_ssl: true`, `use_tls: false` |
+| If using Port | Use Encryption | Setting                           |
+| ------------- | -------------- | --------------------------------- |
+| 587           | STARTTLS       | `use_tls: true`, `use_ssl: false` |
+| 465           | SSL/TLS        | `use_ssl: true`, `use_tls: false` |
 
 **Configuration Examples**:
 
 **Correct (Port 587 + STARTTLS)**:
+
 ```yaml
 smtp_host: smtp.gmail.com
 smtp_port: 587
@@ -418,6 +524,7 @@ use_ssl: false
 ```
 
 **Correct (Port 465 + SSL)**:
+
 ```yaml
 smtp_host: smtp.gmail.com
 smtp_port: 465
@@ -426,10 +533,11 @@ use_tls: false
 ```
 
 **Wrong (mismatched)**:
+
 ```yaml
 # ❌ This will fail
 smtp_port: 587
-use_ssl: true  # Wrong! Port 587 needs TLS, not SSL
+use_ssl: true # Wrong! Port 587 needs TLS, not SSL
 ```
 
 ---
@@ -443,13 +551,15 @@ use_ssl: true  # Wrong! Port 587 needs TLS, not SSL
 **Message**: `"Password requirements not met (3 issues): Must be at least 12 characters; Must contain uppercase letter; Must contain special character"`
 
 **Requirements**:
+
 - ✅ Minimum 12 characters
 - ✅ At least 1 uppercase letter (A-Z)
 - ✅ At least 1 lowercase letter (a-z)
 - ✅ At least 1 number (0-9)
-- ✅ At least 1 special character (!@#$%^&*)
+- ✅ At least 1 special character (!@#$%^&\*)
 
 **Good Password Examples**:
+
 ```
 ✅ FireDept2024!
 ✅ MySecurePass123!
@@ -458,6 +568,7 @@ use_ssl: true  # Wrong! Port 587 needs TLS, not SSL
 ```
 
 **Bad Password Examples**:
+
 ```
 ❌ password123        - No uppercase, no special char
 ❌ PASSWORD!          - No lowercase, no number
@@ -474,6 +585,7 @@ use_ssl: true  # Wrong! Port 587 needs TLS, not SSL
 **Status**: ✅ **FIXED** in latest version (commit `314a721`)
 
 **Symptoms:**
+
 - Complete onboarding steps 1-9 successfully
 - Step 10 "Create Admin Account" returns 500 error
 - Backend logs show: `INFO | User registered: [username]`
@@ -481,12 +593,14 @@ use_ssl: true  # Wrong! Port 587 needs TLS, not SSL
 - Trying again shows: "Username already exists"
 
 **What Happened:**
+
 1. User WAS successfully created in database ✅
 2. But endpoint failed after creation ❌
 3. Frontend stayed on form (thought it failed)
 4. User tried again → "already exists" error
 
 **Root Cause:**
+
 - Bug in code: Tuple unpacking error in `onboarding.py`
 - `register_user()` returns `(user, error)` tuple
 - Code treated it as single user object
@@ -505,6 +619,7 @@ docker compose up --build
 **If You're Stuck on This Error:**
 
 **Option 1: Delete the user and try again**
+
 ```bash
 # Connect to MySQL
 docker compose exec mysql mysql -u root -p[YOUR_ROOT_PASSWORD]
@@ -518,6 +633,7 @@ EXIT;
 ```
 
 **Option 2: Fresh start (recommended)**
+
 ```bash
 # Complete reset
 docker compose down -v
@@ -527,11 +643,13 @@ docker compose up --build
 ```
 
 **Prevention:**
+
 - This bug is fixed in commit `314a721`
 - Update to latest version before starting onboarding
 - No workaround needed - the fix works correctly
 
 **Password Generators**:
+
 - Browser built-in (Chrome, Firefox, Safari all offer this)
 - Password managers (1Password, Bitwarden, LastPass)
 - Command line: `openssl rand -base64 12`
@@ -545,6 +663,7 @@ docker compose up --build
 **Message**: `"Session expired. Please log in again."`
 
 **Causes**:
+
 1. Onboarding session timed out (30 minutes of inactivity, as of 2026-02-12)
 2. Browser was closed
 3. Cookies were cleared
@@ -553,6 +672,7 @@ docker compose up --build
 **Solutions**:
 
 **During Onboarding**:
+
 ```
 1. Click "Reset Progress" if available
 2. Or return to /onboarding/start
@@ -560,6 +680,7 @@ docker compose up --build
 ```
 
 **After Onboarding (logged in)**:
+
 ```
 1. Navigate to login page
 2. Enter your credentials
@@ -567,6 +688,7 @@ docker compose up --build
 ```
 
 **Prevention**:
+
 - Keep browser tab open during onboarding
 - Complete each step promptly
 - Save work frequently (most steps auto-save)
@@ -582,6 +704,7 @@ docker compose up --build
 **Cause (Fixed 2026-02-20)**: The trash can icon buttons were rendered without an `onClick` handler — they were non-functional placeholders. Additionally, no backend `DELETE /users/{user_id}` endpoint existed.
 
 **Resolution**: This is now fully implemented:
+
 - The trash can buttons on the Members page (both mobile and desktop views) now trigger a soft-delete with a confirmation prompt
 - The Members Admin page has a "Delete" text button in the actions column
 - The backend `DELETE /users/{user_id}` endpoint sets the `deleted_at` timestamp (soft-delete)
@@ -645,6 +768,7 @@ As of **2026-02-07**, The Logbook includes comprehensive network error handling.
 **Diagnostic Steps**:
 
 **1. Check internet connection**
+
 ```bash
 # Test basic connectivity
 ping google.com
@@ -657,6 +781,7 @@ curl http://localhost:3001/health
 ```
 
 **2. Verify backend is running**
+
 ```bash
 # Check Docker containers
 docker ps
@@ -671,6 +796,7 @@ docker logs the-logbook-backend-1 --tail 50
 ```
 
 **3. Check frontend can reach backend**
+
 ```bash
 # From frontend container
 docker exec the-logbook-frontend-1 curl http://backend:3001/health
@@ -681,6 +807,7 @@ docker exec the-logbook-frontend-1 curl http://backend:3001/health
 **Common Fixes**:
 
 **Backend Not Running**:
+
 ```bash
 docker-compose up -d
 # or
@@ -688,6 +815,7 @@ docker-compose restart backend
 ```
 
 **Port Conflicts**:
+
 ```bash
 # Check if port 3001 is in use
 lsof -i :3001
@@ -698,6 +826,7 @@ lsof -i :3001
 ```
 
 **CORS Errors**:
+
 ```bash
 # Update .env file
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
@@ -713,12 +842,14 @@ docker-compose restart backend
 **Message**: `"Request timed out. The server is taking too long to respond. Please try again."`
 
 **Causes**:
+
 1. Server is overloaded
 2. Database query is slow
 3. Network is slow
 4. Migration is running
 
 **Diagnostic**:
+
 ```bash
 # Check server load
 docker stats the-logbook-backend-1
@@ -733,11 +864,13 @@ docker logs the-logbook-backend-1 | grep "migration"
 **Solutions**:
 
 **During Migrations**:
+
 - Wait for migrations to complete (check logs)
 - Usually takes 30-120 seconds
 - Don't interrupt - data corruption risk
 
 **Server Overloaded**:
+
 ```bash
 # Increase resources in docker-compose.yml
 services:
@@ -750,6 +883,7 @@ services:
 ```
 
 **Database Slow**:
+
 ```bash
 # Check database size
 docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" \
@@ -767,12 +901,14 @@ docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
 **Message**: `"Server is temporarily unavailable. Please try again in a few moments."`
 
 **Causes**:
+
 - Server is restarting
 - Database is restarting
 - Maintenance in progress
 - Container crashed
 
 **Check Status**:
+
 ```bash
 # Check all containers
 docker-compose ps
@@ -787,6 +923,7 @@ docker-compose up -d
 ```
 
 **Recovery**:
+
 ```bash
 # Full restart
 docker-compose down
@@ -807,25 +944,30 @@ See detailed guide: [`ERROR_MESSAGES_LOGO_UPLOAD.md`](./ERROR_MESSAGES_LOGO_UPLO
 The Logbook performs comprehensive security checks on uploaded images:
 
 **File Type Validation**:
+
 - ✅ Allowed: PNG, JPEG
 - ❌ Blocked: SVG (XSS risk), GIF, WebP, TIFF, BMP
 
 **Magic Byte Verification**:
+
 - Checks actual file content, not just extension
 - Prevents malware disguised as images
 - Example: `malware.exe` renamed to `logo.png` → **Rejected**
 
 **Metadata Stripping**:
+
 - Removes EXIF data (GPS coordinates, camera info)
 - Protects privacy
 - Prevents metadata-based attacks
 
 **Size Limits**:
+
 - File size: 5MB maximum
 - Dimensions: 16x16 to 4096x4096 pixels
 - Prevents decompression bombs
 
 **Decompression Bomb Detection**:
+
 - Catches images that decompress to massive size
 - Example: 1KB PNG → 100GB decompressed → **Rejected**
 
@@ -838,6 +980,7 @@ The Logbook performs comprehensive security checks on uploaded images:
 **Status**: ✅ **FIXED** as of 2026-02-07
 
 #### Symptoms
+
 ```
 Error: 'fire_ems_combined' is not among the defined enum values
 Enum name: organizationtype
@@ -845,15 +988,18 @@ Possible values: FIRE_DEPART.., EMS_ONLY, FIRE_EMS_CO..
 ```
 
 #### Cause
+
 Database had UPPERCASE enum values but application sends lowercase.
 
 #### Fix
+
 ```bash
 cd backend
 alembic upgrade head  # Runs migration 20260207_0500
 ```
 
 #### Verification
+
 ```bash
 # Check enum values in database
 python scripts/verify_database_enums.py
@@ -864,7 +1010,9 @@ python scripts/verify_database_enums.py
 ```
 
 #### Prevention
+
 **Automatic Checks** (implemented 2026-02-07):
+
 1. **Startup validation** - Warns if enum mismatch detected
 2. **Automated tests** - `pytest tests/test_enum_consistency.py`
 3. **Verification script** - `python scripts/verify_database_enums.py`
@@ -878,11 +1026,14 @@ See: [`ENUM_CONVENTIONS.md`](./ENUM_CONVENTIONS.md)
 **Status**: ✅ **FIXED** as of 2026-02-15
 
 #### Symptoms
+
 ```
 sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (1061, "Duplicate key name 'ix_locations_organization_id'")
 [SQL: CREATE INDEX ix_locations_organization_id ON locations (organization_id)]
 ```
+
 or:
+
 ```
 sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (1061, "Duplicate key name 'ix_voting_tokens_token'")
 ```
@@ -890,17 +1041,21 @@ sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (1061, "Duplicat
 Application crashes during startup with `Application startup failed. Exiting.`
 
 #### Cause
+
 SQLAlchemy model columns had **both** `index=True` on the column definition **and** an explicit `Index()` with the same name in `__table_args__`. When SQLAlchemy generates the `index=True` index, it auto-names it `ix_<tablename>_<columnname>`. If `__table_args__` also declares an `Index("ix_<tablename>_<columnname>", ...)`, MySQL rejects the duplicate name.
 
 This happens on every fresh database initialization — it is not caused by leftover tables.
 
 **Affected models** (now fixed):
+
 - `location.py` — `organization_id` (crash: same index name)
 - `election.py` — `VotingToken.token` (crash: same index name)
 - `apparatus.py`, `facilities.py`, `inventory.py`, `ip_security.py`, `public_portal.py` — had redundant indexes with different names (no crash, but wasteful)
 
 #### Fix
+
 This has been fixed in the codebase. Pull the latest changes:
+
 ```bash
 git pull origin main
 docker compose down
@@ -909,6 +1064,7 @@ docker compose up -d
 ```
 
 #### Prevention
+
 When defining indexes on SQLAlchemy models, use **one** method, not both:
 
 ```python
@@ -939,11 +1095,13 @@ __table_args__ = (
 **Common Causes**:
 
 **1. Duplicate Column**:
+
 ```
 Error: Column 'organization_type' already exists
 ```
 
 **Fix**: Migration was already applied
+
 ```bash
 # Check migration status
 alembic current
@@ -953,21 +1111,25 @@ alembic history
 ```
 
 **2. Missing Dependency**:
+
 ```
 Error: Cannot find revision 'abc123'
 ```
 
 **Fix**: Run migrations in order
+
 ```bash
 alembic upgrade head
 ```
 
 **3. Data Constraint Violation**:
+
 ```
 Error: Data truncation or constraint violation
 ```
 
 **Fix**: Check existing data
+
 ```bash
 # Find problematic data
 docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
@@ -981,6 +1143,7 @@ docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
 ### Error Message Format (As of 2026-02-07)
 
 All error messages now follow this format:
+
 ```
 [What failed]: [Specific reason]. [Action to fix].
 ```
@@ -988,6 +1151,7 @@ All error messages now follow this format:
 **Examples**:
 
 ✅ **Good** (new format):
+
 ```
 "Username 'admin' is already taken. Try a different username like 'admin2'."
 "Cannot connect to server. Please check your internet connection and try again."
@@ -995,6 +1159,7 @@ All error messages now follow this format:
 ```
 
 ❌ **Old** (being phased out):
+
 ```
 "Username already exists"
 "Failed to fetch"
@@ -1006,35 +1171,45 @@ All error messages now follow this format:
 ### Error Categories
 
 #### 1. Validation Errors (400, 422)
+
 **Pattern**: Shows what's invalid and requirements
+
 ```
 "Email 'invalid-email' is not valid. Must be in format: user@domain.com"
 "Password too short. Must be at least 12 characters."
 ```
 
 #### 2. Duplicate/Conflict Errors (409)
+
 **Pattern**: Shows conflicting value and suggests alternative
+
 ```
 "Username 'admin' is already taken. Try 'admin2' or 'admin_fcvfd'."
 "Organization name already exists. Try adding location (e.g., 'FCVFD West')."
 ```
 
 #### 3. Authentication Errors (401, 403)
+
 **Pattern**: Clear action needed
+
 ```
 "Session expired. Please log in again."
 "Access denied. You don't have permission to perform this action."
 ```
 
 #### 4. Network Errors
+
 **Pattern**: Explains connectivity issue and next steps
+
 ```
 "Cannot connect to server. Check your internet connection and try again."
 "Request timed out. The server is responding slowly. Please try again."
 ```
 
 #### 5. Server Errors (500+)
+
 **Pattern**: Acknowledges error and suggests action
+
 ```
 "Server error occurred. Please try again later or contact support."
 "Database connection error. Please try again in a moment."
@@ -1046,14 +1221,14 @@ All error messages now follow this format:
 
 The system now automatically translates technical errors:
 
-| Technical Error | User-Friendly Message |
-|----------------|----------------------|
-| `Failed to fetch` | Cannot connect to server. Check your internet connection. |
-| `TypeError: Cannot read property` | An unexpected error occurred. Please try again. |
-| `(pymysql.err.OperationalError)` | Database connection error. Please try again in a moment. |
-| `ECONNREFUSED` | Cannot connect to server at [address]. Verify the server is running. |
-| `ETIMEDOUT` | Request timed out. The server is taking too long to respond. |
-| `SSL: WRONG_VERSION_NUMBER` | SSL/TLS version mismatch. Try changing encryption method. |
+| Technical Error                   | User-Friendly Message                                                |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `Failed to fetch`                 | Cannot connect to server. Check your internet connection.            |
+| `TypeError: Cannot read property` | An unexpected error occurred. Please try again.                      |
+| `(pymysql.err.OperationalError)`  | Database connection error. Please try again in a moment.             |
+| `ECONNREFUSED`                    | Cannot connect to server at [address]. Verify the server is running. |
+| `ETIMEDOUT`                       | Request timed out. The server is taking too long to respond.         |
+| `SSL: WRONG_VERSION_NUMBER`       | SSL/TLS version mismatch. Try changing encryption method.            |
 
 ---
 
@@ -1070,6 +1245,7 @@ The application automatically logs users out after **30 minutes of inactivity** 
 **Cause**: No user activity detected for 30 minutes.
 
 **Solutions**:
+
 1. Log in again at the login page
 2. Keep the browser tab active during long workflows
 3. No data is lost -- unsaved form changes will need to be re-entered
@@ -1085,6 +1261,7 @@ Onboarding sessions now expire after **30 minutes of inactivity** (previously 2 
 **Cause**: Took too long between onboarding steps.
 
 **Solutions**:
+
 1. Refresh the page to start a new session
 2. Previously saved progress (organization, email config) is retained
 3. Complete each step promptly to avoid timeout
@@ -1100,6 +1277,7 @@ Password reset links expire after **30 minutes**.
 **Cause**: Reset link was not used within 30 minutes of being sent.
 
 **Solutions**:
+
 1. Request a new reset link from the login page
 2. Check email promptly after requesting reset
 3. If emails are delayed, contact your administrator
@@ -1109,6 +1287,7 @@ Password reset links expire after **30 minutes**.
 **Cause**: Link was already used, or URL was corrupted.
 
 **Solutions**:
+
 1. Each reset link can only be used once
 2. Request a new link from the login page
 3. Copy the full URL from the email (don't modify it)
@@ -1124,6 +1303,7 @@ After **5 failed login attempts**, accounts are temporarily locked for **30 minu
 **Cause**: Too many incorrect password attempts.
 
 **Solutions**:
+
 1. Wait for the lockout period to expire (message shows remaining time)
 2. Use "Forgot Password" to reset your password
 3. Contact your administrator if you're locked out repeatedly
@@ -1137,16 +1317,30 @@ See [MFA.md](./MFA.md) for the full feature reference.
 #### Symptom: "Invalid verification code" when the code looks correct
 
 **Causes**:
+
 1. Device clock drift between the phone and the server
 2. Entering a code that just rolled over (codes change every 30 seconds)
 3. The authenticator was set up from a screenshot of an already-expired QR
 
 **Solutions**:
+
 1. Enable automatic/network time on the phone — TOTP depends on an accurate
    clock. The server accepts the current 30-second step ±1, so larger drift
    fails verification
 2. Wait for a fresh code and enter it promptly
 3. If it persistently fails, disable and re-enroll MFA (re-scan a fresh QR)
+
+#### Symptom: Login succeeds but no session cookies are issued
+
+**Cause**: Expected behavior when the account has MFA enabled. `POST /auth/login`
+returns `{ mfa_required: true, mfa_token }` — a short-lived pending token — and
+issues no session cookies.
+
+**Solution**: Complete the second step at `POST /auth/mfa/login` with that
+`mfa_token` plus either a TOTP `code` or a `recovery_code`. Only then are full
+session cookies issued. A consumed recovery code is removed from the stored set.
+A client that treats the login response as a session (rather than checking
+`mfa_required`) will appear to log in and then fail every subsequent call.
 
 #### Symptom: Forced into MFA setup and can't reach the rest of the app
 
@@ -1156,6 +1350,7 @@ blocked from every endpoint except the enrollment/session paths until they set
 up an authenticator (enforced server-side in `get_current_user`).
 
 **Solutions**:
+
 1. Complete enrollment in **Settings → Security** (scan the QR, confirm a code,
    save the recovery codes)
 2. An admin can lift the requirement under **Settings → Authentication** if it
@@ -1167,6 +1362,7 @@ up an authenticator (enforced server-side in `get_current_user`).
 single-use. (There is no in-app "regenerate recovery codes" flow.)
 
 **Solutions**:
+
 1. If the member still has **any** unused recovery code, they can log in with it
    at the MFA challenge, then disable + re-enroll from Settings → Security
 2. Otherwise an administrator (`users.create` / `members.manage`) clicks
@@ -1183,13 +1379,14 @@ single-use. (There is no in-app "regenerate recovery codes" flow.)
 
 The following must be configured in production:
 
-| Setting | Requirement | Error if Missing |
-|---------|------------|------------------|
-| `ENCRYPTION_SALT` | Unique random value | Application will not start |
-| `SECRET_KEY` | Unique, 32+ characters | Startup warning/failure |
-| `ENCRYPTION_KEY` | Unique random value | Startup warning/failure |
+| Setting           | Requirement            | Error if Missing           |
+| ----------------- | ---------------------- | -------------------------- |
+| `ENCRYPTION_SALT` | Unique random value    | Application will not start |
+| `SECRET_KEY`      | Unique, 32+ characters | Startup warning/failure    |
+| `ENCRYPTION_KEY`  | Unique random value    | Startup warning/failure    |
 
 **Generate secure values**:
+
 ```bash
 # Generate ENCRYPTION_SALT
 python -c "import secrets; print(secrets.token_hex(16))"
@@ -1220,6 +1417,7 @@ Login passwords must be at least **8 characters** (schema validation). New passw
 **Cause**: The stored file path for the attachment resolved outside the allowed upload directory. This is a security safeguard against path traversal attacks.
 
 **Solutions**:
+
 - This error indicates data integrity issue — the `file_path` in the event's attachments JSON does not point to a file within `/app/uploads/event-attachments/`
 - Re-upload the attachment through the normal upload flow
 - If this occurs on previously uploaded files, check that the `ATTACHMENT_UPLOAD_DIR` path has not changed between deployments
@@ -1231,6 +1429,7 @@ Login passwords must be at least **8 characters** (schema validation). New passw
 **Cause**: Provider API credentials (api_key, api_secret, client_secret) are now encrypted at rest using AES-256. Pre-existing plaintext credentials in the database should be handled transparently (the service falls back to plaintext if decryption fails), but if issues persist:
 
 **Solutions**:
+
 1. Re-save the provider credentials through the UI or API — this will encrypt them with the current key
 2. Verify `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables have not changed since the credentials were last saved
 3. Test the connection: `POST /api/v1/external-training/providers/{id}/test`
@@ -1244,6 +1443,7 @@ Login passwords must be at least **8 characters** (schema validation). New passw
 **Allowed types**: PDF, Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), text, CSV, images (JPEG, PNG, GIF, WebP), ZIP archives.
 
 **Solutions**:
+
 - Verify the file is a genuinely supported format (not just renamed with a supported extension)
 - If the file is a valid format but being rejected, the file may be corrupted — try re-exporting or re-saving it
 - For uncommon but legitimate file types, contact your administrator to request the type be added to the allowlist
@@ -1255,6 +1455,7 @@ Login passwords must be at least **8 characters** (schema validation). New passw
 **Cause**: MinIO credentials are no longer provided as insecure defaults in docker-compose.yml. They must be explicitly set in your `.env` file.
 
 **Solutions**:
+
 ```bash
 # Add to your .env file:
 MINIO_ROOT_USER=your_minio_admin_user
@@ -1282,11 +1483,13 @@ The Documents module provides file storage with folder hierarchy, document uploa
 **Message**: `"Unable to load documents. Please check your connection and try again."`
 
 **Causes**:
+
 1. Network connectivity issue
 2. Backend service not running
 3. Database migration not applied (missing `documents` or `document_folders` tables)
 
 **Solutions**:
+
 ```bash
 # Verify the documents tables exist
 docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
@@ -1305,11 +1508,13 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Message**: `"Unable to upload the document. Please check your input and try again."`
 
 **Causes**:
+
 1. File too large (check server upload limits)
 2. Missing required fields (name)
 3. Invalid folder_id reference
 
 **Solutions**:
+
 - Verify the file is not too large for your server configuration
 - Ensure the target folder exists before uploading
 - Check that the document name is provided
@@ -1321,11 +1526,13 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Message**: `"Unable to create the folder. Please check your input and try again."`
 
 **Causes**:
+
 1. Duplicate folder name in the same parent
 2. Invalid parent_folder_id
 3. Missing `documents.manage` permission
 
 **Solutions**:
+
 - Use a unique folder name within the parent directory
 - Verify your user role has `documents.manage` permission
 - Check that the parent folder exists
@@ -1348,10 +1555,12 @@ The Meetings module manages meeting records with attendees, action items, and ap
 **Message**: `"Unable to load meetings. Please check your connection and try again."`
 
 **Causes**:
+
 1. Network connectivity issue
 2. Missing `meetings` table (migration not applied)
 
 **Solutions**:
+
 ```bash
 # Verify the meetings tables exist
 docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
@@ -1367,11 +1576,13 @@ docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
 **Message**: `"Unable to create the meeting. Please check your input and try again."`
 
 **Causes**:
+
 1. Missing required fields (title, meeting_type, meeting_date)
 2. Invalid meeting_type value
 3. Missing `meetings.manage` permission
 
 **Solutions**:
+
 - Ensure title, meeting type, and date are all provided
 - Valid meeting types: `regular`, `special`, `emergency`, `committee`, `board`
 - Check that your user role has `meetings.manage` permission
@@ -1404,11 +1615,13 @@ The Scheduling module provides full shift management including shift creation, t
 **Message**: `"Unable to load shifts. Please check your connection and try again."`
 
 **Causes**:
+
 1. Network connectivity issue
 2. Backend service not running
 3. Shifts table not created (migration not applied)
 
 **Solutions**:
+
 ```bash
 # Check backend health
 curl http://localhost:3001/health
@@ -1424,11 +1637,13 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Message**: `"Unable to create the shift. Please check your input and try again."`
 
 **Causes**:
+
 1. Missing required fields (shift_date, start_time)
 2. End time before start time
 3. Missing `scheduling.manage` permission
 
 **Solutions**:
+
 - Verify all required fields are filled in
 - Ensure end time is after start time
 - Check user has `scheduling.manage` permission
@@ -1440,10 +1655,12 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Symptoms**: Calendar shows empty week/month despite shifts existing
 
 **Causes**:
+
 1. Date range filter doesn't match existing shifts
 2. Shifts exist for different dates
 
 **Solutions**:
+
 - Navigate to the correct week using the calendar navigation
 - Check that shifts have been created for the current week
 - Verify shift dates are correct in the database
@@ -1455,10 +1672,12 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Symptoms**: Created a template but it doesn't show up when listing templates
 
 **Causes**:
+
 1. Template marked as inactive (`is_active = false`)
 2. The `active_only` query parameter defaults to `true`
 
 **Solutions**:
+
 - Check the template's `is_active` status
 - To see all templates including inactive: `GET /api/v1/scheduling/templates?active_only=false`
 - Update the template: `PATCH /api/v1/scheduling/templates/{id}` with `{"is_active": true}`
@@ -1470,6 +1689,7 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Symptoms**: `POST /api/v1/scheduling/patterns/{id}/generate` returns 0 shifts
 
 **Causes**:
+
 1. Start date is after end date
 2. Pattern has no template linked (`template_id` is null)
 3. For WEEKLY patterns: `schedule_config.weekdays` doesn't include any days in the range
@@ -1477,6 +1697,7 @@ docker exec the-logbook-backend-1 alembic upgrade head
 5. Pattern is inactive
 
 **Solutions**:
+
 - Verify the pattern has a valid `template_id`
 - For weekly patterns, ensure `schedule_config` includes `{"weekdays": [0, 1, 2, 3, 4]}` (Mon-Fri)
 - For platoon patterns, set `rotation_days`, `days_on`, and `days_off`
@@ -1493,6 +1714,7 @@ for the full feature reference.
 don't appear, or a generated rotation produces shifts with nobody on them
 
 **Causes**:
+
 1. The department toggle is off — platoons are **opt-in** and disabled by default
    (`org.settings["scheduling"]["platoons_enabled"]` is false/absent)
 2. Members have no platoon assigned (`users.platoon` is NULL), so there is no one
@@ -1503,6 +1725,7 @@ don't appear, or a generated rotation produces shifts with nobody on them
    on leave, or in a different organization
 
 **Solutions**:
+
 1. Enable platoons in Scheduling settings (sets `platoons_enabled = true`)
 2. Assign each member a platoon from the member admin UI (the one-click control /
    card badge), or via the member's `platoon` field
@@ -1518,10 +1741,12 @@ don't appear, or a generated rotation produces shifts with nobody on them
 **Symptoms**: Member gets an error when trying to confirm their shift assignment
 
 **Causes**:
+
 1. The logged-in user doesn't match the assignment's `user_id`
 2. Assignment has already been confirmed or declined
 
 **Solutions**:
+
 - Members can only confirm their own assignments
 - Check the current `assignment_status` — only `assigned` status can be confirmed
 
@@ -1532,10 +1757,12 @@ don't appear, or a generated rotation produces shifts with nobody on them
 **Symptoms**: Swap request was denied even though both members agreed
 
 **Causes**:
+
 1. An officer must review and approve swap requests — member-to-member agreement is not sufficient
 2. The reviewer may have added notes explaining the denial
 
 **Solutions**:
+
 - Check `reviewer_notes` on the swap request for the reason
 - Ensure the request was reviewed by someone with `scheduling.manage` permission
 - Submit a new request if the original was denied in error
@@ -1547,10 +1774,12 @@ don't appear, or a generated rotation produces shifts with nobody on them
 **Symptoms**: Submitted a time-off request but `GET /availability` doesn't show it
 
 **Causes**:
+
 1. Time-off request is still `pending` — only `approved` requests appear in availability
 2. Date range doesn't overlap with the time-off dates
 
 **Solutions**:
+
 - Have an officer approve the time-off request: `POST /api/v1/scheduling/time-off/{id}/review`
 - Verify the availability query date range overlaps with the time-off dates
 
@@ -1561,9 +1790,11 @@ don't appear, or a generated rotation produces shifts with nobody on them
 **Symptoms**: Call records appear under the wrong shift
 
 **Causes**:
+
 1. Wrong `shift_id` provided when creating the call
 
 **Solutions**:
+
 - Verify the shift ID before creating a call: `GET /api/v1/scheduling/shifts` to list shifts by date
 - Update the call if needed: `PATCH /api/v1/scheduling/calls/{id}`
 
@@ -1574,10 +1805,12 @@ don't appear, or a generated rotation produces shifts with nobody on them
 **Symptoms**: Member hours report shows 0 hours for members who worked shifts
 
 **Causes**:
+
 1. Members have attendance records but no `checked_out_at` time (duration not calculated)
 2. Date range doesn't cover the shift dates
 
 **Solutions**:
+
 - Ensure attendance records have both `checked_in_at` and `checked_out_at` — duration is auto-calculated from these
 - Expand the date range in the report query
 
@@ -1588,10 +1821,12 @@ don't appear, or a generated rotation produces shifts with nobody on them
 **Symptoms**: User gets 403 when trying to assign members to shifts
 
 **Causes**:
+
 1. User has `scheduling.manage` but not `scheduling.assign`
 2. The `scheduling.assign` permission is separate from general manage
 
 **Solutions**:
+
 - Grant the user the `scheduling.assign` permission
 - Officers, chiefs, and the Scheduling Officer role have this by default
 
@@ -1613,11 +1848,13 @@ The Facilities module manages buildings, stations, and properties including main
 **Message**: `"Unable to load facilities. Please check your connection and try again."`
 
 **Causes**:
+
 1. Network connectivity issue
 2. Migration not applied (facilities tables don't exist)
 3. Facilities module not enabled during onboarding
 
 **Solutions**:
+
 ```bash
 # Run migrations
 docker exec the-logbook-backend-1 alembic upgrade head
@@ -1633,14 +1870,17 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook -e "SHOW TABLES LIKE '
 **Symptoms**: No facility types or statuses available when creating a facility
 
 **Causes**:
+
 1. Seed migration `20260214_2000` not applied
 2. Organization-specific types not yet created (system defaults have `organization_id = NULL`)
 
 **Solutions**:
+
 ```bash
 # Run seed migration
 docker exec the-logbook-backend-1 alembic upgrade head
 ```
+
 - System defaults (10 types, 6 statuses, 20 maintenance types) are seeded automatically
 - Organizations can create additional custom types
 
@@ -1651,9 +1891,11 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Symptoms**: No maintenance types available when logging maintenance
 
 **Causes**:
+
 1. Seed migration not applied
 
 **Solutions**:
+
 - Run `alembic upgrade head` — migration `20260214_2000` seeds 20 default maintenance types (HVAC, generator, fire alarm, sprinkler, elevator, bay door, etc.) with recommended scheduling intervals
 
 ---
@@ -1663,10 +1905,12 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Symptoms**: Error when adding a utility reading
 
 **Causes**:
+
 1. No utility account exists for the facility
 2. Missing `facilities.maintenance` permission
 
 **Solutions**:
+
 - First create a utility account: `POST /api/v1/facilities/{id}/utility-accounts`
 - Then add readings: `POST /api/v1/facilities/{id}/utility-accounts/{account_id}/readings`
 - Ensure user has `facilities.maintenance` permission
@@ -1678,10 +1922,12 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Symptoms**: Can't assign an access key to a member
 
 **Causes**:
+
 1. The `assigned_to` field expects a valid user ID
 2. The user must be in the same organization
 
 **Solutions**:
+
 - Verify the user ID: `GET /api/v1/users` to list organization members
 - Use the correct `user_id` in the `assigned_to` field
 
@@ -1692,10 +1938,12 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Symptoms**: Compliance checklist items aren't persisting
 
 **Causes**:
+
 1. Must create the checklist first, then add items to it
 2. Missing `facilities.edit` permission
 
 **Solutions**:
+
 - Create checklist: `POST /api/v1/facilities/{id}/compliance-checklists`
 - Then add items: `POST /api/v1/facilities/{id}/compliance-checklists/{checklist_id}/items`
 
@@ -1706,10 +1954,12 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Symptoms**: Facilities Manager can view but can't edit or log maintenance
 
 **Causes**:
+
 1. The Facilities Manager role intentionally excludes `facilities.delete` and `facilities.manage`
 2. It includes: `facilities.view`, `facilities.create`, `facilities.edit`, `facilities.maintenance`
 
 **Solutions**:
+
 - This is by design — the role is for day-to-day management, not full admin
 - For full access, assign the Chief, President, or Assistant Chief role
 - Or create a custom role with all 6 facilities permissions
@@ -1732,11 +1982,13 @@ The Reports module generates data reports including member roster, training summ
 **Message**: `"Unable to generate report. Please check your connection and try again."`
 
 **Causes**:
+
 1. Network connectivity issue
 2. No data available for the requested report type
 3. Missing `reports.manage` permission
 
 **Solutions**:
+
 - Verify your connection to the server
 - Ensure data exists for the report (e.g., members exist for member roster report)
 - Check that your user role has `reports.manage` permission
@@ -1748,11 +2000,13 @@ The Reports module generates data reports including member roster, training summ
 **Symptoms**: Report generates successfully but shows no data
 
 **Causes**:
+
 1. No records match the report criteria
 2. Date range filters exclude all data
 3. Data hasn't been entered yet
 
 **Solutions**:
+
 - For **member_roster**: Verify active members exist in the Members module
 - For **training_summary**: Verify training records have been created
 - For **event_attendance**: Verify events with attendees exist
@@ -1761,23 +2015,25 @@ The Reports module generates data reports including member roster, training summ
 
 #### Available Report Types
 
-| Report Type | Description | Data Source |
-|-------------|-------------|-------------|
-| `member_roster` | List of all active members with roles | Users table |
-| `training_summary` | Training completion and certification status | Training records |
-| `event_attendance` | Event participation rates | Events and attendees |
-| `training_progress` | Pipeline enrollment progress and requirement completion | Program enrollments |
-| `annual_training` | Comprehensive annual training and shift breakdown | Training records + shift reports |
+| Report Type         | Description                                             | Data Source                      |
+| ------------------- | ------------------------------------------------------- | -------------------------------- |
+| `member_roster`     | List of all active members with roles                   | Users table                      |
+| `training_summary`  | Training completion and certification status            | Training records                 |
+| `event_attendance`  | Event participation rates                               | Events and attendees             |
+| `training_progress` | Pipeline enrollment progress and requirement completion | Program enrollments              |
+| `annual_training`   | Comprehensive annual training and shift breakdown       | Training records + shift reports |
 
 #### Date Range Not Applied to Report
 
 **Symptoms**: Report generates but ignores the selected date range
 
 **Causes**:
+
 1. Report type does not support date ranges (e.g., member_roster, training_progress)
 2. Date format is incorrect
 
 **Solutions**:
+
 - Only reports marked with `usesDateRange: true` use the date range picker (training_summary, event_attendance, annual_training)
 - Verify dates are in `YYYY-MM-DD` format
 - Check that start date is before end date
@@ -1799,11 +2055,13 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Symptoms**: Member was dropped but the property return report shows an empty item table
 
 **Causes**:
+
 1. Items were not assigned through the inventory system (only verbal assignments)
 2. Items were previously unassigned or checked in but the drop was processed later
 3. Items are assigned to a different user ID
 
 **Solutions**:
+
 - Verify the member has active assignments in Inventory → Items → filter by assigned user
 - Check that items were assigned using the `POST /inventory/items/{id}/assign` endpoint, not just manually tracked
 - Review the member's assignment history via `GET /inventory/users/{user_id}/assignments`
@@ -1813,10 +2071,12 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Symptoms**: Items are listed but all values show $0.00
 
 **Causes**:
+
 1. Neither `purchase_price` nor `current_value` was entered when the item was created
 2. Items were created without purchase information
 
 **Solutions**:
+
 - Update items with their purchase price or current value before dropping the member
 - Use `PATCH /inventory/items/{item_id}` to set `purchase_price` or `current_value`
 - The report uses `current_value` first, then falls back to `purchase_price`
@@ -1826,12 +2086,14 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Symptoms**: Member was dropped but no email was received
 
 **Causes**:
+
 1. `send_property_return_email` was set to `false` in the status change request
 2. Member has no email address on file
 3. SMTP is not configured or email is disabled
 4. Email was sent but caught by spam filter
 
 **Solutions**:
+
 - Verify the status change request included `"send_property_return_email": true`
 - Check the member's email address in their profile
 - Review SMTP configuration in organization settings or global config
@@ -1843,10 +2105,12 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Symptoms**: `400 Bad Request` when trying to change a member's status
 
 **Causes**:
+
 1. The status value is misspelled or not a valid UserStatus
 2. The member is already in the requested status
 
 **Solutions**:
+
 - Valid statuses: `active`, `inactive`, `suspended`, `probationary`, `retired`, `dropped_voluntary`, `dropped_involuntary`
 - Check the member's current status first — you cannot change to the same status
 
@@ -1859,10 +2123,12 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 #### Pool Items vs. Individual Items
 
 **Understanding `tracking_type`**: Inventory items have two tracking modes:
+
 - **`individual`** (default): Each item is a unique, serialized record assigned 1:1 to a member (e.g., a specific radio with serial number). Use `POST /inventory/items/{id}/assign` and `/unassign`.
 - **`pool`**: A quantity-tracked pool (e.g., "Dept T-Shirt Medium, qty: 20"). Units are issued to members and the on-hand count decrements automatically. Use `POST /inventory/items/{id}/issue` and `POST /inventory/issuances/{id}/return`.
 
 **Common Scenario**: "I have 20 t-shirts and want to give one to a member"
+
 1. Create the item with `tracking_type: "pool"` and `quantity: 20`
 2. Issue to a member: `POST /inventory/items/{id}/issue` with `{ "user_id": "...", "quantity": 1 }`
 3. On-hand quantity becomes 19, `quantity_issued` becomes 1
@@ -1873,6 +2139,7 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Cause**: You tried to issue from an item with `tracking_type: "individual"`. The `/issue` endpoint only works for pool items.
 
 **Solutions**:
+
 - Change the item's tracking type: `PATCH /inventory/items/{id}` with `{ "tracking_type": "pool" }`
 - If the item has a serial number and should be tracked individually, use `POST /inventory/items/{id}/assign` instead
 
@@ -1881,6 +2148,7 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Cause**: The requested quantity exceeds the item's current on-hand `quantity`.
 
 **Solutions**:
+
 - Check current stock: `GET /inventory/items/{id}` — the `quantity` field shows available on-hand units
 - To see who has issued units: `GET /inventory/items/{id}/issuances`
 - Collect returns from members or increase the pool quantity via `PATCH /inventory/items/{id}` with `{ "quantity": <new_total> }`
@@ -1890,12 +2158,14 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Symptoms**: A member has enough years of service but is still at a lower tier
 
 **Causes**:
+
 1. `auto_advance` is disabled in the membership tier settings
 2. The member's `hire_date` is not set on their profile
 3. The `advance-membership-tiers` endpoint hasn't been called
 4. The member is not in `active` or `probationary` status
 
 **Solutions**:
+
 - Call `POST /api/v1/users/advance-membership-tiers` to trigger a batch scan
 - Check `Organization Settings > membership_tiers > auto_advance` is `true`
 - Ensure the member's profile has a `hire_date` value
@@ -1906,6 +2176,7 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Scenario**: A member is blocked from voting (due to tier or attendance) but leadership wants to allow them to vote anyway
 
 **Solution**:
+
 1. An officer with `elections.manage` permission calls `POST /api/v1/elections/{election_id}/voter-overrides` with the member's `user_id` and a `reason`
 2. The override is recorded with the granting officer's name, timestamp, and reason
 3. The member can now vote in that election — tier and attendance checks are skipped
@@ -1921,6 +2192,7 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Endpoint**: `GET /api/v1/meetings/attendance/dashboard`
 
 **Parameters**:
+
 - `period_months`: Look-back period (default 12)
 - `meeting_type`: Filter by type (e.g. `business` for business meetings only)
 
@@ -1933,6 +2205,7 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Scenario**: A member can't make a meeting and the secretary/president/chief wants to excuse them so their attendance percentage isn't penalized, but they also cannot vote in that meeting.
 
 **Steps**:
+
 1. Call `POST /api/v1/meetings/{meeting_id}/attendance-waiver` with `user_id` and `reason`
 2. The member is marked as excused with a waiver
 3. This meeting is excluded from the member's attendance percentage calculation
@@ -1946,7 +2219,7 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Scenario**: A member is on leave and their training compliance numbers look wrong — they're showing as non-compliant even though they should have reduced requirements.
 
 **How Waiver Adjustments Work**:
-When a Leave of Absence is created via **Administration > Member Lifecycle**, the system automatically reduces all proportional training requirements (hours, shifts, calls) using:
+When a Leave of Absence is created via **Members > Admin > Waivers**, the system automatically reduces all proportional training requirements (hours, shifts, calls) using:
 
 ```
 adjusted_required = base_required × (active_months / total_months)
@@ -1955,6 +2228,7 @@ adjusted_required = base_required × (active_months / total_months)
 A calendar month is "waived" if the leave covers **15 or more days** of that month. Overlapping leaves are deduplicated — the same month is never counted twice.
 
 **Where Adjustments Are Applied** (all views should show the same adjusted numbers):
+
 - My Training page (member self-view)
 - Compliance Matrix (officer view)
 - Competency Matrix / Heat Map
@@ -1963,10 +2237,11 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 - Program Enrollment Progress
 
 **Not working? Check these causes**:
-1. **Leave is not active**: Go to Member Lifecycle > Leave of Absence and verify the leave is active (not deactivated)
+
+1. **Leave is not active**: Go to **Members > Admin > Waivers** and verify the leave is active (not deactivated)
 2. **Leave doesn't cover enough days**: A month is only waived if the leave covers ≥15 days of that month. A leave from Jan 20–Jan 31 (12 days) does NOT waive January.
 3. **Wrong requirement type**: Only Hours, Shifts, and Calls requirements are adjusted proportionally. Courses and Certifications are binary (complete or not) and are never adjusted.
-4. **Training Waiver vs. Leave of Absence**: A Leave of Absence (Member Lifecycle) applies to ALL requirements. A Training Waiver (`/training/waivers` API) can target specific requirements via `requirement_ids`. You don't need both — a Leave of Absence is sufficient for general leaves.
+4. **Training Waiver vs. Leave of Absence**: A Leave of Absence (Members > Admin > Waivers) applies to ALL requirements. A Training Waiver (`/training/waivers` API) can target specific requirements via `requirement_ids`. You don't need both — a Leave of Absence is sufficient for general leaves.
 
 #### Leave of Absence: Meeting Attendance Not Adjusted
 
@@ -1975,6 +2250,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **How It Works**: Any meeting whose `meeting_date` falls between a leave's `start_date` and `end_date` (inclusive) is automatically excluded from the attendance denominator. No per-meeting waivers are needed for members on formal leave.
 
 **Not working? Check these causes**:
+
 1. **Leave is not active**: Verify the leave hasn't been deactivated
 2. **Leave dates don't cover the meeting**: The meeting date must fall between the leave's start and end dates (inclusive)
 3. **Per-meeting waiver vs. Leave of Absence**: Both subtract from the denominator independently. If a member has both a per-meeting waiver AND a leave covering the same meeting, the meeting is only subtracted once from the denominator in the Attendance Dashboard (they are counted separately: `eligible = total - waived - on_leave`)
@@ -1986,6 +2262,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Scenario**: A prospective member has been approved and converted to a full member — they should be automatically enrolled in the probationary training program.
 
 **How It Works**:
+
 1. When `transfer_to_membership()` is called (from the prospective member pipeline), the system looks for the org's default probationary program
 2. First checks `organization.settings.training.auto_enroll_program_id` for an explicitly configured program
 3. Falls back to any active training program with "probationary" in the name
@@ -1994,6 +2271,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Manual Enrollment**: The training officer can enroll anyone into any program via `POST /api/v1/training/enrollments?user_id={id}&program_id={id}`.
 
 **Not working?** Check that:
+
 - A training program exists with "probationary" in the name (or set `auto_enroll_program_id` in org settings)
 - The program is `active = true`
 
@@ -2002,6 +2280,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Scenario**: A department requires driver candidates to respond to 15 calls (10 transports), complete 5 shifts, with specific call type tracking.
 
 **Configuration** (set on `TrainingRequirement`):
+
 - `requirement_type`: `"calls"`, `"shifts"`, or `"hours"`
 - `required_calls`: Total number of calls required (e.g. 15)
 - `required_call_types`: Specific types to count (e.g. `["transport", "cardiac", "trauma"]`)
@@ -2009,6 +2288,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 - `required_hours`: Total hours (e.g. 40)
 
 **Tracking**: Shift completion reports (`POST /api/v1/training/shift-reports`) auto-update requirement progress:
+
 - SHIFTS: +1 per shift report
 - CALLS: Counts matching call types from the report's `call_types` array
 - HOURS: Adds `hours_on_shift` from the report
@@ -2020,6 +2300,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Scenario**: The system needs daily cert alerts, weekly struggling member checks, and monthly tier advancement.
 
 **Recommended crontab**:
+
 ```
 # Daily at 6:00 AM — cert expiration alerts
 0 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=cert_expiration_alerts
@@ -2052,11 +2333,13 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Scenario**: The training officer or secretary needs to change the meeting attendance percentage required for voting eligibility, or adjust tier benefits.
 
 **Steps**:
+
 1. View current config: `GET /api/v1/users/membership-tiers/config`
 2. Update config: `PUT /api/v1/users/membership-tiers/config` with the full tier list
 3. Each tier has `benefits` with: `voting_eligible`, `voting_requires_meeting_attendance`, `voting_min_attendance_pct`, `voting_attendance_period_months`, `training_exempt`, `training_exempt_types`, `can_hold_office`
 
 **Example**: To require 60% attendance over 6 months for active members to vote:
+
 ```json
 {
   "benefits": {
@@ -2074,6 +2357,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Prerequisites**: Proxy voting must be enabled for the organization. Set `organization.settings.proxy_voting.enabled = true` via org settings. This is a department-level decision and is disabled by default.
 
 **Steps**:
+
 1. An officer with `elections.manage` permission calls `POST /api/v1/elections/{election_id}/proxy-authorizations` with:
    - `delegating_user_id`: the absent member
    - `proxy_user_id`: the member who will vote on their behalf
@@ -2082,7 +2366,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 2. The authorization is recorded with both member names, the authorizing officer, and a timestamp
 3. When ballot emails are sent, the proxy holder is automatically CC'd on the absent member's ballot notification
 4. The proxy casts the vote via `POST /api/v1/elections/{election_id}/proxy-vote` with their `proxy_authorization_id`
-5. The system checks the *delegating* member's eligibility and applies double-vote prevention against them
+5. The system checks the _delegating_ member's eligibility and applies double-vote prevention against them
 6. The hash trail shows: `is_proxy_vote=true`, who physically voted (`proxy_voter_id`), and on whose behalf (`proxy_delegating_user_id`)
 7. To revoke before voting: `DELETE /api/v1/elections/{election_id}/proxy-authorizations/{id}`
 8. View all authorizations: `GET /api/v1/elections/{election_id}/proxy-authorizations`
@@ -2094,6 +2378,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Scenario**: The Secretary needs to grant voting overrides to multiple members at once (e.g., for a special election where several excused members were approved by board vote).
 
 **Steps**:
+
 1. Call `POST /api/v1/elections/{election_id}/voter-overrides/bulk` with:
    - `user_ids`: list of member UUIDs to override
    - `reason`: explanation for the bulk override (10–500 characters)
@@ -2109,6 +2394,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 
 **Organization-Level Configuration**:
 Set `organization.settings.quorum_config`:
+
 ```json
 {
   "enabled": true,
@@ -2116,6 +2402,7 @@ Set `organization.settings.quorum_config`:
   "threshold": 50.0
 }
 ```
+
 - `type`: `"percentage"` (of active members) or `"count"` (absolute number required)
 - `threshold`: the value (e.g., 50.0 for 50% or 10 for 10 members)
 
@@ -2123,6 +2410,7 @@ Set `organization.settings.quorum_config`:
 Use `PATCH /api/v1/minutes/{minutes_id}/quorum-config` to set `quorum_type` and `quorum_threshold` on a specific meeting, overriding the org default.
 
 **Checking Quorum**:
+
 - `GET /api/v1/minutes/{minutes_id}/quorum` returns `quorum_met`, `present_count`, `required_count`, and a description
 - Quorum recalculates automatically when attendees are marked present or removed
 
@@ -2133,10 +2421,12 @@ Use `PATCH /api/v1/minutes/{minutes_id}/quorum-config` to set `quorum_type` and 
 **Symptoms**: Members are checking in but quorum still shows 0 present.
 
 **Causes**:
+
 1. Attendees are added to the meeting but not marked as `present: true`
 2. The org quorum config has `enabled: false`
 
 **Solutions**:
+
 - Verify the meeting's `attendees` JSON array — each entry should have `"present": true`
 - Check `Organization Settings > quorum_config > enabled` is `true`
 - If using per-meeting override, verify both `quorum_type` and `quorum_threshold` are set on the meeting
@@ -2148,20 +2438,25 @@ Use `PATCH /api/v1/minutes/{minutes_id}/quorum-config` to set `quorum_type` and 
 **Configuration** (set by training officer or chief on each SkillEvaluation record):
 
 **Role-based** (`allowed_evaluators` JSON):
+
 ```json
-{"type": "roles", "roles": ["shift_leader", "driver_trainer"]}
+{ "type": "roles", "roles": ["shift_leader", "driver_trainer"] }
 ```
+
 Only users with one of these roles can sign off on this skill.
 
 **User-specific**:
+
 ```json
-{"type": "specific_users", "user_ids": ["uuid1", "uuid2"]}
+{ "type": "specific_users", "user_ids": ["uuid1", "uuid2"] }
 ```
+
 Only explicitly named users can evaluate.
 
 **Default** (set to `null`): Any user with `training.manage` permission can sign off.
 
 **Checking Permission**:
+
 - `POST /api/v1/training/skill-evaluations/{skill_id}/check-evaluator` — returns whether the current user is authorized
 
 #### Training: Certification Expiration Alert Pipeline
@@ -2169,15 +2464,17 @@ Only explicitly named users can evaluate.
 **Scenario**: Members with expiring certifications should receive tiered reminders, and training/compliance officers should be CC'd on escalating notifications when members are non-responsive.
 
 **Alert Tiers**:
-| Days Before Expiry | Alert Level | CC Recipients |
-|---|---|---|
-| 90 days | First notice | Member only |
-| 60 days | Second notice | Member only |
-| 30 days | Urgent | Member + Training officers |
-| 7 days | Final warning | Member + Training + Compliance officers |
-| Expired | Escalation | Member + Training + Compliance + Chief |
+
+| Days Before Expiry | Alert Level   | CC Recipients                           |
+| ------------------ | ------------- | --------------------------------------- |
+| 90 days            | First notice  | Member only                             |
+| 60 days            | Second notice | Member only                             |
+| 30 days            | Urgent        | Member + Training officers              |
+| 7 days             | Final warning | Member + Training + Compliance officers |
+| Expired            | Escalation    | Member + Training + Compliance + Chief  |
 
 **Triggering Alerts**:
+
 - `POST /api/v1/training/certifications/process-alerts` — designed to be called by a daily cron job
 - Each tier is tracked per-record (`alert_90_sent_at`, etc.) — idempotent, won't re-send
 
@@ -2190,12 +2487,14 @@ Only explicitly named users can evaluate.
 **Endpoint**: `GET /api/v1/training/competency-matrix`
 
 **Returns**: A matrix of members vs. requirements with status for each cell:
+
 - **current** (green): Active and not expiring soon
 - **expiring_soon** (yellow): Expires within 90 days
 - **expired** (red): Past expiration date
 - **not_started** (gray): No record on file
 
 **Filtering**:
+
 - `requirement_ids`: comma-separated list to focus on specific requirements
 - `user_ids`: comma-separated list to focus on specific members
 
@@ -2206,15 +2505,18 @@ Only explicitly named users can evaluate.
 **Scenario**: Training sessions should appear on the organization calendar and prevent double-booking at the same location.
 
 **Creating a Training Session with Location**:
+
 - Include `location_id` in the `POST /api/v1/training-sessions` request
 - The system checks for overlapping events at that location before creating the training event
 - If a conflict exists, the request returns `400` with the conflicting event name(s)
 
 **Calendar View**:
+
 - `GET /api/v1/training-sessions/calendar` — returns all training sessions with their linked Event data (dates, times, locations)
 - Supports `start_after`, `start_before`, and `training_type` filters
 
-**Generating a Cohort — Conflicts Are Per-Class, Not All-or-Nothing** *(2026-08-05)*:
+**Generating a Cohort — Conflicts Are Per-Class, Not All-or-Nothing** _(2026-08-05)_:
+
 - Generating a course cohort creates one event per class, so a room conflict on
   class 3 of 15 does **not** fail the whole generation. The other 14 are created,
   class 3 is created **without an event**, and the reason comes back as a warning
@@ -2232,6 +2534,7 @@ Only explicitly named users can evaluate.
   same double-booking rules as any other event edit.
 
 **Hall Coordinator Separation**:
+
 - Hall coordinators who manage facility bookings can use `GET /api/v1/events?exclude_event_types=training` to see only non-training events
 - Double-booking prevention still applies across ALL event types — training sessions booked at a location will block other events from booking the same slot
 
@@ -2240,11 +2543,13 @@ Only explicitly named users can evaluate.
 **Symptoms**: An active member gets "attendance below minimum" when trying to vote
 
 **Causes**:
+
 1. The member's tier has `voting_requires_meeting_attendance: true` with a minimum percentage
 2. The member hasn't attended enough meetings in the look-back period
 3. Meeting attendance was not recorded (member was present but not marked)
 
 **Solutions**:
+
 - Check the member's tier in `Organization Settings > membership_tiers > tiers` — look at `benefits.voting_min_attendance_pct`
 - Verify meeting attendance records: ensure the member is marked `present: true` in meeting attendee records
 - Adjust the look-back period (`voting_attendance_period_months`) or lower the minimum if the policy was set too aggressively
@@ -2255,11 +2560,13 @@ Only explicitly named users can evaluate.
 **Symptoms**: A life member is flagged for incomplete training requirements
 
 **Causes**:
+
 1. The member's `membership_type` hasn't been updated to the exempt tier
 2. The tier's `training_exempt` setting is not enabled
 3. Auto-advancement hasn't been triggered
 
 **Solutions**:
+
 - Verify the member's tier: check `membership_type` on their profile
 - Check `Organization Settings > membership_tiers > tiers` — the life tier should have `benefits.training_exempt: true`
 - Run `POST /api/v1/users/advance-membership-tiers` or manually update via `PATCH /api/v1/users/{user_id}/membership-type`
@@ -2269,11 +2576,13 @@ Only explicitly named users can evaluate.
 **Symptoms**: Leadership or quartermaster didn't receive a copy of the drop notification
 
 **Causes**:
+
 1. The CC roles are not configured in organization settings
 2. The user with that role has no email address
 3. Email sending is disabled for the organization
 
 **Solutions**:
+
 - Check `Organization Settings > member_drop_notifications > cc_roles` — default is `["admin", "quartermaster", "chief"]`
 - Add specific emails to `cc_emails` list for users who should always receive copies
 - Verify email service is enabled: `Organization Settings > email_service > enabled`
@@ -2283,10 +2592,12 @@ Only explicitly named users can evaluate.
 **Symptoms**: The drop notification was only sent to the department email, not the member's personal email
 
 **Causes**:
+
 1. The member has no `personal_email` on file
 2. The `include_personal_email` setting is disabled
 
 **Solutions**:
+
 - Ensure the member's profile has a `personal_email` value set
 - Check `Organization Settings > member_drop_notifications > include_personal_email` is `true`
 
@@ -2299,12 +2610,14 @@ Only explicitly named users can evaluate.
 **Symptoms**: A member was dropped more than 30 days ago but no reminder was sent
 
 **Causes**:
+
 1. The process endpoint hasn't been called (reminders require a trigger)
 2. The member has no outstanding items (all were returned)
 3. The reminder was already sent previously (duplicate prevention)
 4. The member was dropped before `status_changed_at` was tracked (legacy drops)
 
 **Solutions**:
+
 - Call `POST /api/v1/users/property-return-reminders/process` manually or set up a daily scheduler
 - Check the overdue list: `GET /api/v1/users/property-return-reminders/overdue`
 - Verify the member still has active assignments/checkouts in the inventory system
@@ -2315,10 +2628,12 @@ Only explicitly named users can evaluate.
 **Symptoms**: Items appear on the overdue list but the member already returned them
 
 **Causes**:
+
 1. Items were physically returned but not checked in / unassigned in the system
 2. Officer forgot to process the return in the inventory module
 
 **Solutions**:
+
 - Unassign items: `POST /api/v1/inventory/items/{item_id}/unassign`
 - Check in items: `POST /api/v1/inventory/checkout/{checkout_id}/checkin`
 - Once all items are returned in the system, the member will no longer appear on the overdue list and no further reminders will be sent
@@ -2329,11 +2644,13 @@ Only explicitly named users can evaluate.
 **Symptoms**: A dropped member returned all items but is still in `dropped_voluntary` or `dropped_involuntary` status
 
 **Causes**:
+
 1. Items were returned physically but not processed through the system (unassign / check-in)
 2. There is still an active `ItemAssignment` or unreturned `CheckOutRecord` for the member
 3. The member was not in a dropped status when items were returned
 
 **Solutions**:
+
 - Verify all items are unassigned: check `GET /api/v1/inventory/users/{user_id}/assignments?active_only=true`
 - Verify all checkouts are returned: check active checkouts for the user
 - Manually archive the member: `POST /api/v1/users/{user_id}/archive`
@@ -2343,9 +2660,11 @@ Only explicitly named users can evaluate.
 **Symptoms**: Creating a prospect or transferring to membership returns 409 Conflict
 
 **Causes**:
+
 1. The prospect's email matches an archived (or active) member in the system
 
 **Solutions**:
+
 - If the person is a returning member: use `POST /api/v1/users/{user_id}/reactivate` to restore their archived profile
 - If it's a genuinely different person who happens to share the email: update the archived member's email first, then retry
 - Use `POST /api/v1/membership-pipeline/prospects/check-existing?email=...` to preview matches before creating
@@ -2355,10 +2674,12 @@ Only explicitly named users can evaluate.
 **Symptoms**: Reactivation endpoint returns an error
 
 **Causes**:
+
 1. Member is not in `archived` status (only archived members can be reactivated)
 2. Member was soft-deleted (`deleted_at` is set)
 
 **Solutions**:
+
 - Verify the member's current status — only `archived` members can be reactivated
 - If the member is still in a dropped status, archive them first, then reactivate
 - If the member was soft-deleted, this requires direct database intervention
@@ -2404,11 +2725,13 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: Member submits training but officer doesn't see it in Review Submissions
 
 **Causes**:
+
 1. Submission is still in "draft" status
 2. Officer doesn't have `training.manage` permission
 3. Different organization context
 
 **Solutions**:
+
 - Confirm the member clicked "Submit" (not just "Save Draft")
 - Verify the officer has `training.manage` permission assigned
 - Ensure both the member and officer are in the same organization
@@ -2419,11 +2742,13 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: Submissions under the configured hour threshold are not auto-approved
 
 **Causes**:
+
 1. `auto_approve_under_hours` is set to null (disabled)
 2. The submitted hours exceed the threshold
 3. `require_approval` is set to true and overrides auto-approve
 
 **Solutions**:
+
 - Navigate to Review Submissions → Settings and verify auto-approve is configured
 - Check the hour threshold value
 - Ensure the submission's hours are strictly below the threshold
@@ -2433,11 +2758,13 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: Filing a shift report doesn't update the trainee's requirement progress
 
 **Causes**:
+
 1. No enrollment_id was linked to the shift report
 2. The trainee has no active enrollments
 3. The enrollment's requirements don't include SHIFTS, CALLS, or HOURS types
 
 **Solutions**:
+
 - When creating a shift report, select the trainee's program enrollment from the dropdown
 - Verify the trainee has an active program enrollment
 - Check that the program's requirements include shift-based, call-based, or hour-based requirement types
@@ -2448,10 +2775,12 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: Trainee doesn't see shift reports on their My Training page
 
 **Causes**:
+
 1. The `show_shift_reports` visibility setting is turned off
 2. The report was filed for a different trainee
 
 **Solutions**:
+
 - Officers: Go to My Training → Member Visibility Settings and enable "Shift Reports"
 - Verify the correct trainee was selected when filing the report
 
@@ -2460,10 +2789,12 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: Member's training page is missing sections (e.g., no shift stats, no certifications)
 
 **Causes**:
+
 1. Visibility settings have been turned off for those sections
 2. No data exists for those sections yet
 
 **Solutions**:
+
 - Officers: Navigate to My Training → Member Visibility Settings to check which sections are enabled
 - Data sections only appear when there is data to show — an empty certification list won't show the Certifications section
 - Check that training records, shift reports, or enrollments exist for the member
@@ -2473,10 +2804,12 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: After toggling visibility settings, members still see/don't see certain data
 
 **Causes**:
+
 1. Settings weren't saved (the Save button was not clicked)
 2. Browser cache showing stale data
 
 **Solutions**:
+
 - Ensure the "Save Changes" button is clicked after toggling settings
 - Ask the member to refresh their browser
 - Verify the settings took effect by checking GET `/api/v1/training/module-config/visibility`
@@ -2486,11 +2819,13 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: Annual Training Report generates but all values are zero
 
 **Causes**:
+
 1. Date range doesn't match any training records or shift reports
 2. No completed training records exist in the period
 3. Members don't have training records linked to the organization
 
 **Solutions**:
+
 - Check the reporting period — default is current year (Jan 1 - Dec 31)
 - Try "Last Year" if training was recorded in the prior year
 - Verify training records exist with `completed_date` within the selected range
@@ -2501,11 +2836,13 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: A Leave of Absence was created but the member's training requirements were not reduced
 
 **Causes**:
+
 1. The leave has `exempt_from_training_waiver = true` set
 2. The auto-linked training waiver was not created (backend service error)
 3. The leave does not cover ≥15 days of any calendar month
 
 **Solutions**:
+
 - Check the leave record — if `exempt_from_training_waiver` is true, the LOA intentionally does not create a training waiver. Update the leave to disable this flag, or create a standalone training waiver from the Waiver Management page.
 - Check `linked_training_waiver_id` on the leave — if null, the auto-link did not fire. Create a standalone training waiver manually.
 - A month is only waived if the leave covers 15+ days of that month. A leave from Jan 20–Jan 31 (12 days) will not waive January.
@@ -2517,6 +2854,7 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Cause**: A record with the same member + course name (case-insensitive) + completion date (±1 day) already exists.
 
 **Solutions**:
+
 - Review the warning — if this is truly a new record, proceed with creation
 - If using bulk upload, set `skip_duplicates: true` to silently skip known duplicates
 - The warning is informational; it does not block creation
@@ -2526,16 +2864,19 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: The green/yellow/red compliance indicator on a member's profile seems incorrect
 
 **Causes**:
+
 1. Stale data — the card reflects the last calculation
 2. A waiver was recently created or deactivated
 3. A certification just expired
 
 **Status logic**:
+
 - **Red**: Any expired certification OR fewer than 50% of requirements met
 - **Yellow**: Any certification expiring within 90 days OR fewer than 100% of requirements met
 - **Green**: All requirements met and no certification issues
 
 **Solutions**:
+
 - Refresh the page to trigger a recalculation
 - Check individual requirement progress to identify which requirements are not met
 - Verify waiver adjustments are correctly applied (see Training Admin > Training Waivers tab)
@@ -2545,11 +2886,13 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Symptoms**: A certification is expiring but the member has not received alert notifications
 
 **Causes**:
+
 1. The alert for that tier was already sent (each tier sends only once)
 2. The certification is more than 90 days away (alerts start at 90 days)
 3. The member has email notifications disabled
 
 **Solutions**:
+
 - Check the training record's `alert_90_sent_at`, `alert_60_sent_at`, `alert_30_sent_at`, `alert_7_sent_at` fields — if already set, that tier was sent
 - Verify the expiration date is within 90 days of today
 - Check the member's email preferences and ensure email is enabled
@@ -2562,6 +2905,7 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 **Cause**: The member's rank does not exactly match any of the organization's configured operational ranks (case-sensitive comparison).
 
 **Solutions**:
+
 - Navigate to Settings to review configured operational ranks
 - Edit the member's profile to set their rank to an exact match
 - If the rank should be valid, add it to the organization's operational ranks configuration
@@ -2584,10 +2928,12 @@ The Notifications module manages notification rules (triggers and categories), d
 **Message**: `"Unable to load notification rules. Please check your connection and try again."`
 
 **Causes**:
+
 1. Network connectivity issue
 2. Missing `notification_rules` or `notification_logs` tables
 
 **Solutions**:
+
 ```bash
 # Verify the notification tables exist
 docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
@@ -2603,17 +2949,18 @@ docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
 **Message**: `"Unable to create the notification rule. Please check your input and try again."`
 
 **Causes**:
+
 1. Missing required fields (name, trigger_type, category)
 2. Invalid trigger_type or category value
 3. Missing `notifications.manage` permission
 
 **Valid Configuration Values**:
 
-| Field | Valid Values |
-|-------|-------------|
+| Field          | Valid Values                                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `trigger_type` | `event_created`, `training_due`, `shift_assigned`, `document_uploaded`, `meeting_scheduled`, `election_opened`, `form_submitted`, `custom` |
-| `category` | `events`, `training`, `scheduling`, `documents`, `meetings`, `elections`, `forms`, `system` |
-| `channel` | `in_app`, `email`, `sms`, `push` |
+| `category`     | `events`, `training`, `scheduling`, `documents`, `meetings`, `elections`, `forms`, `system`                                                |
+| `channel`      | `in_app`, `email`, `sms`, `push`                                                                                                           |
 
 ---
 
@@ -2622,10 +2969,12 @@ docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
 **Symptoms**: Toggling a rule on/off reverts after page refresh
 
 **Causes**:
+
 1. API call to toggle endpoint failing silently
 2. Network issue preventing the update
 
 **Solutions**:
+
 - Check browser console for API errors (F12 -> Console)
 - Verify the rule ID is valid
 - Confirm `notifications.manage` permission is assigned
@@ -2645,22 +2994,25 @@ try {
 } catch (err: unknown) {
   const appError = toAppError(err);
   // For HTTP errors, use the API message; for generic errors, use a fallback
-  setError(appError.status ? appError.message : 'Operation failed');
+  setError(appError.status ? appError.message : "Operation failed");
 }
 ```
 
 **Do NOT use:**
+
 ```typescript
 // WRONG — 'any' bypasses type safety
 catch (err: any) { ... }
 ```
 
 **Key utilities** (`frontend/src/utils/errorHandling.ts`):
+
 - `toAppError(err)` — Converts any error to a structured `AppError` with `message`, `status`, `code`, and `details`
 - `getErrorMessage(err, fallback)` — Shorthand that returns just the message string
 - `isAppError(err)` — Type guard for checking if an object is an `AppError`
 
 **Check order in `toAppError()`:**
+
 1. Axios/HTTP errors (objects with `.response`) — extracts `.response.data.detail` and `.response.status`
 2. Standard `Error` instances — uses `.message`
 3. Plain `AppError` objects — returns as-is
@@ -2694,9 +3046,10 @@ async def get_item(item_id, db):
 **Cause**: The error is a plain `Error` object (not an HTTP error with `.response`), so `toAppError()` extracts the raw `.message` property.
 
 **Solution**: Use `toAppError()` and check for `appError.status` to decide between the API message and a fallback:
+
 ```typescript
 const appError = toAppError(err);
-setError(appError.status ? appError.message : 'A friendly fallback message');
+setError(appError.status ? appError.message : "A friendly fallback message");
 ```
 
 #### Problem: Test mock errors not being parsed correctly
@@ -2704,10 +3057,11 @@ setError(appError.status ? appError.message : 'A friendly fallback message');
 **Cause**: `createMockApiError()` must return an error object (not a Promise). The error needs a `.response` property for `toAppError()` to extract the detail message.
 
 **Solution**: Use the test utility correctly:
+
 ```typescript
 // Correct — returns error object for use with mockRejectedValue
 vi.mocked(api.someMethod).mockRejectedValue(
-  createMockApiError('Error message', 400)
+  createMockApiError("Error message", 400),
 );
 ```
 
@@ -2722,6 +3076,7 @@ vi.mocked(api.someMethod).mockRejectedValue(
 **Cause**: The template has no sections, or all sections are empty (no criteria defined).
 
 **Fix**:
+
 1. Navigate to the template editor.
 2. Add at least one section with at least one criterion.
 3. Save the template.
@@ -2744,11 +3099,13 @@ vi.mocked(api.someMethod).mockRejectedValue(
 #### Cannot Create Test — "Template not found or not published"
 
 **Causes**:
+
 1. The selected template is in `draft` status
 2. The template has been archived
 3. The template belongs to a different organization
 
 **Fix**:
+
 - Verify the template is published: navigate to **Skills Testing > Templates** and check the status column
 - If the template is in draft, publish it first
 - If archived, duplicate it and publish the copy
@@ -2764,6 +3121,7 @@ vi.mocked(api.someMethod).mockRejectedValue(
 **Cause**: The template has "Require All Critical" enabled, and at least one required (critical) criterion was not scored as passed.
 
 **How It Works**: When "Require All Critical" is on, the candidate must meet BOTH conditions:
+
 1. Score ≥ passing percentage
 2. All required criteria passed
 
@@ -2774,16 +3132,19 @@ If any required criterion fails, the result is **FAIL** regardless of the score.
 #### Candidate Not Appearing in Test Dropdown
 
 **Causes**:
+
 1. The member does not belong to your organization
 2. The member's account is deactivated or deleted
 
 **Fix**:
+
 - Check the member's organization and status in **Members > Directory**
 - Ensure the member has an active account
 
 #### Score Calculation Seems Wrong
 
 **How Scoring Works**: The score is calculated as:
+
 ```
 percentage = (total points earned across all sections / total possible points across all sections) × 100
 ```
@@ -2791,6 +3152,7 @@ percentage = (total points earned across all sections / total possible points ac
 **Note**: As of 2026-02-28, scoring uses **point-based calculation**. Each criterion has a configurable point value (default 1). The percentage is calculated from total points, not simple criterion count.
 
 **Troubleshooting**:
+
 1. Check the template's section/criteria structure — ensure all criteria and point values are defined correctly
 2. View the test detail to see the per-section point breakdown
 3. Verify the template's passing percentage matches expectations
@@ -2811,6 +3173,7 @@ percentage = (total points earned across all sections / total possible points ac
 #### Cannot Delete a Test Record
 
 **Causes**:
+
 1. You don't have the `training.manage` permission
 2. The test belongs to a different organization
 
@@ -2833,10 +3196,12 @@ percentage = (total points earned across all sections / total possible points ac
 #### Summary Shows No Data
 
 **Causes**:
+
 1. No templates or tests exist for your organization
 2. You don't have the `training.manage` permission
 
 **Fix**:
+
 - Create templates and administer tests first
 - Contact your administrator to verify your permissions
 
@@ -2851,6 +3216,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Event Request Form Not Appearing on Public Page
 
 **Symptoms**:
+
 - Public form URL (`/f/:slug`) returns 404 or blank page
 - Form exists in admin but isn't accessible publicly
 
@@ -2873,6 +3239,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Submitted Request Not Appearing in Admin Tab
 
 **Symptoms**:
+
 - Community member submitted a request but coordinator doesn't see it
 - Event Requests tab shows empty or outdated list
 
@@ -2895,6 +3262,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Default Coordinator Not Being Auto-Assigned
 
 **Symptoms**:
+
 - New requests arrive with no assignee
 - Coordinator field is blank on submitted requests
 
@@ -2918,6 +3286,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Cannot Schedule Event — Room Double-Booking Error
 
 **Symptoms**:
+
 - "This location has a conflicting event at the selected time" error when scheduling
 - Schedule button is disabled or returns an error
 
@@ -2942,6 +3311,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Comment Thread Not Showing or Comments Lost
 
 **Symptoms**:
+
 - Comments added but not visible when reopening the request
 - Activity log shows status changes but no comments
 
@@ -2961,6 +3331,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Email Templates Not Sending or Template Variables Not Replaced
 
 **Symptoms**:
+
 - Scheduled email not delivered to requester
 - Email body shows `{{contact_name}}` literally instead of the person's name
 
@@ -2990,6 +3361,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Cannot Cancel or Postpone a Request
 
 **Symptoms**:
+
 - Cancel/postpone buttons not visible
 - Error when trying to cancel from the public status page
 
@@ -3013,6 +3385,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Public Status Page Shows "Request Not Found"
 
 **Symptoms**:
+
 - Community member clicks their status link but sees the error page
 - Token-based URL returns 404
 
@@ -3035,6 +3408,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Pipeline Tasks Not Visible on Public Status Page
 
 **Symptoms**:
+
 - Coordinator has completed several pipeline tasks but the public page doesn't show progress
 - Task progress bar and checklist are missing
 
@@ -3054,6 +3428,7 @@ The Public Outreach Request Pipeline allows community members to submit event re
 ### Problem: Pipeline Task Order Not Saving
 
 **Symptoms**:
+
 - Reordered tasks in Settings but they revert on page reload
 - Up/down arrows don't persist the new order
 
@@ -3079,6 +3454,7 @@ The following examples can be used as templates when setting up public outreach 
 **Description**: Live fire extinguisher training and kitchen fire safety demonstration for community groups. Typically 45-60 minutes.
 **Typical Audience**: Corporate offices, senior living communities, school staff
 **Suggested Pipeline Tasks**:
+
 1. Review request and confirm date availability
 2. Chief/President approval
 3. Email volunteer signup to department
@@ -3088,6 +3464,7 @@ The following examples can be used as templates when setting up public outreach 
 7. Day-before reminder to volunteers and requester
 
 **Sample Email Template — Confirmation**:
+
 > Subject: Your Fire Safety Demo is Confirmed — {{event_date}}
 >
 > Dear {{contact_name}},
@@ -3111,6 +3488,7 @@ The following examples can be used as templates when setting up public outreach 
 **Description**: Guided tour of the fire station including apparatus bay, equipment overview, and meet-the-crew. 30-45 minutes.
 **Typical Audience**: Scout troops, daycare/preschool groups, birthday parties, school field trips
 **Suggested Pipeline Tasks**:
+
 1. Review request and confirm station availability
 2. Assign tour guide (on-duty crew or volunteer)
 3. Confirm audience size and age group
@@ -3119,6 +3497,7 @@ The following examples can be used as templates when setting up public outreach 
 6. Day-before reminder
 
 **Sample Email Template — Directions**:
+
 > Subject: Directions to {{organization_name}} — Your Station Tour on {{event_date}}
 >
 > Dear {{contact_name}},
@@ -3141,6 +3520,7 @@ The following examples can be used as templates when setting up public outreach 
 **Description**: Age-appropriate fire safety education at the school. Includes stop-drop-roll, escape planning, 911 education, and optional apparatus display.
 **Typical Audience**: Elementary schools (K-5), after-school programs
 **Suggested Pipeline Tasks**:
+
 1. Review request — confirm school, grade level, number of students
 2. Chief/President approval
 3. Coordinate with school administration (point of contact, schedule, access)
@@ -3151,6 +3531,7 @@ The following examples can be used as templates when setting up public outreach 
 8. Send confirmation to school contact with arrival time and setup needs
 
 **Sample Email Template — School Confirmation**:
+
 > Subject: Fire Safety Visit Confirmed — {{event_date}}
 >
 > Dear {{contact_name}},
@@ -3164,6 +3545,7 @@ The following examples can be used as templates when setting up public outreach 
 > - **Materials**: We'll bring age-appropriate handouts and take-home materials for every student
 >
 > **What we need from you**:
+>
 > - A gym, cafeteria, or outdoor area for the presentation
 > - Access to a power outlet (for our projector, if indoors)
 > - Student count per session
@@ -3179,6 +3561,7 @@ The following examples can be used as templates when setting up public outreach 
 **Description**: Hands-on CPR and basic first aid class for community members. Usually 2-3 hours. May include AED training.
 **Typical Audience**: Community groups, youth organizations, corporate teams, parent groups
 **Suggested Pipeline Tasks**:
+
 1. Review request — confirm group size (max 12 per instructor)
 2. Verify instructor certifications are current
 3. Chief/President approval
@@ -3197,6 +3580,7 @@ The following examples can be used as templates when setting up public outreach 
 **Description**: Free smoke detector installation and battery replacement for residents, especially seniors and low-income households. 15-30 minutes per home.
 **Typical Audience**: Individual homeowners, neighborhood associations, senior communities, housing authorities
 **Suggested Pipeline Tasks**:
+
 1. Review request — confirm address and number of homes
 2. Verify smoke detector inventory (request from supply if needed)
 3. Assign installation team (minimum 2 members)
@@ -3213,6 +3597,7 @@ The following examples can be used as templates when setting up public outreach 
 **Description**: Department open house with apparatus display, equipment demonstrations, recruitment information, and family-friendly activities. 2-4 hours.
 **Typical Audience**: General public, potential recruits, families
 **Suggested Pipeline Tasks**:
+
 1. Select date and obtain Chief/President approval
 2. Form planning committee (assign committee lead)
 3. Email department — request volunteers and activity ideas
@@ -3235,6 +3620,7 @@ The following examples can be used as templates when setting up public outreach 
 **Cause**: The QR code URL contains a category ID that has been deleted or belongs to a different organization.
 
 **Fix**:
+
 1. Go to **Administration > Admin Hours > Manage** and verify the category exists
 2. Regenerate the QR code from the **QR Codes** tab and reprint
 3. Ensure the QR code URL matches your current domain (check after domain changes)
@@ -3244,6 +3630,7 @@ The following examples can be used as templates when setting up public outreach 
 **Cause**: No active clock-in session found for the current user in any category.
 
 **Fix**:
+
 1. Verify you have an active (unclosed) session — check **My Hours** page for an "Active" indicator
 2. If the session was started more than 24 hours ago, it may have been auto-closed by the system. Submit a manual entry instead
 3. If you accidentally closed the browser, your session is still active on the server. Return to the clock-in page
@@ -3253,6 +3640,7 @@ The following examples can be used as templates when setting up public outreach 
 **Cause**: No user with `admin_hours.manage` permission is assigned to review entries.
 
 **Fix**:
+
 1. Go to **Administration > Roles & Permissions** and ensure at least one role has `admin_hours.manage`
 2. Check the category's **auto-approve** settings — entries below the approval threshold are auto-approved
 3. If the category has a high approval threshold, consider lowering it for routine administrative tasks
@@ -3274,6 +3662,7 @@ The following examples can be used as templates when setting up public outreach 
 **Status**: Fixed. The backend now converts Python weekday to JS convention before comparison.
 
 **If you generated incorrect shifts before the fix**:
+
 1. Delete the incorrectly generated shifts from the calendar
 2. Re-run the pattern generation — shifts will now land on the correct days
 
@@ -3282,6 +3671,7 @@ The following examples can be used as templates when setting up public outreach 
 **Cause**: The pattern references a template that was either never linked or has been deleted.
 
 **Fix**:
+
 1. Edit the pattern and verify a template is selected in the template dropdown
 2. If the error says "no template linked," select a template and save
 3. If the error says "template was deleted," create a new template or link an existing one
@@ -3341,6 +3731,7 @@ The following examples can be used as templates when setting up public outreach 
 All backend log entries now include a **request correlation ID** (UUID4) that links all log messages from a single HTTP request. This makes it easy to trace a request's full lifecycle.
 
 **How to use:**
+
 ```bash
 # Find all log entries for a specific request
 docker-compose logs backend | grep "req_id=<uuid>"
@@ -3358,6 +3749,7 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 ### Problem: Sentry not receiving error reports
 
 **Fix**:
+
 1. Verify `SENTRY_DSN` is set in your `.env` file
 2. Verify `SENTRY_ENABLED=true`
 3. Check that the Sentry DSN URL is reachable from the backend container:
@@ -3376,6 +3768,7 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 ### Problem: SMTP test email fails after changing settings
 
 **Fix**:
+
 1. After saving new SMTP settings, the backend must reinitialize the email client. Restart the backend: `docker-compose restart backend`
 2. Verify the new credentials by sending a test email from the Email settings tab
 3. For Gmail/Outlook, ensure you're using an app-specific password if 2FA is enabled
@@ -3383,6 +3776,7 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 ### Problem: Storage provider switch loses existing files
 
 **Important**: Switching file storage providers (e.g., from Local to S3) does **not** automatically migrate existing files. Before switching:
+
 1. Download/backup all existing files
 2. Switch the provider in settings
 3. Re-upload files to the new storage location
@@ -3392,6 +3786,7 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 **Caution**: Changing the authentication provider (e.g., from local to LDAP) can prevent existing users from logging in if their credentials don't exist in the new provider.
 
 **Recommended approach**:
+
 1. Enable the new auth provider as an **additional** option first (if supported)
 2. Verify key admin accounts can authenticate via the new provider
 3. Only then disable the old provider
@@ -3403,10 +3798,12 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 ### Problem: QR Code Not Scanning
 
 **Causes**:
+
 1. Screen brightness too low for scanner to read
 2. QR code too small on screen
 
 **Fix**:
+
 - Increase screen brightness to maximum
 - Zoom in on the QR code or use the print feature (`Ctrl+P`) to produce a physical card at standard ID card dimensions
 - The QR code encodes the member's UUID — ensure your scanner application supports URL or text QR codes
@@ -3414,10 +3811,12 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 ### Problem: Barcode Scanner Not Finding Member
 
 **Causes**:
+
 1. The barcode scanner page is not open
 2. The scanned barcode doesn't match any member in the current organization
 
 **Fix**:
+
 - Navigate to the barcode scanner page from the Member ID Card page
 - Verify the member's account is active and belongs to your organization
 - The barcode uses Code128 encoding of the member's UUID
@@ -3425,6 +3824,7 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 ### Problem: Print Layout Not Matching ID Card Dimensions
 
 **Fix**: The print stylesheet is optimized for standard ID card size. Ensure your browser print dialog has:
+
 - Paper size: auto or custom (3.375" × 2.125")
 - Margins: None or Minimum
 - Background graphics: Enabled (for department branding colors)
@@ -3440,6 +3840,7 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 **Cause**: When a new version is deployed, Vite generates JS/CSS files with new content hashes. Users with cached `index.html` still reference old asset filenames that no longer exist on the server.
 
 **Fix Applied**: As of 2026-02-28, all lazy-loaded route pages use `lazyWithRetry()` instead of bare `React.lazy()`. This utility:
+
 1. Catches chunk load failures
 2. Retries the import up to 3 times with cache-busting query parameters
 3. Forces a page reload as a last resort
@@ -3463,6 +3864,7 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 ### Problem: Analytics Data Not Populating
 
 **Causes**:
+
 1. No usage data exists yet (new deployment)
 2. The user doesn't have IT admin / `platform.admin` permissions
 3. Backend analytics service encounters null values from empty tables
@@ -3488,6 +3890,7 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 **Cause**: Progressive rate limiting on the backend detected too many failed login attempts for this account.
 
 **Fix**:
+
 1. Wait 30 minutes for the automatic lockout to expire
 2. Ensure you are using the correct credentials
 3. If you've forgotten your password, use the "Forgot Password" flow (also rate-limited, but separate from login)
@@ -3536,12 +3939,13 @@ docker-compose logs backend | grep "duration=" | awk -F'duration=' '{if ($2+0 > 
 **Cause**: The scheduling module's API service has been moved from `frontend/src/services/api.ts` to `frontend/src/modules/scheduling/services/api.ts`. If you have custom code that imports scheduling functions from the global API service, update your imports.
 
 **Fix**: Update imports to use the new module-scoped service:
+
 ```typescript
 // Before
-import { schedulingService } from '@/services/api';
+import { schedulingService } from "@/services/api";
 
 // After
-import { schedulingService } from '@/modules/scheduling/services/api';
+import { schedulingService } from "@/modules/scheduling/services/api";
 ```
 
 ---
@@ -3561,6 +3965,7 @@ import { schedulingService } from '@/modules/scheduling/services/api';
 **Cause**: Security alerts are now persisted to the database (new `security_alerts` table). If the migration hasn't been run, alerts won't be stored.
 
 **Fix**:
+
 ```bash
 cd backend
 alembic upgrade head
@@ -3582,6 +3987,7 @@ docker-compose restart backend
 **Cause**: After audit archival (which moves old entries to cold storage), the hash chain may need to be rebuilt.
 
 **Fix**: Use the `rehash_chain` endpoint to rebuild the hash chain:
+
 ```bash
 curl -X POST http://YOUR-IP:3001/api/v1/security/audit-log/rehash-chain \
   -H "Authorization: Bearer YOUR_TOKEN"
@@ -3594,6 +4000,7 @@ curl -X POST http://YOUR-IP:3001/api/v1/security/audit-log/rehash-chain \
 ### Problem: Poor contrast in dark mode on certain pages
 
 **Status (Fixed)**: A comprehensive accessibility audit was performed across all pages in light, dark, and high-contrast themes. Color contrast issues have been fixed on:
+
 - QR code pages (event QR, self-check-in)
 - Onboarding pages (organization setup, progress indicator)
 - Form field renderer (all input types)
@@ -3612,6 +4019,7 @@ curl -X POST http://YOUR-IP:3001/api/v1/security/audit-log/rehash-chain \
 **Status (Improved)**: Mobile responsiveness has been improved across 17+ pages and components including the Dashboard, Settings, Apparatus List, Member Profile, Inventory, Scheduling Reports, Prospective Pipeline, Pagination, Admin Hours, and more.
 
 **Tips**:
+
 - Use landscape orientation for complex tables
 - Check that browser zoom is at 100%
 - Clear cache if layout appears stuck on an old version
@@ -3625,6 +4033,7 @@ curl -X POST http://YOUR-IP:3001/api/v1/security/audit-log/rehash-chain \
 **Cause:** The MySQL ENUM column `email_template_type` doesn't include the newly added template types. The Python model defines template types that haven't been synced to the database.
 
 **Fix:** Run the latest migration to sync the MySQL ENUM:
+
 ```bash
 docker-compose exec backend alembic upgrade head
 docker-compose restart backend
@@ -3711,10 +4120,12 @@ docker-compose restart backend
 ### Problem: How to list available training registries
 
 **Solution:** Use the standalone registry generator tool with the `--list` flag:
+
 ```bash
 cd backend
 python scripts/generate_registry.py --list
 ```
+
 This shows all available registries (NFPA, NREMT, Pro Board, etc.) without generating any files.
 
 ### Problem: Source filter not working on training requirements
@@ -3750,6 +4161,7 @@ This shows all available registries (NFPA, NREMT, Pro Board, etc.) without gener
 **Cause:** Transient MySQL outages (container restart, network blip, resource pressure) caused connection pool errors that propagated as HTTP 500 responses.
 
 **Status (Improved 2026-03-01):** The database connection pool now includes:
+
 - Automatic reconnection on stale connections
 - Health check queries (`SELECT 1`) before reusing connections
 - Configurable pool pre-ping to detect dead connections
@@ -3776,6 +4188,7 @@ This shows all available registries (NFPA, NREMT, Pro Board, etc.) without gener
 When reporting an issue, include:
 
 **1. Error Details**:
+
 ```
 - Exact error message (copy/paste or screenshot)
 - When did it occur? (during which step)
@@ -3783,6 +4196,7 @@ When reporting an issue, include:
 ```
 
 **2. Environment**:
+
 ```bash
 # Browser
 - Name and version (Chrome 120, Firefox 121, etc.)
@@ -3798,6 +4212,7 @@ docker-compose ps
 ```
 
 **3. Recent Logs**:
+
 ```bash
 # Backend logs (last 100 lines)
 docker logs the-logbook-backend-1 --tail 100 > backend_logs.txt
@@ -3807,6 +4222,7 @@ docker logs the-logbook-backend-1 --tail 100 > backend_logs.txt
 ```
 
 **4. Network Information**:
+
 ```bash
 # Test connectivity
 curl http://localhost:3001/health
@@ -3824,12 +4240,14 @@ curl -H "Origin: http://localhost:3000" \
 ### Contact Support
 
 **For Administrators**:
+
 1. Check logs first (see Diagnostic Information above)
 2. Review this troubleshooting guide
 3. Check GitHub Issues: https://github.com/anthropics/claude-code/issues
 4. File new issue with diagnostic information
 
 **For Users**:
+
 1. Contact your organization administrator
 2. Provide error message and steps to reproduce
 3. Include screenshots if helpful
@@ -3843,6 +4261,7 @@ curl -H "Origin: http://localhost:3000" \
 **Symptoms**: Stuck on one step, can't progress
 
 **Diagnostics**:
+
 ```bash
 # Check session status
 curl http://localhost:3001/api/v1/onboarding/session/status
@@ -3852,6 +4271,7 @@ docker logs the-logbook-backend-1 --tail 50 | grep ERROR
 ```
 
 **Solutions**:
+
 1. Try refreshing the page (F5)
 2. Check browser console for errors (F12)
 3. Clear browser cache and cookies
@@ -3865,6 +4285,7 @@ docker logs the-logbook-backend-1 --tail 50 | grep ERROR
 **Symptoms**: Test email fails, no error in inbox
 
 **Checklist**:
+
 - [ ] SMTP credentials correct?
 - [ ] Using app password (Gmail/Outlook)?
 - [ ] Port matches encryption (587=TLS, 465=SSL)?
@@ -3873,6 +4294,7 @@ docker logs the-logbook-backend-1 --tail 50 | grep ERROR
 - [ ] Email in spam folder?
 
 **Test Manually**:
+
 ```bash
 # Install swaks (SMTP test tool)
 sudo apt-get install swaks
@@ -3894,6 +4316,7 @@ swaks --to test@example.com \
 **Symptoms**: Pages load slowly, requests timeout
 
 **Diagnostics**:
+
 ```bash
 # Check resource usage
 docker stats
@@ -3907,6 +4330,7 @@ docker logs the-logbook-backend-1 | grep "slow"
 ```
 
 **Solutions**:
+
 1. Increase container resources
 2. Optimize database (see Database Slow section)
 3. Clear audit logs if very large
@@ -3921,6 +4345,7 @@ docker logs the-logbook-backend-1 | grep "slow"
 **Symptoms**: Applicants stay active despite no activity beyond the configured timeout period.
 
 **Causes**:
+
 1. Inactivity timeout not configured for the pipeline
 2. Timeout preset set to "never"
 3. Per-stage override extending the timeout beyond expected
@@ -3929,17 +4354,20 @@ docker logs the-logbook-backend-1 | grep "slow"
 **Solutions**:
 
 **Check pipeline inactivity configuration:**
+
 1. Navigate to Prospective Members → Pipeline Settings
 2. Scroll to "Inactivity Timeout Configuration"
 3. Verify a timeout preset is selected (not "never")
 4. If using custom, verify the custom days value is set
 
 **Check per-stage overrides:**
+
 - Open each stage's configuration (pencil icon in Pipeline Builder)
 - Look for "Custom timeout for this stage" checkbox
 - A stage with a very long override can keep applicants active longer than the pipeline default
 
 **Check backend logs:**
+
 ```bash
 docker logs intranet-backend 2>&1 | grep -i "inactivity\|timeout\|deactivat"
 ```
@@ -3951,6 +4379,7 @@ docker logs intranet-backend 2>&1 | grep -i "inactivity\|timeout\|deactivat"
 **Symptoms**: Active applicants with recent activity being marked inactive prematurely.
 
 **Causes**:
+
 1. `last_activity_at` not being updated on certain actions
 2. Per-stage timeout too short
 3. Warning threshold set too high
@@ -3958,11 +4387,13 @@ docker logs intranet-backend 2>&1 | grep -i "inactivity\|timeout\|deactivat"
 **Solutions**:
 
 **Verify activity timestamps:**
+
 1. Open the applicant's detail drawer
 2. Check "Last Activity" in the metadata section
 3. If the timestamp is outdated despite recent actions, check backend logs for errors
 
 **Adjust warning threshold:**
+
 1. Pipeline Settings → Inactivity Timeout Configuration
 2. Warning threshold slider controls when amber warnings appear (default: 80%)
 3. Consider increasing the threshold if false positives are common
@@ -3974,6 +4405,7 @@ docker logs intranet-backend 2>&1 | grep -i "inactivity\|timeout\|deactivat"
 **Symptoms**: Reactivate button doesn't work or returns an error.
 
 **Causes**:
+
 1. User doesn't have `prospective_members.manage` permission
 2. Applicant has been purged (permanently deleted)
 3. Backend API endpoint returning error
@@ -3981,6 +4413,7 @@ docker logs intranet-backend 2>&1 | grep -i "inactivity\|timeout\|deactivat"
 **Solutions**:
 
 **Check permissions:**
+
 ```sql
 SELECT rp.permission FROM role_permissions rp
   JOIN user_roles ur ON ur.role_id = rp.role_id
@@ -3988,10 +4421,12 @@ SELECT rp.permission FROM role_permissions rp
 ```
 
 **Check if applicant still exists:**
+
 - Purged applicants are permanently deleted and cannot be reactivated
 - The individual would need to resubmit an interest form to start a new application
 
 **Check backend logs:**
+
 ```bash
 docker logs intranet-backend 2>&1 | grep -i "reactivat"
 ```
@@ -4003,6 +4438,7 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 **Symptoms**: Stats bar shows stale numbers or counts don't match visible applicants.
 
 **Causes**:
+
 1. Browser cache serving stale data
 2. Stats API endpoint returning cached results
 3. Inactive applicants being inadvertently included
@@ -4010,10 +4446,12 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 **Solutions**:
 
 **Refresh data:**
+
 1. Click the browser refresh button or press F5
 2. The stats bar fetches fresh data on each page load
 
 **Understand stats annotations:**
+
 - Statistics include **active applicants only**
 - Inactive, rejected, and withdrawn applicants are **excluded** from conversion rate and averages
 - The "Approaching Timeout" count shows applicants in warning state
@@ -4026,12 +4464,14 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 **Important**: Purging applicants is a **permanent, irreversible** operation.
 
 **Before purging:**
+
 1. Review the list of inactive applicants carefully
 2. Consider reactivating any that may have legitimate reasons for inactivity
 3. Note that purged applicant data cannot be recovered
 4. The purge confirmation modal will show the count and warn about permanent deletion
 
 **Data privacy note:**
+
 - Purging helps comply with data minimization principles
 - Old applicant records contain private information (name, email, phone, documents)
 - Regular purging reduces the impact of potential security incidents
@@ -4043,10 +4483,12 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 **Symptoms**: The "Withdraw" button is missing from the applicant detail drawer or table action menu.
 
 **Causes**:
+
 1. Applicant is not in `active` or `on_hold` status
 2. User does not have `prospective_members.manage` permission
 
 **Solutions**:
+
 - Withdraw is only available for applicants with `active` or `on_hold` status
 - Rejected, converted, and inactive applicants cannot be withdrawn
 - Check that the user's role includes `prospective_members.manage`
@@ -4058,6 +4500,7 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 **Symptoms**: The "Withdrawn" tab shows no applicants even though withdrawals were performed.
 
 **Solutions**:
+
 1. Check that the correct pipeline is selected in the pipeline filter
 2. Refresh the page — the withdrawn tab fetches data when first selected
 3. Use the search field on the withdrawn tab to locate specific applicants
@@ -4069,6 +4512,7 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 **Symptoms**: Applicant advances to an `election_vote` stage but no election package appears in the detail drawer.
 
 **Causes**:
+
 1. The pipeline is not loaded in the store (no `currentPipeline`)
 2. The advance API did not return the updated applicant data
 3. The package creation API call failed silently
@@ -4076,15 +4520,18 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 **Solutions**:
 
 **Verify the pipeline is loaded:**
+
 - The election package auto-creation depends on `currentPipeline` being set in the store
 - If navigating directly to an applicant, ensure the pipeline loads first
 
 **Check backend logs:**
+
 ```bash
 docker logs intranet-backend 2>&1 | grep -i "election-package\|election_package"
 ```
 
 **Manual creation:**
+
 - If auto-creation failed, the package can be created manually via the API
 - The detail drawer will show "No election package has been created yet" with instructions
 
@@ -4095,16 +4542,19 @@ docker logs intranet-backend 2>&1 | grep -i "election-package\|election_package"
 **Symptoms**: The coordinator edited the election package but cannot submit it for ballot.
 
 **Causes**:
+
 1. The "Mark Ready for Ballot" button may be disabled due to a pending save
 2. API error when updating package status
 
 **Solutions**:
 
 **Save first, then submit:**
+
 1. Click "Save Draft" to persist coordinator notes and supporting statement
 2. Then click "Mark Ready for Ballot" to change status to `ready`
 
 **Check for errors:**
+
 - Look for error toasts or the store's `error` field
 - Check backend logs for validation failures on the election package endpoint
 
@@ -4115,6 +4565,7 @@ docker logs intranet-backend 2>&1 | grep -i "election-package\|election_package"
 **Symptoms**: Package is marked as "ready" but the secretary cannot see it in the Elections module.
 
 **Solutions**:
+
 - The Elections module queries the `GET /api/v1/prospective-members/election-packages?status=ready` endpoint
 - Verify the package status is actually `ready` (not still `draft`)
 - Ensure the pipeline_id filter (if any) matches the correct pipeline
@@ -4176,6 +4627,7 @@ To make broader changes, use the "Rollback Election" feature to return to DRAFT 
 **Symptoms**: Creating or updating an election returns "Invalid voting method" error.
 
 **Valid Values**:
+
 - `voting_method`: `simple_majority`, `ranked_choice`, `approval`, `supermajority`
 - `victory_condition`: `most_votes`, `majority`, `supermajority`, `threshold`
 - `runoff_type`: `top_two`, `eliminate_lowest`
@@ -4205,6 +4657,7 @@ To make broader changes, use the "Rollback Election" feature to return to DRAFT 
 **Symptoms**: Minutes detail page shows no sections or shows stale data.
 
 **Causes**:
+
 1. Template had no sections defined when minutes were created
 2. Sections JSON is empty or malformed in the database
 3. Frontend not parsing `sections` array from API response
@@ -4212,6 +4665,7 @@ To make broader changes, use the "Rollback Election" feature to return to DRAFT 
 **Solutions**:
 
 **Check if sections exist in the database:**
+
 ```sql
 SELECT id, title, JSON_LENGTH(sections) AS section_count
 FROM meeting_minutes
@@ -4219,6 +4673,7 @@ WHERE id = 'YOUR_MINUTES_ID';
 ```
 
 **If sections are empty, regenerate from template:**
+
 1. Note the meeting type of the minutes
 2. Delete and recreate the minutes using the correct template
 3. Or manually add sections via the "Add Section" button in the detail page
@@ -4232,6 +4687,7 @@ WHERE id = 'YOUR_MINUTES_ID';
 **Explanation**: This is intentional. Once minutes are approved, they are locked to preserve the official record. The status must be changed back to `draft` or `review` to allow editing.
 
 **If changes are needed:**
+
 1. A user with `meetings.manage` permission can update the status back to `review`
 2. Make the required changes
 3. Re-approve the minutes
@@ -4263,6 +4719,7 @@ WHERE id = 'YOUR_MINUTES_ID';
 2. **Templates not loaded**: Refresh the page and try again. The template list is fetched when the create modal opens.
 
 **Create a default template:**
+
 - Navigate to Minutes page
 - Templates are auto-created on first access for each meeting type
 - If missing, check backend logs for template creation errors
@@ -4282,10 +4739,12 @@ WHERE id = 'YOUR_MINUTES_ID';
 **Symptoms**: Published document in Documents module shows plain text without formatting.
 
 **Possible Causes**:
+
 1. HTML content was not generated properly during publish
 2. Section content contained unescaped special characters
 
 **Check the published document:**
+
 ```sql
 SELECT id, title, content_html IS NOT NULL AS has_html
 FROM documents
@@ -4307,10 +4766,13 @@ If `has_html` is 0, try re-publishing the minutes.
 
 1. **Refresh the page** — The first API call triggers folder initialization
 2. **Check backend logs:**
+
 ```bash
 docker logs the-logbook-backend-1 | grep "initialize_system_folders"
 ```
+
 3. **Check database:**
+
 ```sql
 SELECT name, is_system FROM document_folders
 WHERE organization_id = 'YOUR_ORG_ID'
@@ -4328,6 +4790,7 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 **Explanation**: Per-member folders are created lazily under the "Member Files" system folder on first access.
 
 **Solutions**:
+
 1. **Use the My Folder endpoint**: Navigate to Documents and look for "Member Files" > your name
 2. **Check via API**: `GET /api/v1/documents/my-folder` returns your personal folder (creates it if it doesn't exist)
 3. **Check permissions**: Members need `documents.view` permission to access their folder
@@ -4341,6 +4804,7 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 **Explanation**: Hierarchical folders are created lazily on first access, not when the parent entity is created.
 
 **Solutions**:
+
 1. **Access the folders endpoint**:
    - Apparatus: `GET /api/v1/apparatus/{id}/folders` — creates Photos, Registration & Insurance, Maintenance Records, Inspection & Compliance, Manuals & References sub-folders
    - Facilities: `GET /api/v1/facilities/{id}/folders` — creates Photos, Blueprints & Permits, Maintenance Records, Inspection Reports, Insurance & Leases, Capital Projects sub-folders
@@ -4357,6 +4821,7 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 **Explanation**: Folders now have visibility controls: `organization` (everyone), `leadership` (officers+), or `owner` (folder owner only).
 
 **Solutions**:
+
 1. **Check folder visibility**: Member personal folders are `owner` visibility — only the member and admins can access them
 2. **Check your role**: Leadership-restricted folders require an officer-level role
 3. **Admins**: Users with `documents.manage` permission can access all folders regardless of visibility
@@ -4378,10 +4843,12 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 **Symptoms**: Opening a generated document shows HTML tags instead of rendered content.
 
 **Possible Causes**:
+
 1. Browser security settings blocking inline HTML rendering
 2. Content Security Policy preventing `dangerouslySetInnerHTML`
 
 **Solutions**:
+
 - Check browser console for CSP warnings
 - Ensure the document's `content_html` field contains valid HTML
 - Try a different browser to rule out extension interference
@@ -4509,11 +4976,13 @@ The Locations system serves as the universal "place picker" across all modules (
 #### Kiosk Display Shows "Display Not Found"
 
 **Causes**:
+
 1. The display code in the URL is incorrect
 2. The location has been deactivated (`is_active = false`)
 3. Migration `20260218_0900` has not been applied (display codes not backfilled)
 
 **Solutions**:
+
 - Verify the display code on the Locations page — check the room card for the correct URL
 - Re-activate the location if it was deactivated
 - Run migrations: `docker exec the-logbook-backend-1 alembic upgrade head`
@@ -4523,12 +4992,14 @@ The Locations system serves as the universal "place picker" across all modules (
 #### Kiosk Display Shows "No Active Events" When Event Is Scheduled
 
 **Causes**:
+
 1. The event is not assigned to this location (different `location_id` or uses free-text location)
 2. The event's check-in window hasn't opened yet (opens 1 hour before start)
 3. The event has been cancelled
 4. The event has ended (or was ended early by an admin)
 
 **Solutions**:
+
 - Verify the event's location is set to this room (not "Other Location" free-text)
 - Wait until 1 hour before the event start time
 - Check that the event is not cancelled in the Events list
@@ -4538,10 +5009,12 @@ The Locations system serves as the universal "place picker" across all modules (
 #### Kiosk Display Shows "Unable to Connect"
 
 **Causes**:
+
 1. Tablet has lost Wi-Fi connectivity
 2. Backend server is down or unreachable
 
 **Solutions**:
+
 - Check the tablet's Wi-Fi connection
 - The display auto-retries every 30 seconds — it will reconnect when connectivity is restored
 - The red pulsing Wi-Fi icon in the header indicates a connection problem
@@ -4551,10 +5024,12 @@ The Locations system serves as the universal "place picker" across all modules (
 #### Training Sessions Don't Show QR Codes on Kiosk
 
 **Causes**:
+
 1. Training session was created with "Other Location" (free-text) instead of selecting from the dropdown
 2. Training session location doesn't match the kiosk room
 
 **Solutions**:
+
 - When creating a training session, select the room from the location dropdown instead of typing manually
 - Edit the training event and update its location to the correct room
 
@@ -4563,10 +5038,12 @@ The Locations system serves as the universal "place picker" across all modules (
 #### Display Code Missing for Existing Locations
 
 **Causes**:
+
 1. Location was created before migration `20260218_0900`
 2. Migration didn't run successfully
 
 **Solutions**:
+
 ```bash
 # Run the migration to backfill display codes
 docker exec the-logbook-backend-1 alembic upgrade head
@@ -4581,10 +5058,12 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 #### Locations Don't Appear in Training Session Dropdown
 
 **Causes**:
+
 1. No active locations exist (all deactivated)
 2. Locations haven't been set up yet
 
 **Solutions**:
+
 - Set up locations via the Setup Wizard (Settings > Locations)
 - Ensure locations are active (`is_active = true`)
 - The dropdown falls back to free-text input when no locations are available
@@ -4609,14 +5088,14 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 
 **Explanation**: The theme system uses CSS custom properties for the main layout (background gradient, navigation, inputs). Individual components that still use hardcoded Tailwind classes (e.g., `bg-white/10`, `text-white`) will only look correct in dark mode. To make a component theme-aware, replace hardcoded colors with the `theme-*` Tailwind utilities:
 
-| Dark-only class | Theme-aware class |
-|---|---|
-| `bg-white/10` | `bg-theme-surface` |
-| `border-white/20` | `border-theme-surface-border` |
-| `text-white` | `text-theme-text-primary` |
-| `text-slate-300` | `text-theme-text-secondary` |
-| `bg-slate-900/50` | `bg-theme-input-bg` |
-| `border-slate-600` | `border-theme-input-border` |
+| Dark-only class    | Theme-aware class             |
+| ------------------ | ----------------------------- |
+| `bg-white/10`      | `bg-theme-surface`            |
+| `border-white/20`  | `border-theme-surface-border` |
+| `text-white`       | `text-theme-text-primary`     |
+| `text-slate-300`   | `text-theme-text-secondary`   |
+| `bg-slate-900/50`  | `bg-theme-input-bg`           |
+| `border-slate-600` | `border-theme-input-border`   |
 
 ### Election Components Display Issues
 
@@ -4655,6 +5134,7 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 **Symptom**: Dashboard shows "Getting Started", "Setup Status", or other admin-oriented content.
 
 **Fix Applied**: As of 2026-02-15, the dashboard has been redesigned to show member-focused content:
+
 - **Hours summary**: Training, standby, and administrative hours for the current month
 - **Notifications**: Recent department notifications with read/unread status
 - **Upcoming shifts**: Your scheduled shifts for the next 30 days
@@ -4665,6 +5145,7 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 **Symptom**: The notifications widget shows "No notifications" even when you have notifications.
 
 **Possible Causes**:
+
 1. **Permissions**: The `/notifications/logs` endpoint requires `notifications.view` permission. Ensure the user's role includes this permission.
 2. **No notification rules configured**: Notifications are generated by rules. If no rules are active, no notifications will be created. Go to Settings → Notifications to configure rules.
 
@@ -4673,6 +5154,7 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 **Symptom**: All hour counts show 0 on the dashboard.
 
 **Possible Causes**:
+
 1. **No shifts logged this month**: Hours are calculated from shift attendance records for the current month.
 2. **Scheduling permissions**: The `/scheduling/summary` endpoint requires `scheduling.view` permission.
 3. **Detailed hour breakdown**: Training and administrative hours require shift completion reports to be filed. The standby hours come from the scheduling summary.
@@ -4682,12 +5164,14 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 **Symptom**: Members have completed training (hours logged, training records exist), but the Compliance Matrix and Training Officer Dashboard show them as "not started" or 0% compliant.
 
 **Root Cause**: The compliance matrix endpoint (`/api/v1/training/compliance-matrix`) used broken matching logic:
+
 1. It tried to match training records to requirements using `course_id` (which doesn't exist on the `TrainingRequirement` model)
 2. It fell back to exact `course_name == requirement.name` matching, which never works for hours-based requirements (e.g., a requirement named "Annual Training" won't match a record for "CPR Refresher")
 3. It didn't filter to active requirements only
 4. It didn't use frequency-based date windows
 
 **Fix Applied**: Rewrote the compliance matrix with requirement-type-aware evaluation:
+
 - **HOURS** requirements: Sums hours by `training_type` within the frequency date window, compares to `required_hours`
 - **COURSES** requirements: Checks if all required `course_id`s have completed records
 - **CERTIFICATION** requirements: Matches by `training_type`, name substring, or certification number
@@ -4704,6 +5188,7 @@ docker exec the-logbook-db-1 mysql -u root -p the_logbook \
 **Status**: Fixed
 
 **Symptoms**: Docker frontend build fails with:
+
 ```
 src/pages/CreateTrainingSessionPage.tsx(462,58): error TS2339: Property 'rank' does not exist on type 'User'.
 src/pages/CreateTrainingSessionPage.tsx(462,72): error TS2339: Property 'rank' does not exist on type 'User'.
@@ -4711,10 +5196,12 @@ src/pages/MinutesPage.tsx(378,26): error TS2304: Cannot find name 'BookOpen'.
 ```
 
 **Cause**: Two separate issues:
+
 1. The `User` interface in `types/user.ts` was missing the `rank` field, even though the backend User model includes it. The `CreateTrainingSessionPage` displays rank next to instructor names.
 2. The `MinutesPage` used the `BookOpen` icon from lucide-react but it wasn't included in the import statement.
 
 **Fix**: Pull latest changes and rebuild:
+
 ```bash
 git pull origin main
 docker compose build --no-cache frontend
@@ -4722,6 +5209,7 @@ docker compose up -d
 ```
 
 **What was added**:
+
 - `rank?: string` field to the `User` interface in `types/user.ts`
 - `BookOpen` to the lucide-react import in `MinutesPage.tsx`
 
@@ -4732,6 +5220,7 @@ docker compose up -d
 **Status**: Fixed in commit `5b38fed`
 
 **Symptoms**: Docker frontend build fails with 70+ TypeScript errors like:
+
 ```
 Property 'getShiftCalls' does not exist on type schedulingService
 Property 'getModuleSettings' does not exist on type eventService
@@ -4742,6 +5231,7 @@ Module '"../types/user"' has no exported member 'ArchivedMember'
 **Cause**: New page components (ShiftCallsPanel, EventsSettingsPage, MemberLifecyclePage, ShiftAssignmentsPage, ShiftTemplatesPage, etc.) were added referencing API service methods and types that hadn't been implemented yet in `services/api.ts` and `types/user.ts`.
 
 **Fix**: Pull the latest changes which add all missing methods and types:
+
 ```bash
 git pull origin main
 docker compose build --no-cache frontend
@@ -4749,6 +5239,7 @@ docker compose up -d
 ```
 
 **What was added**:
+
 - 30+ methods to `schedulingService` (calls, assignments, swaps, time-off, attendance, templates, patterns, reports)
 - `getModuleSettings`/`updateModuleSettings` to `eventService`
 - OAuth URL methods to `authService`
@@ -4790,15 +5281,15 @@ npm run typecheck
 
 All 17 `as any` type assertions have been replaced with proper typing. Files affected:
 
-| File | What Changed |
-|------|-------------|
-| `modules/apparatus/services/api.ts` | Added proper response types |
-| `pages/AddMember.tsx` | Used correct form data types |
-| `pages/EventDetailPage.tsx` | Added event-specific types |
-| `pages/EventQRCodePage.test.tsx` | Fixed mock types |
-| `pages/MinutesDetailPage.tsx` | Added minutes types |
-| `test/setup.ts` | Proper mock typing |
-| `utils/errorHandling.ts` | Added `unknown` error type handling |
+| File                                | What Changed                        |
+| ----------------------------------- | ----------------------------------- |
+| `modules/apparatus/services/api.ts` | Added proper response types         |
+| `pages/AddMember.tsx`               | Used correct form data types        |
+| `pages/EventDetailPage.tsx`         | Added event-specific types          |
+| `pages/EventQRCodePage.test.tsx`    | Fixed mock types                    |
+| `pages/MinutesDetailPage.tsx`       | Added minutes types                 |
+| `test/setup.ts`                     | Proper mock typing                  |
+| `utils/errorHandling.ts`            | Added `unknown` error type handling |
 
 If you find new `as any` assertions, replace them with proper types following the patterns in these files.
 
@@ -4825,6 +5316,7 @@ If you find new `as any` assertions, replace them with proper types following th
 **Cause**: The `backend/app/core/constants.py` module was introduced to centralize role group slugs, folder names, analytics event types, and audit categories. If your local branch predates this change, the import target won't exist.
 
 **Fix**:
+
 ```bash
 git pull origin main
 docker compose build --no-cache backend
@@ -4838,6 +5330,7 @@ docker compose up -d
 ### Frontend Enum Constants Not Found (2026-02-20)
 
 **Symptom**: TypeScript build errors referencing missing exports from `constants/enums`:
+
 ```
 Module '"../constants/enums"' has no exported member 'UserStatus'
 ```
@@ -4845,6 +5338,7 @@ Module '"../constants/enums"' has no exported member 'UserStatus'
 **Cause**: The new `frontend/src/constants/enums.ts` file provides centralized `as const` objects for all backend enums (UserStatus, ElectionStatus, RSVPStatus, TrainingStatus, etc.). If you're on an older branch, this file won't exist.
 
 **Fix**:
+
 ```bash
 git pull origin main
 cd frontend && npm install
@@ -4860,6 +5354,7 @@ npm run typecheck
 **Symptom**: A comparison like `if record.status == "completed"` silently fails to match because the column stores an enum member, not a raw string.
 
 **Diagnosis**: Search for raw string comparisons that should use enum constants:
+
 ```bash
 # Backend — look for status string comparisons
 grep -rn '"completed"\|"active"\|"pending"\|"going"\|"not_going"' backend/app/ --include="*.py"
@@ -4870,11 +5365,11 @@ grep -rn "'active'\|'completed'\|'going'\|'closed'" frontend/src/ --include="*.t
 
 **Fix**: Replace raw strings with the appropriate constant:
 
-| Layer | Wrong | Right |
-|-------|-------|-------|
-| Backend (SQLAlchemy column) | `record.status == "completed"` | `record.status == TrainingStatus.COMPLETED` |
+| Layer                       | Wrong                           | Right                                              |
+| --------------------------- | ------------------------------- | -------------------------------------------------- |
+| Backend (SQLAlchemy column) | `record.status == "completed"`  | `record.status == TrainingStatus.COMPLETED`        |
 | Backend (plain string/dict) | `data["status"] == "completed"` | `data["status"] == TrainingStatus.COMPLETED.value` |
-| Frontend | `status === 'active'` | `status === UserStatus.ACTIVE` |
+| Frontend                    | `status === 'active'`           | `status === UserStatus.ACTIVE`                     |
 
 See `docs/ENUM_CONVENTIONS.md` Rule 6 for full guidance.
 
@@ -4885,19 +5380,20 @@ See `docs/ENUM_CONVENTIONS.md` Rule 6 for full guidance.
 **Symptom**: A notification or permission check silently skips roles because an inline array doesn't match the canonical list.
 
 **Diagnosis**: Search for inline role arrays:
+
 ```bash
 grep -rn '\["admin".*"chief"\]\|\["chief".*"admin"\]' backend/app/ --include="*.py"
 ```
 
 **Fix**: Replace inline arrays with the centralized constant from `app.core.constants`:
 
-| Constant | Roles | Purpose |
-|----------|-------|---------|
-| `ADMIN_NOTIFY_ROLE_SLUGS` | admin, quartermaster, chief | Drop/archive CC notifications |
-| `LEADERSHIP_ROLE_SLUGS` | chief, president, VP, secretary | Critical event alerts |
-| `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief | Training module checks |
-| `OPERATIONAL_ROLE_SLUGS` | chief, asst_chief, captain, … | Election eligibility |
-| `ADMINISTRATIVE_ROLE_SLUGS` | president, VP, secretary, … | Election eligibility |
+| Constant                      | Roles                           | Purpose                       |
+| ----------------------------- | ------------------------------- | ----------------------------- |
+| `ADMIN_NOTIFY_ROLE_SLUGS`     | admin, quartermaster, chief     | Drop/archive CC notifications |
+| `LEADERSHIP_ROLE_SLUGS`       | chief, president, VP, secretary | Critical event alerts         |
+| `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief  | Training module checks        |
+| `OPERATIONAL_ROLE_SLUGS`      | chief, asst_chief, captain, …   | Election eligibility          |
+| `ADMINISTRATIVE_ROLE_SLUGS`   | president, VP, secretary, …     | Election eligibility          |
 
 ---
 
@@ -4911,13 +5407,13 @@ grep -rn '\["admin".*"chief"\]\|\["chief".*"admin"\]' backend/app/ --include="*.
 
 **Fix Applied**: Toast colors now reference CSS custom properties:
 
-| Old (hardcoded) | New (CSS variable) | Purpose |
-|---|---|---|
-| `#10b981` | `var(--toast-success)` | Success toast icon |
-| `#ef4444` | `var(--toast-error)` | Error toast icon |
-| `#fff` | `var(--toast-icon-secondary)` | Secondary toast icon |
-| `#fbbf24` | `var(--toast-warning-bg)` | Warning toast background |
-| `#1a1a2e` | `var(--toast-warning-text)` | Warning toast text |
+| Old (hardcoded) | New (CSS variable)            | Purpose                  |
+| --------------- | ----------------------------- | ------------------------ |
+| `#10b981`       | `var(--toast-success)`        | Success toast icon       |
+| `#ef4444`       | `var(--toast-error)`          | Error toast icon         |
+| `#fff`          | `var(--toast-icon-secondary)` | Secondary toast icon     |
+| `#fbbf24`       | `var(--toast-warning-bg)`     | Warning toast background |
+| `#1a1a2e`       | `var(--toast-warning-text)`   | Warning toast text       |
 
 These variables are defined in `frontend/src/styles/index.css` under `:root` (light) and `.dark` (dark) selectors, and registered in `tailwind.config.js`.
 
@@ -4929,11 +5425,11 @@ These variables are defined in `frontend/src/styles/index.css` under `:root` (li
 
 **Fix Applied**: Status colors are now CSS variables:
 
-| Variable | Light Mode | Dark Mode | Usage |
-|---|---|---|---|
-| `--status-passed` | `#16a34a` | `#22c55e` | Passed/complete indicators |
-| `--status-failed` | `#dc2626` | `#ef4444` | Failed/overdue indicators |
-| `--status-pending` | `#d97706` | `#f59e0b` | Pending/in-progress indicators |
+| Variable           | Light Mode | Dark Mode | Usage                          |
+| ------------------ | ---------- | --------- | ------------------------------ |
+| `--status-passed`  | `#16a34a`  | `#22c55e` | Passed/complete indicators     |
+| `--status-failed`  | `#dc2626`  | `#ef4444` | Failed/overdue indicators      |
+| `--status-pending` | `#d97706`  | `#f59e0b` | Pending/in-progress indicators |
 
 Use the Tailwind utilities `text-theme-status-passed`, `text-theme-status-failed`, `text-theme-status-pending` or reference the CSS variables directly.
 
@@ -4946,40 +5442,44 @@ Use the Tailwind utilities `text-theme-status-passed`, `text-theme-status-failed
 **Symptom**: Backend fails to start after pulling dependency updates with import or compatibility errors.
 
 **Diagnosis**:
+
 ```bash
 docker compose logs backend | head -50
 ```
 
 **Common causes after the 2026-02-20 bump**:
+
 1. **Stale Docker image**: Rebuild with `docker compose build --no-cache backend`
 2. **pip cache**: Add `--no-cache-dir` to the Dockerfile `pip install` line
 3. **Version conflict**: Check `requirements.txt` for pinned versions that conflict
 
 **Versions bumped (2026-02-20)**:
-| Package | From | To |
-|---|---|---|
-| fastapi | 0.115.6 | 0.129.0 |
-| uvicorn | 0.34.0 | 0.41.0 |
-| pydantic | 2.10.5 | 2.12.5 |
-| sqlalchemy | 2.0.36 | 2.0.46 |
-| sentry-sdk | 2.20.0 | 2.53.0 |
-| celery | 5.4.0 | 5.6.2 |
+
+| Package    | From    | To      |
+| ---------- | ------- | ------- |
+| fastapi    | 0.115.6 | 0.129.0 |
+| uvicorn    | 0.34.0  | 0.41.0  |
+| pydantic   | 2.10.5  | 2.12.5  |
+| sqlalchemy | 2.0.36  | 2.0.46  |
+| sentry-sdk | 2.20.0  | 2.53.0  |
+| celery     | 5.4.0   | 5.6.2   |
 
 All bumps are minor/patch within the same major version — no breaking API changes.
 
 **Versions bumped (2026-02-24)**:
-| Package | From | To |
-|---|---|---|
-| cryptography | 43.0.3 | 44.0.0 |
-| greenlet | 3.3.1 | 3.3.2 |
-| hiredis | 3.0.0 | 3.1.0 |
-| psutil | 6.1.1 | 7.0.0 |
-| Pillow | 11.1.0 | 11.3.0 |
-| argon2-cffi | 23.1.0 | 25.1.0 |
-| reportlab | 4.2.5 | 4.3.0 |
-| pysaml2 | 7.5.0 | 7.5.4 |
-| black | 24.10.0 | 25.1.0 |
-| flake8 | 7.1.1 | 7.2.0 |
+
+| Package      | From    | To     |
+| ------------ | ------- | ------ |
+| cryptography | 43.0.3  | 44.0.0 |
+| greenlet     | 3.3.1   | 3.3.2  |
+| hiredis      | 3.0.0   | 3.1.0  |
+| psutil       | 6.1.1   | 7.0.0  |
+| Pillow       | 11.1.0  | 11.3.0 |
+| argon2-cffi  | 23.1.0  | 25.1.0 |
+| reportlab    | 4.2.5   | 4.3.0  |
+| pysaml2      | 7.5.0   | 7.5.4  |
+| black        | 24.10.0 | 25.1.0 |
+| flake8       | 7.1.1   | 7.2.0  |
 
 ---
 
@@ -4988,6 +5488,7 @@ All bumps are minor/patch within the same major version — no breaking API chan
 **Symptom**: Frontend `npm run build` or `npm run typecheck` fails after pulling updates.
 
 **Fix**:
+
 ```bash
 cd frontend
 rm -rf node_modules package-lock.json
@@ -4997,24 +5498,26 @@ npm run build
 ```
 
 **Versions bumped (2026-02-20)**:
-| Package | From | To |
-|---|---|---|
-| lucide-react | ^0.469.0 | ^0.575.0 |
-| @vitejs/plugin-react | ^4.3.4 | ^5.1.4 |
-| typescript | ^5.7.3 | ^5.9.3 |
+
+| Package              | From     | To       |
+| -------------------- | -------- | -------- |
+| lucide-react         | ^0.469.0 | ^0.575.0 |
+| @vitejs/plugin-react | ^4.3.4   | ^5.1.4   |
+| typescript           | ^5.7.3   | ^5.9.3   |
 
 **Note**: `@vitejs/plugin-react` jumped to v5 which requires `vite` v7 (already in use). If you're on an older vite version, update vite first.
 
 **Versions bumped (2026-02-24)**:
-| Package | From | To | Reason |
-|---|---|---|---|
-| @typescript-eslint/* | 8.21.0 | 8.56.1 | TypeScript 5.9 compatibility |
-| @vitest/coverage-v8 | 3.0.0 | 3.2.4 | Match vitest 3.2.4 |
-| @vitest/ui | 3.0.0 | 3.2.4 | Match vitest 3.2.4 |
-| esbuild (override) | 0.25.0 | 0.27.0 | Vite 7.3.1 peer dep |
-| postcss | 8.5.0 | 8.5.6 | Vite 7.3.1 peer dep |
-| react-hook-form | 7.54.2 | 7.71.1 | Deduplicate with @hookform/resolvers |
-| jsdom (root) | ^24.1.3 | ^26.0.0 | Align with frontend |
+
+| Package               | From    | To      | Reason                               |
+| --------------------- | ------- | ------- | ------------------------------------ |
+| @typescript-eslint/\* | 8.21.0  | 8.56.1  | TypeScript 5.9 compatibility         |
+| @vitest/coverage-v8   | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
+| @vitest/ui            | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
+| esbuild (override)    | 0.25.0  | 0.27.0  | Vite 7.3.1 peer dep                  |
+| postcss               | 8.5.0   | 8.5.6   | Vite 7.3.1 peer dep                  |
+| react-hook-form       | 7.54.2  | 7.71.1  | Deduplicate with @hookform/resolvers |
+| jsdom (root)          | ^24.1.3 | ^26.0.0 | Align with frontend                  |
 
 ---
 
@@ -5022,13 +5525,13 @@ npm run build
 
 The following major version upgrades were **not** applied because they require migration work:
 
-| Package | Current | Available | Migration Needed |
-|---|---|---|---|
-| React | 18.x | 19.x | New hook patterns, ref changes |
-| React Router | 6.x | 7.x | Loader/action API rewrite |
-| Tailwind CSS | 3.x | 4.x | Config format change |
-| ESLint | 8.x | 10.x | Flat config migration |
-| Zod | 3.x | 4.x | Schema API changes |
+| Package      | Current | Available | Migration Needed               |
+| ------------ | ------- | --------- | ------------------------------ |
+| React        | 18.x    | 19.x      | New hook patterns, ref changes |
+| React Router | 6.x     | 7.x       | Loader/action API rewrite      |
+| Tailwind CSS | 3.x     | 4.x       | Config format change           |
+| ESLint       | 8.x     | 10.x      | Flat config migration          |
+| Zod          | 3.x     | 4.x       | Schema API changes             |
 
 These can be upgraded individually when the team is ready to handle the migration.
 
@@ -5043,6 +5546,7 @@ These can be upgraded individually when the team is ready to handle the migratio
 **Cause**: The MinIO service in `docker-compose.yml` used `:?` (required variable) syntax for its environment variables. Docker Compose validates all `:?` variables at parse time, even for services in inactive profiles like `with-s3`. If you're not using S3 storage, you don't have these variables in your `.env` file, causing the error.
 
 **Fix**: This has been fixed in the codebase. MinIO now uses `:-` (default value) syntax:
+
 ```yaml
 environment:
   MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -5050,6 +5554,7 @@ environment:
 ```
 
 Pull the latest changes:
+
 ```bash
 git pull origin main
 docker-compose up -d
@@ -5068,6 +5573,7 @@ docker-compose up -d
 **Fix**: This has been fixed in the codebase. The nginx configuration now sends `Cache-Control: no-cache` headers for `index.html`, so browsers always fetch fresh asset references. The `error_page 404 → index.html` redirect has also been removed (it was serving HTML content for missing JS/CSS files, causing parse errors).
 
 Pull the latest changes and rebuild:
+
 ```bash
 git pull origin main
 docker-compose build --no-cache frontend
@@ -5107,6 +5613,7 @@ docker-compose up -d
 **Cause**: The `esbuild` override in `package.json` was pinning esbuild to 0.25.x, but Vite 7.3.1 requires `esbuild ^0.27.0`. The two-minor-version gap includes API changes that Vite 7.x depends on.
 
 **Fix**: The esbuild override has been updated to `0.27.0`. If you had a local override, update it:
+
 ```json
 {
   "overrides": {
@@ -5114,6 +5621,7 @@ docker-compose up -d
   }
 }
 ```
+
 Then run `rm -rf node_modules package-lock.json && npm install`.
 
 ---
@@ -5127,12 +5635,14 @@ Then run `rm -rf node_modules package-lock.json && npm install`.
 **Cause**: On Unraid's union filesystem (shfs), Docker bind-mounted migration files can be transiently invisible. Additionally, stale `__pycache__` files from a different Python version (e.g., host Python 3.11 vs container Python 3.13) can confuse module loading.
 
 **Fix**: Multiple resilience improvements have been added:
+
 1. `__pycache__` directories in the versions folder are automatically cleaned before Alembic loads
 2. Revision graph loading retries up to 3 times with 1s/2s backoff
 3. If `command.stamp("head")` fails due to graph issues, a SQL-based fallback stamps the version directly
 4. If `command.upgrade("head")` fails, tables are created from models (`create_all`) and stamped via SQL
 
 Pull the latest changes and restart:
+
 ```bash
 git pull origin main
 docker-compose build --no-cache backend
@@ -5148,6 +5658,7 @@ docker-compose up -d
 **Change**: JWT tokens are no longer stored in `localStorage`. Authentication now uses httpOnly cookies exclusively.
 
 **Impact**:
+
 - The `Authorization: Bearer <token>` header pattern is no longer used for browser requests
 - WebSocket connections use cookies instead of passing tokens in the URL
 - Frontend `authStore` no longer reads/writes tokens to localStorage
@@ -5168,6 +5679,7 @@ docker-compose up -d
 ## Version History
 
 **v2.2** - 2026-02-28
+
 - Added Member ID Card troubleshooting section (QR code scanning, barcode scanner, print layout)
 - Added Dynamic Import / Chunk Load Issues section (lazyWithRetry, deployment asset caching)
 - Added Platform Analytics Issues section (camelCase serialization, empty data)
@@ -5175,6 +5687,7 @@ docker-compose up -d
 - Updated scoring documentation to reflect point-based scoring system
 
 **v2.1** - 2026-02-24
+
 - Added Docker Compose profile issues section (MinIO required variable error)
 - Added stale assets after deployment troubleshooting
 - Added frontend dependency issues section (vitest, typescript-eslint, esbuild)
@@ -5183,42 +5696,50 @@ docker-compose up -d
 - Updated dependency version tables with 2026-02-24 backend and frontend bumps
 
 **v2.0** - 2026-02-20
+
 - Added centralized constants and enum usage troubleshooting (4 new entries)
 - Added CSS variable and theming issues section (2 new entries for toast/status colors)
 - Added dependency version management section (3 entries covering backend, frontend, skipped majors)
 - Documents new files: `backend/app/core/constants.py`, `frontend/src/constants/enums.ts`
 
 **v1.9** - 2026-02-18
+
 - Added missing API service methods troubleshooting (70+ TS build errors from missing service methods/types)
 - Documents fix for missing `schedulingService`, `eventService`, `authService`, `organizationService`, `roleService`, `trainingSessionService` methods
 - Documents new exported services: `memberStatusService`, `prospectiveMemberService`, `scheduledTasksService`
 - Documents missing types in `user.ts` and `api.ts`
 
 **v1.8** - 2026-02-14
+
 - Expanded Scheduling module section with 10 new troubleshooting entries (templates, patterns, assignments, swaps, time-off, calls, reports, permissions)
 - Added Facilities module troubleshooting section (7 new entries covering facility creation, types/statuses, maintenance, utilities, keys, compliance, permissions)
 - Updated permissions reference for new scheduling permissions (assign, swap, report)
 
 **v1.7** - 2026-02-14
+
 - Added events module troubleshooting section (6 new entries)
 - Added TypeScript build issues section (3 entries covering build errors, type assertions, broken JSX)
 - Covers: event creation, duplication, attachments, recurring events, RSVP, editing
 
 **v1.6** - 2026-02-13
+
 - Added meeting minutes module troubleshooting section (6 new entries)
 - Added documents module troubleshooting section (4 new entries)
 - Covers: sections, templates, publishing, folders, document viewer
 
 **v1.5** - 2026-02-12
+
 - Added elections module troubleshooting section (7 new entries)
 - Covers: closing, double-voting, results visibility, update restrictions, validation errors
 
 **v1.4** - 2026-02-12
+
 - Added withdraw/archive troubleshooting sections
 - Added election package troubleshooting sections
 - Added cross-module election package visibility guidance
 
 **v1.3** - 2026-02-12
+
 - Added Documents module troubleshooting (folder creation, file upload, loading errors)
 - Added Meetings & Minutes module troubleshooting (meeting creation, approval workflow, action items)
 - Added Scheduling module troubleshooting (shift creation, calendar views, attendance)
@@ -5231,6 +5752,7 @@ docker-compose up -d
 - Added purge operation safety guidance
 
 **v1.2** - 2026-02-08
+
 - ✅ Added backend configuration issues section
 - ✅ Added database migration best practices
 - ✅ Added startup sequence troubleshooting
@@ -5240,6 +5762,7 @@ docker-compose up -d
   - Organization creation error fix
 
 **v1.1** - 2026-02-07
+
 - ✅ Added comprehensive network error handling section
 - ✅ Added email/username duplicate troubleshooting with soft-delete clarification
 - ✅ Added error message translation reference
@@ -5247,6 +5770,7 @@ docker-compose up -d
 - ✅ Added diagnostic commands and scripts
 
 **v1.0** - 2026-02-07
+
 - Initial comprehensive troubleshooting guide
 - Covers all major error categories
 - Includes onboarding-specific guidance
@@ -5264,22 +5788,26 @@ docker-compose up -d
 ### Error: "'Settings' object has no attribute 'MYSQL_DATABASE'"
 
 **Symptoms:**
+
 ```
 WARNI [app.utils.startup_validators] Could not validate enum consistency: 'Settings' object has no attribute 'MYSQL_DATABASE'
 ```
 
 **Cause:**
-- The startup validator was trying to access `settings.MYSQL_DATABASE` 
+
+- The startup validator was trying to access `settings.MYSQL_DATABASE`
 - The correct attribute name in the config is `settings.DB_NAME`
 
 **Solution:**
 ✅ **FIXED in latest version** (commit: bc58d8d)
 
 If you see this error in an older version:
+
 1. Update to the latest code: `git pull`
 2. Rebuild Docker containers: `docker-compose down && docker-compose up --build -d`
 
 **Technical Details:**
+
 - File: `backend/app/utils/startup_validators.py`
 - Changed lines 64 and 199 from `settings.MYSQL_DATABASE` to `settings.DB_NAME`
 
@@ -5288,11 +5816,13 @@ If you see this error in an older version:
 ### Error: "Table 'skill_evaluations' already exists"
 
 **Symptoms:**
+
 ```
 ERROR [alembic.env] Migration failed: (pymysql.err.OperationalError) (1050, "Table 'skill_evaluations' already exists")
 ```
 
 **Cause:**
+
 - Migration `20260206_0301` was trying to create tables that already existed from migration `20260122_0015`
 - Duplicate table creation in migration chain
 
@@ -5300,6 +5830,7 @@ ERROR [alembic.env] Migration failed: (pymysql.err.OperationalError) (1050, "Tab
 ✅ **FIXED in latest version** (commit: bc58d8d)
 
 The migration now checks if tables exist before creating them:
+
 ```python
 # Check if tables exist to avoid errors
 conn = op.get_bind()
@@ -5313,6 +5844,7 @@ for table_name, create_func in tables_to_create.items():
 ```
 
 If you encounter this on a fresh install:
+
 1. Update to latest code: `git pull`
 2. Clear old database (if safe to do so): `docker-compose down -v`
 3. Rebuild: `docker-compose up --build -d`
@@ -5324,11 +5856,13 @@ For existing installations, the migration will skip creating tables that already
 ### Error: "'OrganizationSetupCreate' object has no attribute 'description'"
 
 **Symptoms:**
+
 ```
 ERROR | app.api.v1.onboarding:save_session_organization:1381 - Error creating organization during onboarding: 'OrganizationSetupCreate' object has no attribute 'description'
 ```
 
 **Cause:**
+
 - The onboarding endpoint was trying to access `data.description`
 - The `OrganizationSetupCreate` Pydantic schema doesn't have a `description` field
 - Frontend doesn't collect organization description
@@ -5337,10 +5871,12 @@ ERROR | app.api.v1.onboarding:save_session_organization:1381 - Error creating or
 ✅ **FIXED in latest version** (commit: da23ccd)
 
 If you see this in an older version:
+
 1. Update to latest code: `git pull`
 2. Restart backend: `docker-compose restart backend`
 
 **Technical Details:**
+
 - File: `backend/app/api/v1/onboarding.py` line 1322
 - Changed `description=data.description` to `description=None`
 
@@ -5351,6 +5887,7 @@ If you see this in an older version:
 ### Checking Migration Status
 
 To see which migrations have been applied:
+
 ```bash
 # Inside Docker container
 docker exec -it intranet-backend alembic current
@@ -5361,6 +5898,7 @@ alembic current
 ```
 
 ### Viewing Migration History
+
 ```bash
 docker exec -it intranet-backend alembic history
 ```
@@ -5368,7 +5906,9 @@ docker exec -it intranet-backend alembic history
 ### Common Migration Issues
 
 #### Migrations Out of Sync
+
 If migrations seem out of sync:
+
 ```bash
 # Check current revision
 docker exec -it intranet-backend alembic current
@@ -5378,7 +5918,9 @@ docker exec -it intranet-backend alembic stamp head
 ```
 
 #### Rolling Back Migrations
+
 ⚠️ **WARNING: Can cause data loss**
+
 ```bash
 # Downgrade one revision
 docker exec -it intranet-backend alembic downgrade -1
@@ -5394,6 +5936,7 @@ docker exec -it intranet-backend alembic downgrade <revision_id>
 ### Database Initialization (First Startup)
 
 **Symptoms:**
+
 - Backend shows "Connecting to database..." for extended period
 - Multiple retry attempts logged
 - Eventually connects successfully
@@ -5419,22 +5962,26 @@ docker exec -it intranet-backend alembic downgrade <revision_id>
    - Self-healing: retries on failure, repairs missing tables, ensures `FK_CHECKS` is always re-enabled
 
 **Total Expected Time:**
+
 - **First startup**: ~7-10 minutes (mostly MySQL init; table creation takes seconds)
 - **Subsequent restarts**: 10-30 seconds (MySQL already initialized)
 - **Resource-constrained environments** (e.g., Unraid NAS): May take longer; optimized with single-connection DDL, batched operations, and `NullPool`
 
 **What the Frontend Shows:**
+
 - "Database Connection: Establishing connection to MySQL database (may retry while database initializes)"
 - "Database Setup: Preparing your intranet with membership, training, events, elections, inventory, and audit capabilities"
 - Educational tips rotating every 15 seconds while waiting
 
 **When to Worry:**
+
 - If connection attempts exceed 40 retries
 - If initialization fails with errors (not warnings)
 - **If the process takes more than 20 minutes** (init timeout will trigger)
 - If you see `FK_CHECKS` warnings (self-healing should handle this, but check logs)
 
 **Troubleshooting:**
+
 ```bash
 # Check MySQL logs
 docker logs intranet-mysql
@@ -5455,12 +6002,14 @@ docker logs intranet-backend | grep "validate_schema"
 ### Fast-Path Init Crashes on Leftover Tables
 
 **Symptoms:**
+
 - Backend crashes with `Duplicate key name` error during startup
 - Happens after a previous startup was interrupted or failed
 
 **Cause:** Leftover tables from a partial previous boot conflict with `create_all()`.
 
 **Resolution:** This is now self-healing. The fast-path init dynamically discovers and drops ALL tables (except `alembic_version`) before running `create_all()`. If you still see this issue:
+
 ```bash
 # Force clean restart
 docker-compose down -v
@@ -5470,6 +6019,7 @@ docker-compose up --build
 ### Startup Fails Silently (No Tables Created)
 
 **Symptoms:**
+
 - Backend appears to start successfully
 - API calls fail with "table does not exist" errors
 - No error messages in logs about initialization failure
@@ -5477,6 +6027,7 @@ docker-compose up --build
 **Cause:** Previously, `_fast_path_init()` was wrapped in a try/except that swallowed all exceptions.
 
 **Resolution:** This has been fixed. The fast-path init now:
+
 1. Runs outside the forgiving try/except
 2. Validates schema after fast-path completes
 3. Crashes the app if validation fails (fail-fast)
@@ -5495,17 +6046,20 @@ If you see schema validation failures, check that all model files are imported i
 **Status**: ✅ **FIXED** in commit `314a721`
 
 **Symptoms:**
+
 - User completes onboarding steps 1-9 successfully
 - Step 10 (admin user creation) returns 500 Internal Server Error
 - Backend logs show "User registered: [username]" but endpoint fails
 - User tries again and gets "username already exists" error
 
 **Root Cause:**
+
 - `auth_service.register_user()` returns a tuple `(user, error_message)`
 - Onboarding service was treating it as a single `User` object
 - Caused AttributeError when trying to access `user.roles` on a tuple
 
 **Fix Applied:**
+
 ```python
 # Before (WRONG):
 user = await auth_service.register_user(...)
@@ -5525,10 +6079,12 @@ if error or not user:
 **Status**: ✅ **FIXED** in commit `afe28f2`
 
 **Issue:**
+
 - User status was set as string `"active"` instead of enum `UserStatus.ACTIVE`
 - Could cause AttributeError when accessing `.value` on status field
 
 **Fix Applied:**
+
 ```python
 # Before:
 user = User(..., status="active", ...)
@@ -5545,6 +6101,7 @@ user = User(..., status=UserStatus.ACTIVE, ...)
 **Status**: ✅ **ADDED** (commit `eed280e`), ✅ **IMPROVED** (fast-path init, commit `5841063`)
 
 **Current Protection:**
+
 - Fast-path `create_all()` has a 20-minute timeout (normal time: seconds)
 - Self-healing retry after 2 seconds on failure
 - Schema validation after init, with automatic repair via `create_all(checkfirst=True)`
@@ -5552,6 +6109,7 @@ user = User(..., status=UserStatus.ACTIVE, ...)
 - Fail-fast with clear error messages if validation fails
 
 **Error Handling:**
+
 - TimeoutError raised with descriptive message
 - Startup phase set to "error"
 - Application startup blocked (fail-fast principle)
@@ -5564,6 +6122,7 @@ user = User(..., status=UserStatus.ACTIVE, ...)
 **Status**: ✅ **IMPLEMENTED** — replaces the old 23-minute migration approach
 
 **Changes:**
+
 - Fresh databases now use `create_all()` instead of running 45+ Alembic migrations sequentially
 - First-boot time reduced from ~25-30 minutes to ~7-10 minutes (mostly MySQL init; table creation takes seconds)
 - Resource-constrained environments (Unraid NAS) supported with optimized DDL and batched operations
@@ -5582,6 +6141,7 @@ user = User(..., status=UserStatus.ACTIVE, ...)
 ### When to Update
 
 **If you see any of these errors, update immediately:**
+
 ```bash
 cd /path/to/the-logbook
 git pull origin main
@@ -5592,12 +6152,14 @@ docker-compose up --build
 **⚠️ Note:** The `-v` flag removes database volumes. Since these fixes relate to onboarding (before data entry), no data will be lost.
 
 ### Verifying the Fixes
+
 After updating, check logs for clean startup:
+
 ```bash
 # Should see no MYSQL_DATABASE errors
 docker logs intranet-backend | grep MYSQL_DATABASE
 
-# Should see no "Table already exists" errors  
+# Should see no "Table already exists" errors
 docker logs intranet-backend | grep "already exists"
 
 # Should see successful onboarding
@@ -5617,6 +6179,7 @@ docker logs intranet-backend | grep "Organization created"
 **Cause:** The `MemberIdScannerModal` requires camera permissions and the BarcodeDetector API (or a polyfill).
 
 **Fix:**
+
 1. Ensure your browser has camera permissions (Settings > Privacy > Camera)
 2. Use Chrome or Safari — Firefox may not support BarcodeDetector natively
 3. The scan works best in well-lit conditions with the QR code or barcode clearly visible
@@ -5636,31 +6199,33 @@ docker logs intranet-backend | grep "Organization created"
 **Cause (2026-03-02):** The monolithic `services/api.ts` (5,330 lines) was split into 13 domain-specific service files. Old imports that referenced the monolithic file may break.
 
 **Fix:** Update imports to use the new domain-specific files:
+
 ```typescript
 // Old (before split)
-import { eventService, userService } from '@/services/api';
+import { eventService, userService } from "@/services/api";
 
 // New (after split)
-import { eventService } from '@/services/eventServices';
-import { userService } from '@/services/userServices';
+import { eventService } from "@/services/eventServices";
+import { userService } from "@/services/userServices";
 ```
 
 **New service file mapping:**
-| Domain | File |
-|--------|------|
-| Auth | `services/authService.ts` |
-| Users | `services/userServices.ts` |
-| Events | `services/eventServices.ts` |
-| Training | `services/trainingServices.ts` |
-| Inventory | `services/inventoryService.ts` |
-| Elections | `services/electionService.ts` |
+
+| Domain         | File                                 |
+| -------------- | ------------------------------------ |
+| Auth           | `services/authService.ts`            |
+| Users          | `services/userServices.ts`           |
+| Events         | `services/eventServices.ts`          |
+| Training       | `services/trainingServices.ts`       |
+| Inventory      | `services/inventoryService.ts`       |
+| Elections      | `services/electionService.ts`        |
 | Communications | `services/communicationsServices.ts` |
-| Documents | `services/documentsService.ts` |
-| Forms | `services/formsServices.ts` |
-| Admin | `services/adminServices.ts` |
-| Facilities | `services/facilitiesServices.ts` |
-| Meetings | `services/meetingsServices.ts` |
-| Shared client | `services/apiClient.ts` |
+| Documents      | `services/documentsService.ts`       |
+| Forms          | `services/formsServices.ts`          |
+| Admin          | `services/adminServices.ts`          |
+| Facilities     | `services/facilitiesServices.ts`     |
+| Meetings       | `services/meetingsServices.ts`       |
+| Shared client  | `services/apiClient.ts`              |
 
 The legacy `services/api.ts` re-exports from the new files for backward compatibility, but direct imports are preferred.
 
@@ -5673,16 +6238,21 @@ The legacy `services/api.ts` re-exports from the new files for backward compatib
 **Cause (2026-03-02):** `exactOptionalPropertyTypes` was enabled in `tsconfig.json`. This prevents assigning `undefined` to optional properties — you must either omit the property or use a valid value.
 
 **Fix:**
+
 ```typescript
 // Error: Type 'undefined' is not assignable
-interface Foo { bar?: string }
+interface Foo {
+  bar?: string;
+}
 const x: Foo = { bar: undefined }; // ❌ Error
 
 // Fix: omit the property entirely
 const x: Foo = {}; // ✅ OK
 
 // Or use a union type if undefined is intentional
-interface Foo { bar?: string | undefined }
+interface Foo {
+  bar?: string | undefined;
+}
 ```
 
 This affects 57 files across types, services, and components. If you see these errors after pulling, run `npm run typecheck` and fix each case by either omitting the property or adding `| undefined` to the type.
@@ -5734,6 +6304,7 @@ This affects 57 files across types, services, and components. If you see these e
 ### Problem: Custom styles or overrides on decomposed components not working
 
 **Cause (2026-03-02):** Several large page components were decomposed into focused sub-components:
+
 - `AdminHoursManagePage` → 5 tab components
 - `ApparatusDetailPage` → 7 tab/header components
 - `ShiftSettingsPanel` → 6 card/editor components
@@ -5749,6 +6320,7 @@ If you had CSS targeting the old monolithic component structure, selectors may n
 ### Problem: Styles look different or broken after update
 
 **Cause (2026-03-03):** Tailwind CSS was upgraded from v3.4 to v4.2. The migration involved:
+
 - Removing `tailwind.config.js` — Tailwind v4 uses CSS-first configuration via `@theme` directives in `index.css`
 - Updating 200+ component files with class name changes (e.g., `rounded-lg` → `rounded-lg`, `shadow-lg` specificity changes)
 - Rebuilding `index.css` with `@theme` directives for CSS variables
@@ -5761,6 +6333,7 @@ If you had CSS targeting the old monolithic component structure, selectors may n
 **Cause:** Tailwind v4 no longer uses `tailwind.config.js`. Configuration is now in CSS via `@theme` blocks in `frontend/src/styles/index.css`.
 
 **Fix:** Move any custom theme extensions to the `@theme` block in `index.css`:
+
 ```css
 @theme {
   --color-custom: #123456;
@@ -5782,6 +6355,7 @@ If you had CSS targeting the old monolithic component structure, selectors may n
 **Cause:** Some testing patterns changed between React 18 and 19 (e.g., `act()` behavior, cleanup timing).
 
 **Fix:** Update test files to use the new `@testing-library/react` patterns compatible with React 19. Clear `node_modules` and reinstall:
+
 ```bash
 cd frontend
 rm -rf node_modules package-lock.json
@@ -5813,6 +6387,7 @@ npm install
 **Cause (2026-03-03):** Vitest was upgraded from v3 to v4, and Zod from v3 to v4.
 
 **Fix:** Clear test cache and reinstall:
+
 ```bash
 cd frontend
 rm -rf node_modules package-lock.json
@@ -5835,6 +6410,7 @@ npm test
 **Cause (2026-03-02):** The integration health dashboard is new and relies on backend endpoints for integration status.
 
 **Fix:** Ensure the backend is running the latest version. The new endpoints are:
+
 - `GET /api/v1/forms/{id}/integrations/health` — Integration processing status
 - `POST /api/v1/forms/{id}/submissions/{sid}/reprocess` — Reprocess failed integrations
 
@@ -5843,10 +6419,12 @@ npm test
 **Cause (2026-03-02):** The form builder was upgraded to use `@dnd-kit` for drag-and-drop. If the `@dnd-kit` dependencies are missing, drag-and-drop will silently fail.
 
 **Fix:** Ensure dependencies are installed:
+
 ```bash
 cd frontend
 npm install
 ```
+
 Check that `@dnd-kit/core` and `@dnd-kit/sortable` are in `package.json`.
 
 ### Problem: Survey results panel not showing aggregated data
@@ -5992,7 +6570,7 @@ it cannot collide with the members that imported successfully.
 
 ### Problem: A phone number was imported into the email field
 
-**Cause (Fixed 2026-08-07):** A comma inside an *unquoted* value splits one
+**Cause (Fixed 2026-08-07):** A comma inside an _unquoted_ value splits one
 column into two and slides every later column one place right, so
 `secondaryPhone` lands in `email`. Quoted commas have parsed correctly since
 2026-08-04, but nothing compared a row's value count against the header's
@@ -6000,7 +6578,7 @@ column count, so an unquoted one was accepted in silence.
 
 **Fix:** A row carrying more values than the header has columns is rejected,
 naming both counts and the quoting rule. Two further checks catch the damage a
-count alone cannot: a *missing* comma shifts columns left while leaving the
+count alone cannot: a _missing_ comma shifts columns left while leaving the
 count plausible, so every email column is also checked for shape — and a value
 holding seven or more digits and no `@` is called out as a probable phone
 number in a shifted row.
@@ -6080,6 +6658,7 @@ missing optional column produces a warning, not a rejection. Notes:
 **Cause (2026-03-02):** The inventory CSV import validates headers, data types, and references before processing.
 
 **Fix:** Download the sample CSV template from the import page and ensure your CSV matches the expected format. Common issues:
+
 - Missing required columns (`name`, `category`)
 - Category names not matching existing categories
 - Duplicate serial numbers
@@ -6105,6 +6684,7 @@ missing optional column produces a warning, not a rejection. Notes:
 **Status (Fixed 2026-03-04):** The system owner creation endpoint created auth tokens and returned them in the response body but never set httpOnly cookies.
 
 **Symptoms:**
+
 - After completing Step 7 (system owner creation), the app redirects to `/login` instead of continuing to Step 8
 - `loadUser()` → `/auth/me` → 401 (no cookies) → clears `has_session`
 - Auth state not established for remaining onboarding steps (8–10)
@@ -6125,19 +6705,55 @@ missing optional column produces a warning, not a rejection. Notes:
 **Status (Fixed 2026-03-04):** The `vite-plugin-pwa` package has a peer dependency conflict with Vite 7.
 
 **Symptoms:**
+
 - `npm ci` fails during Docker build with `ERESOLVE unable to resolve dependency tree`
 - Error mentions `vite-plugin-pwa` and `vite@7`
 - Build works locally but fails in Docker
 
 **Root Cause:** No `package-lock.json` existed in the frontend Docker context, causing npm to resolve dependencies from scratch each build. This led to unpredictable version resolution and peer dependency conflicts.
 
-**Fix:** The Dockerfile now uses `npm install --legacy-peer-deps` instead of `npm ci`. A `backend/.dockerignore` was also added to reduce the Docker build context from 343MB.
+**Fix (2026-03-04, superseded):** The Dockerfile switched to `npm install --legacy-peer-deps` instead of `npm ci`. That silenced the error without addressing the root cause — every image build still re-resolved the tree, so production shipped dependency versions no test had run against.
+
+**Fix (current):** The lockfile is now _in_ the context. `frontend/Dockerfile` builds from the repository root (`docker build -f frontend/Dockerfile .`, or `context: .` in compose) so the npm workspace's single root `package-lock.json` is available, and installs with `npm ci`. `npm ci` installs the locked tree verbatim rather than re-resolving, so the original ERESOLVE conflict cannot recur. Build the frontend from the repository root, never from `frontend/`.
 
 ```bash
 # Rebuild after pulling latest
 docker-compose build --no-cache frontend
 docker-compose up -d frontend
 ```
+
+### Problem: Frontend build fails with `"/frontend/nginx.conf": not found`
+
+**Symptoms:**
+
+- The build stops on `failed to compute cache key: ... "/frontend/nginx.conf": not found`, usually alongside `"/package-lock.json": not found` and `"/frontend/package.json": not found`
+- `[frontend internal] load build context` transfers a few bytes while the backend's transfers megabytes
+- The backend image builds fine; only the frontend target fails
+
+**Root Cause:** A deployment's compose file still names `./frontend` as the frontend build context. The context moved to the repository root (see the entry above) so `npm ci` could reach the workspace lockfile, and every path the Dockerfile copies is now root-relative. `docker compose config` does not catch this — it validates YAML and interpolation, never the Dockerfile — so the mismatch surfaces only as a failed build.
+
+Deployments carrying their own compose file (custom volume paths, service names, pinned image tags) do not get the corrected `context:` from a `git pull`, because the file they run is not the one in the repository.
+
+**Fix:** Point the frontend at the repository root and make `dockerfile` relative to it:
+
+```yaml
+frontend:
+  build:
+    context: . # or the absolute path to the checkout
+    dockerfile: frontend/Dockerfile
+```
+
+**Prevention:** `scripts/sync-compose-build-context.sh` reads each Dockerfile's `COPY`/`ADD` sources and verifies they resolve inside the declared context, then repairs the context in place with `--fix`:
+
+```bash
+# Report drift (exit 1 if any context is wrong)
+./scripts/sync-compose-build-context.sh -f docker-compose.yml
+
+# Repair it, backing the file up first
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
+```
+
+`unraid/update.sh` runs it automatically after the pull and before the rebuild, and `scripts/verify-docker-build.sh` checks every shipped compose file. Self-hosted updaters that maintain their own compose file should call it in `--fix` mode between "pull" and "build" for the same protection.
 
 ### Problem: Docker build context is very large (343MB+)
 
@@ -6152,6 +6768,7 @@ docker-compose up -d frontend
 **Status (Fixed 2026-03-04):** Multiple migration graph issues were resolved.
 
 **Symptoms:**
+
 - `alembic upgrade head` fails with "Can't locate revision identified by..."
 - Startup logs show "Multiple heads detected"
 - Warnings about duplicate revision IDs
@@ -6163,6 +6780,7 @@ docker-compose up -d frontend
 3. **Regex deprecation**: Fixed `re` module deprecation warnings in the migration cleanup script
 
 **Diagnostic:**
+
 ```bash
 # Check for multiple heads
 docker exec logbook-backend alembic heads
@@ -6174,6 +6792,7 @@ docker exec logbook-backend alembic history --verbose
 ### Problem: SQLAlchemy relationship overlap warnings at startup
 
 **Status (Fixed 2026-03-04):** Two model relationships had missing `back_populates`:
+
 - `Event.recurrence_children` / `recurrence_parent` — the reciprocal relationship was missing `back_populates`
 - `StorageArea.parent` / `children` — self-referential relationship not linked
 
@@ -6188,6 +6807,7 @@ These warnings don't cause data issues but pollute startup logs. Pull latest and
 **Status (Fixed 2026-03-04):** The `verify_csrf_token` middleware was applied globally to the API router but failed on WebSocket connections.
 
 **Symptoms:**
+
 - Inventory real-time updates not working
 - Browser console shows WebSocket connection error (500)
 - Backend logs show `AttributeError` in `verify_csrf_token` (expects `Request` object, receives `WebSocket`)
@@ -6205,6 +6825,7 @@ These warnings don't cause data issues but pollute startup logs. Pull latest and
 **Status (Fixed 2026-03-04):** Multiple issues prevented form data from flowing into pipelines.
 
 **Symptoms:**
+
 - Form submission succeeds (200 OK) but no prospect is created
 - Reprocessing a submission doesn't update the prospect
 - Prospect created but all fields are empty/null
@@ -6236,6 +6857,7 @@ These warnings don't cause data issues but pollute startup logs. Pull latest and
 **Status (Fixed 2026-03-04):** Frontend facility types used snake_case (`address_line1`, `zip_code`, `facility_number`) but the backend API returns camelCase.
 
 **Symptoms:**
+
 - Facility detail page shows blank address fields
 - Facility list shows no address information
 - Data exists in the database but doesn't appear in the UI
@@ -6255,6 +6877,7 @@ These warnings don't cause data issues but pollute startup logs. Pull latest and
 **Status (Fixed 2026-03-04):** The `AdminHoursSummary.byCategory` array items used snake_case properties in the frontend but the API returns camelCase.
 
 **Symptoms:**
+
 - Admin hours summary tab shows categories with "undefined" values
 - Category names, total hours, or member counts appear as blank
 - Affects SummaryTab, AdminHoursPage, and MemberProfilePage
@@ -6272,6 +6895,7 @@ These warnings don't cause data issues but pollute startup logs. Pull latest and
 **Cause (2026-03-04):** Custom categories must be configured in Events Settings before they appear in the event form.
 
 **Fix:**
+
 1. Go to **Administration > Events Settings**
 2. Expand the **Custom Event Categories** section
 3. Add categories with name and color
@@ -6297,6 +6921,7 @@ These warnings don't cause data issues but pollute startup logs. Pull latest and
 **Status (Fixed 2026-03-04):** The schema used `alias="metadata"` which read the wrong attribute.
 
 **Symptoms:**
+
 - API response for prospects includes a complex object in the `metadata` field instead of simple JSON
 - Frontend may crash parsing the response
 - `ResponseValidationError` in backend logs
@@ -6314,6 +6939,7 @@ These warnings don't cause data issues but pollute startup logs. Pull latest and
 **Status (Fixed 2026-03-04):** The Modal component's backdrop overlay was intercepting click events that should reach dialog buttons.
 
 **Symptoms:**
+
 - Delete confirmation dialogs don't respond to button clicks
 - Pipeline delete operations require multiple clicks
 - Any modal with action buttons at the bottom may be unresponsive
@@ -6329,6 +6955,7 @@ These warnings don't cause data issues but pollute startup logs. Pull latest and
 **Status (Fixed 2026-03-04):** Several pages used hardcoded Tailwind color classes instead of theme-aware CSS variable classes.
 
 **Affected Pages:**
+
 - EventRequestStatusPage — used hardcoded grays with manual `dark:` prefixes
 - ApparatusListPage — used hardcoded `via-red-900` in gradient
 
@@ -6345,12 +6972,14 @@ These warnings don't cause data issues but pollute startup logs. Pull latest and
 **Status (Fixed 2026-03-04):** The `duplicate_application` email template type was defined in code but missing from the database enum.
 
 **Symptoms:**
+
 - Creating or listing email templates fails with 500
 - Backend logs show database constraint violation on template type
 
 **Root Cause:** New email template types were added to the Python enum but the database column's enum constraint wasn't updated. A sync test was added to prevent future drift.
 
 **Fix:** Run the latest Alembic migration to add the missing enum value:
+
 ```bash
 docker exec logbook-backend alembic upgrade head
 ```
@@ -6368,6 +6997,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (Fixed 2026-03-05):** The nullish coalescing operator (`??`) was used in inventory form handlers where the logical OR (`||`) was needed.
 
 **Symptoms:**
+
 - Clearing a text field (serial number, notes, etc.) leaves an empty string `""` instead of falling back to `null`/default
 - Item detail modal shows blank fields that should show placeholder text
 - Filter dropdowns appear empty instead of showing "All" after clearing
@@ -6387,6 +7017,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (Fixed 2026-03-05):** Two separate issues compounded on the inventory admin page.
 
 **Symptoms:**
+
 - 422 Unprocessable Entity on item create/update
 - 403 Forbidden on WebSocket connection to `/api/v1/inventory/ws`
 - Real-time inventory updates not working
@@ -6406,6 +7037,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (2026-03-05):** New feature. Charges (damage fees, replacement costs) can now be attached to items. If charges don't appear:
 
 **Checklist:**
+
 1. Verify the `inventory.manage` permission is assigned to the user creating charges
 2. Charges are tied to specific return or write-off events — check the return record ID
 3. Member return requests must be approved before charges are finalized
@@ -6422,6 +7054,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (2026-03-05):** Barcode label printing is client-side only (no backend involvement).
 
 **Checklist:**
+
 1. **Browser support:** Chrome/Edge recommended. Safari has limited `window.print()` support for iframes
 2. **Dymo format (2.25×1.25″):** Ensure your Dymo printer is set to the correct label size in the print dialog
 3. **Rollo format (4×6″):** Select the 4×6″ paper size in your printer settings
@@ -6439,6 +7072,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (2026-03-05):** Recertification reminders are new and require configuration.
 
 **Checklist:**
+
 1. Verify the certification has an expiration date set
 2. Recertification lead time must be configured (e.g., 90 days before expiry)
 3. Email notifications must be enabled (`EMAIL_ENABLED=true`)
@@ -6463,6 +7097,7 @@ docker exec logbook-backend alembic upgrade head
 **Root Cause:** ISO readiness scores are calculated from attestation completion rates. If no attestation workflows have been created, the score defaults to 0%.
 
 **Fix:**
+
 1. Navigate to Compliance > Officer Dashboard > Attestations
 2. Create attestation workflows for the relevant ISO standards (9001, 14001, 45001)
 3. Assign attestation requirements to members
@@ -6479,6 +7114,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (Fixed 2026-03-05):** Several grant response schemas were missing `alias_generator=to_camel` in their Pydantic model config.
 
 **Symptoms:**
+
 - Grant list shows `grant_name` instead of `grantName`
 - Campaign totals show `total_raised` instead of `totalRaised`
 - Donor records show `first_name` instead of `firstName`
@@ -6496,12 +7132,14 @@ docker exec logbook-backend alembic upgrade head
 **Status (Fixed 2026-03-05):** The `GrantNote` model had a column named `metadata`, which shadows SQLAlchemy's internal `Base.metadata` attribute.
 
 **Symptoms:**
+
 - `AttributeError: 'MetaData' object has no attribute ...` during backend startup
 - Any endpoint touching grant notes returns 500
 
 **Root Cause:** SQLAlchemy's `DeclarativeBase` (our `Base` class) has a built-in `metadata` attribute that holds the `MetaData` object for table reflection. Naming a column `metadata` overrides this, causing unpredictable failures.
 
 **Fix:** The column was renamed to `note_metadata` in the model, with `serialization_alias="metadata"` in the Pydantic schema so the API response still uses `metadata`. Pull latest and run migrations:
+
 ```bash
 docker exec logbook-backend alembic upgrade head
 ```
@@ -6529,6 +7167,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (Fixed 2026-03-05):** When a new prospect was created, stage history entries were being generated for every stage in the pipeline, not just the initial stage.
 
 **Symptoms:**
+
 - New applicant's history tab shows they've "been in" every stage
 - Timeline appears fully populated for a brand-new prospect
 
@@ -6545,6 +7184,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (Fixed 2026-03-05):** The error boundary's copy-to-clipboard functionality relied solely on `navigator.clipboard.writeText()`, which requires HTTPS or `localhost` and the `clipboard-write` permission.
 
 **Symptoms:**
+
 - Clicking "Copy error details" does nothing
 - No error in the console (the promise silently fails)
 
@@ -6563,6 +7203,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (Fixed 2026-03-05):** After the system owner account is created at step 7, auth cookies are set. If the user then navigates backward or refreshes, the stale auth state interferes with the remaining onboarding steps (8-10).
 
 **Symptoms:**
+
 - Steps 8-10 redirect to login instead of continuing onboarding
 - Dashboard redirect after onboarding completes takes user to login page
 - Browser shows `has_session=true` in localStorage but API calls return 401
@@ -6570,6 +7211,7 @@ docker exec logbook-backend alembic upgrade head
 **Root Cause:** The onboarding flow wasn't clearing the auth state (cookies + `has_session` flag) when resetting or restarting. The stale cookie from step 7 would persist and confuse the auth interceptor.
 
 **Fix:** Pull latest. The onboarding reset now:
+
 1. Clears `has_session` from localStorage
 2. Calls `POST /auth/logout` to invalidate the cookie
 3. Resets the Zustand auth store
@@ -6583,6 +7225,7 @@ docker exec logbook-backend alembic upgrade head
 **Status (Fixed 2026-03-05):** Uninstalling The Logbook via Unraid Community Applications left orphaned Docker volumes and network configurations.
 
 **Symptoms:**
+
 - After removing the app, Docker network errors appear for other containers
 - Re-installing The Logbook fails with "network already exists" or "volume in use" errors
 - Only a full Unraid restart clears the stale resources
@@ -6590,6 +7233,7 @@ docker exec logbook-backend alembic upgrade head
 **Fix:** Pull latest Unraid template. The template XML now includes proper cleanup hooks that remove volumes and networks on app removal.
 
 **Manual cleanup** (if you already hit this issue):
+
 ```bash
 docker network rm logbook_default 2>/dev/null
 docker volume rm logbook_mysql_data logbook_redis_data 2>/dev/null
@@ -6604,6 +7248,7 @@ docker volume rm logbook_mysql_data logbook_redis_data 2>/dev/null
 **Status (Fixed 2026-03-05):** The maintenance create/update endpoints accessed SQLAlchemy relationships synchronously within an async context.
 
 **Symptoms:**
+
 - 500 Internal Server Error on `POST /api/v1/facilities/{id}/maintenance`
 - Backend logs show `MissingGreenlet: greenlet_spawn has not been called`
 - Creating inspections works fine but maintenance records fail
@@ -6639,6 +7284,7 @@ docker volume rm logbook_mysql_data logbook_redis_data 2>/dev/null
 **Fix:** Pull latest code. All issues are resolved. The system now uses a temporary Bearer token bridge (access token from login response body stored in memory) as a fallback for the httpOnly cookie, with automatic cleanup after 30 minutes.
 
 **Edge Cases:**
+
 - Module-specific axios instances (scheduling, admin-hours) each have independent interceptors and also need the Bearer token bridge — all now included
 - The refresh token is stored in memory alongside the access token for environments where cookies are never stored by the browser
 - Cookie settle polling (`waitForLoginCookies`) waits for the `csrf_token` cookie to change before navigating to the dashboard
@@ -6672,6 +7318,7 @@ The `receive` lambda used to re-wrap the request body was synchronous, but ASGI 
 **Status (Fixed 2026-03-06):** Ballot items created from templates were missing the `position` field.
 
 **Symptoms:**
+
 - Ballot preview shows ballot items but no candidates listed under them
 - Voting page shows ballot items but no candidate radio buttons
 - Candidates exist and show in the Candidates tab
@@ -6681,6 +7328,7 @@ The `receive` lambda used to re-wrap the request body was synchronous, but ASGI 
 **Fix:** Pull latest frontend code. Template-created ballot items now include the `position` field. Preview and voting pages also fall back to title-based matching for backward compatibility with existing ballot items that lack a position field.
 
 **Edge Cases:**
+
 - Existing elections created before this fix may have ballot items without position fields — the title-based fallback handles this
 - One ballot item per position is now enforced; the position dropdown only shows unused positions
 - Write-in candidates auto-fill with "Write-in Candidate" name when the checkbox is enabled
@@ -6704,6 +7352,7 @@ The `receive` lambda used to re-wrap the request body was synchronous, but ASGI 
 **API Endpoint:** `POST /api/v1/events/{id}/finalize-attendance`
 
 **Edge Cases:**
+
 - Members who checked out normally are not affected (their duration is already set)
 - If no `actual_end_time` is recorded, the scheduled `end_datetime` is used as fallback
 - Training records created on check-in with 0 hours are updated to the calculated duration
@@ -6718,6 +7367,7 @@ The `receive` lambda used to re-wrap the request body was synchronous, but ASGI 
 **Status (Fixed 2026-03-06):** A chain of cascading issues prevented the backend from starting.
 
 **Chain of failures:**
+
 1. `IssuanceAllowance.role_id` referenced `ForeignKey("roles.id")` but the model was renamed to `Position` with `__tablename__="positions"` — `metadata.sorted_tables` failed
 2. ~50 FK columns across 8 model files had `ondelete="SET NULL"` but missing `nullable=True` — MySQL error 1830
 3. Fundraising migration in `MIGRATION_ONLY_FILES` tried to create tables that already existed from `Base.metadata.sorted_tables` — error 1050
@@ -6757,6 +7407,7 @@ The `receive` lambda used to re-wrap the request body was synchronous, but ASGI 
 **Fix:** `FacilitiesService.create_room`/`update_room`/`delete_room` now auto-sync a linked Location record. Each room gets a display code for QR check-in support. A new `facility_room_id` FK on the Location model links rooms to locations.
 
 **Edge Cases:**
+
 - Existing rooms created before this fix won't have linked locations — they'll be created on next room update
 - Deleting a room deletes the linked location
 - The FacilityRoomPicker component (`components/FacilityRoomPicker.tsx`) provides a reusable facility dropdown + room dropdown for cross-module room selection
@@ -6816,6 +7467,7 @@ Facilities now include NFPA compliance tracking:
 **Fix:** Backend now constructs proper ISO datetime strings by combining event date with start/end times. Also added `organizationTimezone` (IANA timezone string) to the QR check-in response data.
 
 **Edge Cases:**
+
 - Organizations without a configured timezone default to UTC display
 - Events spanning midnight (overnight training) show the correct check-in window across the date boundary
 - Self check-in page gracefully handles missing timezone data by falling back to the browser's local timezone
@@ -6838,6 +7490,7 @@ Facilities now include NFPA compliance tracking:
 **Status (Fixed 2026-03-12):** The recurring event creation now checks for existing events at the same time and location before creating each occurrence. Conflicts are reported and those occurrences are skipped.
 
 **Edge Cases:**
+
 - Deleting a single occurrence does NOT affect other occurrences in the series
 - "Edit All Future" only modifies events after the current date — past occurrences are preserved
 - Series spanning DST transitions may show times shifted by 1 hour; this is expected since events are stored in UTC
@@ -6856,6 +7509,7 @@ Facilities now include NFPA compliance tracking:
 **Verification:** New test suite `test_event_settings.py` with 6 tests covering deep copy consistency, orphan cleanup, and concurrent save scenarios.
 
 **Edge Cases:**
+
 - `flag_modified()` is an alternative to `deepcopy()` but requires remembering to call it after every mutation
 - `MutableDict.as_mutable(JSON)` auto-detects top-level key changes but still misses nested mutations
 - This same pattern applies to the `Organization.settings` JSON column and any other JSON column with nested values
@@ -6881,6 +7535,7 @@ Facilities now include NFPA compliance tracking:
 **Status (Fixed 2026-03-12):** This is the most common recurring bug in the project. React form fields initialize as empty strings (`""`). The nullish coalescing operator (`??`) only filters `null`/`undefined` — it does NOT filter `""`. So `"" ?? undefined === ""`, and the empty string gets sent to the backend where Pydantic validators reject it.
 
 **Fix:** Changed `??` to `||` (logical OR) for optional form field coercion across 14+ files:
+
 - Events: `EventRequestStatusPage`, `EventRequestsTab`, `EventsSettingsTab`
 - Scheduling: `OpenShiftsTab`, `PatternsTab`, `ShiftReportsTab`, `MyShiftsTab`
 - Inventory: `ImportInventory`
@@ -6901,6 +7556,7 @@ Facilities now include NFPA compliance tracking:
 **Fix:** Run `alembic upgrade head` to apply the table rename migration.
 
 **Edge Cases:**
+
 - Existing deployments with partially applied migrations should run the full migration chain
 - The migration handles both table rename and index recreation
 - Fresh installs create the table with the correct name from the start
@@ -6916,9 +7572,11 @@ Facilities now include NFPA compliance tracking:
 **Fix:** Auth cookies now auto-detect the `Secure` flag from the `ALLOWED_ORIGINS` environment variable. If `ALLOWED_ORIGINS` contains only `http://` URLs, `Secure` is set to `False`. If it contains `https://` URLs, `Secure` is set to `True`.
 
 **New env vars:**
+
 - `NGINX_WORKER_PROCESSES` (default: `auto`) — prevents Nginx from spawning excessive workers (36+) on high-core-count servers
 
 **Edge Cases:**
+
 - Mixed-scheme `ALLOWED_ORIGINS` (both HTTP and HTTPS) defaults to `Secure=False` with a log warning
 - Deployments behind a TLS-terminating reverse proxy should set `ALLOWED_ORIGINS` to the HTTPS URL, even though backend-to-proxy traffic is HTTP
 - Cookie `path` includes trailing slash (`/api/v1/auth/`) to ensure the refresh endpoint receives the cookie on all browsers
@@ -6930,6 +7588,7 @@ Facilities now include NFPA compliance tracking:
 ### Problem: Frontend build fails with 94+ TypeScript errors after update
 
 **Status (Fixed 2026-03-12):** Batch fix resolved:
+
 - Wrong import paths in admin-hours module (`ActiveSessionsTab`, `AllEntriesTab`, `PendingReviewTab`)
 - Duplicate CSS class property in `EventRequestStatusPage`
 - Unused variables in `Dashboard.tsx`
@@ -6949,12 +7608,14 @@ ESLint also cleaned to 0 errors, 0 warnings across 59 files.
 **Status (New Feature 2026-03-12):** Coordinators can now link upcoming events (interviews, orientations, meetings) to individual applicants.
 
 **How it works:**
+
 - New `prospect_event_links` table stores the link between applicants and events
 - When a pipeline stage of type `meeting` activates for an applicant, the system auto-links the next upcoming matching event
 - The ApplicantDetailDrawer shows linked events with date, time, type, and status
 - Coordinators can manually add/remove event links
 
 **Edge Cases:**
+
 - If no upcoming events match when a meeting stage activates, no link is created — the coordinator is prompted to schedule manually
 - Events that are cancelled after linking show a "Cancelled" badge on the applicant's event list
 - Multiple applicants can be linked to the same event (e.g., group orientation)
@@ -6969,7 +7630,7 @@ ESLint also cleaned to 0 errors, 0 warnings across 59 files.
 **Cause (Intentional, 2026-08-04):** Payments against `WAIVED` or `EXEMPT` dues
 are refused. Previously the payment went through, recomputed the record to
 Paid/Partial while leaving the waiver fields populated, and — because the dues
-summary derives *Total Waived* from the status — silently moved the waived
+summary derives _Total Waived_ from the status — silently moved the waived
 amount into your collection figures with nothing recording it had ever been
 waived.
 
@@ -7021,16 +7682,1684 @@ directly — it is overwritten on the next payment.
 
 ---
 
-## Getting Help
+## Complete Fresh Rebuild (Nuclear Option)
 
-If you're stuck:
+If all else fails, rebuild everything from scratch:
 
-1. **Search this guide** — Use Ctrl+F with keywords from your error
-2. **Check the wiki** — [Troubleshooting](../wiki/Troubleshooting.md) has deployment-specific guides
-3. **Review recent changes** — Check [CHANGELOG.md](../CHANGELOG.md) for recent fixes
+```bash
+cd /mnt/user/appdata/the-logbook
+
+# Stop and remove all containers
+docker-compose down
+
+# Remove containers and cleanup
+docker-compose rm -f
+docker system prune -f
+
+# Verify .env files are correct
+cat .env
+cat frontend/.env
+
+# Rebuild and start
+docker-compose build --no-cache
+docker-compose up -d
+
+# Watch logs for errors
+docker-compose logs -f
+```
+
+---
+
+---
+
+## Expected Successful State
+
+### Frontend Logs
+
+```
+/docker-entrypoint.sh: Configuration complete; ready for start up
+```
+
+### Backend Logs
+
+```
+INFO:     Started server process
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:3001
+```
+
+### Browser
+
+- Welcome page with animated logo loads
+- No errors in console (F12)
+- Click "Begin Setup" to start onboarding
+
+### API
+
+- `http://YOUR-IP:7881/docs` → FastAPI documentation
+- `http://YOUR-IP:7881/health` → Health status JSON
+
+---
+
+---
+
+## Quick Diagnostic Checklist
+
+### Security Configuration
+
+- [ ] `SECRET_KEY` is set (min 32 characters, does not contain `INSECURE_DEFAULT`)
+- [ ] `ENCRYPTION_KEY` is set (64 hex characters, does not contain `INSECURE_DEFAULT`)
+- [ ] `ENCRYPTION_SALT` is set (32 hex characters, unique per installation)
+- [ ] `DB_PASSWORD` is not `change_me_in_production`
+- [ ] `REDIS_PASSWORD` is set (required in production)
+
+> **Note**: The onboarding security check uses substring matching — any key containing `"INSECURE_DEFAULT"` is flagged as critical. The factory defaults (`INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION` for SECRET_KEY, `INSECURE_DEFAULT_KEY_CHANGE_ME` for ENCRYPTION_KEY) will both be caught. This matches the validation in `backend/app/core/config.py`.
+
+### Secret Handling
+
+- [ ] `.env` files are in `.gitignore` (never committed to version control)
+- [ ] No passwords logged in application output (temporary passwords are never logged)
+- [ ] Health endpoint does not expose raw error strings (shows only "error" status)
+- [ ] API error responses do not leak internal exception details
+- [ ] Frontend console logging restricted in production mode
+- [ ] Authentication failure logs do not reveal whether username exists or password was wrong
+
+### Application Configuration
+
+- [ ] Frontend `.env` exists with correct `VITE_API_URL`
+- [ ] Backend `.env` has `ALLOWED_ORIGINS` with frontend URL
+- [ ] Root `.env` has correct `FRONTEND_PORT` and `BACKEND_PORT`
+- [ ] Using correct docker-compose file (Unraid vs dev)
+- [ ] Frontend rebuilt after env changes
+- [ ] All containers running: `docker-compose ps`
+- [ ] Backend accessible: `curl http://YOUR-IP:7881/health`
+- [ ] Frontend accessible: `curl -I http://YOUR-IP:7880`
+- [ ] No JavaScript errors in browser console
+- [ ] Port mapping correct (`:80` not `:3000` for frontend)
+
+---
+
+---
+
+## Quick Commands Cheatsheet
+
+### Container Management
+
+```bash
+# View all containers
+docker-compose ps
+
+# Restart all services
+docker-compose restart
+
+# Restart specific service
+docker-compose restart backend
+
+# View logs (follow mode)
+docker-compose logs -f
+
+# View logs for specific service
+docker-compose logs -f backend --tail 100
+
+# Enter container shell
+docker exec -it intranet-backend /bin/bash
+docker exec -it intranet-mysql /bin/bash
+```
+
+### Database Commands
+
+```bash
+# Connect to MySQL
+docker exec -it intranet-mysql mysql -u root -p the_logbook
+
+# Run Alembic migrations
+docker exec intranet-backend alembic upgrade head
+
+# Check migration status
+docker exec intranet-backend alembic current
+
+# View migration history
+docker exec intranet-backend alembic history
+```
+
+### Health Checks
+
+```bash
+# Backend health
+curl http://localhost:7881/health
+
+# Frontend health
+curl -I http://localhost:7880
+
+# Redis health
+docker exec intranet-redis redis-cli -a PASSWORD --no-auth-warning ping
+
+# MySQL health
+docker exec intranet-mysql mysqladmin -u root -p ping
+```
+
+### Debugging
+
+```bash
+# Check container resource usage
+docker stats
+
+# View container details
+docker inspect intranet-backend
+
+# Check network connectivity
+docker network inspect logbook-internal
+
+# Test internal connectivity
+docker exec intranet-backend ping -c 3 mysql
+docker exec intranet-frontend wget -qO- http://backend:3001/health
+```
+
+### Cleanup Commands
+
+```bash
+# Remove stopped containers
+docker container prune
+
+# Remove unused images
+docker image prune
+
+# Remove unused volumes (CAUTION: may delete data)
+docker volume prune
+
+# Full cleanup (CAUTION)
+docker system prune -a
+```
+
+### Log Analysis
+
+```bash
+# Search for errors in backend logs
+docker logs intranet-backend 2>&1 | grep -i "error\|exception"
+
+# Search for specific user activity
+docker logs intranet-backend 2>&1 | grep "user@example.com"
+
+# Export logs to file
+docker logs intranet-backend > backend_logs_$(date +%Y%m%d).txt 2>&1
+
+# Monitor logs in real-time with filtering
+docker logs -f intranet-backend 2>&1 | grep --line-buffered "ERROR"
+```
+
+---
+
+---
+
+## Equipment Checks & Shift Reports (2026-04-04 → 2026-04-09)
+
+### Problem: A checklist opens with no items and no explanation
+
+**Status (Fixed):** Templates with no items produced an empty form with no user feedback. The form now says so instead of rendering blank.
+
+### Problem: Duplicate checks for the same shift and apparatus
+
+**Status (Fixed):** A composite unique constraint now prevents them. Pass/fail computation was also corrected for templates mixing check types.
+
+### Problem: Submitting a shift report fails for a trainee with an assignment but no attendance
+
+**Status (Fixed):** The report path assumed an attendance row existed for every assignment.
+
+**Edge Case:** A report linked to a shift validates that its `shift_date` matches the shift's. Checks not tied to a shift are supported — `shift_id` is nullable, which is what makes an ad-hoc checklist possible.
+
+---
+
+---
+
+## Training Program 500s (2026-04-04)
+
+### Problem: Enrollment lookups return 500
+
+**Status (Fixed):** An incorrect field name in the enrollment lookup, and a missing `started_at` column that the training program service already referenced.
+
+**Edge Case:** `NotificationLog` used `metadata` as a model attribute, which SQLAlchemy's declarative base reserves; it was renamed. Any new model hitting the same error needs a different attribute name.
+
+---
+
+---
+
+## Salesforce Sync (2026-04-10 → 2026-04-12)
+
+### Problem: Changes made in Salesforce do not appear in The Logbook (or the reverse)
+
+**Status (Configuration):** `sync_direction` on the integration governs it — `push` (the default: Logbook → Salesforce only), `pull`, or `both`. Inbound changes are written only when it is `pull` or `both`. Set it on the Integrations page before the first run.
+
+**Edge Case:** There is **no conflict-resolution setting**. The 2026-04-12 changelog entry described configurable "Salesforce wins / Logbook wins / newest wins" strategies; no such option exists in `salesforce_sync_service.py` or the Integrations page — the direction is the only control. A record edited on both sides between syncs is resolved by whichever side the direction lets write last.
+
+The webhook receiver validates the Salesforce organization id, so outbound messages from another org are rejected. The Integrations page carries connection status, last sync timestamp and sync history for per-run detail.
+
+---
+
+---
+
+## Cloudflare Email Platform (2026-04-26)
+
+### Problem: Cloudflare email sending is not available or fails to test
+
+**Status (Configuration):** Set `CLOUDFLARE_EMAIL_ENABLED`, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. The connection test validates the token against Cloudflare's `/user/tokens/verify`, so a failing test is usually a token scope problem rather than a sending problem.
+
+**Edge Case:** The account id is validated against `[a-f0-9]{32}` before being interpolated into the URL (SSRF guard) — a malformed id is rejected before any request is made. SPF, DKIM and DMARC are handled by Cloudflare when the domain is managed there.
+
+---
+
+---
+
+## Offline Queue & Pending Sync (2026-05-01 → 2026-05-02)
+
+### Problem: An RSVP or training submission made offline seems to vanish
+
+**Status (Expected Behavior):** Submissions made without connectivity are queued in IndexedDB and flushed when it returns. The top navigation shows an offline / pending-sync pill counting what is waiting.
+
+**Edge Case:** The dashboard "Upcoming Events" stat counts only the next 30 days, which is why a distant event does not appear in it.
+
+---
+
+---
+
+## Training Attachments & Exports (2026-05-24 → 2026-05-25)
+
+### Problem: A training attachment is rejected
+
+**Status (Configuration):** Maximum 25 MB, and the true MIME type is detected from the file's magic bytes rather than its extension. Allowed: PDF, JPEG, PNG, GIF, WEBP, DOC and DOCX (`ALLOWED_ATTACHMENT_MIME` in `endpoints/training_enhancements.py`). A renamed file is still rejected on its real type.
+
+### Problem: A training session cannot be finalized
+
+**Status (Configuration):** `require_completion_confirmation` gates finalize. It defaults to `false`; when a department turns it on, every attendee must confirm before the session can close.
+
+**Edge Case:** Finalizing used to create a second check-in record; it now promotes the existing one. Unknown CSV report types return an explicit 400 rather than an empty file.
+
+---
+
+---
+
+## Prospect Documents & the Coordinator Role Rename (2026-05-28)
+
+### Problem: A prospect document upload is rejected
+
+**Status (Configuration):** The limit is 50 MB and the MIME type is validated from magic bytes. Files are stored per organization at `/app/uploads/prospect-documents/{organization_id}/{prospect_id}/`.
+
+### Problem: The `membership_committee_chair` role cannot be found
+
+**Status (Renamed):** It is now `membership_coordinator`, with the same `prospective_members.manage` permission. References in permissions, seeds and the frontend were updated together.
+
+---
+
+---
+
+## OAuth Sign-In Failures (2026-05-29)
+
+### Problem: Sign in with Google or Microsoft returns to `/login?error=…`
+
+**Status (By Design — read the code):** Each failure mode has a distinct code. `invalid_state` is a CSRF state mismatch between cookie and query (usually a cookie blocked or a stale tab). `token_exchange_failed` is a network or non-200 from the IdP. `invalid_id_token` is a signature, audience or expiry failure. `invalid_tenant` is a Microsoft token from another tenant — the flow is single-tenant locked. `unverified_email` is a Google account with `email_verified=false`. `domain_not_allowed` means the email's domain is outside `GOOGLE_ALLOWED_DOMAINS` / `AZURE_AD_ALLOWED_DOMAINS`.
+
+**Edge Case:** Both flows are **link-existing only** — they never create an account. A member whose email matches no user cannot sign in this way, by design. Successful sign-ins log an `oauth_login` audit event with the provider.
+
+---
+
+---
+
+## Compliance Evaluation Period (2026-05-29)
+
+### Problem: Compliance percentages do not match a hand count
+
+**Status (Configuration):** `include_current_month` decides whether the in-progress month counts. It is set per organization on the Compliance Requirements thresholds tab and can be overridden per requirement (`NULL` inherits the org default). Excluding the current month evaluates as of the last day of the previous one.
+
+**Edge Case:** Certificate "expiring soon" lookahead deliberately always uses the real current date, not the resolved as-of date — an expiry warning must not be suppressed by an evaluation-period setting.
+
+---
+
+---
+
+## Login Blocked Until Configured (2026-06-25)
+
+### Problem: `/login` redirects to onboarding
+
+**Status (Expected Behavior):** The login page calls `GET /api/v1/onboarding/status` on mount and redirects to `/onboarding` when `needs_onboarding` is true — an unconfigured install has no accounts to sign into. A spinner shows while the check is in flight so the form never flashes first.
+
+**Edge Case:** If the status check itself fails, the page falls back to rendering the sign-in form rather than trapping the user.
+
+---
+
+---
+
+## Forced Password Change Rejected as "Changed Recently" (2026-06-25)
+
+### Problem: A new user cannot complete their required first password change
+
+**Status (Fixed):** A user created by an admin carries `must_change_password` together with a fresh `password_changed_at`, and the HIPAA minimum-password-age check (`HIPAA_MINIMUM_PASSWORD_AGE_DAYS`, default 1) rejected their _required_ change — trapping them until an admin reset. The minimum-age check is now skipped when `must_change_password` is set; voluntary changes still enforce it.
+
+---
+
+---
+
+## Inventory Impact Planner (2026-06-22 → 2026-06-23)
+
+### Problem: Members are missing from a planner analysis, or carry full demand
+
+**Status (Expected Behavior):** A member with no size on file cannot be matched to a size and carries their full demand into the shortfall. Use **Request sizes** to notify them; they set it from self-service preferences.
+
+### Problem: A bulk issue skips members
+
+**Status (Expected Behavior):** With `allowance_aware` on, members at or over their per-category `issuance_allowances` cap are flagged before the issue and reported as skips with reasons. A role-specific allowance beats the org-wide one.
+
+**Edge Case:** Sizes match on a normalized key (alpha aliases like `3XL`↔`XXXL` are canonicalized, boot-width and parenthetical notes dropped). Contact details in the planner honor the org's `contact_info_visibility` settings, so a plan may show fewer columns than the operator expects.
+
+---
+
+---
+
+## Training Pipelines: Self-Service Limits & Alerts (2026-07-14 → 2026-07-16)
+
+### Problem: A member cannot mark their own requirement complete
+
+**Status (Intentional):** Members may still self-_report_ training, but completing or verifying a requirement is an officer action, and a training officer can no longer approve their own self-reported training. Both are separation-of-duties guards, not bugs.
+
+### Problem: Struggling-member and deadline alerts never arrived
+
+**Status (Fixed):** They were generated and not delivered. Also fixed: withdrawn or failed enrollments were being auto-resurrected by the enrollment path, and future-dated submissions are now rejected.
+
+**Edge Case:** Concurrent enrollment is a soft advisory rather than a hard filter — a member already enrolled elsewhere can still be enrolled deliberately.
+
+---
+
+---
+
+## Shift Finalize Gates (2026-07-16)
+
+### Problem: A shift cannot be finalized
+
+**Status (Configuration):** A department can require end-of-shift equipment checks before finalizing. Understaffed shifts are flagged at finalize rather than blocked, so running short is recorded rather than hidden.
+
+### Problem: A finalized shift needs correcting
+
+**Fix:** Use **Reopen / unfinalize** — permissioned and audit-logged — rather than deleting. Shifts also have a lifecycle status, so cancelling is distinct from deleting.
+
+**Edge Case:** `restrict_checkin_to_assigned` limits check-in to assigned members. The officer named on a shift can manage it without department-wide scheduling permission. Members subscribe to their own shifts via a personal ICS calendar feed.
+
+---
+
+---
+
+## Messaging Escalation & Acknowledgment (2026-07-17)
+
+### Problem: A member did not receive the text for an urgent message
+
+**Status (Configuration):** Members opt out per channel via the **Urgent Text Messages** toggle, and escalation is throttled per department to protect the email/SMS budget. From 2026-08-05, SMS is additionally gated on recorded TCPA consent — never asked counts as refused.
+
+**Edge Case:** Email is the channel of record and is unconditional: every department message is emailed regardless of urgency or the `email_notifications` preference, which is what makes consent-gated SMS safe. An acknowledgment-required message stays pending until acknowledged; the per-recipient breakdown is on the admin message list.
+
+---
+
+---
+
+## Field Encryption Upgrade (2026-07-21 → 2026-08-01)
+
+### Problem: Which encryption format is my data in?
+
+**Status (Migrated in place):** Sensitive fields moved from Fernet to AES-256-GCM, then to PBKDF2 at 600,000 iterations. New values carry a `$gcm2$` marker; `$gcm1$` and legacy Fernet values stay readable, and the key-rotation tooling rewrites them onto the current factor.
+
+**Edge Case:** Keep `ENCRYPTION_KEY` and `ENCRYPTION_SALT` with your backups — a backup without its era's keys cannot decrypt encrypted fields. See `docs/AES256_GCM_BACKFILL_RUNBOOK.md` and `docs/KEY_ROTATION.md`.
+
+---
+
+---
+
+## Shared-Device Data Leaks (2026-07-21 → 2026-07-27)
+
+### Problem: A member sees another member's data on a station computer
+
+**Status (Fixed):** PII and roster responses are excluded from the in-memory client cache, so cached data no longer survives a user switch on a shared device. Separately, the inventory WebSocket now authenticates through the full session store — it previously kept streaming org events to a logged-out or password-changed session until the token expired.
+
+**Edge Case:** Offline drafts and queues are a different store with their own history — see **Offline Queues Across Tabs (2026-08-01)** below.
+
+---
+
+---
+
+## Production Posture & Compose Overrides (2026-07-27)
+
+### Problem: Production boots in development mode
+
+**Status (Fixed):** The base `docker-compose.yml` is a development configuration and it **hardcoded** `ENVIRONMENT: development`, silently overriding `.env` — so every documented `docker compose up -d` skipped the startup security gate (API docs public, HTTPS not enforced, auth-cookie `Secure` off, DB/Redis plaintext, `/health/detailed` exposed).
+
+**Fix:** The base file now honors `.env` (`${ENVIRONMENT:-development}`), and production layers the override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare `docker compose` management commands stay hardened. `install.sh` does this automatically.
+
+**Edge Case:** In production/staging the app **refuses to start** if secrets are missing or weak, if `DEBUG` or API docs are on, or if HTTPS is not enforced. That refusal is the gate working, not a failure to configure.
+
+---
+
+---
+
+## Host Header & Reverse-Proxy Trust (2026-07-27)
+
+### Problem: Requests are rejected with HTTP 400 after adding a proxy or hostname
+
+**Status (Expected Behavior):** `TrustedHostMiddleware` rejects a `Host` header outside `TRUSTED_HOSTS`. Add the hostname members actually use. Emailed ballot links are built from `settings.FRONTEND_URL` rather than the request host, because a spoofed `Host` could otherwise mail live voting tokens pointing at another domain.
+
+### Problem: Every client shows the same IP; geo-blocking does nothing
+
+**Status (Fixed):** With the empty `TRUSTED_PROXY_IPS` default, every request appeared to come from the proxy's container IP — geo-blocking silently no-opped and all clients shared one rate-limit bucket, which is a global login DoS. `TRUSTED_PROXY_IPS` accepts CIDR ranges and the production override defaults it to the private Docker ranges.
+
+**Edge Case:** Set it only when a proxy is actually in front of the app. If the backend port is published directly, the connecting peer _is_ the client, and trusting forwarded headers would let clients spoof `X-Forwarded-For`. A further 39 call sites still reading the raw peer address were corrected 2026-08-05; rows written before then still hold proxy addresses.
+
+---
+
+---
+
+## DB / Redis TLS Verification (2026-07-27 → 2026-08-01)
+
+### Problem: Startup is blocked complaining about unverified TLS
+
+**Status (Intentional):** `DB_SSL` / `REDIS_SSL` without a CA (`DB_SSL_CA` / `REDIS_SSL_CA`) encrypts but never authenticates the peer — worse than honest plaintext, because it is indistinguishable from a correct setup. It warned from 2026-07-27 and **blocks startup in production and staging** from 2026-08-01.
+
+**Fix:** Set the CA path. `SECURITY_ALLOW_UNVERIFIED_TLS=true` waives the block and logs the acceptance on every boot.
+
+---
+
+---
+
+## MODULE\_\*\_ENABLED Flags Do Nothing (2026-07-27)
+
+### Problem: Setting `MODULE_TRAINING_ENABLED` (or similar) has no effect
+
+**Status (Removed):** The backend never read them — all API routers register unconditionally — so they only misled operators. They are gone from the composes, installers, the Unraid template and the docs.
+
+**Fix:** Module availability is per organization, at runtime, under Organization Settings → Modules (`enabled_modules`).
+
+---
+
+---
+
+## Elections: Eligibility, Test Ballots & Runoffs (2026-07-28 → 2026-07-29)
+
+### Problem: A member cannot vote, or an election shows fewer eligible voters than expected
+
+**Status (Fixed):** Eligibility is now actually enforced at `cast_vote` rather than computed and ignored, so the eligible roster and who can vote finally agree. Candidate edits and deletes are org-scoped.
+
+**Edge Case:** Test ballots let you rehearse without polluting results; a runoff is created automatically when nobody wins outright; per-department feature toggles control the nomination phase and paper-ballot entry. The elections deep-dive (YouTube script 12 and its shorts pack) covers the debugging path in order.
+
+---
+
+---
+
+## FastAPI / Starlette Upgrade (2026-07-30)
+
+### Problem: A pinned dependency conflicts on install after pulling
+
+**Status (Expected):** The stack moved to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), with fastapi-mail, aiosmtplib, PyJWT, cryptography, pydantic-settings, pypdf, email-validator, schemathesis and pytest pinned to match. Install from `backend/requirements.txt` rather than upgrading individual packages.
+
+**Edge Case:** `pip-audit -r requirements.txt` runs **blocking** in CI with documented ignores; a new advisory fails the build rather than being noticed later.
+
+---
+
+---
+
+## Audit Log Retention, Archival & Shipping (2026-07-30 → 2026-07-31)
+
+### Problem: Audit rows are disappearing, or the table is growing without bound
+
+**Status (Configuration):** `HIPAA_AUDIT_RETENTION_DAYS` (7 years) was declared but never applied; a weekly job now exports expired rows to gzipped JSONL under `AUDIT_ARCHIVE_DIR` **before** purging them. Purges are checkpoint-aligned, refuse to run on a chain that fails verification, and record a keyed HMAC attestation of the boundary so the surviving chain still verifies.
+
+### Problem: Audit rows should survive loss of the host
+
+**Fix:** Set `AUDIT_SHIP_WEBHOOK_URL`. The `audit_log_ship` task POSTs new rows as HMAC-signed NDJSON every 30 minutes, advancing a durable watermark only on acknowledgment. It is a no-op unless configured.
+
+**Edge Case:** `audit_logs.organization_id` was added 2026-07-30 (migration `20260801_0009`, backfilled from `user_id`, hash-bound from version 3). Queries that previously filtered through the user relationship now filter the column directly.
+
+---
+
+---
+
+## Privacy Rights: Export, Consent & Anonymization (2026-07-31)
+
+### Problem: A member asks for everything the system holds about them
+
+**Fix:** Settings → Security → **Download my data** (`GET /users/me/data-export`). Self-scoped, audited, rate-limited to 3/hour. Credentials, MFA secrets and tokens are never exported; audit history is summarized rather than dumped.
+
+### Problem: A departed member asks to be erased
+
+**Fix:** `POST /users/{id}/anonymize` scrubs names, contacts, address, DOB, photo, emergency contacts, credentials and MFA material, and the applicant-era prospect record — while keeping operational history (training completions, attendance, dues) as the department's record. `users.anonymized_at` records the event.
+
+**Edge Case:** Audit logs and election records are deliberately untouched — rewriting them would be tampering. Documents and meeting minutes are excluded from automatic retention deletion for the same reason: destroying official records stays a human decision.
+
+---
+
+---
+
+## Assorted July Fixes (2026-07-21 → 2026-07-31)
+
+### Problem: SSO client secrets are blanked after saving organization settings
+
+**Status (Fixed):** A full-settings round trip persisted the redacted placeholder (`••••••••`) over the real secret, because the preservation loop omitted the `auth` section.
+
+### Problem: Inventory item history returns an error
+
+**Status (Fixed):** Items with pool issuances hit a null-handling bug in the history query.
+
+### Problem: Two members are issued the same membership number
+
+**Status (Fixed):** Generation is now collision-safe under concurrency — the org row is locked `FOR UPDATE` before the counter is read and incremented, and the retry loop is capped.
+
+### Problem: Deleting a document or folder leaves the file on disk
+
+**Status (Fixed):** Both paths now remove the backing files. A folder delete walks the subtree first.
+
+**Edge Case:** Also in this window — a facilities maintenance record without a type returns a clean validation error instead of a 500; leave-of-absence edits validate that the start precedes the end; and changing your own email resets `email_verified`, so the new address must be verified again.
+
+---
+
+---
+
+## Offline Queues Across Tabs (2026-08-01)
+
+### Problem: Equipment-check queueing stops working on one browser profile
+
+**Status (Fixed):** Two modules opened the same IndexedDB database (`logbook-offline`) at different versions — 1 and 2. IndexedDB rejects an open below the stored version, so the first queued shift report permanently broke equipment-check queueing on that profile. Name, version and upgrade path now live in one shared module.
+
+### Problem: Logout hangs on a station computer
+
+**Status (Fixed):** An IndexedDB open fires `blocked` — and neither `success` nor `error` — when another tab holds the database during an upgrade, so the promise never settled. Logout awaits the shared-device purge, so this could strand a member signed in. Opens now reject on `blocked` and on timeout, and set `onversionchange` so an open tab stops blocking others.
+
+**Edge Case:** Queued shift reports — the densest PII of any offline store — were never purged at logout, and now are.
+
+---
+
+---
+
+## Approvals Require a Second Person (2026-08-01)
+
+### Problem: An officer cannot approve their own request
+
+**Status (Intentional — ISO/IEC 27001 A.5.3):** A treasurer could raise a check request and approve it; an instructor could examine themselves and record a pass that satisfied a certification; an officer could approve their own administrative hours. All three now require a second person.
+
+**Edge Case:** Practice skills tests stay self-serve, and rejection is never blocked — withdrawing your own request is not a conflict of interest.
+
+---
+
+---
+
+## Last Administrator Lockout (2026-08-01)
+
+### Problem: A change to an administrator's role or status is refused
+
+**Status (Intentional):** Nothing counted how many administrators an organization had left, so a sole administrator could lock out a whole department in one request — set their own status to `inactive` and authentication rejects them on the next call, with recovery requiring direct database access. The guard covers role assignment and removal, member delete, status change, archive, and position edit or delete.
+
+---
+
+---
+
+## Frontend Env Vars That Do Nothing (2026-08-01)
+
+### Problem: `VITE_ENABLE_PWA=false` still ships the service worker
+
+**Status (Removed):** `VITE_WS_URL`, `VITE_ENV`, `VITE_ENABLE_PWA` and `VITE_ENABLE_ANALYTICS` were declared and documented but read by no code. Two were actively misleading — the inventory socket derives its URL from the page origin (which is what makes it work behind a reverse proxy), and the PWA plugin registers unconditionally, so the service worker whose `NetworkOnly` rule for `/api/` is part of the HIPAA caching posture shipped regardless.
+
+**Edge Case:** Reintroduce one only alongside code that reads it.
+
+---
+
+---
+
+## Room Kiosk Time & Check-In Window (2026-08-05)
+
+### Problem: A wall-mounted kiosk shows times hours off
+
+**Status (Fixed):** The kiosk page is deliberately public — a wall tablet holds no session — so the timezone hook had no user profile to read and fell through to the device's zone. A display left on its factory default (commonly UTC) showed event times shifted by hours. The display response now carries the organization's timezone, with the browser zone only as a fallback.
+
+**Edge Case:** `GET /locations/{id}/display` also reported a fixed "one hour before" check-in window when the real window is per-event configurable.
+
+---
+
+---
+
+## Migration Chain Has Two Heads (2026-08-05)
+
+### Problem: `npm run db:migrate` / `alembic upgrade head` fails on every deployment
+
+**Status (Fixed):** Two branches merged the same day each claimed revision `20260805_0010` off the same parent. Alembic cannot resolve a duplicate id, so the upgrade failed everywhere. The second was renumbered to `20260805_0011` and sequenced after the first.
+
+**Edge Case:** This is the same collision shape as the 2026-08-07 duplicate ids. The migration-chain guard now asserts a single head, which catches a fork that duplicate-id, dangling-parent and multiple-root checks all pass.
+
+---
+
+---
+
+## Member PII Visibility (2026-08-04)
+
+### Problem: A member's date of birth and emergency contacts are missing from their profile
+
+**Status (Intentional):** Both are restricted to `members.manage` holders and to the member themselves. The profile hides the emergency-contacts section entirely rather than rendering it empty, because an empty section reads as "none on file".
+
+**Edge Case:** No organization setting can publish them — the contact-visibility toggles cover email, phone and mobile only. Leadership viewing another member's record writes `restricted_pii_disclosed` on the `user_viewed` audit event.
+
+---
+
+---
+
+## Member Delete & Role Save Failures (2026-08-07)
+
+### Problem: Saving a member's roles silently removes their positions
+
+**Status (Fixed):** The endpoint ran a hand-written `DELETE` over every assignment and then reassigned the collection, so the ORM diffed against a stale collection and never re-inserted positions present in both sets. The raw deletes are gone.
+
+### Problem: Permanently deleting a member returns a server error, or is refused with a 409
+
+**Status (Fixed / Intentional):** The 500 was the same stale-collection pattern in the continuity guard. The `409` is deliberate: 12 NOT NULL attribution columns (budgets, purchase requests, expense reports, IP exceptions) cannot be cleared without falsifying who filed the record. The response names them and points at deactivate + anonymize, which strips personal information while leaving those records owned. The admin page used to discard that explanation and show a generic failure.
+
+**Edge Case:** The 62 nullable attribution columns are cleared automatically. Both lists are derived from the schema at delete time, so tables added later are covered.
+
+---
+
+---
+
+## 422 Errors Reading "Invalid value" (2026-08-07)
+
+### Problem: A failed save reports "Invalid value" for every field, naming none of them
+
+**Status (Fixed):** The server rewrites Pydantic's `{loc, msg, type}` entries into `{field, message}`, but the shared error handler read only the Pydantic spelling and fell back to a literal string. A member import reported 50 rows of "Invalid value. Invalid value". Both spellings are now accepted.
+
+**Edge Case:** This affected **every** 422 in the application, not just imports. The onboarding module carried its own copy of the assumption and was fixed alongside it.
+
+---
+
+---
+
+## Web Push Notifications (2026-08-07)
+
+### Problem: No push notifications arrive with the app closed
+
+**Status (Configuration):** Push is **off by default**. Set `PUSH_ENABLED=true` plus `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, and install `pywebpush` — it is imported behind a guard so deployments that do not want push need not install it. Unconfigured, the service reports itself so and the UI hides the toggle.
+
+**Edge Case:** On iOS the push API exists only once the PWA is installed to the home screen (16.4+), so Safari browsing correctly shows no toggle. Subscriptions are per device, and rows are pruned only when the push service answers 404/410 — the sole signal that an app was uninstalled or its site data cleared.
+
+---
+
+---
+
+## Pages Crashing to the Error Boundary (2026-08-07)
+
+### Problem: A page shows the error screen instead of rendering empty
+
+**Status (Fixed):** `api.get<T[]>` asserts the wire format without checking it, and ~190 service methods handed that straight to callers that spread or `.map` it — so one unexpected body took the whole page down. 166 methods across 20 files now verify the array they promise, with envelope reads guarded at the four consumers the service-level guard cannot reach.
+
+**Edge Case:** The usual cause of an unexpected body is a captive portal or carrier interception page answering 200 with HTML — which is why this shows up on station Wi-Fi and on phones more than on desktops. `src/e2e/mobile-resilience.spec.ts` walks all 29 authenticated routes at 390px and fails if any reaches the error boundary.
+
+---
+
+---
+
+## Frontend Container Unhealthy (2026-08-07)
+
+### Problem: The frontend reports unhealthy while nginx is serving fine
+
+**Status (Fixed):** nginx binds IPv4 only (`listen 80;`), the container resolves `localhost` to both families, and musl returns the IPv6 address first — so the healthcheck was refused. The image's `HEALTHCHECK` and the container test now name `127.0.0.1` literally.
+
+**Edge Case:** This affected production, not just CI. Pull the latest code and rebuild the frontend image.
+
+---
+
+---
+
+## Frontend Build Pulls Unpinned Dependencies (2026-08-07)
+
+### Problem: Production ships dependency versions no test ever ran against
+
+**Status (Fixed):** The image copied only `frontend/package.json` and re-resolved 604 packages from the registry on every build. The build context is now the **repository root** (`docker build -f frontend/Dockerfile .`) so the single root `package-lock.json` is in reach, and the install is `npm ci`.
+
+**Edge Case:** Update any script or compose override that still names `./frontend` as the build context — see the next entry.
+
+---
+
+---
+
+## Alembic Duplicate Revision IDs (2026-08-07)
+
+### Problem: The backend crashes on startup and migrations cannot resolve
+
+**Status (Fixed):** Two same-day pull requests merged without being rebased onto each other produced duplicate revision ids (`20260807_0001`, `20260807_0002`). A revision id is what Alembic writes to the version table, so a duplicate leaves the graph unresolvable rather than merely forked — the revision map cannot be built at all, which breaks deploys from `main`, not just tests.
+
+**Edge Case:** The migration-chain guard now asserts a single head. It already caught duplicate ids, dangling parents and multiple roots, but a fork passes all three while still leaving `upgrade head` ambiguous.
+
+---
+
+---
+
+## Push Subscriptions Table Collation (2026-08-07)
+
+### Problem: A fresh install fails creating the push-subscriptions table
+
+**Status (Fixed):** The migration named a character set without a collation, so the table took the server's default collation rather than the database's — and a foreign key requires both sides to agree on collation as well as type.
+
+**Edge Case:** Only affects fresh installs; existing databases already had the table.
+
+---
+
+---
+
+## Skills Testing: Attempts, Conflicts & Result Visibility (2026-08-08)
+
+### Problem: An examiner is refused when creating or completing a test
+
+**Status (Intentional):** `max_attempts` on the linked pipeline requirement is now enforced, both at creation (so an examiner is refused before running an evaluation that could not count) and at completion (several can be started before any is submitted). An attempt is a completed, official, non-voided test. Voided results and practice attempts do not consume a chance, and a requirement already completed, verified or waived is exempt so recertification stays possible.
+
+### Problem: A save is refused with 409, or autosave stops
+
+**Status (Intentional):** Tests carry a version counter and an update sent against a stale version is refused, rather than one of two examiners silently losing their work and getting a success response. The test screen suspends autosave and says so instead of retrying a doomed write.
+
+### Problem: A member cannot see their own result
+
+**Status (Configuration):** The department sets what (`full` / `scores` / `none`), when (`on_completion` / `on_release`) and who, under **Skills-Test Results** in the training configuration editor, overridable per template or per test. Defaults are `full` / `on_completion`. Under `on_release` an officer must use the **Release** action beside **Void**.
+
+**Edge Case:** A withheld result reads as absent rather than forbidden — refusals are `404` and the test is dropped from the list. Emailed results obey the same policy, resolved for the recipient rather than the sender.
+
+---
+
+---
+
+## Equipment Check Submission Fails (2026-08-08)
+
+### Problem: Submitting a shift equipment check fails for any shift with an apparatus assigned
+
+**Status (Known Issue — open):** `shifts.apparatus_id` is an unconstrained string carrying a scheduling apparatus id, while the equipment-check table's column is a real foreign key to the apparatus table, and the create path copies one into the other. Every route to a fix means picking a side in a two-apparatus-tables inconsistency, so it is reported rather than guessed at. See `docs/KNOWN_LIMITATIONS.md`.
+
+**Workaround:** Submit checks against shifts with no apparatus assigned.
+
+---
+
+---
+
+## Development Environment: Tests, Hooks & Node Version (2026-08-08)
+
+### Problem: Backend tests fail on a clean checkout with unexplained data
+
+**Status (Fixed):** The suite ran against the developer's own working database, since that is what `.env` points at. The per-test transaction is rolled back so nothing is written, but tests still _read_ it and several assert on an empty slate — 37 of 46 apparent "pre-existing failures" were this. `pytest` now points at `intranet_test` and creates it if absent; CI can still name the database by exporting `DB_NAME`.
+
+### Problem: The pre-commit hook never runs
+
+**Status (Fixed):** There was no `prepare` script, so the hooks path was never set — which is how a lint violation reached `main`. Run `npm install` to install the hook. It delegates to the declared lint-staged config and runs ESLint from `frontend/`, where the flat config lives.
+
+### Problem: `npm ci` fails with "Missing: vite@... from lock file"
+
+**Status (Fixed):** Lockfile drift on `main`; regenerated. **Node >= 22** is the real floor — the root install builds the frontend workspace, so the frontend's floor governs.
+
+---
+
+**Most Common Fix:** 90% of issues are resolved by:
+
+1. Updating `frontend/.env` with correct `VITE_API_URL`
+2. Running `docker-compose build --no-cache frontend`
+3. Running `docker-compose up -d`
+
+---
+
+## Container & Docker Diagnostics
+
+_Consolidated from the former `wiki/Troubleshooting-Containers.md` (2026-08-08)._
+
+### Container Won't Start
+
+#### Check Logs
+
+```bash
+docker-compose logs backend
+docker-compose logs frontend
+docker-compose logs mysql
+docker-compose logs redis
+```
+
+#### Common Causes
+
+| Symptom                                                              | Cause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Fix                                                                                                                                                                  |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend crashes on startup                                           | Missing or invalid `.env`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Check required env vars (SECRET_KEY, ENCRYPTION_KEY, etc.)                                                                                                           |
+| Backend exits with "SECURITY FAILURE"                                | Default secrets in production                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Generate real secrets: `openssl rand -hex 32`                                                                                                                        |
+| MySQL fails to start                                                 | Port conflict or data corruption                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Check port 3306, try `docker-compose down -v` (loses data)                                                                                                           |
+| Redis marked unhealthy                                               | Health check warning suppression                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Add `--no-auth-warning` to Redis health check                                                                                                                        |
+| Frontend exits immediately                                           | Build failure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Rebuild: `docker-compose build --no-cache frontend`                                                                                                                  |
+| Frontend container **reports unhealthy** while nginx is running fine | _(Fixed 2026-08-07)_ nginx binds IPv4 only (`listen 80;`), but the container resolves `localhost` to both `127.0.0.1` and `::1`, and musl returns the IPv6 address first — so the healthcheck was refused. Both the image's `HEALTHCHECK` and the container test now name `127.0.0.1` literally. **This affected production, not just CI.** Pull latest and rebuild the frontend image                                                                                                                       |
+| Frontend build pulls unpinned dependencies                           | _(Fixed 2026-08-07)_ The image used to copy only `frontend/package.json` and run `npm install --legacy-peer-deps`, re-resolving 604 packages from the registry on every build — so production shipped versions no test had run against. The build context is now the **repository root** (`docker build -f frontend/Dockerfile .`) so the single root `package-lock.json` is in reach, and the install is `npm ci`. Update any script or compose override that still names `./frontend` as the build context |
+| Frontend build fails on `"/frontend/nginx.conf": not found`          | _(Guarded 2026-08-08)_ The compose file being built still names `./frontend` as the frontend context, while every path the Dockerfile copies is now root-relative. `docker compose config` validates YAML and interpolation only — it never opens the Dockerfile — so this passes validation and fails minutes into the build. A `git pull` does not repair a compose file the deployment maintains itself                                                                                                   | `./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml` (drop `--fix` to report only). `unraid/update.sh` now runs it between the pull and the rebuild |
+
+#### Full Rebuild
+
+```bash
+docker-compose down
+docker-compose rm -f
+docker system prune -f
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+---
+
+### Container Health Checks
+
+```bash
+# Check all container statuses
+docker-compose ps
+
+# Check specific container health
+docker inspect --format='{{.State.Health.Status}}' logbook-backend
+
+# View health check logs
+docker inspect --format='{{json .State.Health}}' logbook-backend | jq
+```
+
+#### Expected Health States
+
+| Container          | Expected | Health Check                                                                          |
+| ------------------ | -------- | ------------------------------------------------------------------------------------- |
+| `logbook-backend`  | healthy  | HTTP GET /health                                                                      |
+| `logbook-frontend` | healthy  | `wget http://127.0.0.1:80/` — the literal address, **not** `localhost` _(2026-08-07)_ |
+| `logbook-db`       | healthy  | mysqladmin ping                                                                       |
+| `logbook-redis`    | healthy  | redis-cli ping                                                                        |
+
+---
+
+### Redis Container Unhealthy
+
+**Error:** `dependency failed to start: container intranet-redis is unhealthy`
+
+**Fix:** Update the health check to suppress auth warnings:
+
+```yaml
+redis:
+  healthcheck:
+    test:
+      [
+        "CMD-SHELL",
+        "redis-cli -a $${REDIS_PASSWORD:-change_me_in_production} --no-auth-warning ping | grep PONG",
+      ]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+```
+
+---
+
+### Port Conflicts
+
+```bash
+# Check what's using a port
+lsof -i :3000
+lsof -i :3001
+lsof -i :3306
+
+# Change ports in .env
+FRONTEND_PORT=3100
+BACKEND_PORT=3101
+```
+
+---
+
+### Container Networking
+
+```bash
+# Verify containers are on same network
+docker network inspect logbook-internal
+
+# Test connectivity between containers
+docker-compose exec frontend ping -c 3 backend
+docker-compose exec backend ping -c 3 mysql
+
+# Test backend can reach database
+docker-compose exec backend python -c "import pymysql; pymysql.connect(host='mysql')"
+```
+
+---
+
+### Resource Issues
+
+```bash
+# Check resource usage
+docker stats
+
+# Check disk usage
+docker system df
+
+# Clean up unused resources
+docker image prune -a
+docker builder prune
+docker system prune -a --volumes  # ⚠️ Removes ALL unused data
+```
+
+---
+
+### Container Conflict Cleanup
+
+If containers from a previous installation conflict:
+
+```bash
+# Remove all logbook containers
+docker ps -a | grep logbook | awk '{print $1}' | xargs docker rm -f
+
+# Remove all logbook images
+docker images | grep logbook | awk '{print $3}' | xargs docker rmi -f
+
+# Remove logbook networks
+docker network ls | grep logbook | awk '{print $1}' | xargs docker network rm
+
+# Fresh start
+docker-compose up -d
+```
+
+---
+
+---
+
+## Backend Service Diagnostics
+
+_Consolidated from the former `wiki/Troubleshooting-Backend.md` (2026-08-08)._
+
+### Backend Won't Start
+
+#### "SECURITY FAILURE" Error
+
+**Cause:** Default or missing security configuration in production mode.
+
+**Fix:** Generate required secrets:
+
+```bash
+echo "SECRET_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_SALT=$(openssl rand -hex 16)"
+```
+
+Add to `.env` and restart: `docker-compose restart backend`
+
+#### "Database not initialized" Error
+
+**Cause:** Backend started before MySQL was ready.
+
+**Fix:**
+
+```bash
+docker-compose down
+docker-compose up -d mysql
+# Wait for MySQL to be healthy
+docker-compose up -d backend frontend
+```
+
+#### "Can't connect to MySQL server" Error
+
+**Cause:** `DB_HOST` doesn't match Docker service name.
+
+**Fix:** Set `DB_HOST=mysql` in `.env` (not `db`).
+
+---
+
+### API Errors
+
+#### Health Check
+
+```bash
+# Backend health
+curl http://YOUR-IP:3001/health
+# Expected: {"status":"healthy","timestamp":"..."}
+
+# Database health
+curl http://YOUR-IP:3001/health/db
+
+# Redis health
+curl http://YOUR-IP:3001/health/redis
+```
+
+#### Common API Errors
+
+| Status | Meaning           | Common Cause                             |
+| ------ | ----------------- | ---------------------------------------- |
+| 400    | Bad Request       | Invalid input, missing required fields   |
+| 401    | Unauthorized      | Expired or missing JWT token             |
+| 403    | Forbidden         | Insufficient permissions for this action |
+| 404    | Not Found         | Invalid ID or endpoint                   |
+| 409    | Conflict          | Duplicate entry (email, barcode, etc.)   |
+| 422    | Validation Error  | Request body fails schema validation     |
+| 429    | Too Many Requests | Rate limit exceeded                      |
+| 500    | Server Error      | Check backend logs for stack trace       |
+
+#### Viewing Detailed Error Logs
+
+```bash
+# Recent backend logs
+docker-compose logs --tail=100 backend
+
+# Follow logs in real-time
+docker-compose logs -f backend
+
+# Search for specific errors
+docker-compose logs backend | grep "ERROR"
+docker-compose logs backend | grep "Traceback"
+```
+
+---
+
+### Database Migration Issues
+
+#### "Multiple heads detected"
+
+```bash
+# Check migration chain
+docker-compose exec backend alembic heads
+docker-compose exec backend alembic history --verbose
+```
+
+#### Migration version mismatch
+
+```bash
+# Check current version
+docker-compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD the_logbook -e "SELECT * FROM alembic_version;"
+
+# Run all pending migrations
+docker-compose exec backend alembic upgrade head
+```
+
+---
+
+### Performance Issues
+
+#### Slow API Responses
+
+1. Check database query performance:
+
+```bash
+docker-compose exec mysql mysql -u root -p -e "SHOW PROCESSLIST;"
+```
+
+2. Check Redis is running and caching:
+
+```bash
+docker-compose exec redis redis-cli --no-auth-warning -a $REDIS_PASSWORD INFO stats
+```
+
+3. Check backend resource usage:
+
+```bash
+docker stats logbook-backend
+```
+
+---
+
+### MissingGreenlet Errors
+
+**Symptom:** `MissingGreenlet: greenlet_spawn has not been called` in logs
+
+**Cause:** Accessing lazy-loaded SQLAlchemy relationships in an async context without eager loading.
+
+**Fix:** Use `selectinload()` for relationships accessed after `await`:
+
+```python
+result = await db.execute(
+    select(User).options(selectinload(User.roles)).where(User.id == user_id)
+)
+```
+
+This was a common issue fixed across multiple modules in February 2026.
+
+---
+
+### DateTime Warnings
+
+**Symptom:** `DeprecationWarning: datetime.datetime.utcnow()` in logs
+
+**Status:** Fixed across the entire backend in February 2026. All `datetime.utcnow()` calls replaced with `datetime.now(timezone.utc)`.
+
+---
+
+### API Documentation
+
+The backend automatically generates API documentation:
+
+| URL                                | Format                   |
+| ---------------------------------- | ------------------------ |
+| `http://YOUR-IP:3001/docs`         | Swagger UI (interactive) |
+| `http://YOUR-IP:3001/redoc`        | ReDoc (read-only)        |
+| `http://YOUR-IP:3001/openapi.json` | OpenAPI JSON spec        |
+
+---
+
+---
+
+## Frontend & Browser Diagnostics
+
+_Consolidated from the former `wiki/Troubleshooting-Frontend.md` (2026-08-08)._
+
+### Blank Page (React Won't Load)
+
+#### Symptoms
+
+- HTML loads but React doesn't render
+- White screen with no content
+- 200/304 responses in nginx logs but nothing visible
+
+#### Most Common Cause
+
+Missing or incorrect `VITE_API_URL` in `frontend/.env`. Vite bakes environment variables at **build time**.
+
+#### Fix
+
+1. Create/update `frontend/.env`:
+
+```bash
+VITE_API_URL=/api/v1
+```
+
+2. Rebuild frontend:
+
+```bash
+docker-compose stop frontend
+docker-compose build --no-cache frontend
+docker-compose up -d frontend
+```
+
+---
+
+### Malformed API URLs
+
+**Symptom:** URLs show `http//` instead of `http://`
+
+**Cause:** Frontend built with wrong `VITE_API_URL`.
+
+**Fix:** Use relative URLs (`/api/v1`) and rebuild. For Unraid, use the Unraid-specific docker-compose file:
+
+```bash
+docker-compose -f unraid/docker-compose-unraid.yml build --no-cache frontend
+```
+
+---
+
+### CORS Errors
+
+**Symptom:** Browser console shows `Access-Control-Allow-Origin` errors
+
+**Fix:** Update `ALLOWED_ORIGINS` in root `.env`:
+
+```bash
+ALLOWED_ORIGINS=["http://YOUR-IP:3000"]
+```
+
+Then restart backend: `docker-compose restart backend`
+
+---
+
+### Dark Mode Issues
+
+**Symptom:** Modals or dialogs have wrong background color in dark mode
+
+**Status:** Fixed in February 2026. All modals now use `bg-theme-surface-modal` for proper dark mode contrast.
+
+**If issues persist:** Clear browser cache and reload.
+
+---
+
+### TypeScript Build Errors
+
+**Status:** All TypeScript build errors resolved as of February 2026.
+
+If you encounter build errors after pulling:
+
+```bash
+cd frontend
+rm -rf node_modules
+npm install
+npm run typecheck
+npm run build
+```
+
+---
+
+### Browser Console Errors
+
+| Error                                          | Cause                  | Fix                             |
+| ---------------------------------------------- | ---------------------- | ------------------------------- |
+| `Failed to load module script`                 | Stale build            | Rebuild frontend                |
+| `NetworkError` / `Failed to fetch`             | Wrong VITE_API_URL     | Check frontend/.env             |
+| `CORS policy` blocking                         | Missing CORS origin    | Update ALLOWED_ORIGINS          |
+| `TypeError: Cannot read property of undefined` | API response mismatch  | Clear cache, check backend logs |
+| `ChunkLoadError`                               | Outdated cached chunks | Hard refresh (Ctrl+Shift+R)     |
+
+---
+
+### PWA / Service Worker Issues
+
+**Symptom:** Old version of the app persists after update
+
+**Fix:**
+
+1. Clear browser cache
+2. Unregister service worker: Browser DevTools > Application > Service Workers > Unregister
+3. Hard refresh (Ctrl+Shift+R)
+
+---
+
+### Mobile / Responsive Issues
+
+**Symptom:** Layout breaks on mobile devices
+
+The application is designed as a Progressive Web App with responsive layouts. If issues occur:
+
+1. Check browser zoom is at 100%
+2. Try landscape orientation for complex tables
+3. Clear browser cache
+
+---
+
+### Debugging Frontend
+
+```bash
+# Check frontend logs
+docker-compose logs frontend
+
+# Check nginx config
+docker exec logbook-frontend cat /etc/nginx/conf.d/default.conf
+
+# Check what's built into the bundle
+docker exec logbook-frontend ls -la /usr/share/nginx/html/assets/
+
+# Verify API URL in bundle
+docker exec logbook-frontend sh -c "cat /usr/share/nginx/html/assets/index-*.js" | grep -o "http[^\"']*" | head -5
+```
+
+---
+
+### Stale Assets After Deployment
+
+**Symptom:** 404 errors for JS/CSS files after deploying a new version.
+
+**Status:** Fixed in February 2026. Nginx now sends `Cache-Control: no-cache` for `index.html` so browsers always fetch fresh asset references.
+
+**Workaround:** Hard refresh (Ctrl+Shift+R) or clear browser cache.
+
+---
+
+### Circular Chunk Dependency
+
+**Symptom:** `React.memo` is undefined at runtime, or `useLayoutEffect` error at startup.
+
+**Status:** Fixed in March 2026. The Vite manual chunk configuration was updated to eliminate circular dependencies between vendor chunk groups that caused runtime errors.
+
+---
+
+---
+
+## Database Diagnostics
+
+_Consolidated from the former `wiki/Troubleshooting-Database.md` (2026-08-08)._
+
+### Connection Issues
+
+#### Can't Connect to Database
+
+**Error:** `Can't connect to MySQL server on 'db'`
+
+**Cause:** `DB_HOST` set to `db` instead of `mysql`.
+
+**Fix:**
+
+```bash
+# Check your .env
+grep DB_HOST .env
+
+# Correct value
+DB_HOST=mysql
+```
+
+#### Backend Waits Forever for Database
+
+**Cause:** MySQL container not yet healthy when backend starts.
+
+**Fix:**
+
+```bash
+# Start MySQL first
+docker-compose up -d mysql
+
+# Wait for it to be healthy
+docker-compose ps  # Should show "healthy"
+
+# Then start backend
+docker-compose up -d backend
+```
+
+#### Access MySQL Shell
+
+```bash
+# Via Docker
+docker exec -it logbook-db mysql -u logbook_user -p
+
+# Once connected:
+SHOW DATABASES;
+USE the_logbook;
+SHOW TABLES;
+```
+
+---
+
+### Migration Issues
+
+#### Alembic Version Mismatch
+
+**Error:** `Can't locate revision identified by '0001'`
+
+**Fix:**
+
+```bash
+# Check current version
+docker-compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD the_logbook \
+  -e "SELECT * FROM alembic_version;"
+
+# Update to correct version
+docker-compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD the_logbook \
+  -e "UPDATE alembic_version SET version_num='20260118_0001';"
+
+# Restart backend
+docker-compose restart backend
+```
+
+#### Multiple Heads Detected
+
+**Error:** `Multiple heads detected`
+
+```bash
+# Check migration chain
+docker-compose exec backend alembic heads
+docker-compose exec backend alembic history --verbose
+
+# Look for duplicate revision IDs
+grep -h "^revision = " backend/alembic/versions/*.py | sort | uniq -d
+```
+
+#### Table Already Exists
+
+**Error:** `Table 'X' already exists`
+
+**Cause:** Migration partially ran. The table was created but the version wasn't recorded.
+
+**Fix:**
+
+```bash
+# Manually set the migration version to skip the problematic migration
+docker-compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD the_logbook \
+  -e "UPDATE alembic_version SET version_num='<target_version>';"
+docker-compose restart backend
+```
+
+#### Run All Migrations
+
+```bash
+docker-compose exec backend alembic upgrade head
+```
+
+---
+
+### Data Issues
+
+#### Enum Mismatch
+
+**Error:** `'fire_ems_combined' is not among the defined enum values`
+
+**Cause:** Database enum values don't match application expectations (case mismatch).
+
+**Fix:** Run migrations to update enum values:
+
+```bash
+docker-compose exec backend alembic upgrade head
+docker-compose restart backend
+```
+
+#### Org-Scoped Unique Constraints
+
+**Error:** `Duplicate entry for key 'uq_item_org_barcode'`
+
+**Cause:** Barcodes/asset tags must be unique within each organization.
+
+**Fix:** Search for the existing item with the same code. Either change the new item's code or update the existing one.
+
+---
+
+### Backup & Restore
+
+#### Create Backup
+
+```bash
+# Full database backup
+docker exec logbook-db mysqldump -u logbook_user -p the_logbook > backup.sql
+
+# Compressed backup
+docker exec logbook-db mysqldump -u logbook_user -p the_logbook | gzip > backup.sql.gz
+```
+
+#### Restore from Backup
+
+```bash
+# Restore
+docker exec -i logbook-db mysql -u logbook_user -p the_logbook < backup.sql
+
+# Restore compressed
+gunzip -c backup.sql.gz | docker exec -i logbook-db mysql -u logbook_user -p the_logbook
+```
+
+---
+
+### Performance
+
+#### Slow Queries
+
+```bash
+# Check active queries
+docker-compose exec mysql mysql -u root -p -e "SHOW PROCESSLIST;"
+
+# Enable slow query log
+docker-compose exec mysql mysql -u root -p -e "SET GLOBAL slow_query_log = 'ON';"
+docker-compose exec mysql mysql -u root -p -e "SET GLOBAL long_query_time = 2;"
+```
+
+#### Table Statistics
+
+```bash
+docker-compose exec mysql mysql -u root -p the_logbook \
+  -e "SELECT table_name, table_rows, data_length/1024/1024 AS 'Size (MB)' FROM information_schema.tables WHERE table_schema='the_logbook' ORDER BY data_length DESC;"
+```
+
+---
+
+---
+
+## Backend Memory Growth (2026-03-06)
+
+### Problem: Backend container memory usage climbs steadily over days
+
+**Status (Fixed):** In-memory tracking dicts in `SecurityMonitoringService` and public portal rate-limit caches grew without eviction. Added periodic cleanup and key limits.
+
+**Monitor:**
+
+```bash
+docker stats logbook-backend
+```
+
+If memory still grows, check for other unbounded in-memory caches in custom code.
+
+---
+
+---
+
+## Organization Settings Crash (2026-03-01)
+
+### Problem: `AttributeError` in OrganizationSettings.redacted()
+
+**Status (Fixed):** The `redacted()` method crash has been resolved. An associated auth secret leak that could expose sensitive configuration has also been closed.
+
+---
+
+---
+
+## SMTP Credential Decryption Failure (2026-03-13)
+
+### Problem: Encrypted SMTP password sent as-is to mail server
+
+**Symptoms:** All outbound emails fail with SMTP authentication error. Logs show `smtplib.SMTPAuthenticationError`.
+
+**Root Cause:** The email service was reading SMTP credentials from organization settings without decrypting them. The encrypted string was sent as the password.
+
+**Fix (Commit `831d72b`):** Email service now decrypts stored SMTP credentials before establishing the SMTP connection. Also guards against `None` settings to prevent `TypeError`.
+
+---
+
+---
+
+## SMTP Provider Compatibility (2026-03-13)
+
+### Problem: Email sending fails for Gmail, Office 365, or self-hosted SMTP
+
+**Symptoms:** Emails fail with SSL/TLS handshake errors or connection timeouts depending on the SMTP provider.
+
+**Root Cause:** The email service used a single connection strategy that didn't account for different SMTP providers' TLS requirements.
+
+**Fix (Commit `d809426`):**
+
+- **Gmail**: Uses STARTTLS on port 587 (not SSL). Set `EMAIL_USE_SSL=false`
+- **Office 365**: Uses STARTTLS on port 587. Set `EMAIL_USE_SSL=false`
+- **Self-hosted (SSL)**: Uses SSL on port 465. Set `EMAIL_USE_SSL=true`
+- **Self-hosted (plain)**: Uses plain SMTP on port 25. Set `EMAIL_USE_SSL=false`
+
+New `EMAIL_USE_SSL` environment variable added to `.env.example` and `.env.example.full`.
+
+---
+
+---
+
+## Scheduled Email Pipeline Bugs (2026-03-13–14)
+
+### Problem: Scheduled emails not being delivered
+
+**Symptoms:** Emails configured in pipeline stages are not sent. Scheduled emails stay in `PENDING` status indefinitely.
+
+**Root Cause:** Multiple cascading issues:
+
+1. **Stale Redis claim** — Background email loop gave up permanently when finding a stale Redis claim from a crashed worker, instead of waiting for TTL expiry and reclaiming
+2. **Missing org context** — Email template rendering failed because organization data (name, settings, logo) was not loaded before sending
+3. **Route ordering** — `GET /api/v1/email-templates/{template_id}` was matching before `GET /api/v1/email-templates/scheduled`, treating "scheduled" as a template ID
+4. **UTC future check** — Server rejected emails scheduled in the user's local timezone because it compared against UTC
+5. **UTC time display** — Scheduled email times showed raw UTC instead of local timezone
+6. **Date picker min** — Date picker used UTC date for minimum constraint, rejecting valid local dates
+
+**Fixes:**
+
+- `7810f32`: Redis claim recovery instead of permanent give-up
+- `49defff`: Redis key cleanup on application shutdown
+- `a76148d`: Polling interval reduced from 5 minutes to 60 seconds
+- `b4f86e3`: Load org context before email template rendering
+- `f1cce9e`: Route ordering fixed — `/scheduled` before `/{template_id}`
+- `8eaf002`: Removed server-side UTC-based future check on `scheduled_at`
+- `e7b5a3d`: Display scheduled times in user's local timezone
+- `e4c6e5c`: Date picker uses local date for min constraint
+- `4dc7ad2`: Message history cleanup, date filtering, email validation
+
+---
+
+---
+
+## Automated Email Not Sending on Pipeline Advance (2026-03-14)
+
+### Problem: Prospect advances to automated_email stage but no email is sent
+
+**Root Cause:** The `advance_prospect()` method was not triggering the automated email logic when the target stage type was `AUTOMATED_EMAIL`.
+
+**Fix (Commit `cbaec8b`):** Added email trigger in `advance_prospect()` — when the target stage is `automated_email`, the service now builds and sends the configured email using the stage's email configuration (subject, welcome message, FAQ link, custom sections, etc.).
+
+---
+
+---
+
+## IntegrityError on Prospect Activity Log (2026-03-13)
+
+### Problem: `IntegrityError` when system performs automated pipeline actions
+
+**Symptoms:** Background operations (e.g., auto-advance after form submission) fail with `IntegrityError: foreign key constraint fails` on the `prospect_activity_log` table.
+
+**Root Cause:** The `performed_by` column has a foreign key to the `users` table. Automated actions were setting `performed_by = 'system'`, which is not a valid user ID.
+
+**Fix (Commit `addbbb0`):** Changed automated actions to use `performed_by = None` instead of `'system'`. The column is `nullable=True`, so `None` is valid.
+
+---
+
+---
+
+## Custom Section Add/Edit in Pipeline Email Config (2026-03-13)
+
+### Problem: Custom sections in pipeline email stage config not persisting
+
+**Symptoms:** Adding or editing custom sections (title + content blocks) in the automated email stage configuration does not save correctly. Sections disappear on reload.
+
+**Fix (Commit `49ba979`):** Fixed state management in the StageConfigModal for custom section CRUD operations. Sections now persist correctly.
+
+---
+
+---
+
+## Email Config Not Persisting from Onboarding (2026-03-13)
+
+### Problem: SMTP settings configured during onboarding don't carry over
+
+**Symptoms:** Email works during onboarding but stops working after setup is complete. Organization settings show no SMTP configuration.
+
+**Root Cause:** The onboarding flow configured email in a temporary context but did not persist the SMTP settings to the organization's settings record.
+
+**Fix (Commit `b64cde7`):** Onboarding email configuration step now writes SMTP settings to the organization's persistent settings.
+
+---
+
+---
+
+## Module Enablement Defaults (2026-03-01)
+
+### Problem: Standard modules missing from navigation after fresh install
+
+**Cause:** Standard modules were not defaulting to enabled.
+
+**Status (Fixed 2026-03-01):** Standard modules now default to enabled. Settings UI redesigned with module cards.
+
+---
+
+---
+
+## Post-Login 401 Cascade (2026-03-06)
+
+### Problem: Login succeeds but dashboard shows errors and redirects to login
+
+**Status (Fixed):** Dashboard fires ~15 parallel API calls immediately after login. If cookies aren't processed yet, all return 401, triggering a refresh cascade. Fixed with: (1) Bearer token bridge using access token from login response body, (2) cookie settle polling before dashboard navigation, (3) post-login grace period with exponential backoff in 401 interceptor.
+
+**Edge Cases:** Module-specific axios instances (scheduling, admin-hours, createApiClient) each need independent Bearer token bridges — all now included. Refresh token stored in memory for environments where cookies are never stored.
+
+---
+
+---
+
+## Still Stuck?
+
+1. **Search this guide** — Ctrl+F with keywords from your error. It is one file
+   precisely so that one search covers everything.
+2. **Jump to the diagnostics for your area** — [Containers](#container--docker-diagnostics), [Backend](#backend-service-diagnostics), [Frontend](#frontend--browser-diagnostics) or [Database](#database-diagnostics). Each is a symptom-to-command runbook rather than a fix log.
+3. **Review recent changes** — [CHANGELOG.md](../CHANGELOG.md) records what shipped
+   and when; an entry dated near the day the behavior changed is usually the
+   explanation.
 4. **Open an issue** — [GitHub Issues](https://github.com/thegspiro/the-logbook/issues) with:
    - Error message (full text)
    - Steps to reproduce
    - Environment (Docker, Unraid, bare metal)
    - Browser and OS version
    - Backend logs (`docker logs logbook-backend --tail 100`)
+
+See [Getting Help](#getting-help) above for the full diagnostic bundle to
+gather before filing.

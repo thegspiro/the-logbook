@@ -1,0 +1,62 @@
+# Build context for frontend/Dockerfile.
+#
+# The frontend image is built from the repository ROOT, not ./frontend: the
+# npm workspace keeps a single lockfile at the root (see CLAUDE.md, "Package
+# Manager") and `npm ci` cannot run without it. That makes the whole repo the
+# context, so everything the build does not read is excluded here to keep it
+# small. This file supersedes frontend/.dockerignore, which no longer applies
+# now that the context root moved.
+#
+# The backend still builds from ./backend and uses backend/.dockerignore.
+
+# Dependencies — reinstalled from the lockfile inside the image
+node_modules
+**/node_modules
+
+# Version control and CI definitions
+.git
+.gitignore
+.github
+
+# Backend: built from its own context, never read by the frontend build
+backend
+
+# Documentation, screenshots and ops assets
+docs
+wiki
+static
+scripts
+unraid
+infrastructure
+database
+
+# Build output and test artifacts
+frontend/dist
+frontend/.vite
+frontend/coverage
+frontend/playwright-report
+frontend/test-results
+dist
+build
+coverage
+.nyc_output
+
+# Environment files — build values arrive as build args (VITE_API_URL)
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+
+# Editor and OS noise
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log
+yarn-error.log

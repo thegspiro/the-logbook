@@ -13,12 +13,14 @@ Verifies that enum values in the database match the expected values defined in P
 **Purpose**: Prevent case mismatch bugs like the critical `organization_type` enum issue where the database had UPPERCASE values but the application expected lowercase.
 
 **Usage:**
+
 ```bash
 cd backend
 python scripts/verify_database_enums.py
 ```
 
 **Expected Output (Success):**
+
 ```
 ======================================================================
 DATABASE ENUM VERIFICATION
@@ -34,6 +36,7 @@ DATABASE ENUM VERIFICATION
 ```
 
 **Output on Mismatch:**
+
 ```
 ======================================================================
 DATABASE ENUM VERIFICATION
@@ -56,17 +59,20 @@ RECOMMENDED ACTIONS:
 ```
 
 **When to Run:**
+
 - After running database migrations
 - Before deploying to production
 - When debugging enum-related errors
 - As part of CI/CD pipeline
 
 **Exit Codes:**
+
 - `0`: All enums verified successfully
 - `1`: Mismatch detected
 - `2`: Connection error or exception
 
 **Requirements:**
+
 - Database must be running
 - `DATABASE_URL` environment variable must be set
 - SQLAlchemy models must be importable
@@ -83,7 +89,7 @@ tables that are not directly org-scoped.
 
 The models are the right source rather than a live database: `main.py`'s
 `_fast_path_init()` builds a fresh install with `Base.metadata.create_all()`,
-so the models *are* the schema a new deployment gets.
+so the models _are_ the schema a new deployment gets.
 
 **Usage:**
 
@@ -94,10 +100,12 @@ python scripts/generate_schema_docs.py --check    # CI: fail if stale
 ```
 
 **Exit Codes:**
+
 - `0`: Doc written, or (with `--check`) doc matches the models
 - `1`: With `--check`, the committed doc is out of date
 
 **Requirements:**
+
 - No database needed — reads model metadata only
 - SQLAlchemy models must be importable
 
@@ -106,6 +114,201 @@ schema reference being regenerated. That makes every schema change visible in
 review, which is where "does this need a migration too?" is cheapest to ask.
 See [DATABASE_SCHEMA_DRIFT.md](../../docs/DATABASE_SCHEMA_DRIFT.md) for what
 happens when that question goes unasked.
+
+---
+
+## Data Integrity
+
+### `find_unlinked_course_requirements.py`
+
+Finds training requirements whose `required_courses` entries do not resolve to a
+course in that organization's library.
+
+**Purpose**: `required_courses` holds **course ids** — every compliance
+evaluator asks "is this member's record for one of these course ids?". Until the
+course picker landed, the department Requirements page collected the field as
+free text, one course _name_ per line. A name never matches a record, so those
+requirements can never be completed. The picker stops new ones; this finds the
+existing ones so they can be re-linked.
+
+Read-only. Which library course a given name meant is an officer's call, so the
+script suggests and does not edit.
+
+**Usage:**
+
+```bash
+docker exec -it intranet-backend python scripts/find_unlinked_course_requirements.py
+docker exec -it intranet-backend python scripts/find_unlinked_course_requirements.py --org "Falls Church"
+docker exec -it intranet-backend python scripts/find_unlinked_course_requirements.py --active-only
+docker exec -it intranet-backend python scripts/find_unlinked_course_requirements.py --json
+```
+
+**Example Output:**
+
+```
+Falls Church  (0f9c…)
+------------------------------------------------------------------------------
+
+  [BLOCKING] NIMS/ICS Initial Certification
+      id=4b2a…  type=courses  4/4 unresolved
+      - typed-in name: 'ICS-100: Introduction to the Incident Command System'
+          -> likely ICS-100 [ICS100]  id=22222222-…  (partial)
+      - typed-in name: 'IS-800: National Response Framework, An Introduction'
+          -> no confident match in the course library
+
+  [degraded] CPR Certification
+      id=7e11…  type=certification  1/1 unresolved
+      - typed-in name: 'CPR'
+          -> likely CPR / BLS [CPR]  id=11111111-…  (exact)
+```
+
+`BLOCKING` marks a `courses` requirement, which needs _every_ linked course —
+one unresolved entry means it can never reach 100%. `degraded` marks a
+`certification` requirement, which still falls back to matching records by name,
+training type and registry code.
+
+Entries are classified as a **typed-in name** (not a UUID — the old free-text
+field) or a **dangling id** (a well-formed UUID absent from this org's library:
+either removed, or belonging to another organization). Courses are soft-deleted,
+so a resolvable-but-archived course is reported as a note rather than a fault.
+
+**Exit Codes:**
+
+- `0`: Every entry resolves, or there were none to check
+- `1`: At least one unresolved entry found
+- `2`: Connection error or exception
+
+**Requirements:**
+
+- Database must be running
+- SQLAlchemy models must be importable
+
+### `apply_course_link_suggestions.py`
+
+Relinks the requirements the script above finds, where the intended course is
+unambiguous. **Writes to compliance data** — dry run by default.
+
+**Purpose**: clear the mechanical majority of the typed-in-name backlog so the
+only entries left for a human are the ones that genuinely need a decision.
+
+**"High confidence" means the _only_ match, not the best one.** The reporting
+script returns its top-ranked candidate, which hides ambiguity — a stored `CPR`
+ranks `CPR / BLS` first even when `CPR Instructor` and `CPR Renewal` are equally
+plausible. An entry is relinked only when exactly one library course matches at:
+
+| Tier            | Meaning                                                                                                | Auto-applied |
+| --------------- | ------------------------------------------------------------------------------------------------------ | ------------ |
+| `exact`         | stored text equals a course name or code                                                               | yes          |
+| `contains-name` | a course's full name appears inside the stored text (`"ICS-100: Introduction to…"` carrying `ICS-100`) | yes          |
+| `fragment`      | stored text is a piece of a longer course name (`CPR` inside `CPR Instructor`)                         | **no**       |
+| `fuzzy`         | similarity scoring                                                                                     | **no**       |
+
+The direction matters: a verbose stored value naming a short course is evidence;
+a short stored value sitting inside a long course name is a coincidence waiting
+to happen. Dangling UUIDs are never touched — there is no name to match on, and
+the right answer may be to delete rather than remap.
+
+**Usage:**
+
+```bash
+# Dry run — writes nothing:
+docker exec -it intranet-backend python scripts/apply_course_link_suggestions.py
+
+# Apply, recording a rollback file:
+docker exec -it intranet-backend python scripts/apply_course_link_suggestions.py \
+    --apply --rollback-file /tmp/relink-rollback.json
+
+# One organization at a time:
+docker exec -it intranet-backend python scripts/apply_course_link_suggestions.py \
+    --org "Falls Church" --apply
+
+# Undo:
+docker exec -it intranet-backend python scripts/apply_course_link_suggestions.py \
+    --restore /tmp/relink-rollback.json
+```
+
+**Example Output:**
+
+```
+RELINK TYPED-IN COURSE NAMES  (DRY RUN — no changes written)
+
+Falls Church / NIMS/ICS Initial Certification
+  id=4b2a…
+  RELINK  'ICS-100: Introduction to the Incident Command System'
+          -> ICS-100 [ICS100]  id=c-ics100  (contains-name)
+  SKIP    'IS-800: National Response Framework, An Introduction'
+          no match in the library
+
+Falls Church / CPR Certification
+  id=7e11…
+  SKIP    'CPR'
+          ambiguous — 2 candidates (CPR Instructor, CPR Renewal)
+
+1 entr(ies) relinked, 2 left for a human.
+```
+
+**Safety:** dry run by default; matching is per-organization so a cross-tenant
+course can never be selected; `--apply` records before/after state for
+`--restore`; every change goes through the normal audit logger, so it lands in
+the same tamper-evident chain as an officer's edit. `--restore` refuses to
+overwrite a requirement that has been edited since the relink.
+
+A requirement with three resolvable names and one ambiguous one gets the three —
+a partial fix is still a fix, and the leftover is reported.
+
+**Exit Codes:**
+
+- `0`: Nothing left ambiguous (nothing to do, or everything relinked)
+- `1`: Entries remain that need a human decision
+- `2`: Connection error or exception
+
+**Requirements:**
+
+- Database must be running
+- SQLAlchemy models must be importable
+
+---
+
+## Deployment Setup
+
+### `generate_vapid_keys.py`
+
+Generates the VAPID keypair that identifies this server to the browser push
+services (Apple, Google, Mozilla), enabling Web Push for the installed PWA.
+
+**Purpose**: The two keys are base64url but encode different things, and neither
+consumer tolerates the wrong form — `pywebpush` reads any private key whose
+decoded length is not 32 bytes as DER, and `pushManager.subscribe()` rejects any
+`applicationServerKey` that is not the 65-octet uncompressed point. Getting
+either wrong fails at the worst moment: the browser accepts the subscription and
+the push service silently answers 401.
+
+**Usage:**
+
+```bash
+cd backend
+python scripts/generate_vapid_keys.py
+```
+
+**Expected Output** (key values are shown as placeholders — real ones are
+indistinguishable from live secrets, so they are deliberately not printed in
+documentation):
+
+```
+# Add to your .env — the private key must never leave the server.
+VAPID_PUBLIC_KEY=<87 base64url chars, always starting with B>
+VAPID_PRIVATE_KEY=<43 base64url chars>
+VAPID_SUBJECT=mailto:admin@yourdepartment.org
+```
+
+Paste the lines into `.env` and set `PUSH_ENABLED=true`. **Run this once per
+deployment and keep the pair stable** — rotating it invalidates every existing
+device subscription, and browsers offer no way to notify members, so each of
+them has to re-enable push by hand.
+
+**Requirements:**
+
+- No database or running services; `cryptography` only
 
 ---
 

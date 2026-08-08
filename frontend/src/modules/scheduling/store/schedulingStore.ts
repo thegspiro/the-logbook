@@ -127,6 +127,8 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
       const templates = await schedulingService.getTemplates({
         active_only: true,
       });
+      // No array guard needed here: schedulingService normalizes every
+      // array-returning method at the boundary (see asArray there).
       set({ templates, templatesLoaded: true });
     } catch {
       set({ templatesLoaded: true }); // mark loaded even on error to prevent retry loop

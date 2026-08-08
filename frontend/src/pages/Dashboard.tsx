@@ -589,7 +589,7 @@ const Dashboard: React.FC = () => {
                 {showShiftFirst && nextShift ? (
                   <button
                     onClick={() => void navigate("/scheduling")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
                   >
                     <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Next shift: {formatShiftDate(nextShift.shift_date)} {formatShiftTime(nextShift.start_time)}</span>
@@ -597,7 +597,7 @@ const Dashboard: React.FC = () => {
                 ) : nextEvent ? (
                   <button
                     onClick={() => void navigate(`/events/${nextEvent.id}`)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
                   >
                     <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Next: {nextEvent.title} · {formatShortDateTime(nextEvent.start_datetime, tz)}</span>
@@ -613,7 +613,7 @@ const Dashboard: React.FC = () => {
                 {urgentCerts.length > 0 && (
                   <button
                     onClick={() => void navigate("/training/my-training")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
                   >
                     <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>
@@ -625,7 +625,7 @@ const Dashboard: React.FC = () => {
                 {unreadCount > 0 && (
                   <button
                     onClick={() => void navigate("/notifications?tab=inbox")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
                   >
                     <Bell className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>{unreadCount} unread</span>
@@ -634,7 +634,7 @@ const Dashboard: React.FC = () => {
                 {overdueActionItems > 0 && (
                   <button
                     onClick={() => void navigate("/action-items")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
                   >
                     <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>{overdueActionItems} overdue</span>
@@ -1009,7 +1009,7 @@ const Dashboard: React.FC = () => {
                                   e.stopPropagation();
                                   void markMessageRead(msg.id);
                                 }}
-                                className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 p-2 -m-1 rounded"
+                                className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 p-2 -m-1 rounded max-md:min-h-[44px]"
                                 title="Mark as read"
                               >
                                 <Eye className="w-4 h-4" />
@@ -1118,7 +1118,7 @@ const Dashboard: React.FC = () => {
                         else
                           void navigate("/notifications?tab=inbox");
                       }}
-                      className="flex-1 min-w-0 text-left focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded"
+                      className="flex-1 min-w-0 text-left focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded max-md:min-h-[44px]"
                     >
                       <p className="text-sm font-medium truncate">
                         {notification.subject || "Notification"}
@@ -1136,7 +1136,7 @@ const Dashboard: React.FC = () => {
                       </span>
                       <button
                         onClick={(e) => dismissNotification(e, notification.id)}
-                        className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                        className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors max-md:mobile-touch-target"
                         title="Dismiss"
                         aria-label={`Dismiss notification: ${notification.subject || "Notification"}`}
                       >
@@ -1403,7 +1403,7 @@ const Dashboard: React.FC = () => {
             </h3>
             <button
               onClick={() => void navigate("/notifications?tab=inbox")}
-              className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 py-2 pl-2"
+              className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 py-2 pl-2 max-md:min-h-[44px]"
             >
               View All <ChevronRight className="w-3 h-3" />
             </button>
@@ -1648,7 +1648,7 @@ const Dashboard: React.FC = () => {
               <div className="mt-4 text-center">
                 <button
                   onClick={() => void navigate("/training/my-training")}
-                  className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm px-2 py-1"
+                  className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm px-2 py-1 max-md:min-h-[44px]"
                 >
                   View {enrollments.length - 3} more program
                   {enrollments.length - 3 !== 1 ? "s" : ""}

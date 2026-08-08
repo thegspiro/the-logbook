@@ -77,9 +77,9 @@ Control which contact information fields are visible to members:
 
 Some fields are **not** governed by this setting and have no toggle:
 
-| Field | Who can see it |
-|-------|----------------|
-| Home address, personal email | Roster managers only — never shown to ordinary members at any setting |
+| Field                                 | Who can see it                                                                                                       |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Home address, personal email          | Roster managers only — never shown to ordinary members at any setting                                                |
 | **Date of birth, emergency contacts** | Leadership only (`members.manage`), plus the member themselves. There is deliberately no setting that publishes them |
 
 Emergency contacts are withheld by default because they identify people
@@ -106,7 +106,9 @@ Navigate to **Settings > Organization** and scroll to the **Modules** section.
 Modules are organized into three categories:
 
 ### Core Modules (Always Enabled)
+
 These cannot be disabled:
+
 - Dashboard
 - Membership Management
 - Scheduling
@@ -116,13 +118,17 @@ These cannot be disabled:
 - Custom Forms
 
 ### Recommended Modules (Enabled by Default)
+
 These can be disabled if not needed:
+
 - Apparatus Management
 - Inventory Management
 - Communications
 
 ### Optional Modules (Disabled by Default)
+
 Enable these as needed:
+
 - Training & Certification
 - Incidents & Reports
 - HR & Payroll
@@ -130,8 +136,8 @@ Enable these as needed:
 - Facilities Management
 - Prospective Members Pipeline
 - Public Information
-- Medical Screening *(added 2026-03-13)*
-- Finance *(added 2026-03-12)*
+- Medical Screening _(added 2026-03-13)_
+- Finance _(added 2026-03-12)_
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Module Management section showing the three categories of modules, each with enable/disable toggles. Show some optional modules enabled (green toggle) and some disabled (gray toggle)]_
@@ -157,17 +163,17 @@ The Logbook uses a **position-based** permission system:
 
 ### Default Positions
 
-| Position | Description |
-|----------|-------------|
-| **IT Manager** | System owner with all permissions |
-| **President** | Department president |
-| **Vice President** | Department vice president |
-| **Secretary** | Meeting minutes, correspondence |
-| **Treasurer** | Financial operations |
-| **Chief** | Department chief |
-| **Safety Officer** | Safety and compliance |
-| **Training Officer** | Training management |
-| **Member** | Basic member access (default for all) |
+| Position             | Description                           |
+| -------------------- | ------------------------------------- |
+| **IT Manager**       | System owner with all permissions     |
+| **President**        | Department president                  |
+| **Vice President**   | Department vice president             |
+| **Secretary**        | Meeting minutes, correspondence       |
+| **Treasurer**        | Financial operations                  |
+| **Chief**            | Department chief                      |
+| **Safety Officer**   | Safety and compliance                 |
+| **Training Officer** | Training management                   |
+| **Member**           | Basic member access (default for all) |
 
 ### Managing Permissions
 
@@ -190,6 +196,7 @@ The Logbook uses a **position-based** permission system:
 >   grant another position the member-management permission first, then retry.
 
 Permission categories include:
+
 - `members.*` - Member management
 - `training.*` - Training management
 - `scheduling.*` - Scheduling management
@@ -222,17 +229,17 @@ Navigate to **Reports** in the Administration section to generate department rep
 
 ### Available Report Types
 
-| Report | Description |
-|--------|-------------|
-| **Member Roster** | Full member listing with contact info and status |
-| **Training Summary** | Training hours and completions by member |
-| **Event Attendance** | Attendance records across events |
-| **Training Progress** | Member progress toward requirements |
-| **Annual Training** | Year-end training compliance summary |
+| Report                | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| **Member Roster**     | Full member listing with contact info and status |
+| **Training Summary**  | Training hours and completions by member         |
+| **Event Attendance**  | Attendance records across events                 |
+| **Training Progress** | Member progress toward requirements              |
+| **Annual Training**   | Year-end training compliance summary             |
 
 ### Generating a Report
 
-1. Select a **report category**: All, Member, Training, Event, Compliance, or **Pipeline** *(added 2026-03-15)*.
+1. Select a **report category**: All, Member, Training, Event, Compliance, or **Pipeline** _(added 2026-03-15)_.
 2. Choose a **date range** using presets (This Year, Last Year, Last 90 Days) or a custom range.
 3. Click **Generate**.
 4. View the report on screen.
@@ -285,6 +292,7 @@ The dashboard provides:
 Navigate to **Settings > Public Portal** to configure your department's public-facing content.
 
 The public portal allows external access to:
+
 - Public event calendar
 - Public forms (applications, feedback)
 - Department information
@@ -301,7 +309,7 @@ The public portal allows external access to:
 
 ---
 
-## Integrations *(2026-04-11)*
+## Integrations _(2026-04-11)_
 
 **Required Permission:** `integrations.manage`
 
@@ -335,11 +343,13 @@ After connecting, configure how Logbook fields map to Salesforce fields. Default
 **Webhook setup (for real-time updates):**
 
 To receive real-time updates from Salesforce:
+
 1. Copy the webhook URL shown on the integration detail page
 2. In Salesforce Setup, create an Outbound Message workflow that sends Contact changes to this URL
 3. The webhook validates HMAC-SHA256 signatures for security
 
 **Edge Cases:**
+
 - If Salesforce rate limits are hit during a bulk sync, the system pauses and retries with exponential backoff
 - If a member is deleted in Logbook but exists in Salesforce, the behavior depends on your conflict resolution setting
 - OAuth tokens auto-refresh when expired; no manual re-authentication needed
@@ -353,17 +363,93 @@ To receive real-time updates from Salesforce:
 Navigate to **Settings > Error Monitor** to view system errors and issues.
 
 This page shows:
+
 - Recent error logs with timestamps
 - Error severity levels (Info, Warning, Error, Critical)
 - Error details and stack traces
 - Trends and patterns
+- **Source** — whether the failure was seen by the browser or the server _(2026-08-07)_
+- **The technical message beside the user-facing one**, so you see the same
+  guidance the member saw _(2026-08-07)_
+- **Method, path and status** for any error carrying request context _(2026-08-07)_
+- **Occurrence count** — repeats are counted, not collapsed into one row
 
 ![Error Monitor page listing recent application errors](./images/08-11-error-monitor.png)
 
 > **Hint:** Regular errors about failed login attempts are normal (they indicate the rate limiting is working). Focus on Critical and Error severity items for actual system issues.
 
 > **Screenshot placeholder:**
-> _[Screenshot of the Error Monitor page showing a table of recent errors with columns for timestamp, severity (color-coded badges), message, and a count of occurrences]_
+> _[Screenshot of the Error Monitor page showing a table of recent errors with columns for timestamp, Source, severity (color-coded badges), the user-facing message with the technical message beneath it, method/path/status, and an occurrence count]_
+
+### What Now Reaches This Page _(2026-08-07)_
+
+Before this, the page received almost nothing. Most failures were visible only to
+the member who hit them — a server error became a toast on their screen, a
+JavaScript failure became a line in a console nobody was reading — so
+investigating _"the site is broken for Dave"_ meant asking Dave.
+
+What is now recorded automatically:
+
+| Source      | Recorded                                                                                                          |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Server**  | Every 5xx, including the ones raised as a normal error response (which is where most server errors actually live) |
+| **Browser** | Failed API requests — 5xx, transport failures and timeouts, and 403                                               |
+| **Browser** | Uncaught exceptions and unhandled promise rejections, which previously reached nothing at all                     |
+| **Browser** | Chunk-load failures, under their own type                                                                         |
+
+Deliberately **not** recorded: 401 (routine session expiry), 404, and validation
+failures. They are ordinary and would bury the real failures.
+
+> **A chunk-load failure means a deployment landed while somebody had the app
+> open.** It is resolved differently from a genuine error — the member reloads
+> and it is gone. It is typed separately so you can tell the two apart at a
+> glance.
+
+> **One server failure often produces two rows** — one from the server with the
+> traceback and endpoint, one from the browser with the member and the page they
+> were on. Neither is redundant: the server row is missing when the failure never
+> reached the application (a gateway error), and the browser row is missing for a
+> failure outside any request a user made. The **Source** column distinguishes
+> them.
+
+### Reliability of the Reports Themselves
+
+The failures most worth recording are often the ones that break their own
+delivery — a report about a network outage has to travel over the network that is
+out. So:
+
+- Reports are **queued and retried** (four attempts) and delivered one at a time,
+  so a queue draining on reconnect does not stampede a server that is still
+  recovering.
+- They are **flushed when the page is hidden**, so a member who hits an error and
+  closes the tab — the most common way an error is seen and then lost — still
+  reports it.
+- Errors raised **before sign-in** are held and delivered on the next login.
+  Errors on the login screen are exactly what you get asked about, and they occur
+  before there is a session to attribute them to.
+- **Nothing is discarded silently.** When the per-minute cap or the queue bound
+  drops reports, that fact is itself recorded as a `REPORTING_THROTTLED` row
+  carrying the counts — so a burst reads as _"20 reports plus 340 suppressed"_
+  rather than as a quiet minute.
+
+### Privacy and Retention
+
+- **Error text is scrubbed in the browser before it is sent** — email addresses,
+  phone numbers, SSNs, bearer tokens and JWTs. Error messages quote user input and
+  API payloads, and these rows are readable by every `audit.view` holder and
+  downloadable as an export, so an identifier landing here would have left the
+  access controls that govern it everywhere else.
+- **Rows are retained 180 days by default** (30-day minimum) through the records
+  retention service, so the fastest-growing operational table in the platform
+  stays bounded.
+- **Ingest is rate-limited per member** (120/minute) — per member rather than per
+  IP address, because a department's members share one public address and an IP
+  bucket would let one member's failing tab silence the whole station's reports.
+
+> **Known gaps** are documented in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#error-monitoring-coverage-2026-08-07) —
+> chiefly that background (Celery) task failures are not reported here, since a
+> worker has no request to resolve a department from.
 
 ---
 
@@ -373,19 +459,20 @@ Navigate to **Administration > Scheduled Tasks** to view and manage automated ta
 
 Scheduled tasks run automatically on a schedule:
 
-| Task | Description |
-|------|-------------|
-| **Process Certification Alerts** | Send expiring certification notifications |
-| **Advance Membership Tiers** | Auto-promote eligible members |
-| **Process Property Return Reminders** | Send overdue return emails |
-| **Detect Struggling Members** | Flag members behind on training |
-| **Mark Overdue Checkouts** | Flag inventory checkouts past their expected return date |
-| **Send Event Reminders** | Deliver scheduled event reminders to RSVP'd members |
-| **Clean Up Sessions** | Remove expired login sessions |
-| **Process Scheduled Emails** | Send pending pipeline automated emails (polls every 60 seconds) *(added 2026-03-13)* |
-| **Generate Compliance Reports** | Auto-generate scheduled compliance reports *(added 2026-03-13)* |
+| Task                                  | Description                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Process Certification Alerts**      | Send expiring certification notifications                                            |
+| **Advance Membership Tiers**          | Auto-promote eligible members                                                        |
+| **Process Property Return Reminders** | Send overdue return emails                                                           |
+| **Detect Struggling Members**         | Flag members behind on training                                                      |
+| **Mark Overdue Checkouts**            | Flag inventory checkouts past their expected return date                             |
+| **Send Event Reminders**              | Deliver scheduled event reminders to RSVP'd members                                  |
+| **Clean Up Sessions**                 | Remove expired login sessions                                                        |
+| **Process Scheduled Emails**          | Send pending pipeline automated emails (polls every 60 seconds) _(added 2026-03-13)_ |
+| **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                      |
 
 For each task you can see:
+
 - Last run time
 - Next scheduled run
 - Frequency
@@ -399,6 +486,7 @@ For each task you can see:
 The Logbook now runs scheduled tasks (shift reminders, notification cleanup, overdue checks, etc.) using a built-in asyncio task runner embedded in the backend process. This replaces the need for external cron jobs or Celery Beat for most periodic tasks.
 
 **What runs automatically:**
+
 - Start-of-shift reminders (every 30 minutes)
 - Notification log cleanup
 - Overdue inventory notifications
@@ -406,6 +494,7 @@ The Logbook now runs scheduled tasks (shift reminders, notification cleanup, ove
 - Recurring event series extension
 
 **For IT administrators:**
+
 - No configuration needed — tasks start automatically with the backend
 - Task execution is idempotent — container restarts don't cause duplicate notifications
 - Task intervals and enable/disable flags are configured in organization settings
@@ -416,36 +505,37 @@ The Logbook now runs scheduled tasks (shift reminders, notification cleanup, ove
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Container restarts during task execution | Task resumes on next interval; idempotent checks prevent duplicates |
-| MySQL not ready at startup | App retries migration check up to 5 times with exponential backoff before starting scheduler |
-| Task throws exception | Error logged; other tasks continue on schedule; failed task retries at next interval |
-| Multiple backend replicas | Each replica runs its own scheduler; use `DISABLE_SCHEDULER=true` env var on non-primary replicas to prevent duplicate execution |
+| Scenario                                 | Behavior                                                                                                                         |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Container restarts during task execution | Task resumes on next interval; idempotent checks prevent duplicates                                                              |
+| MySQL not ready at startup               | App retries migration check up to 5 times with exponential backoff before starting scheduler                                     |
+| Task throws exception                    | Error logged; other tasks continue on schedule; failed task retries at next interval                                             |
+| Multiple backend replicas                | Each replica runs its own scheduler; use `DISABLE_SCHEDULER=true` env var on non-primary replicas to prevent duplicate execution |
 
 ---
 
-## HIPAA Audit Logging Expansion *(2026-03-29)*
+## HIPAA Audit Logging Expansion _(2026-03-29)_
 
 The following modules now include comprehensive `log_audit_event()` calls for HIPAA compliance:
 
-| Module | Events Logged |
-|--------|---------------|
-| **Medical Screening** | Requirement creation/update/delete, screening record creation/update/delete (category: "medical") |
-| **Documents** | Document uploaded (with filename, MIME type, file size), document deleted (severity: "warning") |
-| **Membership Pipeline** | Pipeline created/deleted, prospect created/advanced/transferred (includes name/email in metadata) |
-| **Messages** | Message creation and deletion |
-| **Shift Completion Reports** | Report created (`shift_report_created`), updated (`shift_report_updated`), reviewed/approved/flagged (`shift_report_reviewed`), acknowledged by trainee (`shift_report_acknowledged`), bulk submitted (`shift_reports_bulk_submitted`) *(added 2026-04-07)* |
+| Module                       | Events Logged                                                                                                                                                                                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Medical Screening**        | Requirement creation/update/delete, screening record creation/update/delete (category: "medical")                                                                                                                                                           |
+| **Documents**                | Document uploaded (with filename, MIME type, file size), document deleted (severity: "warning")                                                                                                                                                             |
+| **Membership Pipeline**      | Pipeline created/deleted, prospect created/advanced/transferred (includes name/email in metadata)                                                                                                                                                           |
+| **Messages**                 | Message creation and deletion                                                                                                                                                                                                                               |
+| **Shift Completion Reports** | Report created (`shift_report_created`), updated (`shift_report_updated`), reviewed/approved/flagged (`shift_report_reviewed`), acknowledged by trainee (`shift_report_acknowledged`), bulk submitted (`shift_reports_bulk_submitted`) _(added 2026-04-07)_ |
 
 All audit events are appended to the tamper-proof SHA-256 hash chain in the `audit_logs` table.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Security > Audit Log page filtered to "shift_report" events showing recent shift completion report audit entries with timestamps, acting user, event type (e.g., shift_report_reviewed), and metadata (report ID, review status)._
 
-### Shift Report Security Fix *(2026-04-07)*
+### Shift Report Security Fix _(2026-04-07)_
 
 A critical authorization bypass was identified and fixed on the `GET /shift-reports/{report_id}` endpoint. Previously, any authenticated user in the same organization could access any shift completion report by ID, including sensitive performance ratings, officer narratives, and reviewer notes. This violated the HIPAA minimum-necessary principle.
 
 **After the fix:**
+
 - Only the **trainee** (subject of the report), the **filing officer**, or users with **`training.manage` permission** can access a specific report
 - Trainees see **visibility-filtered data** matching the `/my-reports` endpoint behavior (e.g., if `show_performance_rating` is disabled, ratings are stripped)
 - `reviewer_notes` are **always stripped** for trainees regardless of visibility settings
@@ -453,19 +543,19 @@ A critical authorization bypass was identified and fixed on the `GET /shift-repo
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Security > Audit Log page filtered to "medical" events showing recent medical screening audit entries with timestamps, user, and event details._
 
-## Pagination Standardization *(2026-03-29)*
+## Pagination Standardization _(2026-03-29)_
 
 Previously unbounded list endpoints now accept `skip` and `limit` pagination parameters to prevent performance degradation with large datasets:
 
-| Module | Endpoints Paginated |
-|--------|---------------------|
-| **Finance** | Fiscal years, budget categories, budgets, approval chains, purchase requests, expense reports, check requests, member dues |
-| **Grants** | Opportunities, applications, budget items, expenditures |
-| **Medical Screening** | Requirements, records |
-| **Member Leaves** | Leave of absence list (user-specific and org-wide) |
-| **Training Waivers** | Waiver list |
-| **Operational Ranks** | Ranks list |
-| **Training Sessions** | Calendar listing |
+| Module                | Endpoints Paginated                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Finance**           | Fiscal years, budget categories, budgets, approval chains, purchase requests, expense reports, check requests, member dues |
+| **Grants**            | Opportunities, applications, budget items, expenditures                                                                    |
+| **Medical Screening** | Requirements, records                                                                                                      |
+| **Member Leaves**     | Leave of absence list (user-specific and org-wide)                                                                         |
+| **Training Waivers**  | Waiver list                                                                                                                |
+| **Operational Ranks** | Ranks list                                                                                                                 |
+| **Training Sessions** | Calendar listing                                                                                                           |
 
 ---
 
@@ -493,6 +583,7 @@ Dashboard > Scheduling > Shift Templates > Edit Template
 ### Session Management
 
 The system enforces session timeouts in alignment with HIPAA session management requirements:
+
 - Sessions expire after a configurable period of inactivity
 - Members are automatically logged out when their session expires
 - Active sessions can be reviewed from the admin panel
@@ -507,6 +598,7 @@ The system enforces session timeouts in alignment with HIPAA session management 
 ### Audit Logging
 
 All significant actions are logged for compliance:
+
 - Member changes (creation, status changes, role assignments)
 - Training record changes
 - Document access
@@ -530,12 +622,12 @@ Admins with the `audit.view` permission can read the audit trail directly. Navig
 
 The system applies rate limiting to sensitive endpoints with specific thresholds and lockout durations:
 
-| Endpoint | Max Requests | Window | Lockout Duration |
-|----------|-------------|--------|-----------------|
-| Login | 5 | 60 seconds | 30 minutes |
-| Registration | 3 | 60 seconds | 30 minutes |
-| Password reset | 3 | 5 minutes | 30 minutes |
-| Token refresh | 10 | 60 seconds | 10 minutes |
+| Endpoint       | Max Requests | Window     | Lockout Duration |
+| -------------- | ------------ | ---------- | ---------------- |
+| Login          | 5            | 60 seconds | 30 minutes       |
+| Registration   | 3            | 60 seconds | 30 minutes       |
+| Password reset | 3            | 5 minutes  | 30 minutes       |
+| Token refresh  | 10           | 60 seconds | 10 minutes       |
 
 When rate-limited, the system returns HTTP 429 with a `Retry-After` header indicating the lockout duration in seconds. Failed login attempts are also tracked per-user via the `failed_login_attempts` counter on the user record.
 
@@ -565,16 +657,16 @@ The following security measures are enforced:
 
 ### Authentication & Session Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Admin changes a member's roles while they are logged in | Server enforces new permissions immediately (re-queried from DB on every request). However, the frontend UI may show stale permission-based elements (buttons, menu items) until the page is reloaded or the session refreshes via `/auth/me`. |
-| Password reset requested twice within 30 minutes | The second request returns the same success message but no email is sent. This is intentional anti-enumeration — there is no indication to the user that a cooldown is active. Reset tokens expire after 30 minutes. |
-| Admin resets member password with "force change" | `password_changed_at` is intentionally NOT updated, so the user may see a password-expiry warning on their next login before they reach the change-password form. This resolves after they complete the forced password change. |
-| Multiple browser tabs open when access token expires | A shared refresh promise prevents races within one tab, but multiple tabs can trigger simultaneous refresh requests. If two tabs refresh at the same time, the second may see the rotated token as invalid, triggering a full session revocation across all tabs. Closing extra tabs before the session timeout avoids this. |
-| Member soft-deleted by admin | The user's next API request returns 401 (deleted users are filtered out of token validation). However, sessions are not proactively revoked — the session record stays in the database as an orphan until it expires naturally. |
-| Server restarts or deploys during active sessions | In-memory rate limiters reset (Redis-backed limiters are persistent). Encryption ciphers are re-initialized from the current `ENCRYPTION_KEY`. If the key was rotated without restart, data encrypted with the old key cannot be decrypted. |
-| Brief database outage during page refresh | If `GET /auth/me` returns 503 or a network error, the frontend clears `has_session` and logs the user out. The user must log in again when the database recovers. |
-| Concurrent session count | There is no enforced limit on simultaneous sessions. A monitoring threshold of 3 concurrent sessions triggers an anomaly alert but does not block additional logins. |
+| Scenario                                                | Behavior                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin changes a member's roles while they are logged in | Server enforces new permissions immediately (re-queried from DB on every request). However, the frontend UI may show stale permission-based elements (buttons, menu items) until the page is reloaded or the session refreshes via `/auth/me`.                                                                               |
+| Password reset requested twice within 30 minutes        | The second request returns the same success message but no email is sent. This is intentional anti-enumeration — there is no indication to the user that a cooldown is active. Reset tokens expire after 30 minutes.                                                                                                         |
+| Admin resets member password with "force change"        | `password_changed_at` is intentionally NOT updated, so the user may see a password-expiry warning on their next login before they reach the change-password form. This resolves after they complete the forced password change.                                                                                              |
+| Multiple browser tabs open when access token expires    | A shared refresh promise prevents races within one tab, but multiple tabs can trigger simultaneous refresh requests. If two tabs refresh at the same time, the second may see the rotated token as invalid, triggering a full session revocation across all tabs. Closing extra tabs before the session timeout avoids this. |
+| Member soft-deleted by admin                            | The user's next API request returns 401 (deleted users are filtered out of token validation). However, sessions are not proactively revoked — the session record stays in the database as an orphan until it expires naturally.                                                                                              |
+| Server restarts or deploys during active sessions       | In-memory rate limiters reset (Redis-backed limiters are persistent). Encryption ciphers are re-initialized from the current `ENCRYPTION_KEY`. If the key was rotated without restart, data encrypted with the old key cannot be decrypted.                                                                                  |
+| Brief database outage during page refresh               | If `GET /auth/me` returns 503 or a network error, the frontend clears `has_session` and logs the user out. The user must log in again when the database recovers.                                                                                                                                                            |
+| Concurrent session count                                | There is no enforced limit on simultaneous sessions. A monitoring threshold of 3 concurrent sessions triggers an anomaly alert but does not block additional logins.                                                                                                                                                         |
 
 ---
 
@@ -607,30 +699,31 @@ The report loads on screen, showing a department summary and per-member breakdow
 
 **Department Summary (top of report):**
 
-| Metric | Value |
-|--------|-------|
-| **Total Active Members** | 32 |
-| **Total Training Hours Logged** | 1,847 |
-| **Average Hours per Member** | 57.7 |
-| **Members Meeting All Requirements** | 28 (87.5%) |
-| **Members with Expiring Certifications** | 4 |
-| **Members on Leave (excluded)** | 2 |
+| Metric                                   | Value      |
+| ---------------------------------------- | ---------- |
+| **Total Active Members**                 | 32         |
+| **Total Training Hours Logged**          | 1,847      |
+| **Average Hours per Member**             | 57.7       |
+| **Members Meeting All Requirements**     | 28 (87.5%) |
+| **Members with Expiring Certifications** | 4          |
+| **Members on Leave (excluded)**          | 2          |
 
 **Per-Member Detail Table:**
 
-| Member | Rank | Hours | Req. Hours | Compliance | Certs Active | Certs Expiring | Notes |
-|--------|------|-------|-----------|------------|-------------|----------------|-------|
-| Adams, John | Captain | 78.5 | 36 | 100% | 5 | 0 | |
-| Brooks, Sarah | Lieutenant | 64.0 | 36 | 100% | 4 | 1 | CPR expires Mar 2026 |
-| Carter, David | Firefighter | 42.0 | 36 | 100% | 3 | 0 | |
-| Diaz, Maria | Firefighter | 55.5 | 36 | 100% | 3 | 0 | |
-| Evans, Tom | Probationary | 88.0 | 72 | 100% | 2 | 0 | Probationary (2x req.) |
-| Foster, Amy | Firefighter | 28.0 | 36 | 78% | 3 | 1 | **Below minimum** |
-| Garcia, Luis | Firefighter | 18.0 | 24 | 75% | 3 | 0 | LOA: 4 months (req. adjusted) |
-| Harris, Ken | Firefighter | 31.0 | 36 | 86% | 2 | 1 | **Below minimum** |
-| ... | ... | ... | ... | ... | ... | ... | |
+| Member        | Rank         | Hours | Req. Hours | Compliance | Certs Active | Certs Expiring | Notes                         |
+| ------------- | ------------ | ----- | ---------- | ---------- | ------------ | -------------- | ----------------------------- |
+| Adams, John   | Captain      | 78.5  | 36         | 100%       | 5            | 0              |                               |
+| Brooks, Sarah | Lieutenant   | 64.0  | 36         | 100%       | 4            | 1              | CPR expires Mar 2026          |
+| Carter, David | Firefighter  | 42.0  | 36         | 100%       | 3            | 0              |                               |
+| Diaz, Maria   | Firefighter  | 55.5  | 36         | 100%       | 3            | 0              |                               |
+| Evans, Tom    | Probationary | 88.0  | 72         | 100%       | 2            | 0              | Probationary (2x req.)        |
+| Foster, Amy   | Firefighter  | 28.0  | 36         | 78%        | 3            | 1              | **Below minimum**             |
+| Garcia, Luis  | Firefighter  | 18.0  | 24         | 75%        | 3            | 0              | LOA: 4 months (req. adjusted) |
+| Harris, Ken   | Firefighter  | 31.0  | 36         | 86%        | 2            | 1              | **Below minimum**             |
+| ...           | ...          | ...   | ...        | ...        | ...          | ...            |                               |
 
 **Key details in this table:**
+
 - **Evans** (Probationary) has a higher requirement (72 hours) reflecting the department's probationary training standard
 - **Garcia** was on a 4-month Leave of Absence, so his requirement was adjusted from 36 to 24 hours (36 x 8/12). He completed 18 of 24 hours — still below minimum.
 - **Foster** and **Harris** are below the 36-hour minimum and flagged for follow-up
@@ -688,15 +781,15 @@ This walkthrough covers the initial setup of The Logbook for a department that j
 
 Steve logs in with the initial admin account and lands on the **Department Setup Checklist**. He starts with Step 1: Department Profile.
 
-| Field | Value |
-|-------|-------|
-| **Department Name** | Valley Creek Fire Protection District |
-| **Department Type** | Fire/EMS Combined |
-| **FDID** | 29-4521 |
-| **State ID** | MO-VCFPD |
-| **Timezone** | America/Chicago |
-| **Phone** | (555) 867-5309 |
-| **Email** | admin@valleycreekfire.org |
+| Field                | Value                                         |
+| -------------------- | --------------------------------------------- |
+| **Department Name**  | Valley Creek Fire Protection District         |
+| **Department Type**  | Fire/EMS Combined                             |
+| **FDID**             | 29-4521                                       |
+| **State ID**         | MO-VCFPD                                      |
+| **Timezone**         | America/Chicago                               |
+| **Phone**            | (555) 867-5309                                |
+| **Email**            | admin@valleycreekfire.org                     |
 | **Physical Address** | 100 Fire Station Road, Valley Creek, MO 63001 |
 
 He uploads the department logo (PNG, 512x512). The checklist marks Step 1 as complete.
@@ -754,14 +847,14 @@ David,Carter,dcarter@email.com,dcarter,(555)111-0003,Firefighter,Station 1,VCF-0
 
 Steve navigates to **Settings > Organization > Modules** and enables the modules the district needs:
 
-| Module | Action |
-|--------|--------|
-| Training & Certification | **Enable** (state requires training tracking) |
-| Facilities Management | **Enable** (2 stations to manage) |
-| Prospective Members Pipeline | **Enable** (active recruitment program) |
-| Incidents & Reports | Leave disabled (using separate CAD/RMS system) |
-| HR & Payroll | Leave disabled (handled by county HR) |
-| Grants & Fundraising | Leave disabled (for now) |
+| Module                       | Action                                         |
+| ---------------------------- | ---------------------------------------------- |
+| Training & Certification     | **Enable** (state requires training tracking)  |
+| Facilities Management        | **Enable** (2 stations to manage)              |
+| Prospective Members Pipeline | **Enable** (active recruitment program)        |
+| Incidents & Reports          | Leave disabled (using separate CAD/RMS system) |
+| HR & Payroll                 | Leave disabled (handled by county HR)          |
+| Grants & Fundraising         | Leave disabled (for now)                       |
 
 The newly enabled modules appear in the sidebar immediately.
 
@@ -772,21 +865,21 @@ The newly enabled modules appear in the sidebar immediately.
 **Stations:**
 Steve navigates to **Facilities** and adds both stations:
 
-| Station | Address | Bays | Type |
-|---------|---------|------|------|
-| Station 1 (HQ) | 100 Fire Station Road | 4 | Fire Station |
-| Station 2 | 2850 Valley Pike | 2 | Fire Station |
+| Station        | Address               | Bays | Type         |
+| -------------- | --------------------- | ---- | ------------ |
+| Station 1 (HQ) | 100 Fire Station Road | 4    | Fire Station |
+| Station 2      | 2850 Valley Pike      | 2    | Fire Station |
 
 **Apparatus:**
 He navigates to **Apparatus** and adds the fleet:
 
-| Unit | Type | Year | Make/Model | Station |
-|------|------|------|-----------|---------|
-| Engine 1 | Engine | 2020 | Pierce Enforcer | Station 1 |
-| Engine 2 | Engine | 2015 | Pierce Saber | Station 2 |
-| Ladder 1 | Ladder | 2018 | Pierce Ascendant | Station 1 |
-| Rescue 1 | Rescue | 2021 | Horton 623 | Station 1 |
-| Chief 1 | Command | 2023 | Ford Explorer | Station 1 |
+| Unit     | Type    | Year | Make/Model       | Station   |
+| -------- | ------- | ---- | ---------------- | --------- |
+| Engine 1 | Engine  | 2020 | Pierce Enforcer  | Station 1 |
+| Engine 2 | Engine  | 2015 | Pierce Saber     | Station 2 |
+| Ladder 1 | Ladder  | 2018 | Pierce Ascendant | Station 1 |
+| Rescue 1 | Rescue  | 2021 | Horton 623       | Station 1 |
+| Chief 1  | Command | 2023 | Ford Explorer    | Station 1 |
 
 ---
 
@@ -794,19 +887,20 @@ He navigates to **Apparatus** and adds the fleet:
 
 Steve works with the Training Officer to configure the state-mandated training requirements:
 
-| Requirement | Type | Frequency | Required Value | Due Date Type |
-|-------------|------|-----------|---------------|---------------|
-| Annual Training Minimum | Hours | Annual | 36 hours | Calendar Period |
-| Probationary Training | Hours | Annual | 72 hours | Calendar Period |
-| SCBA Fit Test | Certification | Annual | 1 | Fixed Date |
-| CPR/AED Certification | Certification | Biannual | 1 | Certification Period |
-| Hazmat Awareness Refresher | Course Completion | Annual | 1 | Calendar Period |
+| Requirement                | Type              | Frequency | Required Value | Due Date Type        |
+| -------------------------- | ----------------- | --------- | -------------- | -------------------- |
+| Annual Training Minimum    | Hours             | Annual    | 36 hours       | Calendar Period      |
+| Probationary Training      | Hours             | Annual    | 72 hours       | Calendar Period      |
+| SCBA Fit Test              | Certification     | Annual    | 1              | Fixed Date           |
+| CPR/AED Certification      | Certification     | Biannual  | 1              | Certification Period |
+| Hazmat Awareness Refresher | Course Completion | Annual    | 1              | Calendar Period      |
 
 ---
 
 ### Step 7: Verify and Go Live
 
 Steve walks through the remaining checklist items:
+
 - **Notification Setup** — Configures notification rules via the **Notification Rules & Logs** page (`/notifications`). Creates rules with triggers (event_reminder, training_expiry, schedule_change, etc.), assigns channels (email, in-app), and tests delivery. The Send Log tab shows delivery history with channel filtering (All / Email / In-App)
 - **Scheduling Settings** — Configures shift templates for the 24/48 rotation
 - **Document Folders** — Verifies the default folder structure and adds "Mutual Aid Agreements" and "Budget" folders
@@ -827,14 +921,14 @@ The Medical Screening module tracks health screenings, physicals, drug tests, an
 
 ### Screening Types
 
-| Type | Description |
-|------|-------------|
-| Physical Exam | Annual or periodic physical examination |
-| Medical Clearance | Clearance for return to duty or specific activities |
-| Drug Screening | Random or scheduled substance screening |
-| Vision/Hearing | Vision and hearing tests |
-| Fitness Assessment | Physical fitness evaluation |
-| Psychological | Psychological evaluation or fitness-for-duty assessment |
+| Type               | Description                                             |
+| ------------------ | ------------------------------------------------------- |
+| Physical Exam      | Annual or periodic physical examination                 |
+| Medical Clearance  | Clearance for return to duty or specific activities     |
+| Drug Screening     | Random or scheduled substance screening                 |
+| Vision/Hearing     | Vision and hearing tests                                |
+| Fitness Assessment | Physical fitness evaluation                             |
+| Psychological      | Psychological evaluation or fitness-for-duty assessment |
 
 ### Setting Up Requirements
 
@@ -867,6 +961,7 @@ The Medical Screening module tracks health screenings, physicals, drug tests, an
 ### Compliance Dashboard
 
 The compliance dashboard shows:
+
 - Overall compliance rate by screening type
 - Members with expiring screenings (configurable: 30/60/90 days)
 - Overdue screenings requiring immediate attention
@@ -877,12 +972,12 @@ The compliance dashboard shows:
 
 ### Edge Cases
 
-| Scenario | What Happens |
-|----------|-------------|
-| One-time screening (no frequency) | Does not recur; no automatic expiration tracking |
-| Prospect converted to member | Screening records are preserved and can be re-linked to the new user account |
-| Requirement deactivated | Existing records preserved; requirement excluded from future compliance checks |
-| Grace period exceeded | Member marked non-compliant in compliance dashboard and reports |
+| Scenario                          | What Happens                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------ |
+| One-time screening (no frequency) | Does not recur; no automatic expiration tracking                               |
+| Prospect converted to member      | Screening records are preserved and can be re-linked to the new user account   |
+| Requirement deactivated           | Existing records preserved; requirement excluded from future compliance checks |
+| Grace period exceeded             | Member marked non-compliant in compliance dashboard and reports                |
 
 ---
 
@@ -939,49 +1034,49 @@ Profiles allow different compliance standards for different groups:
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| Cannot access admin settings | Verify you have the `settings.manage` permission. Only IT Manager and certain officer positions have this by default. |
-| Module toggle not saving | Refresh the page and try again. Check for any error messages in the notification area. |
-| Report showing no data | Verify the date range includes the period you are interested in. Some reports require specific data to exist (e.g., training records, event attendance). |
-| Cannot assign a position to a member | Verify you have `positions.manage_permissions` permission. The IT Manager position can always assign roles. |
-| Scheduled task not running | Check that the task is enabled. If the system was recently restarted, tasks may take one cycle to resume. |
-| Public portal not accessible | Verify the public portal is enabled and the domain/URL is configured correctly. Check that API keys are active. |
-| Error monitor showing many errors | Some errors are expected (failed login attempts, rate limiting). Focus on Critical and Error severity items. |
-| Email templates page not visible | Navigate to **Administration > Email Templates**. Requires `settings.manage` permission. |
-| "Data truncated" error on email template | Run `alembic upgrade head` to sync the MySQL ENUM with the new template types. |
-| Email template preview shows placeholder data | As of 2026-03-02, template preview loads live organization data. Clear browser cache to get the updated preview. |
-| Cannot send test email to specific member | Use the member dropdown in the preview panel to select a recipient for test emails. |
-| Email scheduling not available | Email scheduling was added 2026-03-02. Ensure you are on the latest version. |
-| Standard modules missing after fresh install | Standard modules now default to enabled. If missing, check **Settings > Modules** and enable them. The Settings UI has been redesigned with module cards. |
-| OrganizationSettings page crashes | Update to the latest version. A crash in the `redacted()` method and an auth secret leak have been fixed. |
-| Physical Address not visible in Organization Settings | As of 2026-03-04, Organization Settings > General includes a Physical Address section with a "Same as mailing address" toggle. Physical address data entered during onboarding is now displayed here. |
-| Admin hours summary categories showing "undefined" | Fixed in March 2026 — type mismatch between snake_case frontend types and camelCase API response. Pull latest and rebuild. |
-| Admin hours clock-in shows "already clocked in" | You have an active session in the same category. Clock out first, or check the dashboard for your active session. |
-| Admin hours clock-in fails with "active session" | You have an active session in a different category. The system allows only one active clock-in at a time across all categories. Clock out of the current session first. |
-| Admin hours category shows "no longer active" | The category has been deactivated by an administrator. You cannot clock into inactive categories. Contact your admin. |
-| Admin hours manual entry rejected | Manual entries are validated: clock-out must be after clock-in, clock-in cannot be in the future, and duration must be at least 1 minute. |
-| Admin hours pending entry rejected without reason | Rejection requires a reason. The reviewer must provide a rejection reason when denying a pending entry. |
-| Email templates return 500 error | Fixed in March 2026 — missing `duplicate_application` enum value in database. Run `alembic upgrade head` and restart. |
-| Email templates missing CC/BCC fields | As of 2026-03-04, each template supports default CC/BCC. BCC also available for scheduled emails. Run latest migration. |
-| Onboarding redirects to /login after Step 7 | Fixed in March 2026 — system owner creation now sets httpOnly auth cookies. Pull latest backend code and restart. |
-| Events Settings page layout changed | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout matching Organization Settings, replacing the previous collapsible sections. |
-| Reports page only shows basic views | As of 2026-03-04, the Reports module has been expanded into a dedicated feature module with 12 report types. Pull latest to access the full reports experience. |
-| Medical Screening module not visible | Enable Medical Screening for your organization in **Organization/Admin Settings > Modules** (`enabled_modules`). *(added 2026-03-13)* |
-| Compliance shows 0% with requirements defined | Verify screening records exist for the member and that the requirement is active. Check that the member's role matches the requirement's `applies_to_roles` configuration. |
-| Compliance report generation fails | Check the error message in the report list. Common causes: no compliance config defined (use **Initialize** first), or SMTP not configured for email delivery. |
-| Scheduled emails not sending | Verify SMTP is configured in Settings > Email. Check that the background email scheduler is running (polls every 60 seconds). For Gmail, use STARTTLS on port 587 with an app password. *(fixed 2026-03-13)* |
-| Compliance config "already exists" error | Use the update endpoint (PUT) instead of initialize (POST) after first-time setup. The initialization endpoint is for first-time configuration only. |
-| Date/time displays show UTC instead of local time | Fixed 2026-03-14 — a SQLAlchemy `load` event listener now stamps all naive datetimes with UTC tzinfo. ESLint rules enforce use of `dateFormatting.ts` utilities. Pull latest and restart. |
-| Pipeline overview report missing | Added 2026-03-15 — new `PipelineOverviewRenderer` in Reports module. Configure stage grouping in Pipeline Settings > Report Stage Groups. |
-| Pipeline report stage groups | Configure in Pipeline Settings. Groups combine multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview) for the pipeline overview report. |
-| Modal cannot be closed by clicking backdrop | Fixed 2026-03-14 — all modals across the app now have correct backdrop click-to-dismiss and z-index stacking. Pull latest frontend code. |
-| Dark mode backgrounds bleeding through | Fixed 2026-03-18 — overlays, dropdowns, drawer panels, and sticky elements now use opaque backgrounds in dark mode. Pull latest frontend. |
-| High-contrast mode missing styles | Fixed 2026-03-18 — high-contrast variants added across 25+ files. Pull latest frontend. |
-| API datetime fields missing timezone | Fixed 2026-03-16 — all API response schemas now inherit from `UTCResponseBase` which stamps naive datetimes with `+00:00`. Pull latest backend. |
-| Equipment check reports not showing | Navigate to `/scheduling/equipment-check-reports`. Requires `equipment_check.manage` permission. At least one check must be submitted. *(added 2026-03-19)* |
-| Operational ranks eligible positions not saving | Ensure you are on the latest migration. The `eligible_positions` JSON column was added 2026-03-19. Run `alembic upgrade head`. |
-| Scheduling admin pages return 404 | Admin tabs were extracted into dedicated routes (`/scheduling/templates`, `/scheduling/patterns`, etc.) in 2026-03-19. Pull latest frontend. |
+| Issue                                                 | Solution                                                                                                                                                                                                     |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cannot access admin settings                          | Verify you have the `settings.manage` permission. Only IT Manager and certain officer positions have this by default.                                                                                        |
+| Module toggle not saving                              | Refresh the page and try again. Check for any error messages in the notification area.                                                                                                                       |
+| Report showing no data                                | Verify the date range includes the period you are interested in. Some reports require specific data to exist (e.g., training records, event attendance).                                                     |
+| Cannot assign a position to a member                  | Verify you have `positions.manage_permissions` permission. The IT Manager position can always assign roles.                                                                                                  |
+| Scheduled task not running                            | Check that the task is enabled. If the system was recently restarted, tasks may take one cycle to resume.                                                                                                    |
+| Public portal not accessible                          | Verify the public portal is enabled and the domain/URL is configured correctly. Check that API keys are active.                                                                                              |
+| Error monitor showing many errors                     | Some errors are expected (failed login attempts, rate limiting). Focus on Critical and Error severity items.                                                                                                 |
+| Email templates page not visible                      | Navigate to **Administration > Email Templates**. Requires `settings.manage` permission.                                                                                                                     |
+| "Data truncated" error on email template              | Run `alembic upgrade head` to sync the MySQL ENUM with the new template types.                                                                                                                               |
+| Email template preview shows placeholder data         | As of 2026-03-02, template preview loads live organization data. Clear browser cache to get the updated preview.                                                                                             |
+| Cannot send test email to specific member             | Use the member dropdown in the preview panel to select a recipient for test emails.                                                                                                                          |
+| Email scheduling not available                        | Email scheduling was added 2026-03-02. Ensure you are on the latest version.                                                                                                                                 |
+| Standard modules missing after fresh install          | Standard modules now default to enabled. If missing, check **Settings > Modules** and enable them. The Settings UI has been redesigned with module cards.                                                    |
+| OrganizationSettings page crashes                     | Update to the latest version. A crash in the `redacted()` method and an auth secret leak have been fixed.                                                                                                    |
+| Physical Address not visible in Organization Settings | As of 2026-03-04, Organization Settings > General includes a Physical Address section with a "Same as mailing address" toggle. Physical address data entered during onboarding is now displayed here.        |
+| Admin hours summary categories showing "undefined"    | Fixed in March 2026 — type mismatch between snake_case frontend types and camelCase API response. Pull latest and rebuild.                                                                                   |
+| Admin hours clock-in shows "already clocked in"       | You have an active session in the same category. Clock out first, or check the dashboard for your active session.                                                                                            |
+| Admin hours clock-in fails with "active session"      | You have an active session in a different category. The system allows only one active clock-in at a time across all categories. Clock out of the current session first.                                      |
+| Admin hours category shows "no longer active"         | The category has been deactivated by an administrator. You cannot clock into inactive categories. Contact your admin.                                                                                        |
+| Admin hours manual entry rejected                     | Manual entries are validated: clock-out must be after clock-in, clock-in cannot be in the future, and duration must be at least 1 minute.                                                                    |
+| Admin hours pending entry rejected without reason     | Rejection requires a reason. The reviewer must provide a rejection reason when denying a pending entry.                                                                                                      |
+| Email templates return 500 error                      | Fixed in March 2026 — missing `duplicate_application` enum value in database. Run `alembic upgrade head` and restart.                                                                                        |
+| Email templates missing CC/BCC fields                 | As of 2026-03-04, each template supports default CC/BCC. BCC also available for scheduled emails. Run latest migration.                                                                                      |
+| Onboarding redirects to /login after Step 7           | Fixed in March 2026 — system owner creation now sets httpOnly auth cookies. Pull latest backend code and restart.                                                                                            |
+| Events Settings page layout changed                   | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout matching Organization Settings, replacing the previous collapsible sections.                                                |
+| Reports page only shows basic views                   | As of 2026-03-04, the Reports module has been expanded into a dedicated feature module with 12 report types. Pull latest to access the full reports experience.                                              |
+| Medical Screening module not visible                  | Enable Medical Screening for your organization in **Organization/Admin Settings > Modules** (`enabled_modules`). _(added 2026-03-13)_                                                                        |
+| Compliance shows 0% with requirements defined         | Verify screening records exist for the member and that the requirement is active. Check that the member's role matches the requirement's `applies_to_roles` configuration.                                   |
+| Compliance report generation fails                    | Check the error message in the report list. Common causes: no compliance config defined (use **Initialize** first), or SMTP not configured for email delivery.                                               |
+| Scheduled emails not sending                          | Verify SMTP is configured in Settings > Email. Check that the background email scheduler is running (polls every 60 seconds). For Gmail, use STARTTLS on port 587 with an app password. _(fixed 2026-03-13)_ |
+| Compliance config "already exists" error              | Use the update endpoint (PUT) instead of initialize (POST) after first-time setup. The initialization endpoint is for first-time configuration only.                                                         |
+| Date/time displays show UTC instead of local time     | Fixed 2026-03-14 — a SQLAlchemy `load` event listener now stamps all naive datetimes with UTC tzinfo. ESLint rules enforce use of `dateFormatting.ts` utilities. Pull latest and restart.                    |
+| Pipeline overview report missing                      | Added 2026-03-15 — new `PipelineOverviewRenderer` in Reports module. Configure stage grouping in Pipeline Settings > Report Stage Groups.                                                                    |
+| Pipeline report stage groups                          | Configure in Pipeline Settings. Groups combine multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview) for the pipeline overview report.                                        |
+| Modal cannot be closed by clicking backdrop           | Fixed 2026-03-14 — all modals across the app now have correct backdrop click-to-dismiss and z-index stacking. Pull latest frontend code.                                                                     |
+| Dark mode backgrounds bleeding through                | Fixed 2026-03-18 — overlays, dropdowns, drawer panels, and sticky elements now use opaque backgrounds in dark mode. Pull latest frontend.                                                                    |
+| High-contrast mode missing styles                     | Fixed 2026-03-18 — high-contrast variants added across 25+ files. Pull latest frontend.                                                                                                                      |
+| API datetime fields missing timezone                  | Fixed 2026-03-16 — all API response schemas now inherit from `UTCResponseBase` which stamps naive datetimes with `+00:00`. Pull latest backend.                                                              |
+| Equipment check reports not showing                   | Navigate to `/scheduling/equipment-check-reports`. Requires `equipment_check.manage` permission. At least one check must be submitted. _(added 2026-03-19)_                                                  |
+| Operational ranks eligible positions not saving       | Ensure you are on the latest migration. The `eligible_positions` JSON column was added 2026-03-19. Run `alembic upgrade head`.                                                                               |
+| Scheduling admin pages return 404                     | Admin tabs were extracted into dedicated routes (`/scheduling/templates`, `/scheduling/patterns`, etc.) in 2026-03-19. Pull latest frontend.                                                                 |
 
 ---
 
@@ -1001,6 +1096,7 @@ Dark mode and high-contrast mode have been hardened across the application:
 All API response schemas now inherit from `UTCResponseBase`, which automatically stamps naive `datetime` fields with UTC timezone info (`+00:00` suffix). This ensures JavaScript correctly interprets times as UTC and applies local timezone conversion.
 
 **What changed:**
+
 - Previously, some API datetime fields were returned without timezone info, causing JavaScript's `new Date()` to treat them as local time
 - Now, all datetime fields include `+00:00` (equivalent to `Z`), so UTC-to-local conversion works correctly
 - Combined with the existing SQLAlchemy `load` event listener (which stamps datetimes at ORM level), timezone consistency is enforced at both the database and API layers
@@ -1044,12 +1140,12 @@ member notification controls — see
 
 The Notifications page now includes a **channel filter** to view notifications by delivery method:
 
-| Filter | Shows |
-|--------|-------|
-| All | All notifications regardless of delivery channel |
-| Email | Only email-delivered notifications |
-| In-App | Only in-app notifications (bell icon) |
-| SMS | Only SMS-delivered notifications (when Twilio enabled) |
+| Filter | Shows                                                  |
+| ------ | ------------------------------------------------------ |
+| All    | All notifications regardless of delivery channel       |
+| Email  | Only email-delivered notifications                     |
+| In-App | Only in-app notifications (bell icon)                  |
+| SMS    | Only SMS-delivered notifications (when Twilio enabled) |
 
 > **Screenshot needed:**
 > _[Screenshot of the Notifications page showing channel filter tabs (All, Email, In-App, SMS) at the top with the In-App filter active]_
@@ -1082,11 +1178,11 @@ The equipment check template builder received UX improvements:
 
 The `TimeQuarterHour` component has been redesigned with three separate dropdown selects:
 
-| Dropdown | Options |
-|----------|---------|
-| **Hour** | 1 through 12 |
+| Dropdown   | Options        |
+| ---------- | -------------- |
+| **Hour**   | 1 through 12   |
 | **Minute** | 00, 15, 30, 45 |
-| **AM/PM** | AM, PM |
+| **AM/PM**  | AM, PM         |
 
 This replaces the previous single text input that was harder to use on mobile and didn't enforce quarter-hour increments visually.
 
@@ -1135,11 +1231,11 @@ The Notifications inbox now includes:
 
 Notification count polling uses the **Page Visibility API**:
 
-| Tab State | Polling Behavior |
-|-----------|-----------------|
-| Visible (active tab) | Polls at regular interval |
-| Hidden (background tab) | Polling pauses completely |
-| Tab becomes visible again | Immediately refetches |
+| Tab State                 | Polling Behavior          |
+| ------------------------- | ------------------------- |
+| Visible (active tab)      | Polls at regular interval |
+| Hidden (background tab)   | Polling pauses completely |
+| Tab becomes visible again | Immediately refetches     |
 
 This reduces unnecessary API calls and battery drain on mobile devices.
 
@@ -1172,12 +1268,12 @@ Dark mode appearance is **unchanged** — only light mode received adjustments.
 
 A new shared utility (`utils/colorContrast.ts`) provides WCAG-compliant color functions used across the app:
 
-| Function | Purpose |
-|----------|---------|
-| `relativeLuminance()` | WCAG 2.x luminance calculation |
-| `contrastRatio()` | Compare two colors for contrast |
-| `accessibleTextColor()` | Iteratively adjust text color until 4.5:1 met |
-| `colorCardStyle()` | Generate accessible card styling from hex color |
+| Function                | Purpose                                         |
+| ----------------------- | ----------------------------------------------- |
+| `relativeLuminance()`   | WCAG 2.x luminance calculation                  |
+| `contrastRatio()`       | Compare two colors for contrast                 |
+| `accessibleTextColor()` | Iteratively adjust text color until 4.5:1 met   |
+| `colorCardStyle()`      | Generate accessible card styling from hex color |
 
 > **Edge case:** In high-contrast mode, theme variables override to target WCAG AAA (7:1 ratio) where possible.
 
@@ -1242,22 +1338,100 @@ This information is pulled from the organization's settings. If any contact fiel
 
 Two new Jinja2 variables are available in all email templates:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `organization_website` | The organization's website URL from settings | `https://oakvillefire.org` |
-| `login_url` | Direct link to the application login page | `https://app.thelogbook.io/login` |
+| Variable               | Description                                  | Example                           |
+| ---------------------- | -------------------------------------------- | --------------------------------- |
+| `organization_website` | The organization's website URL from settings | `https://oakvillefire.org`        |
+| `login_url`            | Direct link to the application login page    | `https://app.thelogbook.io/login` |
 
 Use these in templates to provide consistent branding links. For example: `<a href="{{ login_url }}">Log in to The Logbook</a>`.
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario                                | Behavior                                                    |
+| --------------------------------------- | ----------------------------------------------------------- |
 | Reset template with no built-in default | Reset button disabled (only available for system templates) |
-| Test email with invalid SMTP config | Error toast with SMTP diagnostic details |
-| Search with no matches | Empty list with "No templates match" message |
-| Footer with no contact info configured | Footer section omitted entirely |
-| Ctrl+S with no changes | No-op; no unnecessary save triggered |
+| Test email with invalid SMTP config     | Error toast with SMTP diagnostic details                    |
+| Search with no matches                  | Empty list with "No templates match" message                |
+| Footer with no contact info configured  | Footer section omitted entirely                             |
+| Ctrl+S with no changes                  | No-op; no unnecessary save triggered                        |
+
+---
+
+## Email Template Categories (2026-08-07)
+
+The template catalogue has grown past three dozen entries, and the sidebar
+rendered all of them as one flat scroll. Templates are now grouped into
+**collapsible categories**, each showing how many templates it holds:
+
+| Category                | Contains                                                    |
+| ----------------------- | ----------------------------------------------------------- |
+| **Members & Accounts**  | Welcome, password reset, account status, membership changes |
+| **Events & Scheduling** | Event invitations, reminders, shift and swap notices        |
+| **Training**            | Course notices, expiry warnings, pipeline and cohort mail   |
+| **Elections**           | Nomination, ballot, and result notices                      |
+| **Inventory**           | Checkout, return, reorder and low-stock notices             |
+| **Department Store**    | Storefront order and payment notices                        |
+| **Other**               | Anything that does not fall into the above                  |
+
+Two behaviours worth knowing:
+
+- **Searching expands every group**, so a match is never hidden behind a
+  collapsed header.
+- **The category holding the template you are editing is forced open**, so your
+  selection cannot scroll out of view while you work.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Email Templates sidebar showing seven collapsible category headers with counts (e.g. "Members & Accounts (9)"), one expanded with its templates listed and the currently-selected template highlighted._
+
+---
+
+## Signing Notices with an Officer's Name (2026-08-07)
+
+A notice sent by a member-services clerk — or by a nightly automated task — had
+no way to carry the name of the officer it should come from. A password-reset
+notice signed by whoever happened to run the import is not what a department
+wants going out over its name.
+
+**Every email template can now use officer variables.** For each office, four
+variables are available anywhere in a template:
+
+```
+{{president_name}}       {{president_title}}
+{{president_email}}      {{president_phone}}
+```
+
+The catalogued offices are: **President, Vice President, Chief, Deputy Chief,
+Assistant Chief, Secretary, Assistant Secretary, Treasurer, Safety Officer,
+Training Officer, Quartermaster**.
+
+### Who Holds an Office
+
+A holder is resolved in this order:
+
+1. **An admin override** set on the office (a typed name/title/email/phone).
+2. **The member the office is linked to** — the values then track that member's
+   profile, so a phone number change flows through without anyone editing a
+   template.
+3. **Auto-detection** from members carrying the matching position.
+
+> **A department that never opens the Officers tab still signs its notices
+> correctly**, because of step 3. You only need to visit the tab if
+> auto-detection gets it wrong or an office has no matching position.
+
+### Keeping It Current
+
+The resolved values refresh when an office is edited, when the **Officers** tab
+is loaded, and **nightly** — that last one is what catches a change made to the
+_member_ behind an office rather than to the assignment itself.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Officers tab showing the office list with holders, a "Linked member" column, an override indicator on one row, and the variables each office exposes._
+
+See [DEPARTMENT_OFFICERS.md](../DEPARTMENT_OFFICERS.md) for the full variable
+catalogue and the API.
+
+> **Also fixed 2026-08-07:** inventory change emails were silently dropping every
+> `{{organization_*}}` variable, because that notification path never passed the
+> organization to the renderer. If your inventory notices have been going out with
+> blanks where the department name should be, that was why.
 
 ---
 
@@ -1283,13 +1457,13 @@ The Logbook now supports **Cloudflare Email Routing** as an email delivery platf
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Invalid Cloudflare Account ID format | Rejected with SSRF validation error before any API call |
-| Cloudflare API rate limit hit | Retried with exponential backoff (up to 3 retries) |
-| Bulk send with 100+ recipients | Batched with concurrency limits to avoid API throttling |
-| Email disabled in settings | `send_batch` returns immediately without attempting delivery |
-| Cloudflare API timeout | Retried; failure logged to message history with error details |
+| Scenario                             | Behavior                                                      |
+| ------------------------------------ | ------------------------------------------------------------- |
+| Invalid Cloudflare Account ID format | Rejected with SSRF validation error before any API call       |
+| Cloudflare API rate limit hit        | Retried with exponential backoff (up to 3 retries)            |
+| Bulk send with 100+ recipients       | Batched with concurrency limits to avoid API throttling       |
+| Email disabled in settings           | `send_batch` returns immediately without attempting delivery  |
+| Cloudflare API timeout               | Retried; failure logged to message history with error details |
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Email Configuration page showing the Cloudflare platform selected, with Account ID and API Token fields, and a "Send Test Email" button._
 
@@ -1305,14 +1479,14 @@ Administrators can now view the tamper-proof audit trail directly from the appli
 
 The audit log page displays a real-time, searchable, filterable table of every administrative and security event in your organization:
 
-| Column | Description |
-|--------|-------------|
-| **Timestamp** | When the event occurred (displayed in your timezone) |
-| **Severity** | Info (blue), Warning (amber), or Critical (red) badge |
+| Column         | Description                                                                  |
+| -------------- | ---------------------------------------------------------------------------- |
+| **Timestamp**  | When the event occurred (displayed in your timezone)                         |
+| **Severity**   | Info (blue), Warning (amber), or Critical (red) badge                        |
 | **Event Type** | Technical event identifier (e.g., `shift_report_reviewed`, `member_dropped`) |
-| **Category** | Event group (e.g., "training", "security", "inventory") |
-| **Username** | Who performed the action (or "System" for automated events) |
-| **IP Address** | IP address of the acting user |
+| **Category**   | Event group (e.g., "training", "security", "inventory")                      |
+| **Username**   | Who performed the action (or "System" for automated events)                  |
+| **IP Address** | IP address of the acting user                                                |
 
 ### Filtering and Searching
 
@@ -1324,6 +1498,7 @@ The audit log page displays a real-time, searchable, filterable table of every a
 ### Summary Statistics
 
 Four stat cards appear at the top of the page:
+
 - **Total events** — All-time event count
 - **Critical** — Count of critical-severity events
 - **Warnings** — Count of warning-severity events
@@ -1337,12 +1512,12 @@ Click any row to expand it and see the full **event metadata** — a JSON view o
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| System-level events (no acting user) | Excluded from org-scoped view |
-| Very large audit trail (100k+ events) | Paginated; server-side filtering |
-| Multiple severity levels selected | Events matching any selected severity shown |
-| Event with no metadata | Expandable row shows empty JSON `{}` |
+| Scenario                              | Behavior                                    |
+| ------------------------------------- | ------------------------------------------- |
+| System-level events (no acting user)  | Excluded from org-scoped view               |
+| Very large audit trail (100k+ events) | Paginated; server-side filtering            |
+| Multiple severity levels selected     | Events matching any selected severity shown |
+| Event with no metadata                | Expandable row shows empty JSON `{}`        |
 
 > **Note:** The audit log is scoped to your organization — events for your department's users only. System-level events (such as scheduled jobs that have no acting user) are deliberately excluded from this view.
 
@@ -1363,11 +1538,11 @@ side — is in [Privacy & Your Data](./17-privacy-data-rights.md).
 record is kept. Statutory retention for fire-service records varies by state,
 so the schedule is yours to set rather than fixed by the platform.
 
-| Record class | Default | Minimum you can set |
-|--------------|---------|--------------------|
-| Message history (email/SMS delivery records) | 90 days | 30 days |
-| Notification logs | Keep forever | 30 days |
-| Form submissions (may hold applicant PII) | Keep forever | 90 days |
+| Record class                                 | Default      | Minimum you can set |
+| -------------------------------------------- | ------------ | ------------------- |
+| Message history (email/SMS delivery records) | 90 days      | 30 days             |
+| Notification logs                            | Keep forever | 30 days             |
+| Form submissions (may hold applicant PII)    | Keep forever | 90 days             |
 
 A daily job applies the schedule. Every change is written to the audit log.
 
@@ -1391,8 +1566,8 @@ reasons on leaves and waivers, and the original application record with its
 interview notes and uploaded documents.
 
 Kept: training completions and certifications, attendance and service hours,
-property custody and clearance records, dues, and medical screening *status
-and dates* so past compliance remains provable.
+property custody and clearance records, dues, and medical screening _status
+and dates_ so past compliance remains provable.
 
 Never touched: the audit log (append-only and cryptographically chained) and
 election records (ballot integrity).
@@ -1419,15 +1594,15 @@ off-site copy survives wholesale deletion. See
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Retention set below a class minimum | Rejected with a 400 and the minimum stated |
-| Retention left unset | The class default applies; "keep forever" classes delete nothing |
-| Anonymizing an active member | Refused — change status to dropped or archived first |
-| Anonymizing twice | Refused; the operation runs once and cannot be undone |
-| Anonymizing a member in another organization | Returns "not found" — every by-id lookup is org-scoped |
-| Two members anonymized in the same department | Each receives a distinct placeholder identity, so the unique email/username constraints still hold |
-| Backup restored from before an anonymization | The old PII returns with it. Re-run anonymization after restoring, and account for this in your retention policy |
+| Scenario                                      | Behavior                                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Retention set below a class minimum           | Rejected with a 400 and the minimum stated                                                                       |
+| Retention left unset                          | The class default applies; "keep forever" classes delete nothing                                                 |
+| Anonymizing an active member                  | Refused — change status to dropped or archived first                                                             |
+| Anonymizing twice                             | Refused; the operation runs once and cannot be undone                                                            |
+| Anonymizing a member in another organization  | Returns "not found" — every by-id lookup is org-scoped                                                           |
+| Two members anonymized in the same department | Each receives a distinct placeholder identity, so the unique email/username constraints still hold               |
+| Backup restored from before an anonymization  | The old PII returns with it. Re-run anonymization after restoring, and account for this in your retention policy |
 
 ---
 
@@ -1458,12 +1633,12 @@ A store email is mostly a table of ordered items and a set of pay buttons.
 Neither can be typed into a template, so the store renders them and passes them
 in:
 
-| Variable | What appears there |
-|----------|--------------------|
-| `{{items_table_html}}` | The ordered items with sizes, embroidery text and prices |
-| `{{payment_block_html}}` | Balance due, a pay button per method the department accepts, and its payment instructions |
-| `{{receipt_footer_html}}` | The receipt footer from the store settings |
-| `{{window_extra_html}}` | Whatever that particular notice adds — a closing time, a vendor, a delivery date |
+| Variable                  | What appears there                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| `{{items_table_html}}`    | The ordered items with sizes, embroidery text and prices                                  |
+| `{{payment_block_html}}`  | Balance due, a pay button per method the department accepts, and its payment instructions |
+| `{{receipt_footer_html}}` | The receipt footer from the store settings                                                |
+| `{{window_extra_html}}`   | Whatever that particular notice adds — a closing time, a vendor, a delivery date          |
 
 The editor's variable list shows everything available for whichever template
 you have open, and the preview fills them with sample data. **Removing one
@@ -1482,18 +1657,18 @@ look there.
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Reworded template, notice switched off | Nothing sends. The switch gates it, not the template |
-| Template deleted | The store falls back to its built-in wording. Next time this page loads, the template is recreated from the **shipped default** — not from what you deleted |
-| Template set inactive | Falls back to the built-in wording; your edit is kept. The reversible way to undo |
-| Subject left blank | The built-in subject is used rather than sending an email with no subject |
-| HTML edited, text body left blank | The built-in plain-text alternate is used, so text-only clients get old wording. Edit both or neither |
-| Variable name misspelled | Renders as empty. No braces reach the member — and no value does either |
-| Store templates in Schedule Email | Not offered. Each reads from a specific order, which does not exist when scheduled by hand |
-| Store template edited mid-run | Applies from the next scheduled run; a run in progress keeps the version it started with |
-| Cancellations in Message History | Rows predating this change carry `storefront_order_update`; later ones carry `storefront_order_cancelled` |
-| Store module not enabled | The ten templates still exist and are editable, but nothing sends them |
+| Scenario                               | Behavior                                                                                                                                                    |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reworded template, notice switched off | Nothing sends. The switch gates it, not the template                                                                                                        |
+| Template deleted                       | The store falls back to its built-in wording. Next time this page loads, the template is recreated from the **shipped default** — not from what you deleted |
+| Template set inactive                  | Falls back to the built-in wording; your edit is kept. The reversible way to undo                                                                           |
+| Subject left blank                     | The built-in subject is used rather than sending an email with no subject                                                                                   |
+| HTML edited, text body left blank      | The built-in plain-text alternate is used, so text-only clients get old wording. Edit both or neither                                                       |
+| Variable name misspelled               | Renders as empty. No braces reach the member — and no value does either                                                                                     |
+| Store templates in Schedule Email      | Not offered. Each reads from a specific order, which does not exist when scheduled by hand                                                                  |
+| Store template edited mid-run          | Applies from the next scheduled run; a run in progress keeps the version it started with                                                                    |
+| Cancellations in Message History       | Rows predating this change carry `storefront_order_update`; later ones carry `storefront_order_cancelled`                                                   |
+| Store module not enabled               | The ten templates still exist and are editable, but nothing sends them                                                                                      |
 
 ---
 

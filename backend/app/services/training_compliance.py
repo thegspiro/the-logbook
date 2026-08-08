@@ -140,6 +140,99 @@ def get_requirement_date_window(req, today: date):
         return date(yr, 1, 1), date(yr, 12, 31)
 
 
+def recency_cutoff(req, today: date) -> Optional[date]:
+    """Earliest completion date still fresh enough to count, or None.
+
+    ``recency_days`` is a validity window on the completion itself: a recruit
+    school can demand CPR taken within the last 180 days even though the
+    department's own CPR requirement is a one-time item that never expires.
+    None means no freshness constraint — any completion counts however old.
+    """
+    days = getattr(req, "recency_days", None)
+    if not days or days <= 0:
+        return None
+    return today - timedelta(days=int(days))
+
+
+def is_recent_enough(req, record, today: date) -> bool:
+    """Is ``record``'s completion inside the requirement's freshness window?
+
+    A record with no completion date is treated as *not* fresh whenever a window
+    is set: the window can't be verified, and silently counting it would let
+    exactly the stale completions the officer meant to exclude through.
+    """
+    cutoff = recency_cutoff(req, today)
+    if cutoff is None:
+        return True
+    completion = getattr(record, "completion_date", None)
+    return completion is not None and completion >= cutoff
+
+
+def apply_recency(req, records, today: date):
+    """Drop records that fall outside the requirement's freshness window.
+
+    Applied *on top of* the frequency date window rather than replacing it, so
+    the narrower of the two always wins and this can only ever remove records
+    from consideration.
+    """
+    if recency_cutoff(req, today) is None:
+        return records
+    return [r for r in records if is_recent_enough(req, r, today)]
+
+
+def certification_record_matches(req, record) -> bool:
+    """Does ``record`` satisfy the CERTIFICATION requirement ``req``?
+
+    A certification requirement is satisfied by any completed training record
+    that ties back to it. The tie can be made four ways, in descending order of
+    precision:
+
+    1. An explicit catalog course linked on the requirement
+       (``required_courses``). This is the only exact match — the officer picked
+       the course out of the library, so a record for that course is
+       unambiguously the certification in question.
+    2. The requirement's ``training_type``.
+    3. The requirement name appearing in the record's course name.
+    4. The requirement's registry code appearing in the certification number.
+
+    Matches 2–4 are heuristics kept for requirements created before the library
+    link existed (and for imported records that carry no course id), which is
+    why linking a course *widens* the match rather than replacing it: an
+    existing "CPR" requirement must keep crediting the records it already
+    credited when an officer links the CPR course to it.
+
+    Shared by the compliance matrix, the member compliance summary, and the
+    competency matrix so all three agree on what counts.
+    """
+    linked_courses = getattr(req, "required_courses", None) or []
+    if linked_courses:
+        course_id = getattr(record, "course_id", None)
+        if course_id and str(course_id) in {str(c) for c in linked_courses}:
+            return True
+
+    req_training_type = getattr(req, "training_type", None)
+    if req_training_type and record.training_type == req_training_type:
+        return True
+
+    req_name = getattr(req, "name", None)
+    if (
+        record.course_name
+        and req_name
+        and req_name.lower() in record.course_name.lower()
+    ):
+        return True
+
+    registry_code = getattr(req, "registry_code", None)
+    if (
+        record.certification_number
+        and registry_code
+        and registry_code.lower() in record.certification_number.lower()
+    ):
+        return True
+
+    return False
+
+
 def evaluate_member_requirement(
     req,
     member_records,
@@ -191,6 +284,10 @@ def evaluate_member_requirement(
 
     # Filter completed records within the date window
     completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
+    # A freshness window narrows the pool for every requirement type before the
+    # frequency window is applied, so a stale completion can't satisfy anything
+    # — including a one_time requirement, whose frequency window is unbounded.
+    completed = apply_recency(req, completed, today)
     if start_date and end_date:
         windowed = [
             r
@@ -305,25 +402,10 @@ def evaluate_member_requirement(
         else:
             return "not_started", None, None
 
-    # ---- CERTIFICATION requirements: match by name, training_type, or cert number ----
+    # ---- CERTIFICATION requirements: match by linked course, name, type, or
+    # cert number (see certification_record_matches) ----
     if req_type == RequirementType.CERTIFICATION.value:
-        matching = [
-            r
-            for r in completed
-            if (
-                (req.training_type and r.training_type == req.training_type)
-                or (
-                    r.course_name
-                    and req.name
-                    and req.name.lower() in r.course_name.lower()
-                )
-                or (
-                    r.certification_number
-                    and req.registry_code
-                    and req.registry_code.lower() in r.certification_number.lower()
-                )
-            )
-        ]
+        matching = [r for r in completed if certification_record_matches(req, r)]
         if matching:
             latest = max(matching, key=lambda r: r.completion_date or date.min)
             latest_comp = (

@@ -119,7 +119,7 @@ export const ApparatusListPage: React.FC = () => {
             </div>
             <button
               onClick={() => void navigate('/dashboard')}
-              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm shrink-0"
+              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm shrink-0 max-md:inline-flex max-md:min-h-[44px] max-md:items-center"
             >
               <span className="hidden sm:inline">← Back to Dashboard</span>
               <span className="sm:hidden">← Back</span>
@@ -203,7 +203,7 @@ export const ApparatusListPage: React.FC = () => {
             {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex items-center space-x-2 px-4 py-2 max-md:min-h-[44px] rounded-lg transition-colors ${
                 showFilters
                   ? 'bg-red-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'

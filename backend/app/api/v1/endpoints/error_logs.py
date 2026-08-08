@@ -7,7 +7,7 @@ Endpoints for logging and retrieving application errors.
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security import is_rate_limited
 from app.core.security_middleware import get_client_ip
 from app.models.error_log import ErrorLog
 from app.models.user import User
@@ -28,6 +29,12 @@ MAX_CONTEXT_SIZE = 4096
 # member could POST 20 multi-MB strings and balloon the row / flood the table.
 MAX_STEP_LENGTH = 500
 MAX_STEPS_TOTAL_SIZE = 4096
+
+# Ingest ceiling per user per window. Deliberately generous — the client
+# throttles to 20/minute and collapses duplicates, so a well-behaved session
+# never approaches this.
+ERROR_LOG_RATE_LIMIT = 120
+ERROR_LOG_RATE_WINDOW_SECONDS = 60
 
 
 class ErrorLogCreate(BaseModel):
@@ -71,7 +78,34 @@ async def log_error(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Log an application error"""
+    """
+    Log an application error.
+
+    Rate-limited per user, not per IP: a fire department's members share one
+    public address, so an IP bucket would let one member's failing tab
+    suppress everyone else's reports from the same station — silencing the
+    page precisely when something is going wrong for the whole crew.
+
+    The cap is well above the client's own throttle (20/minute), so it only
+    engages for a client that is ignoring it — a stale build, a hand-rolled
+    caller, or a member spamming the endpoint directly. Exceeding it returns
+    429 rather than 500, so the client drops the report instead of retrying.
+    """
+    if await is_rate_limited(
+        key=f"error_log:{current_user.id}",
+        limit=ERROR_LOG_RATE_LIMIT,
+        window_seconds=ERROR_LOG_RATE_WINDOW_SECONDS,
+        # Redis down is not a reason to stop accepting error reports; the
+        # client-side throttle is still in force and the table is bounded by
+        # the retention policy.
+        fail_closed=False,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many error reports. Please try again later.",
+            headers={"Retry-After": str(ERROR_LOG_RATE_WINDOW_SECONDS)},
+        )
+
     error = ErrorLog(
         organization_id=current_user.organization_id,
         error_type=data.error_type,

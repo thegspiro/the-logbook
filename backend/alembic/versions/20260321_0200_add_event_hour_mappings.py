@@ -90,7 +90,9 @@ def upgrade() -> None:
     op.alter_column(
         "admin_hours_entries",
         "entry_method",
-        type_=sa.Enum("qr_scan", "manual", "event_attendance", name="adminhoursentrymethod"),
+        type_=sa.Enum(
+            "qr_scan", "manual", "event_attendance", name="adminhoursentrymethod"
+        ),
         existing_type=sa.Enum("qr_scan", "manual", name="adminhoursentrymethod"),
         existing_nullable=False,
     )
@@ -138,6 +140,8 @@ def downgrade() -> None:
         existing_nullable=False,
     )
 
-    op.drop_index("ix_event_hour_mappings_org_event_type", table_name="event_hour_mappings")
+    op.drop_index(
+        "ix_event_hour_mappings_org_event_type", table_name="event_hour_mappings"
+    )
     op.drop_index("ix_event_hour_mappings_org_id", table_name="event_hour_mappings")
     op.drop_table("event_hour_mappings")

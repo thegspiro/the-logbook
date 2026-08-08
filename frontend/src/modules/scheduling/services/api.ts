@@ -5,6 +5,7 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
+import { asArray } from '../../../utils/asArray';
 import type {
   Assignment,
   SwapRequest as SchedulingSwapRequest,
@@ -425,7 +426,7 @@ export const schedulingService = {
     const params: Record<string, string> = {};
     if (weekStart) params.week_start = weekStart;
     const response = await api.get<ShiftRecord[]>('/scheduling/calendar/week', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getMonthCalendar(year?: number, month?: number): Promise<ShiftRecord[]> {
@@ -433,7 +434,7 @@ export const schedulingService = {
     if (year) params.year = year;
     if (month) params.month = month;
     const response = await api.get<ShiftRecord[]>('/scheduling/calendar/month', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getSummary(): Promise<SchedulingSummary> {
@@ -449,7 +450,7 @@ export const schedulingService = {
   async getMyAssignments(): Promise<Assignment[]> {
     const response = await api.get<Assignment[]>('/scheduling/my-assignments');
     // Backend returns assignment_status; provide status alias for convenience
-    return (response.data ?? []).map((a) => ({
+    return asArray(response.data).map((a) => ({
       ...a,
       status: a.assignment_status ?? a.status,
     }));
@@ -460,12 +461,12 @@ export const schedulingService = {
     const response = await api.get<{ unavailable_user_ids: string[] }>(
       `/scheduling/shifts/${shiftId}/unavailable-members`,
     );
-    return response.data.unavailable_user_ids ?? [];
+    return asArray(response.data?.unavailable_user_ids);
   },
   async getShiftAssignments(shiftId: string): Promise<Assignment[]> {
     const response = await api.get<Assignment[]>(`/scheduling/shifts/${shiftId}/assignments`);
     // Normalize assignment_status → status for consistency
-    return (response.data ?? []).map((a) => ({
+    return asArray(response.data).map((a) => ({
       ...a,
       status: a.assignment_status ?? a.status ?? 'assigned',
     }));
@@ -498,7 +499,7 @@ export const schedulingService = {
       '/scheduling/my-attendance-history',
       { params: { limit, start_date, end_date } },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   // Active shift lookup
@@ -536,7 +537,7 @@ export const schedulingService = {
   // Swap Requests
   async getSwapRequests(params?: SwapRequestFilters): Promise<SchedulingSwapRequest[]> {
     const response = await api.get<SchedulingSwapRequest[]>('/scheduling/swap-requests', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createSwapRequest(data: SwapRequestCreate): Promise<SchedulingSwapRequest> {
     const response = await api.post<SchedulingSwapRequest>('/scheduling/swap-requests', data);
@@ -553,7 +554,7 @@ export const schedulingService = {
   // Time Off
   async getTimeOffRequests(params?: TimeOffFilters): Promise<SchedulingTimeOffRequest[]> {
     const response = await api.get<SchedulingTimeOffRequest[]>('/scheduling/time-off', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createTimeOff(data: TimeOffCreate): Promise<SchedulingTimeOffRequest> {
     const response = await api.post<SchedulingTimeOffRequest>('/scheduling/time-off', data);
@@ -570,13 +571,13 @@ export const schedulingService = {
   // Shift Attendance
   async getShiftAttendance(shiftId: string): Promise<ShiftAttendanceRecord[]> {
     const response = await api.get<ShiftAttendanceRecord[]>(`/scheduling/shifts/${shiftId}/attendance`);
-    return response.data;
+    return asArray(response.data);
   },
 
   // Templates
   async getTemplates(params?: { active_only?: boolean }): Promise<ShiftTemplateRecord[]> {
     const response = await api.get<ShiftTemplateRecord[]>('/scheduling/templates', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createTemplate(data: ShiftTemplateCreate): Promise<ShiftTemplateRecord> {
     const response = await api.post<ShiftTemplateRecord>('/scheduling/templates', data);
@@ -593,7 +594,7 @@ export const schedulingService = {
   // Patterns
   async getPatterns(params?: { active_only?: boolean }): Promise<SchedulingShiftPattern[]> {
     const response = await api.get<SchedulingShiftPattern[]>('/scheduling/patterns', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createPattern(data: ShiftPatternCreate): Promise<SchedulingShiftPattern> {
     const response = await api.post<SchedulingShiftPattern>('/scheduling/patterns', data);
@@ -618,21 +619,21 @@ export const schedulingService = {
   },
   async getCoverageReport(params?: ReportFilters): Promise<CoverageReportEntry[]> {
     const response = await api.get<CoverageReportEntry[]>('/scheduling/reports/coverage', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getCallVolumeReport(params?: ReportFilters): Promise<CallVolumeReportEntry[]> {
     const response = await api.get<CallVolumeReportEntry[]>('/scheduling/reports/call-volume', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getAvailability(params?: AvailabilityFilters): Promise<AvailabilityRecord[]> {
     const response = await api.get<AvailabilityRecord[]>('/scheduling/availability', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   // --- Basic Apparatus (lightweight, for departments without full Apparatus module) ---
   async getBasicApparatus(params?: { is_active?: boolean }): Promise<BasicApparatusRecord[]> {
     const response = await api.get<BasicApparatusRecord[]>('/scheduling/apparatus', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createBasicApparatus(data: BasicApparatusCreate): Promise<BasicApparatusRecord> {
     const response = await api.post<BasicApparatusRecord>('/scheduling/apparatus', data);
@@ -669,13 +670,13 @@ export const schedulingService = {
   // --- Open Shifts ---
   async getOpenShifts(params?: { start_date?: string | undefined; end_date?: string; apparatus_id?: string }): Promise<ShiftRecord[]> {
     const response = await api.get<ShiftRecord[]>('/scheduling/shifts/open', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   // --- Shift Calls / Runs ---
   async getShiftCalls(shiftId: string): Promise<ShiftCallRecord[]> {
     const response = await api.get<ShiftCallRecord[]>(`/scheduling/shifts/${shiftId}/calls`);
-    return response.data;
+    return asArray(response.data);
   },
   async createCall(shiftId: string, data: ShiftCallCreate): Promise<ShiftCallRecord> {
     const response = await api.post<ShiftCallRecord>(`/scheduling/shifts/${shiftId}/calls`, data);
@@ -746,7 +747,7 @@ export const schedulingService = {
   },
   async getEquipmentCheckTemplates(params?: { apparatus_id?: string; apparatus_type?: string; check_timing?: string }): Promise<EquipmentCheckTemplate[]> {
     const response = await api.get<EquipmentCheckTemplate[]>('/equipment-checks/templates', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getEquipmentCheckTemplate(templateId: string): Promise<EquipmentCheckTemplate> {
     const response = await api.get<EquipmentCheckTemplate>(`/equipment-checks/templates/${templateId}`);
@@ -821,7 +822,7 @@ export const schedulingService = {
 
   async getShiftChecklists(shiftId: string): Promise<ShiftCheckSummary[]> {
     const response = await api.get<ShiftCheckSummary[]>(`/equipment-checks/shifts/${shiftId}/checklists`);
-    return response.data;
+    return asArray(response.data);
   },
   async submitEquipmentCheck(shiftId: string, data: ShiftEquipmentCheckCreate): Promise<ShiftEquipmentCheckRecord> {
     const response = await api.post<ShiftEquipmentCheckRecord>(`/equipment-checks/shifts/${shiftId}/checks`, data);
@@ -859,11 +860,11 @@ export const schedulingService = {
   // --- My Checklists ---
   async getMyChecklists(): Promise<ActiveChecklistRecord[]> {
     const response = await api.get<ActiveChecklistRecord[]>('/equipment-checks/my-checklists');
-    return response.data;
+    return asArray(response.data);
   },
   async getMyChecklistHistory(params?: { start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<ShiftEquipmentCheckRecord[]> {
     const response = await api.get<ShiftEquipmentCheckRecord[]>('/equipment-checks/my-checklists/history', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   // =====================================================================

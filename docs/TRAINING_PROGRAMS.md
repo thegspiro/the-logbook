@@ -36,6 +36,7 @@ The Training Programs module provides a comprehensive system for managing member
 ### Training Requirements
 
 Training requirements are individual training items that members must complete. They can be:
+
 - **Hours-based**: Require a certain number of training hours
 - **Course-based**: Require completion of specific courses
 - **Certification-based**: Require obtaining certifications
@@ -48,6 +49,7 @@ Training requirements are individual training items that members must complete. 
 ### Training Programs
 
 Training programs are structured pathways that group requirements together. Programs can be:
+
 - **Flexible**: Requirements can be completed in any order
 - **Sequential**: Requirements must be completed in a specific order
 - **Phase-based**: Requirements are organized into phases with prerequisites
@@ -55,6 +57,7 @@ Training programs are structured pathways that group requirements together. Prog
 ### Enrollment
 
 Members are enrolled in training programs to track their progress toward completion. Enrollments track:
+
 - Current phase (for phase-based programs)
 - Overall progress percentage
 - Completion status
@@ -66,6 +69,7 @@ Members are enrolled in training programs to track their progress toward complet
 ## User Roles
 
 ### Training Officer
+
 - Create and manage training programs
 - Set up requirements from registries or custom
 - Enroll members in programs
@@ -74,6 +78,7 @@ Members are enrolled in training programs to track their progress toward complet
 - Verify completed requirements
 
 ### Member
+
 - View assigned training programs
 - Track progress on requirements
 - See next steps and upcoming deadlines
@@ -87,6 +92,7 @@ Members are enrolled in training programs to track their progress toward complet
 ### ✅ Implemented Features
 
 #### Registry Integration
+
 - **NFPA Standards**: Firefighter I/II (1001), Driver/Operator (1002), Fire Officer (1021),
   Instructor (1041), Live Fire (1403), Occupational Safety (1500), Medical Fitness (1582),
   Hazmat/WMD Responder (1072), Technical Rescuer (1006), Fire Investigator (1033),
@@ -105,23 +111,25 @@ Members are enrolled in training programs to track their progress toward complet
 - Department can customize imported requirements
 
 #### Template System
+
 - Save programs as reusable templates
 - Duplicate templates with version tracking
 - Independent copies for customization
 - Version numbering (e.g., "Probationary Program v2")
 
 #### Built-in Sample Templates
-The **Templates** tab shows a *"Start from a sample template"* gallery with three
+
+The **Templates** tab shows a _"Start from a sample template"_ gallery with three
 real-world-aligned starting points a training officer can add with one click:
 
-| Template | Aligned to | Structure |
-|----------|-----------|-----------|
-| **Firefighter Recruit School** | NFPA 1001 Firefighter I & II, Hazmat Awareness/Operations (NFPA 1072), IFSAC/Pro Board certification | 4 phases (Orientation & Safety → Fireground Skills → Fire Attack & Live-Fire → Certification), officer-approved advancement on the safety and certification phases |
-| **EMT Recruit School** | National EMS Education Standards / NREMT (Preparatory, Airway, Medical, Trauma, Operations), clinical/field internship, cognitive & psychomotor exams | 5 phases, officer-approved advancement on the certification phase |
-| **New Member Orientation** | Department familiarization + mandatory annual compliance (HIPAA, OSHA Bloodborne Pathogens, Hazard Communication, harassment prevention) + department-specific onboarding | 3 phases |
+| Template                       | Aligned to                                                                                                                                                                | Structure                                                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Firefighter Recruit School** | NFPA 1001 Firefighter I & II, Hazmat Awareness/Operations (NFPA 1072), IFSAC/Pro Board certification                                                                      | 4 phases (Orientation & Safety → Fireground Skills → Fire Attack & Live-Fire → Certification), officer-approved advancement on the safety and certification phases |
+| **EMT Recruit School**         | National EMS Education Standards / NREMT (Preparatory, Airway, Medical, Trauma, Operations), clinical/field internship, cognitive & psychomotor exams                     | 5 phases, officer-approved advancement on the certification phase                                                                                                  |
+| **New Member Orientation**     | Department familiarization + mandatory annual compliance (HIPAA, OSHA Bloodborne Pathogens, Hazard Communication, harassment prevention) + department-specific onboarding | 3 phases                                                                                                                                                           |
 
 These are curated in code (`backend/app/services/sample_program_templates.py`) and are
-deliberately generic — requirements are *named* but do not hard-wire a department's own
+deliberately generic — requirements are _named_ but do not hard-wire a department's own
 course, category, or skills-test IDs. Adding a template replays the atomic program build
 into your organization as an **editable, department-owned template** (it lands in the
 Templates tab with `is_template=true`). Afterward the officer links its requirements to
@@ -132,6 +140,7 @@ their real sessions/categories/tests, adjusts hours, and enrolls members.
   (optional body `{ "name": "…", "is_template": true }`)
 
 #### Editing a Pipeline After Creation
+
 A pipeline is fully editable from the program detail page (Overview tab), gated by
 `training.manage`:
 
@@ -158,11 +167,13 @@ re-derives enrolled members' progress-row percentages against the new target.
   the edit modal instead.
 
 #### Program Prerequisites
+
 - Set prerequisite programs (e.g., must complete "Recruit School" before "Driver Candidate")
 - Automatic validation during enrollment
 - Prevents enrollment if prerequisites not met
 
 #### Enrollment Controls
+
 - Concurrent enrollment restrictions (one program at a time, or multiple allowed)
 - Bulk member enrollment with validation
 - Custom target completion dates
@@ -173,12 +184,13 @@ re-derives enrolled members' progress-row percentages against the new target.
   In another program** with the specific reason, so officers see who can be enrolled
   up front instead of hitting per-member errors on submit. The **hard gates** are
   already-enrolled (in this program) and unmet prerequisite programs. Being **active
-  in another program** is a *soft advisory* only — the member stays eligible and
+  in another program** is a _soft advisory_ only — the member stays eligible and
   selectable (a new member may be in several onboarding courses at once), just flagged
   "Also enrolled in another program". The program's target position/roles are advisory
   and never block.
 
 #### Phase Management
+
 - Multi-phase program structures
 - Phase prerequisites
 - Manual vs. automatic advancement (auto-advance stops at any phase flagged `requires_manual_advancement`)
@@ -186,6 +198,7 @@ re-derives enrolled members' progress-row percentages against the new target.
 - Phase-specific time limits
 
 #### Progress Tracking
+
 - Real-time progress calculation
 - Completion percentage tracking (any completed/verified/waived requirement counts as 100%, including non-numeric types)
 - Requirement-level progress with officer verification
@@ -203,6 +216,7 @@ re-derives enrolled members' progress-row percentages against the new target.
   re-approving a submission is a no-op — one real training is never counted twice.
 
 #### Recertification Cycle (Progress Reset)
+
 Certifications that expire — NREMT, for example, requires resubmission every two
 years — need a member's accumulated progress cleared so a fresh cycle can begin.
 The pipeline supports both a manual and an automatic reset:
@@ -225,6 +239,7 @@ The pipeline supports both a manual and an automatic reset:
   reset on time.
 
 #### Leaving a Program (Self-Service Withdrawal)
+
 A member can remove themselves from a program from their progression view via
 **Leave program** — useful when they step down from a level they no longer need to
 maintain (e.g. Paramedic → EMT), so the program stops cluttering their dashboard and
@@ -234,6 +249,7 @@ with `training.manage` can withdraw any member; a withdrawn member can be re-enr
 later (`POST /training/programs/enrollments/{id}/withdraw`).
 
 #### Certification-Eligible vs. Credit-Only Sessions
+
 Training sessions carry a **"Counts toward certification requirements"** toggle (on by
 default). Leave it on for sessions delivered in a way a certifying body (NFPA/NREMT)
 accepts. Turn it off when a session should give members credit but isn't
@@ -244,21 +260,21 @@ hours off the member's certificate progress.
 
 #### Multi-Class Courses & Cohorts
 
-A recruit school is one *course* made of many *classes*. Rather than creating
+A recruit school is one _course_ made of many _classes_. Rather than creating
 fifteen training sessions by hand for every intake, describe the course once and
 generate each run from it.
 
 **1. Build the syllabus** (Training → Setup → Course Library → **Manage
 classes**). Each class links to a catalog course — that is what carries its
 credit hours, certification settings, and category tagging — and is timed
-*relative to the course start* rather than on a calendar date:
+_relative to the course start_ rather than on a calendar date:
 
-| Field | Meaning |
-|-------|---------|
-| `day_offset` | Days after the course start. 0 is the first day. |
-| `start_time` | Local wall clock, e.g. `19:00`. |
-| `duration_minutes` | How long the class runs. |
-| `section_name` | Optional grouping; becomes a pipeline phase when one is generated. |
+| Field              | Meaning                                                            |
+| ------------------ | ------------------------------------------------------------------ |
+| `day_offset`       | Days after the course start. 0 is the first day.                   |
+| `start_time`       | Local wall clock, e.g. `19:00`.                                    |
+| `duration_minutes` | How long the class runs.                                           |
+| `section_name`     | Optional grouping; becomes a pipeline phase when one is generated. |
 
 The builder shows the gap between consecutive classes the way officers describe
 them — "next day", "2 days later" — and **Fill from pattern** derives every
@@ -293,12 +309,12 @@ tracking works with no extra setup.
 class timeline with live sign-up and attendance counts, plus the roster with
 each member's progress:
 
-| Action | Effect |
-|--------|--------|
-| **Reschedule** a class | Moves the class *and* its calendar event; RSVPs are preserved. |
-| **Cancel** a class | Cancels the event rather than deleting it, so anyone signed up sees the cancellation. The class stays on the cohort for the record. |
-| **Add class** | An ad-hoc class (make-up session, add-on) that was never on the syllabus; the roster is invited automatically. |
-| **Shift remaining** | Slides every upcoming class by N days. Classes that already happened keep their dates — their attendance records are anchored to them. |
+| Action                    | Effect                                                                                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reschedule** a class    | Moves the class _and_ its calendar event; RSVPs are preserved.                                                                                              |
+| **Cancel** a class        | Cancels the event rather than deleting it, so anyone signed up sees the cancellation. The class stays on the cohort for the record.                         |
+| **Add class**             | An ad-hoc class (make-up session, add-on) that was never on the syllabus; the roster is invited automatically.                                              |
+| **Shift remaining**       | Slides every upcoming class by N days. Classes that already happened keep their dates — their attendance records are anchored to them.                      |
 | **Create missing events** | Repairs a class whose event failed to create or was deleted. Idempotent: a class that already has an event is skipped, so this can never duplicate a class. |
 
 > **Timezone note.** Class times are stored as local wall clock and resolved
@@ -315,50 +331,54 @@ except the syllabus read and a roster member's view of their own cohort.
 The syllabus is a **template**; a cohort is a **materialized copy**. Almost
 every confusion below comes from that one distinction.
 
-| Scenario | Behavior |
-|----------|----------|
-| **You reorder the classes but the dates don't change** | Order (`sequence`) and timing (`day_offset`) are independent. Moving class 3 to the top does not move it to day 1 — it still happens on whatever day its offset says. The builder makes this visible: a class scheduled before the one above it reads *"2 days earlier"* instead of *"2 days later"*. To re-space after reordering, edit the day offsets or run **Fill from pattern**. |
-| **You fix the syllabus and a running cohort doesn't change** | Correct and deliberate. A cohort is materialized at generation, so an in-flight recruit school is never silently re-scheduled underneath the students. The fix reaches the *next* cohort; to change the current one, edit its classes on the cohort detail page. |
-| **You delete a class from the syllabus** | Running cohorts keep their copy of it (`course_class_id` becomes NULL) — it simply becomes a class that belongs only to that cohort. Nothing is unscheduled, and nobody loses credit. |
-| **You skip a class in the preview** | The cohort renumbers contiguously. Skip syllabus class 4 and the cohort's class 4 is syllabus class 5. Cohort sequence numbers are per-cohort; they are not syllabus positions. |
-| **One class fails to schedule (room double-booked)** | Only that class fails. Generation continues, the cohort class row is created with no event, and the failure comes back as a warning. Resolve the conflict, then **Create missing events** — which only fills gaps and can never duplicate a class. |
-| **You click "Create missing events" twice** | Nothing happens the second time. It only touches classes whose `event_id` is NULL. |
-| **Someone deletes a generated event in the Events UI** | The cohort still lists the class, now marked **No event**. **Create missing events** rebuilds it. The link is `SET NULL`, not `CASCADE`, precisely so this is recoverable rather than silent data loss. |
-| **The course spans a DST change** | A 19:00 class stays at 19:00 local on both sides. Times are stored as local wall clock and resolved against the organization timezone at generation, not as a fixed UTC offset. |
-| **Two classes roll onto the same day** | Weekend and blackout rolling moves each class forward independently, so two can land on the same date. The preview shows the collision — adjust an offset before generating. |
-| **A blackout date is skipped even with the roll policy off** | Yes. "Keep the computed date" governs weekends; a blackout date is an explicit *not this day* and always applies. |
-| **You generate a second cohort of the same course** | It reuses the pipeline the first cohort built (recorded on `training_courses.program_id`) rather than creating a duplicate. A member already enrolled keeps that enrollment **and their existing progress** — right for someone repeating a course, surprising if you expected a clean slate. Use **Start new cycle** on their enrollment to reset. |
-| **A member can't be enrolled (unmet prerequisite)** | They are still added to the roster and the reason comes back as a warning. The officer knows their department better than the eligibility rules do; losing an entire generation over one member would be worse. |
-| **You add a member half-way through the course** | They are RSVP'd only to classes that **have not started**. Past classes are never backfilled — that would put finished sessions on their calendar and list them as an expected no-show for training they could not have attended. |
-| **You withdraw a member** | Their enrollment, training records, and any class they already checked into are kept. Their RSVPs on classes still to come are removed, so the course drops off their calendar and they stop counting as an expected attendee. |
-| **"Shift remaining" doesn't move everything** | By default it moves only classes that haven't started — past classes are anchored to their attendance records. Cancelled classes never move. Set a starting position explicitly to shift from a specific class onward. |
-| **A cancelled class is still listed** | Cancelling cancels the *event* rather than deleting it, so anyone who signed up sees a cancellation rather than a class silently vanishing. The class stays on the cohort for the record. |
-| **A class's catalog course was archived** | The preview warns, but generation still proceeds — archiving is a soft delete and the officer may well intend it. Reactivate the course or point the class at a different one. |
-| **Some classes shouldn't count toward a certificate** | Set **Counts toward certification requirements** off on that syllabus class. Attendance still creates the training record and hours (counting toward general compliance), but the class won't advance the linked certificate requirements — the standard use for an informal in-house drill inside an otherwise certification-grade school. |
-| **The syllabus is very long** | A course is capped at 200 classes, and a cohort at 200 generated classes. Past that it's a data-entry mistake, not a course. |
-| **A student wants to see their own schedule** | Roster members can read their own cohort (`GET /training/cohorts/{id}`, and `GET /training/cohorts/mine` for the list). Everything else needs `training.manage`. |
-| **Generating a cohort for a course with no classes** | Rejected with a clear error before anything is written. Build the syllabus first. |
+| Scenario                                                     | Behavior                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **You reorder the classes but the dates don't change**       | Order (`sequence`) and timing (`day_offset`) are independent. Moving class 3 to the top does not move it to day 1 — it still happens on whatever day its offset says. The builder makes this visible: a class scheduled before the one above it reads _"2 days earlier"_ instead of _"2 days later"_. To re-space after reordering, edit the day offsets or run **Fill from pattern**. |
+| **You fix the syllabus and a running cohort doesn't change** | Correct and deliberate. A cohort is materialized at generation, so an in-flight recruit school is never silently re-scheduled underneath the students. The fix reaches the _next_ cohort; to change the current one, edit its classes on the cohort detail page.                                                                                                                       |
+| **You delete a class from the syllabus**                     | Running cohorts keep their copy of it (`course_class_id` becomes NULL) — it simply becomes a class that belongs only to that cohort. Nothing is unscheduled, and nobody loses credit.                                                                                                                                                                                                  |
+| **You skip a class in the preview**                          | The cohort renumbers contiguously. Skip syllabus class 4 and the cohort's class 4 is syllabus class 5. Cohort sequence numbers are per-cohort; they are not syllabus positions.                                                                                                                                                                                                        |
+| **One class fails to schedule (room double-booked)**         | Only that class fails. Generation continues, the cohort class row is created with no event, and the failure comes back as a warning. Resolve the conflict, then **Create missing events** — which only fills gaps and can never duplicate a class.                                                                                                                                     |
+| **You click "Create missing events" twice**                  | Nothing happens the second time. It only touches classes whose `event_id` is NULL.                                                                                                                                                                                                                                                                                                     |
+| **Someone deletes a generated event in the Events UI**       | The cohort still lists the class, now marked **No event**. **Create missing events** rebuilds it. The link is `SET NULL`, not `CASCADE`, precisely so this is recoverable rather than silent data loss.                                                                                                                                                                                |
+| **The course spans a DST change**                            | A 19:00 class stays at 19:00 local on both sides. Times are stored as local wall clock and resolved against the organization timezone at generation, not as a fixed UTC offset.                                                                                                                                                                                                        |
+| **Two classes roll onto the same day**                       | Weekend and blackout rolling moves each class forward independently, so two can land on the same date. The preview shows the collision — adjust an offset before generating.                                                                                                                                                                                                           |
+| **A blackout date is skipped even with the roll policy off** | Yes. "Keep the computed date" governs weekends; a blackout date is an explicit _not this day_ and always applies.                                                                                                                                                                                                                                                                      |
+| **You generate a second cohort of the same course**          | It reuses the pipeline the first cohort built (recorded on `training_courses.program_id`) rather than creating a duplicate. A member already enrolled keeps that enrollment **and their existing progress** — right for someone repeating a course, surprising if you expected a clean slate. Use **Start new cycle** on their enrollment to reset.                                    |
+| **A member can't be enrolled (unmet prerequisite)**          | They are still added to the roster and the reason comes back as a warning. The officer knows their department better than the eligibility rules do; losing an entire generation over one member would be worse.                                                                                                                                                                        |
+| **You add a member half-way through the course**             | They are RSVP'd only to classes that **have not started**. Past classes are never backfilled — that would put finished sessions on their calendar and list them as an expected no-show for training they could not have attended.                                                                                                                                                      |
+| **You withdraw a member**                                    | Their enrollment, training records, and any class they already checked into are kept. Their RSVPs on classes still to come are removed, so the course drops off their calendar and they stop counting as an expected attendee.                                                                                                                                                         |
+| **"Shift remaining" doesn't move everything**                | By default it moves only classes that haven't started — past classes are anchored to their attendance records. Cancelled classes never move. Set a starting position explicitly to shift from a specific class onward.                                                                                                                                                                 |
+| **A cancelled class is still listed**                        | Cancelling cancels the _event_ rather than deleting it, so anyone who signed up sees a cancellation rather than a class silently vanishing. The class stays on the cohort for the record.                                                                                                                                                                                              |
+| **A class's catalog course was archived**                    | The preview warns, but generation still proceeds — archiving is a soft delete and the officer may well intend it. Reactivate the course or point the class at a different one.                                                                                                                                                                                                         |
+| **Some classes shouldn't count toward a certificate**        | Set **Counts toward certification requirements** off on that syllabus class. Attendance still creates the training record and hours (counting toward general compliance), but the class won't advance the linked certificate requirements — the standard use for an informal in-house drill inside an otherwise certification-grade school.                                            |
+| **The syllabus is very long**                                | A course is capped at 200 classes, and a cohort at 200 generated classes. Past that it's a data-entry mistake, not a course.                                                                                                                                                                                                                                                           |
+| **A student wants to see their own schedule**                | Roster members can read their own cohort (`GET /training/cohorts/{id}`, and `GET /training/cohorts/mine` for the list). Everything else needs `training.manage`.                                                                                                                                                                                                                       |
+| **Generating a cohort for a course with no classes**         | Rejected with a clear error before anything is written. Build the syllabus first.                                                                                                                                                                                                                                                                                                      |
 
-> **Cohort vs. recurring session — which do I want?** A *recurring training
-> session* repeats **the same class** on a fixed cadence (monthly CPR refresher).
-> A *cohort* runs **an ordered series of different classes** exactly once
+> **Cohort vs. recurring session — which do I want?** A _recurring training
+> session_ repeats **the same class** on a fixed cadence (monthly CPR refresher).
+> A _cohort_ runs **an ordered series of different classes** exactly once
 > (recruit school: orientation, then SCBA, then ladders). If each meeting covers
 > a different subject, you want a cohort.
 
 #### Atomic Program Build
+
 - Create-pipeline wizard builds a program with all phases, requirements, and milestones in one transaction — a failure can't leave a half-built program behind
 
 #### Milestone System
+
 - Define completion milestones (e.g., 25%, 50%, 75%)
 - Milestone notifications
 - Officer verification requirements
 
 #### Conditional Reminders
+
 - Send reminders based on progress thresholds
 - Configure days before deadline
 - Only send if member is behind schedule (e.g., only remind if < 40% complete 90 days before deadline)
 
 #### Member Dashboard Widget
+
 - Shows top 3 active programs on dashboard
 - Visual progress bars
 - Next steps displayed
@@ -366,6 +386,7 @@ every confusion below comes from that one distinction.
 - Click-through to detailed progress page
 
 #### Self-Reported Training
+
 - Members submit external training for officer review
 - Configurable approval workflow (auto-approve, manual, by hours threshold)
 - Customizable form fields (visible, required, label per field)
@@ -382,9 +403,10 @@ every confusion below comes from that one distinction.
   (certification / skills / checklist / knowledge test) are marked complete. It runs through
   the normal progress updater (so rollup and phase advancement fire) and, being an explicit
   officer sign-off, is **not** subject to the requirement's `allows_external_credit` opt-in
-  (that flag only governs *automatic* crediting from provider syncs).
+  (that flag only governs _automatic_ crediting from provider syncs).
 
 #### Correcting Mistakes (Void & Reverse)
+
 Entries made in error can be undone without hand-editing progress:
 
 - **Void a training record** (`DELETE /training/records/{id}`, `training.manage`)
@@ -401,6 +423,7 @@ Both build on the credit ledger, so requirement percentages, the enrollment
 rollup, and phase state unwind automatically. Both are audit-logged.
 
 #### Shift Completion Reports
+
 - Shift officers file reports on trainee experiences
 - Auto-updates pipeline requirement progress (shifts, calls, hours)
 - Performance ratings, skill observations, officer narratives
@@ -408,6 +431,7 @@ rollup, and phase state unwind automatically. Both are audit-logged.
 - Aggregate statistics per trainee
 
 #### Member Training Page
+
 - Personal training page (`/training/my-training`) for each member
 - Shows training history, certifications, pipeline progress, shift reports, submissions
 - Configurable visibility per department (14 toggle settings)
@@ -415,12 +439,14 @@ rollup, and phase state unwind automatically. Both are audit-logged.
 - Settings tab for officers to customize what members see
 
 #### Training Reports
+
 - Training Summary report with date range filtering
 - Training Progress report showing pipeline enrollment status
 - Annual Training Report with comprehensive member breakdown
 - Customizable reporting period (This Year, Last Year, Last 90 Days, Custom)
 
 #### External Training Integration
+
 - Connect to external training platforms (Vector Solutions, Target Solutions, Lexipol, I Am Responding)
 - Automatic sync of completed training records
 - Category and user mapping between systems
@@ -436,13 +462,13 @@ The External Training Integration feature allows organizations to connect to ext
 
 ### Supported Providers
 
-| Provider | Description |
-|----------|-------------|
+| Provider             | Description                                                             |
+| -------------------- | ----------------------------------------------------------------------- |
 | **Vector Solutions** | Fire and EMS online training platform with comprehensive course library |
-| **Target Solutions** | Public safety training, compliance tracking, and recordkeeping |
-| **Lexipol** | Policy acknowledgment, training bulletins, and compliance training |
-| **I Am Responding** | Response tracking with integrated training documentation |
-| **Custom API** | Connect to any training platform with a compatible REST API |
+| **Target Solutions** | Public safety training, compliance tracking, and recordkeeping          |
+| **Lexipol**          | Policy acknowledgment, training bulletins, and compliance training      |
+| **I Am Responding**  | Response tracking with integrated training documentation                |
+| **Custom API**       | Connect to any training platform with a compatible REST API             |
 
 ### Setting Up an Integration
 
@@ -505,7 +531,7 @@ The External Training Integration feature allows organizations to connect to ext
 > Each requirement has an **"Accept external / imported training credit"** toggle
 > (off by default). Leave it off for competencies the department wants delivered
 > in-house (e.g. a hands-on radios drill), and a matching Vector Solutions course
-> will *not* check it off — only an in-house session, a skills test, or manual
+> will _not_ check it off — only an in-house session, a skills test, or manual
 > sign-off will. Turn it on for requirements where online/third-party delivery is
 > acceptable (e.g. HIPAA CE): then, when a record is imported, for each of the
 > member's **active** enrollments a matching HOURS requirement is advanced by the
@@ -522,12 +548,14 @@ The External Training Integration feature allows organizations to connect to ext
 After syncing, you may need to map external users and categories to your internal records.
 
 #### User Mapping
+
 - External users are auto-mapped by email when possible
 - Unmapped users appear in the "Users" tab under Mappings
 - Click "Map User" to select the corresponding internal member
 - Once mapped, all training for that external user will apply to the member
 
 #### Category Mapping
+
 - External categories are auto-mapped by name when possible
 - Unmapped categories appear in the "Categories" tab under Mappings
 - Click "Map Category" to select the corresponding internal category
@@ -536,6 +564,7 @@ After syncing, you may need to map external users and categories to your interna
 ### Import Queue
 
 The Import Queue shows all fetched records pending import:
+
 - **Pending**: Ready to import (user mapped)
 - **Skipped**: No user mapping available
 - **Imported**: Successfully created TrainingRecord
@@ -546,6 +575,7 @@ Use **Bulk Import** to import all pending records at once, or import individual 
 ### Sync History
 
 View sync history for each provider:
+
 - Sync type (full, incremental, manual)
 - Records fetched, imported, updated, skipped, failed
 - Start and end times
@@ -627,19 +657,21 @@ Training requirements support flexible due date calculations to match different 
 Training is due by the end of a specified calendar period. This is ideal for annual requirements that align with calendar or fiscal years.
 
 **Configuration:**
+
 - `period_start_month`: Month when the period starts (1-12)
 - `period_start_day`: Day when the period starts (1-31)
 
 **Examples:**
 
-| Use Case | Start Month | Start Day | Due Date |
-|----------|-------------|-----------|----------|
-| Calendar Year | January (1) | 1 | December 31 |
-| Fiscal Year (July-June) | July (7) | 1 | June 30 |
-| Academic Year (Sept-Aug) | September (9) | 1 | August 31 |
-| Q1 Deadline | January (1) | 1 | March 31 |
+| Use Case                 | Start Month   | Start Day | Due Date    |
+| ------------------------ | ------------- | --------- | ----------- |
+| Calendar Year            | January (1)   | 1         | December 31 |
+| Fiscal Year (July-June)  | July (7)      | 1         | June 30     |
+| Academic Year (Sept-Aug) | September (9) | 1         | August 31   |
+| Q1 Deadline              | January (1)   | 1         | March 31    |
 
 **How it works:**
+
 - If current date is before the period start, due date is end of current period
 - If current date is after period start, due date is end of next period
 - Completion resets the cycle for the next period
@@ -649,18 +681,20 @@ Training is due by the end of a specified calendar period. This is ideal for ann
 Training is due X months from the date of last completion. This is ideal for certifications that must be renewed at regular intervals regardless of when they were obtained.
 
 **Configuration:**
+
 - `rolling_period_months`: Number of months between required completions
 
 **Examples:**
 
-| Certification | Rolling Period | If Completed Jan 15, 2026 |
-|--------------|----------------|---------------------------|
-| CPR/BLS | 24 months | Due: Jan 15, 2028 |
-| ACLS | 24 months | Due: Jan 15, 2028 |
-| Annual Physical | 12 months | Due: Jan 15, 2027 |
-| Quarterly Drill | 3 months | Due: Apr 15, 2026 |
+| Certification   | Rolling Period | If Completed Jan 15, 2026 |
+| --------------- | -------------- | ------------------------- |
+| CPR/BLS         | 24 months      | Due: Jan 15, 2028         |
+| ACLS            | 24 months      | Due: Jan 15, 2028         |
+| Annual Physical | 12 months      | Due: Jan 15, 2027         |
+| Quarterly Drill | 3 months       | Due: Apr 15, 2026         |
 
 **How it works:**
+
 - Due date = Last completion date + Rolling period months
 - If never completed, due date is immediate (or based on enrollment date)
 - Each completion resets the countdown from the new completion date
@@ -670,12 +704,14 @@ Training is due X months from the date of last completion. This is ideal for cer
 Training is due when the associated certification expires. This ties the requirement directly to an external certification's validity period.
 
 **Use Cases:**
+
 - EMT certification renewal
 - Paramedic license renewal
 - State firefighter certification
 - CDL medical card renewal
 
 **How it works:**
+
 - Due date matches the expiration date of the linked certification
 - When certification is renewed, due date automatically updates
 - Useful for requirements that must match external regulatory timelines
@@ -685,25 +721,27 @@ Training is due when the associated certification expires. This ties the require
 Training is due by a specific, unchanging date. This is ideal for one-time requirements or requirements with hard external deadlines.
 
 **Use Cases:**
+
 - Grant-mandated training deadlines
 - New regulation compliance dates
 - Probationary period milestones
 - Specific event preparation
 
 **How it works:**
+
 - Due date is set once and does not change
 - Typically used for non-recurring requirements
 
 ### Choosing the Right Due Date Type
 
-| Scenario | Recommended Type | Why |
-|----------|------------------|-----|
-| "Complete 24 hours by year end" | Calendar Period | Aligns with reporting cycles |
-| "Recertify CPR every 2 years" | Rolling | Based on individual completion dates |
-| "Keep EMT cert current" | Certification Period | Matches external cert expiration |
-| "Complete by grant deadline" | Fixed Date | Hard external deadline |
-| "Quarterly training drills" | Calendar Period | Recurring calendar-based |
-| "Physical fitness test annually" | Rolling | Individual anniversary dates |
+| Scenario                         | Recommended Type     | Why                                  |
+| -------------------------------- | -------------------- | ------------------------------------ |
+| "Complete 24 hours by year end"  | Calendar Period      | Aligns with reporting cycles         |
+| "Recertify CPR every 2 years"    | Rolling              | Based on individual completion dates |
+| "Keep EMT cert current"          | Certification Period | Matches external cert expiration     |
+| "Complete by grant deadline"     | Fixed Date           | Hard external deadline               |
+| "Quarterly training drills"      | Calendar Period      | Recurring calendar-based             |
+| "Physical fitness test annually" | Rolling              | Individual anniversary dates         |
 
 ---
 
@@ -712,6 +750,7 @@ Training is due by a specific, unchanging date. This is ideal for one-time requi
 ### Requirement Types
 
 #### 1. Hours-Based Requirements
+
 Track cumulative training hours.
 
 ```json
@@ -726,6 +765,7 @@ Track cumulative training hours.
 ```
 
 **With Rolling Due Date:**
+
 ```json
 {
   "requirement_type": "hours",
@@ -736,12 +776,16 @@ Track cumulative training hours.
 ```
 
 #### 2. Course-Based Requirements
+
 Require completion of specific courses.
 
 ```json
 {
   "requirement_type": "courses",
-  "required_courses": ["firefighter-i-course-uuid", "firefighter-ii-course-uuid"]
+  "required_courses": [
+    "firefighter-i-course-uuid",
+    "firefighter-ii-course-uuid"
+  ]
 }
 ```
 
@@ -749,7 +793,86 @@ Require completion of specific courses.
 > compliance evaluator matches a member's completed `course_id` against these
 > values directly.
 
+**Pick from the course library, don't type names** _(2026-08-07)_. All three
+places a requirement is defined — the create-pipeline wizard, the pipeline
+requirement modal, and the department requirements page — now offer a
+`CourseLibraryPicker` over the department's course catalog, so a real course id
+is stored rather than an id list nobody could supply by hand.
+
+> **This fixed a requirement that could never be completed.** The department
+> requirements page used to collect `required_courses` as **free-text course
+> names**, one per line, while every evaluator compares that column against a
+> record's `course_id`. A typed-in name matched nothing, so the requirement read
+> as permanently incomplete for everyone. If you have department requirements
+> created before 2026-08-07 that never show anyone compliant, re-open them and
+> pick the courses from the library.
+>
+> The NIMS/ICS starter template seeded four such names. It now names them in its
+> description for the officer to link, since course-library ids are per-department
+> and a template cannot know them in advance.
+
+`required_courses` is a client-supplied array of foreign keys, so every write
+path (program build, requirement create/update, and the department requirement
+endpoints) validates the ids against the caller's organization. An invalid id is
+reported only as invalid — it cannot be used to probe another tenant for the
+existence of a course (XC-1).
+
+**Switching a requirement away from `courses`/`certification` clears its
+links**, since a leftover course id silently narrows the hours evaluator to only
+that course's records.
+
+#### 2a. Freshness Window — `recency_days` _(2026-08-07)_
+
+Course and certification requirements can demand that the completion itself be
+**recent**:
+
+```json
+{
+  "requirement_type": "courses",
+  "required_courses": ["cpr-course-uuid"],
+  "recency_days": 180
+}
+```
+
+Off by default (`null`), so nothing changes for existing requirements.
+
+**This is the case a `one_time` requirement could not express.** Its frequency
+window is unbounded, so a member who took CPR three years ago read as satisfied
+forever — exactly what a recruit school needs to reject.
+
+> **`recency_days` is not `rolling_period_months`.** They are easy to confuse and
+> they answer different questions:
+>
+> |                         | Question it answers              | Scope                                         |
+> | ----------------------- | -------------------------------- | --------------------------------------------- |
+> | `rolling_period_months` | "How often must this be redone?" | A recurring **obligation** on the member      |
+> | `recency_days`          | "How old may the completion be?" | A validity **window on an individual record** |
+>
+> Because they are independent, a department's one-time CPR requirement and a
+> recruit pipeline's 180-day one can point at **the same course** and disagree
+> about **the same record**. That is intended.
+
+**Evaluation order.** The window narrows the record pool _before_ the frequency
+window in every evaluator (compliance matrix, member compliance summary,
+competency matrix), so it can only ever _remove_ records — the narrower of the
+two always wins.
+
+**It also gates the officer apply-training-record path.** That path is an
+explicit sign-off and bypasses the external-credit flag by design, but it must
+not bypass this: crediting a three-year-old record to a "within 180 days"
+requirement would quietly defeat the rule the officer set. Both callers (record
+apply, submission approval) pass the completion date and are rejected pre-flight,
+before anything is committed.
+
+> **Edge case — a record with no completion date fails the check** rather than
+> slipping through, because the window cannot be verified against it.
+
+> **The window can be lifted again.** `recency_days` is in the update path's
+> clearable set; without that the shared update loop would read "unset" as "leave
+> alone" and make the setting one-way.
+
 #### 3. Certification Requirements
+
 Require obtaining certifications.
 
 ```json
@@ -761,6 +884,7 @@ Require obtaining certifications.
 ```
 
 **With Rolling Recertification:**
+
 ```json
 {
   "requirement_type": "certification",
@@ -771,7 +895,17 @@ Require obtaining certifications.
 }
 ```
 
+**Linking to a library course** _(2026-08-07)_. A certification requirement may
+also carry `required_courses`, which matches a record **exactly** by course id.
+This is an _additional_ match on top of the existing name / `training_type` /
+registry-code heuristics — those must keep working for requirements created
+before the link existed. The predicate was duplicated across three evaluators and
+is now a single shared `certification_record_matches`.
+
+`recency_days` (see above) applies to certification requirements too.
+
 #### 4. Shift Requirements
+
 Require completing a number of shifts.
 
 ```json
@@ -783,6 +917,7 @@ Require completing a number of shifts.
 ```
 
 #### 5. Call Requirements
+
 Require responding to calls/incidents.
 
 ```json
@@ -794,6 +929,7 @@ Require responding to calls/incidents.
 ```
 
 #### 6. Skills Evaluation
+
 Require demonstrating skills with officer evaluation.
 
 ```json
@@ -807,6 +943,7 @@ Require demonstrating skills with officer evaluation.
 > array of ID/slug strings, not objects.
 
 #### 7. Checklist Requirements
+
 Require completing a checklist of tasks.
 
 ```json
@@ -821,6 +958,7 @@ Require completing a checklist of tasks.
 ```
 
 #### 8. Knowledge Test Requirements
+
 Require a passing score on a knowledge test. Scoring is lightweight and
 **officer-entered** — an officer records a `test_score` (0-100) via the progress
 endpoint; the system derives pass/fail from `passing_score` (default 70) and
@@ -838,6 +976,21 @@ enforces `max_attempts`.
 > yet — see [Remaining Planned Features](#remaining-planned-features). The current
 > support records officer-entered scores and attempt history only.
 
+> **`max_attempts` is enforced by skills testing too** _(2026-08-08)_. It used to
+> be honoured only on the officer-entered knowledge-test path, so a candidate
+> capped at two attempts could be given a third **skills** evaluation and have the
+> pass credited to the pipeline. Both creating and completing an official skills
+> test now check the cap — creation, so an examiner is refused before running an
+> evaluation that could not count; completion, because several tests can be
+> started before any is submitted.
+>
+> An attempt is a **completed, official, non-voided** test against that
+> requirement, **pass or fail**. Voided results do not consume a chance (the
+> department withdrew them) and practice attempts never do. A requirement already
+> **completed, verified or waived** is exempt, matching the knowledge-test path
+> and keeping recertification testing possible. See
+> [SKILLS_TESTING_FEATURE.md §14.5](./SKILLS_TESTING_FEATURE.md).
+
 ### Requirement Sources
 
 - **Department**: Custom requirements created by the training officer
@@ -847,6 +1000,7 @@ enforces `max_attempts`.
 ### Customizing Registry Requirements
 
 Registry requirements are editable by default. Training officers can:
+
 - Modify time limits
 - Add program-specific descriptions
 - Set custom deadlines
@@ -860,16 +1014,19 @@ Registry requirements are editable by default. Training officers can:
 ### Program Structure Types
 
 #### Flexible Programs
+
 Members can complete requirements in any order.
 
 **Use case**: Annual continuing education requirements
 
 #### Sequential Programs
+
 Requirements must be completed in order.
 
 **Use case**: Progressive skill development programs
 
 #### Phase-Based Programs
+
 Requirements organized into phases with prerequisites.
 
 **Use case**: Probationary firefighter program (Orientation → Skills → Certification)
@@ -889,8 +1046,8 @@ const program = {
   reminder_conditions: {
     milestone_threshold: 50,
     days_before_deadline: 90,
-    send_if_below_percentage: 40
-  }
+    send_if_below_percentage: 40,
+  },
 };
 ```
 
@@ -904,7 +1061,7 @@ const phase1 = {
   description: "Initial orientation and safety training",
   prerequisite_phase_ids: [],
   requires_manual_advancement: false, // Auto-advance when complete
-  time_limit_days: 30
+  time_limit_days: 30,
 };
 
 const phase2 = {
@@ -914,7 +1071,7 @@ const phase2 = {
   description: "Hands-on skills training and evaluation",
   prerequisite_phase_ids: [phase1.id],
   requires_manual_advancement: true, // Officer must approve
-  time_limit_days: 180
+  time_limit_days: 180,
 };
 ```
 
@@ -930,7 +1087,7 @@ const programRequirement = {
   sort_order: 1,
   program_specific_description: "Complete within first 30 days",
   custom_deadline_days: 30,
-  notification_message: "Welcome! Please complete orientation materials."
+  notification_message: "Welcome! Please complete orientation materials.",
 };
 ```
 
@@ -944,7 +1101,7 @@ const milestone = {
   description: "Completed 50% of requirements",
   completion_percentage_threshold: 50,
   notification_message: "Great progress! You're halfway through the program.",
-  requires_verification: false
+  requires_verification: false,
 };
 ```
 
@@ -961,7 +1118,7 @@ const enrollment = {
   user_id: memberId,
   program_id: programId,
   target_completion_date: "2026-12-31",
-  notes: "Started as probationary member on Jan 22, 2026"
+  notes: "Started as probationary member on Jan 22, 2026",
 };
 ```
 
@@ -974,12 +1131,12 @@ const enrollment = {
 ```typescript
 const bulkEnrollment = {
   user_ids: [memberId1, memberId2, memberId3],
-  target_completion_date: "2026-12-31"
+  target_completion_date: "2026-12-31",
 };
 
 const response = await api.post(
   `/training/programs/programs/${programId}/bulk-enroll`,
-  bulkEnrollment
+  bulkEnrollment,
 );
 
 // Response includes success count and any errors
@@ -1007,8 +1164,8 @@ const progress = {
   progress_percentage: 45, // Calculated automatically
   progress_notes: {
     "2026-01-22": "Completed 8 hours of training",
-    "2026-01-29": "Completed additional 12 hours"
-  }
+    "2026-01-29": "Completed additional 12 hours",
+  },
 };
 ```
 
@@ -1095,6 +1252,7 @@ phase-advancement all run consistently:
 ### Dashboard Widget
 
 Members see a training progress widget on their dashboard showing:
+
 - Top 3 active programs
 - Progress percentage with color-coded bars
 - Next 1-2 steps/requirements
@@ -1104,6 +1262,7 @@ Members see a training progress widget on their dashboard showing:
 ### Detailed Progress View
 
 The full progress page shows:
+
 - All enrolled programs
 - Overall progress percentage
 - Time remaining to deadline
@@ -1119,6 +1278,7 @@ The full progress page shows:
 Members have a read-only progression view at `/training/my-progress/:enrollmentId`
 (linked from the **My Training** page). It reuses `GET /enrollments/{id}` (members
 may read their own enrollment) and shows:
+
 - Current phase and overall progress percentage
 - Time remaining / behind-schedule status
 - Next milestones
@@ -1157,6 +1317,7 @@ Categories help organize your training and allow flexible requirement satisfacti
 ### 2. Set Up Requirements
 
 #### Option A: Import from Registry
+
 1. Navigate to Training Programs → Requirements tab
 2. Click a registry button — "Import NFPA", "Import Pro Board", or an NREMT provider
    level ("Import NREMT — EMR / EMT / Advanced EMT (AEMT) / Paramedic")
@@ -1184,6 +1345,7 @@ linked categories, so tagging your Airway course with the "Airway…" category m
 hours count toward that requirement's Airway section.
 
 #### Option B: Create Custom Requirement
+
 1. Click "Create Requirement"
 2. Fill in details:
    - Name and description
@@ -1197,6 +1359,7 @@ hours count toward that requirement's Airway section.
    - Applicability (positions/roles)
 
 #### Option C: Use Requirement Templates
+
 1. Click "Use Template" on the Requirements page
 2. Choose from the built-in templates for common standards:
    - **NFPA 1001 Firefighter Annual Training** (36 hrs, annual, calendar period)
@@ -1217,6 +1380,7 @@ hours count toward that requirement's Airway section.
 ### 2. Create Training Program
 
 #### Option A: Create from Scratch
+
 1. Navigate to Training Programs → Programs tab
 2. Click "New Program"
 3. Fill in program details:
@@ -1228,6 +1392,7 @@ hours count toward that requirement's Airway section.
    - Concurrent enrollment settings
 
 #### Option B: Duplicate from Template
+
 1. Find existing template/program
 2. Click "Duplicate"
 3. Enter new name
@@ -1236,6 +1401,7 @@ hours count toward that requirement's Airway section.
 ### 3. Configure Program Structure
 
 #### For Phase-Based Programs:
+
 1. Add phases in order
 2. Set prerequisites for each phase
 3. Configure manual advancement if needed
@@ -1243,6 +1409,7 @@ hours count toward that requirement's Airway section.
 5. Set phase-specific time limits
 
 #### For All Programs:
+
 1. Add requirements to program
 2. Set requirement order/priority
 3. Add custom descriptions
@@ -1252,6 +1419,7 @@ hours count toward that requirement's Airway section.
 ### 4. Enroll Members
 
 #### Single Enrollment:
+
 1. Navigate to program
 2. Click "Enroll Member"
 3. Select member
@@ -1259,6 +1427,7 @@ hours count toward that requirement's Airway section.
 5. Add notes
 
 #### Bulk Enrollment:
+
 1. Navigate to program
 2. Click "Bulk Enroll"
 3. Select multiple members
@@ -1270,12 +1439,14 @@ hours count toward that requirement's Airway section.
 ### 5. Monitor Progress
 
 #### Program-Level View:
+
 - Number of enrolled members
 - Average completion percentage
 - Members behind schedule
 - Upcoming deadlines
 
 #### Member-Level View:
+
 - Individual progress percentage
 - Completed requirements
 - Pending requirements
@@ -1285,12 +1456,14 @@ hours count toward that requirement's Airway section.
 ### 6. Verify & Approve
 
 #### Verify Completions:
+
 1. Review submitted requirement completions
 2. Check supporting documentation
 3. Verify or request corrections
 4. Add verification notes
 
 #### Approve Phase Advancements:
+
 1. Review phase completion
 2. Evaluate readiness for next phase
 3. Approve or request additional training
@@ -1303,6 +1476,7 @@ hours count toward that requirement's Airway section.
 ### Programs
 
 #### Create Program
+
 ```http
 POST /api/v1/training/programs/programs
 Content-Type: application/json
@@ -1318,6 +1492,7 @@ Content-Type: application/json
 ```
 
 #### Build Program (atomic)
+
 Create a program together with all of its phases, requirements, and milestones in
 a single transaction (backs the create-pipeline wizard). Program `code` and
 `version`, and each phase's `requires_manual_advancement`, are persisted and
@@ -1339,11 +1514,13 @@ Content-Type: application/json
 ```
 
 #### Get Program Details
+
 ```http
 GET /api/v1/training/programs/programs/{programId}
 ```
 
 #### Duplicate Program
+
 ```http
 POST /api/v1/training/programs/programs/{programId}/duplicate?new_name=Program%20v2&increment_version=true
 ```
@@ -1351,6 +1528,7 @@ POST /api/v1/training/programs/programs/{programId}/duplicate?new_name=Program%2
 ### Requirements
 
 #### Create Requirement
+
 ```http
 POST /api/v1/training/programs/requirements
 Content-Type: application/json
@@ -1364,6 +1542,7 @@ Content-Type: application/json
 ```
 
 #### Import Registry
+
 ```http
 POST /api/v1/training/programs/requirements/import/nfpa?skip_existing=true
 ```
@@ -1371,6 +1550,7 @@ POST /api/v1/training/programs/requirements/import/nfpa?skip_existing=true
 ### Enrollment
 
 #### Enroll Member
+
 ```http
 POST /api/v1/training/programs/enrollments
 Content-Type: application/json
@@ -1383,6 +1563,7 @@ Content-Type: application/json
 ```
 
 #### Bulk Enroll
+
 ```http
 POST /api/v1/training/programs/programs/{programId}/bulk-enroll
 Content-Type: application/json
@@ -1394,20 +1575,25 @@ Content-Type: application/json
 ```
 
 #### List Program Enrollments
+
 Returns each enrollment with the member's name and progress. Requires
 `training.view_all` OR `training.manage`.
+
 ```http
 GET /api/v1/training/programs/programs/{programId}/enrollments?status=active
 ```
 
 #### Get Member Progress
+
 ```http
 GET /api/v1/training/programs/enrollments/{enrollmentId}
 ```
 
 #### Advance Phase (manual)
+
 Advances the enrollment to the next phase. Requires the current phase to be
 complete unless `force=true`. Requires `training.manage`.
+
 ```http
 POST /api/v1/training/programs/enrollments/{enrollmentId}/advance-phase?force=false
 ```
@@ -1415,9 +1601,11 @@ POST /api/v1/training/programs/enrollments/{enrollmentId}/advance-phase?force=fa
 ### Progress
 
 #### Update Requirement Progress
+
 Set status, log a numeric `progress_value`, record a knowledge-test `test_score`
 (0-100), and/or apply officer verification. Officers (`training.manage`) may
 update any member's progress; other users may only update their own.
+
 ```http
 PATCH /api/v1/training/programs/progress/{progressId}
 Content-Type: application/json
@@ -1437,6 +1625,7 @@ Content-Type: application/json
 ### Key Tables
 
 #### `training_categories`
+
 - id, organization_id, name, code
 - description, color, icon
 - parent_category_id (self-referential for hierarchy)
@@ -1444,6 +1633,7 @@ Content-Type: application/json
 - created_at, updated_at, created_by
 
 #### `training_programs`
+
 - id, organization_id, name, description
 - version, code
 - target_position, target_roles
@@ -1455,12 +1645,14 @@ Content-Type: application/json
 - is_template, active
 
 #### `program_phases`
+
 - id, program_id, phase_number, name
 - prerequisite_phase_ids
 - requires_manual_advancement
 - time_limit_days
 
 #### `training_requirements`
+
 - id, organization_id, name, description
 - requirement_type (hours, courses, shifts, calls, etc.)
 - source (department, state, national)
@@ -1477,6 +1669,7 @@ Content-Type: application/json
 - **category_ids** (JSONB array of category UUIDs)
 
 #### `training_courses`
+
 - id, organization_id, name, code
 - training_type, duration_hours, credit_hours
 - prerequisites, expiration_months
@@ -1485,7 +1678,9 @@ Content-Type: application/json
   cohort generates one)
 
 #### `course_classes`
+
 One row of a multi-class course's syllabus (see [Multi-Class Courses](#multi-class-courses--cohorts)).
+
 - id, organization_id, course_id (the container course)
 - **class_course_id** (the catalog course taught — required)
 - sequence, section_name, title, description
@@ -1497,6 +1692,7 @@ One row of a multi-class course's syllabus (see [Multi-Class Courses](#multi-cla
 - Unique on (course_id, sequence)
 
 #### `course_cohorts`
+
 - id, organization_id, course_id, name, code, description
 - start_date, status (draft, scheduled, in_progress, completed, cancelled)
 - program_id
@@ -1507,10 +1703,12 @@ One row of a multi-class course's syllabus (see [Multi-Class Courses](#multi-cla
 - generated_at, generated_by
 
 #### `course_cohort_classes`
+
 A syllabus row materialized onto real dates. This row is the stable identity of
 "class 7 of the fall recruit school"; the Event and TrainingSession are its
 current realization, which is what makes rescheduling and idempotent
 regeneration possible.
+
 - id, organization_id, cohort_id, course_class_id (null for ad-hoc classes)
 - sequence, title, description
 - scheduled_start, scheduled_end (**UTC**)
@@ -1522,12 +1720,14 @@ regeneration possible.
   latter is the idempotency key that makes regeneration safe
 
 #### `course_cohort_members`
+
 - id, organization_id, cohort_id, user_id
 - enrollment_id (the ProgramEnrollment tracking their pipeline progress)
 - status (active, withdrawn, completed), withdrawn_at, added_at, added_by
 - Unique on (cohort_id, user_id)
 
 #### `program_requirements`
+
 - id, program_id, phase_id, requirement_id
 - is_required, is_prerequisite
 - sort_order
@@ -1536,6 +1736,7 @@ regeneration possible.
 - notification_message
 
 #### `program_milestones`
+
 - id, program_id, phase_id
 - name, description
 - completion_percentage_threshold
@@ -1543,6 +1744,7 @@ regeneration possible.
 - requires_verification
 
 #### `program_enrollments`
+
 - id, user_id, program_id
 - enrolled_at, target_completion_date
 - current_phase_id
@@ -1551,6 +1753,7 @@ regeneration possible.
 - completed_at, deadline_warning_sent
 
 #### `requirement_progress`
+
 - id, enrollment_id, requirement_id
 - status (not_started, in_progress, completed, waived)
 - progress_value, progress_percentage
@@ -1596,21 +1799,25 @@ regeneration possible.
 ### Common Issues
 
 **Q: Member can't enroll in program**
+
 - Check prerequisite program completion
 - Verify concurrent enrollment settings
 - Ensure program is active
 
 **Q: Progress not updating**
+
 - Verify requirement is linked to program
 - Check that progress value matches requirement type
 - Ensure officer has verified completion
 
 **Q: Reminder not sent**
+
 - Check reminder_conditions configuration
 - Verify member is below threshold percentage
 - Check days_before_deadline setting
 
 **Q: Can't advance to next phase**
+
 - Check if phase requires manual advancement
 - Verify all prerequisites completed
 - Ensure previous phase is 100% complete
@@ -1618,16 +1825,19 @@ regeneration possible.
 ### Category Issues
 
 **Q: Category not appearing in dropdown**
+
 - Verify category is marked as active
 - Check that category belongs to your organization
 - Refresh the page to load latest categories
 
 **Q: Training not counting toward category-based requirement**
+
 - Verify the course is assigned to one of the requirement's categories
 - Check that the training record status is "completed"
 - Ensure the training date is within the current requirement period
 
 **Q: Can't delete a category**
+
 - Categories with assigned courses or requirements cannot be deleted
 - Remove category assignments first, or deactivate the category instead
 - Child categories must be removed or reassigned before deleting parent
@@ -1635,26 +1845,31 @@ regeneration possible.
 ### Due Date Issues
 
 **Q: Due date showing wrong date for calendar period**
+
 - Verify `period_start_month` and `period_start_day` are set correctly
 - Remember: period start defines when the NEW period begins, not when it ends
 - Example: January 1 start means due December 31
 
 **Q: Rolling due date not updating after completion**
+
 - Ensure the training record has a `completion_date` set
 - Verify the record status is "completed"
 - Check that `rolling_period_months` is configured on the requirement
 
 **Q: Member shows compliant but due date is past**
+
 - For rolling requirements, the due date is calculated from last completion
 - If never completed, member is immediately non-compliant
 - Check if there's a grace period configured
 
 **Q: Calendar period requirement due date is in the past**
+
 - If current date is past the period end, member is non-compliant for the current period
 - They need to complete training to become compliant for the next period
 - Due date will update to next period after completion
 
 **Q: Certification period requirement has no due date**
+
 - Ensure the member has an associated certification record
 - The certification must have an expiration date
 - Link the training record to the certification if not auto-linked
@@ -1678,6 +1893,7 @@ Members can submit their own training records for officer review and approval.
 ### Configuration
 
 Each department can customize:
+
 - **Approval Settings**: Require approval, auto-approve under X hours, review deadline
 - **Notification Settings**: Notify officer on submit, notify member on decision
 - **Field Visibility**: Toggle which fields are visible, required, or optional
@@ -1701,7 +1917,7 @@ PUT    /api/v1/training/submissions/config             Update config (officer)
 
 ## Shift Completion Reports
 
-Shift officers submit reports on trainee experiences after each shift. These reports feed into pipeline requirement progress for shift, call, and hour-based requirements. Reports can be auto-created as drafts during shift finalization or manually filed by officers. *(Updated 2026-03-28)*
+Shift officers submit reports on trainee experiences after each shift. These reports feed into pipeline requirement progress for shift, call, and hour-based requirements. Reports can be auto-created as drafts during shift finalization or manually filed by officers. _(Updated 2026-03-28)_
 
 ### Report Contents
 
@@ -1712,9 +1928,10 @@ Shift officers submit reports on trainee experiences after each shift. These rep
 - **Pipeline Linkage**: Optionally link to a trainee's program enrollment to auto-update requirement progress
 - **Audit Trail**: `data_sources` JSON field tracks which fields were auto-populated from shift data vs manually entered (e.g., `{"hours_on_shift": "shift_attendance", "calls_responded": "shift_calls"}`)
 
-### Auto-Population from Shift Data *(2026-03-28)*
+### Auto-Population from Shift Data _(2026-03-28)_
 
 When a shift and trainee are selected in the report form, the system auto-populates:
+
 - **Hours on shift** from ShiftAttendance duration
 - **Calls responded** from ShiftCall records where the trainee is in `responding_members`
 - **Call types** from the incident types of matching calls
@@ -1724,22 +1941,23 @@ Auto-populated fields display an **(auto)** badge. Officers can edit values befo
 ### Auto-Progress Updates
 
 When a shift report is created (or a draft transitions to `approved`/`pending_review`), the system automatically updates requirement progress:
+
 - **SHIFTS** requirements: Incremented by 1
 - **CALLS** requirements: If `required_call_types` specified on the requirement, only matching calls count (case-insensitive). Otherwise all calls counted. Call type breakdown tracked in `progress_notes`
 - **HOURS** requirements: Incremented by hours on shift
 
 Progress percentages and enrollment completion are automatically recalculated. **Draft reports do not trigger progress updates** — progress is deferred until the draft is completed.
 
-### Review Workflow *(2026-03-28)*
+### Review Workflow _(2026-03-28)_
 
 Reports support a multi-stage review workflow:
 
-| Status | Description |
-|--------|-------------|
-| `draft` | Auto-created on shift finalization; awaiting officer completion |
+| Status           | Description                                                                 |
+| ---------------- | --------------------------------------------------------------------------- |
+| `draft`          | Auto-created on shift finalization; awaiting officer completion             |
 | `pending_review` | Submitted for training officer review (if `report_review_required` enabled) |
-| `approved` | Finalized and visible to trainee (subject to visibility config) |
-| `flagged` | Flagged by reviewer for correction or concern |
+| `approved`       | Finalized and visible to trainee (subject to visibility config)             |
+| `flagged`        | Flagged by reviewer for correction or concern                               |
 
 Reviewers can optionally **redact fields** (clearing sensitive content) and add **reviewer notes** (encrypted, never visible to trainees).
 
@@ -1747,24 +1965,26 @@ Reviewers can optionally **redact fields** (clearing sensitive content) and add 
 
 Trainees can acknowledge shift reports and add their own comments via `POST /{report_id}/acknowledge`. Acknowledgment timestamp and comments are recorded for compliance tracking.
 
-### Analytics Dashboards *(2026-03-29)*
+### Analytics Dashboards _(2026-03-29)_
 
 **Officer Analytics** (`GET /training/shift-reports/officer-analytics`):
+
 - Org-wide totals: reports, hours, calls, average rating
 - Per-trainee breakdown table
 - Status counts (draft/pending/approved/flagged)
 - Monthly trend data
 
 **Trainee Statistics** (`GET /training/shift-reports/my-stats`):
+
 - Personal totals: reports, hours, calls, average rating
 - Monthly breakdown
 
 ### Pages
 
-| Page | Path | Access |
-|------|------|--------|
-| Shift Reports (multi-view) | ShiftReportsTab in SchedulingPage | All members |
-| Shift Report Form | ShiftReportPage | `training.manage` |
+| Page                       | Path                              | Access            |
+| -------------------------- | --------------------------------- | ----------------- |
+| Shift Reports (multi-view) | ShiftReportsTab in SchedulingPage | All members       |
+| Shift Report Form          | ShiftReportPage                   | `training.manage` |
 
 ### API Endpoints
 
@@ -1795,6 +2015,7 @@ Every member has access to a personal training page at `/training/my-training` t
 ### What Members See
 
 Depending on the department's visibility configuration:
+
 - **Training Hours Summary**: Total records and hours completed
 - **Requirements Compliance**: Percentage of all active requirements met (supports annual, biannual, quarterly, monthly, and one-time frequencies)
 - **Certifications**: Status, expiration dates, days until expiry
@@ -1820,22 +2041,22 @@ Each department can control exactly what training data individual members see on
 
 ### Visibility Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Training History | On | Members see their training record list |
-| Training Hours | On | Members see total hours summary |
-| Certification Status | On | Members see certification expiration dates |
-| Pipeline Progress | On | Members see program enrollment progress |
-| Requirement Details | On | Members see individual requirement progress |
-| Shift Reports | On | Members see shift completion reports |
-| Shift Statistics | On | Members see aggregate shift stats |
-| Performance Rating | On | Members see 1-5 performance ratings |
-| Areas of Strength | On | Members see officer-noted strengths |
-| Areas for Improvement | On | Members see improvement notes |
-| Skills Observed | On | Members see skill evaluations |
-| Officer Narrative | **Off** | Members see officer written narratives |
-| Submission History | On | Members see self-reported submission status |
-| Report Export | **Off** | Members can download their own data |
+| Setting               | Default | Description                                 |
+| --------------------- | ------- | ------------------------------------------- |
+| Training History      | On      | Members see their training record list      |
+| Training Hours        | On      | Members see total hours summary             |
+| Certification Status  | On      | Members see certification expiration dates  |
+| Pipeline Progress     | On      | Members see program enrollment progress     |
+| Requirement Details   | On      | Members see individual requirement progress |
+| Shift Reports         | On      | Members see shift completion reports        |
+| Shift Statistics      | On      | Members see aggregate shift stats           |
+| Performance Rating    | On      | Members see 1-5 performance ratings         |
+| Areas of Strength     | On      | Members see officer-noted strengths         |
+| Areas for Improvement | On      | Members see improvement notes               |
+| Skills Observed       | On      | Members see skill evaluations               |
+| Officer Narrative     | **Off** | Members see officer written narratives      |
+| Submission History    | On      | Members see self-reported submission status |
+| Report Export         | **Off** | Members can download their own data         |
 
 ### Changing Visibility Settings
 
@@ -1870,18 +2091,24 @@ The Reports module includes training-specific reports that aggregate data from t
 ### Available Training Reports
 
 #### Training Summary
+
 Overview of training completion rates, hours, and per-member statistics.
+
 - Supports date range filtering (This Year, Last Year, custom)
 - Shows completion rate, per-member hours, and course counts
 
 #### Training Progress
+
 Pipeline enrollment progress across all members.
+
 - Shows enrollment status summary (active, completed, withdrawn)
 - Per-member progress bars with requirement completion ratios
 - Average progress percentage
 
 #### Annual Training Report
+
 Comprehensive annual breakdown of all training activity.
+
 - Defaults to current year; customizable with date range picker
 - Summary statistics: total hours, completions, calls responded
 - Training by type breakdown
@@ -1890,6 +2117,7 @@ Comprehensive annual breakdown of all training activity.
 ### Date Range Picker
 
 Training reports support customizable reporting periods:
+
 - **This Year**: January 1 - December 31 of current year
 - **Last Year**: Full previous calendar year
 - **Last 90 Days**: Rolling 90-day window
@@ -1903,7 +2131,8 @@ Navigate to **Reports** page and use the **Reporting Period** section above the 
 
 ## Database Schema (New Tables)
 
-### `shift_completion_reports` *(updated 2026-03-28)*
+### `shift_completion_reports` _(updated 2026-03-28)_
+
 - id, organization_id
 - shift_id (nullable — null for ad hoc reports), shift_date
 - trainee_id, officer_id
@@ -1919,6 +2148,7 @@ Navigate to **Reports** page and use the **Reporting Period** section above the 
 - Unique constraint: `(shift_id, trainee_id)`
 
 ### `training_module_configs`
+
 - id, organization_id (unique)
 - show_training_history, show_training_hours, show_certification_status
 - show_pipeline_progress, show_requirement_details
@@ -1929,6 +2159,7 @@ Navigate to **Reports** page and use the **Reporting Period** section above the 
 - created_at, updated_at, updated_by
 
 ### `self_report_configs`
+
 - id, organization_id (unique)
 - require_approval, auto_approve_under_hours, approval_deadline_days
 - notify_officer_on_submit, notify_member_on_decision
@@ -1937,6 +2168,7 @@ Navigate to **Reports** page and use the **Reporting Period** section above the 
 - created_at, updated_at, updated_by
 
 ### `training_submissions`
+
 - id, organization_id, submitted_by
 - course_name, course_code, training_type, description
 - completion_date, hours_completed, credit_hours
@@ -1963,6 +2195,7 @@ so an event deleted through the events UI leaves a repairable gap rather than
 erasing the cohort's record of the class.
 
 Training sessions can be linked to events via the `training_session.event_id` foreign key. When a training session is created from an event:
+
 - Event RSVP data pre-populates the session attendee list
 - Event QR code check-ins can be used for attendance verification
 - Event location is inherited by the training session
@@ -1974,6 +2207,7 @@ Training sessions can be linked to events via the `training_session.event_id` fo
 
 When a training session is **approved**, its attendance feeds the pipeline via
 `update_requirement_progress` (applied **after** the approval + records commit):
+
 - If the session carries `program_id` + `requirement_id`, the linked requirement
   is progressed directly.
 - If the session is linked to a program and a **category** (`category_id`, no
@@ -1998,19 +2232,21 @@ and retries with `override=true`.
 ### Scheduling Module
 
 Shift completion reports (`POST /training/shift-reports`) auto-progress program requirements when linked to an enrollment:
+
 - **SHIFTS** requirements: Incremented by 1 per report
-- **CALLS** requirements: If `required_call_types` specified on the requirement, only matching calls count (case-insensitive matching). Otherwise all calls counted. Call type breakdown tracked in `progress_notes` *(2026-03-28)*
+- **CALLS** requirements: If `required_call_types` specified on the requirement, only matching calls count (case-insensitive matching). Otherwise all calls counted. Call type breakdown tracked in `progress_notes` _(2026-03-28)_
 - **HOURS** requirements: Incremented by hours on shift
 
-**Shift Finalization Integration** *(2026-03-28)*: When a shift is finalized via `POST /scheduling/shifts/{id}/finalize`, the system auto-creates draft ShiftCompletionReports for all attendees with active program enrollments. Draft reports do NOT trigger pipeline progress — progress is deferred until the officer completes the draft (transitions to `approved` or `pending_review`). This prevents double-counting and ensures officer review before data impacts training pipeline.
+**Shift Finalization Integration** _(2026-03-28)_: When a shift is finalized via `POST /scheduling/shifts/{id}/finalize`, the system auto-creates draft ShiftCompletionReports for all attendees with active program enrollments. Draft reports do NOT trigger pipeline progress — progress is deferred until the officer completes the draft (transitions to `approved` or `pending_review`). This prevents double-counting and ensures officer review before data impacts training pipeline.
 
-**Auto-Population** *(2026-03-28)*: The report form auto-populates hours, calls, and call types from shift records via `GET /training/shift-reports/shift-preview/{shift_id}/{trainee_id}`. The `data_sources` audit trail tracks which fields were auto-populated.
+**Auto-Population** _(2026-03-28)_: The report form auto-populates hours, calls, and call types from shift records via `GET /training/shift-reports/shift-preview/{shift_id}/{trainee_id}`. The `data_sources` audit trail tracks which fields were auto-populated.
 
 > **Edge Case:** If a shift report is filed for a member who is enrolled in multiple programs with overlapping requirements, the system credits all matching requirements across all active enrollments. This means a single shift can progress multiple program requirements simultaneously.
 
 ### Member Leaves & Waivers
 
 When a member has an active Leave of Absence with an auto-linked training waiver:
+
 - Proportional requirements (hours, shifts, calls) within programs are adjusted using the waiver formula: `adjusted = base × (active_months / total_months)`
 - Course completion and certification requirements are NOT adjusted (they are binary)
 - The member's program enrollment remains in `active` status during the leave
@@ -2021,6 +2257,7 @@ When a member has an active Leave of Absence with an auto-linked training waiver
 ### Skills Testing Module
 
 Skills test results can be linked to program requirements of type `skills_evaluation`:
+
 - When a candidate passes a skills test for a template referenced by a program requirement, progress is automatically updated
 - Failed tests do not regress progress but are logged for the officer's review
 - Practice mode tests do NOT count toward program requirement progress
@@ -2028,6 +2265,7 @@ Skills test results can be linked to program requirements of type `skills_evalua
 ### Compliance Officer Dashboard
 
 The compliance officer dashboard at `/compliance` aggregates program data for:
+
 - ISO readiness assessments using program completion data
 - Annual compliance reports incorporating program enrollment statistics
 - Compliance forecasting based on program progress trajectories
@@ -2035,6 +2273,7 @@ The compliance officer dashboard at `/compliance` aggregates program data for:
 ### Multi-Agency Training
 
 Multi-agency training sessions can count toward program requirements when:
+
 - The session is properly linked to the organization's training records
 - The participating member is enrolled in a program with matching requirements
 - The hours, shifts, or calls from the joint session match the requirement type
@@ -2044,6 +2283,7 @@ Multi-agency training sessions can count toward program requirements when:
 ### Instructor Qualification Validation
 
 When creating a training session linked to a program:
+
 - The system can validate that the assigned instructor holds a valid qualification for the course being taught
 - If the instructor's qualification expires before the session date, a warning is displayed
 - Use `GET /training/instructors/validate/{userId}/{courseId}` to programmatically check
@@ -2054,45 +2294,45 @@ When creating a training session linked to a program:
 
 ### Enrollment Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Member already enrolled in same program | Duplicate enrollment is prevented; system returns a clear error |
-| Member withdrawn from program, re-enrollment attempted | Re-enrollment is allowed; a new enrollment record is created with fresh progress |
-| Program deactivated while members are enrolled | Active enrollments remain; enrolled members can still complete requirements, but no new enrollments are accepted |
-| All requirements completed but phase requires manual advancement | Enrollment stays at current phase; officer must manually advance to next phase |
-| Shift report filed for member not enrolled in any program | Report is saved but no auto-progression occurs; report is available for manual review |
-| Concurrent enrollment in programs with overlapping requirements | A single training record or shift report credits all matching requirements across all active enrollments |
+| Scenario                                                         | Behavior                                                                                                         |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Member already enrolled in same program                          | Duplicate enrollment is prevented; system returns a clear error                                                  |
+| Member withdrawn from program, re-enrollment attempted           | Re-enrollment is allowed; a new enrollment record is created with fresh progress                                 |
+| Program deactivated while members are enrolled                   | Active enrollments remain; enrolled members can still complete requirements, but no new enrollments are accepted |
+| All requirements completed but phase requires manual advancement | Enrollment stays at current phase; officer must manually advance to next phase                                   |
+| Shift report filed for member not enrolled in any program        | Report is saved but no auto-progression occurs; report is available for manual review                            |
+| Concurrent enrollment in programs with overlapping requirements  | A single training record or shift report credits all matching requirements across all active enrollments         |
 
 ### Requirement Progress Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Required hours set to 0 | Member automatically shows 100% for that requirement (division by zero protection) |
-| Rolling period spans calendar year boundary | The rolling window is calculated from today minus N months, crossing year boundaries correctly |
-| Biannual requirement with expired certification | Status shows `expired` regardless of hours completed — certification must be renewed |
-| Requirement changed from annual to quarterly mid-year | Existing progress is recalculated against the new frequency; members may see progress reset |
-| Category-based requirement with deleted category | Records already tagged with the category still count; new records cannot be tagged with the deleted category |
-| Requirement marked completed/verified/waived | Progress percentage is set to 100 directly, so non-numeric types (checklist, skills, certification, knowledge test) advance the enrollment rollup |
-| Completed enrollment drops below 100% | Enrollment re-opens to `active` (e.g. a new required requirement is added, or an over-count is corrected down) |
-| Knowledge test with `max_attempts` exhausted | Further scores are rejected once attempts are used up and the requirement is not yet satisfied |
+| Scenario                                              | Behavior                                                                                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Required hours set to 0                               | Member automatically shows 100% for that requirement (division by zero protection)                                                                |
+| Rolling period spans calendar year boundary           | The rolling window is calculated from today minus N months, crossing year boundaries correctly                                                    |
+| Biannual requirement with expired certification       | Status shows `expired` regardless of hours completed — certification must be renewed                                                              |
+| Requirement changed from annual to quarterly mid-year | Existing progress is recalculated against the new frequency; members may see progress reset                                                       |
+| Category-based requirement with deleted category      | Records already tagged with the category still count; new records cannot be tagged with the deleted category                                      |
+| Requirement marked completed/verified/waived          | Progress percentage is set to 100 directly, so non-numeric types (checklist, skills, certification, knowledge test) advance the enrollment rollup |
+| Completed enrollment drops below 100%                 | Enrollment re-opens to `active` (e.g. a new required requirement is added, or an over-count is corrected down)                                    |
+| Knowledge test with `max_attempts` exhausted          | Further scores are rejected once attempts are used up and the requirement is not yet satisfied                                                    |
 
 ### Waiver Interaction Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Overlapping waivers (e.g., maternity leave + medical waiver) | Months are deduplicated — a month waived by multiple waivers counts only once |
-| Targeted waiver (specific requirements only) | Only listed requirements are adjusted; other program requirements retain full targets |
-| Permanent waiver (no end date) | Uses far-future sentinel (9999-12-31); only months within the evaluation period are counted as waived |
-| Waiver end date changed retroactively | Compliance recalculates with the new dates; previously-compliant members may become non-compliant |
+| Scenario                                                     | Behavior                                                                                              |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Overlapping waivers (e.g., maternity leave + medical waiver) | Months are deduplicated — a month waived by multiple waivers counts only once                         |
+| Targeted waiver (specific requirements only)                 | Only listed requirements are adjusted; other program requirements retain full targets                 |
+| Permanent waiver (no end date)                               | Uses far-future sentinel (9999-12-31); only months within the evaluation period are counted as waived |
+| Waiver end date changed retroactively                        | Compliance recalculates with the new dates; previously-compliant members may become non-compliant     |
 
 ### Duplicate Detection Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Same member + same course name + completion date within ±1 day | System flags as potential duplicate with a warning |
-| Same member + same course name but different case (e.g., "EMT" vs "emt") | Detected as duplicate (case-insensitive comparison) |
-| Bulk import with duplicates in the batch | Each record checked independently; duplicates within the same batch are also detected |
-| Override duplicate warning | User can proceed with the duplicate if it's intentional (e.g., retake) |
+| Scenario                                                                 | Behavior                                                                              |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Same member + same course name + completion date within ±1 day           | System flags as potential duplicate with a warning                                    |
+| Same member + same course name but different case (e.g., "EMT" vs "emt") | Detected as duplicate (case-insensitive comparison)                                   |
+| Bulk import with duplicates in the batch                                 | Each record checked independently; duplicates within the same batch are also detected |
+| Override duplicate warning                                               | User can proceed with the duplicate if it's intentional (e.g., retake)                |
 
 ---
 
@@ -2120,13 +2360,13 @@ The following features, previously listed as planned, are now available:
 
 #### Recurring Training Session Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Deleting parent event | Does not cascade-delete the linked training session |
+| Scenario                               | Behavior                                                        |
+| -------------------------------------- | --------------------------------------------------------------- |
+| Deleting parent event                  | Does not cascade-delete the linked training session             |
 | Quarter-hour picker with imported data | Arbitrary minute values are rounded to the nearest quarter-hour |
-| Course auto-populate | Fills all fields but does not lock them — user can override |
-| Quick duration buttons | Disabled until a start date is selected |
-| Recurrence past series end | Events beyond the series end date are not created |
+| Course auto-populate                   | Fills all fields but does not lock them — user can override     |
+| Quick duration buttons                 | Disabled until a start date is selected                         |
+| Recurrence past series end             | Events beyond the series end date are not created               |
 
 ### Recently Implemented (May 2026)
 
@@ -2156,11 +2396,11 @@ The following features, previously listed as planned, are now available:
 
 Training records now support real file attachments (previously metadata-only):
 
-| Endpoint | Notes |
-|----------|-------|
-| `POST /api/v1/training/records/{id}/attachments` | Multipart upload, ≤ **25 MB**, magic-byte MIME detection (PDF/JPEG/PNG/GIF/WEBP/DOC/DOCX) |
-| `GET /api/v1/training/records/{id}/attachments` | Lists **sanitized metadata only** (no server file paths) |
-| `GET /api/v1/training/records/{id}/attachments/{index}/download` | Streams a stored attachment by index |
+| Endpoint                                                         | Notes                                                                                     |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `POST /api/v1/training/records/{id}/attachments`                 | Multipart upload, ≤ **25 MB**, magic-byte MIME detection (PDF/JPEG/PNG/GIF/WEBP/DOC/DOCX) |
+| `GET /api/v1/training/records/{id}/attachments`                  | Lists **sanitized metadata only** (no server file paths)                                  |
+| `GET /api/v1/training/records/{id}/attachments/{index}/download` | Streams a stored attachment by index                                                      |
 
 - **Access:** the record owner manages their own attachments; everyone else
   needs `training.manage`.
@@ -2239,6 +2479,7 @@ record** (matched by `course_name` and `scheduled_date == event_date` OR
   Non-enrolled members, non-program sessions, and officer check-in are never gated.
 
 ### Remaining Planned Features
+
 - **Knowledge-Test Engine**: A full test-taking experience (question bank,
   delivery, and auto-grading). Current knowledge-test support is officer-entered
   scores only.
@@ -2251,10 +2492,11 @@ record** (matched by `course_name` and `scheduled_date == event_date` OR
 ## Support
 
 For questions or issues with the Training Programs module:
+
 - Submit an issue on GitHub: https://github.com/anthropics/the-logbook/issues
 - Check the FAQ in the main README
 - Contact your department administrator
 
 ---
 
-*Last Updated: July 14, 2026*
+_Last Updated: July 14, 2026_

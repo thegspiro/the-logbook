@@ -268,6 +268,7 @@ from app.models.notification import (
     NotificationLog,
     NotificationRule,
     NotificationTrigger,
+    PushSubscription,
 )
 from app.models.onboarding import OnboardingStatus
 from app.models.operational_rank import OperationalRank
@@ -396,6 +397,7 @@ __all__ = [
     "NotificationRule",
     "NotificationLog",
     "NotificationTrigger",
+    "PushSubscription",
     "NotificationCategory",
     "NotificationChannel",
     # Department message models

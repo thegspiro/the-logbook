@@ -14,29 +14,54 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.models.skills_testing import SkillTemplate, SkillTest, SkillTestResult
+from app.models.skills_testing import (
+    ResultDisclosure,
+    SkillTemplate,
+    SkillTest,
+    SkillTestResult,
+    SkillTestStatus,
+    SkillTestViewer,
+)
 from app.models.user import User
 from app.schemas.skills_testing import (
     SkillTemplateCreate,
     SkillTemplateListResponse,
     SkillTemplateResponse,
     SkillTemplateUpdate,
+    SkillTestCancelRequest,
     SkillTestCreate,
     SkillTestingSummaryResponse,
     SkillTestListResponse,
     SkillTestResponse,
     SkillTestUpdate,
+    SkillTestViewerCreate,
+    SkillTestViewerResponse,
+    SkillTestVoidRequest,
 )
 from app.services.separation_of_duties import (
     SeparationOfDutiesError,
     assert_different_person,
 )
 from app.services.skills_testing_service import (
+    AttemptLimitReached,
     apply_test_pass_to_pipeline,
+    assert_attempts_remaining,
+    build_template_snapshot,
     calculate_test_result,
+    redact_test_for_view,
+    resolve_disclosure_policy,
+    resolve_elapsed_seconds,
+    resolve_result_view,
+    resolve_test_template,
+    revert_test_pass_from_pipeline,
+    viewer_positions_for,
 )
 
 router = APIRouter()
@@ -61,6 +86,112 @@ def _user_has_officer_role(user: User) -> bool:
         if any(p in perms for p in ("training.manage", "admin.*", "*")):
             return True
     return False
+
+
+def _can_manage_tests(user: User) -> bool:
+    """Whether the user may administer official tests.
+
+    The write-side counterpart to :func:`_user_has_officer_role` (which governs
+    read visibility). This checks the real granted permission rather than role
+    names, because it stands in for the ``require_permission("training.manage")``
+    dependency on routes that now admit practice examiners too.
+    """
+    return user_has_permission(user, "training.manage")
+
+
+def _authorize_test_write(test: SkillTest, user: User) -> None:
+    """Guard a mutation on ``test``.
+
+    Officers may work any test. Everyone else may only drive a *practice* test
+    they are running as examiner — the peer-drill case, where no officer is in
+    the room. A candidate gets no write access even to their own practice
+    attempt: they are being evaluated in it, so letting them edit criteria would
+    make the record self-scored.
+    """
+    if _can_manage_tests(user):
+        return
+    if test.is_practice and test.examiner_id == str(user.id):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Only a training officer can modify this test",
+    )
+
+
+async def _org_training_config(db: AsyncSession, organization_id) -> object | None:
+    """The organization's training config, or None when it has never been saved."""
+    from app.models.training import TrainingModuleConfig
+
+    return (
+        await db.execute(
+            select(TrainingModuleConfig).where(
+                TrainingModuleConfig.organization_id == str(organization_id)
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def _named_viewer_ids(db: AsyncSession, test_id: str) -> set[str]:
+    """Users individually granted sight of this test's result."""
+    rows = await db.execute(
+        select(SkillTestViewer.user_id).where(SkillTestViewer.test_id == str(test_id))
+    )
+    return {str(r) for r in rows.scalars().all()}
+
+
+async def _user_position_slugs(db: AsyncSession, user: User) -> set[str]:
+    """Corporate position slugs the user holds.
+
+    Queried rather than read off ``user.positions``: the relationship is lazily
+    loaded, and touching it inside an async request raises rather than emitting
+    the implicit IO.
+    """
+    from app.models.user import Position, user_positions
+
+    rows = await db.execute(
+        select(Position.slug)
+        .join(user_positions, Position.id == user_positions.c.position_id)
+        .where(user_positions.c.user_id == str(user.id))
+    )
+    return {str(s) for s in rows.scalars().all() if s}
+
+
+async def _result_view_for(
+    db: AsyncSession,
+    test: SkillTest,
+    template: SkillTemplate | None,
+    user: User,
+) -> str:
+    """Resolve how much of ``test`` this user may see: none / scores / full.
+
+    Officers short-circuit before any of the lookups below — the common path
+    should not pay for three queries to be told what it already knows.
+    """
+    if _user_has_officer_role(user):
+        return ResultDisclosure.FULL.value
+
+    uid = str(user.id)
+    if str(test.examiner_id) == uid:
+        return ResultDisclosure.FULL.value
+
+    org_config = await _org_training_config(db, user.organization_id)
+    named = await _named_viewer_ids(db, test.id)
+    # Only worth the query when some position actually carries a grant.
+    positions = (
+        await _user_position_slugs(db, user)
+        if viewer_positions_for(test, template)
+        else set()
+    )
+
+    return resolve_result_view(
+        test,
+        template,
+        org_config,
+        is_officer=False,
+        user_id=uid,
+        named_viewer_ids=named,
+        user_position_slugs=positions,
+    )
 
 
 @router.get("/templates", response_model=list[SkillTemplateListResponse])
@@ -180,6 +311,9 @@ async def create_template(
         requirement_id=requirement_id,
         tags=template_data.tags,
         visibility=template_data.visibility,
+        result_disclosure=template_data.result_disclosure,
+        result_release=template_data.result_release,
+        result_viewer_positions=template_data.result_viewer_positions,
     )
 
     db.add(new_template)
@@ -537,14 +671,63 @@ async def list_tests(
     )
 
     # Skills-test rows carry PHI-adjacent data (pass/fail, scores, examiner
-    # notes). A non-officer may only see tests they are party to — the same
-    # officer-vs-member split the template list applies. Officers
-    # (training.manage / officer role) keep the full org view.
-    if not _user_has_officer_role(current_user):
+    # notes). A non-officer sees only tests they are party to or have been
+    # granted. Officers (training.manage / officer role) keep the full org view.
+    #
+    # Two passes: this narrows the query to rows the reader could plausibly see,
+    # then the loop below drops any the disclosure policy withholds. The split
+    # exists because "withheld" depends on template and organization settings
+    # that are not join-able portably — position grants live in a JSON column,
+    # and JSON_OVERLAPS is MySQL-only while MariaDB is a supported target.
+    is_officer = _user_has_officer_role(current_user)
+    if not is_officer:
         uid = str(current_user.id)
-        query = query.where(
-            or_(SkillTest.candidate_id == uid, SkillTest.examiner_id == uid)
-        )
+        grant_clauses = [
+            SkillTest.candidate_id == uid,
+            SkillTest.examiner_id == uid,
+            SkillTest.id.in_(
+                select(SkillTestViewer.test_id).where(SkillTestViewer.user_id == uid)
+            ),
+        ]
+
+        position_slugs = await _user_position_slugs(db, current_user)
+        if position_slugs:
+            granting_templates = (
+                await db.execute(
+                    select(
+                        SkillTemplate.id, SkillTemplate.result_viewer_positions
+                    ).where(
+                        SkillTemplate.organization_id == current_user.organization_id,
+                        SkillTemplate.result_viewer_positions.isnot(None),
+                    )
+                )
+            ).all()
+            template_ids = [
+                tid
+                for tid, slugs in granting_templates
+                if isinstance(slugs, list) and position_slugs & {str(s) for s in slugs}
+            ]
+            if template_ids:
+                grant_clauses.append(SkillTest.template_id.in_(template_ids))
+
+            # Per-test grants, which the template scan above cannot see.
+            granting_tests = (
+                await db.execute(
+                    select(SkillTest.id, SkillTest.result_viewer_positions).where(
+                        SkillTest.organization_id == current_user.organization_id,
+                        SkillTest.result_viewer_positions.isnot(None),
+                    )
+                )
+            ).all()
+            test_ids = [
+                tid
+                for tid, slugs in granting_tests
+                if isinstance(slugs, list) and position_slugs & {str(s) for s in slugs}
+            ]
+            if test_ids:
+                grant_clauses.append(SkillTest.id.in_(test_ids))
+
+        query = query.where(or_(*grant_clauses))
 
     if not include_practice:
         query = query.where(SkillTest.is_practice == False)  # noqa: E712
@@ -585,11 +768,55 @@ async def list_tests(
         )
         templates_map = {tmpl.id: tmpl for tmpl in templates_result.scalars().all()}
 
+    # Second pass — drop rows the disclosure policy withholds. Fetched once
+    # outside the loop; every row shares the reader's organization and
+    # positions, and the named-viewer set is looked up per test only when it
+    # could change the outcome.
+    viewer_context: dict[str, object] = {}
+    if not is_officer:
+        uid = str(current_user.id)
+        viewer_context = {
+            "uid": uid,
+            "org_config": await _org_training_config(db, current_user.organization_id),
+            "positions": await _user_position_slugs(db, current_user),
+            "named": {
+                str(tid)
+                for tid in (
+                    await db.execute(
+                        select(SkillTestViewer.test_id).where(
+                            SkillTestViewer.user_id == uid
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            },
+        }
+
     items = []
     for t in tests:
         candidate = users_map.get(t.candidate_id)
         examiner = users_map.get(t.examiner_id)
         tmpl = templates_map.get(t.template_id)
+
+        if not is_officer:
+            reader_id = str(viewer_context["uid"])
+            # resolve_result_view asks "is this reader named on this test", so
+            # pass their own id only when the grant covers this row.
+            named_for_row = (
+                {reader_id} if str(t.id) in viewer_context["named"] else set()
+            )
+            view = resolve_result_view(
+                t,
+                tmpl,
+                viewer_context["org_config"],
+                is_officer=False,
+                user_id=reader_id,
+                named_viewer_ids=named_for_row,
+                user_position_slugs=viewer_context["positions"],
+            )
+            if view == ResultDisclosure.NONE.value:
+                continue
 
         candidate_name = _format_user_name(candidate) if candidate else None
         examiner_name = _format_user_name(examiner) if examiner else None
@@ -611,6 +838,7 @@ async def list_tests(
                 started_at=t.started_at,
                 completed_at=t.completed_at,
                 created_at=t.created_at,
+                voided_at=t.voided_at,
             )
         )
 
@@ -625,7 +853,7 @@ async def list_tests(
 async def create_test(
     test_data: SkillTestCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create a new skill test session.
@@ -633,8 +861,21 @@ async def create_test(
     The current user becomes the examiner. The template must be published
     and the candidate must exist in the same organization.
 
+    Official tests require ``training.manage``. Practice attempts need only
+    authentication, so two members can drill together without an officer
+    present — they are never recorded, credited, or counted.
+
     **Authentication required**
+    **Requires permission: training.manage (official tests only)**
     """
+    is_officer = _can_manage_tests(current_user)
+
+    if not test_data.is_practice and not is_officer:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a training officer can start an official skills test",
+        )
+
     # Verify template exists, is published, and belongs to org
     template_result = await db.execute(
         select(SkillTemplate)
@@ -644,6 +885,16 @@ async def create_test(
     template = template_result.scalar_one_or_none()
 
     if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
+        )
+
+    # Mirror get_template's visibility rule. The test response carries the full
+    # template body (template_sections), so without this a member could practice
+    # against an officers_only/assigned_only template and read the very content
+    # that route hides from them. 404 to match, so restricted templates aren't
+    # confirmed to exist.
+    if not is_officer and (template.visibility or "all_members") != "all_members":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
         )
@@ -693,6 +944,22 @@ async def create_test(
     else:
         requirement_id = template.requirement_id
 
+    # Refuse before the evaluation starts rather than after it is scored. An
+    # examiner who runs a full skills test only to be told at submission that
+    # it cannot count has wasted the candidate's attempt slot and their own
+    # time. Practice attempts are exempt — they are never credited, so they
+    # never consume one.
+    if not test_data.is_practice:
+        try:
+            await assert_attempts_remaining(
+                db=db,
+                candidate_id=str(test_data.candidate_id),
+                requirement_id=requirement_id,
+                organization_id=current_user.organization_id,
+            )
+        except AttemptLimitReached as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     new_test = SkillTest(
         organization_id=current_user.organization_id,
         template_id=str(test_data.template_id),
@@ -703,6 +970,12 @@ async def create_test(
         result="incomplete",
         notes=test_data.notes,
         is_practice=test_data.is_practice,
+        result_disclosure=test_data.result_disclosure,
+        result_release=test_data.result_release,
+        result_viewer_positions=test_data.result_viewer_positions,
+        # Freeze the structure and scoring rules now. A later edit to this
+        # published template must not re-label or re-score this test.
+        template_snapshot=build_template_snapshot(template),
     )
 
     db.add(new_test)
@@ -755,23 +1028,24 @@ async def get_test(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
         )
 
-    # A non-officer may only read a test they are party to (candidate or
-    # examiner). The full detail exposes examiner notes + per-criterion scores,
-    # so this is PHI-adjacent. 404 (not 403) so the record's existence isn't
-    # confirmed to an unrelated member.
-    if not _user_has_officer_role(current_user):
-        uid = str(current_user.id)
-        if test.candidate_id != uid and test.examiner_id != uid:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
-            )
-
     # Fetch related entities for display names
     template = None
     template_result = await db.execute(
         select(SkillTemplate).where(SkillTemplate.id == test.template_id)
     )
     template = template_result.scalar_one_or_none()
+
+    # What this reader may see, under the department's disclosure policy. The
+    # full detail exposes examiner notes and per-criterion scores, so this is
+    # PHI-adjacent. 404 rather than 403 throughout, so neither an unrelated
+    # member nor a candidate whose results are withheld learns the record
+    # exists — a 403 on a withheld result announces "you were evaluated and are
+    # not allowed to know how it went."
+    result_view = await _result_view_for(db, test, template, current_user)
+    if result_view == ResultDisclosure.NONE.value:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
 
     candidate = None
     candidate_result = await db.execute(
@@ -783,7 +1057,14 @@ async def get_test(
     examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
     examiner = examiner_result.scalar_one_or_none()
 
-    return _build_test_response(test, template, candidate, examiner)
+    voider = None
+    if test.voided_by:
+        voider_result = await db.execute(select(User).where(User.id == test.voided_by))
+        voider = voider_result.scalar_one_or_none()
+
+    return _build_test_response(
+        test, template, candidate, examiner, voider, view=result_view
+    )
 
 
 @router.put("/tests/{test_id}", response_model=SkillTestResponse)
@@ -791,7 +1072,7 @@ async def update_test(
     test_id: UUID,
     test_update: SkillTestUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Update a skill test (save progress or results).
@@ -799,6 +1080,9 @@ async def update_test(
     Use this endpoint to save in-progress results as the examiner
     works through the evaluation. Only tests in draft or in_progress
     status can be updated.
+
+    Officers may update any test; a non-officer may only drive a practice
+    test they are running as examiner.
 
     **Authentication required**
     """
@@ -814,10 +1098,20 @@ async def update_test(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
         )
 
+    _authorize_test_write(test, current_user)
+
     if test.status == "cancelled":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot update a cancelled test",
+        )
+
+    # A voided result is the frozen record of a withdrawn test. Reopening it for
+    # edits would let the underlying scorecard drift away from what was voided.
+    if test.status == SkillTestStatus.VOIDED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot update a voided test",
         )
 
     update_data = test_update.model_dump(exclude_unset=True)
@@ -831,6 +1125,21 @@ async def update_test(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot update {', '.join(sorted(disallowed))} on a completed test",
             )
+
+    # Optimistic concurrency. Refuse rather than silently overwrite when the
+    # client's copy is stale — two examiners on one test, or an officer editing
+    # the scorecard while a phone still holds unsaved criteria, previously lost
+    # one side's work and returned success to the loser. Clients that send no
+    # expected_version keep the old last-write-wins behavior.
+    expected_version = update_data.pop("expected_version", None)
+    if expected_version is not None and expected_version != test.version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This test was changed elsewhere since you opened it. "
+                "Reload to see the current results before saving again."
+            ),
+        )
 
     # Convert section_results to JSON-serializable dicts if provided
     if "section_results" in update_data and update_data["section_results"] is not None:
@@ -850,6 +1159,8 @@ async def update_test(
 
     for field, value in update_data.items():
         setattr(test, field, value)
+
+    test.version = (test.version or 1) + 1
 
     await db.commit()
     await db.refresh(test)
@@ -889,7 +1200,7 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
 async def complete_test(
     test_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Mark a skill test as complete and calculate the final result.
@@ -899,6 +1210,9 @@ async def complete_test(
     - Checks if passing percentage is met
     - Checks if all critical (required) criteria passed when require_all_critical is enabled
     - Sets result to pass or fail accordingly
+
+    Officers may complete any test; a non-officer may only complete a practice
+    test they are running as examiner.
 
     **Authentication required**
     """
@@ -912,6 +1226,14 @@ async def complete_test(
     if not test:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    _authorize_test_write(test, current_user)
+
+    if test.status == SkillTestStatus.VOIDED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot complete a voided test",
         )
 
     if test.status == "completed":
@@ -938,21 +1260,40 @@ async def complete_test(
             detail="Associated template not found",
         )
 
-    # Calculate results
-    overall_score, test_result = calculate_test_result(test, template)
+    # Checked again at submission, not only at creation: several tests can be
+    # started before any is completed, so the cap can fall between the two
+    # points. This is what actually protects the credit — completing is where a
+    # pass reaches the pipeline.
+    if not test.is_practice:
+        try:
+            await assert_attempts_remaining(
+                db=db,
+                candidate_id=test.candidate_id,
+                requirement_id=test.requirement_id,
+                organization_id=current_user.organization_id,
+            )
+        except AttemptLimitReached as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    # Score against the structure this test was taken under, not whatever the
+    # template says now.
+    overall_score, test_result = calculate_test_result(
+        test, resolve_test_template(test, template)
+    )
 
     test.status = "completed"
     test.result = test_result
+    test.version = (test.version or 1) + 1
     test.overall_score = overall_score
     test.completed_at = datetime.now(timezone.utc)
 
-    # Calculate elapsed time if started_at is set
-    if test.started_at:
-        started = _ensure_utc(test.started_at)
-        completed = _ensure_utc(test.completed_at)
-        if started and completed:
-            elapsed = completed - started
-            test.elapsed_seconds = int(elapsed.total_seconds())
+    # The examiner's stopwatch reading wins over wall clock; see
+    # resolve_elapsed_seconds for why.
+    test.elapsed_seconds = resolve_elapsed_seconds(
+        test.elapsed_seconds,
+        _ensure_utc(test.started_at),
+        _ensure_utc(test.completed_at),
+    )
 
     await db.commit()
     await db.refresh(test)
@@ -1011,10 +1352,14 @@ async def delete_test(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Delete a skill test record.
+    Delete a *practice* skill test record.
 
     Permanently removes the test and all associated results. This action
     cannot be undone.
+
+    Official results cannot be deleted through this route — a member's
+    certification may rest on them, so a withdrawn result is voided
+    (``POST /tests/{test_id}/void``), which keeps the record and its reason.
 
     **Authentication required**
     **Requires permission: training.manage**
@@ -1029,6 +1374,15 @@ async def delete_test(
     if not test:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    if not test.is_practice:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Official test results cannot be deleted. Void the test instead "
+                "to withdraw it while preserving the record."
+            ),
         )
 
     # Capture info for audit log before deleting
@@ -1071,9 +1425,11 @@ async def discard_practice_test(
     """
     Discard a practice test — permanently deletes it with no audit trail.
 
-    Only practice tests created by the current user (as examiner) can be
-    discarded. This allows any user who ran a practice session to clean
-    it up without needing training.manage permission.
+    Only practice tests can be discarded, by anyone party to them — the
+    candidate whose attempt it was, the examiner who ran it, or a training
+    officer. The candidate is included because practice notes are theirs to
+    review and clear once they're done with them; without it a member whose
+    peer acted as examiner could never delete their own drill record.
 
     **Authentication required**
     """
@@ -1095,27 +1451,367 @@ async def discard_practice_test(
             detail="Only practice tests can be discarded",
         )
 
-    if test.examiner_id != str(current_user.id):
+    uid = str(current_user.id)
+    if (
+        test.candidate_id != uid
+        and test.examiner_id != uid
+        and not _can_manage_tests(current_user)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the examiner who created this practice test can discard it",
+            detail="You cannot discard this practice test",
         )
 
     await db.delete(test)
     await db.commit()
 
 
-@router.post("/tests/{test_id}/email-results")
-async def email_test_results(
+@router.post("/tests/{test_id}/release", response_model=SkillTestResponse)
+async def release_test_results(
     test_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Email a summary of the test results to the candidate.
+    Release a completed result to the candidate.
 
-    Builds an HTML email with the test scorecard and sends it to the
-    candidate's email address. Works for both official and practice tests.
+    Only meaningful under the ``on_release`` disclosure mode, where a finished
+    result stays invisible to the person tested until an officer releases it —
+    so a chief can review the scorecard, or deliver a failure in person, before
+    the member reads it.
+
+    Idempotent: releasing an already-released result returns it unchanged
+    rather than erroring, since the outcome the caller wanted is already true.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == current_user.organization_id)
+    )
+    test = result.scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    if test.status != SkillTestStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only a completed test has a result to release",
+        )
+
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
+    examiner = examiner_result.scalar_one_or_none()
+
+    if test.released_at:
+        return _build_test_response(test, template, candidate, examiner)
+
+    disclosure, _release = resolve_disclosure_policy(
+        test, template, await _org_training_config(db, current_user.organization_id)
+    )
+    if disclosure == ResultDisclosure.NONE.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This test's results are configured never to be shown to the "
+                "candidate. Change its disclosure setting before releasing."
+            ),
+        )
+
+    test.released_at = datetime.now(timezone.utc)
+    test.released_by = str(current_user.id)
+    test.version = (test.version or 1) + 1
+
+    await db.commit()
+    await db.refresh(test)
+
+    await log_audit_event(
+        db=db,
+        event_type="skill_test_released",
+        event_category="training",
+        severity="info",
+        event_data={
+            "test_id": str(test_id),
+            "template_name": template.name if template else None,
+            "candidate_id": test.candidate_id,
+            "candidate_name": _format_user_name(candidate) if candidate else None,
+            "disclosure": disclosure,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _build_test_response(test, template, candidate, examiner)
+
+
+@router.get("/tests/{test_id}/viewers", response_model=list[SkillTestViewerResponse])
+async def list_test_viewers(
+    test_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    List the people individually granted sight of this test's result.
+
+    Officer-only: who has been shown a member's evaluation is itself sensitive,
+    and the candidate cannot change the list, so there is nothing here for them
+    to act on.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    test = (
+        await db.execute(
+            select(SkillTest)
+            .where(SkillTest.id == str(test_id))
+            .where(SkillTest.organization_id == current_user.organization_id)
+        )
+    ).scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    viewers = (
+        (
+            await db.execute(
+                select(SkillTestViewer).where(SkillTestViewer.test_id == str(test_id))
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    user_ids = {v.user_id for v in viewers} | {
+        v.granted_by for v in viewers if v.granted_by
+    }
+    users_map = {}
+    if user_ids:
+        users_map = {
+            u.id: u
+            for u in (await db.execute(select(User).where(User.id.in_(list(user_ids)))))
+            .scalars()
+            .all()
+        }
+
+    return [
+        SkillTestViewerResponse(
+            id=v.id,
+            test_id=v.test_id,
+            user_id=v.user_id,
+            user_name=(
+                _format_user_name(users_map[v.user_id])
+                if v.user_id in users_map
+                else None
+            ),
+            granted_by=v.granted_by,
+            granted_by_name=(
+                _format_user_name(users_map[v.granted_by])
+                if v.granted_by and v.granted_by in users_map
+                else None
+            ),
+            granted_at=_ensure_utc(v.granted_at),
+        )
+        for v in viewers
+    ]
+
+
+@router.post(
+    "/tests/{test_id}/viewers",
+    response_model=SkillTestViewerResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_test_viewer(
+    test_id: UUID,
+    viewer_data: SkillTestViewerCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Grant one person sight of this test's result.
+
+    For the relationships the candidate and position rules cannot express — a
+    preceptor, an FTO, a mentor. The grantee sees the result at the same
+    disclosure level the candidate does; sharing a result never shows the
+    observer more of it than its subject.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    test = (
+        await db.execute(
+            select(SkillTest)
+            .where(SkillTest.id == str(test_id))
+            .where(SkillTest.organization_id == current_user.organization_id)
+        )
+    ).scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    # Pitfall #14c: a client-supplied user id must be proven in-org before it is
+    # stored, or a grant can be written naming someone else's member.
+    viewer = (
+        await db.execute(
+            select(User)
+            .where(User.id == str(viewer_data.user_id))
+            .where(User.organization_id == current_user.organization_id)
+        )
+    ).scalar_one_or_none()
+
+    if not viewer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
+
+    if str(viewer.id) == str(test.candidate_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The candidate can already see their own result as policy allows",
+        )
+
+    existing = (
+        await db.execute(
+            select(SkillTestViewer)
+            .where(SkillTestViewer.test_id == str(test_id))
+            .where(SkillTestViewer.user_id == str(viewer.id))
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        grant = existing
+    else:
+        grant = SkillTestViewer(
+            test_id=str(test_id),
+            user_id=str(viewer.id),
+            granted_by=str(current_user.id),
+        )
+        db.add(grant)
+        await db.commit()
+        await db.refresh(grant)
+
+        await log_audit_event(
+            db=db,
+            event_type="skill_test_viewer_granted",
+            event_category="training",
+            severity="info",
+            event_data={
+                "test_id": str(test_id),
+                "viewer_id": str(viewer.id),
+                "viewer_name": _format_user_name(viewer),
+                "candidate_id": test.candidate_id,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return SkillTestViewerResponse(
+        id=grant.id,
+        test_id=grant.test_id,
+        user_id=grant.user_id,
+        user_name=_format_user_name(viewer),
+        granted_by=grant.granted_by,
+        granted_by_name=_format_user_name(current_user),
+        granted_at=_ensure_utc(grant.granted_at),
+    )
+
+
+@router.delete(
+    "/tests/{test_id}/viewers/{user_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def remove_test_viewer(
+    test_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Withdraw one person's access to this test's result.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    test = (
+        await db.execute(
+            select(SkillTest)
+            .where(SkillTest.id == str(test_id))
+            .where(SkillTest.organization_id == current_user.organization_id)
+        )
+    ).scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    grant = (
+        await db.execute(
+            select(SkillTestViewer)
+            .where(SkillTestViewer.test_id == str(test_id))
+            .where(SkillTestViewer.user_id == str(user_id))
+        )
+    ).scalar_one_or_none()
+
+    if not grant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Viewer grant not found"
+        )
+
+    await db.delete(grant)
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="skill_test_viewer_revoked",
+        event_category="training",
+        severity="info",
+        event_data={
+            "test_id": str(test_id),
+            "viewer_id": str(user_id),
+            "candidate_id": test.candidate_id,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
+@router.post("/tests/{test_id}/cancel", response_model=SkillTestResponse)
+async def cancel_test(
+    test_id: UUID,
+    cancel_data: SkillTestCancelRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cancel a test that was started but never finished.
+
+    For evaluations abandoned mid-session — the candidate withdrew, equipment
+    failed, weather stopped the drill. The test keeps whatever partial results
+    were recorded but is closed out, so it stops sitting in the active list.
+
+    Distinct from voiding: a cancelled test was never scored, so there is no
+    result to withdraw and nothing to release from the training pipeline. A
+    *completed* test cannot be cancelled — use void for that.
+
+    Officers may cancel any test; a non-officer may only cancel a practice test
+    they are running as examiner.
 
     **Authentication required**
     """
@@ -1130,6 +1826,217 @@ async def email_test_results(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
         )
+
+    _authorize_test_write(test, current_user)
+
+    if test.status == SkillTestStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This test has already been scored. Void it instead to withdraw "
+                "the result."
+            ),
+        )
+
+    if test.status == SkillTestStatus.VOIDED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot cancel a voided test",
+        )
+
+    if test.status == SkillTestStatus.CANCELLED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Test is already cancelled",
+        )
+
+    test.status = SkillTestStatus.CANCELLED.value
+    test.version = (test.version or 1) + 1
+    if cancel_data.reason:
+        test.notes = (
+            f"{test.notes}\n\nCancelled: {cancel_data.reason}"
+            if test.notes
+            else f"Cancelled: {cancel_data.reason}"
+        )
+
+    await db.commit()
+    await db.refresh(test)
+
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
+    examiner = examiner_result.scalar_one_or_none()
+
+    # Practice attempts are not logged, matching create/complete.
+    if not test.is_practice:
+        await log_audit_event(
+            db=db,
+            event_type="skill_test_cancelled",
+            event_category="training",
+            severity="info",
+            event_data={
+                "test_id": str(test_id),
+                "template_name": template.name if template else None,
+                "candidate_id": test.candidate_id,
+                "candidate_name": _format_user_name(candidate) if candidate else None,
+                "reason": cancel_data.reason,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return _build_test_response(test, template, candidate, examiner)
+
+
+@router.post("/tests/{test_id}/void", response_model=SkillTestResponse)
+async def void_test(
+    test_id: UUID,
+    void_data: SkillTestVoidRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Void an official test result, withdrawing it without deleting it.
+
+    Official results are never removed — a member's certification may rest on
+    one, and an erased evaluation leaves no trail of what happened. Voiding
+    instead keeps the row and its scorecard, stamps who voided it and why, and:
+
+    - drops the test out of totals, pass rate, and average-score math
+    - releases any training-pipeline requirement the pass had credited
+
+    Practice attempts are not voidable — they were never recorded in the first
+    place, so they are simply discarded.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == current_user.organization_id)
+    )
+    test = result.scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    if test.is_practice:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Practice attempts are not recorded, so they cannot be voided",
+        )
+
+    if test.status == SkillTestStatus.VOIDED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Test is already voided",
+        )
+
+    # Snapshot before the status is overwritten — the audit entry records what
+    # was withdrawn, which is the whole point of voiding over deleting.
+    prior_status = test.status
+    prior_result = test.result
+    credited_requirement = (
+        test.requirement_id if test.result == SkillTestResult.PASS.value else None
+    )
+
+    test.status = SkillTestStatus.VOIDED.value
+    test.version = (test.version or 1) + 1
+    test.voided_at = datetime.now(timezone.utc)
+    test.voided_by = str(current_user.id)
+    test.void_reason = void_data.reason
+
+    await db.commit()
+    await db.refresh(test)
+
+    # Release the pipeline requirement this pass had credited. After the commit
+    # because the progress updater commits internally, mirroring the apply path
+    # in complete_test.
+    if credited_requirement:
+        await revert_test_pass_from_pipeline(
+            db=db,
+            candidate_id=test.candidate_id,
+            requirement_id=credited_requirement,
+            organization_id=current_user.organization_id,
+        )
+
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
+    examiner = examiner_result.scalar_one_or_none()
+
+    await log_audit_event(
+        db=db,
+        event_type="skill_test_voided",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "test_id": str(test_id),
+            "template_name": template.name if template else None,
+            "candidate_id": test.candidate_id,
+            "candidate_name": _format_user_name(candidate) if candidate else None,
+            "prior_status": prior_status,
+            "prior_result": prior_result,
+            "overall_score": test.overall_score,
+            "reason": void_data.reason,
+            "requirement_released": credited_requirement,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _build_test_response(test, template, candidate, examiner, current_user)
+
+
+@router.post("/tests/{test_id}/email-results")
+async def email_test_results(
+    test_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Email a summary of the test results to the candidate.
+
+    Builds an HTML email with the test scorecard and sends it to the
+    candidate's email address. Works for both official and practice tests.
+
+    Officers may email any test's results; a non-officer may only send those of
+    a practice test they ran as examiner.
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == current_user.organization_id)
+    )
+    test = result.scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    _authorize_test_write(test, current_user)
 
     # Load template, candidate, examiner
     template_result = await db.execute(
@@ -1169,10 +2076,38 @@ async def email_test_results(
         f"{round(test.overall_score)}%" if test.overall_score is not None else "N/A"
     )
 
+    # The email is another way for the candidate to read their result, so it
+    # obeys the same disclosure policy the API does — otherwise "email results"
+    # is a one-click bypass of a department's decision to withhold or redact
+    # them. Resolved for the *recipient*, not the officer sending it.
+    candidate_view = resolve_result_view(
+        test,
+        template,
+        await _org_training_config(db, current_user.organization_id),
+        is_officer=False,
+        user_id=str(test.candidate_id),
+        named_viewer_ids=set(),
+        user_position_slugs=set(),
+    )
+    if candidate_view == ResultDisclosure.NONE.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This test's results are not disclosed to the candidate, or have "
+                "not been released yet, so they cannot be emailed."
+            ),
+        )
+
     # Build section summaries
     sections_html = ""
-    template_sections = template.sections or [] if template else []
-    section_results = test.section_results or []
+    # Same rule as the API response: the emailed scorecard must reflect the
+    # structure the test was taken under, not the template's current state.
+    scored_against = resolve_test_template(test, template)
+    template_sections = scored_against.sections or [] if scored_against else []
+    section_results = redact_test_for_view(
+        {"notes": test.notes, "section_results": test.section_results or []},
+        candidate_view,
+    )["section_results"]
     for si, section_def in enumerate(template_sections):
         if not isinstance(section_def, dict):
             continue
@@ -1329,16 +2264,22 @@ async def get_testing_summary(
     )
     published_templates = published_templates_result.scalar() or 0
 
-    # Total tests (excluding practice)
+    # Total tests (excluding practice and voided). The pass-rate and average-
+    # score queries below filter on status == "completed", which already drops
+    # voided rows; these two counts span every status, so they exclude it
+    # explicitly — a withdrawn result should not inflate the department's
+    # testing volume.
+    voided = SkillTestStatus.VOIDED.value
     total_tests_result = await db.execute(
         select(func.count(SkillTest.id)).where(
             SkillTest.organization_id == org_id,
             SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.status != voided,
         )
     )
     total_tests = total_tests_result.scalar() or 0
 
-    # Tests this month (excluding practice)
+    # Tests this month (excluding practice and voided)
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     tests_this_month_result = await db.execute(
@@ -1346,6 +2287,7 @@ async def get_testing_summary(
             SkillTest.organization_id == org_id,
             SkillTest.created_at >= month_start,
             SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.status != voided,
         )
     )
     tests_this_month = tests_this_month_result.scalar() or 0
@@ -1437,9 +2379,22 @@ def _build_test_response(
     template: SkillTemplate | None,
     candidate: User | None,
     examiner: User | None,
+    voider: User | None = None,
+    view: str = ResultDisclosure.FULL.value,
 ) -> SkillTestResponse:
-    """Build a SkillTestResponse with denormalized names and template structure."""
-    return SkillTestResponse(
+    """Build a SkillTestResponse with denormalized names and template structure.
+
+    ``view`` is the caller's resolved disclosure tier. Redaction happens here,
+    at the single point every read path funnels through, rather than at each
+    endpoint — a new endpoint that forgets to redact is a leak, and this way
+    there is nothing to forget.
+    """
+    # The structure the client renders the scorecard from must be the one this
+    # test was taken under — the live template may have been edited since, and
+    # criterion identity is positional.
+    scored_against = resolve_test_template(test, template)
+
+    response = SkillTestResponse(
         id=test.id,
         organization_id=test.organization_id,
         template_id=test.template_id,
@@ -1449,6 +2404,7 @@ def _build_test_response(
         status=test.status,
         result=test.result,
         is_practice=test.is_practice or False,
+        version=test.version or 1,
         section_results=test.section_results,
         overall_score=test.overall_score,
         elapsed_seconds=test.elapsed_seconds,
@@ -1457,9 +2413,24 @@ def _build_test_response(
         completed_at=_ensure_utc(test.completed_at),
         created_at=_ensure_utc(test.created_at),
         updated_at=_ensure_utc(test.updated_at),
+        result_disclosure=test.result_disclosure,
+        result_release=test.result_release,
+        result_viewer_positions=test.result_viewer_positions,
+        released_at=_ensure_utc(test.released_at),
+        released_by=test.released_by,
+        voided_at=_ensure_utc(test.voided_at),
+        voided_by=test.voided_by,
+        void_reason=test.void_reason,
         template_name=template.name if template else None,
         candidate_name=_format_user_name(candidate) if candidate else None,
         examiner_name=_format_user_name(examiner) if examiner else None,
-        template_sections=template.sections if template else None,
-        template_time_limit_seconds=template.time_limit_seconds if template else None,
+        voided_by_name=_format_user_name(voider) if voider else None,
+        template_sections=scored_against.sections if scored_against else None,
+        template_time_limit_seconds=(
+            scored_against.time_limit_seconds if scored_against else None
+        ),
     )
+
+    if view == ResultDisclosure.FULL.value:
+        return response
+    return SkillTestResponse(**redact_test_for_view(response.model_dump(), view))

@@ -7,27 +7,32 @@ This directory contains all the wiki pages for The Logbook project. These pages 
 ## 📚 What's Included
 
 ### Core Pages
+
 - **Home.md** - Wiki home page with overview and navigation
-- **_Sidebar.md** - Navigation sidebar for all wiki pages
+- **\_Sidebar.md** - Navigation sidebar for all wiki pages
 
 ### Getting Started
+
 - **Installation.md** - Complete installation guide for all platforms
 - **Unraid-Quick-Start.md** - One-command Unraid installation
 - **Onboarding.md** - First-time setup wizard guide
 - **Quick-Reference.md** - Common commands and quick solutions
 
 ### Deployment & Configuration
+
 - **Deployment-Unraid.md** - Complete Unraid deployment guide
 - **Configuration-Environment.md** - Environment variables reference
 - **Configuration-Modules.md** - Module configuration
 - **Configuration-Security.md** - Security settings
 
 ### Development
+
 - **Development-Backend.md** - Python/FastAPI backend development
 - **Development-Frontend.md** - React/TypeScript frontend development
 - **Contributing.md** - Contribution guidelines
 
 ### Security
+
 - **Security-Overview.md** - Security policy and compliance
 - **Security-Authentication.md** - Auth systems (local, OAuth/OIDC, MFA)
 - **Security-Encryption.md** - Encryption implementation
@@ -35,13 +40,12 @@ This directory contains all the wiki pages for The Logbook project. These pages 
 - **Security-HIPAA.md** - Security features aligned with HIPAA requirements
 
 ### Troubleshooting
-- **Troubleshooting.md** - Common issues and solutions
-- **Troubleshooting-Containers.md** - Docker container issues
-- **Troubleshooting-Frontend.md** - Frontend issues
-- **Troubleshooting-Backend.md** - Backend API issues
-- **Troubleshooting-Database.md** - Database connection issues
+
+- **Troubleshooting.md** — _generated at publish time_ from `docs/TROUBLESHOOTING.md`; there is no copy of it in this directory to edit. `setup-wiki.sh` writes it into the wiki clone with a do-not-edit header
+  The per-area pages (Containers / Frontend / Backend / Database) were consolidated into that same guide on 2026-08-08 and now live in it as the **Container & Docker**, **Frontend & Browser**, **Backend Service** and **Database Diagnostics** sections. They were never in `setup-wiki.sh`'s publish list, so the sidebar links to them had been dead on the published wiki.
 
 ### Reference
+
 - **Role-System.md** - RBAC documentation
 - **API-Reference.md** - Complete API documentation
 - **Database-Schema.md** - Database structure
@@ -59,6 +63,7 @@ cd wiki
 ```
 
 This will:
+
 1. Clone your GitHub Wiki repository
 2. Copy all wiki pages
 3. Commit and push to GitHub
@@ -92,6 +97,9 @@ cd the-logbook.wiki
 ```bash
 # Copy all wiki files from this directory
 cp /path/to/the-logbook/wiki/*.md .
+
+# Troubleshooting.md is generated, not stored here — add it too
+cp /path/to/the-logbook/docs/TROUBLESHOOTING.md Troubleshooting.md
 ```
 
 ### Step 4: Commit and Push
@@ -154,6 +162,7 @@ Edit `_Sidebar.md` and add your page:
 
 ```markdown
 ### My Section
+
 - [My New Page](My-New-Page)
 ```
 
@@ -182,6 +191,7 @@ See [My New Page](My-New-Page) for more details.
 - Use descriptive names
 
 **Examples:**
+
 - ✅ `Deployment-Unraid.md`
 - ✅ `Configuration-Environment.md`
 - ❌ `deployment unraid.md`
@@ -222,6 +232,7 @@ More content...
 ```
 
 **Example:**
+
 ```markdown
 See the [Installation Guide](Installation) for setup instructions.
 ```
@@ -239,6 +250,7 @@ See the [Installation Guide](Installation) for setup instructions.
 ```
 
 Or use relative paths if images are in the wiki:
+
 ```markdown
 ![Screenshot](images/screenshot.png)
 ```
@@ -255,7 +267,7 @@ docker-compose up -d
 
 ```markdown
 | Column 1 | Column 2 |
-|----------|----------|
+| -------- | -------- |
 | Value 1  | Value 2  |
 ```
 
@@ -304,8 +316,7 @@ Home.md (landing page)
 │   └── ...
 ├── Troubleshooting
 │   ├── Troubleshooting
-│   ├── Troubleshooting-Containers
-│   └── ...
+│   └── (per-area diagnostics are sections inside Troubleshooting)
 └── Reference
     ├── API-Reference
     ├── Database-Schema
@@ -322,7 +333,6 @@ When main documentation files are updated:
 
 ```bash
 # Copy updated files to wiki directory
-cp ../docs/troubleshooting/README.md Troubleshooting.md
 cp ../docs/backend/python-backend.md Development-Backend.md
 cp ../SECURITY.md Security-Overview.md
 
@@ -330,9 +340,17 @@ cp ../SECURITY.md Security-Overview.md
 ./setup-wiki.sh
 ```
 
+> **Troubleshooting is not in that list.** `Troubleshooting.md` is generated
+> from `docs/TROUBLESHOOTING.md` by `setup-wiki.sh` itself, so it is always
+> current as of the last publish and there is nothing here to copy or edit.
+> That guide is the single source for troubleshooting content — the former
+> `docs/troubleshooting/README.md` and the hand-maintained wiki copy were
+> consolidated into it after the three drifted apart.
+
 ### Regular Updates
 
 Recommended schedule:
+
 - Update wiki after major releases
 - Sync documentation monthly
 - Review and update troubleshooting quarterly
@@ -398,6 +416,7 @@ pwd  # Should end with /wiki
 Current pages: **12+**
 Total lines: **~3,000+**
 Coverage:
+
 - ✅ Installation & Setup
 - ✅ Deployment (all platforms)
 - ✅ Configuration
@@ -413,6 +432,7 @@ Coverage:
 See **[Contributing Guide](../CONTRIBUTING.md)** for guidelines.
 
 Wiki-specific tips:
+
 - Keep pages focused on one topic
 - Use clear, simple language
 - Include lots of code examples

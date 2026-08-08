@@ -45,7 +45,8 @@ import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from "lucid
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../stores/authStore";
-import { organizationService } from "../../services/api";
+import { useEnabledModules } from "../../hooks/useEnabledModules";
+import { OPEN_MOBILE_NAV_EVENT } from "./BottomNavigation";
 import { prefetchRoute } from "../../utils/routePrefetch";
 import { useNotificationCountStore } from "../../hooks/useNotificationCount";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
@@ -92,35 +93,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(["Settings"]);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
-  const [enabledModules, setEnabledModules] = useState<Set<string> | null>(null);
+  const { isModuleOn } = useEnabledModules();
 
-  // Essential modules that are always present in the response — if the
-  // response contains ONLY these, the org likely has no module config yet
-  // and we should show everything rather than hiding all optional modules.
-  const ESSENTIAL_ONLY = new Set(["members", "events", "documents", "roles", "settings"]);
-
-  // Load enabled modules for this organization to control nav visibility
+  // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
-    organizationService
-      .getEnabledModules()
-      .then((res) => {
-        const modules = new Set(res.enabled_modules);
-        // Safeguard: if response has no configurable modules enabled
-        // (only essential ones), treat as unconfigured and show all.
-        const hasConfigurable = res.enabled_modules.some(
-          (m) => !ESSENTIAL_ONLY.has(m),
-        );
-        setEnabledModules(hasConfigurable ? modules : null);
-      })
-      .catch(() => {
-        /* default to null = show all */
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const open = () => setMobileMenuOpen(true);
+    window.addEventListener(OPEN_MOBILE_NAV_EVENT, open);
+    return () => window.removeEventListener(OPEN_MOBILE_NAV_EVENT, open);
   }, []);
-
-  /** Show a module's nav items? null (loading/error) → show all; otherwise check the set */
-  const isModuleOn = (key: string) =>
-    enabledModules === null || enabledModules.has(key);
 
   // Lock body scroll while the mobile drawer is open. `overscroll-contain` on
   // the drawer only stops scroll *chaining* once the drawer itself scrolls; it
@@ -597,7 +577,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         <div className="flex items-center justify-between h-16 px-4">
           <Link
             to="/dashboard"
-            className="flex items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+            className="flex min-h-[44px] items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
           >
             <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
               <img
@@ -659,7 +639,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 <div className="flex items-center justify-center">
                   <Link
                     to="/dashboard"
-                    className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                    className="flex min-h-[44px] items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                   >
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                       <img
@@ -685,7 +665,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               <div className="flex items-center justify-between">
                 <Link
                   to="/dashboard"
-                  className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                  className="flex min-h-[44px] items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                 >
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                     <img

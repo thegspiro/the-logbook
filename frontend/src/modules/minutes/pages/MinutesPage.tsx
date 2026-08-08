@@ -28,6 +28,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType } from '../types/minutes';
 import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
+import { asArray } from '../../../utils/asArray';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   { value: 'business', label: 'Business Meeting', color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400' },
@@ -99,7 +100,7 @@ const MinutesPage: React.FC = () => {
         meetingsService.getMeetings(params),
         meetingsService.getSummary(),
       ]);
-      setMeetings(meetingsRes.meetings);
+      setMeetings(asArray(meetingsRes.meetings));
       setSummary(summaryRes);
     } catch {
       setError('Unable to load meetings. Please check your connection and try again.');
@@ -260,7 +261,7 @@ const MinutesPage: React.FC = () => {
               id="type-filter"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+              className="px-3 py-2 max-md:min-h-[44px] bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="all">All Types</option>
               {MEETING_TYPES.map(t => (

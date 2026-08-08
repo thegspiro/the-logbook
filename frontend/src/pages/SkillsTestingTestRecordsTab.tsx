@@ -7,18 +7,20 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react';
+import { Ban, CircleSlash, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTestListItem } from '../types/skillsTesting';
 import { EmptyState } from '../components/ux';
+import { Modal } from '../components/Modal';
+import { getErrorMessage } from '../utils/errorHandling';
 import { ClipboardList } from 'lucide-react';
+
+/** Matches the backend's SkillTestVoidRequest minimum — a void stays visible in
+ *  the member's history, so the record has to say why it was withdrawn. */
+const MIN_VOID_REASON_LENGTH = 10;
 
 // ── Sub-components ─────────────────────────────────────────────
 
@@ -27,13 +29,16 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
     completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    voided: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     pass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}
+    >
       {status.replace('_', ' ')}
     </span>
   );
@@ -43,54 +48,110 @@ const TestCard: React.FC<{
   test: SkillTestListItem;
   onClick: () => void;
   onDelete: () => void;
-}> = ({ test, onClick, onDelete }) => {
+  onVoid: () => void;
+  onCancel: () => void;
+  onRelease: () => void;
+}> = ({ test, onClick, onDelete, onVoid, onCancel, onRelease }) => {
   const tz = useTimezone();
   return (
-  <div
-    role="button"
-    tabIndex={0}
-    onClick={onClick}
-    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
-    className="w-full text-left bg-theme-surface rounded-lg p-4 border border-theme-surface-border hover:border-red-500/50 transition-colors cursor-pointer"
-  >
-    <div className="flex items-center justify-between">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <p className="font-medium text-theme-text-primary truncate">{test.template_name}</p>
-          <StatusBadge status={test.status} />
-          {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
-          {test.is_practice && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-              Practice
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-theme-text-muted">
-          Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}
-        </p>
-      </div>
-      <div className="flex items-center gap-3 ml-4 shrink-0">
-        <div className="text-right">
-          {test.overall_score != null && (
-            <p className="text-lg font-bold text-theme-text-primary">{Math.round(test.overall_score)}%</p>
-          )}
-          <p className="text-xs text-theme-text-muted">
-            {test.completed_at ? formatDate(test.completed_at, tz) : test.started_at ? 'In Progress' : 'Not Started'}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onClick();
+      }}
+      className="bg-theme-surface border-theme-surface-border w-full cursor-pointer rounded-lg border p-4 text-left transition-colors hover:border-red-500/50"
+    >
+      <div className="flex items-center justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <p className="text-theme-text-primary truncate font-medium">{test.template_name}</p>
+            <StatusBadge status={test.status} />
+            {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
+            {test.is_practice && (
+              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                Practice
+              </span>
+            )}
+          </div>
+          <p className="text-theme-text-muted text-sm">
+            Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}
           </p>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="p-2 rounded-lg text-theme-text-muted hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-          aria-label={`Delete test for ${test.candidate_name}`}
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <div className="ml-4 flex shrink-0 items-center gap-3">
+          <div className="text-right">
+            {test.overall_score != null && (
+              <p className="text-theme-text-primary text-lg font-bold">{Math.round(test.overall_score)}%</p>
+            )}
+            <p className="text-theme-text-muted text-xs">
+              {test.completed_at ? formatDate(test.completed_at, tz) : test.started_at ? 'In Progress' : 'Not Started'}
+            </p>
+          </div>
+          {/* Three different ways a test leaves the active list, and they are
+            not interchangeable:
+              practice  → delete. It was never recorded, so nothing is lost.
+              scored    → void. An evaluation record the member's certification
+                          may rest on; withdrawing it keeps the row, its reason,
+                          and its author.
+              unscored  → cancel. Abandoned mid-session, so there is no result
+                          to withdraw and nothing to release from the pipeline.
+            Already-closed rows (voided/cancelled) offer no action. */}
+          {test.is_practice ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+              aria-label={`Delete practice attempt for ${test.candidate_name}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          ) : test.status === 'completed' ? (
+            <>
+              {/* Only meaningful under the on_release mode; the endpoint is
+                  idempotent and refuses tests whose results are never shown,
+                  so offering it on any unreleased result is safe and saves the
+                  officer working out which mode a template uses. */}
+              {!test.released_at && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRelease();
+                  }}
+                  className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20"
+                  aria-label={`Release results to ${test.candidate_name}`}
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onVoid();
+                }}
+                className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
+                aria-label={`Void test for ${test.candidate_name}`}
+              >
+                <Ban className="h-4 w-4" />
+              </button>
+            </>
+          ) : test.status === 'draft' || test.status === 'in_progress' ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancel();
+              }}
+              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
+              aria-label={`Cancel unfinished test for ${test.candidate_name}`}
+            >
+              <CircleSlash className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
-  </div>
   );
 };
 
@@ -98,69 +159,124 @@ const TestCard: React.FC<{
 
 const SkillsTestingTestRecordsTab: React.FC = () => {
   const navigate = useNavigate();
-  const { tests, testsLoading, loadTests, deleteTest, templates, loadTemplates } = useSkillsTestingStore();
+  const { tests, testsLoading, loadTests, deleteTest, voidTest, cancelTest, releaseTest, templates, loadTemplates } =
+    useSkillsTestingStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [voidTarget, setVoidTarget] = useState<SkillTestListItem | null>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voiding, setVoiding] = useState(false);
 
   useEffect(() => {
     void loadTests(statusFilter ? { status: statusFilter } : undefined);
     void loadTemplates({ status: 'published' });
   }, [loadTests, loadTemplates, statusFilter]);
 
-  const filteredTests = tests.filter((t) =>
-    t.template_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.candidate_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.examiner_name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredTests = tests.filter(
+    (t) =>
+      t.template_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.candidate_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.examiner_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleDelete = async (test: SkillTestListItem) => {
     const confirmed = window.confirm(
-      `Delete the test record for ${test.candidate_name} (${test.template_name})? This action cannot be undone.`
+      `Delete the practice attempt for ${test.candidate_name} (${test.template_name})? This action cannot be undone.`
     );
     if (!confirmed) return;
 
     try {
       await deleteTest(test.id);
-      toast.success('Test record deleted');
+      toast.success('Practice attempt deleted');
     } catch {
-      toast.error('Failed to delete test record');
+      toast.error('Failed to delete practice attempt');
+    }
+  };
+
+  const handleCancel = async (test: SkillTestListItem) => {
+    // A plain confirm rather than the void modal: cancelling withdraws no
+    // result and makes no claim about the candidate, so the reason is optional
+    // and there is nothing for a reader to need explained.
+    const reason = window.prompt(
+      `Cancel the unfinished test for ${test.candidate_name} (${test.template_name})?\n\n` +
+        'Any partial results are kept, but the test is closed out. ' +
+        'Optionally note why:'
+    );
+    if (reason === null) return;
+
+    try {
+      await cancelTest(test.id, reason);
+      toast.success('Test cancelled');
+    } catch {
+      toast.error('Failed to cancel test');
+    }
+  };
+
+  const handleRelease = async (test: SkillTestListItem) => {
+    try {
+      await releaseTest(test.id);
+      toast.success(`Results released to ${test.candidate_name}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to release results'));
+    }
+  };
+
+  const closeVoidModal = () => {
+    setVoidTarget(null);
+    setVoidReason('');
+  };
+
+  const handleVoid = async () => {
+    if (!voidTarget || voidReason.trim().length < MIN_VOID_REASON_LENGTH) return;
+
+    setVoiding(true);
+    try {
+      await voidTest(voidTarget.id, voidReason.trim());
+      toast.success('Test result voided');
+      closeVoidModal();
+    } catch {
+      toast.error('Failed to void test result');
+    } finally {
+      setVoiding(false);
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+          <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search tests..." placeholder="Search tests..."
+            aria-label="Search tests..."
+            placeholder="Search tests..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-2 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
           />
         </div>
         <div className="flex gap-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
             aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
+            <option value="voided">Voided</option>
           </select>
           <button
             onClick={() => void navigate('/training/skills-testing/test/new')}
-            className="btn-primary flex font-medium gap-2 items-center"
+            className="btn-primary flex items-center gap-2 font-medium"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Start Test</span>
           </button>
         </div>
@@ -169,10 +285,10 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
       {/* Tests List */}
       {testsLoading ? (
         <div className="flex justify-center py-12" role="status" aria-live="polite">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
+          <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
         </div>
       ) : filteredTests.length === 0 ? (
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border">
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border">
           <EmptyState
             icon={ClipboardList}
             title="No test records found"
@@ -196,10 +312,62 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               test={test}
               onClick={() => void navigate(`/training/skills-testing/test/${test.id}`)}
               onDelete={() => void handleDelete(test)}
+              onVoid={() => setVoidTarget(test)}
+              onCancel={() => void handleCancel(test)}
+              onRelease={() => void handleRelease(test)}
             />
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={voidTarget !== null}
+        onClose={closeVoidModal}
+        title="Void test result"
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={closeVoidModal}
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void handleVoid()}
+              disabled={voiding || voidReason.trim().length < MIN_VOID_REASON_LENGTH}
+              className="rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {voiding ? 'Voiding...' : 'Void result'}
+            </button>
+          </div>
+        }
+      >
+        <div className="modal-body space-y-3">
+          <p className="text-theme-text-secondary text-sm">
+            Voiding withdraws this result for{' '}
+            <span className="text-theme-text-primary font-medium">{voidTarget?.candidate_name}</span> (
+            {voidTarget?.template_name}) without deleting it. The record stays in the member&apos;s history marked as
+            voided, stops counting toward testing statistics, and releases any training requirement this test completed.
+          </p>
+          <div>
+            <label htmlFor="void-reason" className="form-label">
+              Reason for voiding
+            </label>
+            <textarea
+              id="void-reason"
+              rows={3}
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              placeholder="e.g. Scored against the wrong candidate"
+              className="form-input"
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Required, at least {MIN_VOID_REASON_LENGTH} characters. The member can see this reason.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

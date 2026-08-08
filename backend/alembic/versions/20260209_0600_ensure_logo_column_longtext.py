@@ -8,13 +8,13 @@ This migration ensures the organizations.logo column is LONGTEXT.
 This is a retry/insurance migration in case the previous fix didn't apply.
 Uses idempotent raw SQL to safely change the column type.
 """
+
 from alembic import op
 from sqlalchemy import text
 
-
 # revision identifiers, used by Alembic.
-revision = '20260209_0600'
-down_revision = '20260208_1934'
+revision = "20260209_0600"
+down_revision = "20260208_1934"
 branch_labels = None
 depends_on = None
 
@@ -43,11 +43,9 @@ def upgrade() -> None:
         current_type = row[0].lower()
 
         # Only modify if not already LONGTEXT
-        if 'longtext' not in current_type:
+        if "longtext" not in current_type:
             print(f"Updating logo column from {current_type} to LONGTEXT...")
-            bind.execute(text(
-                "ALTER TABLE organizations MODIFY COLUMN logo LONGTEXT"
-            ))
+            bind.execute(text("ALTER TABLE organizations MODIFY COLUMN logo LONGTEXT"))
             print("✓ Logo column updated to LONGTEXT")
         else:
             print("✓ Logo column already LONGTEXT, skipping")

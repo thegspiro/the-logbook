@@ -27,7 +27,11 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import User, UserStatus
-from app.services.training_compliance import get_org_include_current_month
+from app.services.training_compliance import (
+    apply_recency,
+    certification_record_matches,
+    get_org_include_current_month,
+)
 from app.services.training_period import (
     effective_include_current_month,
     resolve_as_of_date,
@@ -281,6 +285,9 @@ class CompetencyMatrixService:
 
         # Filter completed records within the date window
         completed = [r for r in user_records if r.status == TrainingStatus.COMPLETED]
+        # Freshness window narrows the pool before the frequency window, so a
+        # stale completion can't satisfy an unbounded (one_time) requirement.
+        completed = apply_recency(requirement, completed, today)
         if start_date and end_date:
             windowed = [
                 r
@@ -377,25 +384,7 @@ class CompetencyMatrixService:
         # ---- CERTIFICATION requirements ----
         if req_type == RequirementType.CERTIFICATION.value:
             matching = [
-                r
-                for r in completed
-                if (
-                    (
-                        requirement.training_type
-                        and r.training_type == requirement.training_type
-                    )
-                    or (
-                        r.course_name
-                        and requirement.name
-                        and requirement.name.lower() in r.course_name.lower()
-                    )
-                    or (
-                        r.certification_number
-                        and requirement.registry_code
-                        and requirement.registry_code.lower()
-                        in r.certification_number.lower()
-                    )
-                )
+                r for r in completed if certification_record_matches(requirement, r)
             ]
             if not matching:
                 return not_started

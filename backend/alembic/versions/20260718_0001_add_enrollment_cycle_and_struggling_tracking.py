@@ -24,7 +24,9 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "program_enrollments",
-        sa.Column("struggling_alert_sent_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "struggling_alert_sent_at", sa.DateTime(timezone=True), nullable=True
+        ),
     )
     op.add_column(
         "program_enrollments",

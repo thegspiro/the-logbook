@@ -62,6 +62,13 @@ def _ensure_test_database() -> None:
     migration-only files and the seed-data files; if a test ever needs one of
     those lookup tables (apparatus types, facility types, …) this is where that
     would be added.
+
+    `create_all(checkfirst=True)` adds missing *tables*, never missing columns,
+    so a test database built before a schema change keeps the old shape and the
+    suite then fails in ways that look nothing like schema drift — after merging
+    a branch that alters models, drop it and let this rebuild:
+
+        mysql -e 'DROP DATABASE intranet_test'
     """
     from sqlalchemy import create_engine, text
 

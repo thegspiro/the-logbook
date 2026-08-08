@@ -63,6 +63,12 @@ class SkillTemplateCreate(BaseModel):
     # Optional pipeline requirement this template's tests satisfy (hybrid link:
     # tests inherit it, overridable per test).
     requirement_id: Optional[UUID] = None
+    # Result disclosure — omit to inherit the organization default. See
+    # ResultDisclosure / ResultRelease.
+    result_disclosure: Optional[str] = None
+    result_release: Optional[str] = None
+    # Corporate position slugs whose holders may view results of these tests.
+    result_viewer_positions: Optional[List[str]] = None
 
 
 class SkillTemplateUpdate(BaseModel):
@@ -78,6 +84,12 @@ class SkillTemplateUpdate(BaseModel):
     tags: Optional[List[str]] = None
     visibility: Optional[str] = None
     requirement_id: Optional[UUID] = None
+    # Result disclosure — omit to inherit the organization default. See
+    # ResultDisclosure / ResultRelease.
+    result_disclosure: Optional[str] = None
+    result_release: Optional[str] = None
+    # Corporate position slugs whose holders may view results of these tests.
+    result_viewer_positions: Optional[List[str]] = None
 
 
 class SkillTemplateResponse(UTCResponseBase):
@@ -96,6 +108,9 @@ class SkillTemplateResponse(UTCResponseBase):
     passing_percentage: Optional[float] = None
     require_all_critical: bool
     requirement_id: Optional[UUID] = None
+    result_disclosure: Optional[str] = None
+    result_release: Optional[str] = None
+    result_viewer_positions: Optional[list] = None
     tags: Optional[list] = None
     created_at: datetime
     updated_at: datetime
@@ -167,6 +182,10 @@ class SkillTestCreate(BaseModel):
     # Override the requirement this specific test satisfies; defaults to the
     # template's requirement when omitted.
     requirement_id: Optional[UUID] = None
+    # Per-test disclosure overrides; omit to inherit the template's.
+    result_disclosure: Optional[str] = None
+    result_release: Optional[str] = None
+    result_viewer_positions: Optional[List[str]] = None
 
 
 class SkillTestUpdate(BaseModel):
@@ -179,6 +198,54 @@ class SkillTestUpdate(BaseModel):
     notes: Optional[str] = None
     result: Optional[str] = None
     requirement_id: Optional[UUID] = None
+    result_disclosure: Optional[str] = None
+    result_release: Optional[str] = None
+    result_viewer_positions: Optional[List[str]] = None
+    # Optimistic concurrency: the version the client last saw. Omit to keep the
+    # previous last-write-wins behavior; send it to be refused with 409 rather
+    # than silently overwriting a concurrent edit.
+    expected_version: Optional[int] = None
+
+
+class SkillTestViewerCreate(BaseModel):
+    """Grant one member sight of a single test's result."""
+
+    user_id: UUID
+
+
+class SkillTestViewerResponse(UTCResponseBase):
+    """A standing grant on one test."""
+
+    id: UUID
+    test_id: UUID
+    user_id: UUID
+    user_name: Optional[str] = None
+    granted_by: Optional[UUID] = None
+    granted_by_name: Optional[str] = None
+    granted_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SkillTestCancelRequest(BaseModel):
+    """Schema for cancelling a test abandoned before it was scored.
+
+    The reason is optional — unlike a void, a cancellation withdraws no result
+    and makes no claim about the candidate, so there is nothing a reader needs
+    explained. It is appended to the test's notes when given.
+    """
+
+    reason: Optional[str] = Field(None, max_length=1000)
+
+
+class SkillTestVoidRequest(BaseModel):
+    """Schema for voiding an official test result.
+
+    The reason is mandatory and non-trivial: a voided result stays visible in
+    the candidate's history, so the record has to say why it was withdrawn.
+    """
+
+    reason: str = Field(..., min_length=10, max_length=1000)
 
 
 class SkillTestResponse(UTCResponseBase):
@@ -193,6 +260,8 @@ class SkillTestResponse(UTCResponseBase):
     status: str
     result: str
     is_practice: bool = False
+    # Optimistic-concurrency counter; send it back as expected_version on write.
+    version: int = 1
     section_results: Optional[list] = None
     overall_score: Optional[float] = None
     elapsed_seconds: Optional[int] = None
@@ -202,10 +271,24 @@ class SkillTestResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
 
+    # Resolved disclosure policy in force for this test, so the UI can explain
+    # what the candidate will see without recomputing the inheritance chain.
+    result_disclosure: Optional[str] = None
+    result_release: Optional[str] = None
+    result_viewer_positions: Optional[list] = None
+    released_at: Optional[datetime] = None
+    released_by: Optional[UUID] = None
+
+    # Void trail — populated only when an official result has been withdrawn.
+    voided_at: Optional[datetime] = None
+    voided_by: Optional[UUID] = None
+    void_reason: Optional[str] = None
+
     # Denormalized display names (populated in endpoint)
     template_name: Optional[str] = None
     candidate_name: Optional[str] = None
     examiner_name: Optional[str] = None
+    voided_by_name: Optional[str] = None
 
     # Template structure for active test rendering
     template_sections: Optional[list] = None
@@ -231,6 +314,7 @@ class SkillTestListResponse(UTCResponseBase):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime
+    voided_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

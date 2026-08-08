@@ -23,21 +23,22 @@ This guide covers deploying The Logbook across various platforms, from small dev
 
 ## Quick Reference
 
-| Platform | Minimum RAM | Recommended | Profile |
-|----------|-------------|-------------|---------|
-| Raspberry Pi 3 | 1GB | 2GB | minimal |
-| Raspberry Pi 4/5 | 2GB | 4GB | standard |
-| Small VPS | 1GB | 2GB | minimal |
-| Standard VPS | 2GB | 4GB | standard |
-| Synology NAS (DS+/XS+) | 4GB | 8GB | standard |
-| Production Server | 4GB | 8GB+ | full |
-| Kubernetes | 2GB per pod | 4GB per pod | standard |
+| Platform               | Minimum RAM | Recommended | Profile  |
+| ---------------------- | ----------- | ----------- | -------- |
+| Raspberry Pi 3         | 1GB         | 2GB         | minimal  |
+| Raspberry Pi 4/5       | 2GB         | 4GB         | standard |
+| Small VPS              | 1GB         | 2GB         | minimal  |
+| Standard VPS           | 2GB         | 4GB         | standard |
+| Synology NAS (DS+/XS+) | 4GB         | 8GB         | standard |
+| Production Server      | 4GB         | 8GB+        | full     |
+| Kubernetes             | 2GB per pod | 4GB per pod | standard |
 
 ---
 
 ## Resource Requirements
 
 ### Minimal Profile (1-2GB RAM)
+
 - Raspberry Pi, small VPS, budget hosting
 - Single-user or small team (< 20 users)
 - Basic features, no search
@@ -47,6 +48,7 @@ docker compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
 ```
 
 ### Standard Profile (4GB RAM)
+
 - Most deployments
 - Medium organizations (20-200 users)
 - All core features
@@ -56,6 +58,7 @@ docker compose up -d
 ```
 
 ### Full Profile (8GB+ RAM)
+
 - Large organizations (200+ users)
 - Elasticsearch search, S3 storage, email testing
 
@@ -196,6 +199,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
    - Node: cache.t3.micro
 
 3. Configure .env:
+
 ```bash
 DB_HOST=your-rds-endpoint.rds.amazonaws.com
 DB_PORT=3306
@@ -209,6 +213,7 @@ REDIS_PORT=6379
 
 4. Deploy without local database (layer the production override — see the
    hardening note under [Resource Requirements](#resource-requirements)):
+
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d backend frontend
 ```
@@ -248,6 +253,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
    - Basic C0 (development) or Standard C1 (production)
 
 3. Configure .env:
+
 ```bash
 DB_HOST=your-server.mysql.database.azure.com
 DB_USER=admin@your-server
@@ -282,7 +288,9 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
 ```bash
 # Build and push images
 docker build -t gcr.io/your-project/logbook-backend ./backend
-docker build -t gcr.io/your-project/logbook-frontend ./frontend
+# Frontend builds from the repository root: it installs from the npm workspace
+# lockfile there, which is outside frontend/.
+docker build -f frontend/Dockerfile -t gcr.io/your-project/logbook-frontend .
 docker push gcr.io/your-project/logbook-backend
 docker push gcr.io/your-project/logbook-frontend
 
@@ -365,6 +373,7 @@ helm install my-logbook the-logbook/the-logbook
 ### Manual Kubernetes
 
 See `deploy/kubernetes/` for manifests:
+
 - `deployment.yaml` - Backend and frontend deployments
 - `service.yaml` - Services and ingress
 - `configmap.yaml` - Configuration
@@ -491,7 +500,7 @@ and verifies the schema restored — a failed drill fails loudly every night
 until it is fixed. Sync the `backups` volume offsite, and store
 `ENCRYPTION_KEY`/`ENCRYPTION_SALT` separately: a backup without its era's keys
 cannot decrypt encrypted fields. See [docs/BACKUP.md](../docs/BACKUP.md).
-*(2026-07-31)*
+_(2026-07-31)_
 
 ### Manual Backup
 
@@ -526,18 +535,21 @@ tar -xzvf uploads-backup.tar.gz
 ### Common Issues
 
 **Container won't start:**
+
 ```bash
 docker compose logs <service-name>
 docker compose ps
 ```
 
 **Database connection error:**
+
 ```bash
 # Check if database is ready
 docker compose exec mysql mysql -u root -p -e "SELECT 1"
 ```
 
 **Out of memory (Raspberry Pi):**
+
 ```bash
 # Use minimal profile
 docker compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
@@ -550,6 +562,7 @@ sudo dphys-swapfile swapon
 ```
 
 **ARM image issues:**
+
 ```bash
 # Explicitly use ARM compose
 docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
@@ -578,17 +591,17 @@ cp .env.example.full .env
 
 ### Key Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SECRET_KEY` | JWT signing key (64 hex chars) | Required |
-| `ENCRYPTION_KEY` | Data encryption key (64 hex chars) | Required |
-| `ENCRYPTION_SALT` | Encryption salt (32 hex chars) | Required |
-| `DB_HOST` | Database hostname | db |
-| `DB_PASSWORD` | Database password | Required |
-| `REDIS_PASSWORD` | Redis password | Required |
-| `FRONTEND_PORT` | Frontend port | 3000 |
-| `BACKEND_PORT` | Backend port | 3001 |
-| `ALLOWED_ORIGINS` | CORS origins | http://localhost:3000 |
+| Variable          | Description                        | Default               |
+| ----------------- | ---------------------------------- | --------------------- |
+| `SECRET_KEY`      | JWT signing key (64 hex chars)     | Required              |
+| `ENCRYPTION_KEY`  | Data encryption key (64 hex chars) | Required              |
+| `ENCRYPTION_SALT` | Encryption salt (32 hex chars)     | Required              |
+| `DB_HOST`         | Database hostname                  | db                    |
+| `DB_PASSWORD`     | Database password                  | Required              |
+| `REDIS_PASSWORD`  | Redis password                     | Required              |
+| `FRONTEND_PORT`   | Frontend port                      | 3000                  |
+| `BACKEND_PORT`    | Backend port                       | 3001                  |
+| `ALLOWED_ORIGINS` | CORS origins                       | http://localhost:3000 |
 
 ---
 
