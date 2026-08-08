@@ -659,15 +659,15 @@ action buttons visible._
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Training Dashboard Overview | 1:30–4:00 | "The Training Officer Dashboard Explained" |
-| Creating Training Programs | 5:00–8:00 | "Setting Up Training Programs & Requirements" |
-| Bulk Recording Training | 9:30–11:00 | "Recording Training for Multiple Members at Once" |
-| Skills Testing Walkthrough | 12:00–16:00 | "Running a Skills Test in The Logbook" |
-| Compliance Reporting | 16:00–19:00 | "Generating Compliance Reports" |
-| Multi-Class Courses & Cohorts | 20:00–21:30 | "Schedule a Whole Recruit School in One Shot" |
-| When Plans Change | 21:30–22:00 | "Rescheduling a Class Series Without Touching 15 Events" |
-| Shift Reports & Skill Scoring | 22:30–24:00 | "Filing Shift Reports with 1-5 Skill Scoring" |
-| Batch Review | 24:00–25:00 | "Batch Reviewing Shift Reports" |
-| Training Officer Workflow | 25:00–25:30 | "The Training Officer's Weekly Routine" |
+| Clip                          | Timecode    | Standalone Title                                         |
+| ----------------------------- | ----------- | -------------------------------------------------------- |
+| Training Dashboard Overview   | 1:30–4:00   | "The Training Officer Dashboard Explained"               |
+| Creating Training Programs    | 5:00–8:00   | "Setting Up Training Programs & Requirements"            |
+| Bulk Recording Training       | 9:30–11:00  | "Recording Training for Multiple Members at Once"        |
+| Skills Testing Walkthrough    | 12:00–16:00 | "Running a Skills Test in The Logbook"                   |
+| Compliance Reporting          | 16:00–19:00 | "Generating Compliance Reports"                          |
+| Multi-Class Courses & Cohorts | 20:00–21:30 | "Schedule a Whole Recruit School in One Shot"            |
+| When Plans Change             | 21:30–22:00 | "Rescheduling a Class Series Without Touching 15 Events" |
+| Shift Reports & Skill Scoring | 22:30–24:00 | "Filing Shift Reports with 1-5 Skill Scoring"            |
+| Batch Review                  | 24:00–25:00 | "Batch Reviewing Shift Reports"                          |
+| Training Officer Workflow     | 25:00–25:30 | "The Training Officer's Weekly Routine"                  |

@@ -52,11 +52,11 @@ Templates are the reusable definitions of a skills test — the digital equivale
 
 ### Template Statuses
 
-| Status | Description |
-|--------|-------------|
-| **Draft** | Template is being built or edited. Cannot be used for testing. |
-| **Published** | Template is active and available for examiners to use. |
-| **Archived** | Template has been retired. Historical test results still reference it, but no new tests can be created from it. |
+| Status        | Description                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Draft**     | Template is being built or edited. Cannot be used for testing.                                                  |
+| **Published** | Template is active and available for examiners to use.                                                          |
+| **Archived**  | Template has been retired. Historical test results still reference it, but no new tests can be created from it. |
 
 ---
 
@@ -70,15 +70,15 @@ Navigate to **Training Admin > Skills Testing > Templates** and click **Create T
 
 Fill in the basic information:
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| **Name** | Descriptive name of the skill sheet | "Patient Assessment/Management — Trauma" |
-| **Category** | Training category (EMS, Fire, Hazmat, etc.) | "EMS" |
-| **Description** | Purpose and scope | "NREMT psychomotor exam for trauma patient assessment" |
-| **Passing Percentage** | Minimum score to pass (0–100) | 70 |
-| **Require All Critical** | If enabled, failing any required criterion = automatic fail | Enabled |
-| **Time Limit** | Optional time limit in minutes | 10 |
-| **Linked Training Requirement** | Optional. A training-program requirement that passing a test from this template completes | "Recruit Academy — Phase 3: Trauma Assessment" |
+| Field                           | Description                                                                               | Example                                                |
+| ------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Name**                        | Descriptive name of the skill sheet                                                       | "Patient Assessment/Management — Trauma"               |
+| **Category**                    | Training category (EMS, Fire, Hazmat, etc.)                                               | "EMS"                                                  |
+| **Description**                 | Purpose and scope                                                                         | "NREMT psychomotor exam for trauma patient assessment" |
+| **Passing Percentage**          | Minimum score to pass (0–100)                                                             | 70                                                     |
+| **Require All Critical**        | If enabled, failing any required criterion = automatic fail                               | Enabled                                                |
+| **Time Limit**                  | Optional time limit in minutes                                                            | 10                                                     |
+| **Linked Training Requirement** | Optional. A training-program requirement that passing a test from this template completes | "Recruit Academy — Phase 3: Trauma Assessment"         |
 
 ![Create skill sheet template form with metadata fields](./images/09-02-create-template.png)
 
@@ -87,11 +87,13 @@ Fill in the basic information:
 Add sections to organize the evaluation, then add criteria (scored items) within each section.
 
 **Adding a section:**
+
 1. Click **Add Section** below the template metadata.
 2. Enter the section name (e.g., "Scene Size-Up").
 3. Optionally add examiner instructions for the section.
 
 **Adding criteria to a section:**
+
 1. Within a section, click **Add Criterion**.
 2. Enter the step description (e.g., "Determines scene/situation safety").
 3. Select the **criterion type**:
@@ -148,17 +150,18 @@ Navigate to **Training Admin > Skills Testing > Tests** and click **New Test**.
 ### Setting Up a Test Session
 
 1. **Select Template** — Choose a published skill sheet template from the dropdown.
-2. **Select Candidate** — Choose the member being evaluated from the organization roster. **You cannot select yourself** *(2026-08-01)* — see [Separation of Duties](#separation-of-duties) below.
-3. **Linked Requirement** *(optional)* — If the template is linked to a training requirement, it is pre-selected here. You can **override it for this test** to point at a **different requirement** — for example, when the same skill satisfies a requirement in another phase or program.
+2. **Select Candidate** — Choose the member being evaluated from the organization roster. **You cannot select yourself** _(2026-08-01)_ — see [Separation of Duties](#separation-of-duties) below.
+3. **Linked Requirement** _(optional)_ — If the template is linked to a training requirement, it is pre-selected here. You can **override it for this test** to point at a **different requirement** — for example, when the same skill satisfies a requirement in another phase or program.
 4. Click **Start Test**.
 
 The system creates a new test session with:
+
 - The current user as the **examiner**
 - Status set to **not_started**
 
 ### Separation of Duties
 
-*(Added 2026-08-01.)* The examiner is always the person creating the test, and
+_(Added 2026-08-01.)_ The examiner is always the person creating the test, and
 the candidate comes from the form — so nothing previously stopped an
 instructor examining themselves and recording a pass. Because a passing test
 **completes the linked training requirement**, that pass counts toward
@@ -171,6 +174,7 @@ which is what a psychomotor evaluation means.
 **Practice mode is exempt.** Practice attempts are not logged to the audit
 trail, never touch enrollment progress, and self-drilling is the point of
 them — so you can run a practice test on yourself freely.
+
 - The template's sections and criteria loaded for scoring
 
 > **Screenshot placeholder:**
@@ -178,12 +182,12 @@ them — so you can run a practice test on yourself freely.
 
 ### Test Statuses
 
-| Status | Description |
-|--------|-------------|
+| Status          | Description                              |
+| --------------- | ---------------------------------------- |
 | **not_started** | Test created but candidate has not begun |
-| **in_progress** | Candidate is actively being evaluated |
-| **completed** | Test finished and scored |
-| **cancelled** | Test was cancelled before completion |
+| **in_progress** | Candidate is actively being evaluated    |
+| **completed**   | Test finished and scored                 |
+| **cancelled**   | Test was cancelled before completion     |
 
 ---
 
@@ -194,6 +198,7 @@ During the test, the examiner scores each criterion as the candidate performs th
 ### Per-Section Scoring
 
 Each section displays its criteria as a checklist. The examiner:
+
 - **Checks off** each step the candidate completes correctly
 - **Leaves unchecked** any steps the candidate misses or performs incorrectly
 - Notes which criteria are marked as **Required** (critical) — indicated by a red asterisk
@@ -201,6 +206,7 @@ Each section displays its criteria as a checklist. The examiner:
 ### Running Score
 
 As the examiner scores criteria, the interface displays:
+
 - **Section score** — points earned / total possible points in each section
 - **Overall running score** — total points earned / total possible points across all sections
 - **Percentage** — running percentage updated in real-time (based on points, not simple criterion count)
@@ -208,6 +214,7 @@ As the examiner scores criteria, the interface displays:
 ### Critical Criteria
 
 If "Require All Critical" is enabled on the template:
+
 - Any **required** criterion that is left unchecked (not passed) will result in an **automatic FAIL**
 - This is true even if the candidate's percentage score exceeds the passing threshold
 
@@ -235,10 +242,12 @@ When the candidate finishes the procedure:
 ### Result Determination
 
 A candidate **passes** if ALL of the following are true:
+
 1. Their percentage score meets or exceeds the template's **passing percentage**
 2. If "Require All Critical" is enabled, ALL required criteria were scored as passed
 
 A candidate **fails** if ANY of the following are true:
+
 1. Their percentage score is below the passing percentage
 2. Any required criterion was not passed (when "Require All Critical" is enabled)
 
@@ -272,6 +281,7 @@ Navigate to **Training Admin > Skills Testing > Tests** and click on any complet
 ### Test History
 
 The tests list page supports filtering by:
+
 - **Status** — not_started, in_progress, completed, cancelled
 - **Candidate** — filter by specific member
 - **Template** — filter by specific skill sheet
@@ -287,14 +297,14 @@ The tests list page supports filtering by:
 
 Navigate to **Training Admin > Skills Testing > Summary** for a department-wide overview:
 
-| Metric | Description |
-|--------|-------------|
-| **Total Templates** | Number of skill sheet templates |
-| **Published Templates** | Templates available for testing |
-| **Total Tests** | All-time test sessions |
-| **Tests This Month** | Test sessions conducted in the current month |
-| **Pass Rate** | Percentage of completed tests that resulted in a pass |
-| **Average Score** | Mean percentage score across all completed tests |
+| Metric                  | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
+| **Total Templates**     | Number of skill sheet templates                       |
+| **Published Templates** | Templates available for testing                       |
+| **Total Tests**         | All-time test sessions                                |
+| **Tests This Month**    | Test sessions conducted in the current month          |
+| **Pass Rate**           | Percentage of completed tests that resulted in a pass |
+| **Average Score**       | Mean percentage score across all completed tests      |
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Skills Testing Summary dashboard showing six stat cards in a 3x2 grid: Total Templates (12), Published Templates (8), Total Tests (156), Tests This Month (14), Pass Rate (82%), Average Score (76.4%). Each card has an icon and is color-coded]_
@@ -316,6 +326,7 @@ This walkthrough demonstrates a complete skills testing scenario — from templa
 Lt. Santos navigates to **Training Admin > Skills Testing > Templates** and clicks **Create Template**.
 
 **Template metadata:**
+
 - **Name:** Patient Assessment/Management — Trauma
 - **Category:** EMS
 - **Description:** NREMT psychomotor evaluation for trauma patient assessment and management. Candidate must demonstrate a systematic approach to assessing and managing a trauma patient, including scene size-up, primary survey, secondary assessment, and reassessment.
@@ -383,7 +394,7 @@ On evaluation day, Lt. Santos navigates to **Training Admin > Skills Testing > T
 
 The test session is created. Lt. Santos reads the scenario prompt aloud:
 
-> *"You are dispatched to a single-vehicle motorcycle accident. Upon arrival, you find a 28-year-old male lying supine on the roadway. He is conscious and complaining of pain to his left leg. A bystander tells you the patient was traveling approximately 30 mph when he lost control. The patient is wearing a helmet."*
+> _"You are dispatched to a single-vehicle motorcycle accident. Upon arrival, you find a 28-year-old male lying supine on the roadway. He is conscious and complaining of pain to his left leg. A bystander tells you the patient was traveling approximately 30 mph when he lost control. The patient is wearing a helmet."_
 
 Lt. Santos starts the timer and FF Thompson begins the evaluation.
 
@@ -394,26 +405,30 @@ Lt. Santos starts the timer and FF Thompson begins the evaluation.
 As FF Thompson works through the assessment, Lt. Santos scores each criterion:
 
 **Scene Size-Up (6/6):**
-- [x] Takes or verbalizes appropriate PPE precautions *(Required)*
-- [x] Determines the scene/situation is safe *(Required)*
+
+- [x] Takes or verbalizes appropriate PPE precautions _(Required)_
+- [x] Determines the scene/situation is safe _(Required)_
 - [x] Determines the mechanism of injury/nature of illness
 - [x] Determines the number of patients
 - [x] Requests additional EMS assistance if necessary
-- [x] Considers stabilization of the spine *(Required)*
+- [x] Considers stabilization of the spine _(Required)_
 
 **Primary Survey / Resuscitation (5/6):**
+
 - [x] Verbalizes general impression of the patient
 - [x] Determines responsiveness/level of consciousness (AVPU)
 - [x] Determines chief complaint/apparent life threats
-- [x] Assesses airway and breathing *(Required)*
-- [x] Assesses circulation — bleeding, pulse, skin *(Required)*
-- [ ] Identifies patient priority and makes transport decision *(Missed — forgot to verbalize transport priority)*
+- [x] Assesses airway and breathing _(Required)_
+- [x] Assesses circulation — bleeding, pulse, skin _(Required)_
+- [ ] Identifies patient priority and makes transport decision _(Missed — forgot to verbalize transport priority)_
 
 **History Taking (2/2):**
+
 - [x] Obtains baseline vital signs
 - [x] Attempts to obtain SAMPLE history
 
 **Secondary Assessment (7/8):**
+
 - [x] Inspects and palpates head, neck, and cervical spine
 - [x] Inspects and palpates chest
 - [x] Inspects and palpates abdomen
@@ -421,11 +436,12 @@ As FF Thompson works through the assessment, Lt. Santos scores each criterion:
 - [x] Inspects and palpates lower extremities
 - [x] Inspects and palpates upper extremities
 - [x] Inspects and palpates posterior
-- [ ] Manages secondary injuries and wounds appropriately *(Missed — did not splint the injured leg)*
+- [ ] Manages secondary injuries and wounds appropriately _(Missed — did not splint the injured leg)_
 
 **Reassessment (1/2):**
+
 - [x] Demonstrates ongoing reassessment of vital signs
-- [ ] Verbalizes continued treatment and monitoring *(Missed — did not verbalize ongoing care plan)*
+- [ ] Verbalizes continued treatment and monitoring _(Missed — did not verbalize ongoing care plan)_
 
 ---
 
@@ -433,30 +449,31 @@ As FF Thompson works through the assessment, Lt. Santos scores each criterion:
 
 Lt. Santos clicks **Complete Test**. The system calculates:
 
-| Metric | Value |
-|--------|-------|
-| **Criteria Passed** | 17 / 20 |
-| **Percentage Score** | 85% |
-| **Passing Threshold** | 70% |
-| **Score Meets Threshold** | Yes |
-| **Critical Criteria Met** | 5 / 5 (all passed) |
-| **Time Elapsed** | 7 minutes 42 seconds |
-| **Result** | **PASS** |
+| Metric                    | Value                |
+| ------------------------- | -------------------- |
+| **Criteria Passed**       | 17 / 20              |
+| **Percentage Score**      | 85%                  |
+| **Passing Threshold**     | 70%                  |
+| **Score Meets Threshold** | Yes                  |
+| **Critical Criteria Met** | 5 / 5 (all passed)   |
+| **Time Elapsed**          | 7 minutes 42 seconds |
+| **Result**                | **PASS**             |
 
 **Missed Steps:**
+
 1. Primary Survey #6 — Did not verbalize transport priority decision
 2. Secondary Assessment #8 — Did not splint the injured leg
 3. Reassessment #2 — Did not verbalize ongoing care plan
 
 **Section Breakdown:**
 
-| Section | Score | Percentage |
-|---------|-------|------------|
-| Scene Size-Up | 6/6 | 100% |
-| Primary Survey / Resuscitation | 5/6 | 83% |
-| History Taking | 2/2 | 100% |
-| Secondary Assessment | 7/8 | 88% |
-| Reassessment | 1/2 | 50% |
+| Section                        | Score | Percentage |
+| ------------------------------ | ----- | ---------- |
+| Scene Size-Up                  | 6/6   | 100%       |
+| Primary Survey / Resuscitation | 5/6   | 83%        |
+| History Taking                 | 2/2   | 100%       |
+| Secondary Assessment           | 7/8   | 88%        |
+| Reassessment                   | 1/2   | 50%        |
 
 FF Thompson passed with 85% — all critical criteria were met and the score exceeds the 70% passing threshold. The missed steps are documented for follow-up training.
 
@@ -466,14 +483,14 @@ FF Thompson passed with 85% — all critical criteria were met and the score exc
 
 If FF Thompson had forgotten to assess the airway (a **required** criterion in Primary Survey), the result would be:
 
-| Metric | Value |
-|--------|-------|
-| **Criteria Passed** | 16 / 20 |
-| **Percentage Score** | 80% |
-| **Passing Threshold** | 70% |
-| **Score Meets Threshold** | Yes |
+| Metric                    | Value                                          |
+| ------------------------- | ---------------------------------------------- |
+| **Criteria Passed**       | 16 / 20                                        |
+| **Percentage Score**      | 80%                                            |
+| **Passing Threshold**     | 70%                                            |
+| **Score Meets Threshold** | Yes                                            |
 | **Critical Criteria Met** | 4 / 5 — **FAILED** (missed required criterion) |
-| **Result** | **FAIL — Critical Criteria Not Met** |
+| **Result**                | **FAIL — Critical Criteria Not Met**           |
 
 Even though 80% exceeds the 70% threshold, the candidate fails because "Require All Critical" is enabled and one critical criterion was not met. This mirrors real NREMT evaluation rules.
 
@@ -520,16 +537,16 @@ Training officers with `training.manage` permission can permanently delete test 
 
 ## Permissions
 
-| Action | Required Permission |
-|--------|-------------------|
-| Create/edit/publish templates | `training.manage` |
-| Duplicate templates | `training.manage` |
-| Archive templates | `training.manage` |
-| Create and administer tests | Authenticated (any member) |
-| Delete test records | `training.manage` |
-| Toggle test visibility | `training.manage` |
-| View test results | Authenticated (own results) or `training.manage` (all results) |
-| View summary dashboard | `training.manage` |
+| Action                        | Required Permission                                            |
+| ----------------------------- | -------------------------------------------------------------- |
+| Create/edit/publish templates | `training.manage`                                              |
+| Duplicate templates           | `training.manage`                                              |
+| Archive templates             | `training.manage`                                              |
+| Create and administer tests   | Authenticated (any member)                                     |
+| Delete test records           | `training.manage`                                              |
+| Toggle test visibility        | `training.manage`                                              |
+| View test results             | Authenticated (own results) or `training.manage` (all results) |
+| View summary dashboard        | `training.manage`                                              |
 
 ---
 
@@ -542,7 +559,7 @@ Skills tests integrate with the broader training compliance system:
 - **Training Programs:** Skills evaluations can be assigned as phase requirements within structured programs (e.g., "Recruit Academy Phase 3 requires passing Trauma Assessment and Cardiac Arrest Management").
 - **Compliance Matrix:** Skills test completion status feeds into the department-wide compliance matrix view.
 
-### Integration with Shift Completion Reports *(2026-04-07)*
+### Integration with Shift Completion Reports _(2026-04-07)_
 
 Skills observed during shift completion reports now support **1-5 scoring** that connects to the formal skills tracking system:
 
@@ -573,22 +590,22 @@ Competency Matrix reflects new scores
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| Cannot create a test — "Template must be published" | Only published templates can be used for testing. Navigate to the template and click Publish. |
-| Cannot publish template — validation error | The template must have at least one section containing at least one criterion. Add sections and criteria, then try again. |
-| Cannot edit a published template | Published templates can still be edited. If structural fields change (sections, criteria, scoring), the version auto-increments. |
-| Cannot update a completed test | Completed and cancelled tests are locked and cannot be modified. |
-| Test shows FAIL but score is above passing percentage | Check if "Require All Critical" is enabled. If any required criterion was not passed, the result is an automatic FAIL regardless of the score. |
-| Candidate doesn't appear in the dropdown | The candidate must be an active member of your organization. Check their account status. |
-| Template shows "archived" — can I still view old tests? | Yes. Historical test results always reference the template version they were administered under. Archived templates just can't be used for new tests. |
-| Score calculation seems wrong | The score is calculated as: (total points earned / total possible points) × 100. Each criterion has a configurable point value. Check that all sections, criteria, and point values are correct. |
-| Summary dashboard shows 0% pass rate | The pass rate only includes completed tests. If all tests are still in progress or cancelled, the rate will show 0%. |
-| Non-critical criteria showing as "FAIL" | Fixed: Non-critical criteria that are unchecked now display "Not Completed" instead of "FAIL". Pull latest changes. |
-| Completed test times show UTC instead of local time | Fixed: All timestamps now display in the user's local timezone. Pull latest changes and hard-refresh. |
-| Practice test results appearing in compliance | Practice tests are excluded from compliance calculations. If incorrectly categorized, training officers can delete the test record. |
-| Cannot delete a test record | Only users with `training.manage` permission can delete tests. Contact your training officer. |
-| Statement criterion text not saving | Ensure the criterion type is set to `statement` in the template builder. Save and republish the template. |
+| Issue                                                   | Solution                                                                                                                                                                                         |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cannot create a test — "Template must be published"     | Only published templates can be used for testing. Navigate to the template and click Publish.                                                                                                    |
+| Cannot publish template — validation error              | The template must have at least one section containing at least one criterion. Add sections and criteria, then try again.                                                                        |
+| Cannot edit a published template                        | Published templates can still be edited. If structural fields change (sections, criteria, scoring), the version auto-increments.                                                                 |
+| Cannot update a completed test                          | Completed and cancelled tests are locked and cannot be modified.                                                                                                                                 |
+| Test shows FAIL but score is above passing percentage   | Check if "Require All Critical" is enabled. If any required criterion was not passed, the result is an automatic FAIL regardless of the score.                                                   |
+| Candidate doesn't appear in the dropdown                | The candidate must be an active member of your organization. Check their account status.                                                                                                         |
+| Template shows "archived" — can I still view old tests? | Yes. Historical test results always reference the template version they were administered under. Archived templates just can't be used for new tests.                                            |
+| Score calculation seems wrong                           | The score is calculated as: (total points earned / total possible points) × 100. Each criterion has a configurable point value. Check that all sections, criteria, and point values are correct. |
+| Summary dashboard shows 0% pass rate                    | The pass rate only includes completed tests. If all tests are still in progress or cancelled, the rate will show 0%.                                                                             |
+| Non-critical criteria showing as "FAIL"                 | Fixed: Non-critical criteria that are unchecked now display "Not Completed" instead of "FAIL". Pull latest changes.                                                                              |
+| Completed test times show UTC instead of local time     | Fixed: All timestamps now display in the user's local timezone. Pull latest changes and hard-refresh.                                                                                            |
+| Practice test results appearing in compliance           | Practice tests are excluded from compliance calculations. If incorrectly categorized, training officers can delete the test record.                                                              |
+| Cannot delete a test record                             | Only users with `training.manage` permission can delete tests. Contact your training officer.                                                                                                    |
+| Statement criterion text not saving                     | Ensure the criterion type is set to `statement` in the template builder. Save and republish the template.                                                                                        |
 
 ---
 

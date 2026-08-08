@@ -457,12 +457,12 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Recording Meeting Minutes | 1:30–5:00 | "Recording Meeting Minutes in The Logbook" |
-| Creating Action Items | 3:00–4:00 | "Tracking Action Items from Meetings" |
-| Event Attendance Tracking | 7:30–8:30 | "Managing Event Attendance" |
-| Adding a New Member | 10:00–10:30 | "How to Add a New Member (Secretary)" |
-| Document Organization | 12:00–13:00 | "Organizing Your Department's Documents" |
-| Custom Forms Builder | 13:30–14:00 | "Building Custom Forms for Your Department" |
-| Secretary's Meeting Workflow | 16:00–17:30 | "The Secretary's Meeting Workflow" |
+| Clip                         | Timecode    | Standalone Title                            |
+| ---------------------------- | ----------- | ------------------------------------------- |
+| Recording Meeting Minutes    | 1:30–5:00   | "Recording Meeting Minutes in The Logbook"  |
+| Creating Action Items        | 3:00–4:00   | "Tracking Action Items from Meetings"       |
+| Event Attendance Tracking    | 7:30–8:30   | "Managing Event Attendance"                 |
+| Adding a New Member          | 10:00–10:30 | "How to Add a New Member (Secretary)"       |
+| Document Organization        | 12:00–13:00 | "Organizing Your Department's Documents"    |
+| Custom Forms Builder         | 13:30–14:00 | "Building Custom Forms for Your Department" |
+| Secretary's Meeting Workflow | 16:00–17:30 | "The Secretary's Meeting Workflow"          |

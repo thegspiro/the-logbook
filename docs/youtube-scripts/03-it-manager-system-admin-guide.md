@@ -460,7 +460,7 @@ thresholds]**
 > acknowledgment-required department messages are emailed automatically too."
 
 > "If you also configure Twilio — account SID, auth token, and a sending number
-> in the environment settings — the platform can send **SMS** for *urgent*
+> in the environment settings — the platform can send **SMS** for _urgent_
 > department messages, reaching members even when they're off the app. Without
 > Twilio, urgent messages still deliver in-app and by email; the text is simply
 > skipped. Members choose whether to receive those texts in their own settings,
@@ -639,7 +639,7 @@ docker compose exec mysql mysqldump -u root -p intranet_db > backup_$(date +%Y%m
 
 > "**Audit archives:** One more, and it's easy to miss. When old audit entries
 > pass the seven-year retention period, they're exported to archive files and
-> removed from the database. Those archives are the *only* copy of your oldest
+> removed from the database. Those archives are the _only_ copy of your oldest
 > audit history — back up that directory too."
 
 > "Now, the good news: if you're running the production compose file, you don't
@@ -683,7 +683,7 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 **[CALLOUT: "Sync backups OFFSITE — same host is not a backup"]**
 
 > "Second, and this one bites people: your encryption keys are deliberately
-> *not* in the backup, so a leaked archive doesn't leak your credentials. But
+> _not_ in the backup, so a leaked archive doesn't leak your credentials. But
 > that means a database backup without its `ENCRYPTION_KEY` and
 > `ENCRYPTION_SALT` cannot decrypt the encrypted fields. Store those offline,
 > in two places, and keep retired keys with the backups from their era."
@@ -705,7 +705,7 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 **[SCREEN: Settings → Organization → Retention]**
 
 > "Here's a question most departments have never had a good answer to: how long
-> do you actually keep things? Not policy-on-paper — how long does the *system*
+> do you actually keep things? Not policy-on-paper — how long does the _system_
 > keep them?"
 
 > "Now you set that. Each class of record has its own retention: message
@@ -717,7 +717,7 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 
 > "Every class has a minimum you can't go below. That's not the platform being
 > bossy — it's a guard against typing three when you meant thirty and erasing
-> last month. The floor is enforced when you save it *and* again when the job
+> last month. The floor is enforced when you save it _and_ again when the job
 > runs, so even a value edited straight into the database gets clamped."
 
 **[CALLOUT: "Floors prevent a typo from erasing recent records"]**
@@ -763,14 +763,14 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 
 > "Last one, and it's the one to understand before you use it. When a member
 > leaves, you still need their history — training completions, attendance
-> percentages, what gear they had. You do *not* need their home address, date of
+> percentages, what gear they had. You do _not_ need their home address, date of
 > birth, and medical details forever."
 
 > "**Anonymize** splits those apart. It scrubs the identity — name, contacts,
 > address, birthdate, photo, emergency contacts, medical findings, even the
 > original application with its interview notes and uploaded ID. It keeps the
 > operational record: certifications, hours, attendance, property custody, and
-> the *fact* that a medical clearance existed and when it expired."
+> the _fact_ that a medical clearance existed and when it expired."
 
 **[CALLOUT: "Identity removed. History kept."]**
 
@@ -780,7 +780,7 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 > election records, because ballot signatures have to stay intact."
 
 > "It's irreversible, it only works on members who've already been dropped or
-> archived, and you can't run it on yourself. Do it *after* departure clearance
+> archived, and you can't run it on yourself. Do it _after_ departure clearance
 > is finished and after whatever waiting period your retention policy sets."
 
 **[CALLOUT: "Irreversible — run after clearance, per your retention policy"]**
@@ -843,17 +843,17 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Adding a New Member | 5:00–6:30 | "How to Add a Member to The Logbook" |
-| Bulk CSV Import | 6:30–8:30 | "Importing Your Roster via CSV" |
-| Customizing Permissions | 10:00–14:00 | "Position & Permission Management Explained" |
-| Setting Up 2FA | 14:00–15:30 | "Enabling Two-Factor Authentication" |
-| IP Security Setup | 15:30–16:30 | "Restricting Access with IP Security" |
-| Email Configuration | 23:00–24:00 | "Setting Up Email Notifications" |
-| Updating The Logbook | 29:30–31:00 | "How to Update The Logbook (Docker)" |
-| Backup Strategy | 31:00–33:00 | "Backing Up Your Logbook Data" |
-| Records Retention | 33:00–34:30 | "How Long Does The Logbook Keep Your Records?" |
-| Member Data Rights | 34:30–36:00 | "Privacy Choices & Data Export for Members" |
-| Anonymizing a Departed Member | 36:00–37:00 | "Removing a Former Member's Personal Data" |
-| Admin Quick Reference | 37:00–40:00 | "IT Manager Quick Reference Guide" |
+| Clip                          | Timecode    | Standalone Title                               |
+| ----------------------------- | ----------- | ---------------------------------------------- |
+| Adding a New Member           | 5:00–6:30   | "How to Add a Member to The Logbook"           |
+| Bulk CSV Import               | 6:30–8:30   | "Importing Your Roster via CSV"                |
+| Customizing Permissions       | 10:00–14:00 | "Position & Permission Management Explained"   |
+| Setting Up 2FA                | 14:00–15:30 | "Enabling Two-Factor Authentication"           |
+| IP Security Setup             | 15:30–16:30 | "Restricting Access with IP Security"          |
+| Email Configuration           | 23:00–24:00 | "Setting Up Email Notifications"               |
+| Updating The Logbook          | 29:30–31:00 | "How to Update The Logbook (Docker)"           |
+| Backup Strategy               | 31:00–33:00 | "Backing Up Your Logbook Data"                 |
+| Records Retention             | 33:00–34:30 | "How Long Does The Logbook Keep Your Records?" |
+| Member Data Rights            | 34:30–36:00 | "Privacy Choices & Data Export for Members"    |
+| Anonymizing a Departed Member | 36:00–37:00 | "Removing a Former Member's Personal Data"     |
+| Admin Quick Reference         | 37:00–40:00 | "IT Manager Quick Reference Guide"             |

@@ -38,27 +38,32 @@ docker-compose up -d
 ## 📚 Documentation Sections
 
 ### 🎯 Getting Started
+
 - **[Installation Guide](Installation)** - Complete setup instructions
 - **[Unraid Quick Start](Unraid-Quick-Start)** - One-command Unraid deployment
 - **[Onboarding Guide](Onboarding)** - First-time setup wizard
 - **[Quick Reference](Quick-Reference)** - Common commands and tasks
 
 ### 🚢 Deployment
+
 - **[Unraid Deployment](Deployment-Unraid)** - Complete Unraid guide
 - **[Docker Deployment](Deployment-Docker)** - Docker Compose deployment
 - **[Production Deployment](Deployment-Production)** - Production best practices
 
 ### 🔧 Configuration
+
 - **[Environment Variables](Configuration-Environment)** - All .env settings explained
 - **[Module Configuration](Configuration-Modules)** - Enable/disable modules
 - **[Security Configuration](Configuration-Security)** - Security settings
 
 ### 💻 Development
+
 - **[Backend Development](Development-Backend)** - Python/FastAPI development
 - **[Frontend Development](Development-Frontend)** - React/TypeScript development
 - **[Contributing Guide](Contributing)** - How to contribute
 
 ### 📦 Modules
+
 - **[Training Programs](Module-Training)** - Training & certification tracking
 - **[Elections & Voting](Module-Elections)** - Election management system
 - **[Event Management](Module-Events)** - QR code check-in system
@@ -69,9 +74,10 @@ docker-compose up -d
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
 - **[Inventory](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
 - **[Compliance](Module-Compliance)** - Compliance tracking
-- **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync *(2026-04-11)*
+- **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync _(2026-04-11)_
 
 ### 🔐 Security
+
 - **[Security Overview](Security-Overview)** - Security policy and compliance
 - **[Authentication](Security-Authentication)** - Local, OAuth/OIDC, MFA
 - **[Encryption](Security-Encryption)** - AES-256-GCM encryption
@@ -81,6 +87,7 @@ docker-compose up -d
 - **[HIPAA Security Features](Security-HIPAA)** - Security features aligned with HIPAA requirements
 
 ### 🛠️ Troubleshooting
+
 - **[Common Issues](Troubleshooting)** - Solutions to common problems
 - **[Container Conflicts](Troubleshooting-Containers)** - Docker container issues
 - **[Frontend Issues](Troubleshooting-Frontend)** - Frontend not loading
@@ -88,6 +95,7 @@ docker-compose up -d
 - **[Database Issues](Troubleshooting-Database)** - Database connection problems
 
 ### 📖 Reference
+
 - **[API Documentation](API-Reference)** - Complete API reference
 - **[Database Schema](Database-Schema)** - Database structure
 - **[Role System](Role-System)** - RBAC documentation
@@ -110,15 +118,15 @@ docker-compose up -d
 
 ## 🛠️ Technology Stack
 
-| Component | Technology |
-|-----------|-----------|
-| **Backend** | Python 3.13, FastAPI, SQLAlchemy |
-| **Frontend** | React 19, TypeScript 5.9, Vite 7.3 |
-| **Database** | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
-| **Cache** | Redis 7+ |
+| Component          | Technology                                     |
+| ------------------ | ---------------------------------------------- |
+| **Backend**        | Python 3.13, FastAPI, SQLAlchemy               |
+| **Frontend**       | React 19, TypeScript 5.9, Vite 7.3             |
+| **Database**       | MySQL 8.0+ (MariaDB 10.11+ for ARM)            |
+| **Cache**          | Redis 7+                                       |
 | **Authentication** | OAuth 2.0 / OIDC (Google, Microsoft), TOTP MFA |
-| **Encryption** | AES-256-GCM, Argon2id |
-| **Container** | Docker, Docker Compose |
+| **Encryption**     | AES-256-GCM, Argon2id                          |
+| **Container**      | Docker, Docker Compose                         |
 
 ---
 
@@ -362,6 +370,7 @@ docker-compose up -d
 - **Security fixes**: CSRF tokens added to module API clients, permission gates on apparatus/forms routes, token refresh race condition fix, memory leak fix in PWA install hook
 
 ### February 2026 (Feb 23) - Training Compliance, Waiver Management & Membership Enhancements
+
 - **LOA–Training Waiver auto-linking**: Leaves of absence automatically create linked training waivers; date changes sync; deactivation cascades; opt-out with `exempt_from_training_waiver`
 - **Waiver Management Page** (`/members/admin/waivers`): Unified page for managing training, meeting, and shift waivers with Active/Create/History tabs
 - **Training Waivers officer tab**: New tab in Training Admin Dashboard with summary cards, status filtering, and source tracking
@@ -375,6 +384,7 @@ docker-compose up -d
 - **15-minute time increments**: All date/time pickers enforce 15-minute steps
 
 ### February 2026 (Week of Feb 22) - Inventory Overhaul, Event Reminders & Security Hardening
+
 - **Inventory module overhaul**: Pool/quantity-tracked items, item issuances, batch checkout/return, departure clearance lifecycle, notification netting, thermal label printing (Dymo/Rollo), barcode label generation
 - **Inventory security hardening**: Row-level locking on all mutation operations, IDOR fix on clearance line items, org-scoped unique constraints, LIKE injection prevention, kwargs whitelist
 - **Event reminders**: Configurable reminder schedules, multiple reminders per event, post-event/shift validation notifications
@@ -387,6 +397,7 @@ docker-compose up -d
 - **40 new inventory tests**, CI pipeline with GitHub Actions
 
 ### February 2026 (Earlier) - Scheduling Module, Events Module, TypeScript Quality & Backend Fixes
+
 - **Scheduling Module enhanced**: 6-tab hub (Schedule, My Shifts, Open Shifts, Requests, Templates, Reports)
 - Member self-service shift signup with position selection (officer, driver, firefighter, EMS, etc.)
 - My Shifts tab with confirm/decline assignments, swap requests, and time-off requests
@@ -415,6 +426,7 @@ docker-compose up -d
 - Security hardening: session timeouts, DOMPurify sanitization, password requirements
 
 ### January 2026 - Package Updates
+
 - ✅ Updated to Vite 6.0.5 (fixed from invalid 7.3.1)
 - ✅ React 18.3.1 with security updates
 - ✅ axios 1.7.9 security updates
@@ -423,6 +435,7 @@ docker-compose up -d
 - ✅ 25+ package updates total
 
 ### January 2026 - Unraid Automation
+
 - ✅ One-command installation script
 - ✅ Automatic container cleanup
 - ✅ Auto-generated secure passwords

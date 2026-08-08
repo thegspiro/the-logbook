@@ -6,13 +6,13 @@ The Training module tracks courses, certifications, training requirements, progr
 
 ## Key Features
 
-- **Training Requirements** — Hours, courses, certifications, shifts, calls, skills evaluations, checklists, and knowledge tests with annual/quarterly/monthly/rolling frequencies. Requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary) or apply to all members. *(2026-07-08)* The create form collects the matching quantity field per type and blocks requirements that would apply to nobody
-- **Requirement Templates** — *(2026-07-08)* Ten built-in templates for common standards (NFPA 1001/1500, NREMT recertification, CPR/BLS, OSHA hazmat/bloodborne pathogens/respiratory protection, HIPAA awareness, NIMS/ICS courses, new-member onboarding checklist). Selecting a template pre-fills the create form for review; standards-based templates carry source attribution with the standard or CFR citation as registry code
+- **Training Requirements** — Hours, courses, certifications, shifts, calls, skills evaluations, checklists, and knowledge tests with annual/quarterly/monthly/rolling frequencies. Requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary) or apply to all members. _(2026-07-08)_ The create form collects the matching quantity field per type and blocks requirements that would apply to nobody
+- **Requirement Templates** — _(2026-07-08)_ Ten built-in templates for common standards (NFPA 1001/1500, NREMT recertification, CPR/BLS, OSHA hazmat/bloodborne pathogens/respiratory protection, HIPAA awareness, NIMS/ICS courses, new-member onboarding checklist). Selecting a template pre-fills the create form for review; standards-based templates carry source attribution with the standard or CFR citation as registry code
 - **Training Programs** — Structured multi-phase curricula (Flexible, Sequential, Phase-based) with milestone tracking
-- **Pipeline Recert Cycle** — *(2026-07-15)* Training pipelines can reset an enrolled member's accumulated progress for a new certification cycle. Officers reset a single requirement or a whole enrollment manually; a pipeline can also carry a stored recurring deadline (cycle length in months plus an optional fixed anchor date, e.g. NREMT's March 30) that auto-resets each enrollment when it passes — applied lazily on progress load and via a daily 5 AM scheduled sweep (`recert_resets`, also exposed as the `recert/run-due` endpoint)
-- **Self-Service Withdrawal** — *(2026-07-16)* A member can leave a program from their progression view (e.g. after downgrading from Paramedic to EMT); officers can withdraw anyone. Soft withdrawal keeps the record but removes it from the active dashboard and its warnings, and the member can be re-enrolled later
-- **Session Certification Eligibility** — *(2026-07-16)* A training session has a "Counts toward certification requirements" toggle (on by default). When off, attendance still records the member's hours (general credit) but does not feed the linked pipeline/certificate requirements, so hours a certifying body (NFPA/NREMT) wouldn't accept don't inflate a member's certificate
-- **Self-Reported Training** — Members submit training records for officer review and approval. *(2026-07-16)* On approval (or retroactively from an approved submission), the officer can apply the training toward a specific pipeline requirement in one of the member's active enrollments — ideal for make-up sessions with no scheduled date. Hours accrue, a course counts as one completion, and status-based requirements are marked complete; it's an explicit sign-off, so it bypasses the `allows_external_credit` opt-in
+- **Pipeline Recert Cycle** — _(2026-07-15)_ Training pipelines can reset an enrolled member's accumulated progress for a new certification cycle. Officers reset a single requirement or a whole enrollment manually; a pipeline can also carry a stored recurring deadline (cycle length in months plus an optional fixed anchor date, e.g. NREMT's March 30) that auto-resets each enrollment when it passes — applied lazily on progress load and via a daily 5 AM scheduled sweep (`recert_resets`, also exposed as the `recert/run-due` endpoint)
+- **Self-Service Withdrawal** — _(2026-07-16)_ A member can leave a program from their progression view (e.g. after downgrading from Paramedic to EMT); officers can withdraw anyone. Soft withdrawal keeps the record but removes it from the active dashboard and its warnings, and the member can be re-enrolled later
+- **Session Certification Eligibility** — _(2026-07-16)_ A training session has a "Counts toward certification requirements" toggle (on by default). When off, attendance still records the member's hours (general credit) but does not feed the linked pipeline/certificate requirements, so hours a certifying body (NFPA/NREMT) wouldn't accept don't inflate a member's certificate
+- **Self-Reported Training** — Members submit training records for officer review and approval. _(2026-07-16)_ On approval (or retroactively from an approved submission), the officer can apply the training toward a specific pipeline requirement in one of the member's active enrollments — ideal for make-up sessions with no scheduled date. Hours accrue, a course counts as one completion, and status-based requirements are marked complete; it's an explicit sign-off, so it bypasses the `allows_external_credit` opt-in
 - **Shift Completion Reports** — Officers file post-shift reports that auto-credit hours/shifts/calls toward program requirements
 - **Compliance Matrix** — Grid view of all members vs. all active requirements (green/yellow/red)
 - **Competency Matrix** — Department readiness heat-map with color-coded proficiency levels
@@ -21,83 +21,83 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Training Waivers** — Leave of Absence auto-linking, waiver management, proportional requirement adjustment. Supports permanent waivers (no end date), New Member waiver type, and multi-select "Applies To" (Training + Meetings + Shifts can be combined)
 - **Bulk Record Creation** — Up to 500 records per request with duplicate detection (same member + course name + completion date within ±1 day)
 - **Rank & Station Snapshots** — `rank_at_completion` and `station_at_completion` captured on every record
-- **External Integrations** — Connect external training providers (Vector Solutions, Target Solutions, Lexipol, iAmResponding, Custom API) with category and user mapping. *(2026-04-11)* Vector Solutions integration now includes upfront category catalog fetch, credit hours preservation, and improved type mapping with auto-sync. *(2026-07-16)* Imported courses can also feed **pipeline** progress, but only for requirements an officer has opted in via the per-requirement `allows_external_credit` toggle (off by default): a synced course then advances a matching active-enrollment requirement (HOURS accrues hours, COURSES accrues one completion), while in-house-only requirements are never checked off by an import
+- **External Integrations** — Connect external training providers (Vector Solutions, Target Solutions, Lexipol, iAmResponding, Custom API) with category and user mapping. _(2026-04-11)_ Vector Solutions integration now includes upfront category catalog fetch, credit hours preservation, and improved type mapping with auto-sync. _(2026-07-16)_ Imported courses can also feed **pipeline** progress, but only for requirements an officer has opted in via the per-requirement `allows_external_credit` toggle (off by default): a synced course then advances a matching active-enrollment requirement (HOURS accrues hours, COURSES accrues one completion), while in-house-only requirements are never checked off by an import
 - **Historical Import** — CSV import with preview and validation
-- **Registry Integration** — NFPA Standards, NREMT Certifications, Pro Board one-click import with source URL citations and last-updated timestamps. *(2026-04-11)* NREMT NCCR hour distributions corrected to match official requirements; "Cardiovascular" renamed to "Cardiology" per NREMT terminology
-- **National Registry Standard Linkage** — *(2026-04-11)* Training categories can be linked to NREMT NCCR codes via the `registry_code` column, enabling automatic compliance tracking against national continued competency requirements
+- **Registry Integration** — NFPA Standards, NREMT Certifications, Pro Board one-click import with source URL citations and last-updated timestamps. _(2026-04-11)_ NREMT NCCR hour distributions corrected to match official requirements; "Cardiovascular" renamed to "Cardiology" per NREMT terminology
+- **National Registry Standard Linkage** — _(2026-04-11)_ Training categories can be linked to NREMT NCCR codes via the `registry_code` column, enabling automatic compliance tracking against national continued competency requirements
 - **Registry Generator Tool** — Standalone CLI tool (`scripts/generate_registry.py`) for generating registries from standards bodies, with `--list` flag to show available registries
 - **Source Tracking on Imports** — Imported requirements include `source`, `source_url`, and `last_updated` fields for traceability
-- **Training Record Attachments** — Upload certificates, transcripts, and completion letters to training records. *(2026-05-29)* Files are now really stored (the endpoint was previously a stub): multipart upload ≤25MB, MIME validated by magic bytes (PDF/JPEG/PNG/GIF/WEBP/DOC/DOCX), stored under `/app/uploads/training_attachments/{org_id}/{uuid}{ext}` with metadata in the `TrainingRecord.attachments` JSON column; server file paths are never returned. Access is gated to the record owner or `training.manage`
-- **Member Self-Export** — *(2026-05-29)* Members can export their own training history as CSV or PDF via `GET /training/module-config/my-training/export`, gated by the org `allow_member_report_export` setting (403 when disabled). Omitting `start_date` returns the member's entire lifetime history
-- **Officer Member-Record Exports** — *(2026-05-29)* `POST /training/reports/export` (permission `training.manage`) gained `member_records` (bulk export of all active members), `hours_summary`, and `certification` CSV report types. Unknown report types now return 400 instead of silently falling through to a compliance report; bulk PDFs are merged with `pypdf` (empty result → placeholder page)
-- **Recertification Tracking** — *(2026-03-05)* Automated recertification reminders with configurable lead times. Scheduled Celery task sends tiered notifications before certification expiry
-- **Instructor Management** — *(2026-03-05)* Track instructor qualifications (instructor, evaluator, lead_instructor, mentor), availability, and assignment to training sessions with validation
-- **Effectiveness Scoring** — *(2026-03-05)* Training effectiveness measurement using Kirkpatrick model (reaction, learning, behavior, results)
-- **Multi-Agency Training** — *(2026-03-05)* Joint training session coordination across departments with shared records and mutual aid tracking
-- **xAPI (Tin Can) Integration** — *(2026-03-05)* Learning Record Store integration for standardized training activity tracking. Async statement delivery via Celery
-- **Compliance Officer Dashboard** — *(2026-03-05)* ISO readiness tracking, compliance attestations, annual compliance reports, compliance forecasting, and record completeness checks
-- **Recurring Training Sessions** — *(2026-03-15)* Training sessions can recur using the same infrastructure as events (daily, weekly, biweekly, monthly, monthly_weekday, annually, annually_weekday, custom). Backend creates recurring events via `EventService` and links a `TrainingSession` to each occurrence. Selecting a course auto-populates training type, credit hours, instructor, expiration months, and max participants
-- **Quarter-Hour Time Picker** — *(2026-03-15)* New `DateTimeQuarterHour` UX component replacing browser `datetime-local` inputs (which ignore `step="900"`). Splits date/time into a native date picker and a select dropdown restricted to `:00`, `:15`, `:30`, `:45`
-- **Quick Duration Buttons** — *(2026-03-15)* 1-hour, 2-hour, 4-hour, and 8-hour buttons on the training session form, matching the pattern in EventForm. Appear once a start date is set and auto-populate end date/time
-- **Course Auto-Populate** — *(2026-03-15)* Selecting an existing course in the session creation form auto-fills training type, credit hours, instructor, expiration months, and max participants with a details preview card
-- **Training Program Export/Import** — *(2026-04-11)* Export training programs (including phases, requirements, milestones) as shareable JSON packages for cross-department sharing. Import validates structure and auto-creates missing courses/requirements
-- **Manual Shift Report Page** — *(2026-04-11)* Standalone page at `/training/manual-shift-report` for departments without the Scheduling module. Officers manually enter shift date, start/end times, apparatus, crew members, and trainee evaluations. Supports apparatus-specific skill/task auto-population
-- **Manual Entry Admin Config** — *(2026-04-11)* `ManualEntrySettingsPanel` on the Training Admin page controls manual entry availability, allowed apparatus types, default start times, and default shift duration
-- **Category Tracking Fixes** — *(2026-04-11)* Training record creation now properly captures and persists training category through the event/session pipeline, ensuring accurate NCCR and compliance matrix calculations
+- **Training Record Attachments** — Upload certificates, transcripts, and completion letters to training records. _(2026-05-29)_ Files are now really stored (the endpoint was previously a stub): multipart upload ≤25MB, MIME validated by magic bytes (PDF/JPEG/PNG/GIF/WEBP/DOC/DOCX), stored under `/app/uploads/training_attachments/{org_id}/{uuid}{ext}` with metadata in the `TrainingRecord.attachments` JSON column; server file paths are never returned. Access is gated to the record owner or `training.manage`
+- **Member Self-Export** — _(2026-05-29)_ Members can export their own training history as CSV or PDF via `GET /training/module-config/my-training/export`, gated by the org `allow_member_report_export` setting (403 when disabled). Omitting `start_date` returns the member's entire lifetime history
+- **Officer Member-Record Exports** — _(2026-05-29)_ `POST /training/reports/export` (permission `training.manage`) gained `member_records` (bulk export of all active members), `hours_summary`, and `certification` CSV report types. Unknown report types now return 400 instead of silently falling through to a compliance report; bulk PDFs are merged with `pypdf` (empty result → placeholder page)
+- **Recertification Tracking** — _(2026-03-05)_ Automated recertification reminders with configurable lead times. Scheduled Celery task sends tiered notifications before certification expiry
+- **Instructor Management** — _(2026-03-05)_ Track instructor qualifications (instructor, evaluator, lead_instructor, mentor), availability, and assignment to training sessions with validation
+- **Effectiveness Scoring** — _(2026-03-05)_ Training effectiveness measurement using Kirkpatrick model (reaction, learning, behavior, results)
+- **Multi-Agency Training** — _(2026-03-05)_ Joint training session coordination across departments with shared records and mutual aid tracking
+- **xAPI (Tin Can) Integration** — _(2026-03-05)_ Learning Record Store integration for standardized training activity tracking. Async statement delivery via Celery
+- **Compliance Officer Dashboard** — _(2026-03-05)_ ISO readiness tracking, compliance attestations, annual compliance reports, compliance forecasting, and record completeness checks
+- **Recurring Training Sessions** — _(2026-03-15)_ Training sessions can recur using the same infrastructure as events (daily, weekly, biweekly, monthly, monthly_weekday, annually, annually_weekday, custom). Backend creates recurring events via `EventService` and links a `TrainingSession` to each occurrence. Selecting a course auto-populates training type, credit hours, instructor, expiration months, and max participants
+- **Quarter-Hour Time Picker** — _(2026-03-15)_ New `DateTimeQuarterHour` UX component replacing browser `datetime-local` inputs (which ignore `step="900"`). Splits date/time into a native date picker and a select dropdown restricted to `:00`, `:15`, `:30`, `:45`
+- **Quick Duration Buttons** — _(2026-03-15)_ 1-hour, 2-hour, 4-hour, and 8-hour buttons on the training session form, matching the pattern in EventForm. Appear once a start date is set and auto-populate end date/time
+- **Course Auto-Populate** — _(2026-03-15)_ Selecting an existing course in the session creation form auto-fills training type, credit hours, instructor, expiration months, and max participants with a details preview card
+- **Training Program Export/Import** — _(2026-04-11)_ Export training programs (including phases, requirements, milestones) as shareable JSON packages for cross-department sharing. Import validates structure and auto-creates missing courses/requirements
+- **Manual Shift Report Page** — _(2026-04-11)_ Standalone page at `/training/manual-shift-report` for departments without the Scheduling module. Officers manually enter shift date, start/end times, apparatus, crew members, and trainee evaluations. Supports apparatus-specific skill/task auto-population
+- **Manual Entry Admin Config** — _(2026-04-11)_ `ManualEntrySettingsPanel` on the Training Admin page controls manual entry availability, allowed apparatus types, default start times, and default shift duration
+- **Category Tracking Fixes** — _(2026-04-11)_ Training record creation now properly captures and persists training category through the event/session pipeline, ensuring accurate NCCR and compliance matrix calculations
 
 ---
 
 ## Pages
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/training` | My Training | Authenticated |
-| `/training/my-training` | My Training (alias) | Authenticated |
-| `/training/submit` | Submit Training | Authenticated |
-| `/training/courses` | Course Library | Authenticated |
-| `/training/programs` | Training Programs | Authenticated |
-| `/training/programs/:id` | Program Detail | Authenticated |
-| `/training/my-progress/:enrollmentId` | My Program Progress (read-only student view) | Authenticated |
-| `/training/admin` | Training Admin Hub | `training.manage` |
-| `/training/skills-testing` | Skills Testing Hub | Authenticated |
-| `/training/skills-testing/templates/new` | Template Builder (new) | `training.manage` |
-| `/training/skills-testing/templates/:id` | Template Builder (view) | `training.manage` |
-| `/training/skills-testing/templates/:id/edit` | Template Builder (edit) | `training.manage` |
-| `/training/skills-testing/test/new` | Start Skill Test | Authenticated |
-| `/training/skills-testing/test/:testId` | Active Skill Test | Authenticated |
-| `/training/skills-testing/test/:testId/active` | Active Skill Test (alias) | Authenticated |
-| `/training/manual-shift-report` | Manual Shift Report | `training.manage` |
-| `/members/:userId/training` | Member Training History | Authenticated |
+| URL                                            | Page                                         | Permission        |
+| ---------------------------------------------- | -------------------------------------------- | ----------------- |
+| `/training`                                    | My Training                                  | Authenticated     |
+| `/training/my-training`                        | My Training (alias)                          | Authenticated     |
+| `/training/submit`                             | Submit Training                              | Authenticated     |
+| `/training/courses`                            | Course Library                               | Authenticated     |
+| `/training/programs`                           | Training Programs                            | Authenticated     |
+| `/training/programs/:id`                       | Program Detail                               | Authenticated     |
+| `/training/my-progress/:enrollmentId`          | My Program Progress (read-only student view) | Authenticated     |
+| `/training/admin`                              | Training Admin Hub                           | `training.manage` |
+| `/training/skills-testing`                     | Skills Testing Hub                           | Authenticated     |
+| `/training/skills-testing/templates/new`       | Template Builder (new)                       | `training.manage` |
+| `/training/skills-testing/templates/:id`       | Template Builder (view)                      | `training.manage` |
+| `/training/skills-testing/templates/:id/edit`  | Template Builder (edit)                      | `training.manage` |
+| `/training/skills-testing/test/new`            | Start Skill Test                             | Authenticated     |
+| `/training/skills-testing/test/:testId`        | Active Skill Test                            | Authenticated     |
+| `/training/skills-testing/test/:testId/active` | Active Skill Test (alias)                    | Authenticated     |
+| `/training/manual-shift-report`                | Manual Shift Report                          | `training.manage` |
+| `/members/:userId/training`                    | Member Training History                      | Authenticated     |
 
 ### Training Admin Tabs
 
-| Tab | Description |
-|-----|-------------|
-| Officer Dashboard | Department-wide overview, completion rates, members behind schedule |
-| Training Waivers | All training waivers with summary cards, status filtering, source tracking (Auto LOA / Manual) |
-| Review Submissions | Pending member submissions for approval/rejection |
-| Requirements | Create and manage training requirements with type, frequency, due date, role targeting |
-| Create Session | Create training sessions linked to events with instructor assignment |
-| Compliance Matrix | All members x all requirements grid (green/yellow/red cells) |
-| Competency Matrix | Department readiness heat-map with proficiency levels |
-| Expiring Certs | Certifications expiring within 90 days with alert processing |
-| Pipelines | Training program management (create, phases, milestones, enrollment) |
-| Shift Reports | Shift officer reports with auto-progression toward program requirements |
-| Integrations | External training provider connections with sync and mapping |
-| Import History | CSV import records with preview and validation |
-| Enhancements | Recertification pathways, instructor management, effectiveness scoring, multi-agency, compliance officer |
+| Tab                | Description                                                                                              |
+| ------------------ | -------------------------------------------------------------------------------------------------------- |
+| Officer Dashboard  | Department-wide overview, completion rates, members behind schedule                                      |
+| Training Waivers   | All training waivers with summary cards, status filtering, source tracking (Auto LOA / Manual)           |
+| Review Submissions | Pending member submissions for approval/rejection                                                        |
+| Requirements       | Create and manage training requirements with type, frequency, due date, role targeting                   |
+| Create Session     | Create training sessions linked to events with instructor assignment                                     |
+| Compliance Matrix  | All members x all requirements grid (green/yellow/red cells)                                             |
+| Competency Matrix  | Department readiness heat-map with proficiency levels                                                    |
+| Expiring Certs     | Certifications expiring within 90 days with alert processing                                             |
+| Pipelines          | Training program management (create, phases, milestones, enrollment)                                     |
+| Shift Reports      | Shift officer reports with auto-progression toward program requirements                                  |
+| Integrations       | External training provider connections with sync and mapping                                             |
+| Import History     | CSV import records with preview and validation                                                           |
+| Enhancements       | Recertification pathways, instructor management, effectiveness scoring, multi-agency, compliance officer |
 
 ### Legacy Redirects
 
-| Old URL | Redirects To |
-|---------|-------------|
-| `/training/officer` | `/training/admin?page=dashboard&tab=overview` |
-| `/training/submissions` | `/training/admin?page=records&tab=submissions` |
-| `/training/requirements` | `/training/admin?page=setup&tab=requirements` |
-| `/training/sessions/new` | `/training/admin?page=records&tab=sessions` |
-| `/training/programs/new` | `/training/admin?page=setup&tab=pipelines` |
+| Old URL                   | Redirects To                                     |
+| ------------------------- | ------------------------------------------------ |
+| `/training/officer`       | `/training/admin?page=dashboard&tab=overview`    |
+| `/training/submissions`   | `/training/admin?page=records&tab=submissions`   |
+| `/training/requirements`  | `/training/admin?page=setup&tab=requirements`    |
+| `/training/sessions/new`  | `/training/admin?page=records&tab=sessions`      |
+| `/training/programs/new`  | `/training/admin?page=setup&tab=pipelines`       |
 | `/training/shift-reports` | `/training/admin?page=records&tab=shift-reports` |
-| `/training/integrations` | `/training/admin?page=setup&tab=integrations` |
+| `/training/integrations`  | `/training/admin?page=setup&tab=integrations`    |
 
 ---
 
@@ -263,7 +263,7 @@ POST   /api/v1/training/external/providers/{id}/imports/bulk  # Bulk import
 GET    /api/v1/training/external/providers/{id}/categories   # Fetch provider category catalog (2026-04-11)
 ```
 
-### Training Program Export/Import *(2026-04-11)*
+### Training Program Export/Import _(2026-04-11)_
 
 ```
 POST   /api/v1/training/programs/programs/{id}/export        # Export program as shareable JSON
@@ -412,37 +412,37 @@ GET    /api/v1/compliance/incomplete-records                # List incomplete re
 
 ### Database Tables
 
-| Table | Model | Description |
-|-------|-------|-------------|
-| `training_categories` | TrainingCategory | Course categories (EMS, Fire, Hazmat, etc.) with custom colors and optional `registry_code` for NREMT NCCR linkage *(2026-04-11)* |
-| `training_courses` | TrainingCourse | Course definitions with hours, certification flag, expiration months. `program_id` (nullable) records the pipeline this course's cohorts enrol into *(2026-08-05)* |
-| `course_classes` | CourseClass | Syllabus of a multi-class course: ordered classes, each linked to a catalog course (`class_course_id`, NOT NULL) and timed by `day_offset` + local `start_time` rather than a calendar date. Unique on (`course_id`, `sequence`) *(2026-08-05)* |
-| `course_cohorts` | CourseCohort | One scheduled run of a multi-class course: start date, meeting days, date-roll policy, blackout dates, linked pipeline *(2026-08-05)* |
-| `course_cohort_classes` | CourseCohortClass | A syllabus row materialized onto real UTC dates, linked to its `event_id` (`SET NULL`, unique) and `training_session_id`. Unique on (`cohort_id`, `course_class_id`) — the idempotency key that makes regeneration safe *(2026-08-05)* |
-| `course_cohort_members` | CourseCohortMember | Cohort roster; `enrollment_id` ties each member to the ProgramEnrollment tracking their progress. Unique on (`cohort_id`, `user_id`) *(2026-08-05)* |
-| `training_records` | TrainingRecord | Individual training completions with rank/station snapshots |
-| `training_requirements` | TrainingRequirement | Requirement definitions with type, frequency, role targeting |
-| `training_sessions` | TrainingSession | Scheduled training events with instructor assignment and location |
-| `training_approvals` | TrainingApproval | Session approval workflow with token-based email approval |
-| `training_programs` | TrainingProgram | Structured curricula (sequential, phases, flexible) |
-| `program_phases` | ProgramPhase | Ordered phases within programs |
-| `program_requirements` | ProgramRequirement | Requirements linked to program phases |
-| `program_milestones` | ProgramMilestone | Key checkpoints in program progression |
-| `program_enrollments` | ProgramEnrollment | Member enrollment in programs with status tracking |
-| `requirement_progress` | RequirementProgress | Per-member progress toward program requirements |
-| `requirement_progress_credits` | RequirementProgressCredit | Idempotency ledger — one row per automated accrual, unique on (progress, source type, source id), so a training is never double-credited and a credit can be cleanly reversed *(2026-07-16)* |
-| `skill_evaluations` | SkillEvaluation | Skills evaluation records |
-| `skill_checkoffs` | SkillCheckoff | Individual skill check-off completions |
-| `skill_templates` | SkillTemplate | Skills testing template definitions (sections, criteria, scoring) |
-| `skill_tests` | SkillTest | Skills test sessions with scores and results |
-| `external_training_providers` | ExternalTrainingProvider | External provider configurations |
-| `external_category_mappings` | ExternalCategoryMapping | Map external categories to internal |
-| `external_user_mappings` | ExternalUserMapping | Map external users to internal members |
-| `external_training_sync_logs` | ExternalTrainingSyncLog | Sync history and status |
-| `external_training_imports` | ExternalTrainingImport | Individual import records with status and `credit_hours` for CE credit preservation *(2026-04-11)* |
-| `shifts` | Shift | Shift definitions (used by shift completion reports) |
-| `shift_attendance` | ShiftAttendance | Shift attendance records |
-| `shift_calls` | ShiftCall | Calls responded during shifts |
+| Table                          | Model                     | Description                                                                                                                                                                                                                                     |
+| ------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_categories`          | TrainingCategory          | Course categories (EMS, Fire, Hazmat, etc.) with custom colors and optional `registry_code` for NREMT NCCR linkage _(2026-04-11)_                                                                                                               |
+| `training_courses`             | TrainingCourse            | Course definitions with hours, certification flag, expiration months. `program_id` (nullable) records the pipeline this course's cohorts enrol into _(2026-08-05)_                                                                              |
+| `course_classes`               | CourseClass               | Syllabus of a multi-class course: ordered classes, each linked to a catalog course (`class_course_id`, NOT NULL) and timed by `day_offset` + local `start_time` rather than a calendar date. Unique on (`course_id`, `sequence`) _(2026-08-05)_ |
+| `course_cohorts`               | CourseCohort              | One scheduled run of a multi-class course: start date, meeting days, date-roll policy, blackout dates, linked pipeline _(2026-08-05)_                                                                                                           |
+| `course_cohort_classes`        | CourseCohortClass         | A syllabus row materialized onto real UTC dates, linked to its `event_id` (`SET NULL`, unique) and `training_session_id`. Unique on (`cohort_id`, `course_class_id`) — the idempotency key that makes regeneration safe _(2026-08-05)_          |
+| `course_cohort_members`        | CourseCohortMember        | Cohort roster; `enrollment_id` ties each member to the ProgramEnrollment tracking their progress. Unique on (`cohort_id`, `user_id`) _(2026-08-05)_                                                                                             |
+| `training_records`             | TrainingRecord            | Individual training completions with rank/station snapshots                                                                                                                                                                                     |
+| `training_requirements`        | TrainingRequirement       | Requirement definitions with type, frequency, role targeting                                                                                                                                                                                    |
+| `training_sessions`            | TrainingSession           | Scheduled training events with instructor assignment and location                                                                                                                                                                               |
+| `training_approvals`           | TrainingApproval          | Session approval workflow with token-based email approval                                                                                                                                                                                       |
+| `training_programs`            | TrainingProgram           | Structured curricula (sequential, phases, flexible)                                                                                                                                                                                             |
+| `program_phases`               | ProgramPhase              | Ordered phases within programs                                                                                                                                                                                                                  |
+| `program_requirements`         | ProgramRequirement        | Requirements linked to program phases                                                                                                                                                                                                           |
+| `program_milestones`           | ProgramMilestone          | Key checkpoints in program progression                                                                                                                                                                                                          |
+| `program_enrollments`          | ProgramEnrollment         | Member enrollment in programs with status tracking                                                                                                                                                                                              |
+| `requirement_progress`         | RequirementProgress       | Per-member progress toward program requirements                                                                                                                                                                                                 |
+| `requirement_progress_credits` | RequirementProgressCredit | Idempotency ledger — one row per automated accrual, unique on (progress, source type, source id), so a training is never double-credited and a credit can be cleanly reversed _(2026-07-16)_                                                    |
+| `skill_evaluations`            | SkillEvaluation           | Skills evaluation records                                                                                                                                                                                                                       |
+| `skill_checkoffs`              | SkillCheckoff             | Individual skill check-off completions                                                                                                                                                                                                          |
+| `skill_templates`              | SkillTemplate             | Skills testing template definitions (sections, criteria, scoring)                                                                                                                                                                               |
+| `skill_tests`                  | SkillTest                 | Skills test sessions with scores and results                                                                                                                                                                                                    |
+| `external_training_providers`  | ExternalTrainingProvider  | External provider configurations                                                                                                                                                                                                                |
+| `external_category_mappings`   | ExternalCategoryMapping   | Map external categories to internal                                                                                                                                                                                                             |
+| `external_user_mappings`       | ExternalUserMapping       | Map external users to internal members                                                                                                                                                                                                          |
+| `external_training_sync_logs`  | ExternalTrainingSyncLog   | Sync history and status                                                                                                                                                                                                                         |
+| `external_training_imports`    | ExternalTrainingImport    | Individual import records with status and `credit_hours` for CE credit preservation _(2026-04-11)_                                                                                                                                              |
+| `shifts`                       | Shift                     | Shift definitions (used by shift completion reports)                                                                                                                                                                                            |
+| `shift_attendance`             | ShiftAttendance           | Shift attendance records                                                                                                                                                                                                                        |
+| `shift_calls`                  | ShiftCall                 | Calls responded during shifts                                                                                                                                                                                                                   |
 
 ### Key Relationships
 
@@ -477,24 +477,24 @@ MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_t
 
 ### Key Enums
 
-| Enum | Values |
-|------|--------|
-| `TrainingType` | certification, continuing_education, skills_practice, orientation, refresher, specialty |
-| `TrainingStatus` | scheduled, in_progress, completed, cancelled, failed |
-| `RequirementType` | hours, courses, certification, shifts, calls, skills_evaluation, checklist, knowledge_test |
-| `RequirementFrequency` | annual, biannual, quarterly, monthly, one_time |
-| `DueDateType` | calendar_period, rolling, certification_period, fixed_date |
-| `ProgramStructureType` | sequential, phases, flexible |
-| `EnrollmentStatus` | active, completed, expired, on_hold, withdrawn, failed |
-| `RequirementProgressStatus` | not_started, in_progress, completed, verified, waived |
-| `ProgressCreditSource` | training_session, shift_report, external_import, officer_apply |
-| `SubmissionStatus` | draft, pending_review, approved, rejected, revision_requested |
-| `ExternalProviderType` | vector_solutions, target_solutions, lexipol, i_am_responding, custom_api |
-| `SyncStatus` | pending, in_progress, completed, failed, partial |
-| `ImportStatus` | pending, imported, failed, skipped, duplicate |
-| `InstructorQualificationType` | instructor, evaluator, lead_instructor, mentor |
-| `SkillTemplateStatus` | draft, published, archived |
-| `SkillTestStatus` | not_started, in_progress, completed, cancelled |
+| Enum                          | Values                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------ |
+| `TrainingType`                | certification, continuing_education, skills_practice, orientation, refresher, specialty    |
+| `TrainingStatus`              | scheduled, in_progress, completed, cancelled, failed                                       |
+| `RequirementType`             | hours, courses, certification, shifts, calls, skills_evaluation, checklist, knowledge_test |
+| `RequirementFrequency`        | annual, biannual, quarterly, monthly, one_time                                             |
+| `DueDateType`                 | calendar_period, rolling, certification_period, fixed_date                                 |
+| `ProgramStructureType`        | sequential, phases, flexible                                                               |
+| `EnrollmentStatus`            | active, completed, expired, on_hold, withdrawn, failed                                     |
+| `RequirementProgressStatus`   | not_started, in_progress, completed, verified, waived                                      |
+| `ProgressCreditSource`        | training_session, shift_report, external_import, officer_apply                             |
+| `SubmissionStatus`            | draft, pending_review, approved, rejected, revision_requested                              |
+| `ExternalProviderType`        | vector_solutions, target_solutions, lexipol, i_am_responding, custom_api                   |
+| `SyncStatus`                  | pending, in_progress, completed, failed, partial                                           |
+| `ImportStatus`                | pending, imported, failed, skipped, duplicate                                              |
+| `InstructorQualificationType` | instructor, evaluator, lead_instructor, mentor                                             |
+| `SkillTemplateStatus`         | draft, published, archived                                                                 |
+| `SkillTestStatus`             | not_started, in_progress, completed, cancelled                                             |
 
 ---
 
@@ -519,10 +519,12 @@ The Training module includes a **Skills Testing** sub-module for conducting stru
 ### Pass/Fail Determination
 
 A candidate **passes** if ALL of the following are true:
+
 1. Their percentage score meets or exceeds the template's **passing percentage**
 2. If "Require All Critical" is enabled, ALL required criteria were scored as passed
 
 A candidate **fails** if ANY of the following are true:
+
 1. Their percentage score is below the passing percentage
 2. Any required criterion was not passed (when "Require All Critical" is enabled)
 
@@ -538,26 +540,26 @@ A candidate **fails** if ANY of the following are true:
 
 ## Cross-Module Connections
 
-| Source | Target | Connection | Mechanism |
-|--------|--------|------------|-----------|
-| Events | Training | Event attendance → Training session/records | `training_session.event_id` FK |
-| Course Cohorts | Events | Generating a cohort creates one Event per syllabus class, in one transaction | `course_cohort_classes.event_id` (`SET NULL`) |
-| Course Cohorts | Training Sessions | Each generated event carries a linked session with the class's credit hours and pipeline linkage | `course_cohort_classes.training_session_id` |
-| Course Cohorts | Training Pipelines | The roster is enrolled in the cohort's program; a generated pipeline mirrors the syllabus (phases = sections, one `courses` requirement per class) | `course_cohort_members.enrollment_id`, `training_courses.program_id` |
-| Course Cohorts | Events (RSVP) | Roster members are RSVP'd to every class so it lands on their calendar; a late joiner gets only the classes still to come | `event_rsvps` written at generation / add-member |
-| Events | Training | RSVP / self-check-in to a session in a phase ahead of the member's current phase → soft override warning | Pipeline phase gate |
-| Training Sessions | Training Pipelines | Approved session advances its linked requirement (or the program's requirements in the session's category) | `training_session.program_id` / `requirement_id` / `category_id` |
-| Skills Testing | Training Pipelines | Passing a skills test linked to a requirement completes that pipeline requirement | Requirement linkage |
-| Training | Users | Compliance per member | `GET /training/compliance-summary/{user_id}` |
-| Training | Scheduling | Shift completion reports → Training credit | `POST /training/shift-reports` |
-| Locations | Training | Training session location | `training_session.location` FK |
-| Member Leaves | Training Waivers | Auto-create waiver from LOA | `leave.exempt_from_training_waiver` → auto-link |
-| Training | Dashboard | Training compliance metrics, expiring certs | `GET /dashboard/stats` includes training data |
-| Training | Reports | Cross-module report generation | `POST /reports/generate` with training report types |
-| Training | Notifications | Submission, approval, cert expiry alerts | In-app + email notifications |
-| Training | Multi-Agency | Joint sessions across organizations | `POST /training/multi-agency` |
-| Training | External LRS | xAPI statement delivery | `POST /training/xapi/statements` (async via Celery) |
-| Training | Compliance | ISO readiness, attestations, annual reports | `GET /compliance/iso-readiness` |
+| Source            | Target             | Connection                                                                                                                                         | Mechanism                                                            |
+| ----------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Events            | Training           | Event attendance → Training session/records                                                                                                        | `training_session.event_id` FK                                       |
+| Course Cohorts    | Events             | Generating a cohort creates one Event per syllabus class, in one transaction                                                                       | `course_cohort_classes.event_id` (`SET NULL`)                        |
+| Course Cohorts    | Training Sessions  | Each generated event carries a linked session with the class's credit hours and pipeline linkage                                                   | `course_cohort_classes.training_session_id`                          |
+| Course Cohorts    | Training Pipelines | The roster is enrolled in the cohort's program; a generated pipeline mirrors the syllabus (phases = sections, one `courses` requirement per class) | `course_cohort_members.enrollment_id`, `training_courses.program_id` |
+| Course Cohorts    | Events (RSVP)      | Roster members are RSVP'd to every class so it lands on their calendar; a late joiner gets only the classes still to come                          | `event_rsvps` written at generation / add-member                     |
+| Events            | Training           | RSVP / self-check-in to a session in a phase ahead of the member's current phase → soft override warning                                           | Pipeline phase gate                                                  |
+| Training Sessions | Training Pipelines | Approved session advances its linked requirement (or the program's requirements in the session's category)                                         | `training_session.program_id` / `requirement_id` / `category_id`     |
+| Skills Testing    | Training Pipelines | Passing a skills test linked to a requirement completes that pipeline requirement                                                                  | Requirement linkage                                                  |
+| Training          | Users              | Compliance per member                                                                                                                              | `GET /training/compliance-summary/{user_id}`                         |
+| Training          | Scheduling         | Shift completion reports → Training credit                                                                                                         | `POST /training/shift-reports`                                       |
+| Locations         | Training           | Training session location                                                                                                                          | `training_session.location` FK                                       |
+| Member Leaves     | Training Waivers   | Auto-create waiver from LOA                                                                                                                        | `leave.exempt_from_training_waiver` → auto-link                      |
+| Training          | Dashboard          | Training compliance metrics, expiring certs                                                                                                        | `GET /dashboard/stats` includes training data                        |
+| Training          | Reports            | Cross-module report generation                                                                                                                     | `POST /reports/generate` with training report types                  |
+| Training          | Notifications      | Submission, approval, cert expiry alerts                                                                                                           | In-app + email notifications                                         |
+| Training          | Multi-Agency       | Joint sessions across organizations                                                                                                                | `POST /training/multi-agency`                                        |
+| Training          | External LRS       | xAPI statement delivery                                                                                                                            | `POST /training/xapi/statements` (async via Celery)                  |
+| Training          | Compliance         | ISO readiness, attestations, annual reports                                                                                                        | `GET /compliance/iso-readiness`                                      |
 
 ---
 
@@ -646,24 +648,24 @@ Waiver active during evaluation period →
 
 The training module uses 16 exported service objects in `frontend/src/services/trainingServices.ts`:
 
-| Service | API Prefix | Key Operations |
-|---------|------------|----------------|
-| `trainingService` | `/training` | CRUD for records, courses, categories, requirements; compliance summary/matrix; stats |
-| `externalTrainingService` | `/training/external` | Provider CRUD, connection testing, sync, mappings, imports |
-| `trainingProgramService` | `/training/programs` | Programs, phases, milestones, enrollments, progress, registry import |
-| `trainingSessionService` | `/training/sessions` | Session calendar, creation, finalization, token-based approval |
-| `trainingSubmissionService` | `/training/submissions` | Self-reported submissions, config, review workflow |
-| `trainingModuleConfigService` | `/training/module-config` | Module visibility and configuration |
-| `skillsTestingService` | `/training/skills-testing` | Templates, tests, completion, deletion, practice mode |
-| `recertificationService` | `/training/recertification` | Pathways, renewal tasks |
-| `competencyService` | `/training/competency` | Competency matrices, member competencies |
-| `instructorService` | `/training/instructors` | Qualifications, validation, qualified instructor lookup |
-| `effectivenessService` | `/training/effectiveness` | Evaluations, course summaries |
-| `multiAgencyService` | `/training/multi-agency` | Joint session CRUD |
-| `xapiService` | `/training/xapi` | Statement delivery, batch processing |
-| `reportExportService` | `/training/reports` | Report export, compliance forecast |
-| `documentService` | `/training/records/{id}` | Record attachments |
-| `complianceOfficerService` | `/compliance` | ISO readiness, attestations, annual report, record completeness |
+| Service                       | API Prefix                  | Key Operations                                                                        |
+| ----------------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
+| `trainingService`             | `/training`                 | CRUD for records, courses, categories, requirements; compliance summary/matrix; stats |
+| `externalTrainingService`     | `/training/external`        | Provider CRUD, connection testing, sync, mappings, imports                            |
+| `trainingProgramService`      | `/training/programs`        | Programs, phases, milestones, enrollments, progress, registry import                  |
+| `trainingSessionService`      | `/training/sessions`        | Session calendar, creation, finalization, token-based approval                        |
+| `trainingSubmissionService`   | `/training/submissions`     | Self-reported submissions, config, review workflow                                    |
+| `trainingModuleConfigService` | `/training/module-config`   | Module visibility and configuration                                                   |
+| `skillsTestingService`        | `/training/skills-testing`  | Templates, tests, completion, deletion, practice mode                                 |
+| `recertificationService`      | `/training/recertification` | Pathways, renewal tasks                                                               |
+| `competencyService`           | `/training/competency`      | Competency matrices, member competencies                                              |
+| `instructorService`           | `/training/instructors`     | Qualifications, validation, qualified instructor lookup                               |
+| `effectivenessService`        | `/training/effectiveness`   | Evaluations, course summaries                                                         |
+| `multiAgencyService`          | `/training/multi-agency`    | Joint session CRUD                                                                    |
+| `xapiService`                 | `/training/xapi`            | Statement delivery, batch processing                                                  |
+| `reportExportService`         | `/training/reports`         | Report export, compliance forecast                                                    |
+| `documentService`             | `/training/records/{id}`    | Record attachments                                                                    |
+| `complianceOfficerService`    | `/compliance`               | ISO readiness, attestations, annual report, record completeness                       |
 
 ---
 
@@ -673,16 +675,16 @@ The training module uses 16 exported service objects in `frontend/src/services/t
 
 **File:** `frontend/src/stores/skillsTestingStore.ts`
 
-| State | Type | Description |
-|-------|------|-------------|
-| `templates` | `SkillTemplateListItem[]` | All templates for the org |
-| `currentTemplate` | `SkillTemplate \| null` | Currently viewed/edited template |
-| `tests` | `SkillTestListItem[]` | All tests for the org |
-| `currentTest` | `SkillTest \| null` | Currently active test session |
-| `activeTestTimer` | `number` | Timer seconds for active test |
-| `activeTestRunning` | `boolean` | Whether timer is running |
-| `activeSectionIndex` | `number` | Current section in active test |
-| `summary` | `SkillTestingSummary \| null` | Department statistics |
+| State                | Type                          | Description                      |
+| -------------------- | ----------------------------- | -------------------------------- |
+| `templates`          | `SkillTemplateListItem[]`     | All templates for the org        |
+| `currentTemplate`    | `SkillTemplate \| null`       | Currently viewed/edited template |
+| `tests`              | `SkillTestListItem[]`         | All tests for the org            |
+| `currentTest`        | `SkillTest \| null`           | Currently active test session    |
+| `activeTestTimer`    | `number`                      | Timer seconds for active test    |
+| `activeTestRunning`  | `boolean`                     | Whether timer is running         |
+| `activeSectionIndex` | `number`                      | Current section in active test   |
+| `summary`            | `SkillTestingSummary \| null` | Department statistics            |
 
 **26 actions** covering template/test CRUD, scoring, timer management, and summary loading.
 
@@ -690,12 +692,12 @@ The training module uses 16 exported service objects in `frontend/src/services/t
 
 ## Permissions
 
-| Permission | Scope |
-|------------|-------|
-| `training.view` | View training records, courses, programs (own data) |
-| `training.manage` | Full training admin: requirements, sessions, submissions review, compliance, skills templates, module config |
-| `training.evaluate` | Evaluate training (examiner role) |
-| `training.view_all` | View all members' training data |
+| Permission          | Scope                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `training.view`     | View training records, courses, programs (own data)                                                          |
+| `training.manage`   | Full training admin: requirements, sessions, submissions review, compliance, skills templates, module config |
+| `training.evaluate` | Evaluate training (examiner role)                                                                            |
+| `training.view_all` | View all members' training data                                                                              |
 
 ---
 
@@ -705,15 +707,15 @@ The training module uses 16 exported service objects in `frontend/src/services/t
 
 Seven new `form_show_*` boolean columns on `training_module_configs` control which optional sections appear on the shift completion report **creation form**. These are separate from the existing `show_*` columns, which control what **trainees** see after submission.
 
-| Toggle | Default | Controls |
-|--------|---------|----------|
-| `form_show_performance_rating` | `true` | Performance rating stars/scale |
-| `form_show_areas_of_strength` | `true` | Strengths text field |
-| `form_show_areas_for_improvement` | `true` | Improvement areas text field |
-| `form_show_officer_narrative` | `true` | Free-form officer assessment |
-| `form_show_skills_observed` | `true` | Structured skills checklist |
-| `form_show_tasks_performed` | `true` | Structured tasks list |
-| `form_show_call_types` | `true` | Call type selection |
+| Toggle                            | Default | Controls                       |
+| --------------------------------- | ------- | ------------------------------ |
+| `form_show_performance_rating`    | `true`  | Performance rating stars/scale |
+| `form_show_areas_of_strength`     | `true`  | Strengths text field           |
+| `form_show_areas_for_improvement` | `true`  | Improvement areas text field   |
+| `form_show_officer_narrative`     | `true`  | Free-form officer assessment   |
+| `form_show_skills_observed`       | `true`  | Structured skills checklist    |
+| `form_show_tasks_performed`       | `true`  | Structured tasks list          |
+| `form_show_call_types`            | `true`  | Call type selection            |
 
 ### Per-Apparatus-Type Skills and Tasks
 
@@ -728,15 +730,16 @@ Managed via the **ShiftReportsSettingsPanel** in Scheduling Settings, with a per
 
 ### Rating Scale Customization
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `rating_label` | "Performance Rating" | Custom label for the rating input |
-| `rating_scale_type` | "stars" | "stars" (star icons) or "descriptive" (labeled buttons) |
-| `rating_scale_labels` | `null` | Custom labels per level (e.g., `{1: "Needs Improvement", 5: "Exceptional"}`) |
+| Setting               | Default              | Description                                                                  |
+| --------------------- | -------------------- | ---------------------------------------------------------------------------- |
+| `rating_label`        | "Performance Rating" | Custom label for the rating input                                            |
+| `rating_scale_type`   | "stars"              | "stars" (star icons) or "descriptive" (labeled buttons)                      |
+| `rating_scale_labels` | `null`               | Custom labels per level (e.g., `{1: "Needs Improvement", 5: "Exceptional"}`) |
 
 ### Save as Draft
 
 The `save_as_draft` flag on `ShiftCompletionReportCreate` allows officers to save incomplete reports. Drafts:
+
 - Do not trigger training pipeline progress
 - Appear in the officer's **Drafts** view in ShiftReportsTab
 - Transition to `approved` or `pending_review` on final submission, triggering deferred pipeline progress
@@ -751,21 +754,21 @@ New organizations are seeded with sample skills, tasks, and apparatus-type mappi
 
 ### New Database Columns (2026-04-04)
 
-| Table | Column | Type | Description |
-|-------|--------|------|-------------|
-| `training_module_configs` | `form_show_performance_rating` | Boolean | Toggle rating on report form |
-| `training_module_configs` | `form_show_areas_of_strength` | Boolean | Toggle strengths on report form |
-| `training_module_configs` | `form_show_areas_for_improvement` | Boolean | Toggle improvement on report form |
-| `training_module_configs` | `form_show_officer_narrative` | Boolean | Toggle narrative on report form |
-| `training_module_configs` | `form_show_skills_observed` | Boolean | Toggle skills on report form |
-| `training_module_configs` | `form_show_tasks_performed` | Boolean | Toggle tasks on report form |
-| `training_module_configs` | `form_show_call_types` | Boolean | Toggle call types on report form |
-| `training_module_configs` | `apparatus_type_skills` | JSON | Per-type skill lists |
-| `training_module_configs` | `apparatus_type_tasks` | JSON | Per-type task lists |
-| `training_module_configs` | `rating_label` | String | Custom rating label |
-| `training_module_configs` | `rating_scale_type` | String | Rating display type |
-| `training_module_configs` | `rating_scale_labels` | JSON | Custom labels per level |
-| `requirement_progress` | `started_at` | DateTime(tz) | When requirement transitioned to IN_PROGRESS |
+| Table                     | Column                            | Type         | Description                                  |
+| ------------------------- | --------------------------------- | ------------ | -------------------------------------------- |
+| `training_module_configs` | `form_show_performance_rating`    | Boolean      | Toggle rating on report form                 |
+| `training_module_configs` | `form_show_areas_of_strength`     | Boolean      | Toggle strengths on report form              |
+| `training_module_configs` | `form_show_areas_for_improvement` | Boolean      | Toggle improvement on report form            |
+| `training_module_configs` | `form_show_officer_narrative`     | Boolean      | Toggle narrative on report form              |
+| `training_module_configs` | `form_show_skills_observed`       | Boolean      | Toggle skills on report form                 |
+| `training_module_configs` | `form_show_tasks_performed`       | Boolean      | Toggle tasks on report form                  |
+| `training_module_configs` | `form_show_call_types`            | Boolean      | Toggle call types on report form             |
+| `training_module_configs` | `apparatus_type_skills`           | JSON         | Per-type skill lists                         |
+| `training_module_configs` | `apparatus_type_tasks`            | JSON         | Per-type task lists                          |
+| `training_module_configs` | `rating_label`                    | String       | Custom rating label                          |
+| `training_module_configs` | `rating_scale_type`               | String       | Rating display type                          |
+| `training_module_configs` | `rating_scale_labels`             | JSON         | Custom labels per level                      |
+| `requirement_progress`    | `started_at`                      | DateTime(tz) | When requirement transitioned to IN_PROGRESS |
 
 ### Training Admin Enhancements (2026-04-04)
 
@@ -774,15 +777,15 @@ New organizations are seeded with sample skills, tasks, and apparatus-type mappi
 
 ### Edge Cases (2026-04-04)
 
-| Scenario | Behavior |
-|----------|----------|
-| All form sections toggled off | Core fields (trainee, date, hours, calls) remain; form submittable |
-| Apparatus type with no mapped skills | Falls back to org-wide defaults; empty if none configured |
-| Draft saved with missing fields | Validation deferred until final submission |
-| Trainee list when linked to a shift | Auto-filters to shift members; ad-hoc reports show full list |
-| Descriptive rating with no labels | Falls back to numeric display (1-5) |
-| Report shift_date vs linked shift date mismatch | Returns validation error |
-| Trainee with shift assignment but no attendance | Allows manual hour entry; auto-populate returns zeros |
+| Scenario                                        | Behavior                                                           |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| All form sections toggled off                   | Core fields (trainee, date, hours, calls) remain; form submittable |
+| Apparatus type with no mapped skills            | Falls back to org-wide defaults; empty if none configured          |
+| Draft saved with missing fields                 | Validation deferred until final submission                         |
+| Trainee list when linked to a shift             | Auto-filters to shift members; ad-hoc reports show full list       |
+| Descriptive rating with no labels               | Falls back to numeric display (1-5)                                |
+| Report shift_date vs linked shift date mismatch | Returns validation error                                           |
+| Trainee with shift assignment but no attendance | Allows manual hour entry; auto-populate returns zeros              |
 
 ## Skill Scoring, Batch Review & Security Hardening (2026-04-07)
 
@@ -792,13 +795,13 @@ Officers can now assign a 1-5 numeric score to each observed skill when filing s
 
 **Score labels:**
 
-| Score | Label |
-|-------|-------|
-| 1 | Needs work |
-| 2 | Developing |
-| 3 | Competent |
-| 4 | Proficient |
-| 5 | Excellent |
+| Score | Label      |
+| ----- | ---------- |
+| 1     | Needs work |
+| 2     | Developing |
+| 3     | Competent  |
+| 4     | Proficient |
+| 5     | Excellent  |
 
 Labels appear as tooltips on score buttons and inline text in display views. Buttons use a consistent violet color theme across both `ShiftReportPage` and `ShiftReportsTab`.
 
@@ -821,6 +824,7 @@ Review modal now renders full report content (hours, calls, rating, strengths, a
 ### Skill Linkage Status in Apparatus Settings
 
 `ShiftReportsSettingsPanel` shows color-coded tags for each apparatus-type skill:
+
 - **Green**: Skill matches a `SkillEvaluation` record → tracks competency, creates checkoffs, progresses pipeline requirements
 - **Amber**: No matching `SkillEvaluation` → skill observed on reports but not formally tracked
 
@@ -836,27 +840,27 @@ All shift completion report operations now log audit events: `shift_report_creat
 
 ### Bug Fixes (2026-04-07)
 
-| Issue | Fix |
-|-------|-----|
-| Decimal TypeError in weekly/monthly calendar | MySQL `SUM()` returns `Decimal`; wrapped in `float()` before division |
-| `??` → `||` for optional form fields | 35 instances in prospective-members and apparatus modules |
-| `ShiftCompletionReportCreate.shift_date` type mismatch | Changed from optional to required in TypeScript to match backend |
-| Unused `LogOut` import in `MyShiftsTab` | Removed (F401) |
-| `tsconfig.json` TS5101 deprecation error | Added `ignoreDeprecations: "5.0"` for `baseUrl` |
-| `form.shift_date` fallback missing | Added `?? ''` fallback for `noUncheckedIndexedAccess` |
-| Trainee summary table numeric alignment | Center-aligned headers and data columns |
+| Issue                                                  | Fix                                                                   |
+| ------------------------------------------------------ | --------------------------------------------------------------------- | -------------------------- | --------------------------------------------------------- |
+| Decimal TypeError in weekly/monthly calendar           | MySQL `SUM()` returns `Decimal`; wrapped in `float()` before division |
+| `??` → `                                               |                                                                       | ` for optional form fields | 35 instances in prospective-members and apparatus modules |
+| `ShiftCompletionReportCreate.shift_date` type mismatch | Changed from optional to required in TypeScript to match backend      |
+| Unused `LogOut` import in `MyShiftsTab`                | Removed (F401)                                                        |
+| `tsconfig.json` TS5101 deprecation error               | Added `ignoreDeprecations: "5.0"` for `baseUrl`                       |
+| `form.shift_date` fallback missing                     | Added `?? ''` fallback for `noUncheckedIndexedAccess`                 |
+| Trainee summary table numeric alignment                | Center-aligned headers and data columns                               |
 
 ### Edge Cases (2026-04-07)
 
-| Scenario | Behavior |
-|----------|----------|
-| Skill score outside 1-5 range | Rejected by Pydantic `Field(ge=1, le=5)` with 422 |
-| Batch review with >100 report IDs | Rejected by `max_length=100` constraint |
-| Batch review with mix of valid/invalid IDs | Valid reports reviewed; failed count returned |
-| Flagged report re-reviewed to approved | Triggers deferred pipeline progress if applicable |
-| Non-trainee/non-officer accessing report by ID | 403 unless user has `training.manage` |
-| Trainee accessing own report | Sees visibility-filtered data; `reviewer_notes` stripped |
-| No SkillEvaluation records in org | All skills show amber "unlinked" tags |
+| Scenario                                       | Behavior                                                 |
+| ---------------------------------------------- | -------------------------------------------------------- |
+| Skill score outside 1-5 range                  | Rejected by Pydantic `Field(ge=1, le=5)` with 422        |
+| Batch review with >100 report IDs              | Rejected by `max_length=100` constraint                  |
+| Batch review with mix of valid/invalid IDs     | Valid reports reviewed; failed count returned            |
+| Flagged report re-reviewed to approved         | Triggers deferred pipeline progress if applicable        |
+| Non-trainee/non-officer accessing report by ID | 403 unless user has `training.manage`                    |
+| Trainee accessing own report                   | Sees visibility-filtered data; `reviewer_notes` stripped |
+| No SkillEvaluation records in org              | All skills show amber "unlinked" tags                    |
 
 ---
 
@@ -882,18 +886,18 @@ All shift completion report operations now log audit events: `shift_report_creat
 
 ### Data Model Changes
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field                       | Type              | Description                      |
+| --------------------------- | ----------------- | -------------------------------- |
 | `training_records.category` | String (nullable) | Training category classification |
-| `users.evoc_level` | String (nullable) | EVOC certification level |
+| `users.evoc_level`          | String (nullable) | EVOC certification level         |
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Record with no category | Excluded from category-based compliance reports |
-| EVOC level not set for member | Can be assigned to driver position but warning shown |
-| Virginia NCCR with incomplete categories | Flagged in compliance dashboard |
+| Scenario                                 | Behavior                                             |
+| ---------------------------------------- | ---------------------------------------------------- |
+| Record with no category                  | Excluded from category-based compliance reports      |
+| EVOC level not set for member            | Can be assigned to driver position but warning shown |
+| Virginia NCCR with incomplete categories | Flagged in compliance dashboard                      |
 
 ---
 
@@ -946,21 +950,21 @@ Renders the department-wide compliance matrix (all members × all requirements) 
 
 Each source page now includes a **Print** button that navigates to the corresponding print page:
 
-| Source Page | Print Button Location | Target Print Page |
-|-------------|----------------------|-------------------|
-| `ComplianceMatrixTab` | Toolbar above the matrix | `/training/print/compliance` |
-| `MemberTrainingHistoryPage` | Page header actions | `/training/print/member` |
-| `PipelineDetailPage` | Page header actions | `/training/print/program` |
+| Source Page                 | Print Button Location    | Target Print Page            |
+| --------------------------- | ------------------------ | ---------------------------- |
+| `ComplianceMatrixTab`       | Toolbar above the matrix | `/training/print/compliance` |
+| `MemberTrainingHistoryPage` | Page header actions      | `/training/print/member`     |
+| `PipelineDetailPage`        | Page header actions      | `/training/print/program`    |
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Member with no training records | Print page shows empty table with "No records found" message |
-| Program with no enrollments | Enrollment section shows "No members enrolled" |
+| Scenario                            | Behavior                                                             |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| Member with no training records     | Print page shows empty table with "No records found" message         |
+| Program with no enrollments         | Enrollment section shows "No members enrolled"                       |
 | Compliance matrix with 100+ members | Paginated across multiple printed pages with repeated column headers |
-| Browser blocks auto-print dialog | Page remains visible for manual Ctrl+P |
-| Print page for member on leave | Leave period shown with pro-rated requirement adjustments |
+| Browser blocks auto-print dialog    | Page remains visible for manual Ctrl+P                               |
+| Print page for member on leave      | Leave period shown with pro-rated requirement adjustments            |
 
 ---
 
@@ -1011,11 +1015,11 @@ Each source page now includes a **Print** button that navigates to the correspon
 
 ### Data Model Changes (2026-05-29)
 
-| Table | Column | Type | Migration | Description |
-|-------|--------|------|-----------|-------------|
-| `compliance_configs` | `include_current_month` | Boolean (NOT NULL, server_default `1`) | `20260503_0001` | Org default: count the in-progress month toward compliance |
-| `training_requirements` | `include_current_month` | Boolean (nullable) | `20260503_0002` | Per-requirement override; `NULL` inherits the org default |
-| `training_sessions` | `approval_required` | — (dropped) | `20260502_0004` | Removed dead column; finalize is gated by `require_completion_confirmation` |
+| Table                   | Column                  | Type                                   | Migration       | Description                                                                 |
+| ----------------------- | ----------------------- | -------------------------------------- | --------------- | --------------------------------------------------------------------------- |
+| `compliance_configs`    | `include_current_month` | Boolean (NOT NULL, server_default `1`) | `20260503_0001` | Org default: count the in-progress month toward compliance                  |
+| `training_requirements` | `include_current_month` | Boolean (nullable)                     | `20260503_0002` | Per-requirement override; `NULL` inherits the org default                   |
+| `training_sessions`     | `approval_required`     | — (dropped)                            | `20260502_0004` | Removed dead column; finalize is gated by `require_completion_confirmation` |
 
 ---
 
@@ -1090,7 +1094,7 @@ end-to-end — building, enrolling, tracking, and phase gating.
   advance"** flag, and the **version** — all three were previously dropped.
 - **Enrollments tab** — the program detail page lists enrolled members by
   **name** with their progress percentage (`GET
-  /training/programs/programs/{id}/enrollments`, requires `training.view_all`
+/training/programs/programs/{id}/enrollments`, requires `training.view_all`
   or `training.manage`).
 - **Searchable member picker** — enroll a member by searching for them by
   name instead of pasting a user ID.
@@ -1116,7 +1120,7 @@ An officer opens an enrolled member and works one requirement at a time
 
 ### Phases That Gate
 
-- A **phase is complete** when all of its *required* requirements are at 100%
+- A **phase is complete** when all of its _required_ requirements are at 100%
   (a phase with no required items is trivially complete).
 - **Auto-advance** — after any progress update, the member automatically moves
   through each consecutive completed phase.
@@ -1140,8 +1144,8 @@ Beyond an officer editing progress directly, pipeline progress advances from:
 - **Approved training sessions** — approving a session linked to a program
   advances the session's **linked requirement**; if the session is linked to a
   program **and a category** (with no explicit requirement), it advances all of
-  that program's requirements in that category. *(Session attendance previously
-  did not move pipeline progress — now fixed.)*
+  that program's requirements in that category. _(Session attendance previously
+  did not move pipeline progress — now fixed.)_
 - **Passing a linked skills test** — passing a skills test that is linked to a
   requirement completes that requirement (see **Skills Testing** above).
 
@@ -1194,7 +1198,7 @@ gate is a nudge for self-service actions, not a hard block.
 
 ## Multi-Class Courses & Cohorts (2026-08-05)
 
-A recruit school is one *course* made of many *classes*. Before this, describing
+A recruit school is one _course_ made of many _classes_. Before this, describing
 one meant creating fifteen training sessions by hand and repeating that work for
 every intake — the existing recurring-session path did not help, because
 recruit-school classes are different subjects on an irregular cadence, not the
@@ -1204,21 +1208,21 @@ same class repeating.
 
 **Course Library → Manage classes.** A class links to a catalog course — that
 link is what supplies its credit hours, certification settings and category
-tagging — and is timed *relative to the course start* rather than on a calendar
+tagging — and is timed _relative to the course start_ rather than on a calendar
 date:
 
-| Field | Meaning |
-|-------|---------|
-| `day_offset` | Days after the course start; 0 is the first day |
-| `start_time` | Local wall clock, e.g. `19:00` |
-| `duration_minutes` | Length of the class |
-| `section_name` | Optional grouping; becomes a pipeline phase when one is generated |
+| Field                         | Meaning                                                                       |
+| ----------------------------- | ----------------------------------------------------------------------------- |
+| `day_offset`                  | Days after the course start; 0 is the first day                               |
+| `start_time`                  | Local wall clock, e.g. `19:00`                                                |
+| `duration_minutes`            | Length of the class                                                           |
+| `section_name`                | Optional grouping; becomes a pipeline phase when one is generated             |
 | `counts_toward_certification` | Off for an informal drill: hours still count, the certificate doesn't advance |
 
 The builder shows the gap between consecutive classes the way officers describe
 them ("next day", "2 days later"), and **Fill from pattern** derives every offset
 from a weekly cadence — fifteen classes on Tue/Thu becomes offsets 1, 3, 8,
-10, … Because a class *must* link to a catalog course, the builder can create
+10, … Because a class _must_ link to a catalog course, the builder can create
 one inline; without that, building a fifteen-class syllabus would mean leaving
 the page fifteen times.
 
@@ -1243,13 +1247,13 @@ so later cohorts of the same course reuse it.
 
 ### Running a cohort
 
-| Action | Effect |
-|--------|--------|
-| Reschedule a class | Moves the class *and* its event; RSVPs are preserved |
-| Cancel a class | Cancels the event rather than deleting it, so anyone signed up sees the change; the class stays on the cohort for the record |
-| Add class | An ad-hoc make-up session that was never on the syllabus; the roster is invited automatically |
-| Shift remaining | Slides upcoming classes by N days; past and cancelled classes are left alone |
-| Create missing events | Repairs a class whose event failed to create or was deleted. Idempotent — it only fills gaps |
+| Action                | Effect                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Reschedule a class    | Moves the class _and_ its event; RSVPs are preserved                                                                         |
+| Cancel a class        | Cancels the event rather than deleting it, so anyone signed up sees the change; the class stays on the cohort for the record |
+| Add class             | An ad-hoc make-up session that was never on the syllabus; the roster is invited automatically                                |
+| Shift remaining       | Slides upcoming classes by N days; past and cancelled classes are left alone                                                 |
+| Create missing events | Repairs a class whose event failed to create or was deleted. Idempotent — it only fills gaps                                 |
 
 ### Two design points worth knowing
 

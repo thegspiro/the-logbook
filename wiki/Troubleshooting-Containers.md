@@ -7,6 +7,7 @@ Docker container issues and solutions for The Logbook deployment.
 ## Container Won't Start
 
 ### Check Logs
+
 ```bash
 docker-compose logs backend
 docker-compose logs frontend
@@ -16,13 +17,13 @@ docker-compose logs redis
 
 ### Common Causes
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Backend crashes on startup | Missing or invalid `.env` | Check required env vars (SECRET_KEY, ENCRYPTION_KEY, etc.) |
-| Backend exits with "SECURITY FAILURE" | Default secrets in production | Generate real secrets: `openssl rand -hex 32` |
-| MySQL fails to start | Port conflict or data corruption | Check port 3306, try `docker-compose down -v` (loses data) |
-| Redis marked unhealthy | Health check warning suppression | Add `--no-auth-warning` to Redis health check |
-| Frontend exits immediately | Build failure | Rebuild: `docker-compose build --no-cache frontend` |
+| Symptom                               | Cause                            | Fix                                                        |
+| ------------------------------------- | -------------------------------- | ---------------------------------------------------------- |
+| Backend crashes on startup            | Missing or invalid `.env`        | Check required env vars (SECRET_KEY, ENCRYPTION_KEY, etc.) |
+| Backend exits with "SECURITY FAILURE" | Default secrets in production    | Generate real secrets: `openssl rand -hex 32`              |
+| MySQL fails to start                  | Port conflict or data corruption | Check port 3306, try `docker-compose down -v` (loses data) |
+| Redis marked unhealthy                | Health check warning suppression | Add `--no-auth-warning` to Redis health check              |
+| Frontend exits immediately            | Build failure                    | Rebuild: `docker-compose build --no-cache frontend`        |
 
 ### Full Rebuild
 
@@ -51,12 +52,12 @@ docker inspect --format='{{json .State.Health}}' logbook-backend | jq
 
 ### Expected Health States
 
-| Container | Expected | Health Check |
-|-----------|----------|-------------|
-| `logbook-backend` | healthy | HTTP GET /health |
-| `logbook-frontend` | healthy | wget http://localhost:80/ |
-| `logbook-db` | healthy | mysqladmin ping |
-| `logbook-redis` | healthy | redis-cli ping |
+| Container          | Expected | Health Check              |
+| ------------------ | -------- | ------------------------- |
+| `logbook-backend`  | healthy  | HTTP GET /health          |
+| `logbook-frontend` | healthy  | wget http://localhost:80/ |
+| `logbook-db`       | healthy  | mysqladmin ping           |
+| `logbook-redis`    | healthy  | redis-cli ping            |
 
 ---
 
@@ -69,7 +70,11 @@ docker inspect --format='{{json .State.Health}}' logbook-backend | jq
 ```yaml
 redis:
   healthcheck:
-    test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-change_me_in_production} --no-auth-warning ping | grep PONG"]
+    test:
+      [
+        "CMD-SHELL",
+        "redis-cli -a $${REDIS_PASSWORD:-change_me_in_production} --no-auth-warning ping | grep PONG",
+      ]
     interval: 10s
     timeout: 5s
     retries: 5
@@ -155,6 +160,7 @@ docker-compose up -d
 **Cause:** The MinIO service used `:?` (required variable) syntax. Docker Compose validates these even for inactive profiles (`with-s3`).
 
 **Fix:** Updated to `:-` (default value) syntax. Pull latest:
+
 ```bash
 git pull origin main
 docker-compose up -d
@@ -168,12 +174,12 @@ MinIO only starts when you explicitly use `docker compose --profile with-s3 up -
 
 All services in `docker-compose.yml` now have memory limits configured:
 
-| Service | Limit | Reservation |
-|---------|-------|-------------|
-| MySQL | 512M | 256M |
-| Redis | 128M | 64M |
-| Backend | 768M | 384M |
-| Frontend | 128M | 64M |
+| Service  | Limit | Reservation |
+| -------- | ----- | ----------- |
+| MySQL    | 512M  | 256M        |
+| Redis    | 128M  | 64M         |
+| Backend  | 768M  | 384M        |
+| Frontend | 128M  | 64M         |
 
 If containers are being OOM-killed, increase limits in `docker-compose.override.yml`.
 
@@ -192,6 +198,7 @@ If containers are being OOM-killed, increase limits in `docker-compose.override.
 **Status (Fixed):** `backend/.dockerignore` added to exclude tests, virtual environments, and other non-essential files.
 
 **Fix:**
+
 ```bash
 docker-compose build --no-cache frontend
 docker-compose up -d frontend
@@ -206,6 +213,7 @@ docker-compose up -d frontend
 **Status (Fixed):** A chain of 5 cascading issues: wrong FK table reference (`roles` vs `positions`), ~50 SET NULL FK columns missing `nullable=True`, duplicate migration creating existing tables, NOT NULL `organization_id` on system seed records, and missing seed data for facility types/statuses.
 
 **Fix:**
+
 ```bash
 docker-compose exec backend alembic upgrade head
 docker-compose restart backend
@@ -222,6 +230,7 @@ docker-compose restart backend
 **Status (Fixed):** In-memory tracking dicts in `SecurityMonitoringService` and public portal rate-limit caches grew without eviction. Added periodic cleanup and key limits.
 
 **Monitor:**
+
 ```bash
 docker stats logbook-backend
 ```

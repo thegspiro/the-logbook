@@ -4,7 +4,7 @@ The Communications module covers how the department reaches its members:
 **Department Messages** (internal announcements with read/acknowledgment
 tracking and multi-channel delivery), **Email Templates**, and the outbound
 **Message History** log. This page focuses on Department Messages; notification
-*rules* and the member notification inbox are covered under
+_rules_ and the member notification inbox are covered under
 [Events](Module-Events) and the Notifications page.
 
 ## Key Features
@@ -30,11 +30,11 @@ tracking and multi-channel delivery), **Email Templates**, and the outbound
 
 ## Pages
 
-| Page | Route | Audience | Permission |
-|------|-------|----------|------------|
-| Messages (inbox) | `/messages` | All members | Authenticated |
-| Department Messages (admin) | `/communications/messages` | Officers | `notifications.manage` |
-| Email Templates | `/communications/email-templates` | Admins | `settings.manage` |
+| Page                        | Route                             | Audience    | Permission             |
+| --------------------------- | --------------------------------- | ----------- | ---------------------- |
+| Messages (inbox)            | `/messages`                       | All members | Authenticated          |
+| Department Messages (admin) | `/communications/messages`        | Officers    | `notifications.manage` |
+| Email Templates             | `/communications/email-templates` | Admins      | `settings.manage`      |
 
 Members also see recent messages on the **dashboard** "Department Messages" card
 and in the notification **bell**.
@@ -61,11 +61,11 @@ POST   /api/v1/messages/{id}/acknowledge         # Acknowledge (ack-required mes
 
 ## Delivery matrix
 
-| Priority / flag | In-app | Email | SMS |
-|-----------------|:---:|:---:|:---:|
-| Normal / Important | ✅ | — | — |
-| Requires acknowledgment | ✅ | ✅ | — |
-| Urgent | ✅ | ✅ | ✅ |
+| Priority / flag         | In-app | Email | SMS |
+| ----------------------- | :----: | :---: | :-: |
+| Normal / Important      |   ✅   |   —   |  —  |
+| Requires acknowledgment |   ✅   |  ✅   |  —  |
+| Urgent                  |   ✅   |  ✅   | ✅  |
 
 Escalation runs as a background task (posting stays instant) and is
 **rate-limited per organization** on the email/SMS channels so a runaway or

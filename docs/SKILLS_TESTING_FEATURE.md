@@ -14,53 +14,54 @@ Templates are the reusable definitions of a skills test. They are the digital eq
 
 ### 1.1 Template Metadata
 
-| Field | Description |
-|---|---|
-| **Name** | e.g., "Patient Assessment/Management — Trauma" |
-| **Code** | Short identifier, e.g., `NREMT-TRAUMA-ASSESS` |
-| **Description** | Purpose and scope of this skill test |
-| **Version** | Template versioning (v1, v2, etc.) to track changes over time |
-| **Source/Standard** | Origin standard: NREMT, NFPA 1001, state registry, or department-defined |
-| **Registry Code** | Links to `TrainingRequirement.registry_code` (e.g., "NREMT", "NFPA 1001") |
-| **Certification Level** | EMR, EMT, AEMT, Paramedic, Firefighter I/II, etc. |
-| **Category** | Links to existing `TrainingCategory` (EMS, Fire, Hazmat, etc.) |
-| **Time Limit** | Optional maximum duration in **minutes** (e.g., 10 for NREMT trauma). Changed from seconds to minutes as of 2026-02-28 for more intuitive configuration |
-| **Total Possible Points** | Auto-calculated from step point values |
-| **Passing Score** | Minimum points to pass (if no critical criteria are triggered) |
-| **Passing Percentage** | Alternative: minimum percentage to pass |
-| **Equipment/Materials Required** | List of supplies/equipment needed for the exam station |
-| **Scenario Prompt** | Text the examiner reads aloud to the candidate to set up the scenario |
-| **Supplemental Prompts** | Keyed prompt-response pairs the examiner can give when the candidate asks or performs specific actions (e.g., "If candidate assesses breathing: 'Breathing is labored at 24/min'") |
-| **Active** | Whether this template is currently available for use |
+| Field                            | Description                                                                                                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Name**                         | e.g., "Patient Assessment/Management — Trauma"                                                                                                                                     |
+| **Code**                         | Short identifier, e.g., `NREMT-TRAUMA-ASSESS`                                                                                                                                      |
+| **Description**                  | Purpose and scope of this skill test                                                                                                                                               |
+| **Version**                      | Template versioning (v1, v2, etc.) to track changes over time                                                                                                                      |
+| **Source/Standard**              | Origin standard: NREMT, NFPA 1001, state registry, or department-defined                                                                                                           |
+| **Registry Code**                | Links to `TrainingRequirement.registry_code` (e.g., "NREMT", "NFPA 1001")                                                                                                          |
+| **Certification Level**          | EMR, EMT, AEMT, Paramedic, Firefighter I/II, etc.                                                                                                                                  |
+| **Category**                     | Links to existing `TrainingCategory` (EMS, Fire, Hazmat, etc.)                                                                                                                     |
+| **Time Limit**                   | Optional maximum duration in **minutes** (e.g., 10 for NREMT trauma). Changed from seconds to minutes as of 2026-02-28 for more intuitive configuration                            |
+| **Total Possible Points**        | Auto-calculated from step point values                                                                                                                                             |
+| **Passing Score**                | Minimum points to pass (if no critical criteria are triggered)                                                                                                                     |
+| **Passing Percentage**           | Alternative: minimum percentage to pass                                                                                                                                            |
+| **Equipment/Materials Required** | List of supplies/equipment needed for the exam station                                                                                                                             |
+| **Scenario Prompt**              | Text the examiner reads aloud to the candidate to set up the scenario                                                                                                              |
+| **Supplemental Prompts**         | Keyed prompt-response pairs the examiner can give when the candidate asks or performs specific actions (e.g., "If candidate assesses breathing: 'Breathing is labored at 24/min'") |
+| **Active**                       | Whether this template is currently available for use                                                                                                                               |
 
 ### 1.2 Template Sections
 
 Each template is divided into ordered sections that group related steps. Sections map to the bold-header groups on the NREMT sheet.
 
-| Field | Description |
-|---|---|
-| **Section Name** | e.g., "Scene Size-Up", "Primary Survey/Resuscitation", "Secondary Assessment" |
-| **Sort Order** | Display order within the template |
-| **Instructions** | Optional examiner-facing instructions for this section |
-| **Integration Note** | Notation like the NREMT's "**" flag indicating steps may be integrated within the flow of another section (e.g., history taking during primary survey) |
+| Field                | Description                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Section Name**     | e.g., "Scene Size-Up", "Primary Survey/Resuscitation", "Secondary Assessment"                                                                            |
+| **Sort Order**       | Display order within the template                                                                                                                        |
+| **Instructions**     | Optional examiner-facing instructions for this section                                                                                                   |
+| **Integration Note** | Notation like the NREMT's "\*\*" flag indicating steps may be integrated within the flow of another section (e.g., history taking during primary survey) |
 
 ### 1.3 Section Steps (Scored Items)
 
 Each section contains individual scored steps. These are the line items on the NREMT sheet.
 
-| Field | Description |
-|---|---|
-| **Step Description** | What the candidate must do, e.g., "Determines scene/situation safety" |
-| **Point Value** | Points awarded if completed correctly (typically 1, but can be higher for complex steps) |
-| **Sort Order** | Display order within the section |
-| **Required** | Whether this step must be attempted (vs. optional/conditional) |
-| **Conditional On** | Optional: step only appears if a prior step had a specific outcome |
-| **Examiner Prompt** | Optional prompt text the examiner reads when the candidate reaches this step |
-| **Scoring Type** | `binary` (done/not done), `partial` (0 to max points), `scaled` (rubric-based), or `statement` (open-ended text response) |
-| **Point Value** | Configurable point value for weighted scoring (default 1). Enables point-based scoring where criteria can carry different weights |
-| **Rubric** | For `scaled` scoring: criteria descriptions for each point level |
+| Field                | Description                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Step Description** | What the candidate must do, e.g., "Determines scene/situation safety"                                                             |
+| **Point Value**      | Points awarded if completed correctly (typically 1, but can be higher for complex steps)                                          |
+| **Sort Order**       | Display order within the section                                                                                                  |
+| **Required**         | Whether this step must be attempted (vs. optional/conditional)                                                                    |
+| **Conditional On**   | Optional: step only appears if a prior step had a specific outcome                                                                |
+| **Examiner Prompt**  | Optional prompt text the examiner reads when the candidate reaches this step                                                      |
+| **Scoring Type**     | `binary` (done/not done), `partial` (0 to max points), `scaled` (rubric-based), or `statement` (open-ended text response)         |
+| **Point Value**      | Configurable point value for weighted scoring (default 1). Enables point-based scoring where criteria can carry different weights |
+| **Rubric**           | For `scaled` scoring: criteria descriptions for each point level                                                                  |
 
 > **Note on Scoring Types (updated 2026-02-28):**
+>
 > - `binary`: Simple pass/fail (done / not done) — most common
 > - `partial`: Award 0 to max points with a slider or increment buttons
 > - `scaled`: Select from a rubric with predefined score levels
@@ -70,11 +71,11 @@ Each section contains individual scored steps. These are the line items on the N
 
 Separate from scored steps, these are conditions that result in automatic failure regardless of score. Directly mirrors the "Critical Criteria" section at the bottom of NREMT sheets.
 
-| Field | Description |
-|---|---|
+| Field           | Description                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------ |
 | **Description** | e.g., "Failure to initiate or call for transport of the patient within the 10 minute time limit" |
-| **Sort Order** | Display order |
-| **Category** | Optional grouping: safety, airway, assessment, procedural, timing |
+| **Sort Order**  | Display order                                                                                    |
+| **Category**    | Optional grouping: safety, airway, assessment, procedural, timing                                |
 
 If **any** critical criterion is checked, the overall result is **FAIL** regardless of the point total.
 
@@ -97,16 +98,16 @@ This is the real-time interface the examiner uses on a tablet or laptop during t
 
 Before the candidate begins:
 
-| Field | Description |
-|---|---|
-| **Template** | Select which skill sheet to administer |
-| **Template Version** | Locked to the current active version at time of administration |
-| **Candidate** | Select member from roster (links to `users` table) |
-| **Examiner** | Auto-populated from logged-in user; can be overridden |
-| **Scenario Number** | Optional scenario variant identifier |
-| **Date** | Defaults to today |
+| Field                | Description                                                               |
+| -------------------- | ------------------------------------------------------------------------- |
+| **Template**         | Select which skill sheet to administer                                    |
+| **Template Version** | Locked to the current active version at time of administration            |
+| **Candidate**        | Select member from roster (links to `users` table)                        |
+| **Examiner**         | Auto-populated from logged-in user; can be overridden                     |
+| **Scenario Number**  | Optional scenario variant identifier                                      |
+| **Date**             | Defaults to today                                                         |
 | **Training Session** | Optional link to a `TrainingSession` if this is part of a scheduled event |
-| **Attempt Number** | Auto-incremented for the candidate on this template |
+| **Attempt Number**   | Auto-incremented for the candidate on this template                       |
 
 ### 2.2 Timer
 
@@ -396,11 +397,13 @@ SkillTestCriticalResult
 ### 5.1 Template Management (Admin)
 
 **Template List Page**
+
 - Table/grid of all skill sheet templates for the organization
 - Filter by: category, certification level, source standard, active/inactive
 - Actions: create new, duplicate, edit, deactivate, export
 
 **Template Builder/Editor**
+
 - Form-based editor for template metadata
 - Drag-and-drop section and step ordering
 - Inline editing of step descriptions, point values, scoring types
@@ -413,11 +416,13 @@ SkillTestCriticalResult
 ### 5.2 Test Administration (Examiner)
 
 **Candidate Queue** (when linked to a training session)
+
 - List of candidates scheduled for testing
 - Status indicators: waiting, in progress, completed, failed
 - Tap a candidate to begin or resume their test
 
 **Active Test Screen** (the primary examiner interface)
+
 - **Top bar**: Candidate name, template name, timer (prominent), running score
 - **Main content**: Scrollable sections with step checkboxes/toggles
   - Each step shows description and point value
@@ -429,6 +434,7 @@ SkillTestCriticalResult
 - Design priority: Large touch targets, minimal scrolling per section, high-contrast readability for outdoor/bay use
 
 **Completion/Review Screen**
+
 - Score summary with pass/fail indicator
 - Section-by-section breakdown
 - Missed steps highlighted
@@ -440,16 +446,19 @@ SkillTestCriticalResult
 ### 5.3 Results & History
 
 **Individual Test Result View**
+
 - Full recreation of the scored sheet (viewable by examiner, training officer, and candidate)
 - Printable/exportable as PDF (formatted to look like the original NREMT paper sheet)
 - Linked training record
 
 **Candidate History**
+
 - All skill test attempts for a member, grouped by template
 - Attempt-over-attempt comparison (which steps improved/regressed)
 - Pass rate trends
 
 **Reporting Dashboard** (Training Officer)
+
 - Aggregate pass/fail rates by template, category, time period
 - Most commonly missed steps (identifies training gaps)
 - Examiner activity and consistency
@@ -460,15 +469,15 @@ SkillTestCriticalResult
 
 ## 6. Permissions & Roles
 
-| Action | Roles |
-|---|---|
-| Create/edit templates | Training Officer, Admin |
+| Action                       | Roles                                          |
+| ---------------------------- | ---------------------------------------------- |
+| Create/edit templates        | Training Officer, Admin                        |
 | Administer a test (examiner) | Training Officer, designated examiner, Officer |
-| View own results | Any member (candidate) |
-| View all results | Training Officer, Admin, assigned officers |
-| Approve test results | Training Officer, Admin |
-| Export/print results | Training Officer, Admin, Examiner (own tests) |
-| View reporting dashboard | Training Officer, Admin |
+| View own results             | Any member (candidate)                         |
+| View all results             | Training Officer, Admin, assigned officers     |
+| Approve test results         | Training Officer, Admin                        |
+| Export/print results         | Training Officer, Admin, Examiner (own tests)  |
+| View reporting dashboard     | Training Officer, Admin                        |
 
 ---
 
@@ -506,6 +515,7 @@ Each preset includes the full section/step/point structure and critical criteria
 ## 9. API Endpoints (Conceptual)
 
 ### Templates
+
 - `GET    /api/v1/training/skill-sheets` — List templates
 - `POST   /api/v1/training/skill-sheets` — Create template
 - `GET    /api/v1/training/skill-sheets/{id}` — Get template with sections/steps/criteria
@@ -518,6 +528,7 @@ Each preset includes the full section/step/point structure and critical criteria
 - `GET    /api/v1/training/skill-sheets/{id}/export` — Export template as JSON
 
 ### Test Sessions
+
 - `GET    /api/v1/training/skill-tests` — List test sessions (with filters)
 - `POST   /api/v1/training/skill-tests` — Start a new test session
 - `GET    /api/v1/training/skill-tests/{id}` — Get test session with all results
@@ -532,6 +543,7 @@ Each preset includes the full section/step/point structure and critical criteria
 - `POST   /api/v1/training/skill-tests/{id}/timer/stop` — Stop timer
 
 ### Results & Reporting
+
 - `GET    /api/v1/training/skill-tests/member/{user_id}` — Member's test history
 - `GET    /api/v1/training/skill-tests/{id}/pdf` — Generate printable PDF
 - `GET    /api/v1/training/skill-tests/reports/pass-rates` — Aggregate pass rates
@@ -543,18 +555,21 @@ Each preset includes the full section/step/point structure and critical criteria
 ## 10. Implementation Phases
 
 ### Phase 1 — Foundation
+
 - Database models and migrations for all skill sheet/test entities
 - Template CRUD API endpoints
 - Template management UI (list, create, edit)
 - Seed data for NREMT preset templates
 
 ### Phase 2 — Test Administration
+
 - Test session API endpoints
 - Active test screen UI (step scoring, timer, critical criteria)
 - Test completion and submission flow
 - TrainingRecord integration on submission
 
 ### Phase 3 — Results & Integration
+
 - Results viewing and PDF export
 - Candidate history views
 - Integration with TrainingRequirement (SKILLS_EVALUATION) compliance
@@ -562,13 +577,14 @@ Each preset includes the full section/step/point structure and critical criteria
 - Approval workflow integration
 
 ### Phase 4 — Reporting & Offline
+
 - Reporting dashboard (pass rates, missed steps, examiner stats)
 - Offline/PWA support for test administration
 - Template import/export between organizations
 
 ---
 
-## 11. Shift Report Skill Scoring Integration *(2026-04-07)*
+## 11. Shift Report Skill Scoring Integration _(2026-04-07)_
 
 In addition to formal psychomotor evaluations, skills can be observed and scored during regular shift duty via **Shift Completion Reports**:
 
@@ -594,7 +610,7 @@ In addition to formal psychomotor evaluations, skills can be observed and scored
 
 ---
 
-## 13. Scoring Algorithm (Extracted & Unit-Tested) *(2026-04-30)*
+## 13. Scoring Algorithm (Extracted & Unit-Tested) _(2026-04-30)_
 
 The pass/fail scoring logic was extracted verbatim out of the HTTP endpoint
 into a pure function so it can be unit-tested in isolation:
@@ -613,22 +629,22 @@ calculate_test_result(test, template) -> tuple[float | None, str]
 
 ### Algorithm
 
-| Step | Rule |
-|------|------|
-| No section results | If `test.section_results` is empty → return `(None, "fail")` |
-| Overall score (point-based) | If any criterion of `type == "score"` with `max_score > 0` exists: `overall_score = round(sum(earned) / sum(max_score) × 100, 1)` |
-| Overall score (fallback) | Otherwise average the per-section `section_score` percentages; `None` if there are none |
-| Section matching | A section result matches a template section by `section_id == "section-{idx}"` **or** by `section_name` |
-| Criterion matching | A criterion result matches by `criterion_id == "criterion-{s}-{c}"` **or** by `criterion_label` |
-| Passing percentage | If `template.passing_percentage` is set and `overall_score` is not `None`, requires `overall_score >= passing_percentage` |
-| Critical criteria | If `template.require_all_critical`, every **required** non-`statement` criterion must have a matching result with `passed == True` |
-| Statement criteria | `type == "statement"` criteria are informational and **always pass** |
-| Missing required section | A required section with no matching result **fails** the critical check |
-| Final result | `"pass"` only when passing-percentage **AND** critical checks both hold; otherwise `"fail"` |
+| Step                        | Rule                                                                                                                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| No section results          | If `test.section_results` is empty → return `(None, "fail")`                                                                       |
+| Overall score (point-based) | If any criterion of `type == "score"` with `max_score > 0` exists: `overall_score = round(sum(earned) / sum(max_score) × 100, 1)`  |
+| Overall score (fallback)    | Otherwise average the per-section `section_score` percentages; `None` if there are none                                            |
+| Section matching            | A section result matches a template section by `section_id == "section-{idx}"` **or** by `section_name`                            |
+| Criterion matching          | A criterion result matches by `criterion_id == "criterion-{s}-{c}"` **or** by `criterion_label`                                    |
+| Passing percentage          | If `template.passing_percentage` is set and `overall_score` is not `None`, requires `overall_score >= passing_percentage`          |
+| Critical criteria           | If `template.require_all_critical`, every **required** non-`statement` criterion must have a matching result with `passed == True` |
+| Statement criteria          | `type == "statement"` criteria are informational and **always pass**                                                               |
+| Missing required section    | A required section with no matching result **fails** the critical check                                                            |
+| Final result                | `"pass"` only when passing-percentage **AND** critical checks both hold; otherwise `"fail"`                                        |
 
 ---
 
-## 14. Training Pipeline Requirement Link *(2026-07-14)*
+## 14. Training Pipeline Requirement Link _(2026-07-14)_
 
 Skills testing now hooks directly into the training-program pipeline so that
 passing a skill test can automatically complete the requirement it satisfies on
@@ -650,7 +666,7 @@ A nullable `requirement_id` column (FK → `training_requirements`,
 
 The link uses a **template-default / per-test-override** model:
 
-- A **template** carries a *default* `requirement_id` (the requirement it
+- A **template** carries a _default_ `requirement_id` (the requirement it
   normally satisfies).
 - Each **test** inherits that requirement at creation time, but the create-test
   request may override it with an explicit `requirement_id` in the body.

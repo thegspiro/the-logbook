@@ -31,7 +31,7 @@ tablet, checking training status on a laptop.]**
 **[CALLOUT: Member capabilities list]**
 
 > "You can't change other people's data or configure system settings — that's
-> for officers and admins. But everything related to *your* participation in
+> for officers and admins. But everything related to _your_ participation in
 > the department is right at your fingertips."
 
 > "Let's start with logging in."
@@ -245,7 +245,6 @@ Administrative]**
 > list, and you check into each one with the QR code the same as any other
 > event. Miss one and it's just that class you make up, not the whole course."
 
-
 ### VIEWING YOUR SCHEDULE (12:00 – 12:45)
 
 **[SCREEN: Navigate to Scheduling (SchedulingPage)]**
@@ -458,11 +457,11 @@ Copy button, and Reset link]**
 
 **[CALLOUT: "Your training history, in one file, in one click"]**
 
-> "It only ever gives you *your* data — there's no way to point it at someone
+> "It only ever gives you _your_ data — there's no way to point it at someone
 > else — and it leaves out things like your password and your two-factor
 > secret, which nobody should have a copy of."
 
-> "One tip: if you're ever leaving the department, download this *before* your
+> "One tip: if you're ever leaving the department, download this _before_ your
 > account is closed. It's much easier than asking for it afterward."
 
 ### YOUR MEMBER PROFILE (20:00 – 20:30)
@@ -474,7 +473,7 @@ Copy button, and Reset link]**
 > your profile photo is uploaded — it appears on your ID card and in the
 > directory."
 
-> "Two things on that page other members do *not* see: your date of birth, and
+> "Two things on that page other members do _not_ see: your date of birth, and
 > your emergency contacts. Those are limited to your chiefs, captains,
 > secretaries and membership coordinator — and to you. There's no department
 > setting that can put them on the roster, and when an officer does open them,
@@ -515,15 +514,15 @@ Show the app opening full-screen like a native app.]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| How to RSVP | 5:00–6:00 | "How to RSVP for an Event in 30 Seconds" |
-| QR Code Check-In | 6:00–7:00 | "Checking In with a QR Code" |
-| Checking Training Status | 8:00–9:30 | "Checking Your Training Compliance Status" |
-| Submitting External Training | 9:30–11:00 | "Submitting External Training for Credit" |
-| Subscribe to Your Shifts | 12:45–13:15 | "Put Your Shifts in Your Phone Calendar" |
-| Requesting a Shift Swap | 13:15–14:30 | "How to Request a Shift Swap" |
-| Voting in an Election | 16:00–17:00 | "How to Vote in a Department Election" |
-| Setting Up Dark Mode | 18:00–19:00 | "Customizing Your Logbook (Dark Mode & More)" |
-| Privacy Choices & Your Data | 19:00–20:00 | "Your Privacy Choices — and Downloading Your Data" |
-| Adding to Home Screen | 20:30–21:00 | "Add The Logbook to Your Phone's Home Screen" |
+| Clip                         | Timecode    | Standalone Title                                   |
+| ---------------------------- | ----------- | -------------------------------------------------- |
+| How to RSVP                  | 5:00–6:00   | "How to RSVP for an Event in 30 Seconds"           |
+| QR Code Check-In             | 6:00–7:00   | "Checking In with a QR Code"                       |
+| Checking Training Status     | 8:00–9:30   | "Checking Your Training Compliance Status"         |
+| Submitting External Training | 9:30–11:00  | "Submitting External Training for Credit"          |
+| Subscribe to Your Shifts     | 12:45–13:15 | "Put Your Shifts in Your Phone Calendar"           |
+| Requesting a Shift Swap      | 13:15–14:30 | "How to Request a Shift Swap"                      |
+| Voting in an Election        | 16:00–17:00 | "How to Vote in a Department Election"             |
+| Setting Up Dark Mode         | 18:00–19:00 | "Customizing Your Logbook (Dark Mode & More)"      |
+| Privacy Choices & Your Data  | 19:00–20:00 | "Your Privacy Choices — and Downloading Your Data" |
+| Adding to Home Screen        | 20:30–21:00 | "Add The Logbook to Your Phone's Home Screen"      |

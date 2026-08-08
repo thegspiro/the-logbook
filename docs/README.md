@@ -652,7 +652,7 @@ docker-compose ps
 - Created [wiki/Public-Programs.md](../wiki/Public-Programs.md) — Complete how-to guide with setup instructions, 6 sample programs, email template library, tips & best practices
 - Updated [wiki/Module-Events.md](../wiki/Module-Events.md) — Pipeline features, status flow, pages table, 18 API endpoints
 - Updated [docs/training/04-events-meetings.md](./training/04-events-meetings.md) — Full public outreach section with setup guide, managing requests, public form, status page, common programs table
-- Updated [wiki/_Sidebar.md](../wiki/_Sidebar.md) — Added Public Programs link under Modules
+- Updated [wiki/\_Sidebar.md](../wiki/_Sidebar.md) — Added Public Programs link under Modules
 - Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog
 
 ---
