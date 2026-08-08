@@ -31,22 +31,22 @@ The Prospective Members module manages the full applicant lifecycle — from ini
 
 Navigate to **Prospective Members** in the sidebar. The main page shows all applicants organized by their current stage.
 
-| URL | Page | Permission |
-|-----|------|------------|
-| `/prospective-members` | Pipeline Dashboard (Kanban/Table) | `prospective_members.manage` |
-| `/prospective-members/settings` | Pipeline Builder | `prospective_members.manage` |
-| `/prospective-members/:applicantId/interview` | Interview Form | `prospective_members.manage` |
-| `/prospective-members/print-labels` | Print Labels | `prospective_members.view` |
-| `/application-status/:token` | Public Status Page | Public (token-authenticated) |
+| URL                                           | Page                              | Permission                   |
+| --------------------------------------------- | --------------------------------- | ---------------------------- |
+| `/prospective-members`                        | Pipeline Dashboard (Kanban/Table) | `prospective_members.manage` |
+| `/prospective-members/settings`               | Pipeline Builder                  | `prospective_members.manage` |
+| `/prospective-members/:applicantId/interview` | Interview Form                    | `prospective_members.manage` |
+| `/prospective-members/print-labels`           | Print Labels                      | `prospective_members.view`   |
+| `/application-status/:token`                  | Public Status Page                | Public (token-authenticated) |
 
 The module uses two primary permissions:
 
-| Permission | Description |
-|------------|-------------|
-| `prospective_members.view` | View pipeline, applicants, documents |
+| Permission                   | Description                                           |
+| ---------------------------- | ----------------------------------------------------- |
+| `prospective_members.view`   | View pipeline, applicants, documents                  |
 | `prospective_members.manage` | Full CRUD, advance/reject/convert, configure pipeline |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Prospective Members main page showing the kanban board view with columns for each pipeline stage (Interest Form, Application Review, Interview, Membership Vote, Onboarding), applicant cards in each column, and the Kanban/Table view toggle at the top._
+![Prospective members kanban board with a column per pipeline stage](./images/15-01-pipeline-board.png)
 
 ---
 
@@ -69,11 +69,11 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 
 ### Pipeline Settings
 
-| Setting | Description |
-|---------|-------------|
-| **Is Default** | New applicants automatically enter this pipeline |
-| **Auto-Transfer on Approval** | Automatically convert applicant when they reach the final stage |
-| **Inactivity Config** | Timeout settings for stale applications (see [Inactivity Timeout](#inactivity-timeout)) |
+| Setting                       | Description                                                                             |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| **Is Default**                | New applicants automatically enter this pipeline                                        |
+| **Auto-Transfer on Approval** | Automatically convert applicant when they reach the final stage                         |
+| **Inactivity Config**         | Timeout settings for stale applications (see [Inactivity Timeout](#inactivity-timeout)) |
 
 ---
 
@@ -81,29 +81,29 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 
 Each pipeline stage has a type that determines its behavior:
 
-| Type | Icon | What Happens | Auto-Advance? |
-|------|------|-------------|---------------|
-| **Form Submission** | FileText | Applicant fills out a form (linked to Forms module) | Optional — when form is submitted |
-| **Document Upload** | Upload | Applicant uploads required documents | Optional — when all required docs are uploaded |
-| **Manual Approval** | CheckCircle | Coordinator manually reviews and advances | No — manual action required |
-| **Election Vote** | Vote | Members vote on the applicant (creates election package) | No — depends on election result |
-| **Automated Email** | Mail | System sends email to applicant on entry | Yes — auto-advances immediately after send |
-| **Form Dropdown** | ListChecks | Coordinator selects a form for the applicant to fill | No — manual action required |
-| **Meeting** | Calendar | Schedule an interview, orientation, or ride-along | No — manual action required |
+| Type                | Icon        | What Happens                                             | Auto-Advance?                                  |
+| ------------------- | ----------- | -------------------------------------------------------- | ---------------------------------------------- |
+| **Form Submission** | FileText    | Applicant fills out a form (linked to Forms module)      | Optional — when form is submitted              |
+| **Document Upload** | Upload      | Applicant uploads required documents                     | Optional — when all required docs are uploaded |
+| **Manual Approval** | CheckCircle | Coordinator manually reviews and advances                | No — manual action required                    |
+| **Election Vote**   | Vote        | Members vote on the applicant (creates election package) | No — depends on election result                |
+| **Automated Email** | Mail        | System sends email to applicant on entry                 | Yes — auto-advances immediately after send     |
+| **Form Dropdown**   | ListChecks  | Coordinator selects a form for the applicant to fill     | No — manual action required                    |
+| **Meeting**         | Calendar    | Schedule an interview, orientation, or ride-along        | No — manual action required                    |
 
 ### Stage Configuration Options
 
 Each stage can be configured with:
 
-| Setting | Description |
-|---------|-------------|
-| **Auto-Advance** | Automatically move to next stage when this stage's condition is met |
-| **Inactivity Timeout Override** | Custom timeout for this stage (overrides pipeline default) |
+| Setting                                    | Description                                                                       |
+| ------------------------------------------ | --------------------------------------------------------------------------------- |
+| **Auto-Advance**                           | Automatically move to next stage when this stage's condition is met               |
+| **Inactivity Timeout Override**            | Custom timeout for this stage (overrides pipeline default)                        |
 | **Email Settings** (automated email stage) | Subject, sections, welcome text, FAQ link, next meeting info, status tracker link |
-| **Form ID** (form stages) | Which form to link |
-| **Event Type** (meeting stage) | Interview, orientation, or ride-along |
-| **Scheduling** (meeting stage) | *Manual* or *Cal.com self-scheduling* — shown only when Cal.com is connected |
-| **Collection Method** (document stage) | *Upload* or *Documenso e-signature* — shown only when Documenso is connected |
+| **Form ID** (form stages)                  | Which form to link                                                                |
+| **Event Type** (meeting stage)             | Interview, orientation, or ride-along                                             |
+| **Scheduling** (meeting stage)             | _Manual_ or _Cal.com self-scheduling_ — shown only when Cal.com is connected      |
+| **Collection Method** (document stage)     | _Upload_ or _Documenso e-signature_ — shown only when Documenso is connected      |
 
 ### Using Cal.com and Documenso in Stages
 
@@ -111,19 +111,19 @@ If your department has connected the **Cal.com** or **Documenso** integrations (
 
 **Meeting stage → Cal.com self-scheduling**
 
-1. Edit a **Meeting** stage and set **Scheduling** to *Cal.com*
+1. Edit a **Meeting** stage and set **Scheduling** to _Cal.com_
 2. Paste your Cal.com booking link (e.g., `https://cal.com/your-department/interview`)
 3. Applicants on this stage see a **Schedule** button on their public status page and pick their own time
 4. If a **Webhook Secret** is configured on the Cal.com integration, booking auto-advances the applicant to the next stage — otherwise the coordinator advances them manually after the interview
 
 **Document Upload stage → Documenso e-signature**
 
-1. Edit a **Document Upload** stage and set **Collection Method** to *Documenso e-signature*
+1. Edit a **Document Upload** stage and set **Collection Method** to _Documenso e-signature_
 2. Optionally enter a Documenso **Template ID** (stored for automated sending in a later release)
 3. Applicants on this stage see a "Documents sent for signature" note on their public status page
 4. If a **Webhook Secret** is configured on the Documenso integration, a completed signature auto-advances the applicant — otherwise the coordinator advances them manually once signed
 
-> **Note:** Auto-advance matches the signer/attendee **email** to the applicant, so the applicant must book or sign with the same email they applied with. Only the applicant's *current* stage is advanced, and only if that stage is configured to use the integration.
+> **Note:** Auto-advance matches the signer/attendee **email** to the applicant, so the applicant must book or sign with the same email they applied with. Only the applicant's _current_ stage is advanced, and only if that stage is configured to use the integration.
 
 ---
 
@@ -143,19 +143,20 @@ If your department has connected the **Cal.com** or **Documenso** integrations (
 ### Duplicate Detection
 
 The system automatically checks for existing members or applicants with the same email address:
+
 - If an **active member** exists with that email → warning with member details
 - If an **archived member** exists → suggestion to reactivate instead
 - If another **applicant** exists → warning with applicant details
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Create Applicant form showing name, email, phone fields, membership type toggle (Regular/Administrative), and pipeline selector dropdown._
+![Create applicant form with contact fields and membership type](./images/15-03-create-applicant.png)
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Duplicate email (active member) | 409 error; must use different email or reactivate existing |
-| Duplicate email (archived member) | Warning shown; option to reactivate |
-| Missing email | Required; cannot create without email |
+| Scenario                          | Behavior                                                   |
+| --------------------------------- | ---------------------------------------------------------- |
+| Duplicate email (active member)   | 409 error; must use different email or reactivate existing |
+| Duplicate email (archived member) | Warning shown; option to reactivate                        |
+| Missing email                     | Required; cannot create without email                      |
 
 ---
 
@@ -183,16 +184,17 @@ The system automatically checks for existing members or applicants with the same
 ### Completing a Step
 
 For stages with explicit completion criteria:
+
 1. Click **Complete Step** to mark the stage as done
 2. If auto-advance is enabled, the applicant moves to the next stage automatically
 
 ### Holding, Rejecting, or Withdrawing
 
-| Action | Effect |
-|--------|--------|
-| **Hold** | Applicant paused; remains in current stage but marked "On Hold" |
-| **Reject** | Applicant removed from pipeline; status set to "Rejected" |
-| **Withdraw** | Applicant archived; typically at applicant's request |
+| Action         | Effect                                                            |
+| -------------- | ----------------------------------------------------------------- |
+| **Hold**       | Applicant paused; remains in current stage but marked "On Hold"   |
+| **Reject**     | Applicant removed from pipeline; status set to "Rejected"         |
+| **Withdraw**   | Applicant archived; typically at applicant's request              |
 | **Reactivate** | Returns a held, withdrawn, or inactive applicant to active status |
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the applicant detail drawer showing the action buttons: Advance (green), Move Back (yellow), Hold (gray), Reject (red), and Withdraw (orange)._
@@ -207,6 +209,11 @@ The default view shows applicants as **cards on a kanban board** with one column
 - Cards show: applicant name, email, time in current stage, and status badge
 - Switch to **Table View** for a sortable, paginated list format
 - Filter by status: Active, On Hold, Withdrawn
+- **Search accepts a full name** _(2026-08-07)_. Typing "John Smith" used to
+  return nothing, because the query was matched against first name, last name and
+  email **individually** — so only "John" or "Smith" alone worked. Every
+  whitespace-separated word must now match some field, which also means "smith
+  john" finds the same person.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the kanban board showing 4-5 columns (pipeline stages) with applicant cards. Show one card being dragged between columns. Include the Active/On Hold/Withdrawn filter tabs at the top._
 
@@ -246,11 +253,11 @@ Coordinators can download any uploaded document. Files are stored securely with 
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| File exceeds 50 MB | Rejected with size limit error |
-| Duplicate file name | Stored with unique UUID; original name preserved in metadata |
-| Document uploaded at wrong stage | Can be linked to any stage or left unlinked |
+| Scenario                         | Behavior                                                     |
+| -------------------------------- | ------------------------------------------------------------ |
+| File exceeds 50 MB               | Rejected with size limit error                               |
+| Duplicate file name              | Stored with unique UUID; original name preserved in metadata |
+| Document uploaded at wrong stage | Can be linked to any stage or left unlinked                  |
 
 ---
 
@@ -274,9 +281,9 @@ Navigate to `/prospective-members/:applicantId/interview` to record an interview
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Edit interview | Only the original interviewer can edit |
+| Scenario            | Behavior                                                     |
+| ------------------- | ------------------------------------------------------------ |
+| Edit interview      | Only the original interviewer can edit                       |
 | Multiple interviews | Multiple records supported; each interviewer files their own |
 
 ---
@@ -293,13 +300,13 @@ When an applicant advances to an **Election Vote** stage, the system automatical
 
 ### Package Workflow
 
-| Status | Description |
-|--------|-------------|
-| **Draft** | Package created; coordinator reviewing |
-| **Ready** | Coordinator marked ready for ballot |
-| **Added to Ballot** | Secretary added to election |
-| **Elected** | Membership vote passed |
-| **Not Elected** | Membership vote failed |
+| Status              | Description                            |
+| ------------------- | -------------------------------------- |
+| **Draft**           | Package created; coordinator reviewing |
+| **Ready**           | Coordinator marked ready for ballot    |
+| **Added to Ballot** | Secretary added to election            |
+| **Elected**         | Membership vote passed                 |
+| **Not Elected**     | Membership vote failed                 |
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Election Package section in the applicant detail drawer, showing the package status badge, applicant snapshot fields, supporting statement text area, and "Mark Ready for Ballot" button._
 
@@ -334,11 +341,43 @@ When an applicant has completed all pipeline stages:
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Email already exists as a member | Conversion blocked; shows existing member details |
-| Auto-transfer enabled on pipeline | Conversion happens automatically at final stage |
+| Scenario                                  | Behavior                                              |
+| ----------------------------------------- | ----------------------------------------------------- |
+| Email already exists as a member          | Conversion blocked; shows existing member details     |
+| Auto-transfer enabled on pipeline         | Conversion happens automatically at final stage       |
 | Applicant converted without election vote | Allowed if pipeline doesn't include an election stage |
+
+### After Conversion, the File Stays Confidential _(2026-08-07)_
+
+A prospective-membership record is **not the applicant's copy of their
+application**. It carries interview notes, recommendations, reference checks,
+election-package commentary and coordinator notes written in confidence by other
+members — and it stays sensitive after the applicant is elected.
+
+That is precisely when it used to become readable. A newly elected member who is
+given `prospective_members.view` in their own right — a membership coordinator,
+an officer — could open **the file that decided their own membership vote**.
+
+A member can no longer see their own prospect record, at all:
+
+- The detail page and every action on it return **"not found"**.
+- The record is filtered out of the **prospect list** (and its total), the
+  **kanban board**, the **pipeline statistics**, the **election-package list**,
+  and **label generation**.
+
+> **Why "not found" rather than "you may not view this"?** A permission error
+> would confirm the record exists and that there is something in it about them —
+> which is itself the thing being protected.
+
+**How you are matched to your own record.** By the conversion link
+(`converted_to_member_id`); by an email address you own, department or personal;
+or by full name **paired with a matching date of birth**.
+
+> **Matching is deliberately conservative.** Name alone is not enough — two
+> J. Smiths in one department is routine, and a false positive would hide a **real
+> applicant** from the coordinator working their file. If a member reports that a
+> prospect has vanished from the board and you can account for who they are, check
+> whether the two records share a name _and_ a date of birth.
 
 ---
 
@@ -350,12 +389,12 @@ Pipelines can be configured to automatically flag or deactivate stale applicatio
 
 Navigate to **Settings > Pipeline** and configure:
 
-| Setting | Options | Description |
-|---------|---------|-------------|
-| **Timeout Preset** | 3 months, 6 months, 1 year, Never, Custom | How long before an applicant is considered inactive |
-| **Warning Threshold** | Percentage (default 80%) | Show warning when this percentage of timeout has elapsed |
-| **Notify Coordinator** | Yes/No | Send notification when applicant approaches timeout |
-| **Auto-Purge** | Yes/No | Automatically delete inactive applicants after a grace period |
+| Setting                | Options                                   | Description                                                   |
+| ---------------------- | ----------------------------------------- | ------------------------------------------------------------- |
+| **Timeout Preset**     | 3 months, 6 months, 1 year, Never, Custom | How long before an applicant is considered inactive           |
+| **Warning Threshold**  | Percentage (default 80%)                  | Show warning when this percentage of timeout has elapsed      |
+| **Notify Coordinator** | Yes/No                                    | Send notification when applicant approaches timeout           |
+| **Auto-Purge**         | Yes/No                                    | Automatically delete inactive applicants after a grace period |
 
 ### How It Works
 
@@ -368,7 +407,7 @@ Navigate to **Settings > Pipeline** and configure:
 
 Individual stages can override the pipeline timeout. For example, a background check stage might have a 180-day timeout (longer than the default 90 days) because background checks take time.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Inactivity Configuration panel showing the timeout preset dropdown, warning threshold slider, notify coordinator toggle, and auto-purge toggle with purge days input._
+![Prospective members settings showing the inactivity configuration panel](./images/15-10-pipeline-settings.png)
 
 ---
 
@@ -393,15 +432,15 @@ Select multiple applicants on the pipeline dashboard to perform bulk actions:
 
 The pipeline dashboard shows summary statistics:
 
-| Metric | Description |
-|--------|-------------|
-| **Total Active** | Currently active applicants |
-| **In Progress** | Applicants actively moving through stages |
-| **On Hold** | Paused applicants |
-| **Approaching Timeout** | Applicants nearing inactivity threshold |
-| **Conversion Rate** | Percentage of applicants who become members |
-| **Average Time to Convert** | Days from application to conversion |
-| **By Stage** | Count of applicants at each pipeline stage |
+| Metric                      | Description                                 |
+| --------------------------- | ------------------------------------------- |
+| **Total Active**            | Currently active applicants                 |
+| **In Progress**             | Applicants actively moving through stages   |
+| **On Hold**                 | Paused applicants                           |
+| **Approaching Timeout**     | Applicants nearing inactivity threshold     |
+| **Conversion Rate**         | Percentage of applicants who become members |
+| **Average Time to Convert** | Days from application to conversion         |
+| **By Stage**                | Count of applicants at each pipeline stage  |
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the pipeline statistics cards showing Total Active (12), In Progress (8), On Hold (2), Approaching Timeout (1), Conversion Rate (72%), and Average Days to Convert (45)._
 
@@ -441,12 +480,14 @@ See [Inventory > Cross-Module Barcode Label Printing](./05-inventory.md#cross-mo
 ### Part 1: Application Received
 
 Membership Coordinator **Lt. Morrison** creates the applicant:
+
 - Name: Alex Rivera
 - Email: alex.rivera@email.com
 - Desired Membership Type: Regular Member
 - Pipeline: Default Firefighter Pipeline
 
 The pipeline has 6 stages:
+
 1. Interest Form (auto-advance on form submission)
 2. Application Review (manual)
 3. Background Check (manual, 180-day timeout override)
@@ -465,6 +506,7 @@ The pipeline has 6 stages:
 ### Part 3: Interview
 
 **Stage 4 (Interview):** Alex is scheduled for an interview at the next meeting. Three officers conduct interviews and each files a record:
+
 - Capt. Davis: **Recommend**
 - Lt. Hernandez: **Recommend**
 - FF Brooks: **Recommend with reservations** (notes: "Limited availability on weekday shifts")
@@ -478,6 +520,7 @@ Lt. Morrison reviews the interviews and advances Alex to Stage 5.
 Secretary Sarah Kim marks the package as **Ready for Ballot** and adds it to the December business meeting election as an approval vote item.
 
 At the meeting, members vote:
+
 - 35 Approve, 3 Deny → Alex is **Elected** (92% approval)
 
 The package status updates to "Elected" and Lt. Morrison is notified.
@@ -485,6 +528,7 @@ The package status updates to "Elected" and Lt. Morrison is notified.
 ### Part 5: Conversion
 
 Lt. Morrison clicks **Convert to Member**:
+
 - Membership Type: Regular (starts as Probationary)
 - Membership ID: Auto-generated (OFD-2026-047)
 - Rank: Probationary Firefighter
@@ -497,16 +541,16 @@ Alex Rivera is now a full member of the Oakville Fire Department.
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| Applicant stuck at form submission stage | Check that the form is linked correctly. Verify the applicant received the form email. |
-| Election package not created | Ensure the stage type is `election_vote`. Check that the applicant was advanced (not just marked complete). |
-| Cannot convert applicant | Check for existing member with same email. Verify all required stages are complete. |
-| Duplicate detection false positive | If the existing member is archived/dropped, you can create the new applicant and note the relationship. |
-| Public status page shows wrong stage | Token may be for a different applicant. Verify the token in the applicant's detail view. |
-| Inactivity warning not triggering | Check pipeline inactivity settings. Verify the scheduled task is running. |
-| Documents not downloading | Check file storage configuration. Verify the document was uploaded successfully. |
-| Bulk advance fails for some applicants | Applicants at the final stage cannot advance further. Check individual error messages. |
+| Issue                                    | Solution                                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Applicant stuck at form submission stage | Check that the form is linked correctly. Verify the applicant received the form email.                      |
+| Election package not created             | Ensure the stage type is `election_vote`. Check that the applicant was advanced (not just marked complete). |
+| Cannot convert applicant                 | Check for existing member with same email. Verify all required stages are complete.                         |
+| Duplicate detection false positive       | If the existing member is archived/dropped, you can create the new applicant and note the relationship.     |
+| Public status page shows wrong stage     | Token may be for a different applicant. Verify the token in the applicant's detail view.                    |
+| Inactivity warning not triggering        | Check pipeline inactivity settings. Verify the scheduled task is running.                                   |
+| Documents not downloading                | Check file storage configuration. Verify the document was uploaded successfully.                            |
+| Bulk advance fails for some applicants   | Applicants at the final stage cannot advance further. Check individual error messages.                      |
 
 ---
 

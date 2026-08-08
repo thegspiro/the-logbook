@@ -10,9 +10,8 @@ used when creating TrainingRecords instead of dividing duration_minutes
 (which may be zero when only credit hours are provided).
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic
 revision = "20260411_0100"

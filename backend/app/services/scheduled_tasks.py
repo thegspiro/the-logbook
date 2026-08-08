@@ -138,6 +138,12 @@ SCHEDULE = {
         "recommended_time": "04:00",
         "cron": "0 4 * * *",
     },
+    "officer_directory_sync": {
+        "description": "Refresh each organization's cached office directory so email signature variables ({{president_name}}, {{chief_title}}, ...) follow member record changes",
+        "frequency": "daily",
+        "recommended_time": "03:30",
+        "cron": "30 3 * * *",
+    },
     "membership_tier_advance": {
         "description": "Auto-advance members to higher membership tiers based on years of service",
         "frequency": "monthly",
@@ -4441,6 +4447,34 @@ async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "mark_overdue_maintenance", "marked_overdue": total}
 
 
+async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Refresh each organization's cached office directory.
+
+    Template rendering is synchronous, so the {{president_name}} style
+    signature variables are read from a flat snapshot on the organization row
+    rather than resolved per send. That snapshot is rebuilt whenever an office
+    is saved or the Officers screen is opened — but not when the *member*
+    behind an office changes their name or email, or leaves the department.
+    This nightly pass closes that gap so a department's signatures cannot
+    drift stale between admin visits.
+    """
+    from app.services.officer_service import OfficerService
+
+    org_result = await db.execute(select(Organization.id).where(Organization.active))
+    org_ids = [str(row) for row in org_result.scalars().all()]
+
+    service = OfficerService(db)
+    synced = 0
+    for org_id in org_ids:
+        try:
+            await service.sync_directory(org_id)
+            synced += 1
+        except Exception as e:
+            logger.warning("Officer directory sync failed for org {}: {}", org_id, e)
+    await db.commit()
+    return {"task": "officer_directory_sync", "organizations": synced}
+
+
 async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
     """Auto-close admin-hours sessions that exceeded their category limit.
 
@@ -4605,6 +4639,7 @@ TASK_RUNNERS = {
     "expire_ip_exceptions": run_expire_ip_exceptions,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
     "shift_pattern_generation": run_shift_pattern_generation,
+    "officer_directory_sync": run_officer_directory_sync,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -4651,6 +4686,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "membership_inactivity_warnings": 86400,
     "recert_resets": 86400,
     "shift_pattern_generation": 86400,
+    "officer_directory_sync": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,

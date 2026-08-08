@@ -440,7 +440,7 @@ const EventsSettingsTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center" role="status" aria-live="polite">
+      <div className="min-h-[50dvh] flex items-center justify-center" role="status" aria-live="polite">
         <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
       </div>
     );

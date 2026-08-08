@@ -8,6 +8,7 @@ import type {
   DepartmentMessageRecord, InboxMessage, MessageStats, AcknowledgmentReport, RoleOption,
   EmailTemplate, EmailAttachment, EmailTemplateUpdate, EmailTemplatePreview,
 } from './adminServices';
+import { asArray } from '../utils/asArray';
 
 export const notificationsService = {
   async getRules(params?: { category?: string; enabled?: boolean; search?: string }): Promise<{ rules: NotificationRuleRecord[]; total: number }> {
@@ -160,7 +161,7 @@ export interface ExpiringCertification {
 export const emailTemplatesService = {
   async getTemplates(): Promise<EmailTemplate[]> {
     const response = await api.get<EmailTemplate[]>('/email-templates');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getTemplate(templateId: string): Promise<EmailTemplate> {
@@ -198,6 +199,71 @@ export const emailTemplatesService = {
 
   async deleteAttachment(templateId: string, attachmentId: string): Promise<void> {
     await api.delete(`/email-templates/${templateId}/attachments/${attachmentId}`);
+  },
+};
+
+// ============================================
+// Department Offices (email signature holders)
+// ============================================
+
+export interface OfficerCandidate {
+  id: string;
+  name: string;
+}
+
+export interface OfficerVariable {
+  name: string;
+  description: string;
+}
+
+export interface DepartmentOfficer {
+  office_key: string;
+  label: string;
+  category: string;
+  default_title: string;
+  position_slugs: string[];
+  user_id?: string | null;
+  name: string;
+  title: string;
+  email: string;
+  phone: string;
+  /** 'assigned' = pinned by an admin, 'auto' = inferred from the member's position, 'unset' = vacant */
+  source: 'assigned' | 'auto' | 'unset';
+  /** Raw admin overrides, distinct from the resolved values above. */
+  override_name?: string | null;
+  override_title?: string | null;
+  override_email?: string | null;
+  override_phone?: string | null;
+  auto_candidates: OfficerCandidate[];
+}
+
+export interface OfficerDirectory {
+  offices: DepartmentOfficer[];
+  variables: OfficerVariable[];
+}
+
+export interface OfficerUpdate {
+  user_id?: string | undefined;
+  display_name?: string | undefined;
+  title?: string | undefined;
+  email?: string | undefined;
+  phone?: string | undefined;
+}
+
+export const officersService = {
+  async getOfficers(): Promise<OfficerDirectory> {
+    const response = await api.get<OfficerDirectory>('/officers');
+    return response.data;
+  },
+
+  async setOfficer(officeKey: string, data: OfficerUpdate): Promise<OfficerDirectory> {
+    const response = await api.put<OfficerDirectory>(`/officers/${officeKey}`, data);
+    return response.data;
+  },
+
+  async clearOfficer(officeKey: string): Promise<OfficerDirectory> {
+    const response = await api.delete<OfficerDirectory>(`/officers/${officeKey}`);
+    return response.data;
   },
 };
 
@@ -247,7 +313,7 @@ export const scheduledEmailsService = {
   async list(statusFilter?: string): Promise<ScheduledEmail[]> {
     const params = statusFilter ? { status_filter: statusFilter } : {};
     const response = await api.get<ScheduledEmail[]>('/email-templates/scheduled', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async update(id: string, data: ScheduledEmailUpdate): Promise<ScheduledEmail> {
@@ -394,7 +460,7 @@ export const messagesService = {
   },
   async getAvailableRoles(): Promise<RoleOption[]> {
     const response = await api.get<RoleOption[]>('/messages/roles');
-    return response.data;
+    return asArray(response.data);
   },
   async getMessageStats(messageId: string): Promise<MessageStats> {
     const response = await api.get<MessageStats>(`/messages/${messageId}/stats`);
@@ -408,7 +474,7 @@ export const messagesService = {
   // Member inbox
   async getInbox(params?: { include_read?: boolean; skip?: number; limit?: number }): Promise<InboxMessage[]> {
     const response = await api.get<InboxMessage[]>('/messages/inbox', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getUnreadCount(): Promise<{ unread_count: number }> {
     const response = await api.get<{ unread_count: number }>('/messages/inbox/unread-count');

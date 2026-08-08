@@ -173,7 +173,7 @@ const AuthenticationChoice: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
@@ -244,7 +244,7 @@ const AuthenticationChoice: React.FC = () => {
                 className={`relative bg-theme-surface backdrop-blur-xs rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
                   authPlatform === platform.id
                     ? 'border-theme-accent-red shadow-lg'
-                    : 'border-theme-surface-border hover:border-white/40'
+                    : 'border-theme-surface-border hover:border-theme-text-muted/40'
                 }`}
                 aria-pressed={authPlatform === platform.id}
               >

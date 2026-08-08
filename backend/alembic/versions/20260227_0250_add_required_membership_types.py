@@ -9,7 +9,6 @@ administrative, probationary) a training requirement applies to.
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 # revision identifiers

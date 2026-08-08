@@ -45,7 +45,8 @@ import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from "lucid
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../stores/authStore";
-import { organizationService } from "../../services/api";
+import { useEnabledModules } from "../../hooks/useEnabledModules";
+import { OPEN_MOBILE_NAV_EVENT } from "./BottomNavigation";
 import { prefetchRoute } from "../../utils/routePrefetch";
 import { useNotificationCountStore } from "../../hooks/useNotificationCount";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
@@ -92,35 +93,27 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(["Settings"]);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
-  const [enabledModules, setEnabledModules] = useState<Set<string> | null>(null);
+  const { isModuleOn } = useEnabledModules();
 
-  // Essential modules that are always present in the response — if the
-  // response contains ONLY these, the org likely has no module config yet
-  // and we should show everything rather than hiding all optional modules.
-  const ESSENTIAL_ONLY = new Set(["members", "events", "documents", "roles", "settings"]);
-
-  // Load enabled modules for this organization to control nav visibility
+  // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
-    organizationService
-      .getEnabledModules()
-      .then((res) => {
-        const modules = new Set(res.enabled_modules);
-        // Safeguard: if response has no configurable modules enabled
-        // (only essential ones), treat as unconfigured and show all.
-        const hasConfigurable = res.enabled_modules.some(
-          (m) => !ESSENTIAL_ONLY.has(m),
-        );
-        setEnabledModules(hasConfigurable ? modules : null);
-      })
-      .catch(() => {
-        /* default to null = show all */
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const open = () => setMobileMenuOpen(true);
+    window.addEventListener(OPEN_MOBILE_NAV_EVENT, open);
+    return () => window.removeEventListener(OPEN_MOBILE_NAV_EVENT, open);
   }, []);
 
-  /** Show a module's nav items? null (loading/error) → show all; otherwise check the set */
-  const isModuleOn = (key: string) =>
-    enabledModules === null || enabledModules.has(key);
+  // Lock body scroll while the mobile drawer is open. `overscroll-contain` on
+  // the drawer only stops scroll *chaining* once the drawer itself scrolls; it
+  // does nothing for touches that begin on the backdrop, which would otherwise
+  // scroll the page behind the menu. Mirrors the lock in Modal.tsx.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [mobileMenuOpen]);
 
   // Auto-expand parent menu when navigating to a child route
   useEffect(() => {
@@ -578,17 +571,17 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     <>
       {/* Mobile Header */}
       <header
-        className="md:hidden bg-theme-nav-bg border-b border-theme-surface-border fixed top-0 left-0 right-0 z-50"
+        className="md:hidden bg-theme-nav-bg border-b border-theme-surface-border fixed top-0 left-0 right-0 z-50 safe-top"
         role="banner"
       >
         <div className="flex items-center justify-between h-16 px-4">
           <Link
             to="/dashboard"
-            className="flex items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+            className="flex min-h-[44px] items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
           >
             <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
               <img
-                src={logoPreview || '/logo.png'}
+                src={logoPreview || '/logo-128.png'}
                 alt={`${departmentName} logo`}
                 className="max-w-full max-h-full object-contain"
               />
@@ -601,7 +594,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           </Link>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+            className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring mobile-touch-target"
             aria-expanded={mobileMenuOpen}
             aria-controls="side-navigation"
             aria-label={
@@ -620,7 +613,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed top-16 left-0 right-0 bottom-0 bg-black/50 z-40"
+          className="md:hidden fixed mobile-header-inset left-0 right-0 bottom-0 bg-black/50 z-40"
           onClick={() => setMobileMenuOpen(false)}
           aria-hidden="true"
         />
@@ -632,7 +625,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         id="side-navigation"
         role="navigation"
         aria-label="Main navigation"
-        className={`fixed top-0 left-0 h-full bg-theme-nav-bg border-r border-theme-surface-border transition-all duration-300 z-40 overscroll-contain ${
+        className={`fixed top-0 left-0 h-full safe-top bg-theme-nav-bg border-r border-theme-surface-border transition-all duration-300 z-40 overscroll-contain ${
           collapsed ? "w-20" : "w-64"
         } ${
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
@@ -646,11 +639,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 <div className="flex items-center justify-center">
                   <Link
                     to="/dashboard"
-                    className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                    className="flex min-h-[44px] items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                   >
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                       <img
-                        src={logoPreview || '/logo.png'}
+                        src={logoPreview || '/logo-128.png'}
                         alt={`${departmentName} logo`}
                         className="max-w-full max-h-full object-contain"
                       />
@@ -672,11 +665,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               <div className="flex items-center justify-between">
                 <Link
                   to="/dashboard"
-                  className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                  className="flex min-h-[44px] items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                 >
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                     <img
-                      src={logoPreview || '/logo.png'}
+                      src={logoPreview || '/logo-128.png'}
                       alt={`${departmentName} logo`}
                       className="max-w-full max-h-full object-contain"
                     />
@@ -841,7 +834,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                                 onMouseEnter={() => prefetchRoute(subItem.path)}
                                 onFocus={() => prefetchRoute(subItem.path)}
                                 aria-current={subActive ? "page" : undefined}
-                                className={`w-full flex items-center px-4 py-2 rounded-lg transition-all duration-150 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                                className={`w-full flex items-center px-4 py-2 max-md:min-h-[44px] rounded-lg transition-all duration-150 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                                   subActive
                                     ? "bg-red-600 text-white shadow-sm"
                                     : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]"
@@ -895,7 +888,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             {isOnline && pendingSyncCount > 0 && (
               <button
                 onClick={() => { void triggerOfflineDrain(); }}
-                className={`w-full flex items-center rounded-lg bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-500/25 transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                className={`w-full flex items-center rounded-lg bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-500/25 transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring max-md:min-h-[44px] ${
                   collapsed ? "justify-center p-2" : "px-3 py-2"
                 }`}
                 title={collapsed ? `${pendingSyncCount} pending sync — click to retry` : undefined}

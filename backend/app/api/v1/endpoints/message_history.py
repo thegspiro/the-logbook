@@ -28,6 +28,7 @@ from app.schemas.email_template import (
     SendTestEmailRequest,
 )
 from app.services.email_service import EmailService
+from app.services.officer_service import OfficerService
 
 router = APIRouter()
 
@@ -157,6 +158,9 @@ async def send_test_email(
         context = {**SAMPLE_CONTEXT.get(ttype_key, {})}
         if organization:
             context["organization_name"] = organization.name or ""
+        await OfficerService(db).overlay_preview_context(
+            current_user.organization_id, context
+        )
         subject, html_body, text_body = svc.render(
             template, context, organization=organization
         )

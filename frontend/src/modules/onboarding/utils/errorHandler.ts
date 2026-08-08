@@ -248,12 +248,38 @@ function containsTechnicalJargon(message: string): boolean {
 }
 
 /**
+ * One entry of a 422 validation `detail` array.
+ *
+ * The API's `RequestValidationError` handler (see `main.py`) rewrites
+ * Pydantic's `{loc, msg, type}` into `{field, message}` before responding, so
+ * reading only `loc`/`msg` discards the field name and the reason and leaves
+ * every validation failure showing as "Field: Invalid value". `loc`/`msg` is
+ * still accepted for 422s raised outside that handler.
+ */
+export interface ValidationErrorEntry {
+  loc?: Array<string | number>;
+  msg?: string;
+  field?: string;
+  message?: string;
+}
+
+/**
+ * The backend labels an error it cannot attribute to a field as `"request"`,
+ * which reads as a field name of its own if echoed back to the user.
+ */
+function validationErrorField(error: ValidationErrorEntry): string {
+  const locField = error.loc?.length ? String(error.loc[error.loc.length - 1]) : undefined;
+  const field = error.field || locField;
+  return !field || field === 'request' ? 'field' : field;
+}
+
+/**
  * Format validation errors from FastAPI/Pydantic
  *
  * @param validationErrors - Array of validation error objects
  * @returns User-friendly error message
  */
-export function formatValidationErrors(validationErrors: Array<{ loc?: string[]; msg?: string }>): string {
+export function formatValidationErrors(validationErrors: ValidationErrorEntry[]): string {
   if (!validationErrors || validationErrors.length === 0) {
     return 'Validation failed. Please check your input.';
   }
@@ -263,17 +289,16 @@ export function formatValidationErrors(validationErrors: Array<{ loc?: string[];
     if (!error) {
       return 'Validation failed. Please check your input.';
     }
-    const field = error.loc?.[error.loc.length - 1] ?? 'field';
-    return `${capitalizeFirst(field)}: ${error.msg || 'Invalid value'}`;
+    return `${capitalizeFirst(validationErrorField(error))}: ${error.message || error.msg || 'Invalid value'}`;
   }
 
   // Multiple errors
   const errorMessages = validationErrors
-    .filter((error): error is { loc?: string[]; msg?: string } => error != null)
-    .map(error => {
-      const field = error.loc?.[error.loc.length - 1] ?? 'field';
-      return `• ${capitalizeFirst(field)}: ${error.msg || 'Invalid value'}`;
-    });
+    .filter((error): error is ValidationErrorEntry => error != null)
+    .map(
+      error =>
+        `• ${capitalizeFirst(validationErrorField(error))}: ${error.message || error.msg || 'Invalid value'}`
+    );
 
   return `Please fix the following errors:\n${errorMessages.join('\n')}`;
 }

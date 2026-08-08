@@ -46,14 +46,38 @@ jobs:
       # let 85 violations accumulate unseen: lint-staged only lints *staged*
       # files, so a test file's problems surfaced to whoever next happened to
       # touch it rather than to the person who introduced them.
+      # The three checks below are independent, so each runs even when an
+      # earlier one fails. Under the default fail-fast, a single flake8
+      # violation skipped black and isort entirely — for the two days that
+      # PT018 sat on main, every PR reported "Backend Lint failed" having
+      # never checked formatting or import order at all. One run should
+      # surface every lint problem, not just the first.
+      # alembic/ is in scope for the same reason tests/ is. It was outside every
+      # CI check while lint-staged still ran black and isort over it as part of
+      # backend/**/*.py, so a migration could pass `npm run lint` and then be
+      # rejected by the pre-commit hook — the two gates disagreed about which
+      # files exist. (alembic/versions stays excluded from flake8 by .flake8;
+      # generated migration bodies are not hand-written code.)
       - name: Run flake8
-        run: flake8 app/ tests/
+        run: flake8 app/ tests/ alembic/
 
       - name: Check formatting with black
-        run: black --check app/ tests/
+        if: '!cancelled()'
+        run: black --check app/ tests/ alembic/
 
       - name: Check import order with isort
-        run: isort --check-only app/ tests/
+        if: '!cancelled()'
+        run: isort --check-only app/ tests/ alembic/
+
+      # Repo-root Python (generate_registry.py, scripts/) is outside the
+      # backend working-directory and was linted by nothing, which let five
+      # unused imports and an empty f-string accumulate. flake8 only — these
+      # files predate black/isort adoption and reformatting them is a
+      # separate change.
+      - name: Run flake8 (repo-root scripts)
+        if: '!cancelled()'
+        working-directory: .
+        run: flake8 --config backend/.flake8 generate_registry.py scripts/
 
   backend-security:
     name: Backend Security Scan
@@ -649,8 +673,14 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # playwright.config.ts starts `npm run dev` itself via webServer.
+      #
+      # @screenshots is excluded: that spec is a capture utility, not a test.
+      # It asserts nothing, and exists to regenerate the manifest screenshots
+      # committed under public/screenshots (`npm run generate:screenshots`).
+      # In CI it just writes PNGs into the runner's workspace for nothing to
+      # read, so skipping it saves the run without losing any coverage.
       - name: Run E2E tests
-        run: npx playwright test --project=chromium
+        run: npx playwright test --project=chromium --grep-invert @screenshots
 
       - name: Upload Playwright report
         if: failure()

@@ -282,6 +282,9 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
             Members ({targetMembers.length} selected)
           </legend>
           <input
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             className={`${inputClass} mb-2`}
             placeholder="Search members…"
             value={memberSearch}

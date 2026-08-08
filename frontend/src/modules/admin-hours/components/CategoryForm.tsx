@@ -45,7 +45,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ formData, onChange, onSubmi
                   key={c}
                   type="button"
                   onClick={() => onChange({ ...formData, color: c })}
-                  className={`w-8 h-8 rounded-full border-2 transition ${formData.color === c ? 'border-white scale-110 ring-2 ring-blue-500' : 'border-transparent'}`}
+                  className={`w-8 h-8 rounded-full border-2 transition ${formData.color === c ? 'border-theme-surface scale-110 ring-2 ring-blue-500' : 'border-transparent'}`}
                   style={{ backgroundColor: c }}
                 />
               ))}

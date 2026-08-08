@@ -63,7 +63,7 @@ from app.models.user import (
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels
-from app.utils.org_scoping import is_in_org
+from app.utils.org_scoping import assert_in_org, is_in_org
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -4173,6 +4173,18 @@ class InventoryService:
     ) -> Tuple[Optional[ItemVariantGroup], Optional[str]]:
         """Create a variant group for grouping pool item variants."""
         try:
+            # XC-1: category_id is client-supplied. The group itself is
+            # org-stamped, so a foreign id cannot be read back directly — but it
+            # persists a reference to another org's category, which then follows
+            # the group's items into the detail response.
+            await assert_in_org(
+                self.db,
+                InventoryCategory,
+                data.get("category_id"),
+                organization_id,
+                allow_none=True,
+                label="category",
+            )
             group = ItemVariantGroup(
                 organization_id=str(organization_id),
                 name=data["name"],
@@ -4229,6 +4241,19 @@ class InventoryService:
             group = await self.get_variant_group_by_id(group_id, organization_id)
             if not group:
                 return None, "Variant group not found"
+            # XC-1: the loop below is a blind setattr over client keys, so
+            # category_id must be validated before it lands. The schema bounds
+            # which keys can arrive (organization_id is not among them), but it
+            # does not bound which *org* the category belongs to.
+            if "category_id" in data:
+                await assert_in_org(
+                    self.db,
+                    InventoryCategory,
+                    data.get("category_id"),
+                    organization_id,
+                    allow_none=True,
+                    label="category",
+                )
             for key, value in data.items():
                 setattr(group, key, value)
             await self.db.flush()

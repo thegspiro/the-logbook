@@ -51,7 +51,7 @@ const SortableEmailSection: React.FC<SortableEmailSectionProps> = ({ id, childre
     <div ref={setNodeRef} style={style} className="group/section relative">
       <button
         type="button"
-        className="text-theme-text-muted absolute top-4 -left-1 shrink-0 cursor-grab opacity-0 transition-opacity group-hover/section:opacity-100 active:cursor-grabbing touch-none"
+        className="text-theme-text-muted absolute top-4 -left-1 shrink-0 cursor-grab transition-opacity sm:opacity-0 sm:group-hover/section:opacity-100 active:cursor-grabbing touch-none"
         aria-label="Drag to reorder section"
         {...attributes}
         {...listeners}

@@ -118,7 +118,7 @@ const ActionItemsPage: React.FC = () => {
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="bg-theme-input-bg border border-theme-input-border rounded-md px-3 py-1.5 text-sm text-theme-text-primary"
+            className="bg-theme-input-bg border border-theme-input-border rounded-md px-3 py-1.5 max-md:min-h-[44px] text-sm text-theme-text-primary"
           >
             <option value="">All Statuses</option>
             <option value="open">Open</option>
@@ -127,7 +127,7 @@ const ActionItemsPage: React.FC = () => {
             <option value="completed">Completed</option>
           </select>
         </div>
-        <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+        <label className="flex items-center gap-2 max-md:min-h-[44px] text-sm text-theme-text-secondary cursor-pointer">
           <input
             type="checkbox"
             checked={assignedToMe}

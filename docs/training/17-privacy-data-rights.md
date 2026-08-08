@@ -40,8 +40,7 @@ Go to **Settings → Security → Privacy Choices**.
 | **Public roster listing** | Your name and rank may appear on the department's public website roster |
 | **Text message notifications** | The department may send you notifications by SMS at your mobile number |
 
-> **Screenshot placeholder:**
-> _[Screenshot of Settings → Security showing the Privacy Choices section with three checkboxes, one showing the "(not answered)" label]_
+![Account security settings showing the privacy choices section](./images/17-01-privacy-choices.png)
 
 Three things worth knowing:
 

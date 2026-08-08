@@ -90,7 +90,7 @@ const ModuleConfigTemplate: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to p-4 py-8 relative">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to p-4 safe-pt-8 pb-8 relative">
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-4xl w-full mx-auto">
         {/* Header */}

@@ -41,16 +41,15 @@ Navigate to **Inventory** in the sidebar. The inventory landing page shows all i
 
 Key pages in the inventory module:
 
-| Page | URL | Description |
-|------|-----|-------------|
-| **Items List** | `/inventory` | Browse all equipment and supplies with search, filters, and sorting |
-| **My Equipment** | `/inventory/my-equipment` | View your personally assigned items and active checkouts |
-| **Item Detail** | `/inventory/items/:id` | Full item record with barcode, history, maintenance, and NFPA compliance |
-| **Storage Areas** | `/inventory/storage-areas` | Hierarchical storage location management (Facility → Room → Area) |
-| **Admin Dashboard** | `/inventory/admin` | Summary statistics, low-stock alerts, and navigation to admin sub-pages |
+| Page                | URL                        | Description                                                              |
+| ------------------- | -------------------------- | ------------------------------------------------------------------------ |
+| **Items List**      | `/inventory`               | Browse all equipment and supplies with search, filters, and sorting      |
+| **My Equipment**    | `/inventory/my-equipment`  | View your personally assigned items and active checkouts                 |
+| **Item Detail**     | `/inventory/items/:id`     | Full item record with barcode, history, maintenance, and NFPA compliance |
+| **Storage Areas**   | `/inventory/storage-areas` | Hierarchical storage location management (Facility → Room → Area)        |
+| **Admin Dashboard** | `/inventory/admin`         | Summary statistics, low-stock alerts, and navigation to admin sub-pages  |
 
-> **Screenshot needed:**
-> _[Screenshot of the Inventory Items List page showing the search bar, category filter dropdown, status filter pills, location filter cascading selectors (Facility → Room → Storage Area), and a grid of inventory item cards with name, category badge, condition indicator, and status badge]_
+![Inventory Items list with search, category filter, and status pills](./images/05-01-inventory-items.png)
 
 ---
 
@@ -62,6 +61,7 @@ The **Items** tab lists all inventory items. You can:
 - **Filter** by category, status (available, assigned, checked out, in maintenance, lost, stolen, retired)
 
 Click on any item to open its edit form, where you can view and modify:
+
 - Full description
 - Serial number and asset tag
 - Current condition and status
@@ -92,8 +92,7 @@ The **Categories** tab organizes items into groups. Common categories include:
 3. Enter the category name and description.
 4. Save.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Categories tab showing a list of categories with item counts, and the Add Category form/modal]_
+![Inventory categories page listing categories with item counts](./images/05-03-inventory-categories.png)
 
 ---
 
@@ -101,18 +100,20 @@ The **Categories** tab organizes items into groups. Common categories include:
 
 The inventory system supports two tracking modes:
 
-| Tracking Type | Description | Use Case |
-|---------------|-------------|----------|
-| **Individual** | One-to-one tracking with serial numbers. Each item is a unique, trackable unit. | Radios, PPE, tools, uniforms |
-| **Pool** | Quantity-based tracking. Items are issued and returned by quantity rather than individually. | Batteries, gloves, cleaning supplies, disposable items |
+| Tracking Type  | Description                                                                                  | Use Case                                               |
+| -------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Individual** | One-to-one tracking with serial numbers. Each item is a unique, trackable unit.              | Radios, PPE, tools, uniforms                           |
+| **Pool**       | Quantity-based tracking. Items are issued and returned by quantity rather than individually. | Batteries, gloves, cleaning supplies, disposable items |
 
 ### Individual Items
+
 - Tracked by serial number, barcode, or asset tag
 - Assigned to one member at a time
 - Full assignment and checkout history
 - Condition tracked per unit
 
 ### Pool Items
+
 - Tracked by total quantity on hand and quantity currently issued
 - Members receive issuances (e.g., "3 pairs of gloves")
 - Returns increase the on-hand count
@@ -145,8 +146,7 @@ Variant groups link related items that differ only in size or style — for exam
 - The variant group view shows aggregate stock across all sizes/styles
 - When issuing from a variant group, the system prompts for size selection based on the member's size preferences (if recorded)
 
-> **Screenshot needed:**
-> _[Screenshot of the Variant Group creation form showing the base product name field, a table of variants with Size dropdown (XS–5XL), Style dropdown (Regular/Long/Short/Tall), and per-variant stock quantity fields. Show the "Add Variant" button at the bottom]_
+![Variant group creation form with the size and colour matrix](./images/05-04-variant-group-form.png)
 
 > **Edge case:** If a variant group has zero total stock across all sizes, it still appears in the inventory list but is marked as "Out of Stock." Individual variants with zero stock are dimmed but not hidden, so administrators can see which sizes need reordering.
 
@@ -243,11 +243,13 @@ When creating a new uniform or PPE item that comes in multiple sizes and styles,
 ### Example
 
 For a turnout coat with:
+
 - 4 sizes: S, M, L, XL
 - 2 styles: Regular, Long
 - 2 colors: Black, Tan
 
 The system creates `4 × 2 × 2 = 16` pool items:
+
 - Turnout Coat - S / Regular / Black
 - Turnout Coat - S / Regular / Tan
 - Turnout Coat - S / Long / Black
@@ -260,11 +262,11 @@ All 16 items are linked under a single variant group and share the base descript
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Empty styles list | Defaults to `['regular']` — at least one variant per size/color |
-| Empty colors list | Defaults to `['default']` — at least one variant per size/style |
-| Duplicate variant group name | System prevents creation; choose a unique base item name |
+| Scenario                         | Behavior                                                         |
+| -------------------------------- | ---------------------------------------------------------------- |
+| Empty styles list                | Defaults to `['regular']` — at least one variant per size/color  |
+| Empty colors list                | Defaults to `['default']` — at least one variant per size/style  |
+| Duplicate variant group name     | System prevents creation; choose a unique base item name         |
 | Changing variants after creation | Edit individual items normally; the variant group remains intact |
 
 ---
@@ -280,14 +282,13 @@ An **issuance allowance** caps how many units of a category a member may receive
 1. Navigate to **Inventory Admin** and open **Issuance Allowances** (or go directly to `/inventory/admin/allowances`).
 2. Click **New Allowance**.
 3. Fill in the form:
-   - **Category** *(required)* — the inventory category the cap applies to. (This field is locked when editing.)
-   - **Applies To** *(optional)* — a specific role/position, or leave as **All members** to apply org-wide.
-   - **Max Quantity** *(required)* — a non-negative whole number of units allowed per period.
+   - **Category** _(required)_ — the inventory category the cap applies to. (This field is locked when editing.)
+   - **Applies To** _(optional)_ — a specific role/position, or leave as **All members** to apply org-wide.
+   - **Max Quantity** _(required)_ — a non-negative whole number of units allowed per period.
    - **Period Type** — **Annual** (resets each calendar year), **Career** (lifetime total), or **One-time**.
 4. Click **Create**. Use the pencil and trash icons on each row to edit or delete an allowance.
 
-> **Screenshot needed:**
-> _[Screenshot of the Issuance Allowances admin page showing a list of allowance rows — each with category name, role scope ("All members" or a role), max quantity, and a period-type badge (Annual/Career/One-time) — plus a "New Allowance" button in the toolbar. One row shows an inactive badge.]_
+![Issuance allowances with per-category limits and periods](./images/05-11-allowances.png)
 
 > **Screenshot needed:**
 > _[Screenshot of the New Allowance modal showing the Category dropdown, the "Applies To" role dropdown defaulting to "All members", the Max Quantity number input, the Period Type selector (Annual/Career/One-time), and Create/Cancel buttons]_
@@ -306,12 +307,12 @@ When a quartermaster issues a **pool** item to a member, the system checks the m
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Category has no allowance | Unlimited — issuance is never blocked |
-| Member holds several positions | The highest-priority position selects the applicable allowance |
-| Allowance set to 0 | The member cannot receive that category without an override |
-| Admin override | `Override allowance` bypasses the cap; the issuance still records normally |
+| Scenario                       | Behavior                                                                   |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| Category has no allowance      | Unlimited — issuance is never blocked                                      |
+| Member holds several positions | The highest-priority position selects the applicable allowance             |
+| Allowance set to 0             | The member cannot receive that category without an override                |
+| Admin override                 | `Override allowance` bypasses the cap; the issuance still records normally |
 
 ---
 
@@ -357,17 +358,16 @@ When available stock drops to or below the reorder point, the item appears on th
 
 ### Reorder Request Workflow
 
-| Status | Description |
-|--------|-------------|
-| **Pending** | Request submitted, awaiting approval |
-| **Approved** | Approved by a supervisor |
-| **Ordered** | Purchase order placed with vendor (vendor name, PO number, expected delivery tracked) |
-| **Received** | Items received and stock quantities reconciled |
+| Status       | Description                                                                           |
+| ------------ | ------------------------------------------------------------------------------------- |
+| **Pending**  | Request submitted, awaiting approval                                                  |
+| **Approved** | Approved by a supervisor                                                              |
+| **Ordered**  | Purchase order placed with vendor (vendor name, PO number, expected delivery tracked) |
+| **Received** | Items received and stock quantities reconciled                                        |
 
 Each status transition is audit-logged with the user, timestamp, and any notes.
 
-> **Screenshot needed:**
-> _[Screenshot of the Reorder Requests page showing a table of reorder requests with columns for item name, requested quantity, status badge (Pending in yellow, Approved in blue, Ordered in purple, Received in green), requested by, and date. Show the Create Reorder Request button in the toolbar]_
+![Reorder requests table with requested quantities and status](./images/05-14-reorder-requests.png)
 
 > **Edge case:** If an item's stock is replenished through a regular return or issuance reversal (not through the reorder workflow), the reorder request remains open. Admins should manually close or cancel outdated requests.
 
@@ -376,6 +376,7 @@ Each status transition is audit-logged with the user, timestamp, and any notes.
 When `TWILIO_ENABLED=True` in the environment configuration, low-stock alerts are sent via SMS to configured recipients in addition to email notifications.
 
 SMS alerts include:
+
 - Item name
 - Current stock level
 - Reorder point threshold
@@ -392,18 +393,19 @@ Configure SMS recipients in **Settings > Notifications > Inventory Alerts**.
 Each inventory item has a dedicated detail page at `/inventory/items/:id` with a two-column layout:
 
 ### Left Sidebar
+
 - **Barcode**: Visual barcode (Code128) with print button
 - **Quick Info**: Status, condition, category, tracking type, location
 - **Assignment/Issuance History**: Who has/had this item and when
 
 ### Main Content (Tabbed)
+
 - **Overview**: Full item details, photos, purchase info, warranty
 - **History**: Chronological log of all status changes, assignments, checkouts, and returns
 - **Maintenance**: Maintenance records and upcoming scheduled maintenance
 - **NFPA Compliance**: (If NFPA tracking enabled) Lifecycle dates, ensemble info, exposures, inspections
 
-> **Screenshot needed:**
-> _[Screenshot of the Item Detail page showing the two-column layout. Left sidebar shows a Code128 barcode, quick info card (status: Available, condition: Good, category: PPE), and assignment history timeline. Right side shows tabbed content with the Overview tab active displaying item name, description, serial number, purchase date, warranty info, and storage location]_
+![Inventory item detail with its barcode, quick info, and history panels](./images/05-06-item-detail.png)
 
 ---
 
@@ -424,6 +426,7 @@ Items can be permanently assigned to members. Assigned items appear on the membe
 ### Viewing Your Assignments
 
 Your assigned items appear in two places:
+
 - **Your Member Profile** - Under the "Assigned Inventory" section
 - **Inventory > Items** - Items assigned to you are marked with your name
 
@@ -456,8 +459,7 @@ For items that are temporarily loaned (not permanently assigned), use the checko
    - **Damaged** — needs repair or replacement
 4. Confirm.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the checkout form showing the item being checked out, the member selector, expected return date, and a condition notes field]_
+![Equipment checkout page with the item, member, and expected return date](./images/05-08-checkouts.png)
 
 ---
 
@@ -575,12 +577,12 @@ Navigate to **Inventory Admin** and check the **Maintenance Due** section for it
 For consumable items with quantity tracking, the system alerts when stock falls below the minimum threshold.
 
 The **Inventory Summary** (available from the inventory dashboard) shows:
+
 - Items at or below minimum stock
 - Items with overdue maintenance
 - Items currently checked out and overdue for return
 
-> **Screenshot placeholder:**
-> _[Screenshot of the inventory summary/dashboard showing alert cards for low stock items (red), overdue maintenance (yellow), and overdue returns (orange)]_
+![Inventory dashboard with low-stock, maintenance, and assignment alert cards](./images/05-02-inventory-dashboard.png)
 
 ---
 
@@ -604,11 +606,11 @@ When a member departs the department (dropped, retired, etc.), a **Departure Cle
 
 ### Clearance Lifecycle
 
-| Status | Description |
-|--------|-------------|
-| **Initiated** | Clearance created, items pending resolution |
-| **In Progress** | Some items resolved, others still pending |
-| **Completed** | All items resolved, clearance finalized |
+| Status                | Description                                                              |
+| --------------------- | ------------------------------------------------------------------------ |
+| **Initiated**         | Clearance created, items pending resolution                              |
+| **In Progress**       | Some items resolved, others still pending                                |
+| **Completed**         | All items resolved, clearance finalized                                  |
 | **Closed Incomplete** | Closed by an administrator with some items still outstanding (write-off) |
 
 > **Screenshot placeholder:**
@@ -687,16 +689,17 @@ Categories can be configured with **NFPA compliance tracking** enabled (e.g., PP
 
 When you click on an item in an NFPA-enabled category, the detail modal shows additional tabs:
 
-| Tab | Purpose |
-|-----|---------|
-| **General** | Standard item info (name, serial, condition, etc.) |
+| Tab                 | Purpose                                                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **General**         | Standard item info (name, serial, condition, etc.)                                                               |
 | **NFPA Compliance** | Manufacture date, first in-service date, expected retirement date, ensemble assignment, SCBA cylinder/test dates |
-| **Inspections** | Maintenance and inspection history with pass/fail results |
-| **Exposures** | Hazardous exposure log (fire, hazmat, bloodborne pathogen) with decontamination tracking |
+| **Inspections**     | Maintenance and inspection history with pass/fail results                                                        |
+| **Exposures**       | Hazardous exposure log (fire, hazmat, bloodborne pathogen) with decontamination tracking                         |
 
 ### Lifecycle Dates (NFPA 1851 §10.1.2)
 
 NFPA 1851 requires tracking:
+
 - **Manufacture date** — the 10-year retirement clock starts here
 - **First in-service date** — when the item was placed in active use
 - **Expected retirement date** — automatically flags items approaching the 10-year limit
@@ -710,6 +713,7 @@ PPE components (coat, pants, helmet, gloves, boots, hood) can be grouped into en
 ### Exposure Logging (NFPA 1851 §6.2)
 
 After a fire, hazmat, or bloodborne pathogen event, log the exposure against affected PPE items. The system tracks:
+
 - Exposure type and date
 - Incident number
 - Whether decontamination is required and completed
@@ -717,6 +721,7 @@ After a fire, hazmat, or bloodborne pathogen event, log the exposure against aff
 ### SCBA Fields (NFPA 1852)
 
 For SCBA items, additional fields track:
+
 - Cylinder manufacture and expiration dates
 - Hydrostatic test dates and due dates
 - Flow test dates and due dates
@@ -730,6 +735,7 @@ For SCBA items, additional fields track:
 Navigate to **Inventory Admin > Members** to see a per-member view of all equipment assignments across the department.
 
 This view shows:
+
 - Each member with summary counts (permanent assignments, active checkouts, issued items, overdue count)
 - Expandable rows showing detailed inventory per member
 - **Assign Items** and **Return Items** buttons per member
@@ -764,8 +770,7 @@ This is especially useful on mobile during equipment distribution events where y
 4. Set a return condition for each item.
 5. Click **Return Selected Items**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Members inventory tab showing a list of members with their assigned item counts, expandable to show individual items with assignment dates and conditions]_
+![Members inventory tab listing each member and their assigned item count](./images/05-24-member-inventory.png)
 
 ---
 
@@ -791,8 +796,7 @@ The hub is organized into three sections:
 
 3. **Low Stock Alerts** — Banner showing items below reorder threshold with category breakdown
 
-> **Screenshot needed:**
-> _[Screenshot of the Inventory Admin Hub showing the three prominent cards at the top, the grouped navigation sections below, and a low-stock alert banner at the bottom]_
+![Inventory admin hub with its grouped navigation cards](./images/05-25-admin-hub.png)
 
 ### Edge Cases
 
@@ -831,11 +835,11 @@ Navigate to **Inventory Admin > Equipment Kits** (`/inventory/admin/kits`) to ma
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Kit with no line items | Can be saved as a draft but cannot be issued to a member |
-| Size-selectable items | During issuance, the member's size preferences are used to auto-select the correct variant |
-| Deactivated kit | Hidden from the issuance picker but still visible in admin for reactivation |
+| Scenario                     | Behavior                                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Kit with no line items       | Can be saved as a draft but cannot be issued to a member                                                        |
+| Size-selectable items        | During issuance, the member's size preferences are used to auto-select the correct variant                      |
+| Deactivated kit              | Hidden from the issuance picker but still visible in admin for reactivation                                     |
 | Item in kit has been retired | The line item shows a warning indicator; issuance of that component will fail unless an alternative is selected |
 
 ---
@@ -865,11 +869,11 @@ Navigate to **Inventory Admin > Variant Groups** (`/inventory/admin/variant-grou
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario               | Behavior                                                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Group with no variants | Group exists but has no linked items; variants must be created separately or via the size/style auto-generation feature |
-| Pricing changes | Changes to group-level pricing do not retroactively update existing item costs |
-| Deactivated group | Items retain their variant linkage for reporting but the group is hidden from new-item flows |
+| Pricing changes        | Changes to group-level pricing do not retroactively update existing item costs                                          |
+| Deactivated group      | Items retain their variant linkage for reporting but the group is hidden from new-item flows                            |
 
 ---
 
@@ -883,15 +887,15 @@ This walkthrough follows the departure clearance process from start to finish wh
 
 FF Garcia currently has the following items assigned:
 
-| Item | Type | Serial / Asset Tag | Condition |
-|------|------|-------------------|-----------|
-| Turnout Coat | Individual | PPE-2019-042 | Good |
-| Turnout Pants | Individual | PPE-2019-043 | Good |
-| Portable Radio | Individual | RAD-0187 | Good |
-| Leather Helmet | Individual | HLM-0092 | Fair |
-| Pager | Individual | PGR-0341 | Good |
-| Station Boots | Individual | — (no tag) | Poor |
-| Work Gloves (3 pairs) | Pool | — | — |
+| Item                  | Type       | Serial / Asset Tag | Condition |
+| --------------------- | ---------- | ------------------ | --------- |
+| Turnout Coat          | Individual | PPE-2019-042       | Good      |
+| Turnout Pants         | Individual | PPE-2019-043       | Good      |
+| Portable Radio        | Individual | RAD-0187           | Good      |
+| Leather Helmet        | Individual | HLM-0092           | Fair      |
+| Pager                 | Individual | PGR-0341           | Good      |
+| Station Boots         | Individual | — (no tag)         | Poor      |
+| Work Gloves (3 pairs) | Pool       | —                  | —         |
 
 ---
 
@@ -913,28 +917,33 @@ The clearance status is set to **Initiated**.
 FF Garcia comes to the station with his gear. Lt. Park opens the clearance and resolves each item:
 
 **Item 1 — Turnout Coat (PPE-2019-042):**
+
 - FF Garcia hands over the coat
 - Lt. Park selects disposition: **Returned**
 - Condition on return: **Fair** (25 years of use)
 - The item is unassigned from FF Garcia and returned to inventory
 
 **Item 2 — Turnout Pants (PPE-2019-043):**
+
 - FF Garcia hands over the pants
 - Lt. Park selects disposition: **Returned**
 - Condition on return: **Fair**
 
 **Item 3 — Portable Radio (RAD-0187):**
+
 - FF Garcia returns the radio
 - Lt. Park selects disposition: **Returned**
 - Condition on return: **Good** — ready to reassign
 
 **Item 4 — Leather Helmet (HLM-0092):**
+
 - FF Garcia returns the helmet
 - Lt. Park selects disposition: **Returned Damaged** — the face shield is cracked
 - She adds a note: "Face shield cracked, suspension worn. Needs inspection before reissue."
 - The item is returned to inventory with condition set to **Damaged**
 
 **Item 5 — Pager (PGR-0341):**
+
 - FF Garcia says the pager was lost during a wildland deployment 6 months ago
 - Lt. Park selects disposition: **Written Off**
 - Reason: Lost
@@ -942,12 +951,14 @@ FF Garcia comes to the station with his gear. Lt. Park opens the clearance and r
 - The pager is marked as **Lost** in inventory
 
 **Item 6 — Station Boots:**
+
 - The boots are heavily worn after 5+ years
 - Lt. Park selects disposition: **Written Off**
 - Reason: Obsolete / worn beyond use
 - She adds a note: "Worn out, scheduled for disposal."
 
 **Item 7 — Work Gloves (3 pairs, pool item):**
+
 - FF Garcia returns 2 pairs; 1 pair was used up
 - Lt. Park resolves: **Returned** for 2 pairs (pool quantity increases by 2)
 - The remaining 1 pair is resolved as **Written Off** (consumed)
@@ -960,23 +971,30 @@ The clearance status automatically moves to **In Progress** as items are resolve
 
 All 7 line items are now resolved. Lt. Park reviews the summary:
 
-| Item | Disposition | Notes |
-|------|------------|-------|
-| Turnout Coat | Returned (Fair) | |
-| Turnout Pants | Returned (Fair) | |
-| Portable Radio | Returned (Good) | |
-| Leather Helmet | Returned Damaged | Face shield cracked |
-| Pager | Written Off (Lost) | Lost during Willow Creek deployment |
-| Station Boots | Written Off (Worn) | Scheduled for disposal |
-| Work Gloves (2 of 3) | Returned | |
-| Work Gloves (1 of 3) | Written Off (Consumed) | |
+| Item                 | Disposition            | Notes                               |
+| -------------------- | ---------------------- | ----------------------------------- |
+| Turnout Coat         | Returned (Fair)        |                                     |
+| Turnout Pants        | Returned (Fair)        |                                     |
+| Portable Radio       | Returned (Good)        |                                     |
+| Leather Helmet       | Returned Damaged       | Face shield cracked                 |
+| Pager                | Written Off (Lost)     | Lost during Willow Creek deployment |
+| Station Boots        | Written Off (Worn)     | Scheduled for disposal              |
+| Work Gloves (2 of 3) | Returned               |                                     |
+| Work Gloves (1 of 3) | Written Off (Consumed) |                                     |
 
 Lt. Park clicks **Complete Clearance**. The clearance status changes to **Completed**.
 
 The system automatically:
+
 - Cancels any pending property return reminder notifications for FF Garcia
-- Updates the Member Lifecycle page — FF Garcia's "Overdue Returns" count drops to zero
+- Clears FF Garcia from the overdue property-return list
 - Logs the clearance completion in the audit trail
+
+> **Note (2026-08-08):** that overdue list is currently reachable only through the
+> API (`GET /users/overdue-property-returns`) — there is no screen for it. An
+> earlier version of this walkthrough said the count updates on a "Member
+> Lifecycle page", which does not exist. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
 
 > **Hint:** If Lt. Park needed to close the clearance with outstanding items (e.g., FF Garcia is unreachable and has items that will never be returned), she could use **Close Incomplete** instead. This requires administrator permission and logs which items were left unresolved.
 
@@ -991,6 +1009,7 @@ This walkthrough demonstrates how to track a set of turnout gear through its lif
 **Westbrook Fire District** has enabled NFPA 1851/1852 compliance tracking on their "PPE" and "SCBA" inventory categories. Safety Officer **Capt. Elena Torres** manages the compliance program.
 
 A new set of turnout gear arrives for **FF David Park**:
+
 - Globe ATHLETIX turnout coat (manufactured January 2026)
 - Globe ATHLETIX turnout pants (manufactured January 2026)
 
@@ -1002,23 +1021,23 @@ Capt. Torres navigates to **Inventory > Items** and clicks **Add Item** for each
 
 **Turnout Coat:**
 
-| Field | Value |
-|-------|-------|
-| **Name** | Turnout Coat — Globe ATHLETIX |
-| **Category** | PPE (NFPA tracking enabled) |
-| **Serial Number** | GA-2026-00451 |
-| **Asset Tag** | PPE-2026-101 |
-| **Condition** | Excellent |
+| Field             | Value                         |
+| ----------------- | ----------------------------- |
+| **Name**          | Turnout Coat — Globe ATHLETIX |
+| **Category**      | PPE (NFPA tracking enabled)   |
+| **Serial Number** | GA-2026-00451                 |
+| **Asset Tag**     | PPE-2026-101                  |
+| **Condition**     | Excellent                     |
 
 On the **NFPA Compliance** tab:
 
-| Field | Value |
-|-------|-------|
-| **Manufacture Date** | January 15, 2026 |
-| **First In-Service Date** | March 1, 2026 |
+| Field                        | Value                                                      |
+| ---------------------------- | ---------------------------------------------------------- |
+| **Manufacture Date**         | January 15, 2026                                           |
+| **First In-Service Date**    | March 1, 2026                                              |
 | **Expected Retirement Date** | January 15, 2036 (auto-calculated: manufacture + 10 years) |
-| **Ensemble ID** | ENS-PARK-001 |
-| **Ensemble Role** | Coat |
+| **Ensemble ID**              | ENS-PARK-001                                               |
+| **Ensemble Role**            | Coat                                                       |
 
 She repeats for the pants with the same ensemble ID but role set to **Pants**.
 
@@ -1030,13 +1049,13 @@ Six months later, Capt. Torres conducts a routine advanced cleaning and inspecti
 
 She navigates to the coat's detail page, opens the **Inspections** tab, and clicks **Add Inspection**:
 
-| Field | Value |
-|-------|-------|
-| **Inspection Type** | Advanced Cleaning & Inspection |
-| **Date** | September 15, 2026 |
-| **Result** | Pass |
-| **Inspector** | Capt. Elena Torres |
-| **Findings** | All seams intact. Moisture barrier tested — no leaks. Reflective trim in good condition. Thermal liner shows no damage. |
+| Field               | Value                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Inspection Type** | Advanced Cleaning & Inspection                                                                                          |
+| **Date**            | September 15, 2026                                                                                                      |
+| **Result**          | Pass                                                                                                                    |
+| **Inspector**       | Capt. Elena Torres                                                                                                      |
+| **Findings**        | All seams intact. Moisture barrier tested — no leaks. Reflective trim in good condition. Thermal liner shows no damage. |
 
 The inspection is recorded in the item's history. The next inspection due date is calculated based on department policy (typically annual).
 
@@ -1048,23 +1067,23 @@ On November 3, FF Park responds to a structure fire. Afterward, his turnout gear
 
 Capt. Torres navigates to the coat's **Exposures** tab and clicks **Add Exposure**:
 
-| Field | Value |
-|-------|-------|
-| **Exposure Type** | Fire (structural) |
-| **Date** | November 3, 2026 |
-| **Incident Number** | INC-2026-0892 |
-| **Decontamination Required** | Yes |
-| **Decontamination Completed** | No (pending) |
+| Field                         | Value             |
+| ----------------------------- | ----------------- |
+| **Exposure Type**             | Fire (structural) |
+| **Date**                      | November 3, 2026  |
+| **Incident Number**           | INC-2026-0892     |
+| **Decontamination Required**  | Yes               |
+| **Decontamination Completed** | No (pending)      |
 
 She does the same for the pants. Both items now show a warning: "Decontamination pending."
 
 After the gear is professionally cleaned, she updates each exposure record:
 
-| Field | Value |
-|-------|-------|
-| **Decontamination Completed** | Yes |
-| **Decontamination Date** | November 8, 2026 |
-| **Decontamination Method** | Professional ISP cleaning |
+| Field                         | Value                     |
+| ----------------------------- | ------------------------- |
+| **Decontamination Completed** | Yes                       |
+| **Decontamination Date**      | November 8, 2026          |
+| **Decontamination Method**    | Professional ISP cleaning |
 
 The warning clears.
 
@@ -1082,14 +1101,14 @@ In July 2035, the coat is within 180 days of its expected retirement date (Janua
 
 Over the coat's 10-year life, the system tracked:
 
-| Data Point | Count |
-|-----------|-------|
-| Routine inspections | 10 (annual) |
-| Fire exposures | 14 |
-| Hazmat exposures | 2 |
-| Decontamination events | 16 |
-| Repairs | 3 (reflective trim replacement, zipper repair, patch) |
-| Condition changes | Excellent → Good (Year 3) → Fair (Year 7) |
+| Data Point             | Count                                                 |
+| ---------------------- | ----------------------------------------------------- |
+| Routine inspections    | 10 (annual)                                           |
+| Fire exposures         | 14                                                    |
+| Hazmat exposures       | 2                                                     |
+| Decontamination events | 16                                                    |
+| Repairs                | 3 (reflective trim replacement, zipper repair, patch) |
+| Condition changes      | Excellent → Good (Year 3) → Fair (Year 7)             |
 
 This complete history is available for audit, insurance claims, and NFPA compliance reporting — all in one place, replacing the paper logbook taped inside the locker.
 
@@ -1123,6 +1142,7 @@ You can bulk import inventory items from a CSV file instead of adding them indiv
 ### Validation
 
 The import validates:
+
 - Required columns are present (`name`, `category`)
 - Category names match existing categories
 - Serial numbers are unique (no duplicates in file or existing inventory)
@@ -1140,83 +1160,83 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 
 ### Item Creation & Updates
 
-| Scenario | Behavior |
-|----------|----------|
-| Item created without a barcode | Auto-assigned the next per-organization sequential barcode (`<prefix><number>`, default `INV-000001`, `INV-000002`, …). |
+| Scenario                             | Behavior                                                                                                                                                                                                       |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Item created without a barcode       | Auto-assigned the next per-organization sequential barcode (`<prefix><number>`, default `INV-000001`, `INV-000002`, …).                                                                                        |
 | Item created without `current_value` | Set equal to `purchase_price`. On updates, if `purchase_price` changes without an explicit `current_value`, the current value auto-syncs. Depreciated assets need explicit `current_value` entries to diverge. |
-| Item status set to `RETIRED` | Condition is automatically forced to `RETIRED` regardless of the submitted condition value. |
-| Concurrent updates to the same item | Row-level `SELECT FOR UPDATE` locks serialize assign, unassign, issue, and return operations. Long-running transactions can cause lock waits. |
+| Item status set to `RETIRED`         | Condition is automatically forced to `RETIRED` regardless of the submitted condition value.                                                                                                                    |
+| Concurrent updates to the same item  | Row-level `SELECT FOR UPDATE` locks serialize assign, unassign, issue, and return operations. Long-running transactions can cause lock waits.                                                                  |
 
 ### Returns & Unassignment
 
-| Scenario | Behavior |
-|----------|----------|
-| Item returned in poor/damaged/out-of-service condition | Status automatically set to `IN_MAINTENANCE` instead of `AVAILABLE`. The item enters the maintenance queue without manual intervention. |
-| Partial pool return (less than issued quantity) | Issuance record stays open. `quantity_issued` is decremented and a note is appended. The issuance closes only when all units are returned. |
-| Pool item issuance cost snapshot | `replacement_cost` (falling back to `purchase_price`) is captured as `unit_cost_at_issuance` on the issuance record. Future price changes do not affect cost recovery calculations for existing issuances. |
-| Inventory return triggers membership auto-archive check | After both `unassign_item` and `return_to_pool`, the system checks if the member qualifies for auto-archiving. A notification queue failure during this check is non-fatal — the return still succeeds. |
+| Scenario                                                | Behavior                                                                                                                                                                                                   |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Item returned in poor/damaged/out-of-service condition  | Status automatically set to `IN_MAINTENANCE` instead of `AVAILABLE`. The item enters the maintenance queue without manual intervention.                                                                    |
+| Partial pool return (less than issued quantity)         | Issuance record stays open. `quantity_issued` is decremented and a note is appended. The issuance closes only when all units are returned.                                                                 |
+| Pool item issuance cost snapshot                        | `replacement_cost` (falling back to `purchase_price`) is captured as `unit_cost_at_issuance` on the issuance record. Future price changes do not affect cost recovery calculations for existing issuances. |
+| Inventory return triggers membership auto-archive check | After both `unassign_item` and `return_to_pool`, the system checks if the member qualifies for auto-archiving. A notification queue failure during this check is non-fatal — the return still succeeds.    |
 
 ### Label Generation
 
-| Scenario | Behavior |
-|----------|----------|
-| No valid items selected for labels | Returns "No valid items found for label generation." Items must have a barcode or asset tag. |
-| Non-ASCII characters in barcode values | Silently stripped before Code128 encoding. Items imported with accented characters in serial numbers will have those characters removed on labels. |
-| Extremely small custom label size | Minimum bar width of 0.0075 inches is enforced for 203 DPI thermal printers. Labels below this threshold may produce barcodes that cannot be reliably scanned. |
+| Scenario                               | Behavior                                                                                                                                                       |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No valid items selected for labels     | Returns "No valid items found for label generation." Items must have a barcode or asset tag.                                                                   |
+| Non-ASCII characters in barcode values | Silently stripped before Code128 encoding. Items imported with accented characters in serial numbers will have those characters removed on labels.             |
+| Extremely small custom label size      | Minimum bar width of 0.0075 inches is enforced for 203 DPI thermal printers. Labels below this threshold may produce barcodes that cannot be reliably scanned. |
 
 ### Notification Behavior
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario                                              | Behavior                                                                                                                                                                    |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Notification queue failure during inventory operation | All inventory state changes (assign, unassign, issue, return) catch notification failures silently. Inventory operations succeed even if notifications cannot be delivered. |
-| SMS low-stock alerts | Rate-limited to one per item per 24 hours. A new alert is sent only if stock was replenished and then dropped again. |
+| SMS low-stock alerts                                  | Rate-limited to one per item per 24 hours. A new alert is sent only if stock was replenished and then dropped again.                                                        |
 
 ---
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| CSV import fails | Download the sample template and verify your CSV matches the format. Check that category names match existing categories. Serial numbers must be unique. |
-| Item not found when scanning | Verify the barcode/QR code matches the item's serial number or asset tag. The item must exist in the system. A "not found" message means no match; a "network error" message means connectivity issues. |
-| Camera not showing in scan modal (Firefox/Safari) | The inventory scanner now supports all modern browsers. If the camera button is missing, ensure browser camera permissions are granted. On desktop, the scanner falls back to the front-facing webcam if no rear camera is available. |
-| Scan modal opening on desktop but camera failing | Desktop computers typically only have a front-facing webcam. The scanner tries the rear camera first, then automatically falls back to the front-facing camera. If both fail, check that the camera is not in use by another application. |
-| Duplicate scan detected | The scanner ignores the same barcode scanned within 3 seconds to prevent double-processing. Wait 3 seconds or scan a different item. |
-| Cannot assign item - "already assigned" | An item can only be assigned to one member at a time. Return or unassign it from the current member first. |
-| Checkout button not available | The item may already be checked out or in maintenance status. Check the item's current status. |
-| Batch return fails for one item | Each item in a batch is processed independently. If one fails (e.g., "Item is not assigned to the expected user"), the others still succeed. Check if the item was concurrently reassigned. |
-| Departure clearance not generating items | The member must have active assignments or checkouts. If all items were already returned, the clearance will be empty. |
-| Cannot resolve clearance line item | The line item must belong to the specified clearance. If it returns an error, verify you are resolving items within the correct clearance record. |
-| Duplicate barcode error | Barcodes and asset tags must be unique within your organization. Different organizations can reuse the same codes. |
-| Pool item quantity below zero | Pool item quantity cannot go below zero. If a return fails, check that the issuance record exists and hasn't already been returned. |
-| Cannot see Inventory module | Inventory is a recommended module but can be disabled. Contact your administrator to enable it in Settings. |
-| Label PDF not generating | Ensure you have selected at least one item. Labels require the item to have a barcode or asset tag assigned. |
-| Thermal label blank or no barcode | Use Chrome/Edge (Safari has limited iframe print support). Verify Dymo (2.25×1.25″) or Rollo (4×6″) paper size in printer dialog. Check that inline SVG is not blocked by your Content Security Policy. Batch print ≤30 labels to avoid browser hangs. |
-| Organization logo missing on labels | Logo is loaded from organization profile URL. If the URL returns 404 or CORS error, the label prints without logo silently. Verify the logo URL in Settings > Organization. |
-| Form field cleared but value not resetting | The nullish coalescing operator (`??`) treats empty strings as truthy. This was fixed; pull latest code. If you see this in custom code, use `\|\|` instead of `??` when empty string should fall back to a default. |
-| 422 error on item create/update | Optional fields (notes, description) must be omitted from the payload when empty, not sent as `""`. Pull latest frontend code. |
-| WebSocket 403 on inventory page | The WebSocket connection needs the auth cookie. Pull latest; `withCredentials` is now set on the WebSocket connection. |
-| Charges not appearing on returned items | Verify `inventory.manage` permission. Charges are tied to return/write-off events. Quarantine items cannot have charges until inspection completes. |
-| Pool item cost recovery amount wrong | Check the item's `replacement_cost_per_unit` field. Cost recovery = (units not returned) × replacement cost per unit. |
-| Return request stuck in pending | Admin must approve return requests in Inventory Admin > Items. Check that the admin has `inventory.manage` permission. |
-| Quarantine item cannot be re-issued | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection. |
-| Size variant stock not matching total | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal. |
-| Reorder request not triggering alerts | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. Email alerts require `EMAIL_ENABLED=True`; SMS alerts require `TWILIO_ENABLED=True`. |
-| SMS alerts not sending | Verify `TWILIO_ENABLED=True`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` are configured. Check that SMS recipients are configured in Settings > Notifications. |
-| Kit issuance partially failed | If some kit components are out of stock, available items are still issued. Check the issuance result for per-component success/failure status. Reorder the missing components. |
-| Member size preferences not showing during issuance | The member must have size preferences recorded in their profile. If blank, the variant picker shows all sizes without pre-selection. |
-| Item detail page shows "Item not found" | Verify the item ID in the URL. The item may have been retired or deleted. Check that you are in the correct organization context. |
-| Barcode not printing on labels | Ensure the item has a barcode, serial number, or asset tag assigned. SVG barcodes require a modern browser (Chrome/Edge recommended). Wait for the "Ready to print" indicator before printing. |
-| Location filter shows no results | Verify that storage areas are linked to facility rooms. The cascading filter requires Facility → Room → Storage Area hierarchy to be configured. |
-| Size/style variant generation creates too many items | The count is `sizes × colors × styles`. Remove unnecessary sizes or styles before generating. Preview shows the exact count before creation. |
-| Variant group not created after generation | Verify that `create_variant_group` is enabled (toggled on by default). Check that at least one size and one style are selected. |
-| Admin hub layout changed | Fixed 2026-03-22 — admin hub redesigned with grouped card sections. Pull latest. |
-| Barcode labels not ISO compliant | Fixed 2026-03-22 — labels now follow ISO/IEC 15417 with correct quiet zones and bar widths. |
-| Labels printing sideways on thermal printer | Fixed 2026-03-22 — auto-rotation detects roll-fed printers and rotates labels to maximize print area. |
-| Label format mismatch between preview and PDF | Fixed 2026-03-22 — frontend and backend now share unified label format definitions. |
-| Non-admin sees all equipment on dashboard | Fixed 2026-03-22 — non-admins now see only their own assigned equipment. |
-| Mobile FAB shows Export CSV for non-admin | Fixed 2026-03-22 — FAB now shows "Assign Items" for non-admin users. |
-| Barcode scan not working on desktop | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers. |
+| Issue                                                | Solution                                                                                                                                                                                                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CSV import fails                                     | Download the sample template and verify your CSV matches the format. Check that category names match existing categories. Serial numbers must be unique.                                                                                               |
+| Item not found when scanning                         | Verify the barcode/QR code matches the item's serial number or asset tag. The item must exist in the system. A "not found" message means no match; a "network error" message means connectivity issues.                                                |
+| Camera not showing in scan modal (Firefox/Safari)    | The inventory scanner now supports all modern browsers. If the camera button is missing, ensure browser camera permissions are granted. On desktop, the scanner falls back to the front-facing webcam if no rear camera is available.                  |
+| Scan modal opening on desktop but camera failing     | Desktop computers typically only have a front-facing webcam. The scanner tries the rear camera first, then automatically falls back to the front-facing camera. If both fail, check that the camera is not in use by another application.              |
+| Duplicate scan detected                              | The scanner ignores the same barcode scanned within 3 seconds to prevent double-processing. Wait 3 seconds or scan a different item.                                                                                                                   |
+| Cannot assign item - "already assigned"              | An item can only be assigned to one member at a time. Return or unassign it from the current member first.                                                                                                                                             |
+| Checkout button not available                        | The item may already be checked out or in maintenance status. Check the item's current status.                                                                                                                                                         |
+| Batch return fails for one item                      | Each item in a batch is processed independently. If one fails (e.g., "Item is not assigned to the expected user"), the others still succeed. Check if the item was concurrently reassigned.                                                            |
+| Departure clearance not generating items             | The member must have active assignments or checkouts. If all items were already returned, the clearance will be empty.                                                                                                                                 |
+| Cannot resolve clearance line item                   | The line item must belong to the specified clearance. If it returns an error, verify you are resolving items within the correct clearance record.                                                                                                      |
+| Duplicate barcode error                              | Barcodes and asset tags must be unique within your organization. Different organizations can reuse the same codes.                                                                                                                                     |
+| Pool item quantity below zero                        | Pool item quantity cannot go below zero. If a return fails, check that the issuance record exists and hasn't already been returned.                                                                                                                    |
+| Cannot see Inventory module                          | Inventory is a recommended module but can be disabled. Contact your administrator to enable it in Settings.                                                                                                                                            |
+| Label PDF not generating                             | Ensure you have selected at least one item. Labels require the item to have a barcode or asset tag assigned.                                                                                                                                           |
+| Thermal label blank or no barcode                    | Use Chrome/Edge (Safari has limited iframe print support). Verify Dymo (2.25×1.25″) or Rollo (4×6″) paper size in printer dialog. Check that inline SVG is not blocked by your Content Security Policy. Batch print ≤30 labels to avoid browser hangs. |
+| Organization logo missing on labels                  | Logo is loaded from organization profile URL. If the URL returns 404 or CORS error, the label prints without logo silently. Verify the logo URL in Settings > Organization.                                                                            |
+| Form field cleared but value not resetting           | The nullish coalescing operator (`??`) treats empty strings as truthy. This was fixed; pull latest code. If you see this in custom code, use `\|\|` instead of `??` when empty string should fall back to a default.                                   |
+| 422 error on item create/update                      | Optional fields (notes, description) must be omitted from the payload when empty, not sent as `""`. Pull latest frontend code.                                                                                                                         |
+| WebSocket 403 on inventory page                      | The WebSocket connection needs the auth cookie. Pull latest; `withCredentials` is now set on the WebSocket connection.                                                                                                                                 |
+| Charges not appearing on returned items              | Verify `inventory.manage` permission. Charges are tied to return/write-off events. Quarantine items cannot have charges until inspection completes.                                                                                                    |
+| Pool item cost recovery amount wrong                 | Check the item's `replacement_cost_per_unit` field. Cost recovery = (units not returned) × replacement cost per unit.                                                                                                                                  |
+| Return request stuck in pending                      | Admin must approve return requests in Inventory Admin > Items. Check that the admin has `inventory.manage` permission.                                                                                                                                 |
+| Quarantine item cannot be re-issued                  | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection.                                                                                                                 |
+| Size variant stock not matching total                | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal.                                                                                                 |
+| Reorder request not triggering alerts                | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. Email alerts require `EMAIL_ENABLED=True`; SMS alerts require `TWILIO_ENABLED=True`.                                                            |
+| SMS alerts not sending                               | Verify `TWILIO_ENABLED=True`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` are configured. Check that SMS recipients are configured in Settings > Notifications.                                                                |
+| Kit issuance partially failed                        | If some kit components are out of stock, available items are still issued. Check the issuance result for per-component success/failure status. Reorder the missing components.                                                                         |
+| Member size preferences not showing during issuance  | The member must have size preferences recorded in their profile. If blank, the variant picker shows all sizes without pre-selection.                                                                                                                   |
+| Item detail page shows "Item not found"              | Verify the item ID in the URL. The item may have been retired or deleted. Check that you are in the correct organization context.                                                                                                                      |
+| Barcode not printing on labels                       | Ensure the item has a barcode, serial number, or asset tag assigned. SVG barcodes require a modern browser (Chrome/Edge recommended). Wait for the "Ready to print" indicator before printing.                                                         |
+| Location filter shows no results                     | Verify that storage areas are linked to facility rooms. The cascading filter requires Facility → Room → Storage Area hierarchy to be configured.                                                                                                       |
+| Size/style variant generation creates too many items | The count is `sizes × colors × styles`. Remove unnecessary sizes or styles before generating. Preview shows the exact count before creation.                                                                                                           |
+| Variant group not created after generation           | Verify that `create_variant_group` is enabled (toggled on by default). Check that at least one size and one style are selected.                                                                                                                        |
+| Admin hub layout changed                             | Fixed 2026-03-22 — admin hub redesigned with grouped card sections. Pull latest.                                                                                                                                                                       |
+| Barcode labels not ISO compliant                     | Fixed 2026-03-22 — labels now follow ISO/IEC 15417 with correct quiet zones and bar widths.                                                                                                                                                            |
+| Labels printing sideways on thermal printer          | Fixed 2026-03-22 — auto-rotation detects roll-fed printers and rotates labels to maximize print area.                                                                                                                                                  |
+| Label format mismatch between preview and PDF        | Fixed 2026-03-22 — frontend and backend now share unified label format definitions.                                                                                                                                                                    |
+| Non-admin sees all equipment on dashboard            | Fixed 2026-03-22 — non-admins now see only their own assigned equipment.                                                                                                                                                                               |
+| Mobile FAB shows Export CSV for non-admin            | Fixed 2026-03-22 — FAB now shows "Assign Items" for non-admin users.                                                                                                                                                                                   |
+| Barcode scan not working on desktop                  | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers.                                                                                                                                                                  |
 
 ---
 
@@ -1228,14 +1248,14 @@ The inventory admin dashboard has been redesigned with **grouped card sections**
 
 The admin hub now organizes pages into logical groups:
 
-| Group | Pages |
-|-------|-------|
-| **Items & Stock** | Manage Items, Pool Items, Categories, Variant Groups |
-| **Equipment Kits** | Equipment Kits management |
-| **Member Equipment** | Members Inventory, Active Checkouts |
-| **Requests & Workflows** | Equipment Requests, Return Requests, Write-Off Requests, Reorder Requests |
-| **Maintenance & Reports** | Maintenance Records, Charges & Fees |
-| **Import & Labels** | CSV Import, Barcode Label Printing |
+| Group                     | Pages                                                                     |
+| ------------------------- | ------------------------------------------------------------------------- |
+| **Items & Stock**         | Manage Items, Pool Items, Categories, Variant Groups                      |
+| **Equipment Kits**        | Equipment Kits management                                                 |
+| **Member Equipment**      | Members Inventory, Active Checkouts                                       |
+| **Requests & Workflows**  | Equipment Requests, Return Requests, Write-Off Requests, Reorder Requests |
+| **Maintenance & Reports** | Maintenance Records, Charges & Fees                                       |
+| **Import & Labels**       | CSV Import, Barcode Label Printing                                        |
 
 > **Screenshot needed:**
 > _[Screenshot of the redesigned Inventory Admin Hub showing grouped card sections — "Items & Stock" group with Manage Items, Pool Items, Categories, and Variant Groups cards, each with an icon, title, and item count badge]_
@@ -1245,20 +1265,20 @@ The admin hub now organizes pages into logical groups:
 Two new dedicated admin pages have been added:
 
 **Equipment Kits** (`/inventory/admin/kits`):
+
 - Create, edit, and delete equipment kits
 - View kit components and their quantities
 - Issue kits to members with size preference auto-selection
 
-> **Screenshot needed:**
-> _[Screenshot of the Equipment Kits admin page showing a list of kits with name, component count, and actions (Edit, Issue, Delete)]_
+![Equipment kits admin page listing kits with their component counts](./images/05-31-equipment-kits.png)
 
 **Variant Groups** (`/inventory/admin/variant-groups`):
+
 - View and manage variant groups with aggregate stock across all sizes
 - Edit individual variants within a group
 - Link to auto-generation for new variant groups
 
-> **Screenshot needed:**
-> _[Screenshot of the Variant Groups admin page showing variant groups with base product name, total stock across sizes, and expandable variant details]_
+![Variant groups admin page with base products and per-size stock](./images/05-32-variant-groups.png)
 
 ### Barcode Label Printing Improvements
 
@@ -1270,8 +1290,7 @@ Label generation has been significantly improved:
 - **Unified formats**: Frontend and backend share the same label format catalog, preventing size mismatches
 - **Batch limit**: Maximum batch size enforced to prevent browser memory issues
 
-> **Screenshot needed:**
-> _[Screenshot of the label printing page showing the format dropdown (Letter, Dymo 30252, Dymo 30256, Dymo 30334, Rollo 4×6, Custom), the "Test Print" button, and a label preview with ISO-compliant barcode]_
+![Inventory label printing page with format presets and preview](./images/05-33-label-printing.png)
 
 ### Inventory Dashboard Scoping
 
@@ -1306,8 +1325,7 @@ The Storage Areas page now shows the **actual inventory items** assigned to each
 - Item name, serial number, status, and condition
 - Direct links to each item's detail page
 
-> **Screenshot needed:**
-> _[Screenshot of the Storage Areas page showing an expanded storage area panel with 3 items listed — each row showing item name, serial number (e.g., "SN-12345"), a green "Good" condition badge, and a clickable link icon]_
+![Storage areas page with an expanded area listing its items](./images/05-36-storage-areas.png)
 
 > **Edge case:** Storage areas with no items show an empty state message. Items without serial numbers display the item name and barcode instead.
 
@@ -1342,14 +1360,14 @@ Fixed an intermittent error where the real-time inventory updates WebSocket conn
 
 ### Edge Cases (2026-03-24)
 
-| Scenario | Behavior |
-|----------|----------|
-| Item created before barcode auto-generation | Barcode lazily generated on first fetch |
-| Storage area with no items | Shows empty state message |
-| Item with no barcode or asset tag | Fields display `--` placeholder (always visible) |
-| Template builder back navigation | No crash; `beforeunload` still fires on browser close |
-| Camera permission denied | Specific error message; manual entry available |
-| Storage area item link clicked | Navigates to `/inventory/items/{id}` (fixed from dashboard) |
+| Scenario                                    | Behavior                                                    |
+| ------------------------------------------- | ----------------------------------------------------------- |
+| Item created before barcode auto-generation | Barcode lazily generated on first fetch                     |
+| Storage area with no items                  | Shows empty state message                                   |
+| Item with no barcode or asset tag           | Fields display `--` placeholder (always visible)            |
+| Template builder back navigation            | No crash; `beforeunload` still fires on browser close       |
+| Camera permission denied                    | Specific error message; manual entry available              |
+| Storage area item link clicked              | Navigates to `/inventory/items/{id}` (fixed from dashboard) |
 
 ---
 
@@ -1388,13 +1406,13 @@ Barcodes are assigned at item-creation time using a per-organization sequential 
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Storage area with no items | Shows empty state: "No items in this storage area" |
-| Item with no barcode loaded for first time | Barcode auto-generated on first detail page access |
-| Item with barcode and asset tag both empty | Both fields display `--` placeholder |
-| Clicking item in storage area panel | Navigates to `/inventory/items/{id}` (not dashboard) |
-| Storage area name on item detail | Displays resolved area name instead of raw UUID |
+| Scenario                                   | Behavior                                             |
+| ------------------------------------------ | ---------------------------------------------------- |
+| Storage area with no items                 | Shows empty state: "No items in this storage area"   |
+| Item with no barcode loaded for first time | Barcode auto-generated on first detail page access   |
+| Item with barcode and asset tag both empty | Both fields display `--` placeholder                 |
+| Clicking item in storage area panel        | Navigates to `/inventory/items/{id}` (not dashboard) |
+| Storage area name on item detail           | Displays resolved area name instead of raw UUID      |
 
 ---
 
@@ -1428,10 +1446,10 @@ The Variant Groups page now displays a **stock matrix** showing all size × colo
 
 The Items List page now includes three new filter dropdowns for variant-based filtering:
 
-| Filter | Description |
-|--------|-------------|
-| **Size** | Filter items by size (e.g., "L", "XL", "2XL") |
-| **Color** | Filter items by color (e.g., "Navy", "Black") |
+| Filter    | Description                                     |
+| --------- | ----------------------------------------------- |
+| **Size**  | Filter items by size (e.g., "L", "XL", "2XL")   |
+| **Color** | Filter items by color (e.g., "Navy", "Black")   |
 | **Style** | Filter items by style (e.g., "Regular", "Long") |
 
 These filters work alongside existing category, status, condition, and location filters. Selecting a size filter, for example, shows only items with that size variant attribute — useful for quickly finding all "XL" items across all categories.
@@ -1448,13 +1466,13 @@ These filters work alongside existing category, status, condition, and location 
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Variant capsules on non-variant item | No capsules displayed (component returns null) |
-| Stock matrix with all zeros | Group shows "Out of Stock" banner; cells dimmed |
-| Size/color/style filter with no matches | Empty results; filters remain applied |
-| Label preview with all fields unchecked | Minimum content: barcode image + item name always included |
-| Custom label size smaller than content | Content scaled to fit; warning shown if text will be truncated |
+| Scenario                                | Behavior                                                       |
+| --------------------------------------- | -------------------------------------------------------------- |
+| Variant capsules on non-variant item    | No capsules displayed (component returns null)                 |
+| Stock matrix with all zeros             | Group shows "Out of Stock" banner; cells dimmed                |
+| Size/color/style filter with no matches | Empty results; filters remain applied                          |
+| Label preview with all fields unchecked | Minimum content: barcode image + item name always included     |
+| Custom label size smaller than content  | Content scaled to fit; warning shown if text will be truncated |
 
 ---
 
@@ -1476,11 +1494,11 @@ This workflow is designed for events like annual PPE distribution where you need
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Badge scan fails | Falls back to name search in the picker |
-| Item already assigned to another member | Error shown; item not reassigned |
-| Member has no membership number | Badge scan won't find them; use name search |
+| Scenario                                | Behavior                                    |
+| --------------------------------------- | ------------------------------------------- |
+| Badge scan fails                        | Falls back to name search in the picker     |
+| Item already assigned to another member | Error shown; item not reassigned            |
+| Member has no membership number         | Badge scan won't find them; use name search |
 
 ---
 
@@ -1490,13 +1508,13 @@ Barcode label printing is now available across multiple modules — not just Inv
 
 ### Modules Supporting Labels
 
-| Module | Route | What's on the Label | Entry Point |
-|--------|-------|--------------------:|------------|
-| **Inventory** | `/inventory/print-labels` | Item name, barcode, serial/asset tag | Select items → Print Labels |
-| **Apparatus** | `/apparatus/print-labels` | Unit number, asset tag, apparatus type | Per-row "Print Label" action |
-| **Facilities** | `/facilities/print-labels` | Facility name, facility number | Header "Print Labels" button |
-| **Members** | `/members/print-labels` | Member name, membership number | Bulk "Print Badges" button |
-| **Prospects** | `/prospective-members/print-labels` | Applicant name, status token barcode | Bulk "Print Badges" button |
+| Module         | Route                               |                    What's on the Label | Entry Point                  |
+| -------------- | ----------------------------------- | -------------------------------------: | ---------------------------- |
+| **Inventory**  | `/inventory/print-labels`           |   Item name, barcode, serial/asset tag | Select items → Print Labels  |
+| **Apparatus**  | `/apparatus/print-labels`           | Unit number, asset tag, apparatus type | Per-row "Print Label" action |
+| **Facilities** | `/facilities/print-labels`          |         Facility name, facility number | Header "Print Labels" button |
+| **Members**    | `/members/print-labels`             |         Member name, membership number | Bulk "Print Badges" button   |
+| **Prospects**  | `/prospective-members/print-labels` |   Applicant name, status token barcode | Bulk "Print Badges" button   |
 
 ### Remembered Printer Preference
 
@@ -1509,25 +1527,25 @@ The system remembers your chosen **printer/size per position and per module**:
 
 ### Label Formats
 
-| Format | Size | Use Case |
-|--------|------|----------|
-| Dymo 30252 | 1.125×3.5" | Address labels |
-| Dymo 30256 | 2.3125×4" | Shipping labels |
-| Dymo 30334 | 1.25×2.25" | Multi-purpose labels |
-| Rollo 4×6 | 4×6" | Thermal shipping labels |
-| Letter sheet | 8.5×11" | Standard printer, 2×5 grid |
-| Custom | User-defined | 0.5-8" wide × 0.5-11" tall |
+| Format       | Size         | Use Case                   |
+| ------------ | ------------ | -------------------------- |
+| Dymo 30252   | 1.125×3.5"   | Address labels             |
+| Dymo 30256   | 2.3125×4"    | Shipping labels            |
+| Dymo 30334   | 1.25×2.25"   | Multi-purpose labels       |
+| Rollo 4×6    | 4×6"         | Thermal shipping labels    |
+| Letter sheet | 8.5×11"      | Standard printer, 2×5 grid |
+| Custom       | User-defined | 0.5-8" wide × 0.5-11" tall |
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the label print page (any module) showing the label format dropdown, printer preference selector, copies per record field, and a preview of the generated label._
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Record without existing barcode | Auto-generated during label preview |
-| Roll-fed thermal printer (Rollo/Brother) | Labels auto-rotated for maximum print area |
+| Scenario                                  | Behavior                                     |
+| ----------------------------------------- | -------------------------------------------- |
+| Record without existing barcode           | Auto-generated during label preview          |
+| Roll-fed thermal printer (Rollo/Brother)  | Labels auto-rotated for maximum print area   |
 | First time printing (no saved preference) | Defaults to Dymo 30334; saved on first print |
-| Different user fills same position | Inherits the position's printer preference |
+| Different user fills same position        | Inherits the position's printer preference   |
 
 ---
 
@@ -1545,11 +1563,11 @@ Inventory barcodes now use a **per-organization sequential scheme** instead of r
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Concurrent item creation | Row-level locking ensures unique sequential numbers |
-| Existing items before migration | Reassigned sequential barcodes during migration |
-| Custom barcode prefix | Configurable per org via settings |
+| Scenario                        | Behavior                                            |
+| ------------------------------- | --------------------------------------------------- |
+| Concurrent item creation        | Row-level locking ensures unique sequential numbers |
+| Existing items before migration | Reassigned sequential barcodes during migration     |
+| Custom barcode prefix           | Configurable per org via settings                   |
 
 ---
 
@@ -1562,12 +1580,12 @@ Several inventory admin pages have been **collapsed from separate desktop and mo
 
 ### Pages Updated
 
-| Page | Before | After |
-|------|--------|-------|
-| InventoryItemsPage | Separate table + card grid | Single responsive table |
-| InventoryMembersPage | Separate table + card list | Single responsive table |
-| ReorderRequestsPage | Separate renders | Single responsive table |
-| InventoryMaintenancePage | Separate renders | Single responsive table |
+| Page                     | Before                     | After                   |
+| ------------------------ | -------------------------- | ----------------------- |
+| InventoryItemsPage       | Separate table + card grid | Single responsive table |
+| InventoryMembersPage     | Separate table + card list | Single responsive table |
+| ReorderRequestsPage      | Separate renders           | Single responsive table |
+| InventoryMaintenancePage | Separate renders           | Single responsive table |
 
 Each `<td>` uses a `data-label` attribute to display the field name on mobile. Cells without `data-label` (checkboxes, action buttons) are hidden in mobile view.
 
@@ -1594,7 +1612,7 @@ The **Impact Planner** at `/inventory/admin/impact-planner` allows quartermaster
 4. **Choose a size field**: Shirt, Pant, Jacket, Boot, Glove, or Hat
 5. Click **Analyze**
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Impact Planner page showing the filter panel on the left (status, rank, station dropdowns), category and size field selectors, and the Analyze button. Show the filter panel with "Active" status selected and "Firefighter" rank selected._
+![Inventory impact planner with its filter panel and member analysis](./images/05-45-impact-planner.png)
 
 ### Reading the Analysis Results
 
@@ -1620,6 +1638,7 @@ After analyzing, you can take four actions directly from the results:
 #### Generate Reorder Requests
 
 Click **Generate Reorders** to automatically create purchase requests:
+
 - One `ReorderRequest` per size with shortfall > 0
 - Pre-fills vendor, urgency, unit cost, and a descriptive note
 - All requests land in PENDING status for approval
@@ -1630,6 +1649,7 @@ Click **Generate Reorders** to automatically create purchase requests:
 #### Bulk Issue from Stock
 
 Click **Issue from Stock** to distribute on-hand inventory:
+
 - Issues one unit per member from matching pool stock
 - Matches by member's size preference
 - Skips members without a size, with no matching stock, or over their allowance
@@ -1640,6 +1660,7 @@ Click **Issue from Stock** to distribute on-hand inventory:
 #### Request Sizes from Members
 
 Click **Request Sizes** to notify members who haven't recorded their size preference:
+
 - Sends in-app notifications directing them to `/inventory/my-equipment`
 - After members add their sizes, re-run the analysis to see updated results
 - Returns count of members notified
@@ -1649,6 +1670,7 @@ Click **Request Sizes** to notify members who haven't recorded their size prefer
 #### Download PDF Summary
 
 Click **Download PDF** to generate a branded printable summary:
+
 - Includes org name, analysis date, all filter parameters, and size breakdown table
 - Contact columns (email, phone) included only if org visibility settings allow
 - Suitable for budget approval meetings or procurement documentation
@@ -1689,15 +1711,15 @@ When you enable **Check allowances**:
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Member with no size preference | Bucketed as "Unknown"; skipped by bulk-issue and reorder generation |
-| Stock exhausted during bulk-issue | Issues what's available; remaining skipped with "No matching stock" |
-| All shortfalls are zero | Reorder generates nothing; `created_count: 0` |
-| Contact visibility set to "hidden" | Email/phone columns omitted from PDF |
-| Different cost per size variant | Average unit cost used for estimation |
-| Replacement check without NFPA tracking | Falls back to item condition assessment |
-| Concurrent users running bulk-issue | Per-size quantity tracking prevents double-issue |
+| Scenario                                | Behavior                                                            |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| Member with no size preference          | Bucketed as "Unknown"; skipped by bulk-issue and reorder generation |
+| Stock exhausted during bulk-issue       | Issues what's available; remaining skipped with "No matching stock" |
+| All shortfalls are zero                 | Reorder generates nothing; `created_count: 0`                       |
+| Contact visibility set to "hidden"      | Email/phone columns omitted from PDF                                |
+| Different cost per size variant         | Average unit cost used for estimation                               |
+| Replacement check without NFPA tracking | Falls back to item condition assessment                             |
+| Concurrent users running bulk-issue     | Per-size quantity tracking prevents double-issue                    |
 
 ---
 

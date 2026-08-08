@@ -22,6 +22,7 @@ import type {
   EventHourMappingUpdate,
   AdminHoursComplianceItem,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
@@ -34,7 +35,7 @@ export const adminHoursCategoryService = {
     const response = await api.get<AdminHoursCategory[]>('/admin-hours/categories', {
       params: { include_inactive: params?.includeInactive ?? false },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async create(data: AdminHoursCategoryCreate): Promise<AdminHoursCategory> {
@@ -169,7 +170,10 @@ export const adminHoursEntryService = {
         end_date: params?.endDate,
       },
     });
-    return response.data;
+    // byCategory is mapped straight into the stat tiles without a check, so a
+    // summary payload lacking it took the whole page down. Nested arrays like
+    // this sit below where the generic asArray boundary guard can reach.
+    return { ...response.data, byCategory: asArray(response.data?.byCategory) };
   },
 
   async getPendingCount(): Promise<number> {
@@ -201,7 +205,7 @@ export const adminHoursEntryService = {
 
   async listActiveSessions(): Promise<AdminHoursActiveSessionAdmin[]> {
     const response = await api.get<AdminHoursActiveSessionAdmin[]>('/admin-hours/active-sessions');
-    return response.data;
+    return asArray(response.data);
   },
 
   async forceClockOut(entryId: string): Promise<AdminHoursEntry> {
@@ -223,7 +227,7 @@ export const adminHoursComplianceService = {
     const response = await api.get<AdminHoursComplianceItem[]>(`/admin-hours/compliance/${userId}`, {
       params: year ? { year } : undefined,
     });
-    return response.data;
+    return asArray(response.data);
   },
 };
 
@@ -232,7 +236,7 @@ export const eventHourMappingService = {
     const response = await api.get<EventHourMapping[]>('/admin-hours/event-mappings', {
       params: { include_inactive: params?.includeInactive ?? false },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async create(data: EventHourMappingCreate): Promise<EventHourMapping> {

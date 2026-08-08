@@ -162,7 +162,7 @@ const TrainingProgramsPage: React.FC = () => {
               />
               <button
                 onClick={() => importFileRef.current?.click()}
-                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 max-md:min-h-[44px] bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
               >
                 <Upload className="w-5 h-5" aria-hidden="true" />
                 <span>Import</span>
@@ -230,6 +230,9 @@ const TrainingProgramsPage: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
             <label htmlFor="programs-search" className="sr-only">Search {activeTab}</label>
             <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               id="programs-search"
               type="text"
               value={searchTerm}

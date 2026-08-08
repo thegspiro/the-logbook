@@ -35,7 +35,7 @@ The Medical Screening page uses a **three-tab layout**:
 | **Records** | Log individual screening results for members and prospects |
 | **Compliance** | View department-wide compliance status, identify gaps, and track upcoming expirations |
 
-> **[SCREENSHOT NEEDED]:** _The Medical Screening landing page showing the three-tab navigation (Requirements, Records, Compliance) with the Requirements tab active, displaying a table of screening requirements._
+![Medical Screening landing page with its three-tab navigation](./images/13-01-medical-landing.png)
 
 ### Permissions
 
@@ -68,7 +68,7 @@ Requirements define **what** your department mandates and **how often**. Each re
 
 Navigate to **Medical Screening > Requirements** tab to view all requirements.
 
-> **[SCREENSHOT NEEDED]:** _The Requirements tab showing a table of requirements with columns: Name, Screening Type, Frequency, Applies To, Grace Period, Status (Active/Inactive), and action buttons (Edit, Delete)._
+![Medical screening requirements tab with frequency and grace period](./images/13-02-requirements-tab.png)
 
 ### Requirement Fields
 
@@ -109,7 +109,7 @@ Navigate to **Medical Screening > Requirements** tab to view all requirements.
 
 4. Click **Save**.
 
-> **[SCREENSHOT NEEDED]:** _The Add Requirement form/modal showing all fields filled out for an annual physical requirement, with the Screening Type dropdown open displaying all six options._
+![Add screening requirement form with type, frequency, and grace period](./images/13-05-add-requirement.png)
 
 ### Editing and Deleting Requirements
 
@@ -144,7 +144,7 @@ Records capture the **result** of an individual screening event — who was scre
 
 Navigate to **Medical Screening > Records** tab to view all records.
 
-> **[SCREENSHOT NEEDED]:** _The Records tab showing a table of screening records with columns: Member/Prospect Name, Screening Type, Status (color-coded badge), Scheduled Date, Completed Date, Expiration Date, Provider, and action buttons._
+![Medical screening records tab listing completed screenings](./images/13-03-records-tab.png)
 
 ### Record Statuses
 
@@ -245,7 +245,7 @@ The **Compliance** tab provides a department-wide view of who is compliant, who 
 
 Navigate to **Medical Screening > Compliance** tab.
 
-> **[SCREENSHOT NEEDED]:** _The Compliance tab showing summary cards at the top (Total Requirements, Compliant, Non-Compliant, Expiring Soon) and a member-by-member compliance matrix below with green/red/amber indicators per requirement column._
+![Medical screening compliance tab with summary cards and per-member status](./images/13-04-compliance-tab.png)
 
 ### Compliance Summary
 

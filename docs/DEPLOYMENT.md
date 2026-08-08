@@ -26,12 +26,14 @@ This guide provides step-by-step instructions for deploying The Logbook platform
 ### Installation Steps
 
 1. **Download the Platform**
+
    ```bash
    git clone https://github.com/your-org/the-logbook.git
    cd the-logbook
    ```
 
 2. **Run the Installation Script**
+
    ```bash
    chmod +x install.sh
    ./install.sh
@@ -57,19 +59,23 @@ This guide provides step-by-step instructions for deploying The Logbook platform
 ## System Requirements
 
 ### Minimum Requirements
+
 - **CPU:** 2 cores
 - **RAM:** 4 GB
 - **Storage:** 20 GB
 - **OS:** Ubuntu 20.04+ or Debian 11+
 
 ### Recommended for Production
+
 - **CPU:** 4+ cores
 - **RAM:** 8+ GB
 - **Storage:** 50+ GB SSD
 - **OS:** Ubuntu 22.04 LTS
 
 ### Software Requirements
+
 All software will be automatically installed by the installation script:
+
 - Docker 20.10+
 - Docker Compose 2.0+
 - Git
@@ -84,6 +90,7 @@ All software will be automatically installed by the installation script:
 **Best for:** Most users, easy setup, consistent environments
 
 **Advantages:**
+
 - ✅ One-command setup
 - ✅ Isolated environment
 - ✅ Easy updates and rollbacks
@@ -91,6 +98,7 @@ All software will be automatically installed by the installation script:
 - ✅ Automatic service management
 
 **Steps:**
+
 ```bash
 ./install.sh --docker
 ```
@@ -107,6 +115,7 @@ All software will be automatically installed by the installation script:
 > skips the startup security gate.
 
 **Managing Services:**
+
 ```bash
 # Start all services
 docker compose up -d
@@ -135,11 +144,13 @@ docker compose up -d
 **Steps:**
 
 1. **Run Installation Script**
+
    ```bash
    ./install.sh --traditional
    ```
 
 2. **Verify Services**
+
    ```bash
    sudo systemctl status logbook-backend
    sudo systemctl status mysql
@@ -166,6 +177,7 @@ docker compose up -d
    - Security group: Allow ports 22, 80, 443
 
 2. **Connect and Install**
+
    ```bash
    ssh ubuntu@your-ec2-ip
    git clone https://github.com/your-org/the-logbook.git
@@ -188,6 +200,7 @@ docker compose up -d
    - Enable monitoring
 
 2. **Install Application**
+
    ```bash
    ssh root@your-droplet-ip
    git clone https://github.com/your-org/the-logbook.git
@@ -231,6 +244,7 @@ docker compose up -d
    - Ports 80 and 443 open
 
 2. **Run SSL Setup Script**
+
    ```bash
    sudo ./scripts/setup-ssl.sh yourdomain.com admin@yourdomain.com
    ```
@@ -292,6 +306,7 @@ Before going live, complete these security steps:
 ### Firewall Configuration
 
 **Ubuntu/Debian (UFW):**
+
 ```bash
 sudo ufw allow 22/tcp   # SSH
 sudo ufw allow 80/tcp   # HTTP
@@ -301,6 +316,7 @@ sudo ufw status
 ```
 
 **CentOS/RHEL (firewalld):**
+
 ```bash
 sudo firewall-cmd --permanent --add-service=http
 sudo firewall-cmd --permanent --add-service=https
@@ -392,10 +408,12 @@ See [BACKUP.md](./BACKUP.md) for detailed backup configuration.
 ### 3. Set Up Monitoring
 
 **Health Checks:**
+
 - Backend: `https://yourdomain.com/health`
 - Database: `docker compose exec backend alembic current`
 
 **Monitoring Tools:**
+
 - Set up Uptime monitoring (e.g., UptimeRobot, Pingdom)
 - Configure log monitoring
 - Enable error tracking (Sentry recommended)
@@ -414,6 +432,7 @@ SMTP_FROM_EMAIL=noreply@yourdomain.com
 ```
 
 **For Gmail:**
+
 1. Enable 2-factor authentication
 2. Generate an App Password
 3. Use the App Password as SMTP_PASSWORD
@@ -421,17 +440,20 @@ SMTP_FROM_EMAIL=noreply@yourdomain.com
 ### 5. Regular Maintenance
 
 **Weekly:**
+
 - Review error logs
 - Check disk space
 - Verify backups
 
 **Monthly:**
+
 - Update system packages
 - Review security logs
 - Test backup restoration
 - Review user accounts
 
 **Quarterly:**
+
 - Rotate secrets and passwords
 - Security audit
 - Performance review
@@ -449,6 +471,11 @@ docker compose down
 
 # Pull latest code
 git pull
+
+# Reconcile the compose build contexts with the Dockerfiles just pulled.
+# `docker compose config` never opens the Dockerfile, so a context that no
+# longer holds what the build copies passes validation and fails the build.
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
 # Rebuild images
 docker compose build
@@ -486,6 +513,7 @@ npm run build
 ### Application Won't Start
 
 1. **Check logs:**
+
    ```bash
    # Docker
    docker compose logs -f
@@ -496,6 +524,7 @@ npm run build
    ```
 
 2. **Verify database connection:**
+
    ```bash
    docker compose exec mysql mysql -u${DB_USER} -p${DB_PASSWORD} -e "SELECT 1;"
    ```
@@ -547,12 +576,14 @@ sudo nginx -t
 ### Performance Issues
 
 1. **Check resource usage:**
+
    ```bash
    htop
    docker stats
    ```
 
 2. **Optimize database:**
+
    ```bash
    docker compose exec mysql mysqlcheck -u root -p --optimize --all-databases
    ```

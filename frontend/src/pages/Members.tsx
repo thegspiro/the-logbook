@@ -310,6 +310,9 @@ const Members: React.FC = () => {
             <div className="relative flex-1 w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 type="text"
                 aria-label="Search by name, membership number, or email..." placeholder="Search by name, membership number, or email..."
                 value={searchQuery}
@@ -324,7 +327,7 @@ const Members: React.FC = () => {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                className="px-4 py-2 max-md:min-h-[44px] bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
@@ -338,7 +341,7 @@ const Members: React.FC = () => {
             <div className="flex items-center space-x-2 sm:space-x-3 w-full md:w-auto">
               <button
                 onClick={() => void navigate('/members/import')}
-                className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex-1 md:flex-none"
+                className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 max-md:min-h-[44px] bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex-1 md:flex-none"
               >
                 <Upload className="w-4 h-4" />
                 <span className="hidden sm:inline">Import CSV</span>

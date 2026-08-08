@@ -119,7 +119,7 @@ export const ApparatusListPage: React.FC = () => {
             </div>
             <button
               onClick={() => void navigate('/dashboard')}
-              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm shrink-0"
+              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm shrink-0 max-md:inline-flex max-md:min-h-[44px] max-md:items-center"
             >
               <span className="hidden sm:inline">← Back to Dashboard</span>
               <span className="sm:hidden">← Back</span>
@@ -189,6 +189,9 @@ export const ApparatusListPage: React.FC = () => {
             <div className="relative flex-1 w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 type="text"
                 aria-label="Search by unit number, name, or VIN..." placeholder="Search by unit number, name, or VIN..."
                 value={searchQuery}
@@ -200,7 +203,7 @@ export const ApparatusListPage: React.FC = () => {
             {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex items-center space-x-2 px-4 py-2 max-md:min-h-[44px] rounded-lg transition-colors ${
                 showFilters
                   ? 'bg-red-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -293,7 +296,7 @@ export const ApparatusListPage: React.FC = () => {
         {/* Apparatus Table */}
         {isLoading ? (
           <div className="card p-12 text-center" role="status" aria-live="polite">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
             <p className="text-theme-text-secondary">Loading apparatus...</p>
           </div>
         ) : apparatusList.length === 0 ? (
@@ -351,7 +354,7 @@ export const ApparatusListPage: React.FC = () => {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/10">
+                  <tbody className="divide-y divide-theme-surface-border">
                     {apparatusList.map((apparatus) => {
                       const apparatusType = apparatus.apparatusType || getTypeById(apparatus.apparatusTypeId);
                       const status = apparatus.statusRecord || getStatusById(apparatus.statusId);

@@ -28,6 +28,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
+from app.api.prospect_privacy import (
+    block_self_prospect_access,
+    get_hidden_prospect_ids,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -36,6 +40,10 @@ from app.schemas.membership_pipeline import (
     ActivityLogResponse,
     AdvanceProspectRequest,
     AssignPackageToElectionRequest,
+    BulkActionItemResult,
+    BulkActionResponse,
+    BulkAdvanceRequest,
+    BulkStatusRequest,
     CompleteStepRequest,
     ElectionPackageCreate,
     ElectionPackageResponse,
@@ -43,6 +51,8 @@ from app.schemas.membership_pipeline import (
     InterviewCreate,
     InterviewResponse,
     InterviewUpdate,
+    KanbanBoardResponse,
+    KanbanColumnResponse,
     PaginatedProspectListResponse,
     PipelineCreate,
     PipelineListResponse,
@@ -68,7 +78,11 @@ from app.schemas.membership_pipeline import (
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 
-router = APIRouter()
+# Applied router-wide, not per route: every endpoint that takes a
+# {prospect_id} path parameter — including ones added later — must refuse to
+# serve the caller their own prospective-membership file. See
+# app/api/prospect_privacy.py for why.
+router = APIRouter(dependencies=[Depends(block_self_prospect_access)])
 
 
 # ============================================
@@ -544,30 +558,51 @@ async def delete_step(
 # ============================================
 
 
-@router.get("/pipelines/{pipeline_id}/kanban")
+@router.get("/pipelines/{pipeline_id}/kanban", response_model=KanbanBoardResponse)
 async def get_kanban_board(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("prospective_members.view", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Get the kanban board view for a pipeline.
 
-    Returns prospects grouped by their current step.
+    Returns prospects grouped by their current step, omitting the caller's
+    own prospective-membership record if they have one. Cards are capped;
+    each column's ``count`` is the true total regardless, and ``truncated``
+    says whether anything was withheld.
 
     **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     board = await service.get_kanban_board(
-        str(pipeline_id), current_user.organization_id
+        str(pipeline_id),
+        current_user.organization_id,
+        exclude_prospect_ids=hidden_prospect_ids,
     )
     if not board:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
         )
-    return board
+
+    now = datetime.now(timezone.utc)
+    return KanbanBoardResponse(
+        pipeline=board["pipeline"],
+        columns=[
+            KanbanColumnResponse(
+                step=column["step"],
+                prospects=[_prospect_list_item(p, now) for p in column["prospects"]],
+                count=column["count"],
+            )
+            for column in board["columns"]
+        ],
+        total_prospects=board["total_prospects"],
+        returned_prospects=board["returned_prospects"],
+        truncated=board["truncated"],
+    )
 
 
 # ============================================
@@ -582,15 +617,21 @@ async def get_pipeline_stats(
     current_user: User = Depends(
         require_permission("prospective_members.view", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Get statistics for a pipeline (counts by status, by step, conversion rate).
+
+    Counts exclude the caller's own prospective-membership record so the
+    totals reconcile with the list and board views.
 
     **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     stats = await service.get_pipeline_stats(
-        str(pipeline_id), current_user.organization_id
+        str(pipeline_id),
+        current_user.organization_id,
+        exclude_prospect_ids=hidden_prospect_ids,
     )
     if not stats:
         raise HTTPException(
@@ -649,6 +690,43 @@ async def purge_inactive_prospects(
 # ============================================
 
 
+def _prospect_list_item(prospect, now: datetime) -> ProspectListResponse:
+    """Map a prospect ORM row onto the card/list projection.
+
+    Shared by the list and kanban endpoints so a field added to one view
+    cannot silently diverge from the other — and so neither can fall back to
+    serializing the raw model, which exposes the status token.
+    """
+    enriched = MembershipPipelineService.enrich_prospect_list_item(prospect, now)
+    return ProspectListResponse(
+        id=prospect.id,
+        first_name=prospect.first_name,
+        last_name=prospect.last_name,
+        email=prospect.email,
+        phone=prospect.phone,
+        status=(
+            prospect.status.value
+            if hasattr(prospect.status, "value")
+            else prospect.status
+        ),
+        pipeline_id=prospect.pipeline_id,
+        pipeline_name=(prospect.pipeline.name if prospect.pipeline else None),
+        current_step_id=prospect.current_step_id,
+        current_step_name=(
+            prospect.current_step.name if prospect.current_step else None
+        ),
+        desired_membership_type=prospect.desired_membership_type,
+        created_at=prospect.created_at,
+        updated_at=enriched["last_activity"],
+        stage_entered_at=enriched["stage_entered_at"],
+        days_in_stage=enriched["days_in_stage"],
+        days_in_pipeline=enriched["days_in_pipeline"],
+        days_since_activity=enriched["days_since_activity"],
+        inactivity_alert_level=enriched["inactivity_alert_level"],
+        inactivity_timeout_days=enriched["inactivity_timeout_days"],
+    )
+
+
 @router.get("/prospects", response_model=PaginatedProspectListResponse)
 async def list_prospects(
     pipeline_id: UUID | None = Query(None, description="Filter by pipeline"),
@@ -662,12 +740,16 @@ async def list_prospects(
     current_user: User = Depends(
         require_permission("prospective_members.view", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     List prospective members with optional filters.
 
     Returns a paginated response with ``items``, ``total``, ``limit``,
     and ``offset`` so clients can implement proper pagination.
+
+    The caller's own prospective-membership record, if they have one, is
+    omitted from the results and from ``total``.
 
     **Requires permission: prospective_members.view**
     """
@@ -679,34 +761,11 @@ async def list_prospects(
         search=search,
         limit=limit,
         offset=offset,
+        exclude_prospect_ids=hidden_prospect_ids,
     )
 
     now = datetime.now(timezone.utc)
-    items = []
-    for p in prospects:
-        enriched = MembershipPipelineService.enrich_prospect_list_item(p, now)
-        items.append(
-            ProspectListResponse(
-                id=p.id,
-                first_name=p.first_name,
-                last_name=p.last_name,
-                email=p.email,
-                phone=p.phone,
-                status=(p.status.value if hasattr(p.status, "value") else p.status),
-                pipeline_id=p.pipeline_id,
-                pipeline_name=(p.pipeline.name if p.pipeline else None),
-                current_step_id=p.current_step_id,
-                current_step_name=(p.current_step.name if p.current_step else None),
-                created_at=p.created_at,
-                updated_at=enriched["last_activity"],
-                stage_entered_at=enriched["stage_entered_at"],
-                days_in_stage=enriched["days_in_stage"],
-                days_in_pipeline=enriched["days_in_pipeline"],
-                days_since_activity=enriched["days_since_activity"],
-                inactivity_alert_level=enriched["inactivity_alert_level"],
-                inactivity_timeout_days=enriched["inactivity_timeout_days"],
-            )
-        )
+    items = [_prospect_list_item(p, now) for p in prospects]
     return PaginatedProspectListResponse(
         items=items, total=total, limit=limit, offset=offset
     )
@@ -817,6 +876,8 @@ async def create_prospect(
             created_by=current_user.id,
         )
     except ValueError as e:
+        # Rejected foreign keys (pipeline, referring member) are client errors.
+        # Without this they reached the catch-all handler as a 500.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
@@ -943,12 +1004,20 @@ async def advance_prospect(
     **Requires permission: members.manage**
     """
     service = MembershipPipelineService(db)
-    prospect = await service.advance_prospect(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        advanced_by=current_user.id,
-        notes=data.notes if data else None,
-    )
+    try:
+        prospect = await service.advance_prospect(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            advanced_by=current_user.id,
+            notes=data.notes if data else None,
+        )
+    except ValueError as e:
+        # 409, not 400: the request is well-formed, the prospect just has
+        # nowhere to advance to. Answering 200 here previously let the UI
+        # report a movement that never happened.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
     if not prospect:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
@@ -963,6 +1032,112 @@ async def advance_prospect(
         username=current_user.username,
     )
     return prospect
+
+
+def _bulk_response(results: list[dict]) -> BulkActionResponse:
+    items = [BulkActionItemResult(**r) for r in results]
+    succeeded = sum(1 for r in items if r.succeeded)
+    return BulkActionResponse(
+        succeeded_count=succeeded,
+        failed_count=len(items) - succeeded,
+        results=items,
+    )
+
+
+@router.post("/prospects/bulk-advance", response_model=BulkActionResponse)
+async def bulk_advance_prospects(
+    data: BulkAdvanceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+):
+    """
+    Advance several prospects to their next step in one request.
+
+    Returns a per-prospect result rather than a single status, so the caller
+    can name which applicants did not move and why — a prospect already at
+    the final stage is reported as a failure, not silently counted as
+    advanced.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    results = await service.bulk_advance_prospects(
+        prospect_ids=[str(pid) for pid in data.prospect_ids],
+        organization_id=current_user.organization_id,
+        advanced_by=current_user.id,
+        notes=data.notes,
+        exclude_prospect_ids=hidden_prospect_ids,
+    )
+    response = _bulk_response(results)
+    if response.succeeded_count:
+        await log_audit_event(
+            db=db,
+            event_type="membership_pipeline.prospects_bulk_advanced",
+            event_category="membership",
+            severity="info",
+            event_data={
+                "advanced_count": response.succeeded_count,
+                "failed_count": response.failed_count,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return response
+
+
+@router.post("/prospects/bulk-status", response_model=BulkActionResponse)
+async def bulk_set_prospect_status(
+    data: BulkStatusRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+):
+    """
+    Set the status of several prospects in one request (reject, reactivate,
+    withdraw, place on hold).
+
+    ``reason`` is recorded in each prospect's activity log. It deliberately
+    does not touch the coordinator notes field — the previous client-side
+    bulk path sent the reason through the update endpoint as ``notes``,
+    overwriting whatever had been written about each applicant.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        results = await service.bulk_set_prospect_status(
+            prospect_ids=[str(pid) for pid in data.prospect_ids],
+            organization_id=current_user.organization_id,
+            status=data.status,
+            changed_by=current_user.id,
+            reason=data.reason,
+            exclude_prospect_ids=hidden_prospect_ids,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    response = _bulk_response(results)
+    if response.succeeded_count:
+        await log_audit_event(
+            db=db,
+            event_type="membership_pipeline.prospects_bulk_status_changed",
+            event_category="membership",
+            severity="info",
+            event_data={
+                "status": data.status,
+                "changed_count": response.succeeded_count,
+                "failed_count": response.failed_count,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return response
 
 
 @router.post("/prospects/{prospect_id}/regress", response_model=ProspectResponse)
@@ -1443,9 +1618,13 @@ async def list_election_packages(
             "elections.manage",
         )
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     List election packages across all prospects, optionally filtered.
+
+    The package built for the caller's own application is omitted — it
+    bundles the interview and coordinator material the vote is based on.
 
     **Requires permission: prospective_members.view or elections.view**
     """
@@ -1454,6 +1633,7 @@ async def list_election_packages(
         organization_id=current_user.organization_id,
         pipeline_id=str(pipeline_id) if pipeline_id else None,
         status_filter=status_filter,
+        exclude_prospect_ids=hidden_prospect_ids,
     )
     return packages
 

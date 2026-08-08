@@ -5,8 +5,9 @@ Revises: 20260306_0501
 Create Date: 2026-03-07 01:00:00.000000
 
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260307_0100"
@@ -49,7 +50,9 @@ def upgrade() -> None:
             sa.DateTime(timezone=True),
             server_default=sa.func.now(),
         ),
-        sa.Column("created_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
+        sa.Column(
+            "created_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True
+        ),
     )
     op.create_index(
         "idx_variant_groups_org_active",
@@ -63,11 +66,44 @@ def upgrade() -> None:
         sa.Column(
             "standard_size",
             sa.Enum(
-                "xxs", "xs", "s", "m", "l", "xl", "xxl", "xxxl", "xxxxl",
-                "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "10.5",
-                "11", "11.5", "12", "12.5", "13", "14", "15",
-                "28", "30", "32", "34", "36", "38", "40", "42", "44", "46",
-                "one_size", "custom",
+                "xxs",
+                "xs",
+                "s",
+                "m",
+                "l",
+                "xl",
+                "xxl",
+                "xxxl",
+                "xxxxl",
+                "6",
+                "6.5",
+                "7",
+                "7.5",
+                "8",
+                "8.5",
+                "9",
+                "9.5",
+                "10",
+                "10.5",
+                "11",
+                "11.5",
+                "12",
+                "12.5",
+                "13",
+                "14",
+                "15",
+                "28",
+                "30",
+                "32",
+                "34",
+                "36",
+                "38",
+                "40",
+                "42",
+                "44",
+                "46",
+                "one_size",
+                "custom",
                 name="standardsize",
             ),
             nullable=True,
@@ -78,8 +114,16 @@ def upgrade() -> None:
         sa.Column(
             "style",
             sa.Enum(
-                "short_sleeve", "long_sleeve", "mens", "womens", "unisex",
-                "v_neck", "crew_neck", "polo", "button_down", "quarter_zip",
+                "short_sleeve",
+                "long_sleeve",
+                "mens",
+                "womens",
+                "unisex",
+                "v_neck",
+                "crew_neck",
+                "polo",
+                "button_down",
+                "quarter_zip",
                 name="garmentstyle",
             ),
             nullable=True,
@@ -116,7 +160,9 @@ def upgrade() -> None:
         "departure_clearances",
         "departure_type",
         type_=sa.Enum(
-            "dropped_voluntary", "dropped_involuntary", "retired",
+            "dropped_voluntary",
+            "dropped_involuntary",
+            "retired",
             name="departuretype",
         ),
         existing_type=sa.String(50),
@@ -128,7 +174,11 @@ def upgrade() -> None:
         "inventory_write_offs",
         "reason",
         type_=sa.Enum(
-            "lost", "damaged_beyond_repair", "obsolete", "stolen", "other",
+            "lost",
+            "damaged_beyond_repair",
+            "obsolete",
+            "stolen",
+            "other",
             name="writeoffreason",
         ),
         existing_type=sa.String(50),
@@ -140,7 +190,10 @@ def upgrade() -> None:
         "nfpa_inspection_details",
         "recommendation",
         type_=sa.Enum(
-            "pass", "repair", "advanced_cleaning", "retire",
+            "pass",
+            "repair",
+            "advanced_cleaning",
+            "retire",
             name="nfparecommendation",
         ),
         existing_type=sa.String(50),
@@ -173,7 +226,9 @@ def upgrade() -> None:
             sa.DateTime(timezone=True),
             server_default=sa.func.now(),
         ),
-        sa.Column("created_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
+        sa.Column(
+            "created_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True
+        ),
     )
     op.create_index(
         "idx_kits_org_active",

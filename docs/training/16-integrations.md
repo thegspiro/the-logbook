@@ -36,7 +36,7 @@ The integrations page shows:
 - **Coming Soon** integrations planned for future releases
 - Summary counts: connected vs available
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Integrations page showing the catalog grid with connected integrations (green checkmarks), available integrations (gray dots with "Connect" buttons), and coming-soon integrations (dimmed with badges). Show categories: Calendar, Messaging, CRM, Data, Safety._
+![Integrations catalog grid with connection status on each card](./images/16-01-integrations-catalog.png)
 
 ---
 

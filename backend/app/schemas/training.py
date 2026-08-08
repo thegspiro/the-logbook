@@ -315,6 +315,8 @@ class TrainingRequirementBase(BaseModel):
     # Evaluation period boundary override (None = inherit org compliance setting;
     # True = count current month; False = stop at end of previous month)
     include_current_month: Optional[bool] = None
+    # Freshness window: a completion older than this many days doesn't count
+    recency_days: Optional[int] = Field(None, ge=1, le=3650)
     # Category requirements - training in these categories satisfies this requirement
     category_ids: Optional[List[str]] = None
 
@@ -421,6 +423,7 @@ class TrainingRequirementUpdate(BaseModel):
     period_end_month: Optional[int] = Field(None, ge=1, le=12)
     period_end_day: Optional[int] = Field(None, ge=1, le=31)
     include_current_month: Optional[bool] = None
+    recency_days: Optional[int] = Field(None, ge=1, le=3650)
     category_ids: Optional[List[str]] = None
     active: Optional[bool] = None
 

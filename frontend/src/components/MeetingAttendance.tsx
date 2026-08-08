@@ -191,7 +191,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
               {searchQuery ? 'No matching members found' : 'All members are checked in'}
             </div>
           ) : (
-            <div className="max-h-64 overflow-y-auto border border-theme-surface-border rounded-lg divide-y divide-white/10">
+            <div className="max-h-64 overflow-y-auto border border-theme-surface-border rounded-lg divide-y divide-theme-surface-border">
               {notCheckedIn.map((member) => (
                 <div
                   key={member.id}

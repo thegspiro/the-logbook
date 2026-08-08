@@ -35,6 +35,7 @@ from app.models.training import (
     RequirementSource,
     RequirementType,
     TrainingCategory,
+    TrainingCourse,
     TrainingProgram,
     TrainingRequirement,
     TrainingType,
@@ -54,11 +55,13 @@ from app.schemas.training_program import (
     TrainingRequirementEnhancedCreate,
 )
 from app.services.notifications_service import NotificationsService
+from app.services.training_compliance import recency_cutoff
 from app.services.training_waiver_service import (
     adjust_required,
     fetch_user_waivers,
     get_rolling_period_months,
 )
+from app.utils.org_scoping import assert_all_in_org
 
 
 class TrainingProgramService:
@@ -314,6 +317,33 @@ class TrainingProgramService:
 
     # ==================== Training Requirement Methods ====================
 
+    async def _validate_required_courses(
+        self, course_ids: Optional[List[str]], organization_id: UUID
+    ) -> Optional[str]:
+        """Verify every course id a client linked to a requirement belongs to the
+        caller's org, returning an error message if not.
+
+        ``required_courses`` is a JSON array of client-supplied catalog ids, so
+        nothing about the write itself constrains them to the caller's tenant.
+        Storing an out-of-org id would persist a dangling cross-tenant reference
+        that the compliance evaluator then matches records against — so the ids
+        are checked before they are stored (XC-1).
+
+        Returns the message instead of raising, to match this service's
+        ``(result, error)`` convention.
+        """
+        try:
+            await assert_all_in_org(
+                self.db,
+                TrainingCourse,
+                course_ids,
+                organization_id,
+                label="linked course",
+            )
+        except ValueError as exc:
+            return str(exc)
+        return None
+
     async def create_training_requirement(
         self,
         requirement_data: TrainingRequirementEnhancedCreate,
@@ -340,6 +370,12 @@ class TrainingProgramService:
         except ValueError:
             return None, f"Invalid source: {requirement_data.source}"
 
+        course_error = await self._validate_required_courses(
+            requirement_data.required_courses, organization_id
+        )
+        if course_error:
+            return None, course_error
+
         # Create requirement
         requirement = TrainingRequirement(
             organization_id=organization_id,
@@ -363,6 +399,7 @@ class TrainingProgramService:
             checklist_items=requirement_data.checklist_items,
             passing_score=getattr(requirement_data, "passing_score", None),
             max_attempts=getattr(requirement_data, "max_attempts", None),
+            recency_days=getattr(requirement_data, "recency_days", None),
             frequency=requirement_data.frequency,
             time_limit_days=requirement_data.time_limit_days,
             applies_to_all=requirement_data.applies_to_all,
@@ -435,6 +472,13 @@ class TrainingProgramService:
         if not requirement.is_editable:
             return None, "This requirement cannot be edited"
 
+        if "required_courses" in updates:
+            course_error = await self._validate_required_courses(
+                updates["required_courses"], organization_id
+            )
+            if course_error:
+                return None, course_error
+
         # A changed numeric target changes completion math for enrolled members.
         target_fields = {
             "required_hours",
@@ -448,9 +492,18 @@ class TrainingProgramService:
             if field in target_fields
         )
 
-        # Update fields
+        # Update fields.
+        #
+        # `updates` is built with exclude_unset, so a None here was sent
+        # deliberately. For most fields None still means "leave alone" (the
+        # long-standing behavior callers rely on), but for these it is the
+        # value: without them an officer could set a freshness window and never
+        # take it off again.
+        clearable_fields = {"recency_days"}
         for field, value in updates.items():
-            if hasattr(requirement, field) and value is not None:
+            if not hasattr(requirement, field):
+                continue
+            if value is not None or field in clearable_fields:
                 setattr(requirement, field, value)
 
         requirement.updated_at = datetime.now(timezone.utc)
@@ -531,6 +584,21 @@ class TrainingProgramService:
         except ValueError:
             return None, f"Invalid structure type: {prog.structure_type}"
 
+        # Validate every linked course up front, before anything is added to the
+        # session — a rejection part-way through the build would otherwise leave
+        # flushed rows behind for this transaction to roll back.
+        all_linked_courses = [
+            course_id
+            for phase_input in payload.phases
+            for req_input in phase_input.requirements
+            for course_id in (getattr(req_input, "required_courses", None) or [])
+        ]
+        course_error = await self._validate_required_courses(
+            all_linked_courses, organization_id
+        )
+        if course_error:
+            return None, course_error
+
         program = TrainingProgram(
             organization_id=organization_id,
             name=prog.name,
@@ -596,6 +664,7 @@ class TrainingProgramService:
                     required_courses=(
                         getattr(req_input, "required_courses", None) or None
                     ),
+                    recency_days=getattr(req_input, "recency_days", None),
                     is_editable=True,
                     allows_external_credit=getattr(
                         req_input, "allows_external_credit", False
@@ -1542,6 +1611,9 @@ class TrainingProgramService:
         # Create enrollment
         enrolled_now = datetime.now(timezone.utc)
         enrollment = ProgramEnrollment(
+            # organization_id is NOT NULL; omitting it made the INSERT fail
+            # outright once the row got as far as the database.
+            organization_id=str(organization_id),
             user_id=enrollment_data.user_id,
             program_id=enrollment_data.program_id,
             enrolled_at=enrolled_now,
@@ -2405,11 +2477,15 @@ class TrainingProgramService:
         organization_id: UUID,
         program_id: Any,
         requirement_id: Any,
+        completed_on: Optional[date] = None,
     ) -> Tuple[Optional[Any], Optional[str]]:
         """Resolve the (progress, requirement) row an officer would apply training
         to, or an error explaining why it can't be applied. Shared by the
         pre-flight validator and the apply itself so both judge eligibility the
-        same way. Returns (row, None) or (None, error_message)."""
+        same way. Returns (row, None) or (None, error_message).
+
+        ``completed_on`` is the training's completion date, checked against the
+        requirement's freshness window when both are present."""
         enrollment_result = await self.db.execute(
             select(ProgramEnrollment)
             .join(TrainingProgram)
@@ -2438,6 +2514,20 @@ class TrainingProgramService:
         row = row_result.first()
         if row is None:
             return None, "That requirement is not part of this member's enrollment"
+
+        # A requirement with a freshness window rejects an old completion even
+        # on an explicit officer sign-off: "CPR within the last 180 days" is the
+        # point of the requirement, so crediting a three-year-old record would
+        # quietly defeat it. Callers that have no date to check pass None.
+        if completed_on is not None:
+            _, requirement = row
+            cutoff = recency_cutoff(requirement, date.today())
+            if cutoff is not None and completed_on < cutoff:
+                return None, (
+                    f"That training was completed on {completed_on.isoformat()}, "
+                    f"outside this requirement's {requirement.recency_days}-day "
+                    "window — it can't be credited toward it."
+                )
         return row, None
 
     async def validate_apply_target(
@@ -2446,13 +2536,14 @@ class TrainingProgramService:
         organization_id: UUID,
         program_id: Any,
         requirement_id: Any,
+        completed_on: Optional[date] = None,
     ) -> Tuple[bool, Optional[str]]:
         """Pre-flight check: can this training be applied to this requirement?
         Lets a caller reject an invalid target BEFORE committing a side effect
         (e.g. approving a submission), so we never half-apply. Returns
         (ok, error_message)."""
         _, error = await self._resolve_apply_target(
-            user_id, organization_id, program_id, requirement_id
+            user_id, organization_id, program_id, requirement_id, completed_on
         )
         return error is None, error
 
@@ -2465,6 +2556,7 @@ class TrainingProgramService:
         hours: float,
         verified_by: Optional[UUID] = None,
         source_id: Optional[str] = None,
+        completed_on: Optional[date] = None,
     ) -> Tuple[bool, Optional[str]]:
         """Apply a completed training toward one specific pipeline requirement for
         a member's ACTIVE enrollment — an explicit officer action (e.g. crediting a
@@ -2477,10 +2569,16 @@ class TrainingProgramService:
         status-based requirements (certification, skills, checklist, knowledge
         test) are marked complete. Runs through ``update_requirement_progress`` so
         percentage, auto-completion, rollup, and phase advancement all fire.
+
+        It is, however, gated by the requirement's freshness window when
+        ``completed_on`` is supplied — an officer may waive delivery method, but
+        not the "must be within the last N days" rule that defines the
+        requirement.
+
         Returns ``(applied, error_message)``.
         """
         row, error = await self._resolve_apply_target(
-            user_id, organization_id, program_id, requirement_id
+            user_id, organization_id, program_id, requirement_id, completed_on
         )
         if error:
             return False, error

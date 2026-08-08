@@ -14,6 +14,7 @@ import type {
   Room,
   FacilitySystem,
 } from '../modules/facilities/types';
+import { asArray } from '../utils/asArray';
 
 // ============================================
 // Facilities Create / Update payloads
@@ -428,7 +429,7 @@ export const facilitiesService = {
   // Facility Types
   async getTypes(): Promise<FacilityType[]> {
     const response = await api.get<FacilityType[]>('/facilities/types');
-    return response.data;
+    return asArray(response.data);
   },
   async createType(data: FacilityTypeCreate): Promise<FacilityType> {
     const response = await api.post<FacilityType>('/facilities/types', data);
@@ -445,7 +446,7 @@ export const facilitiesService = {
   // Facility Statuses
   async getStatuses(): Promise<FacilityStatus[]> {
     const response = await api.get<FacilityStatus[]>('/facilities/statuses');
-    return response.data;
+    return asArray(response.data);
   },
   async createStatus(data: FacilityStatusCreate): Promise<FacilityStatus> {
     const response = await api.post<FacilityStatus>('/facilities/statuses', data);
@@ -462,7 +463,7 @@ export const facilitiesService = {
   // Facilities CRUD
   async getFacilities(params?: { facility_type_id?: string; status_id?: string; is_archived?: boolean; skip?: number; limit?: number }): Promise<Facility[]> {
     const response = await api.get<Facility[]>('/facilities', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getFacility(facilityId: string): Promise<Facility> {
     const response = await api.get<Facility>(`/facilities/${facilityId}`);
@@ -488,7 +489,7 @@ export const facilitiesService = {
   // Maintenance
   async getMaintenanceRecords(params?: { facility_id?: string; status?: string; skip?: number; limit?: number }): Promise<MaintenanceRecord[]> {
     const response = await api.get<MaintenanceRecord[]>('/facilities/maintenance', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getMaintenanceRecord(recordId: string): Promise<MaintenanceRecord> {
     const response = await api.get<MaintenanceRecord>(`/facilities/maintenance/${recordId}`);
@@ -509,7 +510,7 @@ export const facilitiesService = {
   // Inspections
   async getInspections(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Inspection[]> {
     const response = await api.get<Inspection[]>('/facilities/inspections', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getInspection(inspectionId: string): Promise<Inspection> {
     const response = await api.get<Inspection>(`/facilities/inspections/${inspectionId}`);
@@ -530,7 +531,7 @@ export const facilitiesService = {
   // Rooms
   async getRooms(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Room[]> {
     const response = await api.get<Room[]>('/facilities/rooms', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getRoom(roomId: string): Promise<Room> {
     const response = await api.get<Room>(`/facilities/rooms/${roomId}`);
@@ -551,7 +552,7 @@ export const facilitiesService = {
   // Maintenance Types
   async getMaintenanceTypes(params?: { skip?: number; limit?: number }): Promise<MaintenanceType[]> {
     const response = await api.get<MaintenanceType[]>('/facilities/maintenance-types', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createMaintenanceType(data: { name: string; description?: string; category?: string; default_interval_value?: number; default_interval_unit?: string }): Promise<MaintenanceType> {
     const response = await api.post<MaintenanceType>('/facilities/maintenance-types', data);
@@ -568,7 +569,7 @@ export const facilitiesService = {
   // Building Systems
   async getSystems(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<FacilitySystem[]> {
     const response = await api.get<FacilitySystem[]>('/facilities/systems', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getSystem(systemId: string): Promise<FacilitySystem> {
     const response = await api.get<FacilitySystem>(`/facilities/systems/${systemId}`);
@@ -589,7 +590,7 @@ export const facilitiesService = {
   // Emergency Contacts
   async getEmergencyContacts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<EmergencyContact[]> {
     const response = await api.get<EmergencyContact[]>('/facilities/emergency-contacts', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createEmergencyContact(data: EmergencyContactCreate): Promise<EmergencyContact> {
     const response = await api.post<EmergencyContact>('/facilities/emergency-contacts', data);
@@ -606,7 +607,7 @@ export const facilitiesService = {
   // Shutoff Locations
   async getShutoffLocations(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<ShutoffLocation[]> {
     const response = await api.get<ShutoffLocation[]>('/facilities/shutoff-locations', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createShutoffLocation(data: ShutoffLocationCreate): Promise<ShutoffLocation> {
     const response = await api.post<ShutoffLocation>('/facilities/shutoff-locations', data);
@@ -623,7 +624,7 @@ export const facilitiesService = {
   // Capital Projects
   async getCapitalProjects(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<CapitalProject[]> {
     const response = await api.get<CapitalProject[]>('/facilities/capital-projects', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getCapitalProject(projectId: string): Promise<CapitalProject> {
     const response = await api.get<CapitalProject>(`/facilities/capital-projects/${projectId}`);
@@ -644,7 +645,7 @@ export const facilitiesService = {
   // Insurance Policies
   async getInsurancePolicies(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<InsurancePolicy[]> {
     const response = await api.get<InsurancePolicy[]>('/facilities/insurance-policies', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getInsurancePolicy(policyId: string): Promise<InsurancePolicy> {
     const response = await api.get<InsurancePolicy>(`/facilities/insurance-policies/${policyId}`);
@@ -665,7 +666,7 @@ export const facilitiesService = {
   // Occupants
   async getOccupants(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Occupant[]> {
     const response = await api.get<Occupant[]>('/facilities/occupants', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getOccupant(occupantId: string): Promise<Occupant> {
     const response = await api.get<Occupant>(`/facilities/occupants/${occupantId}`);
@@ -686,7 +687,7 @@ export const facilitiesService = {
   // Utility Accounts
   async getUtilityAccounts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<UtilityAccount[]> {
     const response = await api.get<UtilityAccount[]>('/facilities/utility-accounts', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getUtilityAccount(accountId: string): Promise<UtilityAccount> {
     const response = await api.get<UtilityAccount>(`/facilities/utility-accounts/${accountId}`);
@@ -707,7 +708,7 @@ export const facilitiesService = {
   // Photos
   async getPhotos(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<FacilityPhoto[]> {
     const response = await api.get<FacilityPhoto[]>('/facilities/photos', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createPhoto(data: FacilityPhotoCreate): Promise<FacilityPhoto> {
     const response = await api.post<FacilityPhoto>('/facilities/photos', data);
@@ -724,7 +725,7 @@ export const facilitiesService = {
   // Documents
   async getFacilityDocuments(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<FacilityDocument[]> {
     const response = await api.get<FacilityDocument[]>('/facilities/documents', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createFacilityDocument(data: FacilityDocumentCreate): Promise<FacilityDocument> {
     const response = await api.post<FacilityDocument>('/facilities/documents', data);
@@ -741,7 +742,7 @@ export const facilitiesService = {
   // Utility Readings
   async getUtilityReadings(accountId: string, params?: { skip?: number; limit?: number }): Promise<UtilityReading[]> {
     const response = await api.get<UtilityReading[]>(`/facilities/utility-accounts/${accountId}/readings`, { params });
-    return response.data;
+    return asArray(response.data);
   },
   async createUtilityReading(accountId: string, data: UtilityReadingCreate): Promise<UtilityReading> {
     const response = await api.post<UtilityReading>(`/facilities/utility-accounts/${accountId}/readings`, data);
@@ -758,7 +759,7 @@ export const facilitiesService = {
   // Access Keys
   async getAccessKeys(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<AccessKey[]> {
     const response = await api.get<AccessKey[]>('/facilities/access-keys', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getAccessKey(keyId: string): Promise<AccessKey> {
     const response = await api.get<AccessKey>(`/facilities/access-keys/${keyId}`);
@@ -779,7 +780,7 @@ export const facilitiesService = {
   // Compliance Checklists
   async getComplianceChecklists(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<ComplianceChecklist[]> {
     const response = await api.get<ComplianceChecklist[]>('/facilities/compliance-checklists', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getComplianceChecklist(checklistId: string): Promise<ComplianceChecklist> {
     const response = await api.get<ComplianceChecklist>(`/facilities/compliance-checklists/${checklistId}`);
@@ -800,7 +801,7 @@ export const facilitiesService = {
   // Compliance Items
   async getComplianceItems(checklistId: string): Promise<ComplianceItem[]> {
     const response = await api.get<ComplianceItem[]>(`/facilities/compliance-checklists/${checklistId}/items`);
-    return response.data;
+    return asArray(response.data);
   },
   async createComplianceItem(checklistId: string, data: ComplianceItemCreate): Promise<ComplianceItem> {
     const response = await api.post<ComplianceItem>(`/facilities/compliance-checklists/${checklistId}/items`, data);
@@ -855,7 +856,7 @@ export interface TrainingWaiverResponse {
 export const locationsService = {
   async getLocations(params?: { is_active?: boolean; exclude_rooms?: boolean; skip?: number; limit?: number }): Promise<Location[]> {
     const response = await api.get<Location[]>('/locations', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getLocation(locationId: string): Promise<Location> {
@@ -927,7 +928,7 @@ export interface RankValidationResponse {
 export const ranksService = {
   async getRanks(params?: { is_active?: boolean }): Promise<OperationalRankResponse[]> {
     const response = await api.get<OperationalRankResponse[]>('/operational-ranks', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getRank(rankId: string): Promise<OperationalRankResponse> {
@@ -951,7 +952,7 @@ export const ranksService = {
 
   async reorderRanks(ranks: { id: string; sort_order: number }[]): Promise<OperationalRankResponse[]> {
     const response = await api.post<OperationalRankResponse[]>('/operational-ranks/reorder', { ranks });
-    return response.data;
+    return asArray(response.data);
   },
 
   async validateRanks(): Promise<RankValidationResponse> {

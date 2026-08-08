@@ -65,11 +65,11 @@ const ShiftCheckInPrintPage: React.FC = () => {
           />
         </div>
 
-        <p className="text-xs text-gray-400 mb-2">
+        <p className="text-xs text-gray-600 mb-2">
           Scan with your phone to check in or out
         </p>
         <div className="border-t border-gray-200 pt-2">
-          <p className="text-[10px] text-gray-300 break-all">
+          <p className="text-[10px] text-gray-600 break-all">
             {checkInUrl}
           </p>
         </div>

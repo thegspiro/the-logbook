@@ -165,7 +165,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
       aria-modal="true"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-3xl w-full max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <h2 className="text-xl font-bold text-theme-text-primary">
             {isEdit ? 'Edit Course' : 'Add New Course'}
@@ -526,7 +526,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg border text-sm ${
+              className={`flex items-center space-x-2 px-4 py-2 max-md:min-h-[44px] rounded-lg border text-sm ${
                 showFilters || filterType || filterCategory
                   ? 'bg-red-600/20 border-red-500 text-red-700 dark:text-red-400'
                   : 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
@@ -720,7 +720,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
           aria-modal="true"
           aria-label={`Classes for ${syllabusCourse.name}`}
         >
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-theme-surface-modal">
+          <div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-lg bg-theme-surface-modal">
             <div className="flex items-center justify-between border-b border-theme-surface-border p-6">
               <div>
                 <h2 className="text-xl font-bold text-theme-text-primary">

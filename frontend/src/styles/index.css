@@ -280,14 +280,33 @@
 /* --- Form Controls --- (#7 focus border color, #8 transition on focus, #9 inset shadow on focus) */
 @utility form-input {
   @apply bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder:text-theme-text-muted/60 focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden;
+  /* px-4 py-2 renders ~41px for an input and ~37px for a select — under the
+     44px touch minimum. Enforced below md only: a mouse pointer does not need
+     the target a fingertip does, and raising it everywhere would loosen
+     desktop form density. */
+  @media (max-width: 767px) {
+    min-height: 44px;
+  }
 }
 
 @utility form-input-sm {
   @apply bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder:text-theme-text-muted/60 focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-sm border px-3 py-1.5 text-sm transition-all duration-150 focus:ring-1 focus:outline-hidden;
+  /* Compact on desktop, still thumb-sized on a phone — see form-input. */
+  @media (max-width: 767px) {
+    min-height: 44px;
+  }
 }
 
 @utility form-checkbox {
   @apply bg-theme-input-bg border-theme-input-border focus:ring-theme-focus-ring h-4 w-4 rounded-sm text-blue-700 dark:text-blue-500;
+  /* A 16px box is the smallest thing on any form. The box stays 16px so
+     layouts are unchanged, but outline-style padding grows the hit area to
+     44px on touch; the negative margin keeps it from displacing neighbours. */
+  @media (max-width: 767px) {
+    padding: 14px;
+    margin: -14px;
+    background-clip: content-box;
+  }
 }
 
 @utility form-label {
@@ -316,35 +335,123 @@
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
 @utility btn-primary {
   @apply focus:ring-theme-focus-ring rounded-lg bg-red-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-red-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+
+  /* Grow to the 44px touch minimum on phones. Applied inside the query so
+     desktop button density is untouched; inline-flex centres the label in the
+     taller box, which a plain min-height would leave sitting at the top for
+     anchors styled as buttons. */
+  @media (max-width: 767px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
 }
 
 @utility btn-secondary {
   @apply bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover border-theme-surface-border focus:ring-theme-focus-ring rounded-lg border px-4 py-2 shadow-sm transition-all duration-150 ease-out hover:shadow focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+
+  /* Grow to the 44px touch minimum on phones. Applied inside the query so
+     desktop button density is untouched; inline-flex centres the label in the
+     taller box, which a plain min-height would leave sitting at the top for
+     anchors styled as buttons. */
+  @media (max-width: 767px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
 }
 
 @utility btn-success {
   @apply focus:ring-theme-focus-ring rounded-lg bg-green-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-green-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+
+  /* Grow to the 44px touch minimum on phones. Applied inside the query so
+     desktop button density is untouched; inline-flex centres the label in the
+     taller box, which a plain min-height would leave sitting at the top for
+     anchors styled as buttons. */
+  @media (max-width: 767px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
 }
 
 @utility btn-info {
   @apply focus:ring-theme-focus-ring rounded-lg bg-blue-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-blue-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+
+  /* Grow to the 44px touch minimum on phones. Applied inside the query so
+     desktop button density is untouched; inline-flex centres the label in the
+     taller box, which a plain min-height would leave sitting at the top for
+     anchors styled as buttons. */
+  @media (max-width: 767px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
 }
 
 @utility btn-warning {
   @apply focus:ring-theme-focus-ring rounded-lg bg-yellow-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-yellow-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+
+  /* Grow to the 44px touch minimum on phones. Applied inside the query so
+     desktop button density is untouched; inline-flex centres the label in the
+     taller box, which a plain min-height would leave sitting at the top for
+     anchors styled as buttons. */
+  @media (max-width: 767px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
 }
 
 /* --- Standardized Button Sizes (#79) --- */
 @utility btn-sm {
   @apply rounded-md px-2.5 py-1.5 text-xs;
+
+  /* Grow to the 44px touch minimum on phones. Applied inside the query so
+     desktop button density is untouched; inline-flex centres the label in the
+     taller box, which a plain min-height would leave sitting at the top for
+     anchors styled as buttons. */
+  @media (max-width: 767px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
 }
 
 @utility btn-md {
   @apply rounded-lg px-4 py-2 text-sm;
+
+  /* Grow to the 44px touch minimum on phones. Applied inside the query so
+     desktop button density is untouched; inline-flex centres the label in the
+     taller box, which a plain min-height would leave sitting at the top for
+     anchors styled as buttons. */
+  @media (max-width: 767px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
 }
 
 @utility btn-lg {
   @apply rounded-lg px-6 py-3 text-base;
+
+  /* Grow to the 44px touch minimum on phones. Applied inside the query so
+     desktop button density is untouched; inline-flex centres the label in the
+     taller box, which a plain min-height would leave sitting at the top for
+     anchors styled as buttons. */
+  @media (max-width: 767px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
 }
 
 @utility btn-icon {
@@ -353,9 +460,14 @@
 }
 
 @utility btn-icon-sm {
-  /* Compact 36px icon button for dense desktop toolbars — below the touch-target
-     minimum, so avoid it as a primary control on touch UIs. */
+  /* Compact 36px icon button for dense desktop toolbars. Its own guidance was
+     "avoid as a primary control on touch UIs" — rather than leave that to be
+     remembered at each call site, it grows to the full 44px on phones. */
   @apply inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-1.5;
+  @media (max-width: 767px) {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* --- Stat Cards --- (#10 stat card shadow + hover) */
@@ -535,10 +647,11 @@
 }
 
 @utility modal-body {
-  /* Mobile-safe modal body — accounts for on-screen keyboard */
-  @apply max-h-[85vh] overflow-y-auto;
+  /* Mobile-safe modal body — accounts for on-screen keyboard. Uses dvh so the
+     cap tracks the visible viewport rather than the URL-bar-retracted height. */
+  @apply max-h-[85dvh] overflow-y-auto;
   @media (min-width: 640px) {
-    max-height: 90vh;
+    max-height: 90dvh;
   }
 }
 
@@ -648,17 +761,74 @@
 
 @utility pb-safe {
   /* #27 Bottom padding equal to the device safe-area inset (0 on non-notched
-     devices). For fixed/sticky bars whose inner content already provides its
-     own visual padding. */
-  padding-bottom: env(safe-area-inset-bottom);
+     devices), plus the on-screen keyboard height, plus the mobile bottom
+     navigation bar. For fixed/sticky bars whose inner content already provides
+     its own visual padding. See `--keyboard-inset` and `--bottom-nav-height`. */
+  padding-bottom: calc(
+    env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--bottom-nav-height, 0px)
+  );
 }
 
 @utility action-bar-safe {
   /* #28 Vertical padding for a sticky/fixed bottom action bar: a consistent gap
      on every device that grows to clear the home indicator on notched phones.
-     Owns both paddings, so use it instead of py-* (pair with px-4). */
+     Owns both paddings, so use it instead of py-* (pair with px-4).
+     `--keyboard-inset` is published by useKeyboardInset() and is non-zero only
+     while an on-screen keyboard is open on a browser that shrinks the visual
+     viewport rather than the layout viewport (i.e. iOS). Without it the bar —
+     and its submit button — sits behind the keyboard, unreachable. */
   padding-top: 0.75rem;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(
+    0.75rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) +
+      var(--bottom-nav-height, 0px)
+  );
+}
+
+/* Set on the AppLayout root, so `--bottom-nav-height` is non-zero only where
+ * the mobile bottom navigation is actually rendered — page-level bottom action
+ * bars then lift clear of it automatically instead of each one hard-coding the
+ * bar's height. Public pages (login, onboarding, legal) never see the bar and
+ * so never inherit the offset. Must stay in step with BottomNavigation's own
+ * min-h-[56px] rows. */
+.has-bottom-nav {
+  --bottom-nav-height: 3.5rem;
+}
+@media (min-width: 768px) {
+  .has-bottom-nav {
+    --bottom-nav-height: 0px;
+  }
+}
+
+@utility safe-top {
+  /* Top padding equal to the device safe-area inset. For FIXED elements
+     pinned to top:0 (mobile header, nav drawer) — these are positioned against
+     the viewport, so they sit under the status bar in standalone mode unless
+     they carry the inset themselves. Body padding cannot do this for them. */
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility safe-pt-8 {
+  /* py-8's 2rem of top breathing room, grown to clear the status bar on
+     notched devices in standalone mode. Use with `pb-8` in place of `py-8`
+     on full-viewport pages that render their own flush-top content. */
+  padding-top: max(2rem, env(safe-area-inset-top));
+}
+
+@utility mobile-header-offset {
+  /* Top padding for content sitting below the 4rem fixed mobile header,
+     grown by the status-bar inset so it clears the header in standalone mode.
+     Pairs with `safe-top` on the header itself. Desktop (>=768px) has no fixed
+     mobile header, so the offset collapses to 0. */
+  padding-top: calc(4rem + env(safe-area-inset-top));
+  @media (min-width: 768px) {
+    padding-top: 0;
+  }
+}
+
+@utility mobile-header-inset {
+  /* Absolute offset matching `mobile-header-offset`, for elements pinned
+     below the fixed mobile header (e.g. the nav drawer's scrim). */
+  top: calc(4rem + env(safe-area-inset-top));
 }
 
 /* Theme CSS Custom Properties */
@@ -1030,13 +1200,68 @@ option {
   color: #111;
 }
 
-/* PWA safe area insets for devices with notches (iPhone X+, etc.) */
-@supports (padding: env(safe-area-inset-top)) {
+/* Minimum readable text size on phones.
+ *
+ * The app is used by volunteer members across a wide age range — the same
+ * reason the theme ships a high-contrast mode — and 10-11px captions, badge
+ * counts and tab labels are genuinely hard to read at arm's length on a phone.
+ * This lifts the two arbitrary sizes that appear in ordinary UI to the 12px
+ * floor (`text-xs`) below md, leaving desktop untouched.
+ *
+ * Deliberately scoped to 10px and 11px. The handful of smaller values —
+ * text-[9px] and below — are chart axis labels, day cells in the pattern
+ * builder's month grid, and a simulated barcode on the label-print preview.
+ * Those are dense fixed-size layouts, not prose, and forcing them to 12px
+ * would break the grid rather than help anyone read it.
+ *
+ * Unlayered like the dvh rules above, so it overrides `@layer utilities`
+ * without !important. */
+@media (max-width: 767px) {
+  .text-\[10px\],
+  .text-\[11px\] {
+    font-size: 12px;
+  }
+}
+
+/* Dynamic viewport height for the screen-height utilities.
+ *
+ * On mobile Safari `100vh` is the LARGEST viewport — the height with the URL
+ * bar retracted — so a `h-screen`/`min-h-screen` layout overflows by the
+ * toolbar height while that toolbar is visible, pushing bottom action bars
+ * below the fold. `100dvh` tracks the currently visible viewport instead.
+ *
+ * These rules are deliberately unlayered: Tailwind's utilities live in
+ * `@layer utilities`, and unlayered CSS wins over layered CSS regardless of
+ * specificity, so this overrides `h-screen` et al. without `!important`.
+ * Guarded by @supports so browsers without `dvh` keep the `vh` fallback. */
+@supports (height: 100dvh) {
+  .h-screen {
+    height: 100dvh;
+  }
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+  .max-h-screen {
+    max-height: 100dvh;
+  }
+}
+
+/* PWA safe area insets for devices with notches (iPhone X+, etc.)
+ *
+ * These are deliberately NOT applied to <body>. `viewport-fit=cover` plus
+ * `apple-mobile-web-app-status-bar-style: black-translucent` (index.html) make
+ * the web view extend under the status bar and home indicator, but a
+ * fixed-position element's containing block is the viewport, not the padded
+ * body — so body padding does nothing for the fixed mobile header/drawer while
+ * still adding inset-height overflow to every `min-h-screen` page. Each fixed
+ * element owns its own inset instead; see `safe-top` / `pb-safe` /
+ * `action-bar-safe` below. */
+@supports (padding: env(safe-area-inset-left)) {
+  /* Horizontal insets are safe on body: they affect in-flow content only,
+     which is exactly what needs to clear a landscape notch. */
   body {
-    padding-top: env(safe-area-inset-top);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 
@@ -1119,7 +1344,8 @@ option {
 
 /* Skip to main content link for accessibility */
 .skip-to-main {
-  @apply bg-theme-surface-modal text-theme-text-primary absolute -top-96 left-0 z-50 rounded-br-lg px-4 py-2 focus:top-0;
+  @apply bg-theme-surface-modal text-theme-text-primary absolute -top-96 left-0 z-50 flex items-center rounded-br-lg px-4 py-2 focus:top-0;
+  min-height: 44px;
 }
 
 /* #32 Smooth backdrop overlay for modals and drawers */

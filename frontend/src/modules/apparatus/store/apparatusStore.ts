@@ -21,6 +21,7 @@ import {
   apparatusMaintenanceService,
 } from '../services/api';
 import { handleStoreError } from '../../../utils/storeHelpers';
+import { asArray } from '../../../utils/asArray';
 
 interface ApparatusState {
   // Data
@@ -101,8 +102,11 @@ export const useApparatusStore = create<ApparatusState>((set, get) => ({
       });
 
       set({
-        apparatusList: response.items,
-        totalApparatus: response.total,
+        // Paginated envelope: the array sits below the top level, out of reach
+        // of the service-boundary asArray guard, and the list is filtered and
+        // measured without a check.
+        apparatusList: asArray(response.items),
+        totalApparatus: response.total ?? 0,
         currentPage: response.page,
         totalPages: response.totalPages,
         isLoading: false,

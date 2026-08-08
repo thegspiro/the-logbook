@@ -460,6 +460,9 @@ const FormsPage: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
               <label htmlFor="forms-search" className="sr-only">Search forms</label>
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 id="forms-search"
                 type="text"
                 aria-label="Search forms..." placeholder="Search forms..."

@@ -8,6 +8,7 @@
     "frontend"
   ],
   "scripts": {
+    "prepare": "if command -v husky >/dev/null 2>&1; then husky; fi",
     "setup": "npm install && npm run setup:backend && npm run setup:frontend",
     "setup:backend": "cd backend && pip install -r requirements.txt",
     "setup:frontend": "cd frontend && npm install",
@@ -21,10 +22,10 @@
     "test:backend": "cd backend && pytest",
     "test:frontend": "cd frontend && npm test",
     "lint": "npm run lint:backend && npm run lint:frontend",
-    "lint:backend": "cd backend && flake8 app/ tests/ && black --check app/ tests/ && isort --check-only app/ tests/",
+    "lint:backend": "cd backend && flake8 app/ tests/ alembic/ && black --check app/ tests/ alembic/ && isort --check-only app/ tests/ alembic/",
     "lint:frontend": "cd frontend && npm run lint",
     "format": "npm run format:backend && npm run format:frontend",
-    "format:backend": "cd backend && black app/ tests/ && isort app/ tests/",
+    "format:backend": "cd backend && black app/ tests/ alembic/ && isort app/ tests/ alembic/",
     "format:frontend": "cd frontend && prettier --write \"src/**/*.{ts,tsx,css}\"",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
@@ -64,8 +65,8 @@
     "prettier": "^3.9.6"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
   },
   "husky": {
     "hooks": {
@@ -73,8 +74,8 @@
     }
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
-      "eslint --fix",
+    "frontend/**/*.{ts,tsx,js,jsx}": [
+      "bash -c 'cd frontend && npx eslint --fix \"$@\"' --",
       "prettier --write"
     ],
     "frontend/src/**/*.{ts,tsx}": [
@@ -87,6 +88,9 @@
       "bash -c 'cd backend && python -m black --check \"$@\"' --",
       "bash -c 'cd backend && python -m flake8 \"$@\"' --",
       "bash -c 'cd backend && python -m isort --check-only \"$@\"' --"
+    ],
+    "{generate_registry.py,scripts/**/*.py}": [
+      "bash -c 'python -m flake8 --config backend/.flake8 \"$@\"' --"
     ]
   },
   "overrides": {

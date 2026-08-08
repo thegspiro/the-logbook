@@ -5,8 +5,9 @@ Revises: 20260306_0500
 Create Date: 2026-03-06 05:01:00.000000
 
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260306_0501"
@@ -45,7 +46,9 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("item_name", sa.String(255), nullable=False),
-        sa.Column("quantity_requested", sa.Integer(), nullable=False, server_default="1"),
+        sa.Column(
+            "quantity_requested", sa.Integer(), nullable=False, server_default="1"
+        ),
         sa.Column("quantity_received", sa.Integer(), nullable=True),
         sa.Column("vendor", sa.String(255), nullable=True),
         sa.Column("vendor_contact", sa.String(255), nullable=True),
@@ -55,7 +58,14 @@ def upgrade() -> None:
         sa.Column("expected_delivery_date", sa.Date(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("pending", "approved", "ordered", "received", "cancelled", name="reorderstatus"),
+            sa.Enum(
+                "pending",
+                "approved",
+                "ordered",
+                "received",
+                "cancelled",
+                name="reorderstatus",
+            ),
             nullable=False,
             server_default="pending",
         ),
@@ -81,10 +91,16 @@ def upgrade() -> None:
         sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("ordered_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("received_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
     )
-    op.create_index("idx_reorder_org_status", "reorder_requests", ["organization_id", "status"])
+    op.create_index(
+        "idx_reorder_org_status", "reorder_requests", ["organization_id", "status"]
+    )
     op.create_index("idx_reorder_item", "reorder_requests", ["item_id"])
 
 

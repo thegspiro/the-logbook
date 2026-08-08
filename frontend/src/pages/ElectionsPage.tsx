@@ -328,7 +328,7 @@ export const ElectionsPage: React.FC = () => {
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-4 py-2 rounded-md text-sm font-medium inline-flex items-center gap-2 ${
+              className={`px-4 py-2 max-md:min-h-[44px] rounded-md text-sm font-medium inline-flex items-center gap-2 ${
                 statusFilter === status
                   ? 'bg-blue-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -469,7 +469,7 @@ export const ElectionsPage: React.FC = () => {
           aria-labelledby="create-election-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
         >
-          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="create-election-title" className="text-lg font-medium text-theme-text-primary">Create New Election</h3>
             </div>

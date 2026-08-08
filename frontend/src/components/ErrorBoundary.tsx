@@ -55,8 +55,14 @@ export class ErrorBoundary extends Component<Props, State> {
       errorInfo,
     });
 
+    // A chunk-load failure is reported under its own type: it means members
+    // are running a build whose assets no longer exist (a deployment landed
+    // mid-session), which an administrator resolves very differently from an
+    // ordinary render crash.
     errorTracker.logError(error, {
-      errorType: "REACT_ERROR_BOUNDARY",
+      errorType: isChunkLoadError(error)
+        ? "CHUNK_LOAD_ERROR"
+        : "REACT_ERROR_BOUNDARY",
       additionalContext: { componentStack: errorInfo.componentStack },
     });
   }

@@ -27,14 +27,12 @@ depends_on = None
 def upgrade() -> None:
     # Only the empty cases. A department that has deliberately chosen its
     # methods keeps them, whatever they are.
-    op.execute(
-        """
+    op.execute("""
         UPDATE store_settings
            SET accepted_payment_methods = '["cash"]'
          WHERE accepted_payment_methods IS NULL
             OR JSON_LENGTH(accepted_payment_methods) = 0
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

@@ -358,3 +358,53 @@ class DepartmentMessageRead(Base):
         UniqueConstraint("message_id", "user_id", name="uq_dept_msg_read_user"),
         Index("idx_dept_msg_read_user", "user_id"),
     )
+
+
+class PushSubscription(Base):
+    """A single browser/device Web Push endpoint belonging to a user.
+
+    One row per device, not per user: a member may install the PWA on a phone
+    and a station tablet and expects both to ring. Endpoints are issued by the
+    browser's push service and are opaque; `p256dh` and `auth` are the client's
+    public key and shared secret, required to encrypt the payload so the push
+    service (Apple/Google/Mozilla) cannot read it.
+
+    Rows are removed when the push service reports the endpoint is gone (HTTP
+    404/410), which happens when the user uninstalls the PWA or clears site
+    data — there is no unsubscribe callback to rely on.
+    """
+
+    __tablename__ = "push_subscriptions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Push endpoints are URLs with no documented length bound; observed values
+    # from FCM already exceed 200 chars, so this is stored as TEXT. It cannot
+    # be indexed directly at full width in MySQL, hence endpoint_hash below.
+    endpoint = Column(Text, nullable=False)
+    # SHA-256 of the endpoint, so uniqueness can be enforced and lookups done
+    # without a prefix index on an unbounded column.
+    endpoint_hash = Column(String(64), nullable=False)
+    p256dh = Column(String(255), nullable=False)
+    auth = Column(String(255), nullable=False)
+    user_agent = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("endpoint_hash", name="uq_push_sub_endpoint"),
+        Index("idx_push_sub_org_user", "organization_id", "user_id"),
+    )

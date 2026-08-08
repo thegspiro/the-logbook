@@ -8,6 +8,9 @@ import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, AlertCircle } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
+import { RecencyWindowField } from '../components/training/RecencyWindowField';
+import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { getErrorMessage } from '../utils/errorHandling';
 import type {
   ProgramMilestone,
@@ -35,12 +38,18 @@ const STRUCTURE_TYPES: { value: ProgramStructureType; label: string }[] = [
 ];
 
 const MONTHS: { value: number; label: string }[] = [
-  { value: 1, label: 'January' }, { value: 2, label: 'February' },
-  { value: 3, label: 'March' }, { value: 4, label: 'April' },
-  { value: 5, label: 'May' }, { value: 6, label: 'June' },
-  { value: 7, label: 'July' }, { value: 8, label: 'August' },
-  { value: 9, label: 'September' }, { value: 10, label: 'October' },
-  { value: 11, label: 'November' }, { value: 12, label: 'December' },
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'December' },
 ];
 
 // Shared modal shell.
@@ -53,26 +62,40 @@ const ModalShell: React.FC<{
   children: React.ReactNode;
 }> = ({ title, onClose, onSubmit, submitting, submitLabel = 'Save', children }) => (
   <div
-    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     role="dialog"
     aria-modal="true"
     aria-label={title}
-    onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    onKeyDown={(e) => {
+      if (e.key === 'Escape') onClose();
+    }}
   >
-    <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] flex flex-col">
-      <div className="p-5 border-b border-theme-surface-border flex items-center justify-between">
-        <h2 className="text-lg font-bold text-theme-text-primary">{title}</h2>
-        <button type="button" onClick={onClose} aria-label="Close" className="text-theme-text-muted hover:text-theme-text-primary">
-          <X className="w-5 h-5" />
+    <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-lg flex-col rounded-lg">
+      <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
+        <h2 className="text-theme-text-primary text-lg font-bold">{title}</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="text-theme-text-muted hover:text-theme-text-primary"
+        >
+          <X className="h-5 w-5" />
         </button>
       </div>
       <form
-        onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
-        className="p-5 space-y-4 overflow-y-auto"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+        className="space-y-4 overflow-y-auto p-5"
       >
         {children}
         <div className="flex justify-end gap-3 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm">
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover rounded-lg px-4 py-2 text-sm"
+          >
             Cancel
           </button>
           <button type="submit" className="btn-primary text-sm" disabled={submitting}>
@@ -103,22 +126,19 @@ export const EditProgramModal: React.FC<{
   const [isTemplate, setIsTemplate] = useState(!!program.is_template);
   const [active, setActive] = useState(program.active !== false);
   const [recertEnabled, setRecertEnabled] = useState(!!program.recert_enabled);
-  const [recertInterval, setRecertInterval] = useState(
-    program.recert_interval_months?.toString() ?? '24',
-  );
-  const [recertAnchorMonth, setRecertAnchorMonth] = useState(
-    program.recert_anchor_month?.toString() ?? '',
-  );
-  const [recertAnchorDay, setRecertAnchorDay] = useState(
-    program.recert_anchor_day?.toString() ?? '',
-  );
+  const [recertInterval, setRecertInterval] = useState(program.recert_interval_months?.toString() ?? '24');
+  const [recertAnchorMonth, setRecertAnchorMonth] = useState(program.recert_anchor_month?.toString() ?? '');
+  const [recertAnchorDay, setRecertAnchorDay] = useState(program.recert_anchor_day?.toString() ?? '');
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
-    if (!name.trim()) { toast.error('Name is required'); return; }
+    if (!name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
     // A fixed anchor needs both parts; require them together to avoid an
     // ambiguous "reset in March, day unknown".
-    if (recertEnabled && (!!recertAnchorMonth) !== (!!recertAnchorDay)) {
+    if (recertEnabled && !!recertAnchorMonth !== !!recertAnchorDay) {
       toast.error('Set both the reset month and day, or leave both blank');
       return;
     }
@@ -135,12 +155,9 @@ export const EditProgramModal: React.FC<{
         is_template: isTemplate,
         active,
         recert_enabled: recertEnabled,
-        recert_interval_months:
-          recertEnabled && recertInterval ? Number(recertInterval) : undefined,
-        recert_anchor_month:
-          recertEnabled && recertAnchorMonth ? Number(recertAnchorMonth) : undefined,
-        recert_anchor_day:
-          recertEnabled && recertAnchorDay ? Number(recertAnchorDay) : undefined,
+        recert_interval_months: recertEnabled && recertInterval ? Number(recertInterval) : undefined,
+        recert_anchor_month: recertEnabled && recertAnchorMonth ? Number(recertAnchorMonth) : undefined,
+        recert_anchor_day: recertEnabled && recertAnchorDay ? Number(recertAnchorDay) : undefined,
       });
       toast.success('Pipeline updated');
       onSaved();
@@ -154,60 +171,110 @@ export const EditProgramModal: React.FC<{
   return (
     <ModalShell title="Edit pipeline details" onClose={onClose} onSubmit={() => void submit()} submitting={submitting}>
       <div>
-        <label className="form-label" htmlFor="ep-name">Name</label>
+        <label className="form-label" htmlFor="ep-name">
+          Name
+        </label>
         <input id="ep-name" className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div>
-        <label className="form-label" htmlFor="ep-desc">Description</label>
-        <textarea id="ep-desc" className="form-input" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <label className="form-label" htmlFor="ep-desc">
+          Description
+        </label>
+        <textarea
+          id="ep-desc"
+          className="form-input"
+          rows={3}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="form-label" htmlFor="ep-code">Code</label>
-          <input id="ep-code" className="form-input" value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. FF-RECRUIT" />
+          <label className="form-label" htmlFor="ep-code">
+            Code
+          </label>
+          <input
+            id="ep-code"
+            className="form-input"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="e.g. FF-RECRUIT"
+          />
         </div>
         <div>
-          <label className="form-label" htmlFor="ep-structure">Structure</label>
-          <select id="ep-structure" className="form-input" value={structureType} onChange={(e) => setStructureType(e.target.value as ProgramStructureType)}>
-            {STRUCTURE_TYPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          <label className="form-label" htmlFor="ep-structure">
+            Structure
+          </label>
+          <select
+            id="ep-structure"
+            className="form-input"
+            value={structureType}
+            onChange={(e) => setStructureType(e.target.value as ProgramStructureType)}
+          >
+            {STRUCTURE_TYPES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
           </select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="form-label" htmlFor="ep-target">Target position</label>
-          <input id="ep-target" className="form-input" value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} placeholder="e.g. probationary" />
+          <label className="form-label" htmlFor="ep-target">
+            Target position
+          </label>
+          <input
+            id="ep-target"
+            className="form-input"
+            value={targetPosition}
+            onChange={(e) => setTargetPosition(e.target.value)}
+            placeholder="e.g. probationary"
+          />
         </div>
         <div>
-          <label className="form-label" htmlFor="ep-limit">Time limit (days)</label>
-          <input id="ep-limit" type="number" min={0} className="form-input" value={timeLimit} onChange={(e) => setTimeLimit(e.target.value)} />
+          <label className="form-label" htmlFor="ep-limit">
+            Time limit (days)
+          </label>
+          <input
+            id="ep-limit"
+            type="number"
+            min={0}
+            className="form-input"
+            value={timeLimit}
+            onChange={(e) => setTimeLimit(e.target.value)}
+          />
         </div>
       </div>
       <div>
-        <label className="form-label" htmlFor="ep-warn">Warn days before deadline</label>
-        <input id="ep-warn" type="number" min={0} className="form-input" value={warnDays} onChange={(e) => setWarnDays(e.target.value)} />
+        <label className="form-label" htmlFor="ep-warn">
+          Warn days before deadline
+        </label>
+        <input
+          id="ep-warn"
+          type="number"
+          min={0}
+          className="form-input"
+          value={warnDays}
+          onChange={(e) => setWarnDays(e.target.value)}
+        />
       </div>
       <div className="flex items-center gap-6">
-        <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary">
+        <label className="text-theme-text-secondary inline-flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isTemplate} onChange={(e) => setIsTemplate(e.target.checked)} /> Template
         </label>
-        <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary">
+        <label className="text-theme-text-secondary inline-flex items-center gap-2 text-sm">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active
         </label>
       </div>
-      <div className="rounded-md border border-theme-surface-border p-3 space-y-3">
-        <label className="inline-flex items-center gap-2 text-sm font-medium text-theme-text-primary">
-          <input
-            type="checkbox"
-            checked={recertEnabled}
-            onChange={(e) => setRecertEnabled(e.target.checked)}
-          />
+      <div className="border-theme-surface-border space-y-3 rounded-md border p-3">
+        <label className="text-theme-text-primary inline-flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" checked={recertEnabled} onChange={(e) => setRecertEnabled(e.target.checked)} />
           Recertification cycle (auto-reset)
         </label>
-        <p className="text-xs text-theme-text-muted">
-          Clears each member&apos;s progress on a recurring deadline so a fresh
-          certification cycle can begin — e.g. NREMT&apos;s biennial recert due
-          every other March 30.
+        <p className="text-theme-text-muted text-xs">
+          Clears each member&apos;s progress on a recurring deadline so a fresh certification cycle can begin — e.g.
+          NREMT&apos;s biennial recert due every other March 30.
         </p>
         {recertEnabled && (
           <div className="space-y-3">
@@ -239,7 +306,9 @@ export const EditProgramModal: React.FC<{
                 >
                   <option value="">Roll from enrollment date</option>
                   {MONTHS.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -259,10 +328,9 @@ export const EditProgramModal: React.FC<{
                 />
               </div>
             </div>
-            <p className="text-xs text-theme-text-muted">
-              Set a month and day to pin the reset to a fixed calendar date;
-              leave them blank to reset on a rolling schedule from each
-              member&apos;s enrollment date.
+            <p className="text-theme-text-muted text-xs">
+              Set a month and day to pin the reset to a fixed calendar date; leave them blank to reset on a rolling
+              schedule from each member&apos;s enrollment date.
             </p>
           </div>
         )}
@@ -289,7 +357,10 @@ export const PhaseFormModal: React.FC<{
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
-    if (!name.trim()) { toast.error('Name is required'); return; }
+    if (!name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
     setSubmitting(true);
     try {
       if (phase) {
@@ -320,20 +391,44 @@ export const PhaseFormModal: React.FC<{
   };
 
   return (
-    <ModalShell title={phase ? 'Edit phase' : 'Add phase'} onClose={onClose} onSubmit={() => void submit()} submitting={submitting}>
+    <ModalShell
+      title={phase ? 'Edit phase' : 'Add phase'}
+      onClose={onClose}
+      onSubmit={() => void submit()}
+      submitting={submitting}
+    >
       <div>
-        <label className="form-label" htmlFor="ph-name">Name</label>
+        <label className="form-label" htmlFor="ph-name">
+          Name
+        </label>
         <input id="ph-name" className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div>
-        <label className="form-label" htmlFor="ph-desc">Description</label>
-        <textarea id="ph-desc" className="form-input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <label className="form-label" htmlFor="ph-desc">
+          Description
+        </label>
+        <textarea
+          id="ph-desc"
+          className="form-input"
+          rows={2}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
       </div>
       <div>
-        <label className="form-label" htmlFor="ph-limit">Time limit (days)</label>
-        <input id="ph-limit" type="number" min={0} className="form-input" value={timeLimit} onChange={(e) => setTimeLimit(e.target.value)} />
+        <label className="form-label" htmlFor="ph-limit">
+          Time limit (days)
+        </label>
+        <input
+          id="ph-limit"
+          type="number"
+          min={0}
+          className="form-input"
+          value={timeLimit}
+          onChange={(e) => setTimeLimit(e.target.value)}
+        />
       </div>
-      <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary">
+      <label className="text-theme-text-secondary inline-flex items-center gap-2 text-sm">
         <input type="checkbox" checked={manual} onChange={(e) => setManual(e.target.checked)} />
         Require officer approval to advance out of this phase
       </label>
@@ -363,12 +458,19 @@ export const RequirementFormModal: React.FC<{
   const [passing, setPassing] = useState(req?.passing_score?.toString() ?? '');
   const [attempts, setAttempts] = useState(req?.max_attempts?.toString() ?? '');
   const [checklist, setChecklist] = useState((req?.checklist_items ?? []).join('\n'));
+  const [requiredCourses, setRequiredCourses] = useState<string[]>(req?.required_courses ?? []);
+  const [recencyDays, setRecencyDays] = useState<number | undefined>(req?.recency_days ?? undefined);
   const [isRequired, setIsRequired] = useState(link?.is_required !== false);
   const [allowsExternal, setAllowsExternal] = useState(req?.allows_external_credit === true);
   const [submitting, setSubmitting] = useState(false);
+  const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
+  const linksCourses = type === 'courses' || type === 'certification';
 
   const submit = async () => {
-    if (!name.trim()) { toast.error('Name is required'); return; }
+    if (!name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
     setSubmitting(true);
     try {
       const payload = {
@@ -382,8 +484,18 @@ export const RequirementFormModal: React.FC<{
         max_attempts: type === 'knowledge_test' && attempts ? Number(attempts) : undefined,
         checklist_items:
           type === 'checklist'
-            ? checklist.split('\n').map((s) => s.trim()).filter(Boolean)
+            ? checklist
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean)
             : undefined,
+        // Always sent (as [] for other types) so switching a requirement away
+        // from courses/certification clears stale links — a leftover course id
+        // narrows the hours evaluator to only that course's records.
+        required_courses: linksCourses ? requiredCourses : [],
+        // Sent even when null so an officer can lift a freshness window they
+        // previously set; the service treats recency_days as clearable.
+        recency_days: linksCourses ? recencyDays : undefined,
         allows_external_credit: allowsExternal,
       };
       if (link) {
@@ -416,86 +528,177 @@ export const RequirementFormModal: React.FC<{
   };
 
   return (
-    <ModalShell title={link ? 'Edit requirement' : 'Add requirement'} onClose={onClose} onSubmit={() => void submit()} submitting={submitting}>
+    <ModalShell
+      title={link ? 'Edit requirement' : 'Add requirement'}
+      onClose={onClose}
+      onSubmit={() => void submit()}
+      submitting={submitting}
+    >
       <div>
-        <label className="form-label" htmlFor="rq-name">Name</label>
+        <label className="form-label" htmlFor="rq-name">
+          Name
+        </label>
         <input id="rq-name" className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div>
-        <label className="form-label" htmlFor="rq-desc">Description</label>
-        <textarea id="rq-desc" className="form-input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <label className="form-label" htmlFor="rq-desc">
+          Description
+        </label>
+        <textarea
+          id="rq-desc"
+          className="form-input"
+          rows={2}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
       </div>
       <div>
-        <label className="form-label" htmlFor="rq-type">Type</label>
+        <label className="form-label" htmlFor="rq-type">
+          Type
+        </label>
         <select id="rq-type" className="form-input" value={type} onChange={(e) => setType(e.target.value)}>
-          {REQUIREMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          {REQUIREMENT_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
         </select>
       </div>
       {type === 'hours' && (
         <div>
-          <label className="form-label" htmlFor="rq-hours">Required hours</label>
-          <input id="rq-hours" type="number" min={0} className="form-input" value={hours} onChange={(e) => setHours(e.target.value)} />
+          <label className="form-label" htmlFor="rq-hours">
+            Required hours
+          </label>
+          <input
+            id="rq-hours"
+            type="number"
+            min={0}
+            className="form-input"
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+          />
         </div>
       )}
       {type === 'shifts' && (
         <div>
-          <label className="form-label" htmlFor="rq-shifts">Required shifts</label>
-          <input id="rq-shifts" type="number" min={0} className="form-input" value={shifts} onChange={(e) => setShifts(e.target.value)} />
+          <label className="form-label" htmlFor="rq-shifts">
+            Required shifts
+          </label>
+          <input
+            id="rq-shifts"
+            type="number"
+            min={0}
+            className="form-input"
+            value={shifts}
+            onChange={(e) => setShifts(e.target.value)}
+          />
         </div>
       )}
       {type === 'calls' && (
         <div>
-          <label className="form-label" htmlFor="rq-calls">Required calls</label>
-          <input id="rq-calls" type="number" min={0} className="form-input" value={calls} onChange={(e) => setCalls(e.target.value)} />
+          <label className="form-label" htmlFor="rq-calls">
+            Required calls
+          </label>
+          <input
+            id="rq-calls"
+            type="number"
+            min={0}
+            className="form-input"
+            value={calls}
+            onChange={(e) => setCalls(e.target.value)}
+          />
         </div>
       )}
       {type === 'knowledge_test' && (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="form-label" htmlFor="rq-pass">Passing score (%)</label>
-            <input id="rq-pass" type="number" min={0} max={100} className="form-input" value={passing} onChange={(e) => setPassing(e.target.value)} />
+            <label className="form-label" htmlFor="rq-pass">
+              Passing score (%)
+            </label>
+            <input
+              id="rq-pass"
+              type="number"
+              min={0}
+              max={100}
+              className="form-input"
+              value={passing}
+              onChange={(e) => setPassing(e.target.value)}
+            />
           </div>
           <div>
-            <label className="form-label" htmlFor="rq-att">Max attempts</label>
-            <input id="rq-att" type="number" min={1} className="form-input" value={attempts} onChange={(e) => setAttempts(e.target.value)} />
+            <label className="form-label" htmlFor="rq-att">
+              Max attempts
+            </label>
+            <input
+              id="rq-att"
+              type="number"
+              min={1}
+              className="form-input"
+              value={attempts}
+              onChange={(e) => setAttempts(e.target.value)}
+            />
           </div>
         </div>
       )}
       {type === 'checklist' && (
         <div>
-          <label className="form-label" htmlFor="rq-check">Checklist items (one per line)</label>
-          <textarea id="rq-check" className="form-input" rows={4} value={checklist} onChange={(e) => setChecklist(e.target.value)} />
+          <label className="form-label" htmlFor="rq-check">
+            Checklist items (one per line)
+          </label>
+          <textarea
+            id="rq-check"
+            className="form-input"
+            rows={4}
+            value={checklist}
+            onChange={(e) => setChecklist(e.target.value)}
+          />
         </div>
       )}
+      {linksCourses && (
+        <CourseLibraryPicker
+          idPrefix="rq"
+          compact
+          courses={courses}
+          loading={coursesLoading}
+          error={coursesError}
+          variant={type === 'certification' ? 'certification' : 'courses'}
+          selectedIds={requiredCourses}
+          onChange={setRequiredCourses}
+        />
+      )}
+      {linksCourses && <RecencyWindowField idPrefix="rq" value={recencyDays} onChange={setRecencyDays} />}
       {(type === 'hours' || type === 'courses') && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
           <div className="space-y-2">
-            <p className="text-sm text-theme-text-secondary">
+            <p className="text-theme-text-secondary text-sm">
               {allowsExternal ? (
-                <>Imported courses <strong>will</strong> count toward this requirement when they
-                carry a matching category (e.g. a Vector Solutions completion).</>
+                <>
+                  Imported courses <strong>will</strong> count toward this requirement when they carry a matching
+                  category (e.g. a Vector Solutions completion).
+                </>
               ) : (
-                <>By default, imported courses (e.g. Vector Solutions) <strong>will not</strong> count
-                toward this requirement — only an in-house session, a skills test, or manual sign-off
-                satisfies it.</>
+                <>
+                  By default, imported courses (e.g. Vector Solutions) <strong>will not</strong> count toward this
+                  requirement — only an in-house session, a skills test, or manual sign-off satisfies it.
+                </>
               )}
             </p>
-            <label className="flex items-start gap-2 cursor-pointer">
+            <label className="flex cursor-pointer items-start gap-2">
               <input
                 type="checkbox"
                 className="mt-0.5"
                 checked={allowsExternal}
                 onChange={(e) => setAllowsExternal(e.target.checked)}
               />
-              <span className="text-sm text-theme-text-secondary">
+              <span className="text-theme-text-secondary text-sm">
                 Accept external / imported training credit for this requirement
               </span>
             </label>
           </div>
         </div>
       )}
-      <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary">
+      <label className="text-theme-text-secondary inline-flex items-center gap-2 text-sm">
         <input type="checkbox" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} />
         Required to complete the phase
       </label>
@@ -521,12 +724,20 @@ export const MilestoneFormModal: React.FC<{
   const [phaseId, setPhaseId] = useState(milestone?.phase_id ?? '');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { if (milestone) setPhaseId(milestone.phase_id ?? ''); }, [milestone]);
+  useEffect(() => {
+    if (milestone) setPhaseId(milestone.phase_id ?? '');
+  }, [milestone]);
 
   const submit = async () => {
-    if (!name.trim()) { toast.error('Name is required'); return; }
+    if (!name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
     const pct = Number(threshold);
-    if (Number.isNaN(pct) || pct < 0 || pct > 100) { toast.error('Threshold must be 0–100'); return; }
+    if (Number.isNaN(pct) || pct < 0 || pct > 100) {
+      toast.error('Threshold must be 0–100');
+      return;
+    }
     setSubmitting(true);
     try {
       if (milestone) {
@@ -557,32 +768,65 @@ export const MilestoneFormModal: React.FC<{
   };
 
   return (
-    <ModalShell title={milestone ? 'Edit milestone' : 'Add milestone'} onClose={onClose} onSubmit={() => void submit()} submitting={submitting}>
+    <ModalShell
+      title={milestone ? 'Edit milestone' : 'Add milestone'}
+      onClose={onClose}
+      onSubmit={() => void submit()}
+      submitting={submitting}
+    >
       <div>
-        <label className="form-label" htmlFor="ms-name">Name</label>
+        <label className="form-label" htmlFor="ms-name">
+          Name
+        </label>
         <input id="ms-name" className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div>
-        <label className="form-label" htmlFor="ms-desc">Description</label>
-        <textarea id="ms-desc" className="form-input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <label className="form-label" htmlFor="ms-desc">
+          Description
+        </label>
+        <textarea
+          id="ms-desc"
+          className="form-input"
+          rows={2}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="form-label" htmlFor="ms-thresh">Triggers at (%)</label>
-          <input id="ms-thresh" type="number" min={0} max={100} className="form-input" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+          <label className="form-label" htmlFor="ms-thresh">
+            Triggers at (%)
+          </label>
+          <input
+            id="ms-thresh"
+            type="number"
+            min={0}
+            max={100}
+            className="form-input"
+            value={threshold}
+            onChange={(e) => setThreshold(e.target.value)}
+          />
         </div>
         {!milestone && phases.length > 0 && (
           <div>
-            <label className="form-label" htmlFor="ms-phase">Phase (optional)</label>
+            <label className="form-label" htmlFor="ms-phase">
+              Phase (optional)
+            </label>
             <select id="ms-phase" className="form-input" value={phaseId} onChange={(e) => setPhaseId(e.target.value)}>
               <option value="">Program-level</option>
-              {phases.map((p) => <option key={p.id} value={p.id}>Phase {p.phase_number}: {p.name}</option>)}
+              {phases.map((p) => (
+                <option key={p.id} value={p.id}>
+                  Phase {p.phase_number}: {p.name}
+                </option>
+              ))}
             </select>
           </div>
         )}
       </div>
       <div>
-        <label className="form-label" htmlFor="ms-msg">Notification message</label>
+        <label className="form-label" htmlFor="ms-msg">
+          Notification message
+        </label>
         <input id="ms-msg" className="form-input" value={message} onChange={(e) => setMessage(e.target.value)} />
       </div>
     </ModalShell>

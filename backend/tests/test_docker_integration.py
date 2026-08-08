@@ -14,6 +14,7 @@ run or excluded selectively.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -47,7 +48,55 @@ def _docker_daemon_running() -> bool:
         return False
 
 
+def _base_images() -> list[str]:
+    """Base images the Dockerfiles pull, read from their FROM lines.
+
+    Read rather than hard-coded so the reachability probe below keeps testing
+    the images actually in use after a base-image bump.
+    """
+    images = []
+    for dockerfile in (BACKEND_DIR / "Dockerfile", FRONTEND_DIR / "Dockerfile"):
+        if not dockerfile.exists():
+            continue
+        for line in dockerfile.read_text().splitlines():
+            if not line.upper().startswith("FROM "):
+                continue
+            image = line.split()[1]
+            # Skip references to earlier stages in the same file — only the
+            # external images are fetched from a registry.
+            if ":" in image:
+                images.append(image)
+    return sorted(set(images))
+
+
+def _registry_reachable() -> bool:
+    """Whether the base images can actually be resolved from the registry.
+
+    A running daemon is not sufficient: behind a proxy that blocks the registry
+    CDN, `docker build` dies at "load metadata for ..." with a 403 and the build
+    tests fail for a reason that has nothing to do with the Dockerfiles. That is
+    an unavailable prerequisite, so the tests should skip the way they do when
+    the daemon is missing.
+
+    Deliberately probes only image *resolution*. A failure inside a RUN step is
+    a real defect and still fails the test.
+    """
+    for image in _base_images():
+        try:
+            result = subprocess.run(
+                ["docker", "manifest", "inspect", image],
+                capture_output=True,
+                timeout=60,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return False
+        if result.returncode != 0:
+            return False
+    return True
+
+
 _docker_ready = _docker_daemon_running()
+_registry_ready = _docker_ready and _registry_reachable()
 
 pytestmark = [
     pytest.mark.docker,
@@ -58,6 +107,13 @@ pytestmark = [
         reason="Docker daemon is not available — skipping container tests",
     ),
 ]
+
+# Config-only tests parse compose files and need no registry; the build and
+# runtime tests do, so they carry the extra guard.
+requires_registry = pytest.mark.skipif(
+    not _registry_ready,
+    reason="Docker registry is unreachable — cannot pull base images",
+)
 
 # Test-specific image tag prefix to avoid clashing with real builds
 _TAG_PREFIX = "logbook-test"
@@ -82,16 +138,33 @@ def _run(
 
 
 def _docker_build(
-    context: Path, target: str | None = None, tag: str = ""
+    context: Path,
+    target: str | None = None,
+    tag: str = "",
+    dockerfile: Path | None = None,
 ) -> subprocess.CompletedProcess:
-    """Build a Docker image and return the result."""
+    """Build a Docker image and return the result.
+
+    `dockerfile` is required when it does not sit at the context root — the
+    frontend image builds from the repository root so that `npm ci` can see
+    the workspace lockfile, while its Dockerfile stays in frontend/.
+    """
     cmd = ["docker", "build", str(context)]
+    if dockerfile:
+        cmd += ["-f", str(dockerfile)]
     if target:
         cmd += ["--target", target]
     if tag:
         cmd += ["-t", tag]
     # Don't pull to avoid network dependency — use cached base images
     return _run(cmd, timeout=600)
+
+
+def _build_frontend(target: str, tag: str) -> subprocess.CompletedProcess:
+    """Build the frontend image from the repository root context."""
+    return _docker_build(
+        ROOT_DIR, target=target, tag=tag, dockerfile=FRONTEND_DIR / "Dockerfile"
+    )
 
 
 def _docker_rm_image(tag: str):
@@ -234,11 +307,54 @@ def _wait_for_healthy(container: str, timeout: int = 120) -> bool:
     return False
 
 
+def _frontend_diagnostics(container: str) -> str:
+    """Collect why an nginx container is not answering, for an assertion message.
+
+    "Connection refused" alone cannot distinguish nginx having exited, nginx
+    listening on an address the client did not pick, or nginx never binding at
+    all — and these tests only run in CI, where nobody can poke at the
+    container afterwards. Capturing the state at failure time is the only
+    chance to tell those apart.
+    """
+    sections: list[str] = []
+
+    info = _docker_inspect(container)
+    state = info.get("State", {})
+    sections.append(
+        f"container state: status={state.get('Status')!r} "
+        f"running={state.get('Running')!r} exit_code={state.get('ExitCode')!r} "
+        f"health={state.get('Health', {}).get('Status')!r}"
+    )
+
+    logs = _run(["docker", "logs", "--tail", "40", container], timeout=30)
+    sections.append(f"docker logs:\n{logs.stdout[-2000:]}{logs.stderr[-2000:]}")
+
+    # Listening sockets, resolver state, and both loopback families — the set
+    # that separates "not listening" from "listening on the other address".
+    probes = {
+        "listening sockets": "netstat -ltn 2>/dev/null || ss -ltn 2>/dev/null",
+        "/etc/hosts": "cat /etc/hosts",
+        "GET via 127.0.0.1": "wget -q -O- -T3 http://127.0.0.1/ 2>&1 | head -c 200",
+        "GET via [::1]": "wget -q -O- -T3 http://[::1]/ 2>&1 | head -c 200",
+        "GET via localhost": "wget -q -O- -T3 http://localhost/ 2>&1 | head -c 200",
+    }
+    for label, script in probes.items():
+        probe = _run(
+            ["docker", "exec", container, "sh", "-c", script],
+            timeout=20,
+        )
+        output = (probe.stdout + probe.stderr).strip() or "(no output)"
+        sections.append(f"{label} (rc={probe.returncode}): {output}")
+
+    return "\n".join(sections)
+
+
 # ===========================================================================
 # Backend Image Build Tests
 # ===========================================================================
 
 
+@requires_registry
 class TestBackendImageBuild:
     """Test that the backend Docker image builds successfully for each stage."""
 
@@ -337,13 +453,14 @@ class TestBackendImageBuild:
 # ===========================================================================
 
 
+@requires_registry
 class TestFrontendImageBuild:
     """Test that the frontend Docker image builds successfully."""
 
     def test_build_development_stage(self):
         tag = f"{_TAG_PREFIX}-frontend-dev"
         try:
-            result = _docker_build(FRONTEND_DIR, target="development", tag=tag)
+            result = _build_frontend(target="development", tag=tag)
             assert (
                 result.returncode == 0
             ), f"Frontend 'development' stage failed to build:\n{result.stderr[-2000:]}"
@@ -353,7 +470,7 @@ class TestFrontendImageBuild:
     def test_build_production_stage(self):
         tag = f"{_TAG_PREFIX}-frontend-prod"
         try:
-            result = _docker_build(FRONTEND_DIR, target="production", tag=tag)
+            result = _build_frontend(target="production", tag=tag)
             assert (
                 result.returncode == 0
             ), f"Frontend 'production' stage failed to build:\n{result.stderr[-2000:]}"
@@ -363,7 +480,7 @@ class TestFrontendImageBuild:
     def test_production_image_has_healthcheck(self):
         tag = f"{_TAG_PREFIX}-frontend-hc"
         try:
-            result = _docker_build(FRONTEND_DIR, target="production", tag=tag)
+            result = _build_frontend(target="production", tag=tag)
             if result.returncode != 0:
                 pytest.skip("Image build failed — cannot inspect")
             info = _docker_inspect(tag)
@@ -376,7 +493,7 @@ class TestFrontendImageBuild:
     def test_production_image_exposes_port_80(self):
         tag = f"{_TAG_PREFIX}-frontend-port"
         try:
-            result = _docker_build(FRONTEND_DIR, target="production", tag=tag)
+            result = _build_frontend(target="production", tag=tag)
             if result.returncode != 0:
                 pytest.skip("Image build failed — cannot inspect")
             info = _docker_inspect(tag)
@@ -567,7 +684,7 @@ class TestFrontendContainerHealth:
 
     @pytest.fixture(autouse=True)
     def _build_and_cleanup(self):
-        result = _docker_build(FRONTEND_DIR, target="production", tag=self._tag)
+        result = _build_frontend(target="production", tag=self._tag)
         if result.returncode != 0:
             pytest.skip(f"Frontend build failed: {result.stderr[-500:]}")
         assert _docker_network_create(self._network), "Could not create network"
@@ -627,7 +744,11 @@ class TestFrontendContainerHealth:
         if result.returncode != 0:
             pytest.skip(f"Container failed to start: {result.stderr}")
 
-        # Wait for nginx to be ready
+        # Wait for nginx to be ready.
+        #
+        # 127.0.0.1, not localhost: nginx binds IPv4 only, but the container
+        # resolves localhost to ::1 first, where nothing is listening. See the
+        # HEALTHCHECK comment in frontend/Dockerfile.
         deadline = time.time() + 20
         served = False
         while time.time() < deadline:
@@ -640,7 +761,7 @@ class TestFrontendContainerHealth:
                     "--quiet",
                     "--tries=1",
                     "--spider",
-                    "http://localhost/",
+                    "http://127.0.0.1/",
                 ],
                 timeout=10,
             )
@@ -649,7 +770,10 @@ class TestFrontendContainerHealth:
                 break
             time.sleep(2)
 
-        assert served, "Frontend container did not serve content on port 80 within 20s"
+        assert served, (
+            "Frontend container did not serve content on port 80 within 20s.\n"
+            f"{_frontend_diagnostics(self._container)}"
+        )
 
     def test_frontend_becomes_healthy(self):
         """Frontend container should pass its own HEALTHCHECK."""
@@ -673,7 +797,10 @@ class TestFrontendContainerHealth:
             pytest.skip(f"Container failed to start: {result.stderr}")
 
         healthy = _wait_for_healthy(self._container, timeout=60)
-        assert healthy, "Frontend container did not become healthy within 60s"
+        assert healthy, (
+            "Frontend container did not become healthy within 60s.\n"
+            f"{_frontend_diagnostics(self._container)}"
+        )
 
 
 # ===========================================================================
@@ -686,9 +813,33 @@ class TestDockerComposeConfig:
     Validate docker-compose configuration using 'docker compose config'.
     This catches variable interpolation errors, invalid references, and
     schema issues that static YAML parsing alone cannot detect.
+
+    The compose files mark several variables required (``${VAR:?...}``), so
+    without values `config` aborts on the first one and validates nothing. Those
+    values come from the developer's own `.env`, which makes the result depend
+    on local setup: on a checkout that has not run `cp .env.example .env` these
+    tests fail with a missing-variable error that says nothing about the compose
+    files. Supplying throwaway values here keeps the test hermetic and keeps it
+    testing what it is named for — the structure of the compose files.
     """
 
     _compose_available = shutil.which("docker") is not None
+
+    # Placeholders only: `config` interpolates and discards them, and nothing is
+    # started. Values are shaped to satisfy any length or format expectations.
+    _COMPOSE_ENV = {
+        "SECRET_KEY": "x" * 64,
+        "ENCRYPTION_KEY": "0" * 64,
+        "ENCRYPTION_SALT": "0" * 32,
+        "DB_PASSWORD": "test-db-password",
+        "MYSQL_ROOT_PASSWORD": "test-root-password",
+        "REDIS_PASSWORD": "test-redis-password",
+    }
+
+    @classmethod
+    def _env(cls) -> dict:
+        """Process environment plus the variables compose requires."""
+        return {**os.environ, **cls._COMPOSE_ENV}
 
     @pytest.mark.skipif(
         not _compose_available,
@@ -699,6 +850,7 @@ class TestDockerComposeConfig:
             ["docker", "compose", "-f", "docker-compose.yml", "config", "--quiet"],
             timeout=30,
             cwd=str(ROOT_DIR),
+            env=self._env(),
         )
         assert (
             result.returncode == 0
@@ -722,6 +874,7 @@ class TestDockerComposeConfig:
             ],
             timeout=30,
             cwd=str(ROOT_DIR),
+            env=self._env(),
         )
         assert (
             result.returncode == 0
@@ -748,6 +901,7 @@ class TestDockerComposeConfig:
             ],
             timeout=30,
             cwd=str(ROOT_DIR),
+            env=self._env(),
         )
         assert (
             result.returncode == 0

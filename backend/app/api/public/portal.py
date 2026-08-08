@@ -13,13 +13,13 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security_middleware import get_client_ip
 from app.core.public_portal_security import (
     authenticate_api_key,
     detect_anomalies,
     log_access,
     validate_ip_rate_limit,
 )
+from app.core.security_middleware import get_client_ip
 from app.models.apparatus import Apparatus
 from app.models.event import Event, EventType
 from app.models.public_portal import (

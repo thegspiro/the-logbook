@@ -23,6 +23,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { asArray } from '../utils/asArray';
 
 type ViewMode = 'grid' | 'list';
 
@@ -68,7 +69,10 @@ const DocumentsPage: React.FC = () => {
   const fetchFolders = useCallback(async () => {
     try {
       const response = await documentsService.getFolders();
-      setFolders(response.folders);
+      // Envelope responses put the array a level down, where the service's
+      // asArray guard does not reach — and `folders` is mapped and measured
+      // without checking, so an envelope missing the key crashes the page.
+      setFolders(asArray(response.folders));
     } catch {
       setError('Unable to load folders. Please check your connection and try again.');
     }
@@ -87,7 +91,7 @@ const DocumentsPage: React.FC = () => {
     setDocumentsLoading(true);
     try {
       const response = await documentsService.getDocuments({ folder_id: folderId });
-      setDocuments(response.documents);
+      setDocuments(asArray(response.documents));
     } catch {
       setError('Unable to load documents. Please check your connection and try again.');
     } finally {
@@ -318,6 +322,9 @@ const DocumentsPage: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
               <label htmlFor="doc-search" className="sr-only">Search documents</label>
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 id="doc-search"
                 type="text"
                 placeholder={selectedFolder ? 'Search documents in this folder...' : 'Select a folder to browse documents...'}
@@ -339,7 +346,7 @@ const DocumentsPage: React.FC = () => {
               <div className="flex bg-theme-surface-secondary rounded-lg p-1" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-2.5 rounded-sm ${viewMode === 'grid' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`p-2.5 max-md:mobile-touch-target rounded-sm ${viewMode === 'grid' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="Grid view"
                   aria-pressed={viewMode === 'grid'}
                 >
@@ -347,7 +354,7 @@ const DocumentsPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2.5 rounded-sm ${viewMode === 'list' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`p-2.5 max-md:mobile-touch-target rounded-sm ${viewMode === 'list' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="List view"
                   aria-pressed={viewMode === 'list'}
                 >
@@ -618,7 +625,7 @@ const DocumentsPage: React.FC = () => {
                     disabled={!uploadForm.file || actionLoading}
                     className={`px-4 py-2 rounded-lg text-white transition-colors inline-flex items-center space-x-2 ${
                       !uploadForm.file || actionLoading
-                        ? 'bg-amber-600/50 text-white/50 cursor-not-allowed'
+                        ? 'bg-amber-600 opacity-50 cursor-not-allowed'
                         : 'bg-amber-600 hover:bg-amber-700'
                     }`}
                   >
@@ -687,7 +694,7 @@ const DocumentsPage: React.FC = () => {
                     disabled={!folderForm.name.trim() || actionLoading}
                     className={`px-4 py-2 rounded-lg text-white transition-colors inline-flex items-center space-x-2 ${
                       !folderForm.name.trim() || actionLoading
-                        ? 'bg-amber-600/50 text-white/50 cursor-not-allowed'
+                        ? 'bg-amber-600 opacity-50 cursor-not-allowed'
                         : 'bg-amber-600 hover:bg-amber-700'
                     }`}
                   >

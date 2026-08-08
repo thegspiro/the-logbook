@@ -8,18 +8,21 @@ connects to the database, and configures routes.
 
 import os
 import signal
-import traceback
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import (
+    http_exception_handler as _default_http_exception_handler,
+)
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
 
 from app.api.public import responses as public_responses
@@ -37,6 +40,7 @@ from app.api.v1.api import api_router
 from app.core.cache import cache_manager
 from app.core.config import settings
 from app.core.database import database_manager
+from app.core.error_reporting import build_error_type, persist_error_log
 from app.core.logging import setup_logging, setup_sentry
 
 # Create rate limiter instance (uses Redis if available, falls back to in-memory)
@@ -1887,8 +1891,10 @@ def _custom_openapi() -> dict:
     that body with ``{"detail": [{"field", "message"}]}``. The published
     contract therefore described a shape no endpoint has ever returned —
     anyone generating a client from /openapi.json got the wrong type for the
-    single most common error response, and the frontend's ``toAppError()`` was
-    written against the real shape rather than the documented one.
+    single most common error response. That divergence was not theoretical:
+    the frontend's ``toAppError()`` read ``loc``/``msg`` per the documented
+    contract, found neither, and rendered every field error in every 422 as a
+    bare "Invalid value" with no field name and no reason.
 
     Rewriting the two component schemas fixes it for every route at once,
     which is the only tractable option: the alternative is a per-route
@@ -2039,30 +2045,57 @@ app.add_middleware(
 # Global Exception Handler
 # ============================================
 
-# Query parameter keys that must never appear in error logs
-_SENSITIVE_QUERY_KEYS = {
-    "token",
-    "api_key",
-    "password",
-    "secret",
-    "key",
-    "code",
-    "access_token",
-    "refresh_token",
-}
+BACKEND_TROUBLESHOOTING_STEPS = [
+    "This error has been automatically logged",
+    "Check the Error Monitoring page for details",
+    "Contact your system administrator if the issue persists",
+]
 
 
-def _sanitize_query_params(query_string: str) -> str:
-    """Redact sensitive query parameters before persisting to error logs."""
-    if not query_string:
-        return ""
-    from urllib.parse import parse_qs, urlencode
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler_with_logging(
+    request: Request, exc: StarletteHTTPException
+):
+    """
+    Persist server-side HTTP failures (5xx) to the error_logs table, then hand
+    off to FastAPI's default handler so the response body is unchanged.
 
-    parsed = parse_qs(query_string, keep_blank_values=True)
-    for key in list(parsed.keys()):
-        if key.lower() in _SENSITIVE_QUERY_KEYS:
-            parsed[key] = ["[REDACTED]"]
-    return urlencode(parsed, doseq=True)
+    The unhandled-exception handler below never sees most server errors: the
+    established endpoint pattern is ``except Exception as e: raise
+    HTTPException(500, safe_error_detail(e))``, which converts the failure into
+    an HTTPException that Starlette handles as a normal response. Without this
+    handler those 500s reach the user as a toast and are visible nowhere else,
+    which is exactly the case an administrator needs to see.
+
+    Client errors (4xx) are deliberately not persisted here — a 404 or a 422 is
+    routine traffic, and logging every one would bury real failures. The few
+    that matter to an administrator (403s, which usually mean a role is
+    misconfigured) are reported from the client instead, where the page the
+    member was on is also known.
+
+    A 5xx therefore produces two rows: this one, carrying the traceback and the
+    endpoint, and a client-side API_SERVER_ERROR carrying the member and the
+    page. They are distinguished on the Error Monitoring page by Source.
+    """
+    if exc.status_code >= 500:
+        detail = str(exc.detail) if exc.detail else f"HTTP {exc.status_code}"
+        await persist_error_log(
+            request=request,
+            error_type=build_error_type(f"HTTP_{exc.status_code}"),
+            error_message=detail,
+            user_message=(
+                "The server could not complete this request "
+                f"(HTTP {exc.status_code})."
+            ),
+            troubleshooting_steps=BACKEND_TROUBLESHOOTING_STEPS,
+            exc=exc,
+        )
+        logger.error(
+            f"HTTP {exc.status_code} on {request.method} "
+            f"{request.url.path}: {detail}"
+        )
+
+    return await _default_http_exception_handler(request, exc)
 
 
 @app.exception_handler(Exception)
@@ -2071,62 +2104,19 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     Catch unhandled backend exceptions and log them to the error_logs table
     so they appear on the Error Monitoring page.
     """
-    # Build error details
     error_type = type(exc).__name__
-    error_message = str(exc)
-    tb = traceback.format_exc()
 
-    # Try to extract user/org context from the JWT token
-    user_id = None
-    org_id = None
-    try:
-        from app.core.security import decode_token
-
-        auth_header = request.headers.get("authorization", "")
-        if auth_header.lower().startswith("bearer "):
-            token = auth_header.split(" ", 1)[1]
-            payload = decode_token(token)
-            user_id = payload.get("sub")
-            org_id = payload.get("org_id")
-    except (ValueError, KeyError, AttributeError):
-        logger.debug("Could not extract user context from JWT token", exc_info=True)
-
-    # Persist to error_logs table
-    if org_id:
-        try:
-            from app.core.database import database_manager
-            from app.models.error_log import ErrorLog
-
-            async for session in database_manager.get_session():
-                error_log = ErrorLog(
-                    organization_id=org_id,
-                    error_type=f"BACKEND_{error_type.upper()}",
-                    error_message=error_message,
-                    user_message=f"An internal server error occurred: {error_type}",
-                    troubleshooting_steps=[
-                        "This error has been automatically logged",
-                        "Check the Error Monitoring page for details",
-                        "Contact your system administrator if the issue persists",
-                    ],
-                    context={
-                        "method": request.method,
-                        "path": str(request.url.path),
-                        "query": _sanitize_query_params(str(request.url.query)),
-                        "traceback": (
-                            tb if settings.ENVIRONMENT != "production" else None
-                        ),
-                        "source": "backend",
-                    },
-                    user_id=user_id,
-                )
-                session.add(error_log)
-                await session.commit()
-                break
-        except Exception as log_exc:
-            logger.error(f"Failed to persist error log: {log_exc}")
+    await persist_error_log(
+        request=request,
+        error_type=build_error_type(error_type),
+        error_message=str(exc),
+        user_message=f"An internal server error occurred: {error_type}",
+        troubleshooting_steps=BACKEND_TROUBLESHOOTING_STEPS,
+        exc=exc,
+    )
 
     logger.exception(
-        f"Unhandled {error_type} on {request.method} {request.url.path}: {error_message}"
+        f"Unhandled {error_type} on {request.method} {request.url.path}: {exc}"
     )
 
     return JSONResponse(

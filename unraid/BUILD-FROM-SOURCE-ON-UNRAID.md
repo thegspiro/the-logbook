@@ -159,6 +159,7 @@ docker-compose build
 ```
 
 **What's happening:**
+
 - **Backend build**: Downloads Python, installs dependencies, creates API server (~5-10 min)
 - **Frontend build**: Downloads Node.js, compiles React app, creates Nginx server (~10-15 min)
 
@@ -283,7 +284,8 @@ docker-compose up -d
 
 When there are code updates, use the safe update script. It takes a
 **consistent database dump first**, pulls the latest code (fast-forward
-only), rebuilds the images, recreates the containers **without touching the
+only), **reconciles the compose build contexts with the Dockerfiles it just
+pulled**, rebuilds the images, recreates the containers **without touching the
 database volume**, and waits for the backend to report healthy. If anything
 fails, it prints exact rollback instructions.
 
@@ -304,6 +306,24 @@ subcommand), preserve the volumes (never `docker compose down -v`), and take
 a `mysqldump` backup first — the database persists in the
 `/mnt/user/appdata/the-logbook/mysql` bind mount and survives `build`, `up`,
 and `down` (without `-v`).
+
+Run the build-context check between the pull and the build as well:
+
+```bash
+git pull
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
+docker compose build
+```
+
+A pull can change what a Dockerfile copies out of its build context — the
+frontend's moved to the repository root so `npm ci` could reach the workspace
+lockfile — and `docker compose config` never opens the Dockerfile, so a stale
+`context:` passes validation and then fails the build on
+`"/frontend/nginx.conf": not found`. This matters most if you edited your
+compose file (different ports, volume paths, or service names): the pull
+updates the file in the repository, not the one you are running. Drop `--fix`
+to report drift without rewriting anything; with `--fix`, the file is backed up
+before it is touched.
 
 ### Backup
 
@@ -430,7 +450,7 @@ db:
     --innodb_buffer_pool_size=256M  # Down from 512M
 
 redis:
-  command: redis-server --maxmemory 128mb  # Down from 256mb
+  command: redis-server --maxmemory 128mb # Down from 256mb
 ```
 
 ### For powerful Unraid servers (16GB+ RAM)
@@ -441,7 +461,7 @@ db:
     --innodb_buffer_pool_size=1G  # Up from 512M
 
 redis:
-  command: redis-server --maxmemory 512mb  # Up from 256mb
+  command: redis-server --maxmemory 512mb # Up from 256mb
 ```
 
 ---

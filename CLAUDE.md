@@ -236,7 +236,11 @@ npm run docker:up        # Start Docker Compose stack
 
 ## Package Manager
 
-npm (with workspaces). Node >= 18 required at root level, >= 22 for the frontend.
+npm (with workspaces). Node >= 22 — the root install builds the frontend
+workspace, so the frontend's floor is the real floor; the old root `>= 18` / npm
+`>= 9` range understated it. Run `npm install` from the repo root only: the root
+`package-lock.json` is the single lockfile (see "No nested
+`frontend/package-lock.json`" in KNOWN_LIMITATIONS.md).
 
 ## Architecture & Conventions
 
@@ -708,7 +712,7 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 
 ### Optional Services
 
-Enable with `*_ENABLED=true`: `EMAIL_ENABLED`, `TWILIO_ENABLED`, `SENTRY_ENABLED`, `AZURE_AD_ENABLED`, `GOOGLE_OAUTH_ENABLED`. Each requires additional config vars — see `.env.example.full`. (`LDAP_ENABLED` exists in config but gates nothing — LDAP is not implemented.)
+Enable with `*_ENABLED=true`: `EMAIL_ENABLED`, `TWILIO_ENABLED`, `SENTRY_ENABLED`, `AZURE_AD_ENABLED`, `GOOGLE_OAUTH_ENABLED`, `PUSH_ENABLED` (Web Push; also needs `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` and the optional `pywebpush` dependency). Each requires additional config vars — see `.env.example.full`. (`LDAP_ENABLED` exists in config but gates nothing — LDAP is not implemented.)
 
 ### Module Enablement
 

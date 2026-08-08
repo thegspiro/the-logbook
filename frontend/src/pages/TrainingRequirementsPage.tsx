@@ -20,6 +20,9 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { trainingService, trainingProgramService } from '../services/api';
+import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
+import { RecencyWindowField } from '../components/training/RecencyWindowField';
+import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import type {
   TrainingRequirement,
   TrainingRequirementCreate,
@@ -63,6 +66,10 @@ const TrainingRequirementsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSource, setFilterSource] = useState<FilterSource>('all');
 
+  // Course catalog, so a requirement's linked course ids render as names.
+  const { courses } = useCourseLibrary();
+  const courseNameById = React.useMemo(() => new Map(courses.map((c) => [c.id, c.name])), [courses]);
+
   // Build a lookup from registry name to source_url
   const registryUrlMap = React.useMemo(() => {
     const map: Record<string, string> = {};
@@ -101,7 +108,7 @@ const TrainingRequirementsPage: React.FC = () => {
 
     try {
       await trainingService.deleteRequirement(id);
-      setRequirements(requirements.filter(r => r.id !== id));
+      setRequirements(requirements.filter((r) => r.id !== id));
       toast.success('Requirement permanently deleted');
     } catch (_error) {
       toast.error('Failed to delete requirement');
@@ -158,25 +165,27 @@ const TrainingRequirementsPage: React.FC = () => {
   };
 
   const toggleActive = async (id: string) => {
-    const requirement = requirements.find(r => r.id === id);
+    const requirement = requirements.find((r) => r.id === id);
     if (!requirement) return;
 
     try {
       await trainingService.updateRequirement(id, { active: !requirement.active });
-      setRequirements(requirements.map(r =>
-        r.id === id ? { ...r, active: !r.active } : r
-      ));
+      setRequirements(requirements.map((r) => (r.id === id ? { ...r, active: !r.active } : r)));
       toast.success(requirement.active ? 'Requirement deactivated' : 'Requirement activated');
     } catch (_error) {
       toast.error('Failed to update requirement');
     }
   };
 
-  const handleSave = async (data: TrainingRequirementCreate | TrainingRequirementUpdate, isEdit: boolean, id?: string) => {
+  const handleSave = async (
+    data: TrainingRequirementCreate | TrainingRequirementUpdate,
+    isEdit: boolean,
+    id?: string
+  ) => {
     try {
       if (isEdit && id) {
         const updated = await trainingService.updateRequirement(id, data);
-        setRequirements(requirements.map(r => r.id === id ? updated : r));
+        setRequirements(requirements.map((r) => (r.id === id ? updated : r)));
         toast.success('Requirement updated');
       } else {
         const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
@@ -191,8 +200,9 @@ const TrainingRequirementsPage: React.FC = () => {
     }
   };
 
-  const filteredRequirements = requirements.filter(req => {
-    const matchesSearch = req.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredRequirements = requirements.filter((req) => {
+    const matchesSearch =
+      req.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       req.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSource = filterSource === 'all' || req.source === filterSource;
     return matchesSearch && matchesSource;
@@ -201,9 +211,11 @@ const TrainingRequirementsPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-theme-text-primary" role="status" aria-live="polite">Loading requirements...</div>
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex h-64 items-center justify-center">
+            <div className="text-theme-text-primary" role="status" aria-live="polite">
+              Loading requirements...
+            </div>
           </div>
         </div>
       </div>
@@ -212,39 +224,39 @@ const TrainingRequirementsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-              <FileText className="w-8 h-8 text-red-700 dark:text-red-500" aria-hidden="true" />
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
+              <FileText className="h-8 w-8 text-red-700 dark:text-red-500" aria-hidden="true" />
               <span>Training Requirements</span>
             </h1>
-            <p className="text-theme-text-muted mt-1">
-              Manage department, state, and national training requirements
-            </p>
+            <p className="text-theme-text-muted mt-1">Manage department, state, and national training requirements</p>
           </div>
 
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => { void fetchData(); }}
-              className="p-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
+              onClick={() => {
+                void fetchData();
+              }}
+              className="bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg p-2 transition-colors"
               aria-label="Refresh requirements"
             >
-              <RefreshCcw className="w-5 h-5" aria-hidden="true" />
+              <RefreshCcw className="h-5 w-5" aria-hidden="true" />
             </button>
             <button
               onClick={() => setShowTemplateModal(true)}
-              className="btn-info flex font-medium items-center space-x-2"
+              className="btn-info flex items-center space-x-2 font-medium"
             >
-              <Copy className="w-5 h-5" aria-hidden="true" />
+              <Copy className="h-5 w-5" aria-hidden="true" />
               <span>Use Template</span>
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="btn-success flex font-medium items-center space-x-2"
+              className="btn-success flex items-center space-x-2 font-medium"
             >
-              <Plus className="w-5 h-5" aria-hidden="true" />
+              <Plus className="h-5 w-5" aria-hidden="true" />
               <span>Create Requirement</span>
             </button>
           </div>
@@ -252,32 +264,43 @@ const TrainingRequirementsPage: React.FC = () => {
 
         {/* Filters */}
         <div className="card mb-6 p-4" role="search" aria-label="Search and filter requirements">
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col gap-4 md:flex-row">
             {/* Search */}
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
-                <label htmlFor="req-search" className="sr-only">Search requirements</label>
+                <Search
+                  className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform"
+                  aria-hidden="true"
+                />
+                <label htmlFor="req-search" className="sr-only">
+                  Search requirements
+                </label>
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   id="req-search"
                   type="text"
-                  aria-label="Search requirements..." placeholder="Search requirements..."
+                  aria-label="Search requirements..."
+                  placeholder="Search requirements..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="form-input focus:border-transparent pl-10 placeholder-theme-text-muted pr-4"
+                  className="form-input placeholder-theme-text-muted pr-4 pl-10 focus:border-transparent"
                 />
               </div>
             </div>
 
             {/* Source Filter */}
             <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
-              <label htmlFor="source-filter" className="sr-only">Filter by source</label>
+              <Filter className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
+              <label htmlFor="source-filter" className="sr-only">
+                Filter by source
+              </label>
               <select
                 id="source-filter"
                 value={filterSource}
                 onChange={(e) => setFilterSource(e.target.value as FilterSource)}
-                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2 focus:outline-hidden"
               >
                 <option value="all">All Sources</option>
                 <option value="department">Department</option>
@@ -292,15 +315,14 @@ const TrainingRequirementsPage: React.FC = () => {
         <div className="space-y-4">
           {filteredRequirements.length === 0 ? (
             <div className="card p-12 text-center">
-              <FileText className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
-              <h3 className="text-theme-text-primary text-xl font-semibold mb-2">No Requirements Found</h3>
+              <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
+              <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">No Requirements Found</h3>
               <p className="text-theme-text-muted mb-6">
-                {searchTerm ? 'Try adjusting your search or filters' : 'Get started by creating your first training requirement'}
+                {searchTerm
+                  ? 'Try adjusting your search or filters'
+                  : 'Get started by creating your first training requirement'}
               </p>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="btn-success font-medium px-6 py-3"
-              >
+              <button onClick={() => setShowCreateModal(true)} className="btn-success px-6 py-3 font-medium">
                 Create First Requirement
               </button>
             </div>
@@ -310,6 +332,7 @@ const TrainingRequirementsPage: React.FC = () => {
                 key={requirement.id}
                 requirement={requirement}
                 categories={categories}
+                courseNameById={courseNameById}
                 registryUrlMap={registryUrlMap}
                 isExpanded={expandedId === requirement.id}
                 onToggleExpand={() => setExpandedId(expandedId === requirement.id ? null : requirement.id)}
@@ -317,9 +340,15 @@ const TrainingRequirementsPage: React.FC = () => {
                   setSelectedRequirement(requirement);
                   setShowCreateModal(true);
                 }}
-                onDelete={() => { void handleDelete(requirement.id); }}
-                onDuplicate={() => { void handleDuplicate(requirement); }}
-                onToggleActive={() => { void toggleActive(requirement.id); }}
+                onDelete={() => {
+                  void handleDelete(requirement.id);
+                }}
+                onDuplicate={() => {
+                  void handleDuplicate(requirement);
+                }}
+                onToggleActive={() => {
+                  void toggleActive(requirement.id);
+                }}
               />
             ))
           )}
@@ -336,7 +365,9 @@ const TrainingRequirementsPage: React.FC = () => {
               setSelectedRequirement(null);
               setTemplateSeed(null);
             }}
-            onSave={(...args) => { void handleSave(...args); }}
+            onSave={(...args) => {
+              void handleSave(...args);
+            }}
           />
         )}
 
@@ -363,6 +394,8 @@ const TrainingRequirementsPage: React.FC = () => {
 interface RequirementCardProps {
   requirement: TrainingRequirement;
   categories: TrainingCategory[];
+  /** Course id → name, for rendering linked courses instead of raw ids. */
+  courseNameById: Map<string, string>;
   registryUrlMap: Record<string, string>;
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -375,6 +408,7 @@ interface RequirementCardProps {
 const RequirementCard: React.FC<RequirementCardProps> = ({
   requirement,
   categories,
+  courseNameById,
   registryUrlMap,
   isExpanded,
   onToggleExpand,
@@ -385,33 +419,47 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
 }) => {
   const getRequirementTypeLabel = (type: string) => {
     switch (type) {
-      case 'hours': return 'Hours';
-      case 'courses': return 'Courses';
-      case 'certification': return 'Certification';
-      case 'shifts': return 'Shifts';
-      case 'calls': return 'Calls';
-      case 'skills_evaluation': return 'Skills Evaluation';
-      case 'checklist': return 'Checklist';
-      case 'knowledge_test': return 'Knowledge Test';
-      default: return type;
+      case 'hours':
+        return 'Hours';
+      case 'courses':
+        return 'Courses';
+      case 'certification':
+        return 'Certification';
+      case 'shifts':
+        return 'Shifts';
+      case 'calls':
+        return 'Calls';
+      case 'skills_evaluation':
+        return 'Skills Evaluation';
+      case 'checklist':
+        return 'Checklist';
+      case 'knowledge_test':
+        return 'Knowledge Test';
+      default:
+        return type;
     }
   };
 
   const getDueDateTypeLabel = (type: DueDateType) => {
     switch (type) {
-      case 'calendar_period': return 'Calendar Period';
-      case 'rolling': return 'Rolling';
-      case 'certification_period': return 'Certification Period';
-      case 'fixed_date': return 'Fixed Date';
-      default: return type;
+      case 'calendar_period':
+        return 'Calendar Period';
+      case 'rolling':
+        return 'Rolling';
+      case 'certification_period':
+        return 'Certification Period';
+      case 'fixed_date':
+        return 'Fixed Date';
+      default:
+        return type;
     }
   };
 
   const getCategoryNames = () => {
     if (!requirement.category_ids?.length) return null;
     return categories
-      .filter(c => requirement.category_ids?.includes(c.id))
-      .map(c => c.name)
+      .filter((c) => requirement.category_ids?.includes(c.id))
+      .map((c) => c.name)
       .join(', ');
   };
 
@@ -421,10 +469,10 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
       <div className="p-6">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <div className="flex items-center space-x-3 mb-2">
+            <div className="mb-2 flex items-center space-x-3">
               <h3 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h3>
               {requirement.requirement_type && (
-                <span className="text-xs font-semibold px-2 py-1 rounded-sm bg-green-700 text-theme-text-primary">
+                <span className="text-theme-text-primary rounded-sm bg-green-700 px-2 py-1 text-xs font-semibold">
                   {getRequirementTypeLabel(requirement.requirement_type)}
                 </span>
               )}
@@ -432,58 +480,62 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   (unused) due date type here read as a recurring schedule —
                   "Calendar Period" implies an annual Dec 31 reset. */}
               {requirement.frequency === 'one_time' ? (
-                <span className="text-xs font-semibold px-2 py-1 rounded bg-teal-700 text-theme-text-primary">
+                <span className="text-theme-text-primary rounded bg-teal-700 px-2 py-1 text-xs font-semibold">
                   One Time
                 </span>
               ) : (
-                <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                  requirement.due_date_type === 'rolling' ? 'bg-purple-600' :
-                  requirement.due_date_type === 'calendar_period' ? 'bg-blue-600' :
-                  requirement.due_date_type === 'certification_period' ? 'bg-orange-600' :
-                  'bg-theme-surface-hover'
-                } text-theme-text-primary`}>
+                <span
+                  className={`rounded px-2 py-1 text-xs font-semibold ${
+                    requirement.due_date_type === 'rolling'
+                      ? 'bg-purple-600'
+                      : requirement.due_date_type === 'calendar_period'
+                        ? 'bg-blue-600'
+                        : requirement.due_date_type === 'certification_period'
+                          ? 'bg-orange-600'
+                          : 'bg-theme-surface-hover'
+                  } text-theme-text-primary`}
+                >
                   {getDueDateTypeLabel(requirement.due_date_type)}
                 </span>
               )}
               {requirement.source && requirement.source !== 'department' && (
-                <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                  requirement.source === 'national' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
-                  'bg-green-500/20 text-green-700 dark:text-green-400'
-                }`}>
+                <span
+                  className={`rounded px-2 py-1 text-xs font-semibold ${
+                    requirement.source === 'national'
+                      ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                      : 'bg-green-500/20 text-green-700 dark:text-green-400'
+                  }`}
+                >
                   {requirement.registry_name || (requirement.source === 'national' ? 'National' : 'State')}
                 </span>
               )}
               {!requirement.active && (
-                <span className="text-xs font-semibold px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-primary">
+                <span className="bg-theme-surface-hover text-theme-text-primary rounded-sm px-2 py-1 text-xs font-semibold">
                   Inactive
                 </span>
               )}
             </div>
-            {requirement.description && (
-              <p className="text-theme-text-muted text-sm mb-3">{requirement.description}</p>
-            )}
+            {requirement.description && <p className="text-theme-text-muted mb-3 text-sm">{requirement.description}</p>}
 
             {/* Misconfiguration warning — a requirement with no target for its
                 type can never be completed (and used to read as compliant). */}
             {requirement.config_warning && (
               <div className="mb-3 flex items-start gap-2 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-700 dark:text-yellow-400" />
-                <p className="text-xs text-yellow-800 dark:text-yellow-300">
-                  {requirement.config_warning}
-                </p>
+                <p className="text-xs text-yellow-800 dark:text-yellow-300">{requirement.config_warning}</p>
               </div>
             )}
 
             {/* Quick Info */}
             <div className="flex flex-wrap gap-3 text-sm">
               {requirement.required_hours && (
-                <div className="flex items-center space-x-2 text-theme-text-secondary">
-                  <Clock className="w-4 h-4" aria-hidden="true" />
+                <div className="text-theme-text-secondary flex items-center space-x-2">
+                  <Clock className="h-4 w-4" aria-hidden="true" />
                   <span>{requirement.required_hours} hours</span>
                 </div>
               )}
-              <div className="flex items-center space-x-2 text-theme-text-secondary">
-                <Award className="w-4 h-4" aria-hidden="true" />
+              <div className="text-theme-text-secondary flex items-center space-x-2">
+                <Award className="h-4 w-4" aria-hidden="true" />
                 <span className="capitalize">
                   {requirement.frequency === 'one_time'
                     ? 'One time — never resets'
@@ -491,29 +543,31 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 </span>
               </div>
               {requirement.applies_to_all ? (
-                <div className="flex items-center space-x-2 text-theme-text-secondary">
-                  <Users className="w-4 h-4" aria-hidden="true" />
+                <div className="text-theme-text-secondary flex items-center space-x-2">
+                  <Users className="h-4 w-4" aria-hidden="true" />
                   <span>All Members</span>
                 </div>
               ) : (
-                <div className="flex items-center space-x-2 text-theme-text-secondary">
-                  <Users className="w-4 h-4" aria-hidden="true" />
+                <div className="text-theme-text-secondary flex items-center space-x-2">
+                  <Users className="h-4 w-4" aria-hidden="true" />
                   <span>
                     {requirement.required_membership_types?.length
-                      ? requirement.required_membership_types.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(', ')
+                      ? requirement.required_membership_types
+                          .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
+                          .join(', ')
                       : 'Specific Roles/Members'}
                   </span>
                 </div>
               )}
               {requirement.due_date_type === 'rolling' && requirement.rolling_period_months && (
-                <div className="flex items-center space-x-2 text-theme-text-secondary">
-                  <RefreshCcw className="w-4 h-4" aria-hidden="true" />
+                <div className="text-theme-text-secondary flex items-center space-x-2">
+                  <RefreshCcw className="h-4 w-4" aria-hidden="true" />
                   <span>Every {requirement.rolling_period_months} months</span>
                 </div>
               )}
               {getCategoryNames() && (
-                <div className="flex items-center space-x-2 text-theme-text-secondary">
-                  <Tag className="w-4 h-4" aria-hidden="true" />
+                <div className="text-theme-text-secondary flex items-center space-x-2">
+                  <Tag className="h-4 w-4" aria-hidden="true" />
                   <span>{getCategoryNames()}</span>
                 </div>
               )}
@@ -521,64 +575,77 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center space-x-2 ml-4">
+          <div className="ml-4 flex items-center space-x-2">
             <button
               onClick={onToggleActive}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`rounded-lg p-2 transition-colors ${
                 requirement.active
-                  ? 'bg-green-600/20 text-green-700 dark:text-green-400 hover:bg-green-600/30'
+                  ? 'bg-green-600/20 text-green-700 hover:bg-green-600/30 dark:text-green-400'
                   : 'bg-theme-surface-hover/20 text-theme-text-muted hover:bg-theme-surface-hover/30'
               }`}
               title={requirement.active ? 'Deactivate' : 'Activate'}
               aria-label={requirement.active ? 'Deactivate requirement' : 'Activate requirement'}
             >
-              {requirement.active ? <CheckCircle className="w-5 h-5" aria-hidden="true" /> : <AlertCircle className="w-5 h-5" aria-hidden="true" />}
+              {requirement.active ? (
+                <CheckCircle className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <AlertCircle className="h-5 w-5" aria-hidden="true" />
+              )}
             </button>
             <button
               onClick={onEdit}
-              className="p-2 bg-blue-600/20 text-blue-700 dark:text-blue-400 hover:bg-blue-600/30 rounded-lg transition-colors"
+              className="rounded-lg bg-blue-600/20 p-2 text-blue-700 transition-colors hover:bg-blue-600/30 dark:text-blue-400"
               title="Edit"
               aria-label="Edit requirement"
             >
-              <Edit className="w-5 h-5" aria-hidden="true" />
+              <Edit className="h-5 w-5" aria-hidden="true" />
             </button>
             <button
               onClick={onDuplicate}
-              className="p-2 bg-purple-600/20 text-purple-700 dark:text-purple-400 hover:bg-purple-600/30 rounded-lg transition-colors"
+              className="rounded-lg bg-purple-600/20 p-2 text-purple-700 transition-colors hover:bg-purple-600/30 dark:text-purple-400"
               title="Duplicate"
               aria-label="Duplicate requirement"
             >
-              <Copy className="w-5 h-5" aria-hidden="true" />
+              <Copy className="h-5 w-5" aria-hidden="true" />
             </button>
             <button
               onClick={onDelete}
-              className="p-2 bg-red-600/20 text-red-700 dark:text-red-400 hover:bg-red-600/30 rounded-lg transition-colors"
+              className="rounded-lg bg-red-600/20 p-2 text-red-700 transition-colors hover:bg-red-600/30 dark:text-red-400"
               title="Delete"
               aria-label="Delete requirement"
             >
-              <Trash2 className="w-5 h-5" aria-hidden="true" />
+              <Trash2 className="h-5 w-5" aria-hidden="true" />
             </button>
             <button
               onClick={onToggleExpand}
-              className="p-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
+              className="bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg p-2 transition-colors"
               title={isExpanded ? 'Collapse' : 'Expand'}
               aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
             >
-              {isExpanded ? <ChevronUp className="w-5 h-5" aria-hidden="true" /> : <ChevronDown className="w-5 h-5" aria-hidden="true" />}
+              {isExpanded ? (
+                <ChevronUp className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="h-5 w-5" aria-hidden="true" />
+              )}
             </button>
           </div>
         </div>
 
         {/* Expanded Details */}
         {isExpanded && (
-          <div className="mt-6 pt-6 border-t border-theme-surface-border space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="border-theme-surface-border mt-6 space-y-4 border-t pt-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <DetailSection title="Requirement Details">
-                <DetailRow label="Source" value={
-                  requirement.source === 'national' ? (requirement.registry_name || 'National') :
-                  requirement.source === 'state' ? (requirement.registry_name || 'State') :
-                  'Department'
-                } />
+                <DetailRow
+                  label="Source"
+                  value={
+                    requirement.source === 'national'
+                      ? requirement.registry_name || 'National'
+                      : requirement.source === 'state'
+                        ? requirement.registry_name || 'State'
+                        : 'Department'
+                  }
+                />
                 {requirement.registry_name && registryUrlMap[requirement.registry_name] && (
                   <div className="flex justify-between">
                     <span className="text-theme-text-muted text-sm">Citation:</span>
@@ -586,9 +653,9 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                       href={registryUrlMap[requirement.registry_name]}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center space-x-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                      className="flex items-center space-x-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
                     >
-                      <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
                       <span>View source</span>
                     </a>
                   </div>
@@ -603,9 +670,11 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 )}
                 <DetailRow
                   label="Frequency"
-                  value={requirement.frequency === 'one_time'
-                    ? 'One time — completion never expires'
-                    : requirement.frequency.replace('_', ' ')}
+                  value={
+                    requirement.frequency === 'one_time'
+                      ? 'One time — completion never expires'
+                      : requirement.frequency.replace('_', ' ')
+                  }
                 />
                 {requirement.required_hours && (
                   <DetailRow label="Required Hours" value={`${requirement.required_hours} hours`} />
@@ -617,7 +686,19 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   <DetailRow label="Required Calls" value={String(requirement.required_calls)} />
                 )}
                 {requirement.required_courses && requirement.required_courses.length > 0 && (
-                  <DetailRow label="Required Courses" value={requirement.required_courses.join(', ')} />
+                  <DetailRow
+                    label={requirement.requirement_type === 'certification' ? 'Earned By' : 'Required Courses'}
+                    // Pre-picker requirements stored course *names* here, which
+                    // the map can't resolve — show the stored value rather than
+                    // a blank so those legacy entries stay diagnosable.
+                    value={requirement.required_courses.map((id) => courseNameById.get(id) ?? id).join(', ')}
+                  />
+                )}
+                {requirement.recency_days != null && (
+                  <DetailRow
+                    label="Recency Window"
+                    value={`Completed within the last ${requirement.recency_days} days`}
+                  />
                 )}
                 {requirement.checklist_items && requirement.checklist_items.length > 0 && (
                   <DetailRow label="Checklist Items" value={String(requirement.checklist_items.length)} />
@@ -628,35 +709,36 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 {requirement.year && requirement.frequency !== 'one_time' && (
                   <DetailRow label="Year" value={String(requirement.year)} />
                 )}
-                {requirement.due_date && (
-                  <DetailRow label="Due Date" value={requirement.due_date} />
-                )}
-                {requirement.frequency !== 'one_time' && requirement.due_date_type === 'rolling' && requirement.rolling_period_months && (
-                  <DetailRow label="Rolling Period" value={`${requirement.rolling_period_months} months`} />
-                )}
+                {requirement.due_date && <DetailRow label="Due Date" value={requirement.due_date} />}
+                {requirement.frequency !== 'one_time' &&
+                  requirement.due_date_type === 'rolling' &&
+                  requirement.rolling_period_months && (
+                    <DetailRow label="Rolling Period" value={`${requirement.rolling_period_months} months`} />
+                  )}
                 {requirement.frequency !== 'one_time' && requirement.due_date_type === 'calendar_period' && (
                   <DetailRow
                     label="Period Start"
                     value={`Month ${requirement.period_start_month || 1}, Day ${requirement.period_start_day || 1}`}
                   />
                 )}
-                {requirement.frequency !== 'one_time' && requirement.due_date_type === 'calendar_period' && requirement.period_end_month && (
-                  <DetailRow
-                    label="Period End"
-                    value={`Month ${requirement.period_end_month}, Day ${requirement.period_end_day || 'last'}`}
-                  />
-                )}
+                {requirement.frequency !== 'one_time' &&
+                  requirement.due_date_type === 'calendar_period' &&
+                  requirement.period_end_month && (
+                    <DetailRow
+                      label="Period End"
+                      value={`Month ${requirement.period_end_month}, Day ${requirement.period_end_day || 'last'}`}
+                    />
+                  )}
               </DetailSection>
 
               <DetailSection title="Assignment">
-                <DetailRow
-                  label="Applies To"
-                  value={requirement.applies_to_all ? 'All Members' : 'Specific Groups'}
-                />
+                <DetailRow label="Applies To" value={requirement.applies_to_all ? 'All Members' : 'Specific Groups'} />
                 {requirement.required_membership_types && requirement.required_membership_types.length > 0 && (
                   <DetailRow
                     label="Member Categories"
-                    value={requirement.required_membership_types.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(', ')}
+                    value={requirement.required_membership_types
+                      .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
+                      .join(', ')}
                   />
                 )}
                 {requirement.required_roles && requirement.required_roles.length > 0 && (
@@ -665,9 +747,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 {requirement.category_ids && requirement.category_ids.length > 0 && (
                   <DetailRow label="Categories" value={getCategoryNames() || ''} />
                 )}
-                {requirement.start_date && (
-                  <DetailRow label="Start Date" value={requirement.start_date} />
-                )}
+                {requirement.start_date && <DetailRow label="Start Date" value={requirement.start_date} />}
               </DetailSection>
             </div>
           </div>
@@ -679,7 +759,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
 
 const DetailSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>
-    <h4 className="text-theme-text-primary font-semibold mb-3">{title}</h4>
+    <h4 className="text-theme-text-primary mb-3 font-semibold">{title}</h4>
     <div className="space-y-2">{children}</div>
   </div>
 );
@@ -700,22 +780,15 @@ interface RequirementModalProps {
   onSave: (data: TrainingRequirementCreate | TrainingRequirementUpdate, isEdit: boolean, id?: string) => void;
 }
 
-const RequirementModal: React.FC<RequirementModalProps> = ({
-  requirement,
-  template,
-  categories,
-  onClose,
-  onSave,
-}) => {
+const RequirementModal: React.FC<RequirementModalProps> = ({ requirement, template, categories, onClose, onSave }) => {
   const seed = requirement ?? template;
   const seedFrequency = seed?.frequency || 'annual';
   const [formData, setFormData] = useState({
     name: seed?.name || '',
     description: seed?.description || '',
-    requirement_type: (seed?.requirement_type || 'hours'),
+    requirement_type: seed?.requirement_type || 'hours',
     training_type: seed?.training_type || '',
     required_hours: seed?.required_hours || undefined,
-    required_courses: (seed?.required_courses || []).join('\n'),
     required_shifts: seed?.required_shifts || undefined,
     required_calls: seed?.required_calls || undefined,
     checklist_items: (seed?.checklist_items || []).join('\n'),
@@ -726,28 +799,28 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
     // year: "One time" next to "2026" reads as "only required during 2026",
     // when in fact the completion counts permanently (the backend returns an
     // unbounded date window for one_time and ignores `year` entirely).
-    year: seedFrequency === 'one_time'
-      ? undefined
-      : (seed?.year || new Date().getFullYear() as number | undefined),
+    year: seedFrequency === 'one_time' ? undefined : seed?.year || (new Date().getFullYear() as number | undefined),
     allows_external_credit: seed?.allows_external_credit ?? false,
     applies_to_all: seed?.applies_to_all ?? true,
-    required_membership_types: seed?.required_membership_types || [] as string[],
+    required_membership_types: seed?.required_membership_types || ([] as string[]),
     due_date: seed?.due_date || '',
     start_date: seed?.start_date || '',
     due_date_type: seed?.due_date_type || 'calendar_period',
     rolling_period_months: seed?.rolling_period_months || 12,
     period_start_month: seed?.period_start_month || 1,
     period_start_day: seed?.period_start_day || 1,
-    period_end_month: seed?.period_end_month || undefined as number | undefined,
-    period_end_day: seed?.period_end_day || undefined as number | undefined,
+    period_end_month: seed?.period_end_month || (undefined as number | undefined),
+    period_end_day: seed?.period_end_day || (undefined as number | undefined),
     include_current_month_mode:
-      seed?.include_current_month == null
-        ? 'inherit'
-        : seed.include_current_month
-          ? 'include'
-          : 'exclude',
-    category_ids: seed?.category_ids || [] as string[],
+      seed?.include_current_month == null ? 'inherit' : seed.include_current_month ? 'include' : 'exclude',
+    category_ids: seed?.category_ids || ([] as string[]),
   });
+
+  // Linked course-library ids. Kept out of `formData` because it is an id list
+  // the picker owns, not a text field.
+  const [requiredCourses, setRequiredCourses] = useState<string[]>(seed?.required_courses ?? []);
+  const [recencyDays, setRecencyDays] = useState<number | undefined>(seed?.recency_days ?? undefined);
+  const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
 
   const [saving, setSaving] = useState(false);
 
@@ -758,7 +831,10 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
   const isOneTime = formData.frequency === 'one_time';
 
   const splitLines = (value: string): string[] =>
-    value.split('\n').map(line => line.trim()).filter(Boolean);
+    value
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -769,14 +845,13 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
     // Mirror the backend TrainingRequirementCreate validator so users get a
     // specific message instead of a generic 422 failure
-    const courses = splitLines(formData.required_courses);
     const checklistItems = splitLines(formData.checklist_items);
     if (formData.requirement_type === 'hours' && !formData.required_hours) {
       toast.error('Required hours must be set for an hours requirement');
       return;
     }
-    if (formData.requirement_type === 'courses' && courses.length === 0) {
-      toast.error('List at least one course for a courses requirement');
+    if (formData.requirement_type === 'courses' && requiredCourses.length === 0) {
+      toast.error('Select at least one course from the library for a courses requirement');
       return;
     }
     if (formData.requirement_type === 'shifts' && !formData.required_shifts) {
@@ -795,8 +870,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
     // A requirement that applies to nobody silently disappears from every
     // member's compliance view — block it unless the record targets by
     // role/position (set outside this form)
-    const hasRoleTargeting =
-      (seed?.required_roles?.length || 0) > 0 || (seed?.required_positions?.length || 0) > 0;
+    const hasRoleTargeting = (seed?.required_roles?.length || 0) > 0 || (seed?.required_positions?.length || 0) > 0;
     if (!formData.applies_to_all && formData.required_membership_types.length === 0 && !hasRoleTargeting) {
       toast.error('Select at least one member category, or check "Applies to all members"');
       return;
@@ -814,34 +888,51 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
         requirement_type: formData.requirement_type,
         ...(formData.training_type ? { training_type: formData.training_type as TrainingType } : {}),
         ...(formData.required_hours ? { required_hours: formData.required_hours } : {}),
-        ...(formData.requirement_type === 'courses' ? { required_courses: courses } : {}),
+        // Always sent so switching a requirement off the course/certification
+        // types clears stale links — a leftover course id silently narrows the
+        // hours evaluator to only that course's records.
+        required_courses:
+          formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
+            ? requiredCourses
+            : [],
+        // Sent unconditionally (undefined when off) so lifting a freshness
+        // window persists rather than silently keeping the old value.
+        recency_days:
+          formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
+            ? recencyDays
+            : undefined,
         ...(formData.requirement_type === 'shifts' && formData.required_shifts
-          ? { required_shifts: formData.required_shifts } : {}),
+          ? { required_shifts: formData.required_shifts }
+          : {}),
         ...(formData.requirement_type === 'calls' && formData.required_calls
-          ? { required_calls: formData.required_calls } : {}),
+          ? { required_calls: formData.required_calls }
+          : {}),
         ...(formData.requirement_type === 'checklist' && checklistItems.length > 0
-          ? { checklist_items: checklistItems } : {}),
+          ? { checklist_items: checklistItems }
+          : {}),
         ...(formData.requirement_type === 'knowledge_test' && formData.passing_score
-          ? { passing_score: formData.passing_score } : {}),
+          ? { passing_score: formData.passing_score }
+          : {}),
         ...(formData.requirement_type === 'knowledge_test' && formData.max_attempts
-          ? { max_attempts: formData.max_attempts } : {}),
+          ? { max_attempts: formData.max_attempts }
+          : {}),
         frequency: formData.frequency,
         ...(!isOneTime && formData.year ? { year: formData.year } : {}),
         allows_external_credit: formData.allows_external_credit,
         applies_to_all: formData.applies_to_all,
-        required_membership_types: formData.required_membership_types.length > 0 ? formData.required_membership_types : undefined,
+        required_membership_types:
+          formData.required_membership_types.length > 0 ? formData.required_membership_types : undefined,
         ...(formData.due_date ? { due_date: formData.due_date } : {}),
         ...(formData.start_date ? { start_date: formData.start_date } : {}),
         due_date_type: formData.due_date_type,
-        rolling_period_months: !isOneTime && formData.due_date_type === 'rolling' ? formData.rolling_period_months : undefined,
+        rolling_period_months:
+          !isOneTime && formData.due_date_type === 'rolling' ? formData.rolling_period_months : undefined,
         period_start_month: usesCalendarPeriod ? formData.period_start_month : undefined,
         period_start_day: usesCalendarPeriod ? formData.period_start_day : undefined,
         period_end_month: usesCalendarPeriod ? formData.period_end_month : undefined,
         period_end_day: usesCalendarPeriod ? formData.period_end_day : undefined,
         include_current_month:
-          formData.include_current_month_mode === 'inherit'
-            ? null
-            : formData.include_current_month_mode === 'include',
+          formData.include_current_month_mode === 'inherit' ? null : formData.include_current_month_mode === 'include',
         category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
         // Preserve registry attribution when creating from a standards template
         ...(!requirement && template?.source ? { source: template.source } : {}),
@@ -856,44 +947,51 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
   };
 
   const handleCategoryToggle = (categoryId: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       category_ids: prev.category_ids.includes(categoryId)
-        ? prev.category_ids.filter(id => id !== categoryId)
+        ? prev.category_ids.filter((id) => id !== categoryId)
         : [...prev.category_ids, categoryId],
     }));
   };
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="requirement-modal-title"
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-lg p-6">
+        <div className="mb-6 flex items-center justify-between">
           <h3 id="requirement-modal-title" className="text-theme-text-primary text-xl font-bold">
             {requirement ? 'Edit Requirement' : 'Create Requirement'}
           </h3>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-theme-surface-hover rounded-lg transition-colors text-theme-text-muted"
+            className="hover:bg-theme-surface-hover text-theme-text-muted rounded-lg p-2 transition-colors"
             aria-label="Close dialog"
           >
-            <X className="w-5 h-5" aria-hidden="true" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Info */}
           <div className="space-y-4">
-            <h4 className="text-theme-text-primary font-semibold border-b border-theme-surface-border pb-2">Basic Information</h4>
+            <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">
+              Basic Information
+            </h4>
 
             <div>
-              <label htmlFor="req-name" className="block text-sm font-medium text-theme-text-secondary mb-2">
-                Name <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+              <label htmlFor="req-name" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                Name{' '}
+                <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                  *
+                </span>
               </label>
               <input
                 id="req-name"
@@ -908,7 +1006,9 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             </div>
 
             <div>
-              <label htmlFor="req-description" className="block text-sm font-medium text-theme-text-secondary mb-2">Description</label>
+              <label htmlFor="req-description" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                Description
+              </label>
               <textarea
                 id="req-description"
                 value={formData.description}
@@ -920,8 +1020,14 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             </div>
 
             <div>
-              <label htmlFor="req-requirement-type" className="block text-sm font-medium text-theme-text-secondary mb-2">
-                Requirement Type <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+              <label
+                htmlFor="req-requirement-type"
+                className="text-theme-text-secondary mb-2 block text-sm font-medium"
+              >
+                Requirement Type{' '}
+                <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                  *
+                </span>
               </label>
               <select
                 id="req-requirement-type"
@@ -960,9 +1066,11 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               </select>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label htmlFor="req-training-type" className="block text-sm font-medium text-theme-text-secondary mb-2">Training Type</label>
+                <label htmlFor="req-training-type" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                  Training Type
+                </label>
                 <select
                   id="req-training-type"
                   value={formData.training_type}
@@ -980,16 +1088,25 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               </div>
 
               <div>
-                <label htmlFor="req-required-hours" className="block text-sm font-medium text-theme-text-secondary mb-2">
-                  Required Hours{formData.requirement_type === 'hours' && (
-                    <span aria-hidden="true" className="text-red-700 dark:text-red-400"> *</span>
+                <label
+                  htmlFor="req-required-hours"
+                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                >
+                  Required Hours
+                  {formData.requirement_type === 'hours' && (
+                    <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                      {' '}
+                      *
+                    </span>
                   )}
                 </label>
                 <input
                   id="req-required-hours"
                   type="number"
                   value={formData.required_hours || ''}
-                  onChange={(e) => setFormData({ ...formData, required_hours: e.target.value ? Number(e.target.value) : undefined })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, required_hours: e.target.value ? Number(e.target.value) : undefined })
+                  }
                   className="form-input placeholder-theme-text-muted"
                   placeholder="e.g., 36"
                   min="0"
@@ -999,35 +1116,43 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             </div>
 
             {/* Per-type quantity fields */}
-            {formData.requirement_type === 'courses' && (
-              <div>
-                <label htmlFor="req-required-courses" className="block text-sm font-medium text-theme-text-secondary mb-2">
-                  Required Courses <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <textarea
-                  id="req-required-courses"
-                  value={formData.required_courses}
-                  onChange={(e) => setFormData({ ...formData, required_courses: e.target.value })}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder={'One course per line, e.g.\nICS-100\nICS-200'}
-                  rows={4}
-                />
-                <p className="text-theme-text-muted text-sm mt-1">
-                  Members must complete every course listed (one per line).
-                </p>
-              </div>
+            {/* Courses are picked from the library, never typed: compliance
+                matches a member's records by course id, so a typed-in course
+                name never matches and the requirement could never complete. */}
+            {(formData.requirement_type === 'courses' || formData.requirement_type === 'certification') && (
+              <CourseLibraryPicker
+                idPrefix="req"
+                courses={courses}
+                loading={coursesLoading}
+                error={coursesError}
+                variant={formData.requirement_type === 'certification' ? 'certification' : 'courses'}
+                selectedIds={requiredCourses}
+                onChange={setRequiredCourses}
+              />
+            )}
+
+            {(formData.requirement_type === 'courses' || formData.requirement_type === 'certification') && (
+              <RecencyWindowField idPrefix="req" value={recencyDays} onChange={setRecencyDays} />
             )}
 
             {formData.requirement_type === 'shifts' && (
               <div>
-                <label htmlFor="req-required-shifts" className="block text-sm font-medium text-theme-text-secondary mb-2">
-                  Required Shifts <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+                <label
+                  htmlFor="req-required-shifts"
+                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                >
+                  Required Shifts{' '}
+                  <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                    *
+                  </span>
                 </label>
                 <input
                   id="req-required-shifts"
                   type="number"
                   value={formData.required_shifts || ''}
-                  onChange={(e) => setFormData({ ...formData, required_shifts: e.target.value ? Number(e.target.value) : undefined })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, required_shifts: e.target.value ? Number(e.target.value) : undefined })
+                  }
                   className="form-input placeholder-theme-text-muted"
                   placeholder="e.g., 12"
                   min="1"
@@ -1037,14 +1162,22 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
             {formData.requirement_type === 'calls' && (
               <div>
-                <label htmlFor="req-required-calls" className="block text-sm font-medium text-theme-text-secondary mb-2">
-                  Required Calls <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+                <label
+                  htmlFor="req-required-calls"
+                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                >
+                  Required Calls{' '}
+                  <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                    *
+                  </span>
                 </label>
                 <input
                   id="req-required-calls"
                   type="number"
                   value={formData.required_calls || ''}
-                  onChange={(e) => setFormData({ ...formData, required_calls: e.target.value ? Number(e.target.value) : undefined })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, required_calls: e.target.value ? Number(e.target.value) : undefined })
+                  }
                   className="form-input placeholder-theme-text-muted"
                   placeholder="e.g., 24"
                   min="1"
@@ -1054,7 +1187,10 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
             {formData.requirement_type === 'checklist' && (
               <div>
-                <label htmlFor="req-checklist-items" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                <label
+                  htmlFor="req-checklist-items"
+                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                >
                   Checklist Items
                 </label>
                 <textarea
@@ -1065,23 +1201,29 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   placeholder={'One item per line, e.g.\nStation tour completed\nSCBA fit test'}
                   rows={5}
                 />
-                <p className="text-theme-text-muted text-sm mt-1">
-                  Each line becomes an item members must check off.
-                </p>
+                <p className="text-theme-text-muted mt-1 text-sm">Each line becomes an item members must check off.</p>
               </div>
             )}
 
             {formData.requirement_type === 'knowledge_test' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label htmlFor="req-passing-score" className="block text-sm font-medium text-theme-text-secondary mb-2">
-                    Passing Score (%) <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+                  <label
+                    htmlFor="req-passing-score"
+                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                  >
+                    Passing Score (%){' '}
+                    <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                      *
+                    </span>
                   </label>
                   <input
                     id="req-passing-score"
                     type="number"
                     value={formData.passing_score || ''}
-                    onChange={(e) => setFormData({ ...formData, passing_score: e.target.value ? Number(e.target.value) : undefined })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, passing_score: e.target.value ? Number(e.target.value) : undefined })
+                    }
                     className="form-input placeholder-theme-text-muted"
                     placeholder="e.g., 80"
                     min="1"
@@ -1089,12 +1231,19 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label htmlFor="req-max-attempts" className="block text-sm font-medium text-theme-text-secondary mb-2">Max Attempts</label>
+                  <label
+                    htmlFor="req-max-attempts"
+                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                  >
+                    Max Attempts
+                  </label>
                   <input
                     id="req-max-attempts"
                     type="number"
                     value={formData.max_attempts || ''}
-                    onChange={(e) => setFormData({ ...formData, max_attempts: e.target.value ? Number(e.target.value) : undefined })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, max_attempts: e.target.value ? Number(e.target.value) : undefined })
+                    }
                     className="form-input placeholder-theme-text-muted"
                     placeholder="Unlimited"
                     min="1"
@@ -1106,13 +1255,17 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
           {/* Due Date Configuration */}
           <div className="space-y-4">
-            <h4 className="text-theme-text-primary font-semibold border-b border-theme-surface-border pb-2">Due Date Configuration</h4>
+            <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">
+              Due Date Configuration
+            </h4>
 
             {/* Frequency comes first: it decides whether any of the recurring
                 cycle controls below apply at all. */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label htmlFor="req-frequency" className="block text-sm font-medium text-theme-text-secondary mb-2">Frequency</label>
+                <label htmlFor="req-frequency" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                  Frequency
+                </label>
                 <select
                   id="req-frequency"
                   value={formData.frequency}
@@ -1129,12 +1282,16 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
               {!isOneTime && (
                 <div>
-                  <label htmlFor="req-year" className="block text-sm font-medium text-theme-text-secondary mb-2">Year</label>
+                  <label htmlFor="req-year" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                    Year
+                  </label>
                   <input
                     id="req-year"
                     type="number"
                     value={formData.year || ''}
-                    onChange={(e) => setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })
+                    }
                     className="form-input placeholder-theme-text-muted"
                     placeholder="e.g., 2026"
                     min="2020"
@@ -1148,47 +1305,49 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               <div className="flex items-start gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2">
                 <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-400" aria-hidden="true" />
                 <p className="text-xs text-blue-800 dark:text-blue-300">
-                  One-time requirements never reset. Once a member completes this,
-                  they stay compliant permanently — there is no renewal cycle,
-                  compliance period, or year to configure.
+                  One-time requirements never reset. Once a member completes this, they stay compliant permanently —
+                  there is no renewal cycle, compliance period, or year to configure.
                 </p>
               </div>
             )}
 
             {!isOneTime && (
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Due Date Type</label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3" role="radiogroup" aria-label="Due date type">
-                {[
-                  { value: 'calendar_period', label: 'Calendar Period', desc: 'Due by end of period (e.g., Dec 31)' },
-                  { value: 'rolling', label: 'Rolling', desc: 'Due X months from last completion' },
-                  { value: 'certification_period', label: 'Cert Period', desc: 'Due when certification expires' },
-                  { value: 'fixed_date', label: 'Fixed Date', desc: 'Due by a specific date' },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={formData.due_date_type === option.value}
-                    onClick={() => setFormData({ ...formData, due_date_type: option.value as DueDateType })}
-                    className={`p-3 rounded-lg border text-left transition-colors ${
-                      formData.due_date_type === option.value
-                        ? 'border-red-500 bg-red-500/20 text-theme-text-primary'
-                        : 'border-theme-input-border bg-theme-input-bg text-theme-text-secondary hover:border-theme-input-border'
-                    }`}
-                  >
-                    <div className="font-medium text-sm">{option.label}</div>
-                    <div className="text-xs text-theme-text-muted mt-1">{option.desc}</div>
-                  </button>
-                ))}
+              <div>
+                <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Due Date Type</label>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4" role="radiogroup" aria-label="Due date type">
+                  {[
+                    { value: 'calendar_period', label: 'Calendar Period', desc: 'Due by end of period (e.g., Dec 31)' },
+                    { value: 'rolling', label: 'Rolling', desc: 'Due X months from last completion' },
+                    { value: 'certification_period', label: 'Cert Period', desc: 'Due when certification expires' },
+                    { value: 'fixed_date', label: 'Fixed Date', desc: 'Due by a specific date' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={formData.due_date_type === option.value}
+                      onClick={() => setFormData({ ...formData, due_date_type: option.value as DueDateType })}
+                      className={`rounded-lg border p-3 text-left transition-colors ${
+                        formData.due_date_type === option.value
+                          ? 'text-theme-text-primary border-red-500 bg-red-500/20'
+                          : 'border-theme-input-border bg-theme-input-bg text-theme-text-secondary hover:border-theme-input-border'
+                      }`}
+                    >
+                      <div className="text-sm font-medium">{option.label}</div>
+                      <div className="text-theme-text-muted mt-1 text-xs">{option.desc}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
             )}
 
             {/* Rolling period options */}
             {!isOneTime && formData.due_date_type === 'rolling' && (
               <div>
-                <label htmlFor="req-rolling-period" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                <label
+                  htmlFor="req-rolling-period"
+                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                >
                   Rolling Period (Months)
                 </label>
                 <input
@@ -1200,8 +1359,9 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   min="1"
                   max="120"
                 />
-                <p className="text-theme-text-muted text-sm mt-1">
-                  Training must be completed every {formData.rolling_period_months} months from the last completion date.
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  Training must be completed every {formData.rolling_period_months} months from the last completion
+                  date.
                 </p>
               </div>
             )}
@@ -1211,20 +1371,45 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="req-period-start-month" className="block text-sm font-medium text-theme-text-secondary mb-2">Period Start Month</label>
+                    <label
+                      htmlFor="req-period-start-month"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Period Start Month
+                    </label>
                     <select
                       id="req-period-start-month"
                       value={formData.period_start_month}
                       onChange={(e) => setFormData({ ...formData, period_start_month: Number(e.target.value) })}
                       className="form-input"
                     >
-                      {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
-                        <option key={idx} value={idx + 1}>{month}</option>
+                      {[
+                        'January',
+                        'February',
+                        'March',
+                        'April',
+                        'May',
+                        'June',
+                        'July',
+                        'August',
+                        'September',
+                        'October',
+                        'November',
+                        'December',
+                      ].map((month, idx) => (
+                        <option key={idx} value={idx + 1}>
+                          {month}
+                        </option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label htmlFor="req-period-start-day" className="block text-sm font-medium text-theme-text-secondary mb-2">Period Start Day</label>
+                    <label
+                      htmlFor="req-period-start-day"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Period Start Day
+                    </label>
                     <input
                       id="req-period-start-day"
                       type="number"
@@ -1238,26 +1423,61 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="req-period-end-month" className="block text-sm font-medium text-theme-text-secondary mb-2">Period End Month (Optional)</label>
+                    <label
+                      htmlFor="req-period-end-month"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Period End Month (Optional)
+                    </label>
                     <select
                       id="req-period-end-month"
                       value={formData.period_end_month || ''}
-                      onChange={(e) => setFormData({ ...formData, period_end_month: e.target.value ? Number(e.target.value) : undefined })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          period_end_month: e.target.value ? Number(e.target.value) : undefined,
+                        })
+                      }
                       className="form-input"
                     >
                       <option value="">Default (end of year)</option>
-                      {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
-                        <option key={idx} value={idx + 1}>{month}</option>
+                      {[
+                        'January',
+                        'February',
+                        'March',
+                        'April',
+                        'May',
+                        'June',
+                        'July',
+                        'August',
+                        'September',
+                        'October',
+                        'November',
+                        'December',
+                      ].map((month, idx) => (
+                        <option key={idx} value={idx + 1}>
+                          {month}
+                        </option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label htmlFor="req-period-end-day" className="block text-sm font-medium text-theme-text-secondary mb-2">Period End Day</label>
+                    <label
+                      htmlFor="req-period-end-day"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Period End Day
+                    </label>
                     <input
                       id="req-period-end-day"
                       type="number"
                       value={formData.period_end_day || ''}
-                      onChange={(e) => setFormData({ ...formData, period_end_day: e.target.value ? Number(e.target.value) : undefined })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          period_end_day: e.target.value ? Number(e.target.value) : undefined,
+                        })
+                      }
                       className="form-input"
                       min="1"
                       max="31"
@@ -1268,7 +1488,9 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 </div>
                 {formData.period_end_month && formData.period_start_month > formData.period_end_month && (
                   <p className="text-theme-text-muted text-sm">
-                    Cross-year window: completions accepted from month {formData.period_start_month} of the previous year through month {formData.period_end_month}, day {formData.period_end_day || 'last'} of the current year.
+                    Cross-year window: completions accepted from month {formData.period_start_month} of the previous
+                    year through month {formData.period_end_month}, day {formData.period_end_day || 'last'} of the
+                    current year.
                   </p>
                 )}
               </>
@@ -1277,7 +1499,9 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             {/* Fixed date option */}
             {!isOneTime && formData.due_date_type === 'fixed_date' && (
               <div>
-                <label htmlFor="req-due-date" className="block text-sm font-medium text-theme-text-secondary mb-2">Due Date</label>
+                <label htmlFor="req-due-date" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                  Due Date
+                </label>
                 <input
                   id="req-due-date"
                   type="date"
@@ -1290,7 +1514,10 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
             {/* Evaluation period boundary (per-requirement override) */}
             <div>
-              <label htmlFor="req-include-current-month" className="block text-sm font-medium text-theme-text-secondary mb-2">
+              <label
+                htmlFor="req-include-current-month"
+                className="text-theme-text-secondary mb-2 block text-sm font-medium"
+              >
                 Evaluation Period
               </label>
               <select
@@ -1303,51 +1530,52 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 <option value="include">Count the current (in-progress) month</option>
                 <option value="exclude">Stop at the end of the previous month</option>
               </select>
-              <p className="mt-1 text-xs text-theme-text-muted">
-                Controls whether this requirement counts the in-progress month.
-                Choose &ldquo;stop at the end of the previous month&rdquo; for
-                drills held late in the month so members aren&rsquo;t flagged
-                early. Defaults to the department-wide compliance setting.
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Controls whether this requirement counts the in-progress month. Choose &ldquo;stop at the end of the
+                previous month&rdquo; for drills held late in the month so members aren&rsquo;t flagged early. Defaults
+                to the department-wide compliance setting.
               </p>
             </div>
-
           </div>
 
           {/* Categories */}
           {categories.length > 0 && (
             <div className="space-y-4">
-              <h4 className="text-theme-text-primary font-semibold border-b border-theme-surface-border pb-2">
+              <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">
                 Training Categories
               </h4>
               <p className="text-theme-text-muted text-sm">
-                Select categories that can satisfy this requirement. Training sessions tagged with these categories will count towards completion.
+                Select categories that can satisfy this requirement. Training sessions tagged with these categories will
+                count towards completion.
               </p>
               <div className="flex flex-wrap gap-2" role="group" aria-label="Training categories">
-                {categories.filter(c => c.active).map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => handleCategoryToggle(category.id)}
-                    aria-pressed={formData.category_ids.includes(category.id)}
-                    className={`px-3 py-2 rounded-lg border transition-colors flex items-center space-x-2 ${
-                      formData.category_ids.includes(category.id)
-                        ? 'border-red-500 bg-red-500/20 text-theme-text-primary'
-                        : 'border-theme-input-border bg-theme-input-bg text-theme-text-secondary hover:border-theme-input-border'
-                    }`}
-                  >
-                    {category.color && (
-                      <span
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: category.color }}
-                        aria-hidden="true"
-                      />
-                    )}
-                    <span>{category.name}</span>
-                    {formData.category_ids.includes(category.id) && (
-                      <CheckCircle className="w-4 h-4 text-red-700 dark:text-red-400" aria-hidden="true" />
-                    )}
-                  </button>
-                ))}
+                {categories
+                  .filter((c) => c.active)
+                  .map((category) => (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={() => handleCategoryToggle(category.id)}
+                      aria-pressed={formData.category_ids.includes(category.id)}
+                      className={`flex items-center space-x-2 rounded-lg border px-3 py-2 transition-colors ${
+                        formData.category_ids.includes(category.id)
+                          ? 'text-theme-text-primary border-red-500 bg-red-500/20'
+                          : 'border-theme-input-border bg-theme-input-bg text-theme-text-secondary hover:border-theme-input-border'
+                      }`}
+                    >
+                      {category.color && (
+                        <span
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: category.color }}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span>{category.name}</span>
+                      {formData.category_ids.includes(category.id) && (
+                        <CheckCircle className="h-4 w-4 text-red-700 dark:text-red-400" aria-hidden="true" />
+                      )}
+                    </button>
+                  ))}
               </div>
             </div>
           )}
@@ -1356,30 +1584,37 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               a deliberate choice about whether third-party courses count. */}
           {(formData.requirement_type === 'hours' || formData.requirement_type === 'courses') && (
             <div className="space-y-3">
-              <h4 className="text-theme-text-primary font-semibold border-b border-theme-surface-border pb-2">
+              <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">
                 External / Imported Training Credit
               </h4>
               <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+                <AlertCircle
+                  className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+                  aria-hidden="true"
+                />
                 <div className="space-y-2">
-                  <p className="text-sm text-theme-text-secondary">
+                  <p className="text-theme-text-secondary text-sm">
                     {formData.allows_external_credit ? (
-                      <>Imported courses <strong>will</strong> count toward this requirement when
-                      they carry a matching category (e.g. a Vector Solutions completion).</>
+                      <>
+                        Imported courses <strong>will</strong> count toward this requirement when they carry a matching
+                        category (e.g. a Vector Solutions completion).
+                      </>
                     ) : (
-                      <>By default, courses imported from an external provider (e.g. Vector
-                      Solutions) <strong>will not</strong> count toward this requirement — it can
-                      only be satisfied by an in-house session, a skills test, or manual sign-off.</>
+                      <>
+                        By default, courses imported from an external provider (e.g. Vector Solutions){' '}
+                        <strong>will not</strong> count toward this requirement — it can only be satisfied by an
+                        in-house session, a skills test, or manual sign-off.
+                      </>
                     )}
                   </p>
-                  <label className="flex items-start gap-2 cursor-pointer">
+                  <label className="flex cursor-pointer items-start gap-2">
                     <input
                       type="checkbox"
                       checked={formData.allows_external_credit}
                       onChange={(e) => setFormData({ ...formData, allows_external_credit: e.target.checked })}
-                      className="w-5 h-5 mt-0.5 rounded-sm border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                      className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring mt-0.5 h-5 w-5 rounded-sm text-red-700 dark:text-red-500"
                     />
-                    <span className="text-sm text-theme-text-secondary">
+                    <span className="text-theme-text-secondary text-sm">
                       Accept external / imported training credit for this requirement
                     </span>
                   </label>
@@ -1390,23 +1625,27 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
           {/* Assignment */}
           <div className="space-y-4">
-            <h4 className="text-theme-text-primary font-semibold border-b border-theme-surface-border pb-2">Assignment</h4>
+            <h4 className="text-theme-text-primary border-theme-surface-border border-b pb-2 font-semibold">
+              Assignment
+            </h4>
 
             <div>
-              <label className="flex items-center space-x-3 cursor-pointer">
+              <label className="flex cursor-pointer items-center space-x-3">
                 <input
                   type="checkbox"
                   checked={formData.applies_to_all}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    applies_to_all: e.target.checked,
-                    ...(e.target.checked ? { required_membership_types: [] } : {}),
-                  })}
-                  className="w-5 h-5 rounded-sm border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      applies_to_all: e.target.checked,
+                      ...(e.target.checked ? { required_membership_types: [] } : {}),
+                    })
+                  }
+                  className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring h-5 w-5 rounded-sm text-red-700 dark:text-red-500"
                 />
                 <span className="text-theme-text-secondary">Applies to all members</span>
               </label>
-              <p className="text-theme-text-muted text-sm mt-1 ml-8">
+              <p className="text-theme-text-muted mt-1 ml-8 text-sm">
                 When checked, this requirement applies to everyone in the organization.
               </p>
             </div>
@@ -1414,17 +1653,17 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             {/* Member Categories - shown when not applies_to_all */}
             {!formData.applies_to_all && (
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Member Categories</label>
-                <p className="text-theme-text-muted text-sm mb-3">
+                <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Member Categories</label>
+                <p className="text-theme-text-muted mb-3 text-sm">
                   Select which member categories this requirement applies to.
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2" role="group" aria-label="Member categories">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3" role="group" aria-label="Member categories">
                   {MEMBERSHIP_TYPES.map((memberType) => (
                     <label
                       key={memberType.value}
-                      className={`flex items-center space-x-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                      className={`flex cursor-pointer items-center space-x-3 rounded-lg border px-3 py-2 transition-colors ${
                         formData.required_membership_types.includes(memberType.value)
-                          ? 'border-red-500 bg-red-500/20 text-theme-text-primary'
+                          ? 'text-theme-text-primary border-red-500 bg-red-500/20'
                           : 'border-theme-input-border bg-theme-input-bg text-theme-text-secondary hover:border-theme-input-border'
                       }`}
                     >
@@ -1432,14 +1671,14 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                         type="checkbox"
                         checked={formData.required_membership_types.includes(memberType.value)}
                         onChange={() => {
-                          setFormData(prev => ({
+                          setFormData((prev) => ({
                             ...prev,
                             required_membership_types: prev.required_membership_types.includes(memberType.value)
-                              ? prev.required_membership_types.filter(v => v !== memberType.value)
+                              ? prev.required_membership_types.filter((v) => v !== memberType.value)
                               : [...prev.required_membership_types, memberType.value],
                           }));
                         }}
-                        className="w-4 h-4 rounded-sm border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                        className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring h-4 w-4 rounded-sm text-red-700 dark:text-red-500"
                       />
                       <span className="text-sm">{memberType.label}</span>
                     </label>
@@ -1448,9 +1687,11 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label htmlFor="req-start-date" className="block text-sm font-medium text-theme-text-secondary mb-2">Start Date</label>
+                <label htmlFor="req-start-date" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                  Start Date
+                </label>
                 <input
                   id="req-start-date"
                   type="date"
@@ -1463,20 +1704,16 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end space-x-3 pt-4 border-t border-theme-surface-border">
+          <div className="border-theme-surface-border flex justify-end space-x-3 border-t pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
+              className="bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg px-4 py-2 transition-colors"
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="btn-success"
-            >
-              {saving ? 'Saving...' : (requirement ? 'Update Requirement' : 'Create Requirement')}
+            <button type="submit" disabled={saving} className="btn-success">
+              {saving ? 'Saving...' : requirement ? 'Update Requirement' : 'Create Requirement'}
             </button>
           </div>
         </form>
@@ -1526,7 +1763,8 @@ const TemplateModal: React.FC<{
     },
     {
       name: 'NREMT EMT Recertification',
-      description: '40 hours of continuing education per 2-year National Registry cycle (national, local/state, and individual components)',
+      description:
+        '40 hours of continuing education per 2-year National Registry cycle (national, local/state, and individual components)',
       requirement_type: 'hours',
       training_type: 'continuing_education',
       required_hours: 40,
@@ -1564,7 +1802,8 @@ const TemplateModal: React.FC<{
     },
     {
       name: 'Bloodborne Pathogens Annual Refresher',
-      description: 'Annual bloodborne pathogens and exposure control plan training required by OSHA 29 CFR 1910.1030 for members with occupational exposure',
+      description:
+        'Annual bloodborne pathogens and exposure control plan training required by OSHA 29 CFR 1910.1030 for members with occupational exposure',
       requirement_type: 'hours',
       training_type: 'refresher',
       required_hours: 2,
@@ -1579,7 +1818,8 @@ const TemplateModal: React.FC<{
     },
     {
       name: 'HIPAA Privacy & Security Awareness',
-      description: 'Annual HIPAA privacy and security training for all personnel with access to protected health information (patient care reports, EMS records)',
+      description:
+        'Annual HIPAA privacy and security training for all personnel with access to protected health information (patient care reports, EMS records)',
       requirement_type: 'hours',
       training_type: 'continuing_education',
       required_hours: 1,
@@ -1613,15 +1853,14 @@ const TemplateModal: React.FC<{
     },
     {
       name: 'NIMS/ICS Initial Certification',
-      description: 'One-time incident command system courses required for emergency responders under the National Incident Management System',
+      // The four FEMA courses are named in the description rather than seeded
+      // into required_courses: that field holds course-library ids, which are
+      // per-department, so a starter template can't know them. The officer
+      // links the matching library courses when applying the template.
+      description:
+        'One-time incident command system courses required for emergency responders under the National Incident Management System. Link ICS-100, ICS-200, IS-700, and IS-800 from the course library.',
       requirement_type: 'courses',
       training_type: 'certification',
-      required_courses: [
-        'ICS-100: Introduction to the Incident Command System',
-        'ICS-200: Basic Incident Command System for Initial Response',
-        'IS-700: An Introduction to the National Incident Management System',
-        'IS-800: National Response Framework, An Introduction',
-      ],
       frequency: 'one_time',
       applies_to_all: true,
       source: 'national',
@@ -1648,46 +1887,52 @@ const TemplateModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="template-modal-title"
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-4xl w-full p-6 max-h-[80vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-theme-surface-modal max-h-[80dvh] w-full max-w-4xl overflow-y-auto rounded-lg p-6">
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">Select a Template</h3>
+            <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">
+              Select a Template
+            </h3>
             <p className="text-theme-text-muted mt-1">
               Start from a common standard — you can review and adjust everything before saving
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-theme-surface-hover rounded-lg transition-colors text-theme-text-muted"
+            className="hover:bg-theme-surface-hover text-theme-text-muted rounded-lg p-2 transition-colors"
             aria-label="Close dialog"
           >
-            <X className="w-5 h-5" aria-hidden="true" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
           {templates.map((template, idx) => (
             <button
               key={idx}
               onClick={() => onSelect(template)}
               className="card hover:bg-theme-surface-hover p-4 text-left transition-colors"
             >
-              <h4 className="text-theme-text-primary font-semibold mb-2">{template.name}</h4>
-              <p className="text-theme-text-muted text-sm mb-3">{template.description}</p>
-              <div className="flex items-center space-x-2 flex-wrap gap-2">
-                <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                  template.due_date_type === 'rolling' ? 'bg-purple-600' : 'bg-blue-600'
-                } text-theme-text-primary`}>
+              <h4 className="text-theme-text-primary mb-2 font-semibold">{template.name}</h4>
+              <p className="text-theme-text-muted mb-3 text-sm">{template.description}</p>
+              <div className="flex flex-wrap items-center gap-2 space-x-2">
+                <span
+                  className={`rounded px-2 py-1 text-xs font-semibold ${
+                    template.due_date_type === 'rolling' ? 'bg-purple-600' : 'bg-blue-600'
+                  } text-theme-text-primary`}
+                >
                   {template.due_date_type === 'rolling' ? 'Rolling' : 'Calendar Period'}
                 </span>
                 {template.registry_name && (
-                  <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                  <span className="rounded bg-blue-500/20 px-2 py-1 text-xs font-semibold text-blue-700 dark:text-blue-400">
                     {template.registry_name}
                   </span>
                 )}
@@ -1709,7 +1954,7 @@ const TemplateModal: React.FC<{
         <div className="flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
+            className="bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg px-4 py-2 transition-colors"
           >
             Close
           </button>

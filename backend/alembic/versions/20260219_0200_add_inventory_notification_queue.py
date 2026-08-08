@@ -5,8 +5,8 @@ Revises: dc01a
 Create Date: 2026-02-19
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "20260219_0200"
 down_revision = "dc01a"
@@ -33,8 +33,12 @@ def upgrade() -> None:
         sa.Column(
             "action_type",
             sa.Enum(
-                "assigned", "unassigned", "issued", "returned",
-                "checked_out", "checked_in",
+                "assigned",
+                "unassigned",
+                "issued",
+                "returned",
+                "checked_out",
+                "checked_in",
                 name="inventoryactiontype",
             ),
             nullable=False,
@@ -78,8 +82,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("idx_inv_notif_queue_org_user", table_name="inventory_notification_queue")
-    op.drop_index("idx_inv_notif_queue_pending", table_name="inventory_notification_queue")
+    op.drop_index(
+        "idx_inv_notif_queue_org_user", table_name="inventory_notification_queue"
+    )
+    op.drop_index(
+        "idx_inv_notif_queue_pending", table_name="inventory_notification_queue"
+    )
     op.drop_table("inventory_notification_queue")
     # PostgreSQL uses standalone enum types; MySQL inlines them — skip on MySQL
     try:

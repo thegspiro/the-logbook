@@ -45,6 +45,7 @@ echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u thegspiro --password-stdin
 ```
 
 You should see:
+
 ```
 Login Succeeded
 ```
@@ -84,6 +85,7 @@ cd ..
 ```
 
 **Expected output:**
+
 ```
 [+] Building 123.4s (15/15) FINISHED
  => [internal] load build definition from Dockerfile
@@ -104,23 +106,22 @@ latest: digest: sha256:xyz789... size: 1234
 ## Step 5: Build and Push Frontend Image
 
 ```bash
-# Navigate to frontend directory
-cd frontend
+# Run from the repository root — the frontend image installs from the npm
+# workspace lockfile at the root, so the root must be the build context.
+cd /path/to/the-logbook
 
 # Build the frontend image (this may take 10-15 minutes)
-docker build --target production -t ghcr.io/thegspiro/the-logbook-frontend:latest .
+docker build -f frontend/Dockerfile --target production -t ghcr.io/thegspiro/the-logbook-frontend:latest .
 
 # Optional: Test the frontend image locally
 # docker run -p 3000:80 ghcr.io/thegspiro/the-logbook-frontend:latest
 
 # Push the frontend image to GitHub Container Registry
 docker push ghcr.io/thegspiro/the-logbook-frontend:latest
-
-# Navigate back to project root
-cd ..
 ```
 
 **Expected output:**
+
 ```
 [+] Building 234.5s (18/18) FINISHED
  => [build 1/6] COPY package*.json ./
@@ -198,6 +199,7 @@ docker-compose up -d
 **Problem**: GitHub Container Registry is denying access.
 
 **Solutions**:
+
 1. Make sure images are set to **Public** (Step 6)
 2. If private, login on Unraid:
    ```bash
@@ -210,6 +212,7 @@ docker-compose up -d
 **Problem**: Image doesn't exist or tag is wrong.
 
 **Solutions**:
+
 1. Verify image was pushed successfully (check Step 4 & 5 output)
 2. Check package exists on GitHub: https://github.com/thegspiro?tab=packages
 3. Verify tag name is `latest`
@@ -219,15 +222,18 @@ docker-compose up -d
 **Problem**: Missing files in build context.
 
 **Solutions**:
-1. Make sure you're in the correct directory (`backend/` or `frontend/`)
+
+1. Make sure you're in the correct directory: `backend/` for the backend image, the repository root for the frontend image (it builds with `-f frontend/Dockerfile .`)
 2. Check that all required files exist (main.py, app/, package.json, etc.)
 3. Pull latest code: `git pull origin main`
+4. If you build through a compose file rather than these `docker build` commands, check the contexts it declares against the Dockerfiles: `./scripts/sync-compose-build-context.sh -f docker-compose.yml` (add `--fix` to repair them in place). `docker compose config` validates YAML and interpolation only and never opens the Dockerfile, so a stale context passes validation and fails the build — the frontend's `"/frontend/nginx.conf": not found` is this.
 
 ### Images too large / build takes forever
 
 **Problem**: Docker build is slow or images are very large.
 
 **Solutions**:
+
 1. Check your internet connection (npm install downloads packages)
 2. Use BuildKit for faster builds:
    ```bash
@@ -244,6 +250,7 @@ docker-compose up -d
 **Problem**: Unraid can't pull images even though they're public.
 
 **Solutions**:
+
 1. Wait a few minutes for GitHub to update visibility settings
 2. Try logging out and back in on Unraid:
    ```bash
@@ -257,13 +264,12 @@ docker-compose up -d
 
 ```bash
 # Build and push everything (run from project root)
-cd backend
-docker build --target production -t ghcr.io/thegspiro/the-logbook-backend:latest .
+docker build -f backend/Dockerfile --target production -t ghcr.io/thegspiro/the-logbook-backend:latest ./backend
 docker push ghcr.io/thegspiro/the-logbook-backend:latest
-cd ../frontend
-docker build --target production -t ghcr.io/thegspiro/the-logbook-frontend:latest .
+# Frontend builds from the repository root — it installs from the workspace
+# lockfile there, which is outside frontend/.
+docker build -f frontend/Dockerfile --target production -t ghcr.io/thegspiro/the-logbook-frontend:latest .
 docker push ghcr.io/thegspiro/the-logbook-frontend:latest
-cd ..
 
 # On Unraid, pull and start
 cd /mnt/user/appdata/the-logbook
@@ -281,17 +287,16 @@ When you make code changes and want to update the images:
 # Pull latest code
 git pull origin main
 
-# Rebuild and push backend
-cd backend
-docker build --target production -t ghcr.io/thegspiro/the-logbook-backend:latest .
-docker push ghcr.io/thegspiro/the-logbook-backend:latest
-cd ..
+# If you build via compose, reconcile its contexts with the pulled Dockerfiles
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
-# Rebuild and push frontend
-cd frontend
-docker build --target production -t ghcr.io/thegspiro/the-logbook-frontend:latest .
+# Rebuild and push backend
+docker build -f backend/Dockerfile --target production -t ghcr.io/thegspiro/the-logbook-backend:latest ./backend
+docker push ghcr.io/thegspiro/the-logbook-backend:latest
+
+# Rebuild and push frontend (root context — see above)
+docker build -f frontend/Dockerfile --target production -t ghcr.io/thegspiro/the-logbook-frontend:latest .
 docker push ghcr.io/thegspiro/the-logbook-frontend:latest
-cd ..
 
 # On Unraid, pull new images and restart
 cd /mnt/user/appdata/the-logbook
@@ -315,15 +320,17 @@ docker push ghcr.io/thegspiro/the-logbook-backend:latest
 ```
 
 Then in docker-compose.yml, you can pin to a specific version:
+
 ```yaml
 backend:
-  image: ghcr.io/thegspiro/the-logbook-backend:v1.0.0  # Pinned version
+  image: ghcr.io/thegspiro/the-logbook-backend:v1.0.0 # Pinned version
 ```
 
 Or use latest for automatic updates:
+
 ```yaml
 backend:
-  image: ghcr.io/thegspiro/the-logbook-backend:latest  # Always latest
+  image: ghcr.io/thegspiro/the-logbook-backend:latest # Always latest
 ```
 
 ---
@@ -331,6 +338,7 @@ backend:
 ## Automation (Optional)
 
 For automatic builds on every commit, see the GitHub Actions setup guide:
+
 - **File**: `.github/workflows/docker-publish.yml`
 - **Triggers**: Automatically builds and pushes images when you push to `main` branch
 - **Benefits**: No manual building, always up-to-date images

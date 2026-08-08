@@ -46,6 +46,7 @@ import type {
   VoterOverrideCreate,
   BulkVoterOverrideCreate,
 } from '../types/election';
+import { asArray } from '../utils/asArray';
 
 export const electionService = {
   /**
@@ -55,21 +56,21 @@ export const electionService = {
     const response = await api.get<ElectionListItem[]>('/elections', {
       params: { status_filter: statusFilter },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getElectionsByEvent(eventId: string): Promise<ElectionListItem[]> {
     const response = await api.get<ElectionListItem[]>('/elections', {
       params: { event_id: eventId },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getElectionsByMeeting(meetingId: string): Promise<ElectionListItem[]> {
     const response = await api.get<ElectionListItem[]>('/elections', {
       params: { meeting_id: meetingId },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -135,7 +136,7 @@ export const electionService = {
    */
   async getCandidates(electionId: string): Promise<Candidate[]> {
     const response = await api.get<Candidate[]>(`/elections/${electionId}/candidates`);
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -207,7 +208,7 @@ export const electionService = {
    */
   async bulkCastVotes(electionId: string, votes: BulkVoteItem[]): Promise<Vote[]> {
     const response = await api.post<Vote[]>(`/elections/${electionId}/vote/bulk`, { election_id: electionId, votes });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -215,7 +216,7 @@ export const electionService = {
    */
   async getBallotTemplates(): Promise<BallotTemplate[]> {
     const response = await api.get<{ templates: BallotTemplate[] }>('/elections/templates/ballot-items');
-    return response.data.templates;
+    return asArray(response.data?.templates);
   },
 
   /**
@@ -296,7 +297,7 @@ export const electionService = {
    */
   async getVoterOverrides(electionId: string): Promise<VoterOverride[]> {
     const response = await api.get<{ overrides: VoterOverride[] }>(`/elections/${electionId}/voter-overrides`);
-    return response.data.overrides;
+    return asArray(response.data?.overrides);
   },
 
   /**
@@ -611,7 +612,7 @@ export const electionService = {
       `/elections/${electionId}/package-recipients`,
       { params: { mode } }
     );
-    return response.data.recipients;
+    return asArray(response.data?.recipients);
   },
 
   /**

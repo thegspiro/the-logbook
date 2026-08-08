@@ -29,6 +29,27 @@ from app.models.grant import (
 )
 from app.models.user import User
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_ordering import nulls_last_asc
+
+
+def _status_value(value: Any) -> str:
+    """Read an enum-backed column as its wire value.
+
+    The application-status and reporting-frequency schema fields are
+    ``Literal[...]`` unions of plain strings, so ``model_dump()`` hands the
+    service a ``str``. Assigning that to the SQLAlchemy ``Enum`` column leaves
+    the *attribute* a ``str`` until the row is refreshed from the database — the
+    coercion happens on the way out, not on assignment. Reading ``.value`` off
+    it therefore raises ``AttributeError`` and turns the whole request into a
+    500, but only when the client actually sends the field (omitting it leaves
+    the column default, a real enum member) — which is why it survived review.
+    Handle both shapes rather than assuming which one is in hand.
+
+    Duck-typed on ``.value`` rather than ``isinstance(value, Enum)`` so any
+    enum-like stand-in (such as the lightweight fakes the service tests build)
+    reads the same way a real member does.
+    """
+    return str(getattr(value, "value", value))
 
 
 class GrantService:
@@ -83,7 +104,7 @@ class GrantService:
                 | (GrantOpportunity.agency.ilike(pattern, escape="\\"))
                 | (GrantOpportunity.description.ilike(pattern, escape="\\"))
             )
-        query = query.order_by(GrantOpportunity.deadline_date.asc().nulls_last())
+        query = query.order_by(*nulls_last_asc(GrantOpportunity.deadline_date))
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -262,8 +283,11 @@ class GrantService:
         note = GrantNote(
             application_id=application.id,
             note_type=GrantNoteType.STATUS_CHANGE,
-            content=f"Application created with status: {application.application_status.value}",
-            note_metadata={"new_status": application.application_status.value},
+            content=(
+                "Application created with status: "
+                f"{_status_value(application.application_status)}"
+            ),
+            note_metadata={"new_status": _status_value(application.application_status)},
             created_by=user_id,
         )
         self.db.add(note)
@@ -307,10 +331,13 @@ class GrantService:
             note = GrantNote(
                 application_id=application.id,
                 note_type=GrantNoteType.STATUS_CHANGE,
-                content=f"Status changed from {old_status.value} to {new_status.value}",
+                content=(
+                    f"Status changed from {_status_value(old_status)} "
+                    f"to {_status_value(new_status)}"
+                ),
                 note_metadata={
-                    "old_status": old_status.value,
-                    "new_status": new_status.value,
+                    "old_status": _status_value(old_status),
+                    "new_status": _status_value(new_status),
                 },
                 created_by=user_id,
             )
@@ -324,8 +351,8 @@ class GrantService:
                 "grant_application_status_changed",
                 {
                     "application_id": application.id,
-                    "old_status": old_status.value,
-                    "new_status": new_status.value,
+                    "old_status": _status_value(old_status),
+                    "new_status": _status_value(new_status),
                 },
                 user_id=user_id,
             )
@@ -349,7 +376,7 @@ class GrantService:
                 "semi_annual": relativedelta(months=6),
                 "annual": relativedelta(years=1),
             }
-            delta = freq_map.get(application.reporting_frequency.value)
+            delta = freq_map.get(_status_value(application.reporting_frequency))
             if delta and application.grant_end_date:
                 report_date = application.grant_start_date + delta
                 report_num = 1

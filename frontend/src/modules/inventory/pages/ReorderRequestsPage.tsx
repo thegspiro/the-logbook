@@ -429,6 +429,9 @@ export const ReorderRequestsPage: React.FC = () => {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
             <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               className={`${inp} pl-9`}
               aria-label="Search by item name..." placeholder="Search by item name..."
               value={search}

@@ -36,6 +36,7 @@ from app.schemas.email_template import (
     ScheduledEmailUpdate,
 )
 from app.services.email_template_service import SAMPLE_CONTEXT, EmailTemplateService
+from app.services.officer_service import OfficerService
 from app.utils.org_scoping import assert_in_org
 
 router = APIRouter()
@@ -262,6 +263,11 @@ async def preview_email_template(
             "organization_name", ""
         )
         context["organization_logo"] = getattr(organization, "logo", None) or ""
+
+    # --- Inject live officeholders over the sample signature block ---
+    await OfficerService(db).overlay_preview_context(
+        current_user.organization_id, context
+    )
 
     # --- Inject live member data if member_id provided ---
     if preview_data.member_id:

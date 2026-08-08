@@ -13,6 +13,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
 ```
 
 This automatically:
+
 - Detects your OS (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch, macOS)
 - Detects architecture (x86_64, ARM64, ARMv7)
 - Installs Docker if needed
@@ -28,13 +29,14 @@ This automatically:
 
 Choose a profile based on your hardware:
 
-| Profile | RAM | Best For | Command |
-|---------|-----|----------|---------|
-| `minimal` | 1-2GB | Raspberry Pi, small VPS | `--profile minimal` |
-| `standard` | 4GB | Most deployments | (default) |
-| `full` | 8GB+ | Large organizations | `--profile full` |
+| Profile    | RAM   | Best For                | Command             |
+| ---------- | ----- | ----------------------- | ------------------- |
+| `minimal`  | 1-2GB | Raspberry Pi, small VPS | `--profile minimal` |
+| `standard` | 4GB   | Most deployments        | (default)           |
+| `full`     | 8GB+  | Large organizations     | `--profile full`    |
 
 **Examples:**
+
 ```bash
 # Raspberry Pi / Low memory (1-2GB)
 curl -sSL .../universal-install.sh | bash -s -- --profile minimal
@@ -50,33 +52,33 @@ curl -sSL .../universal-install.sh | bash -s -- --profile full
 
 ## Supported Platforms
 
-| Platform | Architecture | Profiles | Status |
-|----------|--------------|----------|--------|
-| **Linux** (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch) | x86_64 | All | Full support |
-| **macOS** (Intel & Apple Silicon) | x86_64, ARM64 | All | Full support |
-| **Windows** (WSL2) | x86_64 | All | Full support |
-| **Raspberry Pi 4/5** | ARM64 | minimal, standard | Full support |
-| **Raspberry Pi 3** | ARMv7 | minimal | Limited (1GB RAM) |
-| **AWS** (EC2, ECS, Fargate) | x86_64, ARM64 | All | Full support |
-| **Azure** (VMs, Container Instances) | x86_64 | All | Full support |
-| **Google Cloud** (Compute, Cloud Run) | x86_64 | All | Full support |
-| **DigitalOcean** (Droplets, App Platform) | x86_64 | All | Full support |
-| **Synology NAS** (DS+, XS+ series) | x86_64 | minimal, standard | Full support |
-| **Unraid** | x86_64 | standard | Optimized |
-| **Kubernetes** | x86_64, ARM64 | standard, full | Helm chart available |
+| Platform                                                 | Architecture  | Profiles          | Status               |
+| -------------------------------------------------------- | ------------- | ----------------- | -------------------- |
+| **Linux** (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch) | x86_64        | All               | Full support         |
+| **macOS** (Intel & Apple Silicon)                        | x86_64, ARM64 | All               | Full support         |
+| **Windows** (WSL2)                                       | x86_64        | All               | Full support         |
+| **Raspberry Pi 4/5**                                     | ARM64         | minimal, standard | Full support         |
+| **Raspberry Pi 3**                                       | ARMv7         | minimal           | Limited (1GB RAM)    |
+| **AWS** (EC2, ECS, Fargate)                              | x86_64, ARM64 | All               | Full support         |
+| **Azure** (VMs, Container Instances)                     | x86_64        | All               | Full support         |
+| **Google Cloud** (Compute, Cloud Run)                    | x86_64        | All               | Full support         |
+| **DigitalOcean** (Droplets, App Platform)                | x86_64        | All               | Full support         |
+| **Synology NAS** (DS+, XS+ series)                       | x86_64        | minimal, standard | Full support         |
+| **Unraid**                                               | x86_64        | standard          | Optimized            |
+| **Kubernetes**                                           | x86_64, ARM64 | standard, full    | Helm chart available |
 
 ---
 
 ## Choose Your Installation Method
 
-| Method | Best For | Difficulty |
-|--------|----------|------------|
-| **[Universal Installer](#quick-start-universal-installer)** | Any platform | Easy |
-| **[Unraid](#unraid-one-command)** | Unraid users | Easy |
-| **[Docker Compose](#docker-compose)** | Manual control | Moderate |
-| **[Raspberry Pi](#raspberry-pi)** | ARM devices | Moderate |
-| **[Cloud Deployment](#cloud-deployment)** | AWS, Azure, GCP | Moderate |
-| **[Development](#development-setup)** | Contributors | Advanced |
+| Method                                                      | Best For        | Difficulty |
+| ----------------------------------------------------------- | --------------- | ---------- |
+| **[Universal Installer](#quick-start-universal-installer)** | Any platform    | Easy       |
+| **[Unraid](#unraid-one-command)**                           | Unraid users    | Easy       |
+| **[Docker Compose](#docker-compose)**                       | Manual control  | Moderate   |
+| **[Raspberry Pi](#raspberry-pi)**                           | ARM devices     | Moderate   |
+| **[Cloud Deployment](#cloud-deployment)**                   | AWS, Azure, GCP | Moderate   |
+| **[Development](#development-setup)**                       | Contributors    | Advanced   |
 
 ---
 
@@ -89,6 +91,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 ```
 
 This automated script handles everything:
+
 - ✅ Container cleanup
 - ✅ Secure password generation
 - ✅ Directory creation with proper permissions
@@ -213,13 +216,13 @@ docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-com
 
 ### Raspberry Pi Memory Requirements
 
-| Model | RAM | Recommended Profile |
-|-------|-----|---------------------|
-| Pi 3 | 1GB | `minimal` (limited functionality) |
-| Pi 4 (2GB) | 2GB | `minimal` |
-| Pi 4 (4GB) | 4GB | `standard` |
-| Pi 4 (8GB) | 8GB | `standard` or `full` |
-| Pi 5 | 4-8GB | `standard` |
+| Model      | RAM   | Recommended Profile               |
+| ---------- | ----- | --------------------------------- |
+| Pi 3       | 1GB   | `minimal` (limited functionality) |
+| Pi 4 (2GB) | 2GB   | `minimal`                         |
+| Pi 4 (4GB) | 4GB   | `standard`                        |
+| Pi 4 (8GB) | 8GB   | `standard` or `full`              |
+| Pi 5       | 4-8GB | `standard`                        |
 
 ### Performance Tips for Raspberry Pi
 
@@ -408,25 +411,25 @@ Production `.env` checklist:
 ```yaml
 # nginx reverse proxy example
 server {
-    listen 443 ssl http2;
-    server_name logbook.yourdomain.com;
+listen 443 ssl http2;
+server_name logbook.yourdomain.com;
 
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
+ssl_certificate /path/to/cert.pem;
+ssl_certificate_key /path/to/key.pem;
 
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+location / {
+proxy_pass http://localhost:3000;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+}
 
-    location /api {
-        proxy_pass http://localhost:3001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
+location /api {
+proxy_pass http://localhost:3001;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+}
 }
 ```
 
@@ -482,9 +485,10 @@ and verifies the schema restored — a failed drill fails loudly every night
 until it is fixed. Sync the `backups` volume offsite, and store
 `ENCRYPTION_KEY`/`ENCRYPTION_SALT` separately: a backup without its era's keys
 cannot decrypt encrypted fields. See [docs/BACKUP.md](../docs/BACKUP.md).
-*(2026-07-31)*
+_(2026-07-31)_
 
 Manual backup:
+
 ```bash
 docker-compose exec backend /app/scripts/backup.sh
 ```
@@ -492,6 +496,7 @@ docker-compose exec backend /app/scripts/backup.sh
 ### 4. Security Hardening
 
 See **[Security Configuration](Configuration-Security)** for:
+
 - Rate limiting
 - Multi-factor authentication
 - Session security
@@ -548,13 +553,14 @@ docker-compose logs --tail=50 frontend
 If you encounter issues, see:
 
 - **[Troubleshooting Guide](Troubleshooting)** - Common problems
-- **[Container Issues](Troubleshooting-Containers)** - Docker problems
-- **[Frontend Issues](Troubleshooting-Frontend)** - UI problems
-- **[Backend Issues](Troubleshooting-Backend)** - API problems
+- **[Container Diagnostics](Troubleshooting#container--docker-diagnostics)** - Docker problems
+- **[Frontend Diagnostics](Troubleshooting#frontend--browser-diagnostics)** - UI problems
+- **[Backend Diagnostics](Troubleshooting#backend-service-diagnostics)** - API problems
 
 ### Common Issues
 
 **Port already in use:**
+
 ```bash
 # Change ports in .env
 FRONTEND_PORT=8080
@@ -566,6 +572,7 @@ docker-compose up -d
 ```
 
 **Permission denied:**
+
 ```bash
 # Fix permissions
 sudo chown -R $USER:$USER .
@@ -573,6 +580,7 @@ chmod -R 755 .
 ```
 
 **Database connection failed:**
+
 ```bash
 # Check database is running
 docker-compose ps db

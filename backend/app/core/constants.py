@@ -90,6 +90,129 @@ ROLE_CHIEF = "chief"
 
 
 # ============================================
+# Department Offices (email signature holders)
+# ============================================
+# The offices a department signs correspondence from.  Each entry becomes
+# four email-template variables ({{<key>_name}}, {{<key>_title}},
+# {{<key>_email}}, {{<key>_phone}}) so a notice can be signed by whoever
+# currently holds the office, regardless of who triggered the send.
+#
+# ``position_slugs`` drives auto-detection: when an office has not been
+# assigned explicitly, the holder is inferred from the members carrying one
+# of those position slugs.  ``default_title`` is the signature line used when
+# an admin has not overridden it.
+#
+# Adding an entry here is all that is needed to expose a new office — the
+# variable catalogue, the admin UI, and the render-time directory are all
+# generated from this list.
+
+OFFICE_CATALOG: list[dict[str, object]] = [
+    {
+        "key": "chief",
+        "label": "Chief",
+        "default_title": "Chief",
+        "category": "operational",
+        "position_slugs": ["fire_chief", "chief"],
+    },
+    {
+        "key": "deputy_chief",
+        "label": "Deputy Chief",
+        "default_title": "Deputy Chief",
+        "category": "operational",
+        "position_slugs": ["deputy_chief"],
+    },
+    {
+        "key": "assistant_chief",
+        "label": "Assistant Chief",
+        "default_title": "Assistant Chief",
+        "category": "operational",
+        "position_slugs": ["assistant_chief"],
+    },
+    {
+        "key": "safety_officer",
+        "label": "Safety Officer",
+        "default_title": "Safety Officer",
+        "category": "operational",
+        "position_slugs": ["safety_officer"],
+    },
+    {
+        "key": "training_officer",
+        "label": "Training Officer",
+        "default_title": "Training Officer",
+        "category": "operational",
+        "position_slugs": ["training_officer"],
+    },
+    {
+        "key": "president",
+        "label": "President",
+        "default_title": "President",
+        "category": "administrative",
+        "position_slugs": ["president"],
+    },
+    {
+        "key": "vice_president",
+        "label": "Vice President",
+        "default_title": "Vice President",
+        "category": "administrative",
+        "position_slugs": ["vice_president"],
+    },
+    {
+        "key": "secretary",
+        "label": "Secretary",
+        "default_title": "Secretary",
+        "category": "administrative",
+        "position_slugs": ["secretary"],
+    },
+    {
+        "key": "assistant_secretary",
+        "label": "Assistant Secretary",
+        "default_title": "Assistant Secretary",
+        "category": "administrative",
+        "position_slugs": ["assistant_secretary"],
+    },
+    {
+        "key": "treasurer",
+        "label": "Treasurer",
+        "default_title": "Treasurer",
+        "category": "administrative",
+        "position_slugs": ["treasurer"],
+    },
+    {
+        "key": "quartermaster",
+        "label": "Quartermaster",
+        "default_title": "Quartermaster",
+        "category": "administrative",
+        "position_slugs": ["quartermaster"],
+    },
+]
+
+# Per-office variable suffixes, paired with the description shown in the
+# template editor's variable palette ("{label}" is the office label).
+OFFICE_VARIABLE_SUFFIXES: list[tuple[str, str]] = [
+    ("name", "Full name of the current {label}"),
+    ("title", "Signature title for the {label}"),
+    ("email", "Email address of the current {label}"),
+    ("phone", "Phone number of the current {label}"),
+]
+
+OFFICE_KEYS: list[str] = [str(office["key"]) for office in OFFICE_CATALOG]
+
+# Every variable name the office directory may contribute.  Render-time
+# injection is filtered through this set so a malformed settings blob can
+# never introduce arbitrary template variables.
+OFFICE_VARIABLE_NAMES: frozenset[str] = frozenset(
+    f"{key}_{suffix}" for key in OFFICE_KEYS for suffix, _ in OFFICE_VARIABLE_SUFFIXES
+)
+
+# Key under ``Organization.settings`` holding the flattened, render-ready
+# office directory ({"president_name": "...", ...}).  It is a denormalized
+# snapshot of the ``organization_officers`` table, rebuilt by
+# ``OfficerService.sync_directory`` so that template rendering — which is
+# synchronous and already receives the organization — needs no extra query.
+ORG_SETTINGS_OFFICER_KEY = "officer_directory"
+
+
+# ============================================
 # Well-Known Folder Slugs
 # ============================================
 

@@ -263,7 +263,7 @@ const MyEquipmentPage: React.FC = () => {
 
   if (loading && !inventory) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-live="polite">
+      <div className="flex items-center justify-center min-h-[60dvh]" role="status" aria-live="polite">
         <Loader2 className="h-8 w-8 animate-spin text-theme-text-muted" />
       </div>
     );
@@ -282,7 +282,7 @@ const MyEquipmentPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void loadInventory()}
-            className="inline-flex items-center gap-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+            className="inline-flex items-center gap-1.5 max-md:min-h-[44px] text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh

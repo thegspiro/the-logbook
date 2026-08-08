@@ -39,7 +39,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({
       aria-labelledby="ballot-preview-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-secondary rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-secondary rounded-lg shadow-xl max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
         <div className="sticky top-0 z-10 bg-amber-500 text-amber-900 px-4 py-2 text-center text-sm font-bold">
           BALLOT PREVIEW — This is how voters will see the ballot
         </div>

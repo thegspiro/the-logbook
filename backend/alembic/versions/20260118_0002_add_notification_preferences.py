@@ -5,12 +5,13 @@ Revises: 20260118_0001
 Create Date: 2026-01-18
 
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260118_0002'
-down_revision = '20260118_0001'
+revision = "20260118_0002"
+down_revision = "20260118_0001"
 branch_labels = None
 depends_on = None
 
@@ -20,14 +21,9 @@ def upgrade() -> None:
     # Note: MySQL doesn't support default values for JSON columns
     # Default should be handled at application level
     op.add_column(
-        'users',
-        sa.Column(
-            'notification_preferences',
-            sa.JSON(),
-            nullable=True
-        )
+        "users", sa.Column("notification_preferences", sa.JSON(), nullable=True)
     )
 
 
 def downgrade() -> None:
-    op.drop_column('users', 'notification_preferences')
+    op.drop_column("users", "notification_preferences")

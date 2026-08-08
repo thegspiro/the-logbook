@@ -17,6 +17,7 @@ import type {
   IPExceptionRequestCreate,
   IPExceptionRevoke,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const BASE = '/ip-security';
 
@@ -32,7 +33,7 @@ export const ipSecurityService = {
     const res = await api.get<IPException[]>(`${BASE}/exceptions/me`, {
       params: { include_expired: includeExpired },
     });
-    return res.data;
+    return asArray(res.data);
   },
 
   // Admin: get pending exceptions
@@ -40,7 +41,7 @@ export const ipSecurityService = {
     const res = await api.get<IPException[]>(`${BASE}/exceptions/pending`, {
       params: { limit, offset },
     });
-    return res.data;
+    return asArray(res.data);
   },
 
   // Admin: get all exceptions
@@ -78,7 +79,7 @@ export const ipSecurityService = {
     const res = await api.get<IPExceptionAuditLog[]>(
       `${BASE}/exceptions/${exceptionId}/audit-log`,
     );
-    return res.data;
+    return asArray(res.data);
   },
 
   // Admin: get blocked access attempts
@@ -96,7 +97,7 @@ export const ipSecurityService = {
   // Admin: get blocked countries
   async getBlockedCountries(): Promise<CountryBlockRule[]> {
     const res = await api.get<CountryBlockRule[]>(`${BASE}/blocked-countries`);
-    return res.data;
+    return asArray(res.data);
   },
 
   // Admin: add blocked country

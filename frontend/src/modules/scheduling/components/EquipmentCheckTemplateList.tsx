@@ -173,6 +173,9 @@ export const EquipmentCheckTemplateList: React.FC = () => {
             <label htmlFor="template-search" className="sr-only">Filter templates</label>
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted" aria-hidden="true" />
             <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               id="template-search"
               type="text"
               value={search}

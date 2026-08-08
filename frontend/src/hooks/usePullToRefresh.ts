@@ -18,6 +18,22 @@ interface PullToRefreshState {
   pullDistance: number;
 }
 
+/**
+ * Walks up from the touch target looking for a scrollable ancestor that is
+ * already scrolled away from its top. Such an element owns the downward drag.
+ */
+function isInsideScrolledContainer(target: EventTarget | null): boolean {
+  let node = target instanceof Element ? target : null;
+  while (node && node !== document.body) {
+    if (node.scrollTop > 0) {
+      const overflowY = getComputedStyle(node).overflowY;
+      if (overflowY === 'auto' || overflowY === 'scroll') return true;
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+
 export function usePullToRefresh({
   onRefresh,
   threshold = 80,
@@ -37,8 +53,18 @@ export function usePullToRefresh({
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
       if (disabled || window.scrollY > 0) return;
+      // A modal or the nav drawer is open — they lock body scroll while shown.
+      // Refreshing the page out from under an open dialog would discard
+      // whatever the user was editing, so never arm the gesture there.
+      if (document.body.style.overflow === 'hidden') return;
       const touch = e.touches[0];
       if (!touch) return;
+      // window.scrollY only describes the document. A downward drag that starts
+      // inside an already-scrolled inner container (modal body, side panel,
+      // any overflow-y-auto region) belongs to that container, not to
+      // pull-to-refresh — arming here would refresh the page instead of
+      // scrolling the content under the finger.
+      if (isInsideScrolledContainer(e.target)) return;
       startYRef.current = touch.clientY;
       pullingRef.current = true;
     },

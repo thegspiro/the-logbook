@@ -340,6 +340,42 @@ async def upload_document(
     return document
 
 
+# Declared above the catch-all `/{document_id}` on purpose: FastAPI
+# matches in declaration order, so below it `/my-folder` resolved as an id
+# and the endpoint was unreachable.
+@router.get("/my-folder", response_model=DocumentFolderResponse)
+async def get_my_member_folder(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents.view")),
+):
+    """
+    Get (or auto-create) the current user's personal folder
+    under the 'Member Files' hierarchy.
+    """
+    service = DocumentsService(db)
+    folder = await service.ensure_member_folder(
+        current_user.organization_id, current_user
+    )
+    await db.commit()
+
+    count_result = await db.execute(
+        select(func.count(Document.id))
+        .where(Document.folder_id == folder.id)
+        .where(Document.status == DocumentStatus.ACTIVE)
+    )
+    folder.document_count = count_result.scalar() or 0
+
+    return {
+        **{c.key: getattr(folder, c.key) for c in folder.__table__.columns},
+        "document_count": folder.document_count,
+    }
+
+
+# ============================================
+# Summary Endpoint
+# ============================================
+
+
 @router.get("/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: UUID,
@@ -409,39 +445,6 @@ async def delete_document(
 
 # ============================================
 # Member Folder Endpoints
-# ============================================
-
-
-@router.get("/my-folder", response_model=DocumentFolderResponse)
-async def get_my_member_folder(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("documents.view")),
-):
-    """
-    Get (or auto-create) the current user's personal folder
-    under the 'Member Files' hierarchy.
-    """
-    service = DocumentsService(db)
-    folder = await service.ensure_member_folder(
-        current_user.organization_id, current_user
-    )
-    await db.commit()
-
-    count_result = await db.execute(
-        select(func.count(Document.id))
-        .where(Document.folder_id == folder.id)
-        .where(Document.status == DocumentStatus.ACTIVE)
-    )
-    folder.document_count = count_result.scalar() or 0
-
-    return {
-        **{c.key: getattr(folder, c.key) for c in folder.__table__.columns},
-        "document_count": folder.document_count,
-    }
-
-
-# ============================================
-# Summary Endpoint
 # ============================================
 
 

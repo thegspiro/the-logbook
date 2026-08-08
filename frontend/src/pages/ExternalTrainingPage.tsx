@@ -109,7 +109,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
       aria-labelledby="create-provider-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border">
           <h2 id="create-provider-title" className="text-2xl font-bold text-theme-text-primary">
             {step === 'type' ? 'Select Provider Type' : 'Configure Provider'}
@@ -608,7 +608,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
       aria-labelledby="edit-provider-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border">
           <h2 id="edit-provider-title" className="text-2xl font-bold text-theme-text-primary">
             Edit Provider: {provider.name}
@@ -815,7 +815,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
       aria-labelledby="mappings-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-theme-surface-modal rounded-lg max-w-4xl w-full max-h-[90dvh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-theme-surface-border">
           <h2 id="mappings-modal-title" className="text-2xl font-bold text-white">Mappings - {providerName}</h2>
           <p className="text-sm text-theme-text-muted mt-1">

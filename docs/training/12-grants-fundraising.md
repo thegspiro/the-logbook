@@ -67,7 +67,7 @@ The main dashboard at `/grants` shows key performance indicators:
 - **Compliance Tasks Due**
 - **Pipeline by Status** (applications across all stages)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Grants Dashboard showing KPI cards (Total Raised: $125,000, Active Campaigns: 3, Pending Applications: 2, Active Grants: 1), upcoming deadlines widget, and recent donations list._
+![Grants dashboard with KPI cards for raised funds and active campaigns](./images/12-02-grants-dashboard.png)
 
 ---
 
@@ -100,7 +100,7 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
 5. Add required documents list and federal program code
 6. Save
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Opportunities Library showing a grid of grant program cards with agency logos, award ranges, deadline badges (red/yellow/green), and category tags._
+![Grant opportunities library showing available grant programs](./images/12-03-opportunities.png)
 
 ---
 
@@ -122,7 +122,7 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
    - **Assigned To** — team member managing the application
 3. Save — application starts in **Researching** status
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Create Application form showing program name, agency, amount requested, match fields, deadline, project description, priority dropdown, and assignee selector._
+![Create grant application form with program, agency, and amount fields](./images/12-04-create-application.png)
 
 ---
 
@@ -149,7 +149,7 @@ Applications can be viewed in two ways:
 - **Pipeline (Kanban)** — Visual columns with drag-and-drop between stages
 - **Table** — Sortable, filterable list with status badges
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Applications page in Pipeline (kanban) view showing columns for each status with application cards that can be dragged between columns. Show at least 3 columns with cards._
+![Grant applications in pipeline view with a column per status](./images/12-05-applications-pipeline.png)
 
 ---
 
@@ -181,7 +181,7 @@ Navigate to the **Expenditures** tab to record spending against the budget:
 4. Add receipt URL and approval info
 5. Save
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Budget tab showing a table of budget items (Equipment: $40,000 budgeted / $15,000 spent / $25,000 remaining; Training: $10,000 budgeted / $2,000 spent / $8,000 remaining) with a "Record Expenditure" button._
+![Grant application budget tab with budgeted, spent, and remaining columns](./images/12-06-application-budget-tab.png)
 
 ### Edge Cases
 
@@ -229,7 +229,7 @@ Awarded grants come with reporting and compliance obligations. The system tracks
 4. Set reminder days (e.g., remind 14 days before due date)
 5. Mark tasks complete when done
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Compliance Tasks tab showing tasks with due dates, status badges (green=completed, red=overdue, yellow=pending), assignee names, and a "Add Task" button._
+![Grant application compliance tasks tab with due dates and status badges](./images/12-07-application-compliance-tab.png)
 
 ### Edge Cases
 
@@ -295,7 +295,7 @@ Campaigns organize fundraising efforts around a specific goal.
 - **Anonymous donations** — Toggle allowing anonymous giving
 - **Match Campaign linking** — Link to a grant application for cost-share campaigns
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of a campaign detail page showing "2026 Equipment Fund" with progress bar ($45,000 / $75,000 — 60%), recent donation list, and donation stats._
+![Fundraising campaign detail with the goal progress bar and donations](./images/12-09-campaign-detail.png)
 
 ### Edge Cases
 
@@ -328,7 +328,7 @@ Each donor profile shows:
 - **Tags** — for categorization and segmentation
 - **Communication preferences** — how and when to contact
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of a donor profile showing contact details, giving summary (Total: $2,500 across 8 donations), donation history table, and tags ("Annual Donor", "Business")._
+![Donor list with contact details and giving summaries](./images/12-10-donors.png)
 
 ### Edge Cases
 
@@ -459,7 +459,7 @@ Navigate to **Grants > Reports** for two report types:
 - Payment method breakdown
 - Average donation size
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Fundraising Report showing donation trends chart (monthly bars), top campaigns table, payment method pie chart, and summary metrics._
+![Fundraising report with donation trends and top campaigns](./images/12-14-fundraising-reports.png)
 
 ---
 

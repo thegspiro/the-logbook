@@ -1,13 +1,17 @@
 /**
  * Template List Component
  *
- * Displays all email templates grouped by type with selection.
+ * Displays all email templates grouped into collapsible categories.
+ * The catalogue has grown past three dozen entries, so a flat list forced
+ * admins to scroll the whole thing to find one notice.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Mail,
   Search,
+  ChevronDown,
+  ChevronRight,
   UserPlus,
   KeyRound,
   CalendarX,
@@ -101,6 +105,89 @@ function getTemplateDisplay(type: string) {
   );
 }
 
+/**
+ * Category definitions, in display order. Each template type belongs to
+ * exactly one category; anything not listed here lands in "Other" so a newly
+ * added template type is still reachable before this map is updated.
+ */
+const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
+  {
+    id: 'members',
+    label: 'Members & Accounts',
+    types: [
+      'welcome',
+      'password_reset',
+      'it_password_notification',
+      'member_dropped',
+      'member_archived',
+      'inactivity_warning',
+      'duplicate_application',
+    ],
+  },
+  {
+    id: 'events',
+    label: 'Events & Scheduling',
+    types: [
+      'event_reminder',
+      'event_cancellation',
+      'event_request_status',
+      'series_end_reminder',
+      'post_event_validation',
+      'shift_assignment',
+      'shift_decline',
+      'shift_reminder',
+      'post_shift_validation',
+    ],
+  },
+  {
+    id: 'training',
+    label: 'Training & Certifications',
+    types: ['training_approval', 'cert_expiration'],
+  },
+  {
+    id: 'elections',
+    label: 'Elections & Voting',
+    types: [
+      'ballot_notification',
+      'ballot_eligibility_summary',
+      'election_report',
+      'election_rollback',
+      'election_deleted',
+    ],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory & Property',
+    types: ['inventory_change', 'property_return_reminder'],
+  },
+  {
+    id: 'storefront',
+    label: 'Department Store',
+    types: [
+      'storefront_order_confirmation',
+      'storefront_new_order_admin',
+      'storefront_order_update',
+      'storefront_order_cancelled',
+      'storefront_payment_reminder',
+      'storefront_payment_received',
+      'storefront_window_open',
+      'storefront_window_closing',
+      'storefront_window_closed',
+      'storefront_vendor_order_placed',
+    ],
+  },
+];
+
+const OTHER_CATEGORY_ID = 'other';
+
+const CATEGORY_BY_TYPE: Record<string, string> = Object.fromEntries(
+  TEMPLATE_CATEGORIES.flatMap((c) => c.types.map((t) => [t, c.id])),
+);
+
+function categoryIdFor(templateType: string): string {
+  return CATEGORY_BY_TYPE[templateType] ?? OTHER_CATEGORY_ID;
+}
+
 interface TemplateListProps {
   templates: EmailTemplate[];
   selectedId: string | null;
@@ -109,6 +196,7 @@ interface TemplateListProps {
 
 export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedId, onSelect }) => {
   const [search, setSearch] = useState('');
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const filtered = useMemo(() => {
     if (!search.trim()) return templates;
@@ -122,6 +210,41 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
       );
     });
   }, [templates, search]);
+
+  const groups = useMemo(() => {
+    const byCategory = new Map<string, EmailTemplate[]>();
+    for (const template of filtered) {
+      const id = categoryIdFor(template.template_type);
+      const bucket = byCategory.get(id) ?? [];
+      bucket.push(template);
+      byCategory.set(id, bucket);
+    }
+    const ordered = TEMPLATE_CATEGORIES.filter((c) => byCategory.has(c.id)).map((c) => ({
+      id: c.id,
+      label: c.label,
+      templates: byCategory.get(c.id) ?? [],
+    }));
+    const other = byCategory.get(OTHER_CATEGORY_ID);
+    if (other) {
+      ordered.push({ id: OTHER_CATEGORY_ID, label: 'Other', templates: other });
+    }
+    return ordered;
+  }, [filtered]);
+
+  // Keep the selected template visible: selecting from search, or landing on
+  // the page with a template already chosen, must not leave it hidden inside a
+  // collapsed category.
+  const selectedCategory = useMemo(() => {
+    const selected = templates.find((t) => t.id === selectedId);
+    return selected ? categoryIdFor(selected.template_type) : null;
+  }, [templates, selectedId]);
+
+  useEffect(() => {
+    if (!selectedCategory) return;
+    setCollapsed((prev) => (prev[selectedCategory] ? { ...prev, [selectedCategory]: false } : prev));
+  }, [selectedCategory]);
+
+  const isSearching = search.trim().length > 0;
 
   return (
     <div className="space-y-1">
@@ -140,43 +263,74 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
           />
         </div>
       )}
-      {filtered.map((template) => {
-        const display = getTemplateDisplay(template.template_type);
-        const Icon = display.icon;
-        const isSelected = template.id === selectedId;
+
+      {groups.map((group) => {
+        // An active search expands everything — a hit hidden behind a
+        // collapsed header reads as "no results".
+        const isOpen = isSearching || !collapsed[group.id];
         return (
-          <button
-            key={template.id}
-            onClick={() => onSelect(template)}
-            className={`flex w-full items-center space-x-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
-              isSelected
-                ? 'border border-orange-500/30 bg-orange-500/10'
-                : 'hover:bg-theme-surface-hover border border-transparent'
-            }`}
-          >
-            <Icon className={`h-5 w-5 shrink-0 ${display.color}`} />
-            <div className="min-w-0 flex-1">
-              <p
-                className={`truncate text-sm font-medium ${
-                  isSelected ? 'text-orange-600 dark:text-orange-400' : 'text-theme-text-primary'
-                }`}
-              >
-                {template.name}
-              </p>
-              <p className="text-theme-text-muted truncate text-xs">{display.label}</p>
-            </div>
-            {template.is_active ? (
-              <span title="Active" className="shrink-0">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <div key={group.id} className="mb-1">
+            <button
+              type="button"
+              onClick={() => setCollapsed((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
+              aria-expanded={isOpen}
+              className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-left text-xs font-semibold tracking-wide uppercase transition-colors"
+            >
+              {isOpen ? (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+              )}
+              <span className="flex-1 truncate">{group.label}</span>
+              <span className="text-theme-text-muted shrink-0 font-normal normal-case">
+                {group.templates.length}
               </span>
-            ) : (
-              <span title="Inactive" className="shrink-0">
-                <XCircle className="text-theme-text-muted h-4 w-4" />
-              </span>
-            )}
-          </button>
+            </button>
+
+            {isOpen &&
+              group.templates.map((template) => {
+                const display = getTemplateDisplay(template.template_type);
+                const Icon = display.icon;
+                const isSelected = template.id === selectedId;
+                return (
+                  <button
+                    key={template.id}
+                    onClick={() => onSelect(template)}
+                    className={`flex w-full items-center space-x-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                      isSelected
+                        ? 'border border-orange-500/30 bg-orange-500/10'
+                        : 'hover:bg-theme-surface-hover border border-transparent'
+                    }`}
+                  >
+                    <Icon className={`h-5 w-5 shrink-0 ${display.color}`} />
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`truncate text-sm font-medium ${
+                          isSelected
+                            ? 'text-orange-600 dark:text-orange-400'
+                            : 'text-theme-text-primary'
+                        }`}
+                      >
+                        {template.name}
+                      </p>
+                      <p className="text-theme-text-muted truncate text-xs">{display.label}</p>
+                    </div>
+                    {template.is_active ? (
+                      <span title="Active" className="shrink-0">
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      </span>
+                    ) : (
+                      <span title="Inactive" className="shrink-0">
+                        <XCircle className="text-theme-text-muted h-4 w-4" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+          </div>
         );
       })}
+
       {filtered.length === 0 && (
         <p className="text-theme-text-muted py-8 text-center text-sm">
           {search ? 'No matching templates' : 'No templates found'}

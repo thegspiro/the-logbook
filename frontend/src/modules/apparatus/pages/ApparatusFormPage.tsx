@@ -253,7 +253,7 @@ export const ApparatusFormPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
           <p className="text-theme-text-secondary">Loading apparatus...</p>
         </div>
       </div>
@@ -302,6 +302,9 @@ export const ApparatusFormPage: React.FC = () => {
                   Unit Number <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   name="unitNumber"
                   value={formData.unitNumber}
@@ -375,6 +378,9 @@ export const ApparatusFormPage: React.FC = () => {
               <div>
                 <label className="block text-sm text-theme-text-secondary mb-1">VIN</label>
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   name="vin"
                   value={formData.vin}
@@ -450,6 +456,9 @@ export const ApparatusFormPage: React.FC = () => {
               <div>
                 <label className="block text-sm text-theme-text-secondary mb-1">License Plate</label>
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   name="licensePlate"
                   value={formData.licensePlate}
@@ -460,6 +469,9 @@ export const ApparatusFormPage: React.FC = () => {
               <div>
                 <label className="block text-sm text-theme-text-secondary mb-1">License State</label>
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   name="licenseState"
                   value={formData.licenseState}
@@ -483,6 +495,9 @@ export const ApparatusFormPage: React.FC = () => {
               <div>
                 <label className="block text-sm text-theme-text-secondary mb-1">Asset Tag</label>
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   name="assetTag"
                   value={formData.assetTag}

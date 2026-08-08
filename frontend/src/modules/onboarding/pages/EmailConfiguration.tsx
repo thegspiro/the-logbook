@@ -625,7 +625,7 @@ const EmailConfiguration: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       {/* Main Content */}

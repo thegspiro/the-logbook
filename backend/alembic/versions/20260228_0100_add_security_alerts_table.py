@@ -9,7 +9,6 @@ restarts. Supports acknowledge/resolve workflows with actor tracking.
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 # revision identifiers
@@ -75,9 +74,7 @@ def upgrade() -> None:
         "security_alerts",
         ["alert_type", "threat_level"],
     )
-    op.create_index(
-        "ix_security_alerts_alert_type", "security_alerts", ["alert_type"]
-    )
+    op.create_index("ix_security_alerts_alert_type", "security_alerts", ["alert_type"])
     op.create_index(
         "ix_security_alerts_threat_level", "security_alerts", ["threat_level"]
     )

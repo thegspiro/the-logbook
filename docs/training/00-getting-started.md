@@ -25,8 +25,7 @@ When your department administrator creates your account, you will receive a welc
 2. Enter the **username** and **password** provided to you.
 3. Click **Sign In**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the login page showing the username and password fields, the Sign In button, and the "Forgot Password?" link at the bottom]_
+![The Logbook login page with username and password fields](./images/00-01-login-page.png)
 
 > **Hint:** If you did not receive a welcome email, contact your department's IT Manager or the person who set up the system. They can resend your credentials or reset your password from the admin panel.
 
@@ -76,8 +75,7 @@ The Logbook uses a sidebar navigation layout. The main areas of the screen are:
 2. **Main Content Area (Center)** - The active page you are working on
 3. **Header/Breadcrumb (Top)** - Shows your current location and provides context actions
 
-> **Screenshot placeholder:**
-> _[Full-screen screenshot of the dashboard showing the sidebar navigation on the left, the main dashboard content in the center, and the header area at the top. Annotate the three areas with numbered callouts]_
+![Dashboard showing the sidebar navigation, main content, and header](./images/00-04-dashboard-overview.png)
 
 ---
 
@@ -152,8 +150,7 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 - **Notifications** - Unread alerts and reminders with **Clear All** and individual dismiss (X) buttons. Persistent department messages (set by administrators) cannot be dismissed by regular members and show a "Persistent" badge
 - **Department Messages** - Organization-wide announcements from administrators. Urgent messages are highlighted (and may also reach you by email/text), some ask you to **Acknowledge** them, and persistent messages remain visible until an admin clears them. Your full message history lives on the **Messages** page (megaphone icon)
 
-> **Screenshot needed:**
-> _[Screenshot of the dashboard showing the stats cards at the top, the notification section with "Clear All" button, a persistent department message with "Persistent" badge, individual notification cards with dismiss (X) buttons, the upcoming events panel, and upcoming shifts panel]_
+![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
 
 > **Hint:** The dashboard is personalized. Officers and administrators see additional summary cards with department-wide metrics. Regular members see their own upcoming items and assignments.
 
@@ -203,8 +200,7 @@ From here you can:
 - **Download your data** — a complete export of everything the system stores about you *(2026-07-31)*
 - View your **assigned roles and permissions**
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Account Settings page showing the profile section, notification preferences toggles, and the change password section]_
+![Account Settings page with profile, notification preferences, and password sections](./images/00-09-account-settings.png)
 
 > **Privacy note:** Privacy choices and the data export live on the
 > **Security** tab. Nothing under Privacy Choices is required for membership,

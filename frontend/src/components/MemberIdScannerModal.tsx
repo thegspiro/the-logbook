@@ -210,7 +210,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
           <div
             id="member-scanner-viewport"
             data-testid="member-scanner-viewport"
-            className="w-full aspect-square max-h-[55vh]"
+            className="w-full aspect-square max-h-[55dvh]"
             role="img"
             aria-label="Camera scanner preview"
           />

@@ -38,8 +38,7 @@ The Documents page provides:
 - **Grid and List view** toggles
 - **Search** across all documents
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Documents page showing the folder tree on the left (with folders like "SOPs", "Policies", "Training Materials", "Meeting Minutes"), the file list on the right with document names, types, dates, and a search bar at the top]_
+![Documents page with the folder tree, file list, and search bar](./images/07-01-documents.png)
 
 ---
 
@@ -63,8 +62,7 @@ Documents are organized into folders. The system provides default folders, and a
 3. Optionally set a parent folder for nesting.
 4. Save.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the New Folder dialog showing the folder name field and parent folder dropdown]_
+![New folder dialog with the name field and parent folder selector](./images/07-02-new-folder-dialog.png)
 
 ---
 
@@ -102,8 +100,7 @@ Custom forms let you collect structured data for:
 - Surveys and feedback
 - Any custom data collection need
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Forms listing page showing created forms with name, status (Active/Draft), submission count, and action buttons (Edit, View Submissions, Share)]_
+![Forms listing page with status, submission counts, and actions](./images/07-04-forms-list.png)
 
 ---
 
@@ -159,8 +156,7 @@ The form builder includes advanced capabilities:
 
 > **Hint:** If a field is highlighted in yellow or red, it means the field configuration is incomplete. Click on the field to see what's missing.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the form builder showing a form being designed with a drag-and-drop field list on the left, the form preview in the center with several fields already placed, and the field configuration panel on the right showing label, type, required toggle, and validation options]_
+![Form builder with the field palette, canvas, and field settings](./images/07-06-form-builder.png)
 
 ### Form Templates
 
@@ -244,8 +240,7 @@ The Notifications page uses a three-tab layout:
 | **Email Templates** | Link to email template management for customizing notification formats |
 | **Send Log** | View delivery history with channel filtering (All / Email / In-App) |
 
-> **Screenshot needed:**
-> _[Screenshot of the Notification Rules & Logs page showing the three tabs, the summary statistics cards (Total Rules, Active Rules, Sent Count), and the rules list with search, create button, and enable/disable toggles]_
+![Notification rules and logs page with summary cards and the rules list](./images/07-08-notification-rules.png)
 
 ### Notification Rules
 
@@ -285,8 +280,7 @@ The **Send Log** tab shows notification delivery history with:
 - **Channel filter** — filter by All, Email only, or In-App only
 - **Mark All Read** button to bulk-clear unread notifications
 
-> **Screenshot needed:**
-> _[Screenshot of the Send Log tab showing the channel filter buttons (All / Email / In-App), the Mark All Read button, and a table of notification entries with status indicators]_
+![Notification send log with channel filters and delivery status](./images/07-09-notification-send-log.png)
 
 ### Dashboard Notification Dismiss
 
@@ -466,8 +460,7 @@ Navigate to **Integrations** in the sidebar to configure connections with extern
 4. Configure which events or triggers should use this integration.
 5. Test the connection.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Integrations page showing available integrations as cards with logos, connection status (Connected in green, Not Connected in gray), and a Configure button]_
+![Integrations page showing available integrations and connection status](./images/07-13-integrations.png)
 
 > **Hint:** Calendar integrations use iCal feeds. After connecting, events from The Logbook will appear in your personal calendar app automatically.
 

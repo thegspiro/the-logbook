@@ -46,16 +46,19 @@ class TestGetProspectPipelineName:
 
 
 class TestReferredByValidation:
+    """The create/update paths validate a client-supplied referred_by (a User
+    FK) is in-org via the shared assert_in_org helper."""
+
     async def test_update_rejects_foreign_referrer(self):
         svc = MembershipPipelineService(AsyncMock())
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=SimpleNamespace()
         ), patch(
-            "app.services.membership_pipeline_service.is_in_org",
+            "app.services.membership_pipeline_service.assert_in_org",
             new_callable=AsyncMock,
-            return_value=False,
+            side_effect=ValueError("Invalid referring member"),
         ):
-            with pytest.raises(ValueError, match="Invalid referrer"):
+            with pytest.raises(ValueError, match="referring member"):
                 await svc.update_prospect("p1", "org1", {"referred_by": "foreign-user"})
 
     async def test_create_rejects_foreign_referrer(self):
@@ -66,11 +69,11 @@ class TestReferredByValidation:
             new_callable=AsyncMock,
             return_value=None,
         ), patch(
-            "app.services.membership_pipeline_service.is_in_org",
+            "app.services.membership_pipeline_service.assert_in_org",
             new_callable=AsyncMock,
-            return_value=False,
+            side_effect=ValueError("Invalid referring member"),
         ):
-            with pytest.raises(ValueError, match="Invalid referrer"):
+            with pytest.raises(ValueError, match="referring member"):
                 await svc.create_prospect(
                     "org1",
                     {
@@ -87,10 +90,11 @@ class TestReferredByValidation:
         with patch.object(
             svc, "get_prospect", new_callable=AsyncMock, return_value=SimpleNamespace()
         ), patch(
-            "app.services.membership_pipeline_service.is_in_org",
+            "app.services.membership_pipeline_service.assert_in_org",
             new_callable=AsyncMock,
-        ) as mock_in_org, patch.object(
+        ) as mock_assert, patch.object(
             svc, "_log_activity", new_callable=AsyncMock
         ):
+            # main's update guard is `if "referred_by" in data:` — absent key skips.
             await svc.update_prospect("p1", "org1", {})
-        mock_in_org.assert_not_awaited()
+        mock_assert.assert_not_awaited()

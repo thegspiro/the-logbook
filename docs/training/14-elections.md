@@ -53,7 +53,7 @@ Key pages:
 | `/elections/settings` | Election Settings | `elections.manage` |
 | `/ballot` | Public Ballot (token-based) | Public (rate-limited) |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Elections list page showing several elections with status badges (Draft in gray, Open in green, Closed in blue), election titles, dates, and vote counts._
+![Elections list showing elections with status badges](./images/14-01-elections-list.png)
 
 ---
 
@@ -93,7 +93,7 @@ Key pages:
 | **Supermajority** | Must reach the configured percentage (`victory_percentage`, default 67) |
 | **Threshold** | Must reach a configured absolute vote count (`victory_threshold`) |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Create Election form showing title, description, type selector, date range, voting method dropdown, anonymous toggle, and write-in toggle._
+![Create Election form with title, dates, and voting method](./images/14-02-create-election.png)
 
 > **Hint:** For bylaw amendments requiring a 2/3 supermajority, set the victory condition to **Supermajority** with **victory_percentage = 67**.
 
@@ -697,7 +697,7 @@ nomination-deadline auto-close. Closing finalizes results and runs the
 anonymous-election privacy purge — a privacy guarantee, not a convenience —
 and an in-flight nomination phase must always be closeable.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Election Settings page showing toggle switches for each setting, the default voting method dropdown, and the Features section with its toggles and attestation-count selector._
+![Election settings page with the default rule toggles](./images/14-16-election-settings.png)
 
 ---
 

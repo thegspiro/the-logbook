@@ -20,7 +20,8 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 from loguru import logger
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -58,6 +59,11 @@ from app.services.admin_continuity_service import (
 )
 from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
+from app.services.user_deletion_service import (
+    describe_blockers,
+    find_hard_delete_blockers,
+    release_user_references,
+)
 from app.services.user_service import UserService
 from app.utils.security_notifications import notify_security_event
 
@@ -735,10 +741,12 @@ async def assign_user_roles(
     except LastAdministratorError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    # Remove all existing role assignments
-    await db.execute(delete(user_roles).where(user_roles.c.user_id == str(user_id)))
-
-    # Assign new roles
+    # Assigning the collection is what replaces the assignments: SQLAlchemy
+    # diffs it against the eagerly loaded one above and emits exactly the
+    # needed user_positions inserts and deletes. Clearing the table by hand
+    # first would both hide the retained positions from that diff (so their
+    # rows would never be re-inserted) and leave the loaded collection stale,
+    # making the delete of a dropped position raise StaleDataError.
     user.roles = roles
     await db.commit()
 
@@ -1380,11 +1388,48 @@ async def delete_user(
     deleted_full_name = user.full_name
 
     if hard:
-        # Remove role assignments first
-        await db.execute(delete(user_roles).where(user_roles.c.user_id == str(user_id)))
-        # Hard delete the user record
+        # Attribution columns that were never given an ondelete (`created_by`,
+        # `approved_by`, `issued_by`, ...) are RESTRICT in MySQL, so any member
+        # who has ever created a record would otherwise fail the DELETE with
+        # errno 1451. Clear the nullable ones; refuse when a record cannot be
+        # left ownerless. See user_deletion_service for the full rationale.
+        blockers = await find_hard_delete_blockers(db, str(user_id))
+        if blockers:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This member owns records that cannot be left without an "
+                    f"owner ({describe_blockers(blockers)}), so they cannot be "
+                    "permanently deleted. Deactivate the member instead, then "
+                    "anonymize them to remove their personal information while "
+                    "keeping those records intact."
+                ),
+            )
+
+        await release_user_references(db, str(user_id))
+
+        # Deleting the User is also what removes its user_positions rows.
+        # Deleting them separately first would leave the User.positions
+        # collection — eagerly loaded by the administrator guard above —
+        # holding rows that no longer exist, and the flush below would then
+        # fail with StaleDataError.
         await db.delete(user)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            # A reference the metadata scan expected MySQL to resolve on its
+            # own did not resolve (schema drift from the models). Report it as
+            # a conflict rather than a 500; the real constraint is logged.
+            await db.rollback()
+            logger.error(f"Hard delete of user {user_id} blocked by a reference: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This member is still referenced by records that must keep "
+                    "an owner, so they cannot be permanently deleted. "
+                    "Deactivate the member instead, then anonymize them."
+                ),
+            )
 
         await log_audit_event(
             db=db,
@@ -1675,7 +1720,21 @@ async def get_deletion_impact(
     except Exception:
         pass
 
-    total = training_count + inventory_count
+    # Count uploaded documents
+    document_count = 0
+    try:
+        from app.models.document import Document
+
+        doc_result = await db.execute(
+            select(func.count())
+            .select_from(Document)
+            .where(Document.uploaded_by == str(user_id))
+        )
+        document_count = doc_result.scalar() or 0
+    except Exception:
+        pass
+
+    total = training_count + inventory_count + document_count
 
     return DeletionImpactResponse(
         user_id=str(user_id),
@@ -1683,6 +1742,7 @@ async def get_deletion_impact(
         status=user.status.value if hasattr(user.status, "value") else str(user.status),
         training_records=training_count,
         inventory_items=inventory_count,
+        documents=document_count,
         total_records=total,
     )
 

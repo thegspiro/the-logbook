@@ -4,7 +4,7 @@
  * SECURITY: Handles server-side sessions, CSRF tokens, and rate limiting
  */
 
-import { formatValidationErrors } from '../utils/errorHandler';
+import { formatValidationErrors, type ValidationErrorEntry } from '../utils/errorHandler';
 
 interface ApiResponse<T> {
   data?: T | undefined;
@@ -206,7 +206,7 @@ class SecureApiClient {
         // FastAPI/Pydantic returns detail as an array of validation error objects
         if (Array.isArray(errorData.detail)) {
           return {
-            error: formatValidationErrors(errorData.detail as Array<{ loc?: string[]; msg?: string }>),
+            error: formatValidationErrors(errorData.detail as ValidationErrorEntry[]),
             statusCode: 422,
           };
         }

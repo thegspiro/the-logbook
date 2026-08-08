@@ -28,6 +28,7 @@ import {
   Rocket,
   Package,
   Smartphone,
+  Share,
   UserPlus,
   Loader2,
   CreditCard,
@@ -86,13 +87,23 @@ import { useNotificationCountStore } from "../hooks/useNotificationCount";
  * Member-focused landing page showing notifications, upcoming shifts,
  * training progress, and recorded hours.
  */
+const INSTALL_BANNER_DISMISSED_KEY = 'installBannerDismissed';
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
   const { user: currentUser, checkPermission } = useAuthStore();
   const [departmentName, setDepartmentName] = useState("Fire Department");
-  const { canInstall, install } = usePWAInstall();
-  const [dismissedInstall, setDismissedInstall] = useState(false);
+  const { canInstall, needsManualInstall, install } = usePWAInstall();
+  // Persisted so the banner doesn't reappear on every dashboard visit — it is
+  // purely informational, and on iOS there is no "installed" event to hide it.
+  const [dismissedInstall, setDismissedInstall] = useState(
+    () => localStorage.getItem(INSTALL_BANNER_DISMISSED_KEY) === '1',
+  );
+  const dismissInstallBanner = () => {
+    localStorage.setItem(INSTALL_BANNER_DISMISSED_KEY, '1');
+    setDismissedInstall(true);
+  };
 
   // Admin summary (only loaded for users with settings.manage)
   const isAdmin = checkPermission("settings.manage");
@@ -578,7 +589,7 @@ const Dashboard: React.FC = () => {
                 {showShiftFirst && nextShift ? (
                   <button
                     onClick={() => void navigate("/scheduling")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
                   >
                     <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Next shift: {formatShiftDate(nextShift.shift_date)} {formatShiftTime(nextShift.start_time)}</span>
@@ -586,7 +597,7 @@ const Dashboard: React.FC = () => {
                 ) : nextEvent ? (
                   <button
                     onClick={() => void navigate(`/events/${nextEvent.id}`)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
                   >
                     <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Next: {nextEvent.title} · {formatShortDateTime(nextEvent.start_datetime, tz)}</span>
@@ -602,7 +613,7 @@ const Dashboard: React.FC = () => {
                 {urgentCerts.length > 0 && (
                   <button
                     onClick={() => void navigate("/training/my-training")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
                   >
                     <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>
@@ -614,7 +625,7 @@ const Dashboard: React.FC = () => {
                 {unreadCount > 0 && (
                   <button
                     onClick={() => void navigate("/notifications?tab=inbox")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
                   >
                     <Bell className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>{unreadCount} unread</span>
@@ -623,7 +634,7 @@ const Dashboard: React.FC = () => {
                 {overdueActionItems > 0 && (
                   <button
                     onClick={() => void navigate("/action-items")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
                   >
                     <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>{overdueActionItems} overdue</span>
@@ -685,35 +696,47 @@ const Dashboard: React.FC = () => {
           <ChevronRight className="w-6 h-6 opacity-80 group-hover:translate-x-0.5 transition-transform shrink-0" aria-hidden="true" />
         </button>
 
-        {/* PWA Install Banner */}
-        {canInstall && !dismissedInstall && (
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 flex items-center justify-between mb-6 sm:mb-8">
-            <div className="flex items-center gap-3">
-              <Smartphone className="w-5 h-5 text-blue-500" aria-hidden="true" />
+        {/* PWA Install Banner. Two variants: browsers that fire
+            `beforeinstallprompt` get a one-tap Install button; iOS Safari has
+            no such event, so it gets Share-sheet instructions instead. */}
+        {(canInstall || needsManualInstall) && !dismissedInstall && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6 sm:mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <Smartphone className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" aria-hidden="true" />
               <div>
                 <p className="text-sm font-medium text-theme-text-primary">
                   Install The Logbook
                 </p>
-                <p className="text-xs text-theme-text-muted">
-                  Add to your home screen for quick access
-                </p>
+                {needsManualInstall ? (
+                  <p className="text-xs text-theme-text-muted">
+                    Tap the Share button{' '}
+                    <Share className="inline w-3.5 h-3.5 -mt-0.5" aria-hidden="true" />{' '}
+                    in Safari, then choose &ldquo;Add to Home Screen&rdquo;.
+                  </p>
+                ) : (
+                  <p className="text-xs text-theme-text-muted">
+                    Add to your home screen for quick access
+                  </p>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => setDismissedInstall(true)}
-                className="text-sm text-theme-text-muted hover:text-theme-text-primary px-3 py-2 rounded"
+                onClick={dismissInstallBanner}
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary px-3 rounded mobile-touch-target"
               >
                 Dismiss
               </button>
-              <button
-                onClick={() => {
-                  void install();
-                }}
-                className="btn-info font-medium px-4 py-2 rounded-md text-sm"
-              >
-                Install
-              </button>
+              {canInstall && (
+                <button
+                  onClick={() => {
+                    void install();
+                  }}
+                  className="btn-info font-medium px-4 rounded-md text-sm mobile-touch-target"
+                >
+                  Install
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -986,7 +1009,7 @@ const Dashboard: React.FC = () => {
                                   e.stopPropagation();
                                   void markMessageRead(msg.id);
                                 }}
-                                className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 p-2 -m-1 rounded"
+                                className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 p-2 -m-1 rounded max-md:min-h-[44px]"
                                 title="Mark as read"
                               >
                                 <Eye className="w-4 h-4" />
@@ -1095,7 +1118,7 @@ const Dashboard: React.FC = () => {
                         else
                           void navigate("/notifications?tab=inbox");
                       }}
-                      className="flex-1 min-w-0 text-left focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded"
+                      className="flex-1 min-w-0 text-left focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded max-md:min-h-[44px]"
                     >
                       <p className="text-sm font-medium truncate">
                         {notification.subject || "Notification"}
@@ -1113,7 +1136,7 @@ const Dashboard: React.FC = () => {
                       </span>
                       <button
                         onClick={(e) => dismissNotification(e, notification.id)}
-                        className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                        className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors max-md:mobile-touch-target"
                         title="Dismiss"
                         aria-label={`Dismiss notification: ${notification.subject || "Notification"}`}
                       >
@@ -1380,7 +1403,7 @@ const Dashboard: React.FC = () => {
             </h3>
             <button
               onClick={() => void navigate("/notifications?tab=inbox")}
-              className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 py-2 pl-2"
+              className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 py-2 pl-2 max-md:min-h-[44px]"
             >
               View All <ChevronRight className="w-3 h-3" />
             </button>
@@ -1625,7 +1648,7 @@ const Dashboard: React.FC = () => {
               <div className="mt-4 text-center">
                 <button
                   onClick={() => void navigate("/training/my-training")}
-                  className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm px-2 py-1"
+                  className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm px-2 py-1 max-md:min-h-[44px]"
                 >
                   View {enrollments.length - 3} more program
                   {enrollments.length - 3 !== 1 ? "s" : ""}

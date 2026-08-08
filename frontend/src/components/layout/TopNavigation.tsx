@@ -4,7 +4,8 @@ import { LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserC
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
-import { organizationService } from '../../services/api';
+import { useEnabledModules } from '../../hooks/useEnabledModules';
+import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
@@ -49,29 +50,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [enabledModules, setEnabledModules] = useState<Set<string> | null>(null);
+  const { isModuleOn } = useEnabledModules();
 
-  // Essential modules that are always present in the response — if the
-  // response contains ONLY these, the org likely has no module config yet
-  // and we should show everything rather than hiding all optional modules.
-  const ESSENTIAL_ONLY = new Set(["members", "events", "documents", "roles", "settings"]);
-
-  // Load enabled modules for this organization to control nav visibility
+  // The mobile bottom bar's "More" button asks us to open the menu.
   useEffect(() => {
-    organizationService.getEnabledModules()
-      .then(res => {
-        const modules = new Set(res.enabled_modules);
-        // Safeguard: if response has no configurable modules enabled
-        // (only essential ones), treat as unconfigured and show all.
-        const hasConfigurable = res.enabled_modules.some(m => !ESSENTIAL_ONLY.has(m));
-        setEnabledModules(hasConfigurable ? modules : null);
-      })
-      .catch(() => { /* default to null = show all */ });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const open = () => setMobileMenuOpen(true);
+    window.addEventListener(OPEN_MOBILE_NAV_EVENT, open);
+    return () => window.removeEventListener(OPEN_MOBILE_NAV_EVENT, open);
   }, []);
-
-  /** Show a module's nav items? null (loading/error) → show all; otherwise check the set */
-  const isModuleOn = (key: string) => enabledModules === null || enabledModules.has(key);
 
   const cycleTheme = () => {
     const order = ['light', 'dark', 'system', 'high-contrast'] as const;
@@ -248,14 +234,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const accountActive = isActive('/account');
 
   return (
-    <header className="border-b" style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }} role="banner">
+    <header className="border-b safe-top" style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }} role="banner">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Department Name */}
-          <a href="/dashboard" className="flex items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 rounded-lg">
+          <a href="/dashboard" className="flex min-h-[44px] items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 rounded-lg">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
               <img
-                src={logoPreview || '/logo.png'}
+                src={logoPreview || '/logo-128.png'}
                 alt={`${departmentName} logo`}
                 className="max-w-full max-h-full object-contain"
               />
@@ -490,7 +476,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       <button
                         onClick={() => toggleMobileMenu(item.label)}
                         aria-expanded={isExpanded}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                        className={`w-full flex items-center justify-between px-3 py-2 min-h-[44px] rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                           isParentActive(item) ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                         }`}
                       >
@@ -512,7 +498,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                               href={subItem.path}
                               onClick={(e) => handleNavigation(subItem.path, e)}
                               aria-current={subActive ? 'page' : undefined}
-                              className={`block px-3 py-2 rounded-md text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                              className={`flex items-center px-3 py-2 min-h-[44px] rounded-md text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                                 subActive
                                   ? 'bg-red-600 text-white'
                                   : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
@@ -534,7 +520,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     href={item.path}
                     onClick={(e) => handleNavigation(item.path, e)}
                     aria-current={isActive(item.path) ? 'page' : undefined}
-                    className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                    className={`flex items-center px-3 py-2 min-h-[44px] rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                       isActive(item.path) ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                     }`}
                   >

@@ -66,9 +66,9 @@ export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({
                   <tr key={log.id} className="hover:bg-theme-surface-secondary/50 transition-colors">
                     <td className="px-4 py-3 text-theme-text-primary">{formatDate(log.fuelDate, timezone)}</td>
                     <td className="px-4 py-3 text-theme-text-secondary capitalize">{log.fuelType}</td>
-                    <td className="px-4 py-3 text-right text-theme-text-primary">{log.gallons.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right text-theme-text-primary">{Number(log.gallons).toFixed(2)}</td>
                     <td className="px-4 py-3 text-right text-theme-text-secondary">
-                      {log.pricePerGallon != null ? `$${log.pricePerGallon.toFixed(3)}` : '-'}
+                      {log.pricePerGallon != null ? `$${Number(log.pricePerGallon).toFixed(3)}` : '-'}
                     </td>
                     <td className="px-4 py-3 text-right text-theme-text-primary">
                       {log.totalCost != null ? formatCurrency(log.totalCost) : '-'}

@@ -42,8 +42,12 @@ docker compose logs -f
 # Restart
 docker compose restart
 
-# Update (backs up the DB, pulls, rebuilds, recreates — safely)
+# Update (backs up the DB, pulls, repairs build contexts, rebuilds — safely)
 ./unraid/update.sh
+
+# Updating by hand instead? Run this between the pull and the build —
+# a pulled Dockerfile can outgrow the context your compose file names.
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
 # Fix container conflicts
 docker compose down --remove-orphans && docker compose up -d
@@ -53,6 +57,6 @@ docker compose down --remove-orphans && docker compose up -d
 
 - **[Unraid Setup Guide](docs/deployment/unraid.md)** - complete installation, configuration, HTTPS, backups, and troubleshooting
 - **[Unraid Installation Details](unraid/UNRAID-INSTALLATION.md)** - Community Apps template and advanced configuration
-- **[Troubleshooting](docs/troubleshooting/README.md)** - general troubleshooting
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - every module, plus deployment, build and CI issues
 
 **Need help?** Open a [GitHub issue](https://github.com/thegspiro/the-logbook/issues).

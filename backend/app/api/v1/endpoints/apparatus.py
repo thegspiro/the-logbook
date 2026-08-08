@@ -576,77 +576,6 @@ async def list_archived_apparatus(
     )
 
 
-@router.get("/{apparatus_id}", response_model=ApparatusResponse, tags=["Apparatus"])
-async def get_apparatus(
-    apparatus_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("apparatus.view", "apparatus.manage")
-    ),
-):
-    """
-    Get a specific apparatus by ID
-
-    **Authentication required**
-    **Permissions required:** apparatus.view or apparatus.manage
-    """
-    service = ApparatusService(db)
-    apparatus = await service.get_apparatus(
-        apparatus_id=apparatus_id,
-        organization_id=current_user.organization_id,
-    )
-
-    if not apparatus:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
-        )
-
-    return apparatus
-
-
-@router.patch("/{apparatus_id}", response_model=ApparatusResponse, tags=["Apparatus"])
-async def update_apparatus(
-    apparatus_id: str,
-    apparatus_data: ApparatusUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("apparatus.edit", "apparatus.manage")
-    ),
-):
-    """
-    Update an apparatus
-
-    **Authentication required**
-    **Permissions required:** apparatus.edit or apparatus.manage
-    """
-    service = ApparatusService(db)
-
-    try:
-        apparatus = await service.update_apparatus(
-            apparatus_id=apparatus_id,
-            apparatus_data=apparatus_data,
-            organization_id=current_user.organization_id,
-            updated_by=current_user.id,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
-
-    if not apparatus:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
-        )
-
-    # Reload with relations
-    apparatus = await service.get_apparatus(
-        apparatus_id=apparatus.id,
-        organization_id=current_user.organization_id,
-    )
-
-    return apparatus
-
-
 @router.post(
     "/{apparatus_id}/status", response_model=ApparatusResponse, tags=["Apparatus"]
 )
@@ -727,41 +656,6 @@ async def archive_apparatus(
         )
 
     return apparatus
-
-
-@router.delete(
-    "/{apparatus_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Apparatus"]
-)
-async def delete_apparatus(
-    apparatus_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.manage")),
-):
-    """
-    Delete apparatus permanently
-
-    **Authentication required**
-    **Permissions required:** apparatus.manage
-
-    **Warning:** This permanently deletes the apparatus and all related records.
-    Consider using archive instead for historical tracking.
-    """
-    service = ApparatusService(db)
-
-    deleted = await service.delete_apparatus(
-        apparatus_id=apparatus_id,
-        organization_id=current_user.organization_id,
-    )
-
-    if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
-        )
-
-
-# ============================================================================
-# Custom Field Endpoints
-# ============================================================================
 
 
 @router.get(
@@ -1151,7 +1045,13 @@ async def create_maintenance_record(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
-    return record
+    # Re-read so `maintenance_type` is eager-loaded. The response model includes
+    # the relationship, and serializing it off the freshly-added object triggers
+    # a lazy load in async context — MissingGreenlet, a 500 raised *after* the
+    # record was written, so the row exists but the caller sees an error.
+    return await service.get_maintenance_record(
+        record_id=record.id, organization_id=current_user.organization_id
+    )
 
 
 @router.get(
@@ -1226,7 +1126,11 @@ async def update_maintenance_record(
             status_code=status.HTTP_404_NOT_FOUND, detail="Maintenance record not found"
         )
 
-    return record
+    # Same reload as the create path: the response model reaches into
+    # `maintenance_type`, which the update does not eager-load.
+    return await service.get_maintenance_record(
+        record_id=record_id, organization_id=current_user.organization_id
+    )
 
 
 @router.delete(
@@ -2988,3 +2892,123 @@ async def check_evoc_eligibility(
             else None
         ),
     }
+
+
+# ============================================================================
+# Single-Apparatus Endpoints (by id)
+#
+# Registered last on purpose. FastAPI matches routes in declaration order, so
+# a single-segment "/{apparatus_id}" declared above the literal paths swallows
+# every one of them: GET /apparatus/maintenance-types resolved here with
+# apparatus_id="maintenance-types" and 404'd as "Apparatus not found", taking
+# maintenance, fuel-logs, equipment, operators, nfpa-compliance, components,
+# component-notes, service-providers, report-configs, custom-fields and
+# evoc-levels down with it — the whole apparatus detail read API. Keep these
+# handlers below every literal route in this file.
+# ============================================================================
+
+
+@router.get("/{apparatus_id}", response_model=ApparatusResponse, tags=["Apparatus"])
+async def get_apparatus(
+    apparatus_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
+):
+    """
+    Get a specific apparatus by ID
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    apparatus = await service.get_apparatus(
+        apparatus_id=apparatus_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not apparatus:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
+        )
+
+    return apparatus
+
+
+@router.patch("/{apparatus_id}", response_model=ApparatusResponse, tags=["Apparatus"])
+async def update_apparatus(
+    apparatus_id: str,
+    apparatus_data: ApparatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.edit", "apparatus.manage")
+    ),
+):
+    """
+    Update an apparatus
+
+    **Authentication required**
+    **Permissions required:** apparatus.edit or apparatus.manage
+    """
+    service = ApparatusService(db)
+
+    try:
+        apparatus = await service.update_apparatus(
+            apparatus_id=apparatus_id,
+            apparatus_data=apparatus_data,
+            organization_id=current_user.organization_id,
+            updated_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    if not apparatus:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
+        )
+
+    # Reload with relations
+    apparatus = await service.get_apparatus(
+        apparatus_id=apparatus.id,
+        organization_id=current_user.organization_id,
+    )
+
+    return apparatus
+
+
+@router.delete(
+    "/{apparatus_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Apparatus"]
+)
+async def delete_apparatus(
+    apparatus_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Delete apparatus permanently
+
+    **Authentication required**
+    **Permissions required:** apparatus.manage
+
+    **Warning:** This permanently deletes the apparatus and all related records.
+    Consider using archive instead for historical tracking.
+    """
+    service = ApparatusService(db)
+
+    deleted = await service.delete_apparatus(
+        apparatus_id=apparatus_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Apparatus not found"
+        )
+
+
+# ============================================================================
+# Custom Field Endpoints
+# ============================================================================

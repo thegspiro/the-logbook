@@ -19,6 +19,7 @@ import type { UserProfileUpdate, EmergencyContact, ConsentItem } from '../types/
 import type { UserWithRoles } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useRanks } from '../hooks/useRanks';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 
 type TabType = 'account' | 'password' | 'security' | 'emergency' | 'appearance' | 'notifications';
 
@@ -74,6 +75,9 @@ export const UserSettingsPage: React.FC = () => {
 
   // Notification preferences state
   const [emailNotifications, setEmailNotifications] = useState(true);
+  // Per-device web push; separate from the account-level email/SMS prefs below
+  // because a subscription belongs to this browser, not to the user record.
+  const push = usePushNotifications();
   const [smsNotifications, setSmsNotifications] = useState(true);
   const [eventReminders, setEventReminders] = useState(true);
   const [trainingReminders, setTrainingReminders] = useState(true);
@@ -511,6 +515,9 @@ export const UserSettingsPage: React.FC = () => {
                     <div>
                       <label htmlFor="membershipNumber" className="block text-sm font-medium text-theme-text-secondary mb-1">Membership Number</label>
                       <input
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         id="membershipNumber"
                         type="text"
                         value={profileForm.membership_number || ''}
@@ -1086,6 +1093,49 @@ export const UserSettingsPage: React.FC = () => {
             </div>
 
             <div className="space-y-4">
+              {/* Push Notifications Toggle — hidden entirely unless this
+                  browser supports push AND the server has VAPID keys. On iOS
+                  the API only exists once the PWA is on the home screen, so a
+                  member browsing in Safari correctly sees nothing here. */}
+              {push.supported && (
+                <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
+                  <div className="pr-4">
+                    <span className="text-sm font-medium text-theme-text-primary">
+                      Push Notifications on This Device
+                    </span>
+                    <p className="text-sm text-theme-text-secondary">
+                      Get alerts on your lock screen even when The Logbook is
+                      closed. Enabled per device, so turn it on wherever you
+                      want to be reached.
+                    </p>
+                    {push.error && (
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
+                        {push.error}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={push.busy}
+                    onClick={() => {
+                      void (push.subscribed ? push.unsubscribe() : push.subscribe());
+                    }}
+                    className={`${
+                      push.subscribed ? 'bg-red-600' : 'bg-theme-surface-border'
+                    } relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-theme-bg disabled:opacity-50`}
+                    role="switch"
+                    aria-checked={push.subscribed}
+                    aria-label="Push notifications on this device"
+                  >
+                    <span
+                      className={`${
+                        push.subscribed ? 'translate-x-5' : 'translate-x-0'
+                      } toggle-knob-md`}
+                    />
+                  </button>
+                </div>
+              )}
+
               {/* Email Notifications Toggle */}
               <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>

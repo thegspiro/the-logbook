@@ -11,8 +11,9 @@
 #   1. Pre-flight checks (git repo, compose available, clean tree)
 #   2. Takes a CONSISTENT database dump via mysqldump and verifies it
 #   3. Fast-forwards the git checkout to the latest code
-#   4. Rebuilds images and recreates containers (never with `-v`)
-#   5. Waits for the backend to report healthy (migrations run on startup)
+#   4. Reconciles the compose build contexts with the pulled Dockerfiles
+#   5. Rebuilds images and recreates containers (never with `-v`)
+#   6. Waits for the backend to report healthy (migrations run on startup)
 #
 # On any failure after the backup is taken, it prints exact rollback
 # instructions (restore the dump + check out the previous commit).
@@ -266,6 +267,21 @@ else
     git pull --ff-only origin "$BRANCH"
     reapply_compose
     success "Code updated to $(git rev-parse --short HEAD)."
+fi
+
+# ---- Step 2b: Reconcile build contexts with the pulled Dockerfiles -------
+# A pull can change what a Dockerfile copies out of its build context — 2c93c7c
+# moved the frontend context to the repository root so `npm ci` could reach the
+# workspace lockfile. A compose file still naming the old context passes
+# `docker compose config` and then fails the build minutes later. Catch it here,
+# before the rebuild, and repair the context in place.
+
+SYNC_CONTEXTS="$INSTALL_DIR/scripts/sync-compose-build-context.sh"
+if [ -x "$SYNC_CONTEXTS" ]; then
+    info "Checking build contexts against the pulled Dockerfiles..."
+    "$SYNC_CONTEXTS" --fix -f docker-compose.yml
+else
+    warn "$SYNC_CONTEXTS not found — skipping the build-context check."
 fi
 
 # ---- Step 3: Rebuild images ---------------------------------------------

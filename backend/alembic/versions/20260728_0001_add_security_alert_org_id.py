@@ -62,10 +62,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "idx_security_alert_org_timestamp", table_name="security_alerts"
-    )
-    op.drop_index(
-        "ix_security_alerts_organization_id", table_name="security_alerts"
-    )
+    op.drop_index("idx_security_alert_org_timestamp", table_name="security_alerts")
+    op.drop_index("ix_security_alerts_organization_id", table_name="security_alerts")
     op.drop_column("security_alerts", "organization_id")

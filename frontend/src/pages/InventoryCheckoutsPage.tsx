@@ -211,6 +211,9 @@ export const InventoryCheckoutsPage: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-theme-text-muted" aria-hidden="true" />
             <label htmlFor="checkout-search" className="sr-only">Search checkouts</label>
             <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               id="checkout-search"
               type="text"
               aria-label="Search by item or member name..." placeholder="Search by item or member name..."

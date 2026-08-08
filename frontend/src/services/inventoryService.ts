@@ -23,6 +23,7 @@ import type {
   ImpactPlan, ImpactPlanCreate, ImpactPlannerRequestSizesResponse,
   InventoryLot, InventoryLotCreate, InventoryLotUpdate, ExpiringLot,
 } from './eventServices';
+import { asArray } from '../utils/asArray';
 
 export const inventoryService = {
   async getMembersSummary(search?: string): Promise<MembersInventoryListResponse> {
@@ -71,7 +72,7 @@ export const inventoryService = {
 
   async getImpactPlans(): Promise<ImpactPlan[]> {
     const response = await api.get<ImpactPlan[]>('/inventory/impact-planner/plans');
-    return response.data;
+    return asArray(response.data);
   },
 
   async createImpactPlan(data: ImpactPlanCreate): Promise<ImpactPlan> {
@@ -90,14 +91,14 @@ export const inventoryService = {
 
   async getSummaryByLocation(): Promise<LocationInventorySummary[]> {
     const response = await api.get<LocationInventorySummary[]>('/inventory/summary/by-location');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getCategories(itemType?: string, activeOnly: boolean = true): Promise<InventoryCategory[]> {
     const response = await api.get<InventoryCategory[]>('/inventory/categories', {
       params: { item_type: itemType, active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createCategory(data: InventoryCategoryCreate): Promise<InventoryCategory> {
@@ -191,17 +192,17 @@ export const inventoryService = {
 
   async getLowStockItems(): Promise<LowStockAlert[]> {
     const response = await api.get<LowStockAlert[]>('/inventory/low-stock');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getMaintenanceDueItems(daysAhead: number = 30): Promise<InventoryItem[]> {
     const response = await api.get<InventoryItem[]>('/inventory/maintenance/due', { params: { days_ahead: daysAhead } });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getItemMaintenanceHistory(itemId: string): Promise<MaintenanceRecord[]> {
     const response = await api.get<MaintenanceRecord[]>(`/inventory/items/${itemId}/maintenance`);
-    return response.data;
+    return asArray(response.data);
   },
 
   async createMaintenanceRecord(data: MaintenanceRecordCreate): Promise<MaintenanceRecord> {
@@ -217,7 +218,7 @@ export const inventoryService = {
   // Storage Areas
   async getStorageAreas(params?: { location_id?: string; parent_id?: string; flat?: boolean }): Promise<StorageAreaResponse[]> {
     const response = await api.get<StorageAreaResponse[]>('/inventory/storage-areas', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createStorageArea(data: StorageAreaCreate): Promise<StorageAreaResponse> {
@@ -257,7 +258,7 @@ export const inventoryService = {
     const response = await api.get<ItemIssuance[]>(`/inventory/items/${itemId}/issuances`, {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   // Size variant quick-create
@@ -275,7 +276,7 @@ export const inventoryService = {
   // Issuance allowances
   async getAllowances(): Promise<IssuanceAllowance[]> {
     const response = await api.get<IssuanceAllowance[]>('/inventory/allowances');
-    return response.data;
+    return asArray(response.data);
   },
 
   async createAllowance(data: { category_id: string; role_id?: string | undefined; max_quantity: number; period_type?: string }): Promise<IssuanceAllowance> {
@@ -310,7 +311,7 @@ export const inventoryService = {
     const response = await api.get<ItemIssuance[]>(`/inventory/users/${userId}/issuances`, {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   // Barcode scan / quick-action methods
@@ -438,7 +439,7 @@ export const inventoryService = {
   // Write-off requests
   async getWriteOffRequests(params?: { status?: string }): Promise<WriteOffRequestItem[]> {
     const response = await api.get<WriteOffRequestItem[]>('/inventory/write-offs', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createWriteOffRequest(data: { item_id: string; reason: string; description: string }): Promise<WriteOffRequestItem> {
@@ -474,7 +475,7 @@ export const inventoryService = {
 
   async getExposureRecords(itemId: string): Promise<NFPAExposureRecord[]> {
     const response = await api.get<NFPAExposureRecord[]>(`/inventory/items/${itemId}/exposures`);
-    return response.data;
+    return asArray(response.data);
   },
 
   async createExposureRecord(itemId: string, data: Omit<NFPAExposureRecord, 'id' | 'item_id' | 'organization_id' | 'created_at' | 'updated_at'>): Promise<NFPAExposureRecord> {
@@ -517,7 +518,7 @@ export const inventoryService = {
 
   async getReturnRequests(params?: { status?: string | undefined; mine_only?: boolean | undefined }): Promise<ReturnRequestItem[]> {
     const response = await api.get<ReturnRequestItem[]>('/inventory/return-requests', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async reviewReturnRequest(requestId: string, data: { status: string; review_notes?: string | undefined; override_condition?: string | undefined }): Promise<{ id: string; status: string; message: string }> {
@@ -528,13 +529,13 @@ export const inventoryService = {
   // Issuance history (all records, active + returned)
   async getUserIssuanceHistory(userId: string): Promise<ItemIssuance[]> {
     const response = await api.get<ItemIssuance[]>(`/inventory/users/${userId}/issuance-history`);
-    return response.data;
+    return asArray(response.data);
   },
 
   // Reorder Requests
   async getReorderRequests(params?: { status?: string | undefined; urgency?: string | undefined; search?: string | undefined }): Promise<ReorderRequest[]> {
     const response = await api.get<ReorderRequest[]>('/inventory/reorder-requests', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getReorderRequest(id: string): Promise<ReorderRequest> {
@@ -561,7 +562,7 @@ export const inventoryService = {
     const response = await api.get<ItemVariantGroup[]>('/inventory/variant-groups', {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getVariantGroup(id: string): Promise<ItemVariantGroup> {
@@ -584,7 +585,7 @@ export const inventoryService = {
     const response = await api.get<EquipmentKit[]>('/inventory/kits', {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getEquipmentKit(id: string): Promise<EquipmentKit> {
@@ -631,7 +632,7 @@ export const inventoryService = {
   // Stock lots (ready replacement stock: lot # + expiration + quantity)
   async getItemLots(itemId: string): Promise<InventoryLot[]> {
     const response = await api.get<InventoryLot[]>(`/inventory/items/${itemId}/lots`);
-    return response.data;
+    return asArray(response.data);
   },
 
   async addItemLot(itemId: string, data: InventoryLotCreate): Promise<InventoryLot> {
@@ -652,6 +653,6 @@ export const inventoryService = {
     const response = await api.get<ExpiringLot[]>('/inventory/lots/expiring', {
       params: { days_ahead: daysAhead },
     });
-    return response.data;
+    return asArray(response.data);
   },
 };

@@ -5,8 +5,102 @@
 import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
-import type { SkillTemplate, SkillTemplateCreate, SkillTemplateListItem, SkillTemplateUpdate, SkillTest, SkillTestCreate, SkillTestListItem, SkillTestUpdate, SkillTestingSummary } from '../types/skillsTesting';
-import type { CohortAdHocClassCreate, CohortClassReschedule, CohortMemberAdd, CohortOperationResult, CohortSchedulePreviewRequest, CohortSchedulePreviewResponse, CohortShiftRequest, CourseClass, CourseClassAutofill, CourseClassCreate, CourseClassUpdate, CourseCohort, CourseCohortClass, CourseCohortCreate, CourseCohortDetail, CourseCohortUpdate, BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberPeriodStatusResponse, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramMilestoneUpdate, ProgramPhase, ProgramPhaseCreate, ProgramPhaseUpdate, MemberEligibility, ProgramRequirement, ProgramRequirementCreate, ProgramRequirementUpdate, ProgramWithDetails, SampleTemplateSummary, RegistryImportResult, RegistryInfo, RegistryRequirementPreview, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingProgramUpdate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
+import type {
+  SkillTemplate,
+  SkillTemplateCreate,
+  SkillTemplateListItem,
+  SkillTemplateUpdate,
+  SkillTest,
+  SkillTestCreate,
+  SkillTestListItem,
+  SkillTestUpdate,
+  SkillTestViewer,
+  SkillTestingSummary,
+} from '../types/skillsTesting';
+import type {
+  CohortAdHocClassCreate,
+  CohortClassReschedule,
+  CohortMemberAdd,
+  CohortOperationResult,
+  CohortSchedulePreviewRequest,
+  CohortSchedulePreviewResponse,
+  CohortShiftRequest,
+  CourseClass,
+  CourseClassAutofill,
+  CourseClassCreate,
+  CourseClassUpdate,
+  CourseCohort,
+  CourseCohortClass,
+  CourseCohortCreate,
+  CourseCohortDetail,
+  CourseCohortUpdate,
+  BulkEnrollmentRequest,
+  BulkEnrollmentResponse,
+  BulkImportRequest,
+  BulkImportResponse,
+  BulkTrainingRecordCreate,
+  BulkTrainingRecordResult,
+  ComplianceSummary,
+  ExternalCategoryMapping,
+  ExternalCategoryMappingUpdate,
+  ExternalTrainingImport,
+  ExternalTrainingProvider,
+  ExternalTrainingProviderCreate,
+  ExternalTrainingProviderUpdate,
+  ExternalTrainingSyncLog,
+  ExternalUserMapping,
+  ExternalUserMappingUpdate,
+  HistoricalImportConfirmRequest,
+  HistoricalImportParseResponse,
+  HistoricalImportResult,
+  ImportRecordRequest,
+  MemberPeriodStatusResponse,
+  MemberProgramProgress,
+  ProgramBuildRequest,
+  ProgramEnrollment,
+  ProgramEnrollmentCreate,
+  ProgramEnrollmentWithUser,
+  ProgramMilestone,
+  ProgramMilestoneCreate,
+  ProgramMilestoneUpdate,
+  ProgramPhase,
+  ProgramPhaseCreate,
+  ProgramPhaseUpdate,
+  MemberEligibility,
+  ProgramRequirement,
+  ProgramRequirementCreate,
+  ProgramRequirementUpdate,
+  ProgramWithDetails,
+  SampleTemplateSummary,
+  RegistryImportResult,
+  RegistryInfo,
+  RegistryRequirementPreview,
+  RequirementProgress,
+  RequirementProgressRecord,
+  RequirementProgressUpdate,
+  SyncRequest,
+  SyncResponse,
+  TestConnectionResponse,
+  TrainingCategory,
+  TrainingCategoryCreate,
+  TrainingCategoryUpdate,
+  TrainingCourse,
+  TrainingCourseCreate,
+  TrainingCourseUpdate,
+  TrainingProgram,
+  TrainingProgramCreate,
+  TrainingProgramUpdate,
+  TrainingRecord,
+  TrainingRecordCreate,
+  TrainingRecordUpdate,
+  TrainingReport,
+  TrainingRequirement,
+  TrainingRequirementCreate,
+  TrainingRequirementEnhanced,
+  TrainingRequirementEnhancedCreate,
+  TrainingRequirementUpdate,
+  UserTrainingStats,
+} from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 import type { TrainingSessionResponse, TrainingSessionCreate, RecurringTrainingSessionCreate } from './adminServices';
 
@@ -18,7 +112,7 @@ export const trainingService = {
     const response = await api.get<TrainingCourse[]>('/training/courses', {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -55,7 +149,7 @@ export const trainingService = {
     end_date?: string;
   }): Promise<TrainingRecord[]> {
     const response = await api.get<TrainingRecord[]>('/training/records', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -77,12 +171,18 @@ export const trainingService = {
   /**
    * Import training records from a CSV file
    */
-  async importCSV(file: File): Promise<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }> {
+  async importCSV(
+    file: File
+  ): Promise<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }> {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }>('/training/records/import-csv', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await api.post<{ success: number; failed: number; errors: Array<{ row: number; error: string }> }>(
+      '/training/records/import-csv',
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
     return response.data;
   },
 
@@ -97,12 +197,9 @@ export const trainingService = {
   /**
    * Get training requirements
    */
-  async getRequirements(params?: {
-    year?: number;
-    active_only?: boolean;
-  }): Promise<TrainingRequirement[]> {
+  async getRequirements(params?: { year?: number; active_only?: boolean }): Promise<TrainingRequirement[]> {
     const response = await api.get<TrainingRequirement[]>('/training/requirements', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -116,14 +213,8 @@ export const trainingService = {
   /**
    * Update a training requirement
    */
-  async updateRequirement(
-    requirementId: string,
-    updates: TrainingRequirementUpdate
-  ): Promise<TrainingRequirement> {
-    const response = await api.patch<TrainingRequirement>(
-      `/training/requirements/${requirementId}`,
-      updates
-    );
+  async updateRequirement(requirementId: string, updates: TrainingRequirementUpdate): Promise<TrainingRequirement> {
+    const response = await api.patch<TrainingRequirement>(`/training/requirements/${requirementId}`, updates);
     return response.data;
   },
 
@@ -143,7 +234,7 @@ export const trainingService = {
     const response = await api.get<TrainingCategory[]>('/training/categories', {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -165,14 +256,8 @@ export const trainingService = {
   /**
    * Update a training category
    */
-  async updateCategory(
-    categoryId: string,
-    updates: TrainingCategoryUpdate
-  ): Promise<TrainingCategory> {
-    const response = await api.patch<TrainingCategory>(
-      `/training/categories/${categoryId}`,
-      updates
-    );
+  async updateCategory(categoryId: string, updates: TrainingCategoryUpdate): Promise<TrainingCategory> {
+    const response = await api.patch<TrainingCategory>(`/training/categories/${categoryId}`, updates);
     return response.data;
   },
 
@@ -202,11 +287,7 @@ export const trainingService = {
   /**
    * Generate a training report
    */
-  async generateReport(
-    userId: string,
-    startDate: string,
-    endDate: string
-  ): Promise<TrainingReport> {
+  async generateReport(userId: string, startDate: string, endDate: string): Promise<TrainingReport> {
     const response = await api.get<TrainingReport>(`/training/reports/user/${userId}`, {
       params: { start_date: startDate, end_date: endDate },
     });
@@ -216,15 +297,11 @@ export const trainingService = {
   /**
    * Get requirement progress for a user
    */
-  async getRequirementProgress(
-    userId: string,
-    year?: number
-  ): Promise<RequirementProgress[]> {
-    const response = await api.get<RequirementProgress[]>(
-      `/training/requirements/progress/${userId}`,
-      { params: { year } }
-    );
-    return response.data;
+  async getRequirementProgress(userId: string, year?: number): Promise<RequirementProgress[]> {
+    const response = await api.get<RequirementProgress[]>(`/training/requirements/progress/${userId}`, {
+      params: { year },
+    });
+    return asArray(response.data);
   },
 
   /**
@@ -234,7 +311,7 @@ export const trainingService = {
     const response = await api.get<TrainingRecord[]>('/training/certifications/expiring', {
       params: { days_ahead: daysAhead },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getComplianceMatrix(): Promise<ComplianceMatrix> {
@@ -246,14 +323,10 @@ export const trainingService = {
    * Per-member training activity within a selected period plus current
    * compliance standing. Dates are ISO (YYYY-MM-DD).
    */
-  async getMemberPeriodStatus(
-    startDate: string,
-    endDate: string,
-  ): Promise<MemberPeriodStatusResponse> {
-    const response = await api.get<MemberPeriodStatusResponse>(
-      '/training/records/member-status',
-      { params: { start_date: startDate, end_date: endDate } },
-    );
+  async getMemberPeriodStatus(startDate: string, endDate: string): Promise<MemberPeriodStatusResponse> {
+    const response = await api.get<MemberPeriodStatusResponse>('/training/records/member-status', {
+      params: { start_date: startDate, end_date: endDate },
+    });
     return response.data;
   },
 
@@ -261,27 +334,26 @@ export const trainingService = {
     const response = await api.get<ExpiringCertification[]>('/training/expiring-certifications', {
       params: { days },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   // ==================== Historical Training Import ====================
 
-  async parseHistoricalImport(file: File, matchBy: 'email' | 'membership_number' = 'membership_number'): Promise<HistoricalImportParseResponse> {
+  async parseHistoricalImport(
+    file: File,
+    matchBy: 'email' | 'membership_number' = 'membership_number'
+  ): Promise<HistoricalImportParseResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post<HistoricalImportParseResponse>(
-      '/training/import/parse',
-      formData,
-      { params: { match_by: matchBy }, headers: { 'Content-Type': 'multipart/form-data' } }
-    );
+    const response = await api.post<HistoricalImportParseResponse>('/training/import/parse', formData, {
+      params: { match_by: matchBy },
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   },
 
   async confirmHistoricalImport(request: HistoricalImportConfirmRequest): Promise<HistoricalImportResult> {
-    const response = await api.post<HistoricalImportResult>(
-      '/training/import/confirm',
-      request
-    );
+    const response = await api.post<HistoricalImportResult>('/training/import/confirm', request);
     return response.data;
   },
 };
@@ -298,7 +370,7 @@ export const externalTrainingService = {
     const response = await api.get<ExternalTrainingProvider[]>('/training/external/providers', {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -320,14 +392,8 @@ export const externalTrainingService = {
   /**
    * Update an external training provider
    */
-  async updateProvider(
-    providerId: string,
-    updates: ExternalTrainingProviderUpdate
-  ): Promise<ExternalTrainingProvider> {
-    const response = await api.patch<ExternalTrainingProvider>(
-      `/training/external/providers/${providerId}`,
-      updates
-    );
+  async updateProvider(providerId: string, updates: ExternalTrainingProviderUpdate): Promise<ExternalTrainingProvider> {
+    const response = await api.patch<ExternalTrainingProvider>(`/training/external/providers/${providerId}`, updates);
     return response.data;
   },
 
@@ -342,9 +408,7 @@ export const externalTrainingService = {
    * Test provider connection
    */
   async testConnection(providerId: string): Promise<TestConnectionResponse> {
-    const response = await api.post<TestConnectionResponse>(
-      `/training/external/providers/${providerId}/test`
-    );
+    const response = await api.post<TestConnectionResponse>(`/training/external/providers/${providerId}/test`);
     return response.data;
   },
 
@@ -354,10 +418,7 @@ export const externalTrainingService = {
    * Trigger a sync operation
    */
   async triggerSync(providerId: string, request: SyncRequest): Promise<SyncResponse> {
-    const response = await api.post<SyncResponse>(
-      `/training/external/providers/${providerId}/sync`,
-      request
-    );
+    const response = await api.post<SyncResponse>(`/training/external/providers/${providerId}/sync`, request);
     return response.data;
   },
 
@@ -365,17 +426,18 @@ export const externalTrainingService = {
    * Get sync logs for a provider
    */
   async getSyncLogs(providerId: string, limit: number = 20): Promise<ExternalTrainingSyncLog[]> {
-    const response = await api.get<ExternalTrainingSyncLog[]>(
-      `/training/external/providers/${providerId}/sync-logs`,
-      { params: { limit } }
-    );
-    return response.data;
+    const response = await api.get<ExternalTrainingSyncLog[]>(`/training/external/providers/${providerId}/sync-logs`, {
+      params: { limit },
+    });
+    return asArray(response.data);
   },
 
   /**
    * Fetch training categories from the external provider and create mappings
    */
-  async syncCategories(providerId: string): Promise<{ success: boolean; message: string; created: number; existing: number }> {
+  async syncCategories(
+    providerId: string
+  ): Promise<{ success: boolean; message: string; created: number; existing: number }> {
     const response = await api.post<{ success: boolean; message: string; created: number; existing: number }>(
       `/training/external/providers/${providerId}/sync-categories`
     );
@@ -387,15 +449,12 @@ export const externalTrainingService = {
   /**
    * Get category mappings for a provider
    */
-  async getCategoryMappings(
-    providerId: string,
-    unmappedOnly: boolean = false
-  ): Promise<ExternalCategoryMapping[]> {
+  async getCategoryMappings(providerId: string, unmappedOnly: boolean = false): Promise<ExternalCategoryMapping[]> {
     const response = await api.get<ExternalCategoryMapping[]>(
       `/training/external/providers/${providerId}/category-mappings`,
       { params: { unmapped_only: unmappedOnly } }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -418,15 +477,11 @@ export const externalTrainingService = {
   /**
    * Get user mappings for a provider
    */
-  async getUserMappings(
-    providerId: string,
-    unmappedOnly: boolean = false
-  ): Promise<ExternalUserMapping[]> {
-    const response = await api.get<ExternalUserMapping[]>(
-      `/training/external/providers/${providerId}/user-mappings`,
-      { params: { unmapped_only: unmappedOnly } }
-    );
-    return response.data;
+  async getUserMappings(providerId: string, unmappedOnly: boolean = false): Promise<ExternalUserMapping[]> {
+    const response = await api.get<ExternalUserMapping[]>(`/training/external/providers/${providerId}/user-mappings`, {
+      params: { unmapped_only: unmappedOnly },
+    });
+    return asArray(response.data);
   },
 
   /**
@@ -457,11 +512,10 @@ export const externalTrainingService = {
       offset?: number;
     }
   ): Promise<ExternalTrainingImport[]> {
-    const response = await api.get<ExternalTrainingImport[]>(
-      `/training/external/providers/${providerId}/imports`,
-      { params }
-    );
-    return response.data;
+    const response = await api.get<ExternalTrainingImport[]>(`/training/external/providers/${providerId}/imports`, {
+      params,
+    });
+    return asArray(response.data);
   },
 
   /**
@@ -504,7 +558,7 @@ export const trainingProgramService = {
     position?: string;
   }): Promise<TrainingRequirementEnhanced[]> {
     const response = await api.get<TrainingRequirementEnhanced[]>('/training/programs/requirements', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -518,7 +572,9 @@ export const trainingProgramService = {
   /**
    * Create an enhanced training requirement
    */
-  async createRequirementEnhanced(requirement: TrainingRequirementEnhancedCreate): Promise<TrainingRequirementEnhanced> {
+  async createRequirementEnhanced(
+    requirement: TrainingRequirementEnhancedCreate
+  ): Promise<TrainingRequirementEnhanced> {
     const response = await api.post<TrainingRequirementEnhanced>('/training/programs/requirements', requirement);
     return response.data;
   },
@@ -526,8 +582,14 @@ export const trainingProgramService = {
   /**
    * Update an enhanced training requirement
    */
-  async updateRequirementEnhanced(requirementId: string, updates: Partial<TrainingRequirementEnhancedCreate>): Promise<TrainingRequirementEnhanced> {
-    const response = await api.patch<TrainingRequirementEnhanced>(`/training/programs/requirements/${requirementId}`, updates);
+  async updateRequirementEnhanced(
+    requirementId: string,
+    updates: Partial<TrainingRequirementEnhancedCreate>
+  ): Promise<TrainingRequirementEnhanced> {
+    const response = await api.patch<TrainingRequirementEnhanced>(
+      `/training/programs/requirements/${requirementId}`,
+      updates
+    );
     return response.data;
   },
 
@@ -536,12 +598,9 @@ export const trainingProgramService = {
   /**
    * Get all training programs
    */
-  async getPrograms(params?: {
-    target_position?: string;
-    is_template?: boolean;
-  }): Promise<TrainingProgram[]> {
+  async getPrograms(params?: { target_position?: string; is_template?: boolean }): Promise<TrainingProgram[]> {
     const response = await api.get<TrainingProgram[]>('/training/programs/programs', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -591,7 +650,7 @@ export const trainingProgramService = {
    */
   async getSampleTemplates(): Promise<SampleTemplateSummary[]> {
     const response = await api.get<SampleTemplateSummary[]>('/training/programs/sample-templates');
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -599,11 +658,11 @@ export const trainingProgramService = {
    */
   async instantiateSampleTemplate(
     templateKey: string,
-    options?: { name?: string; is_template?: boolean },
+    options?: { name?: string; is_template?: boolean }
   ): Promise<TrainingProgram> {
     const response = await api.post<TrainingProgram>(
       `/training/programs/sample-templates/${templateKey}/instantiate`,
-      options ?? {},
+      options ?? {}
     );
     return response.data;
   },
@@ -615,7 +674,7 @@ export const trainingProgramService = {
    */
   async getProgramPhases(programId: string): Promise<ProgramPhase[]> {
     const response = await api.get<ProgramPhase[]>(`/training/programs/programs/${programId}/phases`);
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -630,7 +689,7 @@ export const trainingProgramService = {
   async updateProgramPhase(programId: string, phaseId: string, updates: ProgramPhaseUpdate): Promise<ProgramPhase> {
     const response = await api.patch<ProgramPhase>(
       `/training/programs/programs/${programId}/phases/${phaseId}`,
-      updates,
+      updates
     );
     return response.data;
   },
@@ -642,11 +701,10 @@ export const trainingProgramService = {
 
   /** Renumber phases to match the given order (1-based). */
   async reorderProgramPhases(programId: string, phaseIds: string[]): Promise<ProgramPhase[]> {
-    const response = await api.post<ProgramPhase[]>(
-      `/training/programs/programs/${programId}/phases/reorder`,
-      { phase_ids: phaseIds },
-    );
-    return response.data;
+    const response = await api.post<ProgramPhase[]>(`/training/programs/programs/${programId}/phases/reorder`, {
+      phase_ids: phaseIds,
+    });
+    return asArray(response.data);
   },
 
   // ==================== Program Requirements ====================
@@ -658,14 +716,17 @@ export const trainingProgramService = {
     const response = await api.get<ProgramRequirement[]>(`/training/programs/programs/${programId}/requirements`, {
       params: { phase_id: phaseId },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
    * Add a requirement to a program
    */
   async addProgramRequirement(programId: string, requirement: ProgramRequirementCreate): Promise<ProgramRequirement> {
-    const response = await api.post<ProgramRequirement>(`/training/programs/programs/${programId}/requirements`, requirement);
+    const response = await api.post<ProgramRequirement>(
+      `/training/programs/programs/${programId}/requirements`,
+      requirement
+    );
     return response.data;
   },
 
@@ -675,11 +736,11 @@ export const trainingProgramService = {
   async updateProgramRequirement(
     programId: string,
     programRequirementId: string,
-    updates: ProgramRequirementUpdate,
+    updates: ProgramRequirementUpdate
   ): Promise<ProgramRequirement> {
     const response = await api.patch<ProgramRequirement>(
       `/training/programs/programs/${programId}/requirements/${programRequirementId}`,
-      updates,
+      updates
     );
     return response.data;
   },
@@ -693,9 +754,9 @@ export const trainingProgramService = {
   async reorderProgramRequirements(programId: string, programRequirementIds: string[]): Promise<ProgramRequirement[]> {
     const response = await api.post<ProgramRequirement[]>(
       `/training/programs/programs/${programId}/requirements/reorder`,
-      { program_requirement_ids: programRequirementIds },
+      { program_requirement_ids: programRequirementIds }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   // ==================== Program Milestones ====================
@@ -709,10 +770,14 @@ export const trainingProgramService = {
   },
 
   /** Update a milestone's name / description / threshold / message. */
-  async updateMilestone(programId: string, milestoneId: string, updates: ProgramMilestoneUpdate): Promise<ProgramMilestone> {
+  async updateMilestone(
+    programId: string,
+    milestoneId: string,
+    updates: ProgramMilestoneUpdate
+  ): Promise<ProgramMilestone> {
     const response = await api.patch<ProgramMilestone>(
       `/training/programs/programs/${programId}/milestones/${milestoneId}`,
-      updates,
+      updates
     );
     return response.data;
   },
@@ -739,7 +804,7 @@ export const trainingProgramService = {
     const response = await api.get<ProgramEnrollment[]>('/training/programs/enrollments/me', {
       params: { status },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -749,7 +814,7 @@ export const trainingProgramService = {
     const response = await api.get<ProgramEnrollment[]>(`/training/programs/enrollments/user/${userId}`, {
       params: { status },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -759,9 +824,9 @@ export const trainingProgramService = {
   async getProgramEnrollments(programId: string, status?: string): Promise<ProgramEnrollmentWithUser[]> {
     const response = await api.get<ProgramEnrollmentWithUser[]>(
       `/training/programs/programs/${programId}/enrollments`,
-      { params: { status } },
+      { params: { status } }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -818,7 +883,7 @@ export const trainingProgramService = {
   async withdrawEnrollment(enrollmentId: string, reason?: string): Promise<ProgramEnrollment> {
     const response = await api.post<ProgramEnrollment>(
       `/training/programs/enrollments/${enrollmentId}/withdraw`,
-      reason ? { reason } : {},
+      reason ? { reason } : {}
     );
     return response.data;
   },
@@ -831,7 +896,7 @@ export const trainingProgramService = {
     const response = await api.post<ProgramEnrollment>(
       `/training/programs/enrollments/${enrollmentId}/advance-phase`,
       null,
-      { params: { force } },
+      { params: { force } }
     );
     return response.data;
   },
@@ -841,7 +906,11 @@ export const trainingProgramService = {
   /**
    * Duplicate a program with all phases, requirements, and milestones
    */
-  async duplicateProgram(programId: string, newName: string, incrementVersion: boolean = true): Promise<TrainingProgram> {
+  async duplicateProgram(
+    programId: string,
+    newName: string,
+    incrementVersion: boolean = true
+  ): Promise<TrainingProgram> {
     const response = await api.post<TrainingProgram>(`/training/programs/programs/${programId}/duplicate`, null, {
       params: { new_name: newName, increment_version: incrementVersion },
     });
@@ -855,8 +924,13 @@ export const trainingProgramService = {
     return response.data;
   },
 
-  async importProgram(data: Record<string, unknown>): Promise<{ success: boolean; program_id: string; program_name: string; message: string }> {
-    const response = await api.post<{ success: boolean; program_id: string; program_name: string; message: string }>('/training/programs/programs/import', data);
+  async importProgram(
+    data: Record<string, unknown>
+  ): Promise<{ success: boolean; program_id: string; program_name: string; message: string }> {
+    const response = await api.post<{ success: boolean; program_id: string; program_name: string; message: string }>(
+      '/training/programs/programs/import',
+      data
+    );
     return response.data;
   },
 
@@ -866,7 +940,10 @@ export const trainingProgramService = {
    * Enroll multiple members in a program
    */
   async bulkEnrollMembers(programId: string, request: BulkEnrollmentRequest): Promise<BulkEnrollmentResponse> {
-    const response = await api.post<BulkEnrollmentResponse>(`/training/programs/programs/${programId}/bulk-enroll`, request);
+    const response = await api.post<BulkEnrollmentResponse>(
+      `/training/programs/programs/${programId}/bulk-enroll`,
+      request
+    );
     return response.data;
   },
 
@@ -875,10 +952,8 @@ export const trainingProgramService = {
    * enrolled / missing prerequisite / concurrent-block), eligible first.
    */
   async getEnrollmentEligibility(programId: string): Promise<MemberEligibility[]> {
-    const response = await api.get<MemberEligibility[]>(
-      `/training/programs/programs/${programId}/eligibility`,
-    );
-    return response.data;
+    const response = await api.get<MemberEligibility[]>(`/training/programs/programs/${programId}/eligibility`);
+    return asArray(response.data);
   },
 
   // ==================== Registry Import ====================
@@ -888,7 +963,7 @@ export const trainingProgramService = {
    */
   async getRegistries(): Promise<RegistryInfo[]> {
     const response = await api.get<RegistryInfo[]>('/training/programs/requirements/registries');
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -896,9 +971,9 @@ export const trainingProgramService = {
    */
   async previewRegistry(registryName: string): Promise<RegistryRequirementPreview[]> {
     const response = await api.get<RegistryRequirementPreview[]>(
-      `/training/programs/requirements/registries/${registryName}/preview`,
+      `/training/programs/requirements/registries/${registryName}/preview`
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -907,23 +982,25 @@ export const trainingProgramService = {
    */
   async importRegistry(
     registryName: string,
-    options?: { registryCodes?: string[]; skipExisting?: boolean },
+    options?: { registryCodes?: string[]; skipExisting?: boolean }
   ): Promise<RegistryImportResult> {
-    const response = await api.post<RegistryImportResult>(
-      `/training/programs/requirements/import/${registryName}`,
-      {
-        registry_codes: options?.registryCodes,
-        skip_existing: options?.skipExisting ?? true,
-      },
-    );
+    const response = await api.post<RegistryImportResult>(`/training/programs/requirements/import/${registryName}`, {
+      registry_codes: options?.registryCodes,
+      skip_existing: options?.skipExisting ?? true,
+    });
     return response.data;
   },
 };
 
 export const trainingSessionService = {
-  async getCalendar(params?: { start_after?: string; start_before?: string; training_type?: string; include_finalized?: boolean }): Promise<TrainingSessionResponse[]> {
+  async getCalendar(params?: {
+    start_after?: string;
+    start_before?: string;
+    training_type?: string;
+    include_finalized?: boolean;
+  }): Promise<TrainingSessionResponse[]> {
     const response = await api.get<TrainingSessionResponse[]>('/training/sessions/calendar', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createSession(data: TrainingSessionCreate): Promise<TrainingSessionResponse> {
@@ -933,11 +1010,13 @@ export const trainingSessionService = {
 
   async createRecurringSessions(data: RecurringTrainingSessionCreate): Promise<TrainingSessionResponse[]> {
     const response = await api.post<TrainingSessionResponse[]>('/training/sessions/recurring', data);
-    return response.data;
+    return asArray(response.data);
   },
 
   async finalizeSession(sessionId: string): Promise<{ message: string; approval_id: string }> {
-    const response = await api.post<{ message: string; approval_id: string }>(`/training/sessions/${sessionId}/finalize`);
+    const response = await api.post<{ message: string; approval_id: string }>(
+      `/training/sessions/${sessionId}/finalize`
+    );
     return response.data;
   },
 
@@ -964,6 +1043,7 @@ import type {
   TrainingSubmissionUpdate,
   SubmissionReviewRequest,
 } from '../types/training';
+import { asArray } from '../utils/asArray';
 
 export const trainingSubmissionService = {
   // Config
@@ -983,12 +1063,7 @@ export const trainingSubmissionService = {
     // syncs when connectivity returns. This is the most-used action in the
     // product and must never silently drop because of weak station wifi.
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      await enqueueGeneric(
-        'training-submission',
-        '/training/submissions',
-        data,
-        `Training: ${data.course_name}`,
-      );
+      await enqueueGeneric('training-submission', '/training/submissions', data, `Training: ${data.course_name}`);
       void usePendingSyncStore.getState().refresh();
       // Caller expects a TrainingSubmission. Synthesise an optimistic
       // record so UIs that update immediately don't crash. The real
@@ -1008,7 +1083,7 @@ export const trainingSubmissionService = {
     const response = await api.get<TrainingSubmission[]>('/training/submissions/my', {
       params: status ? { status } : undefined,
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getSubmission(submissionId: string): Promise<TrainingSubmission> {
@@ -1028,7 +1103,7 @@ export const trainingSubmissionService = {
   // Officer review
   async getPendingSubmissions(): Promise<TrainingSubmission[]> {
     const response = await api.get<TrainingSubmission[]>('/training/submissions/pending');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getPendingCount(): Promise<{ pending_count: number }> {
@@ -1036,9 +1111,14 @@ export const trainingSubmissionService = {
     return response.data;
   },
 
-  async getAllSubmissions(params?: { status?: string | undefined; user_id?: string; limit?: number; offset?: number }): Promise<TrainingSubmission[]> {
+  async getAllSubmissions(params?: {
+    status?: string | undefined;
+    user_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<TrainingSubmission[]> {
     const response = await api.get<TrainingSubmission[]>('/training/submissions/all', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async reviewSubmission(submissionId: string, review: SubmissionReviewRequest): Promise<TrainingSubmission> {
@@ -1057,8 +1137,13 @@ export const trainingModuleConfigService = {
     return response.data;
   },
 
-  async updateConfig(updates: Partial<import('../types/training').TrainingModuleConfig>): Promise<import('../types/training').TrainingModuleConfig> {
-    const response = await api.put<import('../types/training').TrainingModuleConfig>('/training/module-config/config', updates);
+  async updateConfig(
+    updates: Partial<import('../types/training').TrainingModuleConfig>
+  ): Promise<import('../types/training').TrainingModuleConfig> {
+    const response = await api.put<import('../types/training').TrainingModuleConfig>(
+      '/training/module-config/config',
+      updates
+    );
     return response.data;
   },
 
@@ -1068,20 +1153,20 @@ export const trainingModuleConfigService = {
   },
 
   async getMyTraining(): Promise<import('../types/training').MyTrainingSummary> {
-    const response = await api.get<import('../types/training').MyTrainingSummary>('/training/module-config/my-training');
+    const response = await api.get<import('../types/training').MyTrainingSummary>(
+      '/training/module-config/my-training'
+    );
     return response.data;
   },
 
   async getSkillNames(): Promise<{ id: string; name: string; category: string | null }[]> {
-    const response = await api.get<{ id: string; name: string; category: string | null }[]>('/training/module-config/skill-names');
+    const response = await api.get<{ id: string; name: string; category: string | null }[]>(
+      '/training/module-config/skill-names'
+    );
     return response.data;
   },
 
-  async exportMyTraining(
-    format: 'csv' | 'pdf' = 'csv',
-    startDate?: string,
-    endDate?: string,
-  ): Promise<Blob> {
+  async exportMyTraining(format: 'csv' | 'pdf' = 'csv', startDate?: string, endDate?: string): Promise<Blob> {
     const response = await api.get('/training/module-config/my-training/export', {
       params: {
         format,
@@ -1118,7 +1203,7 @@ export const skillsTestingService = {
   // Templates
   async getTemplates(params?: { status?: string; category?: string }): Promise<SkillTemplateListItem[]> {
     const response = await api.get<SkillTemplateListItem[]>('/training/skills-testing/templates', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getTemplate(templateId: string): Promise<SkillTemplate> {
@@ -1151,9 +1236,14 @@ export const skillsTestingService = {
   },
 
   // Tests
-  async getTests(params?: { status?: string; candidate_id?: string; template_id?: string }): Promise<SkillTestListItem[]> {
+  async getTests(params?: {
+    status?: string;
+    candidate_id?: string;
+    template_id?: string;
+    include_practice?: boolean;
+  }): Promise<SkillTestListItem[]> {
     const response = await api.get<SkillTestListItem[]>('/training/skills-testing/tests', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getTest(testId: string): Promise<SkillTest> {
@@ -1184,6 +1274,41 @@ export const skillsTestingService = {
     await api.delete(`/training/skills-testing/tests/${testId}/discard`);
   },
 
+  async releaseTest(testId: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/release`);
+    return response.data;
+  },
+
+  async getTestViewers(testId: string): Promise<SkillTestViewer[]> {
+    const response = await api.get<SkillTestViewer[]>(`/training/skills-testing/tests/${testId}/viewers`);
+    return asArray(response.data);
+  },
+
+  async addTestViewer(testId: string, userId: string): Promise<SkillTestViewer> {
+    const response = await api.post<SkillTestViewer>(`/training/skills-testing/tests/${testId}/viewers`, {
+      user_id: userId,
+    });
+    return response.data;
+  },
+
+  async removeTestViewer(testId: string, userId: string): Promise<void> {
+    await api.delete(`/training/skills-testing/tests/${testId}/viewers/${userId}`);
+  },
+
+  async cancelTest(testId: string, reason?: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/cancel`, {
+      // `||` not `??`: an untouched textarea sends '', which the backend's
+      // Optional[str] would store as an empty reason line in the notes.
+      reason: reason?.trim() || undefined,
+    });
+    return response.data;
+  },
+
+  async voidTest(testId: string, reason: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/void`, { reason });
+    return response.data;
+  },
+
   async emailTestResults(testId: string): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/training/skills-testing/tests/${testId}/email-results`);
     return response.data;
@@ -1200,19 +1325,33 @@ export const skillsTestingService = {
 
 export const recertificationService = {
   async getPathways(activeOnly = true): Promise<import('../types/training').RecertificationPathway[]> {
-    const response = await api.get<import('../types/training').RecertificationPathway[]>('/training/recertification/pathways', {
-      params: { active_only: activeOnly },
-    });
+    const response = await api.get<import('../types/training').RecertificationPathway[]>(
+      '/training/recertification/pathways',
+      {
+        params: { active_only: activeOnly },
+      }
+    );
     return response.data;
   },
 
-  async createPathway(data: import('../types/training').RecertificationPathwayCreate): Promise<import('../types/training').RecertificationPathway> {
-    const response = await api.post<import('../types/training').RecertificationPathway>('/training/recertification/pathways', data);
+  async createPathway(
+    data: import('../types/training').RecertificationPathwayCreate
+  ): Promise<import('../types/training').RecertificationPathway> {
+    const response = await api.post<import('../types/training').RecertificationPathway>(
+      '/training/recertification/pathways',
+      data
+    );
     return response.data;
   },
 
-  async updatePathway(pathwayId: string, data: import('../types/training').RecertificationPathwayUpdate): Promise<import('../types/training').RecertificationPathway> {
-    const response = await api.patch<import('../types/training').RecertificationPathway>(`/training/recertification/pathways/${pathwayId}`, data);
+  async updatePathway(
+    pathwayId: string,
+    data: import('../types/training').RecertificationPathwayUpdate
+  ): Promise<import('../types/training').RecertificationPathway> {
+    const response = await api.patch<import('../types/training').RecertificationPathway>(
+      `/training/recertification/pathways/${pathwayId}`,
+      data
+    );
     return response.data;
   },
 
@@ -1239,18 +1378,31 @@ export const competencyService = {
     return response.data;
   },
 
-  async createMatrix(data: import('../types/training').CompetencyMatrixCreate): Promise<import('../types/training').CompetencyMatrix> {
-    const response = await api.post<import('../types/training').CompetencyMatrix>('/training/competency/matrices', data);
+  async createMatrix(
+    data: import('../types/training').CompetencyMatrixCreate
+  ): Promise<import('../types/training').CompetencyMatrix> {
+    const response = await api.post<import('../types/training').CompetencyMatrix>(
+      '/training/competency/matrices',
+      data
+    );
     return response.data;
   },
 
-  async updateMatrix(matrixId: string, data: import('../types/training').CompetencyMatrixUpdate): Promise<import('../types/training').CompetencyMatrix> {
-    const response = await api.patch<import('../types/training').CompetencyMatrix>(`/training/competency/matrices/${matrixId}`, data);
+  async updateMatrix(
+    matrixId: string,
+    data: import('../types/training').CompetencyMatrixUpdate
+  ): Promise<import('../types/training').CompetencyMatrix> {
+    const response = await api.patch<import('../types/training').CompetencyMatrix>(
+      `/training/competency/matrices/${matrixId}`,
+      data
+    );
     return response.data;
   },
 
   async getMemberCompetencies(userId: string): Promise<import('../types/training').MemberCompetency[]> {
-    const response = await api.get<import('../types/training').MemberCompetency[]>(`/training/competency/members/${userId}`);
+    const response = await api.get<import('../types/training').MemberCompetency[]>(
+      `/training/competency/members/${userId}`
+    );
     return response.data;
   },
 
@@ -1263,28 +1415,52 @@ export const competencyService = {
 // ==================== Instructor Qualification Services ====================
 
 export const instructorService = {
-  async getQualifications(params?: { user_id?: string; course_id?: string }): Promise<import('../types/training').InstructorQualification[]> {
-    const response = await api.get<import('../types/training').InstructorQualification[]>('/training/instructors/qualifications', { params });
+  async getQualifications(params?: {
+    user_id?: string;
+    course_id?: string;
+  }): Promise<import('../types/training').InstructorQualification[]> {
+    const response = await api.get<import('../types/training').InstructorQualification[]>(
+      '/training/instructors/qualifications',
+      { params }
+    );
     return response.data;
   },
 
-  async createQualification(data: import('../types/training').InstructorQualificationCreate): Promise<import('../types/training').InstructorQualification> {
-    const response = await api.post<import('../types/training').InstructorQualification>('/training/instructors/qualifications', data);
+  async createQualification(
+    data: import('../types/training').InstructorQualificationCreate
+  ): Promise<import('../types/training').InstructorQualification> {
+    const response = await api.post<import('../types/training').InstructorQualification>(
+      '/training/instructors/qualifications',
+      data
+    );
     return response.data;
   },
 
-  async updateQualification(qualId: string, data: import('../types/training').InstructorQualificationUpdate): Promise<import('../types/training').InstructorQualification> {
-    const response = await api.patch<import('../types/training').InstructorQualification>(`/training/instructors/qualifications/${qualId}`, data);
+  async updateQualification(
+    qualId: string,
+    data: import('../types/training').InstructorQualificationUpdate
+  ): Promise<import('../types/training').InstructorQualification> {
+    const response = await api.patch<import('../types/training').InstructorQualification>(
+      `/training/instructors/qualifications/${qualId}`,
+      data
+    );
     return response.data;
   },
 
   async getQualifiedInstructors(courseId: string): Promise<import('../types/training').InstructorQualification[]> {
-    const response = await api.get<import('../types/training').InstructorQualification[]>(`/training/instructors/qualifications/${courseId}/qualified`);
+    const response = await api.get<import('../types/training').InstructorQualification[]>(
+      `/training/instructors/qualifications/${courseId}/qualified`
+    );
     return response.data;
   },
 
-  async validateInstructor(userId: string, courseId: string): Promise<{ user_id: string; course_id: string; is_qualified: boolean }> {
-    const response = await api.get<{ user_id: string; course_id: string; is_qualified: boolean }>(`/training/instructors/validate/${userId}/${courseId}`);
+  async validateInstructor(
+    userId: string,
+    courseId: string
+  ): Promise<{ user_id: string; course_id: string; is_qualified: boolean }> {
+    const response = await api.get<{ user_id: string; course_id: string; is_qualified: boolean }>(
+      `/training/instructors/validate/${userId}/${courseId}`
+    );
     return response.data;
   },
 };
@@ -1292,18 +1468,32 @@ export const instructorService = {
 // ==================== Training Effectiveness Services ====================
 
 export const effectivenessService = {
-  async createEvaluation(data: import('../types/training').TrainingEffectivenessCreate): Promise<import('../types/training').TrainingEffectivenessEvaluation> {
-    const response = await api.post<import('../types/training').TrainingEffectivenessEvaluation>('/training/effectiveness/evaluations', data);
+  async createEvaluation(
+    data: import('../types/training').TrainingEffectivenessCreate
+  ): Promise<import('../types/training').TrainingEffectivenessEvaluation> {
+    const response = await api.post<import('../types/training').TrainingEffectivenessEvaluation>(
+      '/training/effectiveness/evaluations',
+      data
+    );
     return response.data;
   },
 
-  async getEvaluations(params?: { course_id?: string; session_id?: string; level?: string }): Promise<import('../types/training').TrainingEffectivenessEvaluation[]> {
-    const response = await api.get<import('../types/training').TrainingEffectivenessEvaluation[]>('/training/effectiveness/evaluations', { params });
+  async getEvaluations(params?: {
+    course_id?: string;
+    session_id?: string;
+    level?: string;
+  }): Promise<import('../types/training').TrainingEffectivenessEvaluation[]> {
+    const response = await api.get<import('../types/training').TrainingEffectivenessEvaluation[]>(
+      '/training/effectiveness/evaluations',
+      { params }
+    );
     return response.data;
   },
 
   async getCourseSummary(courseId: string): Promise<import('../types/training').TrainingEffectivenessSummary> {
-    const response = await api.get<import('../types/training').TrainingEffectivenessSummary>(`/training/effectiveness/summary/${courseId}`);
+    const response = await api.get<import('../types/training').TrainingEffectivenessSummary>(
+      `/training/effectiveness/summary/${courseId}`
+    );
     return response.data;
   },
 };
@@ -1311,24 +1501,36 @@ export const effectivenessService = {
 // ==================== Multi-Agency Training Services ====================
 
 export const multiAgencyService = {
-  async getExercises(params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').MultiAgencyTraining[]> {
-    const response = await api.get<import('../types/training').MultiAgencyTraining[]>('/training/multi-agency', { params });
+  async getExercises(params?: {
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('../types/training').MultiAgencyTraining[]> {
+    const response = await api.get<import('../types/training').MultiAgencyTraining[]>('/training/multi-agency', {
+      params,
+    });
     return response.data;
   },
 
-  async createExercise(data: import('../types/training').MultiAgencyTrainingCreate): Promise<import('../types/training').MultiAgencyTraining> {
+  async createExercise(
+    data: import('../types/training').MultiAgencyTrainingCreate
+  ): Promise<import('../types/training').MultiAgencyTraining> {
     const response = await api.post<import('../types/training').MultiAgencyTraining>('/training/multi-agency', data);
     return response.data;
   },
 
-  async updateExercise(exerciseId: string, data: import('../types/training').MultiAgencyTrainingUpdate): Promise<import('../types/training').MultiAgencyTraining> {
-    const response = await api.patch<import('../types/training').MultiAgencyTraining>(`/training/multi-agency/${exerciseId}`, data);
+  async updateExercise(
+    exerciseId: string,
+    data: import('../types/training').MultiAgencyTrainingUpdate
+  ): Promise<import('../types/training').MultiAgencyTraining> {
+    const response = await api.patch<import('../types/training').MultiAgencyTraining>(
+      `/training/multi-agency/${exerciseId}`,
+      data
+    );
     return response.data;
   },
 };
 
 // ==================== xAPI Services ====================
-
 
 // ==================== Report Export Services ====================
 
@@ -1341,7 +1543,9 @@ export const reportExportService = {
   },
 
   async getComplianceForecast(): Promise<import('../types/training').ComplianceForecast[]> {
-    const response = await api.get<import('../types/training').ComplianceForecast[]>('/training/reports/compliance-forecast');
+    const response = await api.get<import('../types/training').ComplianceForecast[]>(
+      '/training/reports/compliance-forecast'
+    );
     return response.data;
   },
 };
@@ -1358,16 +1562,25 @@ export interface TrainingAttachment {
 
 export const documentService = {
   async getRecordAttachments(recordId: string): Promise<{ record_id: string; attachments: TrainingAttachment[] }> {
-    const response = await api.get<{ record_id: string; attachments: TrainingAttachment[] }>(`/training/records/${recordId}/attachments`);
+    const response = await api.get<{ record_id: string; attachments: TrainingAttachment[] }>(
+      `/training/records/${recordId}/attachments`
+    );
     return response.data;
   },
 
-  async uploadAttachment(recordId: string, file: File): Promise<{ record_id: string; attachments: TrainingAttachment[] }> {
+  async uploadAttachment(
+    recordId: string,
+    file: File
+  ): Promise<{ record_id: string; attachments: TrainingAttachment[] }> {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post<{ record_id: string; attachments: TrainingAttachment[] }>(`/training/records/${recordId}/attachments`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await api.post<{ record_id: string; attachments: TrainingAttachment[] }>(
+      `/training/records/${recordId}/attachments`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
     return response.data;
   },
 
@@ -1387,41 +1600,64 @@ export const complianceOfficerService = {
     return response.data;
   },
 
-  async createAttestation(data: import('../types/training').AttestationCreate): Promise<import('../types/training').ComplianceAttestation> {
-    const response = await api.post<import('../types/training').ComplianceAttestation>('/compliance/attestations', data);
+  async createAttestation(
+    data: import('../types/training').AttestationCreate
+  ): Promise<import('../types/training').ComplianceAttestation> {
+    const response = await api.post<import('../types/training').ComplianceAttestation>(
+      '/compliance/attestations',
+      data
+    );
     return response.data;
   },
 
   async getAttestations(limit = 20): Promise<import('../types/training').ComplianceAttestation[]> {
-    const response = await api.get<import('../types/training').ComplianceAttestation[]>('/compliance/attestations', { params: { limit } });
+    const response = await api.get<import('../types/training').ComplianceAttestation[]>('/compliance/attestations', {
+      params: { limit },
+    });
     return response.data;
   },
 
   async getAnnualReport(year: number): Promise<import('../types/training').AnnualComplianceReport> {
-    const response = await api.get<import('../types/training').AnnualComplianceReport>('/compliance/annual-report', { params: { year } });
+    const response = await api.get<import('../types/training').AnnualComplianceReport>('/compliance/annual-report', {
+      params: { year },
+    });
     return response.data;
   },
 
   async exportAnnualReport(year: number): Promise<Blob> {
-    const response = await api.post('/compliance/annual-report/export', { year, format: 'csv' }, { responseType: 'blob' });
+    const response = await api.post(
+      '/compliance/annual-report/export',
+      { year, format: 'csv' },
+      { responseType: 'blob' }
+    );
     return response.data as Blob;
   },
 
-  async getRecordCompleteness(startDate?: string, endDate?: string): Promise<import('../types/training').RecordCompleteness> {
+  async getRecordCompleteness(
+    startDate?: string,
+    endDate?: string
+  ): Promise<import('../types/training').RecordCompleteness> {
     const params: Record<string, string> = {};
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
-    const response = await api.get<import('../types/training').RecordCompleteness>('/compliance/record-completeness', { params });
+    const response = await api.get<import('../types/training').RecordCompleteness>('/compliance/record-completeness', {
+      params,
+    });
     return response.data;
   },
 
   async getIncompleteRecords(limit = 50): Promise<import('../types/training').IncompleteRecord[]> {
-    const response = await api.get<import('../types/training').IncompleteRecord[]>('/compliance/incomplete-records', { params: { limit } });
+    const response = await api.get<import('../types/training').IncompleteRecord[]>('/compliance/incomplete-records', {
+      params: { limit },
+    });
     return response.data;
   },
 
   async getContributedHours(year: number): Promise<import('../types/training').ContributedHoursResponse> {
-    const response = await api.get<import('../types/training').ContributedHoursResponse>('/compliance/contributed-hours', { params: { year } });
+    const response = await api.get<import('../types/training').ContributedHoursResponse>(
+      '/compliance/contributed-hours',
+      { params: { year } }
+    );
     return response.data;
   },
 };
@@ -1436,28 +1672,45 @@ export const complianceConfigService = {
     return response.data;
   },
 
-  async updateConfig(data: import('../types/training').ComplianceConfigUpdate): Promise<import('../types/training').ComplianceConfigData> {
+  async updateConfig(
+    data: import('../types/training').ComplianceConfigUpdate
+  ): Promise<import('../types/training').ComplianceConfigData> {
     const response = await api.put<import('../types/training').ComplianceConfigData>('/compliance/config', data);
     return response.data;
   },
 
-  async initializeConfig(data: import('../types/training').ComplianceConfigUpdate): Promise<import('../types/training').ComplianceConfigData> {
-    const response = await api.post<import('../types/training').ComplianceConfigData>('/compliance/config/initialize', data);
+  async initializeConfig(
+    data: import('../types/training').ComplianceConfigUpdate
+  ): Promise<import('../types/training').ComplianceConfigData> {
+    const response = await api.post<import('../types/training').ComplianceConfigData>(
+      '/compliance/config/initialize',
+      data
+    );
     return response.data;
   },
 
   async getAvailableRequirements(): Promise<{ requirements: import('../types/training').AvailableRequirement[] }> {
-    const response = await api.get<{ requirements: import('../types/training').AvailableRequirement[] }>('/compliance/config/requirements');
+    const response = await api.get<{ requirements: import('../types/training').AvailableRequirement[] }>(
+      '/compliance/config/requirements'
+    );
     return response.data;
   },
 
-  async createProfile(data: import('../types/training').ComplianceProfileCreate): Promise<import('../types/training').ComplianceProfile> {
+  async createProfile(
+    data: import('../types/training').ComplianceProfileCreate
+  ): Promise<import('../types/training').ComplianceProfile> {
     const response = await api.post<import('../types/training').ComplianceProfile>('/compliance/config/profiles', data);
     return response.data;
   },
 
-  async updateProfile(profileId: string, data: import('../types/training').ComplianceProfileUpdate): Promise<import('../types/training').ComplianceProfile> {
-    const response = await api.put<import('../types/training').ComplianceProfile>(`/compliance/config/profiles/${profileId}`, data);
+  async updateProfile(
+    profileId: string,
+    data: import('../types/training').ComplianceProfileUpdate
+  ): Promise<import('../types/training').ComplianceProfile> {
+    const response = await api.put<import('../types/training').ComplianceProfile>(
+      `/compliance/config/profiles/${profileId}`,
+      data
+    );
     return response.data;
   },
 
@@ -1465,18 +1718,33 @@ export const complianceConfigService = {
     await api.delete(`/compliance/config/profiles/${profileId}`);
   },
 
-  async generateReport(data: import('../types/training').ComplianceReportGenerate): Promise<import('../types/training').ComplianceReportDetail> {
-    const response = await api.post<import('../types/training').ComplianceReportDetail>('/compliance/reports/generate', data);
+  async generateReport(
+    data: import('../types/training').ComplianceReportGenerate
+  ): Promise<import('../types/training').ComplianceReportDetail> {
+    const response = await api.post<import('../types/training').ComplianceReportDetail>(
+      '/compliance/reports/generate',
+      data
+    );
     return response.data;
   },
 
-  async listReports(params?: { report_type?: string; year?: number; limit?: number; offset?: number }): Promise<{ reports: import('../types/training').ComplianceReportSummary[]; total: number }> {
-    const response = await api.get<{ reports: import('../types/training').ComplianceReportSummary[]; total: number }>('/compliance/reports', { params });
+  async listReports(params?: {
+    report_type?: string;
+    year?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ reports: import('../types/training').ComplianceReportSummary[]; total: number }> {
+    const response = await api.get<{ reports: import('../types/training').ComplianceReportSummary[]; total: number }>(
+      '/compliance/reports',
+      { params }
+    );
     return response.data;
   },
 
   async getReport(reportId: string): Promise<import('../types/training').ComplianceReportDetail> {
-    const response = await api.get<import('../types/training').ComplianceReportDetail>(`/compliance/reports/${reportId}`);
+    const response = await api.get<import('../types/training').ComplianceReportDetail>(
+      `/compliance/reports/${reportId}`
+    );
     return response.data;
   },
 
@@ -1489,7 +1757,6 @@ export const complianceConfigService = {
   },
 };
 
-
 // ============================================
 // Multi-Class Courses: Syllabus & Cohorts
 // ============================================
@@ -1500,29 +1767,17 @@ export const complianceConfigService = {
  */
 export const courseSyllabusService = {
   async getClasses(courseId: string): Promise<CourseClass[]> {
-    const response = await api.get<CourseClass[]>(
-      `/training/courses/${courseId}/classes`,
-    );
-    return response.data;
+    const response = await api.get<CourseClass[]>(`/training/courses/${courseId}/classes`);
+    return asArray(response.data);
   },
 
   async addClass(courseId: string, data: CourseClassCreate): Promise<CourseClass> {
-    const response = await api.post<CourseClass>(
-      `/training/courses/${courseId}/classes`,
-      data,
-    );
+    const response = await api.post<CourseClass>(`/training/courses/${courseId}/classes`, data);
     return response.data;
   },
 
-  async updateClass(
-    courseId: string,
-    classId: string,
-    updates: CourseClassUpdate,
-  ): Promise<CourseClass> {
-    const response = await api.patch<CourseClass>(
-      `/training/courses/${courseId}/classes/${classId}`,
-      updates,
-    );
+  async updateClass(courseId: string, classId: string, updates: CourseClassUpdate): Promise<CourseClass> {
+    const response = await api.patch<CourseClass>(`/training/courses/${courseId}/classes/${classId}`, updates);
     return response.data;
   },
 
@@ -1531,57 +1786,40 @@ export const courseSyllabusService = {
   },
 
   async reorderClasses(courseId: string, classIds: string[]): Promise<CourseClass[]> {
-    const response = await api.post<CourseClass[]>(
-      `/training/courses/${courseId}/classes/reorder`,
-      { class_ids: classIds },
-    );
-    return response.data;
+    const response = await api.post<CourseClass[]>(`/training/courses/${courseId}/classes/reorder`, {
+      class_ids: classIds,
+    });
+    return asArray(response.data);
   },
 
   /** Recompute every class's day offset from a weekly meeting pattern. */
-  async autofillOffsets(
-    courseId: string,
-    data: CourseClassAutofill,
-  ): Promise<CourseClass[]> {
-    const response = await api.post<CourseClass[]>(
-      `/training/courses/${courseId}/classes/autofill`,
-      data,
-    );
-    return response.data;
+  async autofillOffsets(courseId: string, data: CourseClassAutofill): Promise<CourseClass[]> {
+    const response = await api.post<CourseClass[]>(`/training/courses/${courseId}/classes/autofill`, data);
+    return asArray(response.data);
   },
 };
 
 /** One scheduled run of a multi-class course, and its ongoing management. */
 export const courseCohortService = {
   /** Compute the dates a cohort would get — creates nothing. */
-  async previewSchedule(
-    data: CohortSchedulePreviewRequest,
-  ): Promise<CohortSchedulePreviewResponse> {
-    const response = await api.post<CohortSchedulePreviewResponse>(
-      '/training/cohorts/preview',
-      data,
-    );
+  async previewSchedule(data: CohortSchedulePreviewRequest): Promise<CohortSchedulePreviewResponse> {
+    const response = await api.post<CohortSchedulePreviewResponse>('/training/cohorts/preview', data);
     return response.data;
   },
 
-  async getCohorts(params?: {
-    course_id?: string;
-    status?: string;
-  }): Promise<CourseCohort[]> {
+  async getCohorts(params?: { course_id?: string; status?: string }): Promise<CourseCohort[]> {
     const response = await api.get<CourseCohort[]>('/training/cohorts', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /** Cohorts the signed-in member is on the roster for. */
   async getMyCohorts(): Promise<CourseCohort[]> {
     const response = await api.get<CourseCohort[]>('/training/cohorts/mine');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getCohort(cohortId: string): Promise<CourseCohortDetail> {
-    const response = await api.get<CourseCohortDetail>(
-      `/training/cohorts/${cohortId}`,
-    );
+    const response = await api.get<CourseCohortDetail>(`/training/cohorts/${cohortId}`);
     return response.data;
   },
 
@@ -1590,87 +1828,51 @@ export const courseCohortService = {
     return response.data;
   },
 
-  async updateCohort(
-    cohortId: string,
-    updates: CourseCohortUpdate,
-  ): Promise<CourseCohort> {
-    const response = await api.patch<CourseCohort>(
-      `/training/cohorts/${cohortId}`,
-      updates,
-    );
+  async updateCohort(cohortId: string, updates: CourseCohortUpdate): Promise<CourseCohort> {
+    const response = await api.patch<CourseCohort>(`/training/cohorts/${cohortId}`, updates);
     return response.data;
   },
 
   /** Create events for classes that have none. Safe to run repeatedly. */
   async regenerate(cohortId: string): Promise<CohortOperationResult> {
-    const response = await api.post<CohortOperationResult>(
-      `/training/cohorts/${cohortId}/regenerate`,
-    );
+    const response = await api.post<CohortOperationResult>(`/training/cohorts/${cohortId}/regenerate`);
     return response.data;
   },
 
-  async shiftClasses(
-    cohortId: string,
-    data: CohortShiftRequest,
-  ): Promise<CohortOperationResult> {
-    const response = await api.post<CohortOperationResult>(
-      `/training/cohorts/${cohortId}/shift`,
-      data,
-    );
+  async shiftClasses(cohortId: string, data: CohortShiftRequest): Promise<CohortOperationResult> {
+    const response = await api.post<CohortOperationResult>(`/training/cohorts/${cohortId}/shift`, data);
     return response.data;
   },
 
   async cancelCohort(cohortId: string, reason: string): Promise<CourseCohort> {
-    const response = await api.post<CourseCohort>(
-      `/training/cohorts/${cohortId}/cancel`,
-      { reason },
-    );
+    const response = await api.post<CourseCohort>(`/training/cohorts/${cohortId}/cancel`, { reason });
     return response.data;
   },
 
-  async addClass(
-    cohortId: string,
-    data: CohortAdHocClassCreate,
-  ): Promise<CourseCohortClass> {
-    const response = await api.post<CourseCohortClass>(
-      `/training/cohorts/${cohortId}/classes`,
-      data,
-    );
+  async addClass(cohortId: string, data: CohortAdHocClassCreate): Promise<CourseCohortClass> {
+    const response = await api.post<CourseCohortClass>(`/training/cohorts/${cohortId}/classes`, data);
     return response.data;
   },
 
   async rescheduleClass(
     cohortId: string,
     cohortClassId: string,
-    data: CohortClassReschedule,
+    data: CohortClassReschedule
   ): Promise<CourseCohortClass> {
-    const response = await api.patch<CourseCohortClass>(
-      `/training/cohorts/${cohortId}/classes/${cohortClassId}`,
-      data,
-    );
+    const response = await api.patch<CourseCohortClass>(`/training/cohorts/${cohortId}/classes/${cohortClassId}`, data);
     return response.data;
   },
 
-  async cancelClass(
-    cohortId: string,
-    cohortClassId: string,
-    reason: string,
-  ): Promise<CourseCohortClass> {
+  async cancelClass(cohortId: string, cohortClassId: string, reason: string): Promise<CourseCohortClass> {
     const response = await api.post<CourseCohortClass>(
       `/training/cohorts/${cohortId}/classes/${cohortClassId}/cancel`,
-      { reason },
+      { reason }
     );
     return response.data;
   },
 
-  async addMembers(
-    cohortId: string,
-    data: CohortMemberAdd,
-  ): Promise<CohortOperationResult> {
-    const response = await api.post<CohortOperationResult>(
-      `/training/cohorts/${cohortId}/members`,
-      data,
-    );
+  async addMembers(cohortId: string, data: CohortMemberAdd): Promise<CohortOperationResult> {
+    const response = await api.post<CohortOperationResult>(`/training/cohorts/${cohortId}/members`, data);
     return response.data;
   },
 

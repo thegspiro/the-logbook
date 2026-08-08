@@ -15,6 +15,7 @@ import type {
   AdminHoursActiveSessionAdmin,
   AdminHoursSummary,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 interface AdminHoursState {
   // Categories
@@ -213,7 +214,14 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
     set({ entriesLoading: true, error: null });
     try {
       const result = await adminHoursEntryService.listMy(params);
-      set({ myEntries: result.entries, myEntriesTotal: result.total, entriesLoading: false });
+      // Envelope response: the array sits below the top level, out of reach
+      // of the service-boundary asArray guard, and the page reads .length
+      // off it unchecked.
+      set({
+        myEntries: asArray(result.entries),
+        myEntriesTotal: result.total ?? 0,
+        entriesLoading: false,
+      });
     } catch (error) {
       set({
         error: handleStoreError(error, 'Failed to load entries'),
@@ -226,7 +234,11 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
     set({ entriesLoading: true, error: null });
     try {
       const result = await adminHoursEntryService.listAll(params);
-      set({ allEntries: result.entries, allEntriesTotal: result.total, entriesLoading: false });
+      set({
+        allEntries: asArray(result.entries),
+        allEntriesTotal: result.total ?? 0,
+        entriesLoading: false,
+      });
     } catch (error) {
       set({
         error: handleStoreError(error, 'Failed to load entries'),
