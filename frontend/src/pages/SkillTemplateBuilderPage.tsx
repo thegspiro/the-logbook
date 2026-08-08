@@ -21,9 +21,32 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
-import { trainingProgramService } from '../services/api';
-import type { TrainingRequirementEnhanced } from '../types/training';
-import type { SkillTemplateSectionCreate, SkillCriterionCreate, CriterionType } from '../types/skillsTesting';
+import { trainingProgramService, trainingModuleConfigService, roleService } from '../services/api';
+import type { TrainingRequirementEnhanced, TrainingModuleConfig as TMConfig } from '../types/training';
+import type { Role } from '../types/role';
+import type {
+  SkillTemplateSectionCreate,
+  SkillCriterionCreate,
+  CriterionType,
+  ResultDisclosure,
+  ResultRelease,
+} from '../types/skillsTesting';
+
+/** Empty value means "inherit"; the label names what that resolves to. */
+const DISCLOSURE_CHOICES = [
+  { value: 'full', label: 'Full results — scores and examiner notes' },
+  { value: 'scores', label: 'Scores only — pass/fail and points, no written notes' },
+  { value: 'none', label: 'Nothing — results are never shown to the member' },
+];
+
+const RELEASE_CHOICES = [
+  { value: 'on_completion', label: 'As soon as the examiner submits' },
+  { value: 'on_release', label: 'Only after an officer releases the result' },
+];
+
+function labelFor(choices: { value: string; label: string }[], value: string | undefined): string {
+  return choices.find((c) => c.value === value)?.label ?? value ?? 'not set';
+}
 
 // ==================== Helpers ====================
 
@@ -376,6 +399,13 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   const [tags, setTags] = useState('');
   const [requirementId, setRequirementId] = useState<string>('');
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
+  // '' means "inherit the department default" — the column is nullable, and an
+  // empty select value maps back to null on save.
+  const [resultDisclosure, setResultDisclosure] = useState<string>('');
+  const [resultRelease, setResultRelease] = useState<string>('');
+  const [viewerPositions, setViewerPositions] = useState<string[]>([]);
+  const [positions, setPositions] = useState<Role[]>([]);
+  const [orgConfig, setOrgConfig] = useState<TMConfig | null>(null);
   const [sections, setSections] = useState<LocalSection[]>([createEmptySection(0)]);
   const [isSaving, setIsSaving] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -387,6 +417,27 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         setRequirements(await trainingProgramService.getRequirementsEnhanced());
       } catch {
         // Non-fatal — the requirement link is optional.
+      }
+    })();
+  }, []);
+
+  // Corporate positions for the extra-viewer grants, and the department's
+  // disclosure defaults so "Inherit" can say what it actually resolves to.
+  // Both are non-fatal: the disclosure block still works without them, it just
+  // cannot name the inherited value or offer a position list.
+  useEffect(() => {
+    void (async () => {
+      try {
+        setPositions(await roleService.getRoles());
+      } catch {
+        // Non-fatal — position grants are optional.
+      }
+    })();
+    void (async () => {
+      try {
+        setOrgConfig(await trainingModuleConfigService.getConfig());
+      } catch {
+        // Non-fatal — only affects the wording of the inherit options.
       }
     })();
   }, []);
@@ -412,6 +463,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       setPassingPercentage(currentTemplate.passing_percentage ?? undefined);
       setRequireAllCritical(currentTemplate.require_all_critical);
       setRequirementId(currentTemplate.requirement_id ?? '');
+      setResultDisclosure(currentTemplate.result_disclosure ?? '');
+      setResultRelease(currentTemplate.result_release ?? '');
+      setViewerPositions(currentTemplate.result_viewer_positions ?? []);
       setTags((currentTemplate.tags ?? []).join(', '));
       setSections(
         currentTemplate.sections.map((s) => ({
@@ -491,6 +545,12 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       passing_percentage: passingPercentage,
       require_all_critical: requireAllCritical,
       requirement_id: requirementId || undefined,
+      // null, not undefined: undefined is dropped by exclude_unset on the
+      // backend, so clearing an override back to "inherit" would silently keep
+      // the old value. null is an explicit "unset this".
+      result_disclosure: (resultDisclosure || null) as ResultDisclosure | null,
+      result_release: (resultRelease || null) as ResultRelease | null,
+      result_viewer_positions: viewerPositions.length > 0 ? viewerPositions : null,
       tags: parsedTags.length > 0 ? parsedTags : undefined,
       sections: sections.map((s, si) => ({
         name: s.name.trim(),
@@ -519,6 +579,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     passingPercentage,
     requireAllCritical,
     requirementId,
+    resultDisclosure,
+    resultRelease,
+    viewerPositions,
     tags,
     sections,
   ]);
@@ -728,6 +791,108 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 candidate. Individual tests can override this.
               </p>
             </div>
+            {/* Result disclosure — a per-template override of the department
+                default. Left on "Inherit", a template follows whatever the
+                organization is set to, so most templates need nothing here;
+                the labels name the inherited value so an officer can see what
+                that means without leaving the page. */}
+            <div className="md:col-span-2">
+              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+                <p className="text-theme-text-primary text-sm font-medium">Result Disclosure</p>
+                <p className="text-theme-text-muted mt-0.5 mb-3 text-xs">
+                  What the person tested sees of their own result, and when. Officers always see everything. Individual
+                  tests can override this again.
+                </p>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="template-result-disclosure"
+                      className="text-theme-text-muted mb-1 block text-xs font-medium"
+                    >
+                      What the member sees
+                    </label>
+                    <select
+                      id="template-result-disclosure"
+                      value={resultDisclosure}
+                      onChange={(e) => setResultDisclosure(e.target.value)}
+                      className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    >
+                      <option value="">
+                        Inherit — {labelFor(DISCLOSURE_CHOICES, orgConfig?.skills_result_disclosure ?? 'full')}
+                      </option>
+                      {DISCLOSURE_CHOICES.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Nothing to time when results are never shown. */}
+                  {resultDisclosure !== 'none' && (
+                    <div>
+                      <label
+                        htmlFor="template-result-release"
+                        className="text-theme-text-muted mb-1 block text-xs font-medium"
+                      >
+                        When they see it
+                      </label>
+                      <select
+                        id="template-result-release"
+                        value={resultRelease}
+                        onChange={(e) => setResultRelease(e.target.value)}
+                        className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                      >
+                        <option value="">
+                          Inherit — {labelFor(RELEASE_CHOICES, orgConfig?.skills_result_release ?? 'on_completion')}
+                        </option>
+                        {RELEASE_CHOICES.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {positions.length > 0 && (
+                  <fieldset className="mt-4">
+                    <legend className="text-theme-text-muted mb-1 block text-xs font-medium">
+                      Also visible to these positions (optional)
+                    </legend>
+                    <p className="text-theme-text-muted mb-2 text-xs">
+                      Holders of the selected positions can see results of tests built from this template, at the same
+                      level the member sees them — never more.
+                    </p>
+                    <div className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2">
+                      {positions.map((position) => (
+                        <label
+                          key={position.id}
+                          className="hover:bg-theme-surface-hover mobile-touch-target flex cursor-pointer items-center gap-2 rounded-md px-2 py-1"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={viewerPositions.includes(position.slug)}
+                            onChange={(e) =>
+                              setViewerPositions((current) =>
+                                e.target.checked
+                                  ? [...current, position.slug]
+                                  : current.filter((slug) => slug !== position.slug)
+                              )
+                            }
+                            className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
+                          />
+                          <span className="text-theme-text-primary text-sm">{position.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
+              </div>
+            </div>
+
             <div className="md:col-span-2">
               <label className="text-theme-text-muted mb-1 block text-sm font-medium">Description</label>
               <textarea
