@@ -99,6 +99,22 @@ const EMPTY_STATE =
  */
 const CRASHED = /Oops! Something went wrong|Show error details/i;
 
+/**
+ * Pages that render an in-page error instead of content — a print view opened
+ * without the record id it expects, a detail page whose id does not resolve.
+ * Like a crash this screenshots as a normal page and reads as a broken feature,
+ * and unlike an empty state it is the shot's own fault: the manifest sent the
+ * page somewhere it cannot render. Failing the shot is what surfaces that.
+ */
+const PAGE_ERROR =
+  /no [a-z ]{2,30} (id )?provided|failed to load|could not be loaded|unable to load|invalid (id|request)/i;
+
+async function detectPageError(page) {
+  const text = await pageText(page);
+  const match = text.match(PAGE_ERROR);
+  return match ? match[0].trim() : null;
+}
+
 async function pageText(page) {
   return page
     .locator("main, body")
@@ -200,6 +216,10 @@ async function main() {
         : await detectEmptyState(page);
       if (await detectCrash(page)) {
         throw new Error("page hit the ErrorBoundary — the app crashed here");
+      }
+      const pageError = await detectPageError(page);
+      if (pageError) {
+        throw new Error(`page rendered an error: "${pageError}"`);
       }
       results.push({
         id: shot.id,

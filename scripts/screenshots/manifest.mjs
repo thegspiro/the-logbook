@@ -106,6 +106,40 @@ export const isUpcoming = (event) => {
   return start > new Date().toISOString();
 };
 
+/**
+ * Re-open the current route with query parameters taken from an API record.
+ *
+ * The print views are addressed by query string rather than path — they read
+ * `?id=` and render "No member ID provided" without it. Same reasoning as
+ * openFirstFromApi: the id is minted per seed, so it has to be discovered at
+ * capture time.
+ */
+export function withQueryFromApi(apiPath, listKey, paramsFor) {
+  return async (page) => {
+    const records = await page.evaluate(
+      async ([path, key]) => {
+        const response = await fetch(`/api/v1${path}`, {
+          credentials: "include",
+        });
+        if (!response.ok) return [];
+        const body = await response.json();
+        return Array.isArray(body)
+          ? body
+          : body[key] || body.items || body.results || body.data || [];
+      },
+      [apiPath, listKey ?? ""],
+    );
+    if (!records.length) {
+      throw new Error(`withQueryFromApi: ${apiPath} returned no records`);
+    }
+    const url = new URL(page.url());
+    for (const [key, value] of Object.entries(paramsFor(records[0]))) {
+      if (value != null) url.searchParams.set(key, String(value));
+    }
+    await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  };
+}
+
 export const SHOTS = [
   // ── 00 Getting Started ──────────────────────────────────────────────
   {
@@ -1555,6 +1589,74 @@ export const SHOTS = [
     alt: "Training pipeline wizard with program details and phase list",
     route: "/training/programs",
     prepare: clickByName(/new pipeline/i),
+    fullPage: true,
+  },
+
+  // ── Sixth batch: print layouts and training history ────────────────
+  {
+    id: "02-62-print-member-history",
+    doc: "02-training.md",
+    line: 1541,
+    anchor:
+      "Screenshot of the printed Member Training History page showing the letter-size layout",
+    alt: "Print layout for a member training history",
+    // The print views take their subject from the query string and render
+    // "No member ID provided" without it.
+    route: "/training/print/member",
+    prepare: withQueryFromApi("/users?limit=1", "users", (record) => ({
+      id: record.id,
+      name: [record.first_name, record.last_name].filter(Boolean).join(" "),
+    })),
+    fullPage: true,
+  },
+  {
+    id: "02-63-print-program",
+    doc: "02-training.md",
+    line: 1556,
+    anchor:
+      "Screenshot of the printed Training Program page showing the program header, phases",
+    alt: "Print layout for a training program with phases and requirements",
+    route: "/training/print/program",
+    prepare: withQueryFromApi(
+      "/training/programs/programs",
+      "programs",
+      (record) => ({ id: record.id }),
+    ),
+    fullPage: true,
+  },
+  {
+    id: "02-65-print-compliance",
+    doc: "02-training.md",
+    line: 1573,
+    anchor:
+      "Screenshot of the printed Compliance Matrix page showing the landscape grid with",
+    alt: "Print layout for the compliance matrix",
+    route: "/training/print/compliance",
+    fullPage: true,
+  },
+  {
+    id: "02-40-member-training-history",
+    doc: "02-training.md",
+    line: 947,
+    anchor:
+      "The Member Training History page showing the export period dropdown next to",
+    alt: "Member training history with the export period selector and download buttons",
+    route: "/members",
+    prepare: openFirstFromApi(
+      "/users?limit=1",
+      (id) => `/members/${id}/training`,
+      "users",
+    ),
+    fullPage: true,
+  },
+  {
+    id: "02-30-shift-reports",
+    doc: "02-training.md",
+    line: 742,
+    anchor:
+      "Screenshot of the Pending Review view showing report cards with checkboxes, the",
+    alt: "Shift reports pending review with selection controls",
+    route: "/training/shift-reports",
     fullPage: true,
   },
 ];
