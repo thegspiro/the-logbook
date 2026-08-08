@@ -45,7 +45,7 @@ from its open list.
 | B4 | facilities | FAC2 | ✅ (p1, p2) |
 | B5 | elections | ELEC2 | ✅ (p1, p2) |
 | B6 | meetings & minutes | MM2 | ✅ (p1, p2) |
-| B7 | equipment-check | EC2 | ⬜ |
+| B7 | equipment-check | EC2 | ✅ (p1, p2) |
 | B8 | documents | DOC2 | ⬜ |
 | B9 | membership pipeline | MP2 | ⬜ |
 | B10 | messaging & communications | MSG2 | ⬜ |
@@ -866,4 +866,24 @@ re-run unless directed).
   (`TestPublishMinutesExecutiveGuard`); 36 documents/minutes/org-scoping tests
   pass. Gate: flake8/black/tsc clean. See meetings-minutes.md → Pass 2. Next: B7
   equipment-check.
+- **B7 equipment-check ✅ (pass 2).** Re-verified pass-1 (EC-1…EC-11), then applied
+  the update-bypass lens to the template CRUD — create/clone validate the
+  apparatus in-org, the shared update `setattr` loop did not. **2 fixes applied:**
+  EC2-1 (MED read leak): `update_template` re-parented to a foreign `apparatus_id`
+  (exposed by `EquipmentCheckTemplateUpdate`, not in `PROTECTED_FIELDS`), and the
+  checklist/supply listings resolved it to an apparatus **name** via an unscoped
+  lookup — so another org's apparatus name read back. Fixed both layers (validate
+  the reassigned id via `is_in_org` + org-scope the two name lookups), and added
+  the missing `ValueError → 400` to the `update_template`/`update_item` endpoints
+  (latent 500, the MM-1 class). EC2-2 (MED cross-org **write**): `update_item`
+  re-parented via `compartment_id` with no check — and a check item is org-scoped
+  only via `compartment → template`, so a foreign `compartment_id` transfers the
+  item (with the caller's content) into another org's checklist. Fixed via the
+  org-scoped `_get_compartment`. **1 flagged:** EC2-3 (LOW: `inventory_item_id`/
+  `equipment_id`/`parent_compartment_id` on the same loops — dangling-only, not
+  projected, not org-moving; DiD sweep). EC-7 residual (submit on bare auth)
+  re-confirmed intra-org, left as the owner call. **8 tests added**
+  (`test_equipment_check_service.py`); 21 pass with org-scoping. Gate:
+  flake8/black/tsc clean; no frontend change. See equipment-check.md → Pass 2.
+  Next: B8 documents.
 </content>
