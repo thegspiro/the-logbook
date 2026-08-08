@@ -56,13 +56,20 @@ interface SkillsTestingState {
   duplicateTemplate: (id: string) => Promise<SkillTemplate>;
 
   // Test actions
-  loadTests: (params?: { status?: string; candidate_id?: string; template_id?: string }) => Promise<void>;
+  loadTests: (params?: {
+    status?: string;
+    candidate_id?: string;
+    template_id?: string;
+    include_practice?: boolean;
+  }) => Promise<void>;
   loadTest: (id: string) => Promise<void>;
   createTest: (data: SkillTestCreate) => Promise<SkillTest>;
   updateTest: (id: string, data: SkillTestUpdate) => Promise<SkillTest>;
   completeTest: (id: string) => Promise<SkillTest>;
   deleteTest: (id: string) => Promise<void>;
   discardPracticeTest: (id: string) => Promise<void>;
+  voidTest: (id: string, reason: string) => Promise<SkillTest>;
+  cancelTest: (id: string, reason?: string) => Promise<SkillTest>;
   emailTestResults: (id: string) => Promise<string>;
 
   // Active test session actions
@@ -72,7 +79,7 @@ interface SkillsTestingState {
     criterionId: string,
     result: Partial<CriterionResult>,
     sectionName?: string,
-    criterionLabel?: string,
+    criterionLabel?: string
   ) => void;
   setActiveTestTimer: (seconds: number) => void;
   setActiveTestRunning: (running: boolean) => void;
@@ -134,7 +141,16 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     set({ error: null });
     try {
       const template = await skillsTestingService.createTemplate(data);
-      set((state) => ({ templates: [{ ...template, section_count: template.sections.length, criteria_count: template.sections.reduce((sum, s) => sum + s.criteria.length, 0) }, ...state.templates] }));
+      set((state) => ({
+        templates: [
+          {
+            ...template,
+            section_count: template.sections.length,
+            criteria_count: template.sections.reduce((sum, s) => sum + s.criteria.length, 0),
+          },
+          ...state.templates,
+        ],
+      }));
       return template;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to create template');
@@ -297,10 +313,54 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     }
   },
 
+  voidTest: async (id: string, reason: string) => {
+    set({ error: null });
+    try {
+      const voided = await skillsTestingService.voidTest(id, reason);
+      // The row stays in the list — voiding withdraws a result, it does not
+      // remove the record — so patch it in place rather than filtering it out.
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.map((t: SkillTestListItem) =>
+          t.id === id ? { ...t, status: voided.status, voided_at: voided.voided_at } : t
+        ),
+        currentTest: state.currentTest?.id === id ? voided : state.currentTest,
+      }));
+      return voided;
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to void test');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
+  cancelTest: async (id: string, reason?: string) => {
+    set({ error: null });
+    try {
+      const cancelled = await skillsTestingService.cancelTest(id, reason);
+      // Like voiding, this closes a test out rather than removing it, so the
+      // row is patched in place.
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.map((t: SkillTestListItem) => (t.id === id ? { ...t, status: cancelled.status } : t)),
+        currentTest: state.currentTest?.id === id ? cancelled : state.currentTest,
+      }));
+      return cancelled;
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to cancel test');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
   // Active test session actions
   setActiveSectionIndex: (index: number) => set({ activeSectionIndex: index }),
 
-  updateCriterionResult: (sectionId: string, criterionId: string, result: Partial<CriterionResult>, sectionName?: string, criterionLabel?: string) => {
+  updateCriterionResult: (
+    sectionId: string,
+    criterionId: string,
+    result: Partial<CriterionResult>,
+    sectionName?: string,
+    criterionLabel?: string
+  ) => {
     const { currentTest } = get();
     if (!currentTest) return;
 
@@ -363,5 +423,6 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   // General
   clearError: () => set({ error: null }),
   clearCurrentTemplate: () => set({ currentTemplate: null }),
-  clearCurrentTest: () => set({ currentTest: null, activeTestTimer: 0, activeTestRunning: false, activeSectionIndex: 0 }),
+  clearCurrentTest: () =>
+    set({ currentTest: null, activeTestTimer: 0, activeTestRunning: false, activeSectionIndex: 0 }),
 }));

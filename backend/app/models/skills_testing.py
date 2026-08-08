@@ -48,6 +48,12 @@ class SkillTestStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    # An official result withdrawn after the fact. Official results are never
+    # deleted — they are evaluation records that a member's certification may
+    # rest on — so a mistaken or invalidated test is voided instead: the row
+    # survives with its reason and author, but stops counting toward stats and
+    # releases any pipeline requirement it had credited.
+    VOIDED = "voided"
 
 
 class SkillTestResult(str, enum.Enum):
@@ -177,6 +183,23 @@ class SkillTest(Base):
     result = Column(String(20), default="incomplete")
     is_practice = Column(Boolean, default=False)
 
+    # Frozen copy of the template as it stood when this test was created:
+    # {version, sections, passing_percentage, require_all_critical,
+    #  time_limit_seconds}.
+    #
+    # Criterion identity is positional ("criterion-{section}-{index}"), and
+    # updating a published template rewrites skill_templates.sections in place.
+    # Without this snapshot, inserting or deleting a criterion re-binds every
+    # historical result to different criteria — a recorded pass would display
+    # against whichever criterion later took that slot, and deleted criteria
+    # would drop recorded evidence off the scorecard entirely. Scoring rules are
+    # frozen alongside the structure so a result is never re-derived against a
+    # passing threshold that didn't apply at the time.
+    #
+    # Nullable for rows created before the column existed; readers fall back to
+    # the live template.
+    template_snapshot = Column(JSON, nullable=True)
+
     # Results — JSON array of SectionResult[] with nested CriterionResult[]
     section_results = Column(JSON, nullable=True)
     overall_score = Column(Float, nullable=True)
@@ -184,6 +207,16 @@ class SkillTest(Base):
 
     # Notes
     notes = Column(Text, nullable=True)
+
+    # Void trail — set only when an official result is withdrawn. SET NULL on the
+    # author (a departed officer must not erase the void record), so nullable.
+    voided_at = Column(DateTime(timezone=True), nullable=True)
+    voided_by = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    void_reason = Column(Text, nullable=True)
 
     # Timing
     started_at = Column(DateTime(timezone=True), nullable=True)
@@ -203,6 +236,9 @@ class SkillTest(Base):
     __table_args__ = (
         Index("idx_skill_test_org_status", "organization_id", "status"),
         Index("idx_skill_test_template_candidate", "template_id", "candidate_id"),
+        # Sweep index for the practice-attempt purge job, which scans by
+        # is_practice + age.
+        Index("idx_skill_test_practice_created", "is_practice", "created_at"),
     )
 
     def __repr__(self):

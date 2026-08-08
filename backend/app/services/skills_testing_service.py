@@ -12,7 +12,10 @@ pure-scoring path stays import-light.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import copy
+from datetime import datetime
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from loguru import logger
@@ -20,6 +23,70 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from app.models.skills_testing import SkillTemplate, SkillTest
+
+
+def build_template_snapshot(template: SkillTemplate) -> dict[str, Any]:
+    """Freeze the parts of a template a test must be scored and displayed against.
+
+    Deep-copied because ``sections`` is a JSON column: storing the live list
+    would leave the snapshot aliasing the template's own value, so a later edit
+    to that template would mutate the "frozen" copy too — exactly the bug this
+    exists to prevent (Pitfall #12).
+    """
+    return {
+        "version": template.version,
+        "sections": copy.deepcopy(template.sections or []),
+        "passing_percentage": template.passing_percentage,
+        "require_all_critical": template.require_all_critical,
+        "time_limit_seconds": template.time_limit_seconds,
+    }
+
+
+def resolve_test_template(
+    test: SkillTest, template: SkillTemplate | None
+) -> SimpleNamespace | SkillTemplate | None:
+    """The structure and scoring rules a given test must be judged by.
+
+    Prefers the test's own snapshot, so editing a published template never
+    re-scores or re-labels a test taken against the old one. Falls back to the
+    live template for rows created before snapshots existed and for any row the
+    backfill could not reach.
+    """
+    snapshot = getattr(test, "template_snapshot", None)
+    if not snapshot:
+        return template
+
+    return SimpleNamespace(
+        sections=snapshot.get("sections") or [],
+        passing_percentage=snapshot.get("passing_percentage"),
+        require_all_critical=snapshot.get("require_all_critical"),
+        time_limit_seconds=snapshot.get("time_limit_seconds"),
+        # Display name always comes from the live template — a renamed template
+        # is the same template, and the snapshot exists to freeze structure and
+        # scoring rules, not identity.
+        name=getattr(template, "name", None),
+    )
+
+
+def resolve_elapsed_seconds(
+    measured_seconds: int | None,
+    started_at: datetime | None,
+    completed_at: datetime | None,
+) -> int | None:
+    """How long the evaluation took, preferring the examiner's stopwatch.
+
+    The test screen runs a timer the examiner starts, pauses between attempts,
+    and stops while equipment resets; its reading is saved before the test is
+    completed. Wall clock (``completed_at - started_at``) measures the whole
+    sitting instead — a test begun at 09:00 and finished after lunch logged
+    seven hours — and time limits are pass/fail criteria here, so it is only a
+    fallback for tests completed without a measured value.
+    """
+    if measured_seconds is not None:
+        return measured_seconds
+    if started_at and completed_at:
+        return int((completed_at - started_at).total_seconds())
+    return None
 
 
 def calculate_test_result(
@@ -233,3 +300,79 @@ async def apply_test_pass_to_pipeline(
                 )
     except Exception as e:  # pragma: no cover - defensive
         logger.error(f"Failed to apply skills-test pipeline progress: {e}")
+
+
+async def revert_test_pass_from_pipeline(
+    db: AsyncSession,
+    candidate_id: str,
+    requirement_id: str,
+    organization_id: UUID,
+) -> None:
+    """Release the requirement a now-voided passing test had credited.
+
+    The mirror of :func:`apply_test_pass_to_pipeline`, run when an official pass
+    is voided. Without it a voided test leaves the candidate's enrollment
+    showing a satisfied requirement — and a phase possibly advanced — on the
+    strength of a result the department has withdrawn.
+
+    Only rows still sitting in a satisfied state are reverted, and they go back
+    to ``not_started`` (which clears ``completed_at`` and the rollup
+    percentage). A requirement a member has since re-earned by another route
+    reads as completed for that reason, not this test, but the two are
+    indistinguishable at this layer: ``RequirementProgress`` records the state,
+    not which artifact produced it. Reverting is the safe direction — an
+    officer re-verifies, whereas a silently retained pass is a credential the
+    member never earned. ``WAIVED`` is deliberately left alone: a waiver is an
+    officer's own decision, not something this test granted.
+
+    Runs after the void has committed; failures are logged, never surfaced,
+    since the void itself is already saved.
+    """
+    from sqlalchemy import select
+
+    from app.models.training import (
+        EnrollmentStatus,
+        ProgramEnrollment,
+        RequirementProgress,
+        RequirementProgressStatus,
+    )
+    from app.schemas.training_program import RequirementProgressUpdate
+    from app.services.training_program_service import TrainingProgramService
+
+    try:
+        rows = await db.execute(
+            select(RequirementProgress)
+            .join(
+                ProgramEnrollment,
+                RequirementProgress.enrollment_id == ProgramEnrollment.id,
+            )
+            .where(
+                ProgramEnrollment.user_id == str(candidate_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                RequirementProgress.requirement_id == str(requirement_id),
+                RequirementProgress.status.in_(
+                    [
+                        RequirementProgressStatus.COMPLETED,
+                        RequirementProgressStatus.VERIFIED,
+                    ]
+                ),
+            )
+        )
+        progress_rows = rows.scalars().all()
+        if not progress_rows:
+            return
+
+        service = TrainingProgramService(db)
+        for progress in progress_rows:
+            _, error = await service.update_requirement_progress(
+                progress_id=progress.id,
+                organization_id=organization_id,
+                updates=RequirementProgressUpdate(status="not_started"),
+            )
+            if error:
+                logger.error(
+                    f"Skills-test pipeline revert failed: candidate={candidate_id} "
+                    f"requirement={requirement_id}: {error}"
+                )
+    except Exception as e:  # pragma: no cover - defensive
+        logger.error(f"Failed to revert skills-test pipeline progress: {e}")

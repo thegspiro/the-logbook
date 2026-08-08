@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import ActiveSkillTestPage from './ActiveSkillTestPage';
 
@@ -43,7 +44,18 @@ const mockInProgressTest = {
   completed_at: undefined,
 };
 
-let currentMockTest: typeof mockCompletedTest | typeof mockInProgressTest | null = null;
+const mockInProgressPracticeTest = {
+  ...mockInProgressTest,
+  is_practice: true,
+};
+
+const mockCompletedPracticeTest = {
+  ...mockCompletedTest,
+  is_practice: true,
+};
+
+let currentMockTest: typeof mockCompletedTest | typeof mockInProgressTest | typeof mockInProgressPracticeTest | null =
+  null;
 
 vi.mock('../stores/skillsTestingStore', () => ({
   useSkillsTestingStore: Object.assign(
@@ -70,7 +82,7 @@ vi.mock('../stores/skillsTestingStore', () => ({
     }),
     {
       getState: () => ({ activeTestTimer: 0 }),
-    },
+    }
   ),
 }));
 
@@ -188,6 +200,55 @@ describe('ActiveSkillTestPage', () => {
       unmount();
 
       expect(mockClearCurrentTest).toHaveBeenCalledWith();
+    });
+  });
+
+  // Regression: "View Results" navigates from /test/:id/active to /test/:id,
+  // and both routes render THIS component, so react-router swaps the URL
+  // without remounting. The review screen is shown whenever `reviewing` is set
+  // and the results view is gated on `!reviewing`, so unless completing clears
+  // the flag the page re-renders the identical review screen and the button
+  // appears to do nothing at all.
+  describe('Practice: View Results', () => {
+    it('should show the results view after View Results is clicked', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockInProgressPracticeTest;
+
+      // Completing swaps the store's test for the scored one, as the real
+      // completeTest action does.
+      mockCompleteTest.mockImplementation(() => {
+        currentMockTest = mockCompletedPracticeTest;
+        return Promise.resolve(mockCompletedPracticeTest);
+      });
+      mockUpdateTest.mockResolvedValue(mockInProgressPracticeTest);
+
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /complete test/i }));
+
+      const viewResults = await screen.findByRole('button', { name: /view results/i });
+      await user.click(viewResults);
+
+      // The results view — not the review screen — must now be on screen.
+      expect(await screen.findByText('Practice Results')).toBeInTheDocument();
+      expect(screen.getByText('Passed')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /view results/i })).not.toBeInTheDocument();
+    });
+
+    it('should complete the test when View Results is clicked', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockInProgressPracticeTest;
+      mockCompleteTest.mockImplementation(() => {
+        currentMockTest = mockCompletedPracticeTest;
+        return Promise.resolve(mockCompletedPracticeTest);
+      });
+      mockUpdateTest.mockResolvedValue(mockInProgressPracticeTest);
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: /complete test/i }));
+      await user.click(await screen.findByRole('button', { name: /view results/i }));
+
+      await waitFor(() => expect(mockCompleteTest).toHaveBeenCalledWith('test-1'));
     });
   });
 });

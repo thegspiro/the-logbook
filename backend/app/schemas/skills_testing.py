@@ -181,6 +181,27 @@ class SkillTestUpdate(BaseModel):
     requirement_id: Optional[UUID] = None
 
 
+class SkillTestCancelRequest(BaseModel):
+    """Schema for cancelling a test abandoned before it was scored.
+
+    The reason is optional — unlike a void, a cancellation withdraws no result
+    and makes no claim about the candidate, so there is nothing a reader needs
+    explained. It is appended to the test's notes when given.
+    """
+
+    reason: Optional[str] = Field(None, max_length=1000)
+
+
+class SkillTestVoidRequest(BaseModel):
+    """Schema for voiding an official test result.
+
+    The reason is mandatory and non-trivial: a voided result stays visible in
+    the candidate's history, so the record has to say why it was withdrawn.
+    """
+
+    reason: str = Field(..., min_length=10, max_length=1000)
+
+
 class SkillTestResponse(UTCResponseBase):
     """Schema for full skill test response"""
 
@@ -202,10 +223,16 @@ class SkillTestResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
 
+    # Void trail — populated only when an official result has been withdrawn.
+    voided_at: Optional[datetime] = None
+    voided_by: Optional[UUID] = None
+    void_reason: Optional[str] = None
+
     # Denormalized display names (populated in endpoint)
     template_name: Optional[str] = None
     candidate_name: Optional[str] = None
     examiner_name: Optional[str] = None
+    voided_by_name: Optional[str] = None
 
     # Template structure for active test rendering
     template_sections: Optional[list] = None
@@ -231,6 +258,7 @@ class SkillTestListResponse(UTCResponseBase):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime
+    voided_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

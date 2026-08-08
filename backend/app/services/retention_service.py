@@ -21,6 +21,7 @@ attempts) are configured via environment settings, not org settings.
 """
 
 import copy
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -35,6 +36,7 @@ from app.models.error_log import ErrorLog
 from app.models.forms import FormSubmission
 from app.models.ip_security import BlockedAccessAttempt
 from app.models.notification import NotificationLog
+from app.models.skills_testing import SkillTest
 from app.models.user import Organization
 
 _DELETE_BATCH_SIZE = 1000
@@ -48,6 +50,11 @@ class RecordClass:
     timestamp_attr: str
     default_days: int | None  # None = keep forever unless the org opts in
     min_days: int  # floor a department cannot go below
+    # Narrows the sweep to a subset of the table, for classes that share a
+    # table with records this service must never touch. Receives the model and
+    # returns a SQLAlchemy criterion ANDed onto the expiry query. None sweeps
+    # every row, which is what a dedicated table wants.
+    row_filter: Callable[[type], Any] | None = None
 
 
 # Org-scoped record classes. Adding one here is the whole registration:
@@ -102,6 +109,23 @@ RECORD_CLASSES: list[RecordClass] = [
         timestamp_attr="submitted_at",
         default_days=None,
         min_days=90,
+    ),
+    RecordClass(
+        key="practice_skill_tests",
+        description=(
+            "Practice skills-test attempts — drill runs a member and a peer "
+            "examiner keep for their own review. They are never recorded "
+            "against the member, never counted in statistics, and never feed "
+            "the training pipeline, so they expire on a timer (1 year) rather "
+            "than being kept as records. Official results share this table and "
+            "are never swept: they are evaluation records, removable only by "
+            "voiding, which preserves the row."
+        ),
+        model=SkillTest,
+        timestamp_attr="created_at",
+        default_days=365,
+        min_days=30,
+        row_filter=lambda m: m.is_practice.is_(True),
     ),
 ]
 
@@ -162,7 +186,12 @@ class RetentionService:
     # ----- enforcement ---------------------------------------------------
 
     async def _delete_expired(
-        self, model: type, timestamp_attr: str, cutoff: datetime, org_id: str | None
+        self,
+        model: type,
+        timestamp_attr: str,
+        cutoff: datetime,
+        org_id: str | None,
+        row_filter: Callable[[type], Any] | None = None,
     ) -> int:
         """Batch-delete expired rows (bounded batches, like the original
         message-history cleanup, to avoid long table locks)."""
@@ -172,6 +201,8 @@ class RetentionService:
             query = select(model.id).where(ts_col < cutoff).limit(_DELETE_BATCH_SIZE)
             if org_id is not None:
                 query = query.where(model.organization_id == org_id)
+            if row_filter is not None:
+                query = query.where(row_filter(model))
             ids = (await self.db.execute(query)).scalars().all()
             if not ids:
                 break
@@ -209,6 +240,7 @@ class RetentionService:
                     rc.timestamp_attr,
                     now - timedelta(days=days),
                     org.id,
+                    rc.row_filter,
                 )
                 if deleted:
                     key = f"{org.id}:{rc.key}"
