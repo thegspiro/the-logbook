@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: ending an event now works, and drafts stay off public calendars (2026-08-08)
+
+**Fixed**
+
+- **Ending an in-progress event early returned a server error.** The event was
+  actually ended (members checked out, end time recorded), but the response failed
+  with a 500, making it look like the action didn't work. Ending an event now
+  completes cleanly.
+- **Unpublished draft events could appear on the public event calendar and the
+  public portal.** Draft events (community education, fundraisers, etc.) are meant
+  to stay hidden until published — they are now excluded from both public feeds.
+- **Recurring events now reject an invalid meeting location** instead of silently
+  saving the series with a location that doesn't belong to your department.
+
 ### Admin hours: bulk approval can no longer be used to approve your own hours (2026-08-08)
 
 **Fixed**

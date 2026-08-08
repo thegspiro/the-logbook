@@ -27,7 +27,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -733,7 +733,9 @@ async def get_public_calendar(
             Event.organization_id == organization_id,
             Event.event_type.in_(public_types),
             Event.start_datetime >= datetime.now(dt_timezone.utc),
-            Event.is_cancelled == False,  # noqa: E712
+            Event.is_cancelled.is_(False),
+            # Never surface unpublished drafts on the public calendar.
+            or_(Event.is_draft.is_(False), Event.is_draft.is_(None)),
         )
         .order_by(Event.start_datetime.asc())
         .limit(50)
@@ -1874,12 +1876,15 @@ async def end_event(
 
     await log_audit_event(
         db=db,
-        user_id=current_user.id,
-        action="event.ended",
-        resource_type="event",
-        resource_id=str(event_id),
-        organization_id=current_user.organization_id,
-        details={"checked_out_count": checked_out_count},
+        event_type="event_ended",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "checked_out_count": checked_out_count,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
     )
 
     return EndEventResponse(

@@ -1,6 +1,7 @@
-# Application Review — Events (Tier B, 2nd pass)
+# Application Review — Events (Tier B)
 
-**Prefix:** `EV2` · **Iteration:** B17 · **Reviewed:** 2026-08-06
+**Prefix:** `EV2` · **Iteration:** B17 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** `endpoints/events.py` (2,931 L, 53 endpoints), `endpoints/event_requests.py`
 (1,658 L, 18), `services/event_service.py` (3,097 L), model `models/event.py`
@@ -11,6 +12,64 @@ EV-5 (public-intake opt-in), EV-6 (RSVP to draft/past), EV-7 (rate-limit +
 TypeError) left open.
 
 ---
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified pass-1 (EV-1–4 solid; EV-6 rejects draft/past RSVPs; EV-7 coerces
+None context values). The six-lens sweep found **3 fixes** — one a live crash on a
+core action, one a public data leak, one a cross-org read-leak on the recurring
+path pass-1's non-recurring focus didn't cover.
+
+### EV-9 — MED — `end_event` 500'd on every call (wrong audit-log signature) — ✅ FIXED
+
+`log_audit_event(db, event_type, event_category, severity, event_data, **kwargs)`
+requires those four named args, but the `end_event` endpoint called it with the
+`action=`/`resource_type=`/`resource_id=`/`details=` shape (none of the four
+required params) → `TypeError` → uncaught `500`. This is the **only** audit call
+in `events.py` using that shape; every sibling (`event_created`/`_updated`/
+`_deleted`/`_checkin`) uses the correct one. Worse, `service.end_event` had
+**already committed** the actual-end-time + bulk-checkout before the audit call,
+so the event ended but the caller always got a 500. **Fix:** rewrite to the
+canonical shape (`event_type="event_ended"`, `event_category="events"`,
+`severity="info"`, `event_data={...}`, `user_id`, `username`).
+
+### EV-10 — LOW-MED — Unpublished draft events surfaced on public event feeds — ✅ FIXED
+
+`get_public_calendar` (unauthenticated, `events.py`) and the public-portal events
+query (`api/public/portal.py`) both filtered org + public types + future +
+not-cancelled but **not `is_draft`**, so a draft public_education/fundraiser event
+was visible to the public before publication — while the authenticated
+`list_events` excludes drafts by default. **Fix:** both queries now add the same
+draft filter the service's tested `list_events` uses —
+`or_(Event.is_draft.is_(False), Event.is_draft.is_(None))`. Swept the adjacent
+`is_cancelled == False  # noqa: E712` on the public calendar to `.is_(False)`.
+
+### EV-8 — MED — `create_recurring_event` stored a client `location_id` unvalidated → cross-org location leak — ✅ FIXED
+
+`create_event`, `update_event`, and (via the BXC sweep) `update_future_events` all
+validate `location_id` in-org before storing it; `create_recurring_event` spread
+it straight into every occurrence via `**event_data`. The occurrences are then
+re-queried with `selectinload(Event.location_obj)` and the response projects
+`location_obj.name`, so a foreign `location_id` leaked another org's location name
+on every occurrence — the exact BXC-1 class already fixed on the single-event
+paths. **Fix:** the same in-org `LocationService.get_location` guard before
+generating occurrences, returning `([], "Location not found")` per the method's
+error-tuple convention. (The double-booking parity check was intentionally left
+out — running it per-occurrence is a behavior change beyond closing the leak.) 1
+DB-free regression test (foreign location rejected).
+
+**Flagged (unchanged / new LOW):** EV-5 (public-intake opt-in + anti-spam) stands.
+New lower-priority items left for a hardening pass: recurring `template_id` stored
+unvalidated (dangling, not projected — no read-back leak); `EventUpdate.attachments`
+is a free-form list written by the blind setattr loop and the attachment-download
+guard checks the base upload dir but not the org subdir (not exploitable — files
+use unguessable uuid4 names — but the guard should be org-scoped);
+`get_check_in_monitoring_stats` fetches the event by id then compares org in Python
+(fail-closed, but deviates from the scope-in-SQL standard). All recorded here.
+
+---
+
+## Pass 1 (2026-08-06)
 
 ## Scope
 

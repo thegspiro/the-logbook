@@ -54,8 +54,8 @@ from its open list.
 | B13 | forms | FORM2 | ✅ |
 | B14 | grants & fundraising | GF2 | ✅ (p1, p2) |
 | B15 | admin-hours | AH2 | ✅ (p1, p2) |
-| B16 | reports & analytics | RPT2 | ⬜ |
-| B17 | events | EV2 | ⬜ |
+| B16 | reports & analytics | RPT2 | ✅ (p1, p2) |
+| B17 | events | EV2 | ✅ (p1, p2) |
 | B18 | training | TR2 | ⬜ |
 | B19 | scheduling | SCH2 | ⬜ |
 | B20 | finance | FIN2 | ⬜ |
@@ -1033,4 +1033,37 @@ re-run unless directed).
   robustness nit, module-doc only). **2 regression tests** (mixed batch skips self;
   all-self approves nothing). flake8/black clean. User-visible SoD fix in CHANGELOG.
   See admin-hours.md → Pass 2. Next: B16 reports & analytics.
+- **B16 reports & analytics ✅ (pass 2) — clean-module verification, no code
+  change.** Re-verified pass-1 (RPT-1 per-org scoping, RPT-4 str-consistent org
+  compare, RPT-5a/b correctness). The six-lens sweep confirmed the module is clean
+  of cross-tenant leak / IDOR / update-bypass / cross-org write — the dominant
+  reporting risk: every by-id/IN read resolves through an org-scoped anchor,
+  `SavedReportUpdate` exposes no tenancy field, `*_name` all have fallbacks. **3
+  flagged, none a drive-by:** RPT-3 (PII at `reports.view` — permission-granularity
+  product decision, KNOWN_LIMITATIONS), RPT-6 (LOW: `requirement_breakdown`
+  completion % can exceed 100% under shared-requirement + double-enrollment;
+  mechanical distinct-user fix risks skewing the common case, so flagged), RPT-7
+  (LOW: `/generate`+`/run` lack the `except ValueError→400` wrapper, but no
+  generator raises deterministically — robustness sweep). No code changed. See
+  reports-analytics.md → Pass 2. Next: B17 events.
+- **B17 events ✅ (pass 2).** Re-verified pass-1 (EV-1–4, EV-6 draft/past RSVP,
+  EV-7 None-coercion). The six-lens sweep found **3 fixes:** **EV-9** (MED: the
+  `end_event` endpoint called `log_audit_event` with the wrong signature —
+  `action=`/`resource_type=` instead of the required `event_type`/`event_category`/
+  `severity`/`event_data` — → TypeError → 500 on *every* end-event, after the event
+  had already committed its end + bulk-checkout; rewrote to the canonical shape used
+  by every sibling audit call), **EV-10** (LOW-MED public leak: `get_public_calendar`
+  and the public-portal events query omitted the `is_draft` filter, so unpublished
+  drafts showed on public feeds; added `or_(is_draft.is_(False), is_(None))` matching
+  the tested `list_events` filter; swept an adjacent E712), **EV-8** (MED cross-org
+  read-leak: `create_recurring_event` stored a client `location_id` unvalidated and
+  the response projects `location_obj.name` on every occurrence — the BXC-1 class
+  already closed on the single-event paths; added the same in-org
+  `LocationService.get_location` guard). Lower-priority items (recurring
+  `template_id` dangling, `attachments` blind-write + non-org-scoped download-dir
+  guard, monitoring-stats by-id scope-in-Python) flagged in events.md. **1 DB-free
+  regression test** (recurring foreign-location rejected); the audit + draft-filter
+  fixes are endpoint-query changes mirroring tested patterns (no-MySQL sandbox).
+  flake8/black clean. User-visible fixes in CHANGELOG (end-event 500, public drafts,
+  recurring location). See events.md → Pass 2. Next: B18 training.
 </content>

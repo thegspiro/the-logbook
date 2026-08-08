@@ -2482,6 +2482,17 @@ class EventService:
             start = event_data["start_datetime"]
             recurrence_end_date = start.replace(year=start.year + 1)
 
+        # Validate the client-supplied location belongs to the caller's org
+        # (same guard as create_event): without it a foreign location_id is
+        # stored on every occurrence and leaks that org's location name back
+        # through the eager-loaded relationship in the response.
+        if event_data.get("location_id"):
+            location_service = LocationService(self.db)
+            if not await location_service.get_location(
+                event_data["location_id"], str(organization_id)
+            ):
+                return [], "Location not found"
+
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(
             start_datetime=event_data["start_datetime"],
