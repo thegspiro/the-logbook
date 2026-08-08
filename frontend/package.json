@@ -19,7 +19,8 @@
     "validate:onboarding": "npm run typecheck && eslint src/modules/onboarding",
     "precommit": "npm run validate",
     "generate:pwa-assets": "node scripts/generate-pwa-assets.mjs",
-    "generate:screenshots": "playwright test --project=chromium --grep @screenshots"
+    "generate:screenshots": "playwright test --project=chromium --grep @screenshots",
+    "test:mobile": "playwright test --project=chromium src/e2e/mobile-presentation.spec.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
