@@ -1,6 +1,30 @@
 # Application Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** A2 · **Reviewed:** 2026-08-05
+**Prefix:** `AUTH` · **Iteration:** A2 · **Reviewed:** 2026-08-05 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep — no code change
+
+Re-verified this heavily-hardened surface: **every pass-1 fix holds** — M1
+forced-Secure cookies, M2 refresh grace window, M3 dummy-verify on all three
+enumeration branches (incl. the locked-account path), H3 TOTP replay + lockout,
+H5/AXC-1 `get_client_ip` everywhere (no `request.client.host`), AUTH-1 (session
+rows + login/reset audits use `get_client_ip`), AUTH-2 (SMS gated on consent, email
+unconditional), SHA-256 reset tokens, JWT `algorithms=["HS256"]` + `require:["exp"]`,
+`compare_digest` on OAuth state / TOTP / recovery codes. The six lenses found **no
+verified bug**: no blind `setattr` onto a protected field, no cross-user/cross-org
+write by id (logout/consent/MFA all self-scoped), no enumeration branch skipping
+dummy-verify, no rate-limit-skipping credential path, no unguarded token-parse → 500.
+
+**2 informational flags (not fixes):** `oauth_service._link_existing_user` picks the
+oldest org via `order_by(created_at)` without an `active` filter (single-org-benign;
+would only mis-scope if the oldest org were deactivated while a newer active one
+existed) and `forgot_password` constructs `AuthSettings(**org_settings["auth"])`
+with no try/except (a malformed *admin-written* config could 500 a public endpoint,
+but `extra="ignore"` means extra keys don't raise — availability-only, not
+attacker-controllable). **No code changed** — the verifications are the deliverable.
+
+---
 
 **Backend:** `app/api/v1/endpoints/auth.py` (1405 L, 25 endpoints),
 `app/services/auth_service.py` (970 L), `app/services/mfa_service.py` (121 L),

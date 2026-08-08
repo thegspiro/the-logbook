@@ -12,6 +12,7 @@ The report:
 """
 
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from html import escape
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -119,13 +120,16 @@ class PropertyReturnService:
         )
         issuances = issuance_result.scalars().all()
 
-        # Build item list with values
+        # Build item list with values. Accumulate as Decimal — this feeds the
+        # chargeable "Total Assessed Value" in the member's return letter, so
+        # float accumulation drift must not reach a figure the member can be
+        # billed for (the LIFE-1 fix already applied in the clearance service).
         items: List[Dict[str, Any]] = []
-        total_value = 0.0
+        total_value = Decimal("0")
 
         for a in assignments:
             item = a.item
-            value = float(item.current_value or item.purchase_price or 0)
+            value = Decimal(str(item.current_value or item.purchase_price or 0))
             total_value += value
             items.append(
                 {
@@ -145,7 +149,7 @@ class PropertyReturnService:
 
         for c in checkouts:
             item = c.item
-            value = float(item.current_value or item.purchase_price or 0)
+            value = Decimal(str(item.current_value or item.purchase_price or 0))
             total_value += value
             items.append(
                 {
@@ -170,7 +174,7 @@ class PropertyReturnService:
         for iss in issuances:
             item = iss.item
             qty = iss.quantity_issued or 1
-            value = float(item.current_value or item.purchase_price or 0) * qty
+            value = Decimal(str(item.current_value or item.purchase_price or 0)) * qty
             total_value += value
             items.append(
                 {

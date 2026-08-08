@@ -133,6 +133,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > as a fixture holding a literal permission list.
 
 ---
+### Property return: the total value owed is now calculated precisely (2026-08-08)
+
+**Fixed**
+
+- **The "total assessed value" on a member's property-return letter and overdue
+  reminder was summed using floating-point math**, which can drift by fractions of a
+  cent. Because that figure is a charge a departing member can be billed for, it is
+  now computed with exact decimal math (matching how the clearance summary already
+  worked).
+
+### Scheduled jobs: one department's error no longer stops the rest (2026-08-08)
+
+**Fixed**
+
+- **Several nightly jobs (shift auto-checkout, compliance reports, officer-directory
+  refresh, certification alerts) processed every department in one shared database
+  transaction.** If one department hit an error partway through, it could cause the
+  remaining departments to fail too — and shift auto-checkout could even discard the
+  work already done for earlier departments. Each department's work is now saved and
+  isolated, so one failure no longer cascades.
+
+### Emails: department names and member names with an apostrophe or "&" render correctly (2026-08-08)
+
+**Fixed**
+
+- **On the built-in fallback email layout, a subject line or plain-text body could
+  show a name like "O'Brien" as "O&#x27;Brien" or "Fire & Rescue" as "Fire &amp;
+  Rescue."** The fallback path now matches the main templates, which already rendered
+  these correctly.
 
 ### Storefront: a payment in the wrong currency is no longer auto-applied (2026-08-08)
 

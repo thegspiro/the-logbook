@@ -19,11 +19,11 @@ been through a review pass.
 | # | Feature | Code | Prefix | Status |
 |---|---------|------|--------|--------|
 | A1 | Storefront & payments | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF | ✅ (p1, p2) |
-| A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | 🔄 |
-| A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | 🔄 |
-| A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | 🔄 |
+| A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ✅ (p1, p2) |
+| A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ✅ (p1, p2) |
+| A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ✅ (p1, p2) |
 | A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | 🔄 |
-| A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | 🔄 |
+| A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ✅ (p1, p2) |
 | A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | 🔄 |
 | A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | 🔄 |
 | A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | 🔄 |
@@ -1246,4 +1246,47 @@ The rotation wraps from B27 back to A1. Same discipline as Tier B pass 2.
   stays flagged; 2 LOW webhook-robustness items noted. **2 regression tests**
   (DB-backed + DB-free). flake8/black clean. User-visible fix in CHANGELOG. See
   storefront.md → Pass 2. Next: A2 auth & session lifecycle.
+- **A2 auth & session lifecycle ✅ (pass 2) — no code change.** Re-verified the
+  heavily-hardened surface: every pass-1/red-team fix holds (M1/M2/M3, H3 TOTP,
+  H5/AXC-1 get_client_ip, AUTH-1/2, SHA-256 reset tokens, JWT HS256+exp,
+  compare_digest). Six lenses found no verified bug (no blind setattr on protected
+  fields, no cross-user/org by-id write, no enumeration branch skipping dummy-verify,
+  no rate-limit-skipping path). 2 informational flags (oldest-org lookup w/o active
+  filter — single-org-benign; forgot_password config-construct w/o try/except —
+  not attacker-controllable). No code changed. See auth-session.md → Pass 2. Next: A3.
+- **A3 scheduled tasks & cron ✅ (pass 2).** Re-verified pass-1 (39/39 runner parity,
+  Pitfall-#12 dedup, the 8 CRON-1 runners roll back). The sweep found the **CRON-1 fix
+  was incomplete** — **6 fixes:** CRON-5 (MED: 3 more org-loops could poison the shared
+  session — `run_shift_auto_checkout` *deferred* its commit so a late org's rollback
+  discarded every earlier org's checkouts; `run_compliance_auto_reports` +
+  `run_officer_directory_sync` had no per-org commit/rollback; `cert_alert_service.
+  run_daily_cert_alerts` no rollback — all now commit-per-org + rollback), CRON-2b
+  (LOW: run_daily_cert_alerts didn't filter `Organization.active`), CRON-6 (LOW-MED
+  money: overdue-property reminder totalled chargeable value as float → Decimal; plus
+  a ZoneInfo fallback guard in the unguarded `_to_local`). **Flagged:** naive
+  `datetime.now()` at rolling-recurrence (aware-vs-naive TypeError risk vs the DB —
+  needs DB-verified change), rolling-recurrence rollback (SELECT-only, low risk),
+  cert-alert N+1 (perf), CRON-4 (raw str(e)). **1 DB-free regression test** (cron org-
+  loop isolation). flake8/black clean. Money + reliability fixes in CHANGELOG. See
+  scheduled-tasks.md → Pass 2. Next: A4.
+- **A4 email templates & delivery ✅ (pass 2).** Re-verified pass-1 (11 endpoints
+  gated, escape-at-construction, `_sanitize_header`, Redis overlap lock, MAIL-1/2).
+  Lenses 1–6 clean on primary paths. **1 fix — MAIL-5** (LOW: the code-default
+  `_render_with_fallback` path re-introduced MAIL-1 — its inline `_replace` had no
+  escape flag and HTML-escaped the subject + text/plain, so `O'Brien`→`O&#x27;Brien`
+  and `Fire & Rescue`→`Fire &amp; Rescue` on that path; added the same escape flag,
+  off for subject/text, on for HTML — XSS boundary verified untouched). MAIL-3/4 stay
+  flagged. **1 DB-free regression test** (fallback render). flake8/black clean.
+  User-visible fix in CHANGELOG. See email-templates.md → Pass 2. Next: A5.
+- **A6 member lifecycle & offboarding ✅ (pass 2).** Re-verified the irreversible ops
+  (anonymization never-cross-tenant + self-block + idempotent; retention floors;
+  every by-id op XC-3 clean; LIFE-1 Decimal). **1 fix — LIFE-4** (MED money:
+  `property_return_service.generate_report` totalled the chargeable "Total Assessed
+  Value" in the member's return letter as float — the LIFE-1 class unfixed in this
+  sibling; converted to Decimal, verified safe across `:,.2f`/FastAPI-encoder/audit
+  `default=str` consumers). **Flagged:** LIFE-2 (per-unit float division — FIN-7), the
+  pool-issuance full-vs-per-unit valuation mismatch between the two member-facing
+  figures (methodology reconciliation), and the DiD member-fetch org filter. Existing
+  23 property-return tests pass. flake8/black clean. Money fix in CHANGELOG. See
+  member-lifecycle.md → Pass 2. Next: A5 course cohorts (wave 2).
 </content>
