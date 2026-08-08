@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Minutes: executive-session minutes can no longer be published as a shared document (2026-08-06)
+
+**Fixed**
+
+- **Publishing an executive-session set of minutes to the Meeting Minutes
+  document folder is now blocked.** Executive-session minutes are visible only to
+  members who can manage minutes; publishing them created a copy in the shared
+  documents area that anyone with document access could read, sidestepping that
+  restriction. The publish action now returns an error for executive-session
+  minutes. (Regular business/other minutes publish exactly as before.)
+
 ### Medical screening: the Records list now shows the member's name (2026-08-06)
 
 **Fixed**

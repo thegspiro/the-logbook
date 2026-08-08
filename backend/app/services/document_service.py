@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import SYSTEM_FOLDERS, Document, DocumentFolder, DocumentType
-from app.models.minute import MeetingMinutes, MinutesStatus
+from app.models.minute import MeetingMinutes, MinutesMeetingType, MinutesStatus
 from app.models.user import Organization
 
 
@@ -112,6 +112,26 @@ class DocumentService:
         """
         if minutes.status != MinutesStatus.APPROVED.value:
             raise ValueError("Only approved minutes can be published")
+
+        # MM2-1: executive-session minutes are restricted to minutes.manage
+        # holders everywhere else (get/list/search/stats + the dashboard feed all
+        # 404 them for plain viewers, to protect discipline/termination/legal
+        # content). Publishing copies the full body into the meeting-minutes
+        # folder, which is readable by the far broader `documents.view` audience —
+        # silently defeating that restriction. Refuse to publish executive
+        # minutes so the boundary the rest of the module enforces isn't
+        # bypassable via a one-click publish. (A deliberate "share executive
+        # minutes to a restricted audience" flow would be a separate build.)
+        meeting_type_value = (
+            minutes.meeting_type
+            if isinstance(minutes.meeting_type, str)
+            else minutes.meeting_type.value
+        )
+        if meeting_type_value == MinutesMeetingType.EXECUTIVE.value:
+            raise ValueError(
+                "Executive-session minutes cannot be published as a shared "
+                "document — they are restricted to minutes managers"
+            )
 
         # Get or create the meeting-minutes folder
         folder = await self.get_folder_by_slug("meeting-minutes", organization_id)

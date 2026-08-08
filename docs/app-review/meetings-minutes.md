@@ -1,4 +1,66 @@
-# Application Review — Meetings & Minutes (Tier B, 2nd pass)
+# Application Review — Meetings & Minutes (Tier B)
+
+**Prefix:** `MM2` · **Iteration:** B6 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06)
+
+Re-verified pass 1 (MM-4 FK validation, MM-3-frontend permission, DASH-1
+consistency — intact). Then chased the module's distinctive risk — the
+**executive-session read restriction** — across *every* path that reads minutes,
+not just the four the restriction already covers. DASH-1 fixed one cross-module
+leak of executive content; this pass found another, in a different module.
+
+### MM2-1 — MED — Executive minutes leak to the broad documents audience via publish — ✅ FIXED
+
+**The restriction, and where it holds:** executive-session minutes are visible
+only to `minutes.manage` holders. `MinuteService.get_minutes` / `list_minutes` /
+`search` / `get_stats` all apply `status == APPROVED AND meeting_type != EXECUTIVE`
+for a non-manager (a plain viewer gets a 404, so the existence is hidden), and A7's
+DASH-1 extended the same gate to the dashboard action-item feed. The content this
+protects is, by the module's own rationale, discipline/termination/legal matters.
+
+**The leak:** `POST /minutes/{id}/publish` (`minutes.manage`) calls
+`DocumentService.publish_minutes`, which rendered the **full minutes body** into a
+`Document` in the "meeting-minutes" system folder — checking `status == APPROVED`
+but **not** `meeting_type`. Executive minutes can be approved, so an approved
+executive session could be published. Every documents read path
+(`GET /documents/{id}`, `list_documents`, download, summary) gates on
+**`documents.view`** — a far broader audience than `minutes.manage` — so the
+published copy exposed the executive-session body to members who get a 404 on the
+minutes endpoints themselves. The system even tagged the document `executive`
+while doing it. This is the DASH-1 shape (cross-module read bypassing the minutes
+restriction), via publish → documents instead of the dashboard.
+
+**Why FIXED, not flagged:** it enforces an **already-decided** access-control
+policy at a path that silently violated it — the same disposition A7 chose for
+DASH-1 (fix the leak, don't re-litigate the policy). `publish_minutes` now refuses
+executive-session minutes with `ValueError → 400` (the endpoint's
+`handle_service_errors` maps it). No data changes; the approved-status check still
+runs first. 3 tests added (`TestPublishMinutesExecutiveGuard`): executive rejected
+(as `.value` and as the enum), and the approved-gate-precedes-executive ordering.
+
+**Escape hatch recorded (future dev):** if an org deliberately wants to share an
+executive session with a *restricted* audience, that needs a real build (a
+restricted document folder, or a `minutes.view_executive` tier — the same tier
+MM-3's deferred half wants), not a one-click publish to `documents.view`. Noted in
+`KNOWN_LIMITATIONS.md`.
+
+### Not a leak — the reports count (verified)
+
+`reports_service._generate_department_overview` counts open minutes action items
+(`open_from_minutes`) across a join to `MeetingMinutes` with no executive filter —
+but it returns only a **count**, never content, at `reports.view`. A total that
+includes executive items is arguably correct for an overview and discloses
+nothing, so it is left as-is (contrast the dashboard, which exposed each item's
+description/assignee and so needed the DASH-1 filter). `quorum_service` reads
+minutes by id for quorum math only (no content projection).
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `MM2` · **Iteration:** B6 · **Reviewed:** 2026-08-06
 

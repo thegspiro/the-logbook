@@ -44,7 +44,7 @@ from its open list.
 | B3 | inventory | INV2 | ✅ (p1, p2) |
 | B4 | facilities | FAC2 | ✅ (p1, p2) |
 | B5 | elections | ELEC2 | ✅ (p1, p2) |
-| B6 | meetings & minutes | MM2 | ⬜ |
+| B6 | meetings & minutes | MM2 | ✅ (p1, p2) |
 | B7 | equipment-check | EC2 | ⬜ |
 | B8 | documents | DOC2 | ⬜ |
 | B9 | membership pipeline | MP2 | ⬜ |
@@ -846,4 +846,24 @@ re-run unless directed).
   pure-style sweep on the hash-chain/forensics file isn't worth the churn here. No
   code changed; verifications are the deliverable (same shape as B20/B26). See
   elections.md → Pass 2. Next: B6 meetings & minutes.
+- **B6 meetings & minutes ✅ (pass 2).** Re-verified pass-1 (MM-4/MM-3-frontend/
+  DASH-1 consistency), then chased the module's distinctive risk — the
+  executive-session read restriction — across **every** minutes reader, not just
+  the four surfaces it already covers. **1 fix applied:** MM2-1 (MED, the DASH-1
+  shape in another module): `DocumentService.publish_minutes` (`POST
+  /minutes/{id}/publish`, `minutes.manage`) rendered the full minutes body into a
+  Document in the shared meeting-minutes folder, checking `status == APPROVED` but
+  **not** `meeting_type` — and every documents read gates on the far broader
+  `documents.view`, so publishing an approved **executive** session exposed its
+  body (discipline/termination/legal) to members who get a 404 on the minutes
+  endpoints themselves. Fixed by refusing executive-session minutes in
+  `publish_minutes` (`ValueError → 400`), enforcing the already-decided restriction
+  at the leaking path (same disposition as DASH-1). CHANGELOG + KNOWN_LIMITATIONS
+  updated (the deliberate "share executive to a restricted audience" flow is the
+  same build as the deferred `minutes.view_executive` tier). Verified **not** a
+  leak: the reports `open_from_minutes` figure is count-only (no content),
+  `quorum_service` reads minutes for quorum math only. **3 tests added**
+  (`TestPublishMinutesExecutiveGuard`); 36 documents/minutes/org-scoping tests
+  pass. Gate: flake8/black/tsc clean. See meetings-minutes.md → Pass 2. Next: B7
+  equipment-check.
 </content>

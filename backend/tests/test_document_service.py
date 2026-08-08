@@ -11,6 +11,9 @@ from datetime import timezone as tz
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
+from app.models.minute import MinutesMeetingType, MinutesStatus
 from app.services.document_service import DocumentService
 
 
@@ -98,7 +101,38 @@ class TestToLocal:
         assert out.hour == 12
 
 
-if __name__ == "__main__":  # pragma: no cover
-    import pytest
+class TestPublishMinutesExecutiveGuard:
+    """MM2-1: executive-session minutes must not be publishable to the broadly
+    readable meeting-minutes document folder (documents.view), which would
+    bypass the executive restriction enforced on every minutes read path."""
 
+    async def test_executive_minutes_cannot_be_published(self):
+        minutes = SimpleNamespace(
+            status=MinutesStatus.APPROVED.value,
+            meeting_type=MinutesMeetingType.EXECUTIVE.value,
+        )
+        with pytest.raises(ValueError, match="Executive-session"):
+            await _svc().publish_minutes(minutes, "org-1", "user-1")
+
+    async def test_executive_enum_value_also_rejected(self):
+        # meeting_type may arrive as the enum rather than its .value string.
+        minutes = SimpleNamespace(
+            status=MinutesStatus.APPROVED.value,
+            meeting_type=MinutesMeetingType.EXECUTIVE,
+        )
+        with pytest.raises(ValueError, match="Executive-session"):
+            await _svc().publish_minutes(minutes, "org-1", "user-1")
+
+    async def test_unapproved_rejected_before_executive_check(self):
+        # The approved gate runs first: a draft executive minutes reports the
+        # approval error, not the executive one.
+        minutes = SimpleNamespace(
+            status=MinutesStatus.DRAFT.value,
+            meeting_type=MinutesMeetingType.EXECUTIVE.value,
+        )
+        with pytest.raises(ValueError, match="approved"):
+            await _svc().publish_minutes(minutes, "org-1", "user-1")
+
+
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
