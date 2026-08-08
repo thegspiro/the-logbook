@@ -35,13 +35,28 @@ export const DEMO_CREDENTIALS = {
   password: "DemoP@ssw0rd!2026",
 };
 
-/** Click a tab/button by its visible label. */
+/**
+ * Click a control by its visible label.
+ *
+ * Matches buttons, tabs and links, because which of the three a given tab strip
+ * uses is not predictable from the outside — Settings renders its sections as
+ * links while Medical Screening renders the same shape as buttons, and a
+ * button-only lookup simply times out on the former.
+ */
 export function clickByName(name) {
   return async (page) => {
     const target = page
       .getByRole("button", { name })
-      .or(page.getByRole("tab", { name }));
-    await target.first().click({ timeout: 10_000 });
+      .or(page.getByRole("tab", { name }))
+      .or(page.getByRole("link", { name }))
+      // Last resort: an <a> with no href, or a div wired up with onClick, has
+      // no implicit role at all, so match the visible text directly.
+      .or(page.locator("a, [role='tab'], button").filter({ hasText: name }));
+    const control = target.first();
+    // Settings renders its section tabs below the fold on a 900px viewport, and
+    // Playwright's actionability check times out on a control it cannot reach.
+    await control.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+    await control.click({ timeout: 10_000 });
   };
 }
 
@@ -1764,5 +1779,29 @@ export const SHOTS = [
       await clickByName(/edit shift/i)(page);
     },
     fullPage: true,
+  },
+  {
+    id: "08-22-screening-record-form",
+    doc: "08-admin-reports.md",
+    line: 865,
+    anchor:
+      "Screenshot of the ScreeningRecordForm showing fields for member selection, requirement dropdown, scheduled",
+    alt: "Screening record form with member, requirement and result fields",
+    route: "/medical-screening",
+    prepare: async (page) => {
+      await clickByName(/^records$/i)(page);
+      await clickByName(/add record/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-31-sidebar-notification-badge",
+    doc: "08-admin-reports.md",
+    line: 1108,
+    anchor:
+      "Screenshot of the side navigation panel showing the 'Notifications' link with a",
+    alt: "Sidebar navigation with the unread notification badge",
+    route: "/dashboard",
+    selector: "aside, nav",
   },
 ];
