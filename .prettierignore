@@ -1,0 +1,19 @@
+# Generated files — Prettier must not rewrite these.
+#
+# `lint-staged` runs `prettier --write` over `*.{json,md}`, which would reformat
+# a generated document on every commit that touches it. The generator would then
+# undo that on its next run, so the file would flip between two formattings
+# forever and every regeneration would carry thousands of lines of pure noise.
+# The fix is to leave generated output exactly as its generator emits it.
+
+# Rendered from Base.metadata by backend/scripts/generate_schema_docs.py
+docs/DATABASE_SCHEMA.md
+
+# Rendered from the training guides by scripts/screenshots/status_report.py
+docs/training/SCREENSHOT_STATUS.md
+
+# Dependencies and build output
+node_modules/
+frontend/dist/
+frontend/coverage/
+package-lock.json

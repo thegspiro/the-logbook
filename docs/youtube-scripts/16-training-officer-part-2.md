@@ -98,14 +98,34 @@ assumes they exist."]**
 
 **[SCREEN: Navigate to Start Skill Test (StartSkillTestPage)]**
 
-> "When it's time to test, select the template and the member being evaluated.
-> The system presents each skill in order."
+> "When it's time to test, select the template and search for the member being
+> evaluated. The system presents each skill in order."
+
+> "That candidate field is a **search**, not a dropdown of the whole department.
+> Type two letters of the name. You can confirm somebody you already know; you
+> can't browse the roster from here, and it only shows the first fifteen matches
+> — so type more of the name rather than scrolling."
 
 > "One thing you'll notice: you can't select **yourself** as the candidate.
 > Skills testing is somebody observing you perform — so the examiner and the
 > candidate have to be two different people. If you want to run through a
 > sheet on your own to practice, switch the test into **practice mode**;
 > practice attempts don't touch anyone's record."
+
+**[SCREEN: An ordinary member's account, no training permissions, starting an
+official test.]**
+
+> "And since August 2026 you are not the only person who can do this. **Any
+> member can run an official skills test** — because in most departments the
+> person holding the clipboard is a senior member, not an officer."
+
+> "What comes back to you is the sign-off. A test a member ran arrives in your
+> queue as a **submission**: it's scored and stored, but it credits nothing, uses
+> none of the candidate's attempts, and doesn't move your pass rate. You read the
+> scorecard and **validate** it — or **void** it, with a reason. Your own tests
+> validate the moment you submit them, so nothing changes about your workflow."
+
+**[CALLOUT: "Anyone can examine. Only an officer can validate."]**
 
 **[SCREEN: Show the active skill test interface (ActiveSkillTestPage)]**
 
@@ -135,6 +155,12 @@ assumes they exist."]**
 > "This is your documentation for NFPA compliance — proof that your members are
 > tested and proficient."
 
+**[SCREEN: Filter the records list to "Awaiting validation".]**
+
+> "There's a filter here for results **waiting on you** — the ones a member ran.
+> The count also shows on the Skills Testing dashboard, so it comes and finds you
+> rather than sitting there unnoticed."
+
 **[SCREEN: Hover three rows showing Delete, Void and Cancel respectively.]**
 
 > "And notice each row offers exactly one way to take it off the books. Practice
@@ -144,13 +170,18 @@ assumes they exist."]**
 > mid-session you **cancel**. You can't delete an official result: an examiner
 > observed something, so you withdraw it rather than erase it."
 
+> "Void doubles as your **reject** button on the validation queue. Same reasoning
+> — somebody sat for that evaluation, so you refuse it with a reason attached
+> rather than erasing it."
+
 **[CALLOUT: "Full deep-dive: Script 15 — Skills Testing"]**
 
-> "There's a lot more here than fits in this chapter — deciding how much of a
-> result the candidate sees and when, attempt limits, and one genuinely nasty bug
-> that used to let editing a published sheet rewrite scorecards you'd already
-> finished. That's all in **Script 15**, the skills-testing deep dive. If you've
-> been running skills testing since before August 2026, watch that one."
+> "There's a lot more here than fits in this chapter — who can run a test and who
+> signs it off, deciding how much of a result the candidate sees and when,
+> attempt limits, and one genuinely nasty bug that used to let editing a published
+> sheet rewrite scorecards you'd already finished. That's all in **Script 15**,
+> the skills-testing deep dive. If you've been running skills testing since before
+> August 2026, watch that one."
 
 **[TRANSITION: Compliance and reporting]**
 

@@ -4,7 +4,7 @@
 **Audience:** operator / DBA with shell access to the backend container
 **Estimated downtime:** none (the app reads both formats throughout)
 **Reversible:** the data change is one-directional, but safe — see
-[Rollback & safety](#rollback--safety).
+[Rollback & safety](#6-rollback--safety).
 
 ---
 
@@ -19,8 +19,8 @@ Fernet (AES-128-CBC + HMAC) format.
 > derived at the previous 100,000 — stay readable forever: the iteration count
 > is part of a value's identity, so both counts are permanent. Anywhere this
 > runbook says `$gcm1$`, read it as "either GCM marker". The
-application is therefore fully correct **without ever running this script** —
-existing Fernet ciphertext stays readable indefinitely.
+> application is therefore fully correct **without ever running this script** —
+> existing Fernet ciphertext stays readable indefinitely.
 
 This backfill is the optional Phase-2 step: it rewrites every remaining
 legacy value as AES-256-GCM so that, once complete and verified, Fernet
@@ -28,18 +28,19 @@ read-support can eventually be retired. Because every value it writes is a form
 `decrypt_data()` can read, and because it **skips values already in GCM form**, a
 partial or interrupted run is safe and simply resumable.
 
-It also upgrades any *legacy plaintext* found in an encrypted column (rows
+It also upgrades any _legacy plaintext_ found in an encrypted column (rows
 written before encryption existed) to AES-256-GCM.
 
 ### Fields covered
-| Table | Column(s) | Format |
-|-------|-----------|--------|
-| `shift_completion_reports` | `areas_of_strength`, `areas_for_improvement`, `officer_narrative`, `reviewer_notes` | single ciphertext |
-| `users` | `mfa_secret` | single ciphertext |
-| `users` | `mfa_backup_codes` | JSON array of ciphertext strings |
-| `integrations` | `encrypted_config` | single ciphertext (JSON blob) |
-| `external_training_providers` | `api_key`, `api_secret`, `client_secret` | single ciphertext |
-| `organizations` | `settings` → any `enc:`-prefixed value (recursive) | nested secrets |
+
+| Table                         | Column(s)                                                                           | Format                           |
+| ----------------------------- | ----------------------------------------------------------------------------------- | -------------------------------- |
+| `shift_completion_reports`    | `areas_of_strength`, `areas_for_improvement`, `officer_narrative`, `reviewer_notes` | single ciphertext                |
+| `users`                       | `mfa_secret`                                                                        | single ciphertext                |
+| `users`                       | `mfa_backup_codes`                                                                  | JSON array of ciphertext strings |
+| `integrations`                | `encrypted_config`                                                                  | single ciphertext (JSON blob)    |
+| `external_training_providers` | `api_key`, `api_secret`, `client_secret`                                            | single ciphertext                |
+| `organizations`               | `settings` → any `enc:`-prefixed value (recursive)                                  | nested secrets                   |
 
 > If new `EncryptedText` columns or manually-encrypted fields are added later,
 > extend `_PLAIN_COLUMNS` (or the JSON handlers) in the script before running.
@@ -76,29 +77,38 @@ different effective key than what wrote the data will fail to decrypt it.
 ## 4. Execute
 
 ### 4a. Dry run (no writes) — always do this first
+
 ```bash
 docker exec -it intranet-backend python scripts/reencrypt_to_aesgcm.py
 ```
-Reports, per field group, how many rows were scanned and how many values *would*
+
+Reports, per field group, how many rows were scanned and how many values _would_
 be re-encrypted. Example tail:
+
 ```
 Would re-encrypt 1234 value(s) to AES-256-GCM.
 Run again with --commit to apply.
 ```
+
 If it reports `0`, everything is already AES-256-GCM — you're done.
 
 ### 4b. Apply
+
 ```bash
 docker exec -it intranet-backend python scripts/reencrypt_to_aesgcm.py --commit
 ```
+
 The run is wrapped in a single transaction per invocation and commits at the end;
 on any error it rolls back and exits non-zero (no partial JSON left half-written).
 
 ### 4c. Confirm convergence
+
 Re-run the **dry run** (4a). A healthy result is now:
+
 ```
 Would re-encrypt 0 value(s) to AES-256-GCM.
 ```
+
 `0` means every covered value is AES-256-GCM.
 
 ---

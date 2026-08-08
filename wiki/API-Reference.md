@@ -6,11 +6,11 @@ The Logbook provides a RESTful API built with FastAPI. Interactive documentation
 
 ## Interactive Documentation
 
-| URL | Format | Description |
-|-----|--------|-------------|
-| `/docs` | Swagger UI | Interactive API explorer — try endpoints directly |
-| `/redoc` | ReDoc | Clean, readable API documentation |
-| `/openapi.json` | OpenAPI 3.0 | Machine-readable JSON spec |
+| URL             | Format      | Description                                       |
+| --------------- | ----------- | ------------------------------------------------- |
+| `/docs`         | Swagger UI  | Interactive API explorer — try endpoints directly |
+| `/redoc`        | ReDoc       | Clean, readable API documentation                 |
+| `/openapi.json` | OpenAPI 3.0 | Machine-readable JSON spec                        |
 
 > Access these at `http://YOUR-IP:3001/docs` (or your configured backend port).
 
@@ -33,6 +33,7 @@ curl -X POST http://YOUR-IP:3001/api/v1/auth/login \
 ```
 
 Response:
+
 ```json
 {
   "access_token": "eyJ...",
@@ -47,61 +48,61 @@ Response:
 
 ### Core Endpoints
 
-| Prefix | Module | Description |
-|--------|--------|-------------|
-| `/api/v1/auth` | Authentication | Login, logout, refresh, password reset, MFA |
-| `/api/v1/users` | Members | User CRUD, profiles, leaves, rank validation, personal-data export, consents, anonymization |
-| `/api/v1/organizations` | Organization | Org settings, modules, retention policy, template export |
-| `/api/v1/onboarding` | Onboarding | Organization setup wizard |
-| `/api/v1/settings` | Settings | Organization and module configuration |
-| `/api/v1/notifications` | Notifications | Notification rules, logs, user inbox, and department messages |
+| Prefix                  | Module         | Description                                                                                 |
+| ----------------------- | -------------- | ------------------------------------------------------------------------------------------- |
+| `/api/v1/auth`          | Authentication | Login, logout, refresh, password reset, MFA                                                 |
+| `/api/v1/users`         | Members        | User CRUD, profiles, leaves, rank validation, personal-data export, consents, anonymization |
+| `/api/v1/organizations` | Organization   | Org settings, modules, retention policy, template export                                    |
+| `/api/v1/onboarding`    | Onboarding     | Organization setup wizard                                                                   |
+| `/api/v1/settings`      | Settings       | Organization and module configuration                                                       |
+| `/api/v1/notifications` | Notifications  | Notification rules, logs, user inbox, and department messages                               |
 
 ### Module Endpoints
 
-| Prefix | Module | Permission |
-|--------|--------|------------|
-| `/api/v1/training` | Training | `training.manage` (admin) |
-| `/api/v1/scheduling` | Scheduling | `scheduling.manage` (admin) |
-| `/api/v1/events` | Events | `events.manage` (admin) |
-| `/api/v1/elections` | Elections | `elections.manage` (admin) |
-| `/api/v1/inventory` | Inventory | `inventory.manage` (admin) |
-| `/api/v1/equipment-checks` | Equipment Checks | `equipment_check.manage` (admin) |
-| `/api/v1/facilities` | Facilities | `facilities.manage` (admin) |
-| `/api/v1/apparatus` | Apparatus | Authenticated |
-| `/api/v1/forms` | Forms | Authenticated |
-| `/api/v1/minutes` | Meeting Minutes | Authenticated |
-| `/api/v1/documents` | Documents | Authenticated |
-| `/api/v1/pipelines` | Prospective Members | `prospective_members.manage` |
-| `/api/v1/prospective-members` | Prospective Members (pipelines, prospects, documents) | `prospective_members.manage` |
-| `/api/v1/audit-logs` | Audit Logs (admin read API) | `audit.view` |
-| `/api/v1/reports` | Reports | `reports.view` |
+| Prefix                        | Module                                                | Permission                       |
+| ----------------------------- | ----------------------------------------------------- | -------------------------------- |
+| `/api/v1/training`            | Training                                              | `training.manage` (admin)        |
+| `/api/v1/scheduling`          | Scheduling                                            | `scheduling.manage` (admin)      |
+| `/api/v1/events`              | Events                                                | `events.manage` (admin)          |
+| `/api/v1/elections`           | Elections                                             | `elections.manage` (admin)       |
+| `/api/v1/inventory`           | Inventory                                             | `inventory.manage` (admin)       |
+| `/api/v1/equipment-checks`    | Equipment Checks                                      | `equipment_check.manage` (admin) |
+| `/api/v1/facilities`          | Facilities                                            | `facilities.manage` (admin)      |
+| `/api/v1/apparatus`           | Apparatus                                             | Authenticated                    |
+| `/api/v1/forms`               | Forms                                                 | Authenticated                    |
+| `/api/v1/minutes`             | Meeting Minutes                                       | Authenticated                    |
+| `/api/v1/documents`           | Documents                                             | Authenticated                    |
+| `/api/v1/pipelines`           | Prospective Members                                   | `prospective_members.manage`     |
+| `/api/v1/prospective-members` | Prospective Members (pipelines, prospects, documents) | `prospective_members.manage`     |
+| `/api/v1/audit-logs`          | Audit Logs (admin read API)                           | `audit.view`                     |
+| `/api/v1/reports`             | Reports                                               | `reports.view`                   |
 
 ### Public Endpoints (No Auth Required)
 
-| Prefix | Description |
-|--------|-------------|
-| `/api/public/v1/forms/{slug}` | Public form access |
-| `/api/public/v1/forms/{slug}/submit` | Public form submission (rate-limited) |
-| `/api/public/portal/*` | Public portal endpoints (`X-API-Key` required). IP rate limit runs before bcrypt; keys use a selective 16-char lookup prefix (`logbook_`+8), legacy keys self-heal on next use |
-| `/health` | Health check |
-| `/health/db` | Database health |
-| `/health/redis` | Redis health |
+| Prefix                               | Description                                                                                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/api/public/v1/forms/{slug}`        | Public form access                                                                                                                                                             |
+| `/api/public/v1/forms/{slug}/submit` | Public form submission (rate-limited)                                                                                                                                          |
+| `/api/public/portal/*`               | Public portal endpoints (`X-API-Key` required). IP rate limit runs before bcrypt; keys use a selective 16-char lookup prefix (`logbook_`+8), legacy keys self-heal on next use |
+| `/health`                            | Health check                                                                                                                                                                   |
+| `/health/db`                         | Database health                                                                                                                                                                |
+| `/health/redis`                      | Redis health                                                                                                                                                                   |
 
 ### Security & Monitoring
 
-| Prefix | Description |
-|--------|-------------|
-| `/api/v1/security/status` | Security dashboard |
-| `/api/v1/security/alerts` | Security alerts (org-scoped — caller sees/acks/resolves only their own org's alerts) |
-| `/api/v1/security/audit-log/integrity` | Audit log verification |
-| `/api/v1/security/audit-log/export` | Audit log export (org-scoped; redacts `session_id` to a fingerprint) |
-| `/api/v1/security/audit-log/rehash` | Break-glass legacy-hash repair (gated by `AUDIT_ALLOW_CHAIN_REHASH`; fails closed on keyed mismatch) |
-| `/api/v1/security/intrusion-detection/status` | IDS status |
-| `/api/v1/ip-security/blocked-countries` | List / add / remove country blocks (add/remove gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`) |
+| Prefix                                        | Description                                                                                          |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `/api/v1/security/status`                     | Security dashboard                                                                                   |
+| `/api/v1/security/alerts`                     | Security alerts (org-scoped — caller sees/acks/resolves only their own org's alerts)                 |
+| `/api/v1/security/audit-log/integrity`        | Audit log verification                                                                               |
+| `/api/v1/security/audit-log/export`           | Audit log export (org-scoped; redacts `session_id` to a fingerprint)                                 |
+| `/api/v1/security/audit-log/rehash`           | Break-glass legacy-hash repair (gated by `AUDIT_ALLOW_CHAIN_REHASH`; fails closed on keyed mismatch) |
+| `/api/v1/security/intrusion-detection/status` | IDS status                                                                                           |
+| `/api/v1/ip-security/blocked-countries`       | List / add / remove country blocks (add/remove gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`)       |
 
 ---
 
-## Notification Endpoints *(2026-03-23)*
+## Notification Endpoints _(2026-03-23)_
 
 ```
 GET    /api/v1/notifications/rules                       # List notification rules
@@ -119,7 +120,7 @@ POST   /api/v1/notifications/my/{log_id}/read            # Mark own notification
 GET    /api/v1/notifications/summary                     # Rule and send statistics
 ```
 
-## Equipment Check Endpoints *(2026-03-19)*
+## Equipment Check Endpoints _(2026-03-19)_
 
 ```
 POST   /api/v1/equipment-checks/templates                    # Create template
@@ -143,7 +144,7 @@ GET    /api/v1/equipment-checks/reports/trends               # Item trend histor
 GET    /api/v1/equipment-checks/reports/export               # CSV/PDF export
 ```
 
-## Shift Completion Reports *(2026-03-28)*
+## Shift Completion Reports _(2026-03-28)_
 
 ```
 POST   /api/v1/training/shift-reports                                  # Create shift completion report
@@ -163,13 +164,13 @@ POST   /api/v1/training/shift-reports/{report_id}/acknowledge          # Trainee
 POST   /api/v1/training/shift-reports/{report_id}/review               # Officer reviews (approve/flag/redact)
 ```
 
-## Shift Finalization *(2026-03-28)*
+## Shift Finalization _(2026-03-28)_
 
 ```
 POST   /api/v1/scheduling/shifts/{id}/finalize                         # Finalize shift (snapshot data, create draft reports)
 ```
 
-## Shift Calls / Runs *(2026-06-09)*
+## Shift Calls / Runs _(2026-06-09)_
 
 Log the calls/runs a crew responded to during a shift. Read: `scheduling.view`;
 write: `scheduling.manage`. Hidden once a shift is finalized.
@@ -182,9 +183,9 @@ PATCH  /api/v1/scheduling/calls/{call_id}                               # Update
 DELETE /api/v1/scheduling/calls/{call_id}                               # Delete a call
 ```
 
-> Open-shift results *(2026-06-09)*: `GET /api/v1/scheduling/open-shifts` now returns shifts by **actual staffing** (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`), capped at 500 candidates in the window, excluding shifts the caller already holds — fixing fully-staffed shifts pushing open ones off a fixed page.
+> Open-shift results _(2026-06-09)_: `GET /api/v1/scheduling/open-shifts` now returns shifts by **actual staffing** (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`), capped at 500 candidates in the window, excluding shifts the caller already holds — fixing fully-staffed shifts pushing open ones off a fixed page.
 
-## Inventory — Allowances, Size Preferences & Fulfillment *(2026-06-09)*
+## Inventory — Allowances, Size Preferences & Fulfillment _(2026-06-09)_
 
 ```
 GET    /api/v1/inventory/allowances/check/{user_id}/{category_id}       # Remaining issue allowance { max_quantity, issued_this_period, remaining, period_type }
@@ -210,7 +211,7 @@ DELETE /api/v1/inventory/kits/{kit_id}                                 # Soft-de
 
 > Issuing a pool item enforces the per-category allowance unless `override_allowance=true`. Member-specific inventory endpoints (`/inventory/my/`, `/inventory/members/`, `/inventory/charges`, `/inventory/checkout/`, `/inventory/users/`, `/inventory/members-summary`) are excluded from client caching (PII).
 
-## Inventory — Impact Planner *(2026-06-23)*
+## Inventory — Impact Planner _(2026-06-23)_
 
 All endpoints require `inventory.manage`.
 
@@ -229,14 +230,14 @@ DELETE /api/v1/inventory/impact-planner/plans/{plan_id}                # Delete 
 
 > The analyze body (statuses, membership types, ranks, stations, position ids, related/stock category, size field, `replacement_aware`, `allowance_aware`) is reused by reorder/issue/pdf and stored verbatim by saved plans. On-hand netting, cost, replacement, and allowance layers only run when their inputs are supplied.
 
-## Election Results & Verification *(2026-03-29)*
+## Election Results & Verification _(2026-03-29)_
 
 ```
 POST   /api/v1/elections/{id}/send-report                              # Email election results to voters
 GET    /api/v1/elections/{id}/verify-receipt                            # Public vote receipt verification (rate-limited)
 ```
 
-## Election Pre-Meeting Package *(2026-07-28)*
+## Election Pre-Meeting Package _(2026-07-28)_
 
 All require `elections.manage`; draft/open elections only.
 
@@ -246,7 +247,7 @@ GET    /api/v1/elections/{id}/package-pdf?variant=                      # Downlo
 POST   /api/v1/elections/{id}/send-package                              # Email package to an edited address list (BCC + PDF attachment)
 ```
 
-## Election Nominations, Paper Ballots & Meeting-Night Workflows *(2026-07-29)*
+## Election Nominations, Paper Ballots & Meeting-Night Workflows _(2026-07-29)_
 
 Optional workflows are gated by per-org feature toggles in
 `org.settings.election_features` (enforced server-side). All require
@@ -284,7 +285,7 @@ POST   /api/v1/elections/ballot/vote                                    # Cast o
 POST   /api/v1/elections/ballot/vote/bulk                               # Submit full ballot atomically (choice | candidate_ids | rankings per item)
 ```
 
-## Department Messages *(updated 2026-07-17)*
+## Department Messages _(updated 2026-07-17)_
 
 Admin endpoints require `notifications.manage`. Inbox/read/acknowledge endpoints
 are available to any authenticated member (scoped to messages targeted to them).
@@ -312,7 +313,7 @@ Posting a message fans it out across in-app / email / SMS channels by priority
 
 ---
 
-## Audit Logs (Admin) *(updated 2026-07-30)*
+## Audit Logs (Admin) _(updated 2026-07-30)_
 
 Read-only admin API for browsing the audit trail. Permission: `audit.view`.
 Results are org-scoped on the `audit_logs.organization_id` column (stamped at
@@ -330,7 +331,7 @@ Filters on the list endpoint: `event_type`, `event_category`,
 `severity` (`info` \| `warning` \| `critical`), `user_id`, `search` (username or
 event-type substring), `start_date`, `end_date`, `skip` (≥0), `limit` (1–500).
 
-## OAuth Sign-In *(2026-05-29)*
+## OAuth Sign-In _(2026-05-29)_
 
 ```
 GET    /api/v1/auth/oauth-config                         # Enabled OAuth providers (for the login page)
@@ -343,7 +344,7 @@ GET    /api/v1/auth/oauth/microsoft/callback             # Microsoft OAuth callb
 See [Authentication > OAuth](Security-Authentication#oauth) for the
 link-existing-only policy, domain restriction, and callback error codes.
 
-## Prospective Member Documents *(2026-05-29)*
+## Prospective Member Documents _(2026-05-29)_
 
 ```
 GET    /api/v1/prospective-members/prospects/{id}/documents                       # List documents
@@ -353,7 +354,7 @@ GET    /api/v1/prospective-members/prospects/{id}/documents/{document_id}/downlo
 
 ---
 
-## Training Programs *(2026-07-14)*
+## Training Programs _(2026-07-14)_
 
 Endpoints live under `/api/v1/training/programs` (note the doubled `programs`
 segment on program-scoped routes: prefix `/training/programs` + path
@@ -409,7 +410,7 @@ DELETE /api/v1/training/programs/programs/{program_id}/milestones/{milestone_id}
 - **Program create/response** now include `code` and `version`; each program
   phase includes `requires_manual_advancement`.
 
-### Soft Phase Gate on Attendance *(2026-07-14)*
+### Soft Phase Gate on Attendance _(2026-07-14)_
 
 ```
 POST   /api/v1/events/{event_id}/rsvp?override=<bool>                   # RSVP to an event
@@ -425,7 +426,7 @@ their current phase, these endpoints return HTTP **409**:
 
 Pass `override=true` to proceed anyway.
 
-## Skills Testing — Pipeline Requirement Link *(2026-07-14)*
+## Skills Testing — Pipeline Requirement Link _(2026-07-14)_
 
 Skills templates and tests can point at the training-pipeline requirement they
 satisfy via a nullable `requirement_id`. Endpoints are under
@@ -445,9 +446,119 @@ POST   /api/v1/training/skills-testing/tests/{id}/complete             # Complet
   a **practice** test, or a test with no `requirement_id` does nothing to the
   pipeline.
 
+> **Superseded in part on 2026-08-08.** The pipeline credit no longer lands at
+> completion for a member-run test — it lands at **validation**. See the next
+> section.
+
 ---
 
-## Training — Multi-Class Courses & Cohorts *(2026-08-05)*
+## Skills Testing — Member Examining & Officer Validation _(2026-08-08)_
+
+Skills testing was gated on `training.manage` end to end. **Examining is now
+open to every member**; the officer's authority moved to a second step,
+**validating** the result against the candidate's account.
+
+```
+GET    /api/v1/training/skills-testing/candidates?q=<fragment>   # Name lookup for the start-test picker (training.view | training.manage)
+POST   /api/v1/training/skills-testing/tests                     # Start a test — official is now AUTH-ONLY
+POST   /api/v1/training/skills-testing/tests/{id}/complete       # Score — AUTH-ONLY. An officer's completion validates in the same step
+POST   /api/v1/training/skills-testing/tests/{id}/validate       # Accept the result against the candidate's record (training.manage). Idempotent
+POST   /api/v1/training/skills-testing/tests/{id}/void           # The rejection path — keeps the record and the reason (training.manage)
+GET    /api/v1/training/skills-testing/tests?pending_validation=true   # Officer review queue
+GET    /api/v1/training/skills-testing/summary                   # Now carries `pending_validation`
+```
+
+**Until `validated_at` is set, an official test is a submission, not a
+record.** It credits no pipeline requirement, spends no attempt against
+`max_attempts`, and is excluded from the summary's pass rate and average score.
+The candidate sees it listed as _awaiting validation_ with the outcome withheld.
+
+| Gate change                                                                 | Before                | After                         |
+| --------------------------------------------------------------------------- | --------------------- | ----------------------------- |
+| `POST /tests` (official), `PUT`, `/complete`, `/cancel`                     | `training.manage`     | Authenticated                 |
+| `/validate` _(new)_, `/void`, `/release`, `/viewers*`, `DELETE /tests/{id}` | — / `training.manage` | `training.manage`             |
+| `/templates` writes                                                         | `training.manage`     | `training.manage` (unchanged) |
+
+**Separation of duties (CS-8)** holds at both ends: a member cannot examine
+themselves on an official test, and an **officer cannot validate a test they
+are the candidate in** — that would launder a peer-run self-pass. Both are
+`400`.
+
+**`GET /candidates` is a lookup, not a listing.** It exists because examining is
+open to every member while `GET /users` needs `users.view`, which the baseline
+member position does not carry. It returns `[{ id, name }]` only.
+
+| Guard            | Value                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `q`              | **Required**, min 2 characters — no request returns the roster                          |
+| Whitespace-only  | `422`, refused before the query runs                                                    |
+| `LIKE` wildcards | `\`, `%`, `_` escaped — a bare `%` would match every row                                |
+| Result cap       | **15**, truncated silently                                                              |
+| Scope            | Caller's org, `status = ACTIVE`, `deleted_at IS NULL`; matched on the full display name |
+
+**New response fields:** `SkillTestResponse` gains `validated_at`,
+`validated_by`, `validated_by_name` and the derived `pending_validation`;
+`SkillTestListResponse` gains `validated_at` and `pending_validation`;
+`SkillTestingSummaryResponse` gains a `pending_validation` count (`0` for
+readers who cannot validate).
+
+**Schema:** `skill_tests.validated_at` (`DATETIME`, nullable),
+`skill_tests.validated_by` (`VARCHAR(36)` → `users.id` `ON DELETE SET NULL`),
+index `idx_skill_test_org_validation` (`organization_id`, `is_practice`,
+`validated_at`). Migration `20260808_0001`; existing completed official results
+are backfilled as validated by their examiner.
+
+---
+
+## Prospective Members — Kanban Response Model & Bulk Actions _(2026-08-08)_
+
+Router prefix `/api/v1/membership-pipeline`.
+
+```
+GET    /api/v1/membership-pipeline/pipelines/{id}/kanban   # Now returns KanbanBoardResponse, not a bare dict
+POST   /api/v1/membership-pipeline/prospects/bulk-advance  # members.manage | prospective_members.manage
+POST   /api/v1/membership-pipeline/prospects/bulk-status   # members.manage | prospective_members.manage
+POST   /api/v1/membership-pipeline/prospects/{id}/advance  # Now 409 when there is nowhere to advance to
+```
+
+**The kanban endpoint declared no response model**, so FastAPI serialized every
+column of `ProspectiveMember` — putting `status_token` (the credential behind
+the public application-status page), coordinator notes, date of birth and home
+address into a board held by anyone with `prospective_members.view`. It now
+returns `KanbanBoardResponse`, whose cards carry the **same projection as the
+prospect list** via a shared mapper.
+
+| `KanbanBoardResponse` field                            | Notes                                            |
+| ------------------------------------------------------ | ------------------------------------------------ |
+| `pipeline`                                             | `PipelineResponse`                               |
+| `columns[].step`                                       | `PipelineStepResponse \| null`                   |
+| `columns[].prospects[]`                                | `ProspectListResponse`                           |
+| `columns[].count`                                      | True column size — can exceed the cards returned |
+| `total_prospects` / `returned_prospects` / `truncated` | Board truncation state                           |
+
+**Bulk actions** take `prospect_ids` (1–**200**) plus `notes` (advance) or
+`status` + `reason` (status), and return `BulkActionResponse`:
+`succeeded_count`, `failed_count`, and a `results[]` of
+`{ prospect_id, name, succeeded, error }`. **One failure never aborts the
+rest.** Bulk ids arrive in the body, where the router's path-parameter privacy
+guard cannot see them, so both endpoints filter the caller's own prospect record
+explicitly and report it as **"not found"**. A `bulk-status` `reason` is
+recorded in the **activity log** and never written to the `notes` column.
+
+**`POST /prospects/{id}/advance` now answers `409`** when the prospect is
+already at the final stage or has no current stage, instead of `200` with an
+untouched record and a fabricated `membership_pipeline.prospect_advanced` audit
+entry.
+
+**`referred_by` is validated against the caller's org** on prospect create and
+update (`assert_in_org`, fails closed, generic message so the endpoint is not a
+cross-tenant existence oracle). Conversion **drops** an out-of-org referrer
+rather than copying it onto `User.referred_by_user_id`. Both endpoints now
+translate `ValueError` into `400` rather than letting it surface as a `500`.
+
+---
+
+## Training — Multi-Class Courses & Cohorts _(2026-08-05)_
 
 A course can carry an ordered **syllabus** of classes; a **cohort** is one
 scheduled run of that course. Syllabus routes hang off the existing course
@@ -479,7 +590,7 @@ DELETE /api/v1/training/cohorts/{cohort_id}/members/{user_id}           # Withdr
 - **`POST .../courses/{id}/classes`** — `class_course_id` is **required**: every
   class teaches a real catalog course, which is what supplies its credit hours,
   certification settings and categories. Title, credit hours and instructor
-  default from that course when omitted. Timing is *relative* — `day_offset`
+  default from that course when omitted. Timing is _relative_ — `day_offset`
   (days from the cohort start, 0-based) plus a local `start_time` (`"HH:MM"`)
   and `duration_minutes`. A course cannot list itself as one of its classes,
   and a syllabus is capped at 200.
@@ -509,7 +620,7 @@ DELETE /api/v1/training/cohorts/{cohort_id}/members/{user_id}           # Withdr
   `event_id` is NULL. Safe to run repeatedly: the
   `(cohort_id, course_class_id)` unique constraint means it can never duplicate
   a class, and it never moves an existing one.
-- **`PATCH /cohorts/{id}/classes/{class_id}`** — moves the cohort class *and*
+- **`PATCH /cohorts/{id}/classes/{class_id}`** — moves the cohort class _and_
   its linked event; RSVPs are preserved. Rejected for a cancelled class.
 - **`POST .../classes/{class_id}/cancel`** — **cancels** the event rather than
   deleting it, so members who RSVP'd see a cancellation instead of the class
@@ -529,7 +640,7 @@ DELETE /api/v1/training/cohorts/{cohort_id}/members/{user_id}           # Withdr
 
 ---
 
-## Member Dues — Payment Ledger *(2026-08-02)*
+## Member Dues — Payment Ledger _(2026-08-02)_
 
 Each payment against a member's dues is its own row. The dues record's
 `amountPaid` is the **sum of that ledger**, recomputed on every write, and
@@ -556,7 +667,7 @@ the waiver as a side effect. Use `/unwaive` first — it restores whatever the
 ledger says (`PENDING` / `PARTIAL` / `PAID`) and writes a
 `finance.dues_waiver_reversed` audit event carrying the erased waive reason.
 
-## Privacy, Consent & Retention *(2026-07-31)*
+## Privacy, Consent & Retention _(2026-07-31)_
 
 Data-subject rights and records retention. See
 [Privacy & Data Rights](Security-Privacy) for behavior and guarantees.
@@ -585,7 +696,7 @@ organization. Audit logs and election records are never modified.
 
 ---
 
-## Public Legal Text *(2026-07-31)*
+## Public Legal Text _(2026-07-31)_
 
 Unauthenticated, rate-limited (30/min per IP). Backs the public `/privacy` and
 `/terms` pages.
@@ -601,7 +712,7 @@ install all fields are `null` — with no org context, no tenant's text is serve
 
 ---
 
-## Vulnerability Disclosure *(2026-07-31)*
+## Vulnerability Disclosure _(2026-07-31)_
 
 Served at the site root (not under `/api`), per RFC 9116.
 
@@ -617,6 +728,7 @@ Configured with `SECURITY_TXT_CONTACT` and `SECURITY_TXT_POLICY_URL`. The
 ## Common Response Patterns
 
 ### Success (200/201)
+
 ```json
 {
   "id": "uuid",
@@ -653,6 +765,7 @@ short human-readable sentence, already safe to show a user.
 > the two stay in agreement.
 
 ### Permission Error (403)
+
 ```json
 {
   "detail": "Insufficient permissions. Required: training.manage"
@@ -663,12 +776,12 @@ short human-readable sentence, already safe to show a user.
 
 ## Rate Limiting
 
-| Endpoint Type | Limit |
-|--------------|-------|
-| Login | 5 requests/minute per IP |
-| General API | 60 requests/minute per user |
-| Public form view | 60 requests/minute per IP |
-| Public form submit | 10 requests/minute per IP |
+| Endpoint Type      | Limit                       |
+| ------------------ | --------------------------- |
+| Login              | 5 requests/minute per IP    |
+| General API        | 60 requests/minute per user |
+| Public form view   | 60 requests/minute per IP   |
+| Public form submit | 10 requests/minute per IP   |
 
 ---
 
@@ -680,12 +793,12 @@ List endpoints support pagination:
 GET /api/v1/users?page=1&per_page=25&sort=last_name&order=asc
 ```
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `page` | 1 | Page number |
-| `per_page` | 25 | Items per page (max 100) |
-| `sort` | varies | Sort field |
-| `order` | `asc` | Sort direction (`asc` or `desc`) |
+| Parameter  | Default | Description                      |
+| ---------- | ------- | -------------------------------- |
+| `page`     | 1       | Page number                      |
+| `per_page` | 25      | Items per page (max 100)         |
+| `sort`     | varies  | Sort field                       |
+| `order`    | `asc`   | Sort direction (`asc` or `desc`) |
 
 ---
 

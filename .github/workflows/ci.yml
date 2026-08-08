@@ -79,6 +79,28 @@ jobs:
         working-directory: .
         run: flake8 --config backend/.flake8 generate_registry.py scripts/
 
+      # An endpoint docstring is rendered into /docs and is what the wiki's API
+      # reference and the module guides are written from, so a docstring that
+      # disagrees with its own require_permission dependency seeds every
+      # document downstream of it. That drift is invisible until someone does a
+      # documentation pass months later — which is exactly how 38 routes came to
+      # advertise one of the two permissions they actually accept, and how a QA
+      # checklist came to instruct testers to verify behaviour the application
+      # no longer had.
+      #
+      # Fails on a docstring that names different permissions than the code
+      # enforces, or that claims a permission the route does not require at all.
+      # The 189 routes that under-document (code enforces a permission, docstring
+      # says only "Authentication required") are reported as warnings and do not
+      # fail the build; when that backlog reaches zero, add --strict here.
+      #
+      # Pure stdlib ast — no import of the application, so it cannot be broken
+      # by a missing runtime dependency.
+      - name: Check endpoint permission docs match enforcement
+        if: '!cancelled()'
+        working-directory: .
+        run: python3 scripts/check_endpoint_permissions.py
+
   backend-security:
     name: Backend Security Scan
     runs-on: ubuntu-latest
@@ -689,3 +711,31 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 7
+
+  # ──────────────────────────────────────────────
+  # Documentation
+  # ──────────────────────────────────────────────
+  docs-links:
+    name: Docs Link Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # Verifies in-page anchors, relative file links, and cross-file anchors
+      # across every tracked Markdown file, including the GitHub-Wiki-style
+      # extensionless page links in wiki/.
+      #
+      # This is cheap to run and catches something nothing else does: a heading
+      # rename silently breaks every link to it, and Markdown renders a dead
+      # anchor as ordinary text with no error. Four such links were sitting in
+      # the tree when the check was added, plus 28 sidebar entries pointing at
+      # wiki pages setup-wiki.sh never published.
+      #
+      # No network access: external URLs are deliberately out of scope, so a
+      # third-party outage cannot fail this build.
+      - name: Check documentation links
+        run: python3 scripts/check_docs_links.py

@@ -30,7 +30,7 @@ or Platform Analytics are absent.]**
 > "As Fire Chief, you have near-full access to the platform — but you're not
 > the IT Manager. You can manage members, events, training, scheduling,
 > apparatus, and elections. You can view reports and analytics. What you
-> typically *don't* have is access to system settings like server configuration,
+> typically _don't_ have is access to system settings like server configuration,
 > integrations, or IP security — that's the IT Manager's domain."
 
 > "The President has a similar access level but is more focused on governance —
@@ -252,11 +252,39 @@ RSVP list and check-in status]**
 > Background Check, Interview, Probationary Period, Full Member. You can see
 > where everyone is at a glance."
 
+**[SCREEN: A board with a large intake — full columns, and the truncation notice
+if the pipeline exceeds 200.]**
+
+> "And you're now seeing **all** of them. That board used to be built from one
+> page of applicants — twenty-five — so a big recruiting class meant cards were
+> just missing from columns, with nothing on screen saying so. If you ran a large
+> intake before August 2026 and the numbers looked light, that's why."
+
+> "If you go past two hundred active applicants, the board tells you what it
+> isn't showing rather than dropping them quietly. At that scale, work from the
+> table view."
+
 **[SCREEN: Click into an applicant to show their detail view]**
 
 > "Click on any applicant to see their progress, notes, documents, and next
 > steps. You can advance them to the next stage, add notes from their interview,
 > or mark them as rejected with a reason."
+
+**[SCREEN: Select twelve applicants; run a bulk advance; the itemized result
+appears — ten advanced, two named and skipped with reasons.]**
+
+> "Selecting a group and advancing them is one action now, and — more usefully —
+> it **tells you who didn't move and why.** It used to come back as a bare count
+> with no names, so a partial failure was something you found out about later."
+
+**[CALLOUT: "Bulk actions name who was skipped, and why"]**
+
+> "One thing worth knowing if you're auditing past decisions: before August 2026,
+> pressing Advance on somebody already at the final stage reported success and
+> wrote an audit entry saying they'd been advanced, when nothing had happened.
+> It now refuses, and the audit entry is only written after a real move. If
+> you're reconstructing a membership decision from before that date, check the
+> applicant's stage history rather than trusting the audit line alone."
 
 > "When an applicant completes the pipeline, you can convert them directly to a
 > full member — their data carries over automatically."
@@ -547,13 +575,13 @@ and tables.]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Dashboard Overview | 2:00–5:00 | "Your Leadership Dashboard Explained" |
-| Creating an Event | 5:00–7:00 | "Creating an Event with QR Check-In" |
-| Event Templates | 7:00–8:00 | "Save Time with Event Templates" |
-| Running an Election | 14:00–18:00 | "How to Run a Department Election" |
-| Scheduling Overview | 18:00–21:00 | "Managing Shifts & Scheduling" |
+| Clip                  | Timecode    | Standalone Title                                |
+| --------------------- | ----------- | ----------------------------------------------- |
+| Dashboard Overview    | 2:00–5:00   | "Your Leadership Dashboard Explained"           |
+| Creating an Event     | 5:00–7:00   | "Creating an Event with QR Check-In"            |
+| Event Templates       | 7:00–8:00   | "Save Time with Event Templates"                |
+| Running an Election   | 14:00–18:00 | "How to Run a Department Election"              |
+| Scheduling Overview   | 18:00–21:00 | "Managing Shifts & Scheduling"                  |
 | Shift Close-Out Rules | 19:45–20:15 | "Require End-of-Shift Checks Before Finalizing" |
-| Generating Reports | 21:00–22:30 | "Generating Reports for Officer Meetings" |
-| Chief's Daily Routine | 24:00–25:30 | "The Chief's Daily Routine on The Logbook" |
+| Generating Reports    | 21:00–22:30 | "Generating Reports for Officer Meetings"       |
+| Chief's Daily Routine | 24:00–25:30 | "The Chief's Daily Routine on The Logbook"      |

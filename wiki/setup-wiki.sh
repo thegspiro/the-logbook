@@ -64,30 +64,56 @@ echo ""
 # Step 2: Copy Wiki Files
 echo -e "${BLUE}Step 2: Copying wiki pages...${NC}"
 
-# List of wiki files to copy
-WIKI_FILES=(
-    "Home.md"
-    "_Sidebar.md"
-    "Installation.md"
-    "Unraid-Quick-Start.md"
-    "Quick-Reference.md"
-    "Development-Backend.md"
-    "Deployment-Unraid.md"
-    "Contributing.md"
-    "Security-Overview.md"
-    "Onboarding.md"
-    "Role-System.md"
-)
+# Every page in this directory is published, discovered rather than listed.
+#
+# This used to be a hand-maintained array of eleven filenames. Nobody updated it
+# when a page was added, so by 2026-08 there were 41 pages here and 11 being
+# published — and _Sidebar.md, which IS published, linked to 28 of the missing
+# ones. Every one of those sidebar entries was a dead link on the live wiki, and
+# editing a page like Module-Training.md changed nothing a reader could see.
+#
+# That is the same failure the generated Troubleshooting page below was
+# introduced to stop, one level up: a second place that has to be updated by
+# hand will eventually disagree with the first. A glob cannot fall behind.
+#
+# Two deliberate exclusions:
+#   README.md          — maintainer instructions for this directory, not a page.
+#                        GitHub Wikis have no index page, so a published README
+#                        would appear as a stray "README" entry.
+#   Troubleshooting.md — generated below from docs/TROUBLESHOOTING.md. It should
+#                        not exist here; the guard catches it if someone
+#                        re-creates one by hand.
+WIKI_EXCLUDE=("README.md" "Troubleshooting.md")
+
+if [ -f "Troubleshooting.md" ]; then
+    echo -e "${RED}✗${NC} wiki/Troubleshooting.md exists but is generated from"
+    echo -e "  docs/TROUBLESHOOTING.md at publish time. Delete it and add any"
+    echo -e "  new entries to docs/TROUBLESHOOTING.md instead."
+    exit 1
+fi
+
+WIKI_FILES=()
+for file in *.md; do
+    skip=""
+    for excluded in "${WIKI_EXCLUDE[@]}"; do
+        [ "$file" = "$excluded" ] && skip=1 && break
+    done
+    [ -n "$skip" ] && continue
+    WIKI_FILES+=("$file")
+done
+
+if [ ${#WIKI_FILES[@]} -eq 0 ]; then
+    echo -e "${RED}Error: no wiki pages found to publish${NC}"
+    exit 1
+fi
 
 # Copy each file
 for file in "${WIKI_FILES[@]}"; do
-    if [ -f "$file" ]; then
-        cp "$file" "$WIKI_DIR/"
-        echo -e "${GREEN}✓${NC} Copied $file"
-    else
-        echo -e "${YELLOW}⚠${NC} Skipped $file (not found)"
-    fi
+    cp "$file" "$WIKI_DIR/"
+    echo -e "${GREEN}✓${NC} Copied $file"
 done
+
+echo -e "${GREEN}✓${NC} ${#WIKI_FILES[@]} pages staged for publication"
 
 # Troubleshooting is GENERATED, not maintained here.
 #
