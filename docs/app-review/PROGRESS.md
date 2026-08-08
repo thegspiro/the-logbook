@@ -41,7 +41,7 @@ from its open list.
 |---|---------|--------|--------|
 | B1 | medical-screening | MS2 | ✅ (p1, p2) |
 | B2 | apparatus | AP2 | ✅ (p1, p2) |
-| B3 | inventory | INV2 | ⬜ |
+| B3 | inventory | INV2 | ✅ (p1, p2) |
 | B4 | facilities | FAC2 | ⬜ |
 | B5 | elections | ELEC2 | ⬜ |
 | B6 | meetings & minutes | MM2 | ⬜ |
@@ -791,4 +791,23 @@ re-run unless directed).
   file); 13 pass with `test_org_scoping.py`. Gate: flake8/black clean (black
   rewrapped the new guards); no frontend change. See apparatus.md → Pass 2. Next:
   B3 inventory.
+- **B3 inventory ✅ (pass 2).** Re-verified pass-1 (INV-3/INV-5/INV-6 intact), then
+  took the flagged INV-4 XC-1 sweep through the B1/B2 lens: which FK sites are
+  projected into a response (real leak) vs dangling-only? **1 fix applied:** INV2-1
+  (MED cross-tenant PII leak): `assign_item_to_user`/`checkout_item`/`issue_from_pool`
+  (and `issue_kit_to_member` via delegation) org-validated the *item* but stored a
+  client `user_id` unchecked — and while the item response only exposes the id
+  (pass 1's check), the assignment/checkout/issuance/**charge** listings format the
+  member **name** from the record's eager-loaded `user` (`_format_user_name` at
+  service 3016/3071/3121/3557), so a foreign `user_id` leaks another org's member
+  name. Closed with `is_in_org(User, …)` on all four paths (chosen over
+  `assert_in_org` to fit the `(None, "message")` return contract). **2 flagged:**
+  INV-4 remainder narrowed to the dangling-FK-only set (category/location/storage
+  ids — verified not projected by name, integrity-only), and INV2-2 (~55 `# noqa:
+  E712` suppressions — suppressed/clean, a 55-line sweep deferred to its own commit
+  to avoid swamping the security fix). **5 tests added** (`TestMemberOrgValidation`);
+  65/65 inventory-service tests pass (existing ones use a single `return_value`
+  mock so the added lookup returns truthy and they're unaffected). Gate:
+  flake8/black/tsc clean; no frontend change. See inventory.md → Pass 2. Next: B4
+  facilities.
 </content>

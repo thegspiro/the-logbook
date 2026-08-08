@@ -63,6 +63,7 @@ from app.models.user import (
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels
+from app.utils.org_scoping import is_in_org
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -920,6 +921,14 @@ class InventoryService:
             if not item:
                 return None, "Item not found"
 
+            # XC-1: the target member id is client-supplied. A foreign user_id
+            # would be stored on the assignment and item, then surfaced by name in
+            # get_assignments (which formats assignment.user) — a cross-tenant PII
+            # leak, and a notification queued to another org's member. Validate
+            # the member is in-org before assigning.
+            if not await is_in_org(self.db, User, user_id, organization_id):
+                return None, "Member not found"
+
             # Check if item is available
             if item.status not in [ItemStatus.AVAILABLE, ItemStatus.ASSIGNED]:
                 return None, f"Item is not available (status: {item.status})"
@@ -1108,6 +1117,12 @@ class InventoryService:
             item = lock_result.scalar_one_or_none()
             if not item:
                 return None, "Item not found"
+
+            # XC-1: validate the client-supplied member is in-org — a foreign
+            # user_id is surfaced by name in the issuance and charge listings
+            # (which format issuance.user). See assign_item_to_user.
+            if not await is_in_org(self.db, User, user_id, organization_id):
+                return None, "Member not found"
 
             if item.tracking_type != TrackingType.POOL:
                 return (
@@ -1337,6 +1352,12 @@ class InventoryService:
             item = lock_result.scalar_one_or_none()
             if not item:
                 return None, "Item not found"
+
+            # XC-1: validate the client-supplied member is in-org — a foreign
+            # user_id is surfaced by name in the checkout listing (formats
+            # checkout.user). See assign_item_to_user.
+            if not await is_in_org(self.db, User, user_id, organization_id):
+                return None, "Member not found"
 
             if item.status != ItemStatus.AVAILABLE:
                 return (
@@ -4355,6 +4376,12 @@ class InventoryService:
             kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
             if not kit:
                 return None, "Equipment kit not found"
+
+            # XC-1: validate the member once up front (the per-item issue/assign
+            # calls below each re-check, but this fails fast with a clear message
+            # before any item is issued).
+            if not await is_in_org(self.db, User, user_id, organization_id):
+                return None, "Member not found"
 
             issuances = []
             for kit_item in kit.line_items:

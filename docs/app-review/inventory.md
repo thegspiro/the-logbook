@@ -1,4 +1,71 @@
-# Application Review — Inventory (Tier B, 2nd pass)
+# Application Review — Inventory (Tier B)
+
+**Prefix:** `INV2` · **Iteration:** B3 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06)
+
+Re-verified pass 1 (INV-3 maintenance item validation, INV-5 LIKE escape, INV-6
+`getattr` guard — all intact). Then took the flagged **INV-4** XC-1 sweep and
+applied the B1/B2 lens: which of its FK sites are actually **projected into a
+response** (a real read leak) versus dangling-only? Pass 1 had checked one site
+(`assign_item_to_user`'s `user_id`) against the *item* response and cleared it —
+but the assignment/checkout/issuance/charge **listings** tell a different story.
+
+### INV2-1 — MED — Member-facing mutations didn't validate `user_id` in-org; the member name leaks via listings — ✅ FIXED
+
+**What:** `assign_item_to_user`, `checkout_item`, and `issue_from_pool` each lock
+and org-validate the *item*, but stored the client-supplied **`user_id` with no
+in-org check** (`issue_kit_to_member` does the same via delegation).
+
+**Why it's a read leak, not just a dangling FK (correcting pass 1's scope):** the
+item response exposes only `assigned_to_user_id` (pass 1's finding), but the
+**listing** endpoints format the member name from the record's eager-loaded
+`user` — `get_assignments`, the checkout list, the issuance list, and the admin
+**charge-management** view all call `_format_user_name(x.user)` (service lines
+3016 / 3071 / 3121 / 3557; the charge list is typed `IssuanceChargeListItem` with
+a non-optional `user_name`). So an admin who assigns/checks-out/issues an item to
+a **foreign `user_id`** causes that other org's member **name (PII)** to render in
+these views — the AP2-1 shape, but PII rather than config. A notification is also
+queued to the foreign member.
+
+**Fix:** validate the member in-org at the top of all four paths via the shared
+`is_in_org(self.db, User, user_id, organization_id)` (chosen over `assert_in_org`
+because these methods use a `(None, "message")` return contract, not exceptions —
+so a clean `return None, "Member not found"` fits, and the surrounding
+`except Exception` isn't relied on for control flow). `issue_kit_to_member`
+validates once up front to fail fast; its per-item `issue`/`assign` calls
+re-check. 5 unit tests added (`TestMemberOrgValidation`): foreign user rejected on
+each of the four paths, plus an ordering guard that item-not-found short-circuits
+before the member lookup. The existing assign/checkout tests use a single
+`return_value` mock, so the added lookup returns a truthy row and they still pass;
+verified 65/65.
+
+### INV-4 remainder — LOW — Non-projected FKs still unvalidated — 🚩 OPEN (narrowed)
+
+With the member-name read leak now closed, the rest of INV-4 is the
+**dangling-FK-only** set: `category_id`/`location_id`/`storage_id` on
+item/variant/kit/reorder/allowance, and the assignment/issuance/checkout ids on
+returns. Verified these are **not** projected by name into any response
+(`InventoryItemResponse` exposes scalar `category_id`/`location_id`; the
+name-bearing schemas like `LowStockItem`/`UserInventoryItem` are built from
+org-scoped aggregation, not from an item's client-supplied FK). So they are
+integrity-only, no disclosure — the continued mechanical `assert_in_org` sweep
+pass 1 described, now with the read-leak subset carved out and fixed.
+
+### INV2-2 — NIT — ~55 `== True/False  # noqa: E712` suppressions — 🚩 OPEN
+
+`inventory_service.py` carries ~55 `# noqa: E712` comparisons that should be
+`.is_(True)`/`.is_(False)` (Pitfall #10). Deliberately **not** swept in this
+iteration: they are suppressed (flake8 is clean), and rewriting 55 lines across a
+5,700-line file would swamp a security fix with unrelated churn and risk. Recorded
+as a standalone cleanup — one focused commit, no behavior change.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `INV2` · **Iteration:** B3 · **Reviewed:** 2026-08-06
 
