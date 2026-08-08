@@ -50,7 +50,7 @@ from its open list.
 | B9 | membership pipeline | MP2 | ✅ (p1, p2) |
 | B10 | messaging & communications | MSG2 | ✅ (p1, p2) |
 | B11 | notifications | NOTIF2 | ✅ (p1, p2) |
-| B12 | integrations | INT2 | ⬜ |
+| B12 | integrations | INT2 | ✅ (p1, p2) |
 | B13 | forms | FORM2 | ⬜ |
 | B14 | grants & fundraising | GF2 | ⬜ |
 | B15 | admin-hours | AH2 | ⬜ |
@@ -971,4 +971,17 @@ re-run unless directed).
   org-scoped, delivery fail-safe, VAPID private key never exposed. **17 unit tests
   added** (`test_push_endpoint_validation.py`); 32 notification tests pass.
   flake8/black/tsc clean. See notifications.md → Pass 2. Next: B12 integrations.
+- **B12 integrations ✅ (pass 2, against freshly-merged main) — no code change.**
+  After the merge, re-verified standing fixes (INT-1 send-time SSRF guard intact on
+  all 5 senders — and *more robust* than B11's push fix, since it re-resolves to a
+  public IP at send, closing DNS rebinding; INT-4 converged with main's parallel
+  `918e0b3`; update-bypass clean via config `exclude_unset` merge; no MS2-4). Then
+  reviewed the **new PayPal integration** main merged (`paypal_service.py`, public
+  `paypal_webhook.py`): **verified good** — no outbound SSRF (fixed `{sandbox,live}`
+  host dict, not client-controlled), secrets from the encrypted column, and an
+  **exemplary fail-closed webhook** (PayPal `verify-webhook-signature`, `raise 401`
+  if not verified; returns False on missing webhook_id/headers/exception/non-2xx;
+  rate-limited + idempotent). Storefront reconciliation depth deferred to an A1
+  pass. INT-3/INT-5 stand (flagged). No code changed. See integrations.md → Pass 2.
+  Next: B13 forms.
 </content>
