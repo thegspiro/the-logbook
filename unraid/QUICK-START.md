@@ -11,6 +11,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 ```
 
 That's it! The script will:
+
 - ✅ Clean up any existing containers (fixes the conflict error)
 - ✅ Clone the repository
 - ✅ Generate secure passwords
@@ -42,6 +43,7 @@ chmod +x unraid-setup.sh
 ```
 
 Choose option:
+
 - **1** - Fresh Installation (recommended for first time)
 - **2** - Update Existing Installation
 - **3** - Clean Install (removes all data)
@@ -55,6 +57,7 @@ Open browser: `http://YOUR-UNRAID-IP:7880`
 ## Fixing Container Conflicts
 
 If you get the error:
+
 ```
 Error: The container name "/logbook-redis" is already in use
 ```
@@ -102,17 +105,20 @@ docker-compose up -d
 The setup script automatically:
 
 ### 🔐 Security
+
 - Generates unique `SECRET_KEY` and `ENCRYPTION_KEY`
 - Creates strong database passwords
 - Sets proper Unraid permissions (nobody:users)
 
 ### 📦 Containers
+
 - **Frontend** - React/Vite app (Port 7880)
 - **Backend** - FastAPI (Port 7881)
 - **Database** - MySQL 8.0
 - **Cache** - Redis 7
 
 ### 📁 Directory Structure
+
 ```
 /mnt/user/appdata/the-logbook/
 ├── mysql/           # Database files
@@ -147,6 +153,7 @@ TZ=America/New_York
 ```
 
 After changing `.env`, restart:
+
 ```bash
 docker-compose restart
 ```
@@ -288,6 +295,7 @@ docker exec -it logbook-db mysql -u root -p
 ### Port conflicts (7880 or 7881 in use)
 
 Edit `.env` file:
+
 ```bash
 nano /mnt/user/appdata/the-logbook/.env
 
@@ -342,6 +350,7 @@ docker-compose up -d
 This version includes the latest package updates:
 
 ### Frontend
+
 - ✅ **Vite 6.0.5** (fixed from incorrect 7.3.1)
 - ✅ **React 18.3.1** (security updates)
 - ✅ **axios 1.7.9** (security updates)
@@ -350,11 +359,13 @@ This version includes the latest package updates:
 - ✅ Plus 20+ other updated packages
 
 ### Backend
+
 - ✅ **Python 3.13** (latest stable)
 - ✅ **FastAPI** (latest)
 - ✅ **Updated all dependencies**
 
 ### Benefits
+
 - 🔒 Security vulnerability fixes
 - ⚡ Better performance
 - 🐛 Bug fixes
@@ -373,16 +384,17 @@ For optimal performance on Unraid:
 deploy:
   resources:
     limits:
-      cpus: '2'
+      cpus: "2"
       memory: 2G
     reservations:
-      cpus: '1'
+      cpus: "1"
       memory: 512M
 ```
 
 ### Database Optimization
 
 Already configured in docker-compose:
+
 - 512MB buffer pool
 - UTF8MB4 encoding
 - 200 max connections
@@ -407,11 +419,13 @@ docker-compose logs -f
 ```
 
 ### Documentation
+
 - [Full Unraid Guide](/mnt/user/appdata/the-logbook/docs/deployment/unraid.md)
 - [Troubleshooting Guide](/mnt/user/appdata/the-logbook/docs/troubleshooting/README.md)
 - [Main README](/mnt/user/appdata/the-logbook/README.md)
 
 ### Support
+
 - **GitHub Issues**: https://github.com/thegspiro/the-logbook/issues
 - **Unraid Forums**: Post in Docker Support
 

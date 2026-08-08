@@ -159,6 +159,7 @@ docker-compose build
 ```
 
 **What's happening:**
+
 - **Backend build**: Downloads Python, installs dependencies, creates API server (~5-10 min)
 - **Frontend build**: Downloads Node.js, compiles React app, creates Nginx server (~10-15 min)
 
@@ -430,7 +431,7 @@ db:
     --innodb_buffer_pool_size=256M  # Down from 512M
 
 redis:
-  command: redis-server --maxmemory 128mb  # Down from 256mb
+  command: redis-server --maxmemory 128mb # Down from 256mb
 ```
 
 ### For powerful Unraid servers (16GB+ RAM)
@@ -441,7 +442,7 @@ db:
     --innodb_buffer_pool_size=1G  # Up from 512M
 
 redis:
-  command: redis-server --maxmemory 512mb  # Up from 256mb
+  command: redis-server --maxmemory 512mb # Up from 256mb
 ```
 
 ---

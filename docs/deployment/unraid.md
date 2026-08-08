@@ -20,12 +20,12 @@ Complete guide for installing and running The Logbook on Unraid.
 
 ## Requirements
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| Unraid | 6.9.0+ | 6.12.0+ |
-| RAM | 4 GB free | 8 GB free |
-| Disk | 20 GB | 50 GB+ |
-| CPU | 2 cores | 4+ cores |
+| Component | Minimum   | Recommended |
+| --------- | --------- | ----------- |
+| Unraid    | 6.9.0+    | 6.12.0+     |
+| RAM       | 4 GB free | 8 GB free   |
+| Disk      | 20 GB     | 50 GB+      |
+| CPU       | 2 cores   | 4+ cores    |
 
 Docker must be enabled on your Unraid server (Settings > Docker > Enable Docker: Yes).
 
@@ -44,6 +44,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 ```
 
 The script will:
+
 - Clone the repository to `/mnt/user/appdata/the-logbook`
 - Generate secure passwords and encryption keys
 - Create the directory structure with correct Unraid permissions
@@ -51,6 +52,7 @@ The script will:
 - Verify the deployment
 
 When prompted, choose:
+
 - **1** for a fresh installation
 - **2** to update an existing installation
 - **3** for a clean install (removes all data)
@@ -135,12 +137,12 @@ docker-compose restart
 
 ### Ports
 
-| Service | Default Port | Purpose |
-|---------|-------------|---------|
-| Frontend | 7880 | Web interface |
-| Backend API | 7881 | API endpoint |
-| MySQL | 3306 (internal) | Database (not exposed to host) |
-| Redis | 6379 (internal) | Cache (not exposed to host) |
+| Service     | Default Port    | Purpose                        |
+| ----------- | --------------- | ------------------------------ |
+| Frontend    | 7880            | Web interface                  |
+| Backend API | 7881            | API endpoint                   |
+| MySQL       | 3306 (internal) | Database (not exposed to host) |
+| Redis       | 6379 (internal) | Cache (not exposed to host)    |
 
 To change ports, edit `FRONTEND_PORT` and `BACKEND_PORT` in `.env` and update `ALLOWED_ORIGINS` to match.
 
@@ -247,7 +249,7 @@ into a throwaway schema, verified, and dropped. Check `docker compose logs
 backup` — a failed drill repeats loudly every night until fixed. Remember to
 sync the backups share off the array, and keep
 `ENCRYPTION_KEY`/`ENCRYPTION_SALT` somewhere separate: a backup without its
-era's keys cannot decrypt encrypted fields. *(2026-07-31)*
+era's keys cannot decrypt encrypted fields. _(2026-07-31)_
 
 ### Manual Backup
 
