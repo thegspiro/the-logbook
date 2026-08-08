@@ -173,4 +173,50 @@ describe('SkillTemplateBuilderPage', () => {
       );
     });
   });
+
+  // A passing threshold only means anything on a critical criterion: a
+  // non-critical one contributes points to the overall score and cannot fail
+  // the test on its own, so the field previously asked for a number that was
+  // then ignored.
+  describe('Passing Points visibility', () => {
+    // The page mounts with one section holding one pass/fail criterion, so
+    // there is nothing to add — just switch that criterion to a scored one.
+    const makeCriterionScored = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.selectOptions(screen.getByDisplayValue('Pass / Fail'), 'score');
+    };
+
+    it('hides Passing Points on a non-critical score criterion', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await makeCriterionScored(user);
+
+      expect(screen.getByText('Max Points')).toBeInTheDocument();
+      expect(screen.queryByText('Passing Points')).not.toBeInTheDocument();
+    });
+
+    it('shows Passing Points once the criterion is marked critical', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await makeCriterionScored(user);
+      await user.click(screen.getByRole('checkbox', { name: /must pass to pass the test/i }));
+
+      expect(screen.getByText('Passing Points')).toBeInTheDocument();
+    });
+
+    it('hides it again when Critical is unchecked', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await makeCriterionScored(user);
+      const critical = screen.getByRole('checkbox', { name: /must pass to pass the test/i });
+
+      await user.click(critical);
+      expect(screen.getByText('Passing Points')).toBeInTheDocument();
+
+      await user.click(critical);
+      expect(screen.queryByText('Passing Points')).not.toBeInTheDocument();
+    });
+  });
 });

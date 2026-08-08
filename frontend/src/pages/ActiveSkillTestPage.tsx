@@ -44,7 +44,14 @@ import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
-import type { SkillCriterion, SkillTemplateSection, CriterionResult, SectionResult } from '../types/skillsTesting';
+import { toAppError } from '../utils/errorHandling';
+import type {
+  SkillCriterion,
+  SkillTemplateSection,
+  CriterionResult,
+  SectionResult,
+  SkillTestUpdate,
+} from '../types/skillsTesting';
 
 // ==================== Timer Component ====================
 
@@ -874,18 +881,52 @@ export const ActiveSkillTestPage: React.FC = () => {
     }
   }, [activeTestRunning, setActiveTestRunning, currentTest, updateTest]);
 
+  // Every write goes through here so it carries the version this screen is
+  // working from. The server refuses a stale one with 409 instead of quietly
+  // overwriting whoever saved in between — a second examiner on the same test,
+  // or an officer editing the scorecard in the admin UI.
+  const [conflict, setConflict] = useState(false);
+  const saveTest = useCallback(
+    async (updates: SkillTestUpdate) => {
+      if (!currentTest) return;
+      try {
+        await updateTest(currentTest.id, {
+          ...updates,
+          expected_version: currentTest.version,
+        });
+      } catch (err: unknown) {
+        if (toAppError(err).status === 409) {
+          setConflict(true);
+        }
+        throw err;
+      }
+    },
+    [currentTest, updateTest]
+  );
+
   const handleSaveProgress = useCallback(async () => {
     if (!currentTest) return;
     try {
-      await updateTest(currentTest.id, {
+      await saveTest({
         section_results: currentTest.section_results,
         elapsed_seconds: activeTestTimer,
       });
       toast.success('Progress saved');
-    } catch {
-      toast.error('Failed to save progress');
+    } catch (err: unknown) {
+      toast.error(
+        toAppError(err).status === 409
+          ? 'This test changed elsewhere — reload before saving'
+          : 'Failed to save progress'
+      );
     }
-  }, [currentTest, activeTestTimer, updateTest]);
+  }, [currentTest, activeTestTimer, saveTest]);
+
+  const handleReloadAfterConflict = useCallback(async () => {
+    if (!testId) return;
+    setConflict(false);
+    await loadTest(testId);
+    toast.success('Reloaded the current results');
+  }, [testId, loadTest]);
 
   // Autosave. This screen is used one-handed on a phone, outdoors, often with
   // gloves — and until now it only persisted on an explicit Save or on entering
@@ -908,9 +949,9 @@ export const ActiveSkillTestPage: React.FC = () => {
   const persistAutoSave = useCallback(
     async (payload: { section_results: SectionResult[]; elapsed_seconds: number }) => {
       if (!currentTest) return;
-      await updateTest(currentTest.id, payload);
+      await saveTest(payload);
     },
-    [currentTest, updateTest]
+    [currentTest, saveTest]
   );
 
   useAutoSave({
@@ -947,7 +988,7 @@ export const ActiveSkillTestPage: React.FC = () => {
 
     try {
       // Save current state before entering review
-      await updateTest(currentTest.id, {
+      await saveTest({
         section_results: currentTest.section_results,
         elapsed_seconds: activeTestTimer,
       });
@@ -955,7 +996,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     } catch {
       toast.error('Failed to save progress');
     }
-  }, [currentTest, activeTestTimer, updateTest, templateSections, setActiveTestRunning]);
+  }, [currentTest, activeTestTimer, saveTest, templateSections, setActiveTestRunning]);
 
   /** "Submit Test" — finalizes the test with notes from review, calculates results */
   const handleSubmit = useCallback(async () => {
@@ -997,7 +1038,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       });
 
       // Save section results with review notes
-      await updateTest(currentTest.id, {
+      await saveTest({
         section_results: updatedSectionResults,
         elapsed_seconds: activeTestTimer,
       });
@@ -1016,7 +1057,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [currentTest, activeTestTimer, updateTest, completeTest, navigate, templateSections, reviewNotes]);
+  }, [currentTest, activeTestTimer, saveTest, completeTest, navigate, templateSections, reviewNotes]);
 
   /** Practice: complete the test (calculate results) but keep in review mode */
   const handlePracticeViewResults = useCallback(async () => {
@@ -1050,7 +1091,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         };
       });
 
-      await updateTest(currentTest.id, {
+      await saveTest({
         section_results: updatedSectionResults,
         elapsed_seconds: activeTestTimer,
       });
@@ -1068,7 +1109,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [currentTest, activeTestTimer, updateTest, completeTest, navigate, templateSections, reviewNotes]);
+  }, [currentTest, activeTestTimer, saveTest, completeTest, navigate, templateSections, reviewNotes]);
 
   /** Practice: email results to candidate */
   const handleEmailResults = useCallback(async () => {
@@ -1474,6 +1515,24 @@ export const ActiveSkillTestPage: React.FC = () => {
           <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
             Practice Mode — This attempt will not be recorded
           </p>
+        </div>
+      )}
+
+      {/* Concurrent-edit banner. Autosave is suspended while this is up —
+          every attempt would 409 against the same stale version — so the
+          examiner is told plainly rather than left believing their scoring is
+          still being saved. */}
+      {conflict && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            Someone else changed this test. Your scoring is not being saved.
+          </p>
+          <button
+            onClick={() => void handleReloadAfterConflict()}
+            className="mt-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+          >
+            Reload current results
+          </button>
         </div>
       )}
 

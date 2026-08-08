@@ -1716,6 +1716,13 @@ export interface TrainingModuleConfig {
   show_areas_for_improvement: boolean;
   show_skills_observed: boolean;
   show_submission_history: boolean;
+  /** Department default for how much of a skills-test result the person tested
+   *  sees: 'none' | 'scores' (marks and points, no notes) | 'full'. Templates
+   *  and individual tests may override it. */
+  skills_result_disclosure: string;
+  /** Department default for when a result becomes visible:
+   *  'on_completion' | 'on_release' (an officer must release it first). */
+  skills_result_release: string;
   allow_member_report_export: boolean;
   report_review_required: boolean;
   report_review_role: string;

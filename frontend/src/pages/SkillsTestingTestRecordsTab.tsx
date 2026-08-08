@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, CircleSlash, Plus, Search, Trash2 } from 'lucide-react';
+import { Ban, CircleSlash, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
@@ -15,6 +15,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTestListItem } from '../types/skillsTesting';
 import { EmptyState } from '../components/ux';
 import { Modal } from '../components/Modal';
+import { getErrorMessage } from '../utils/errorHandling';
 import { ClipboardList } from 'lucide-react';
 
 /** Matches the backend's SkillTestVoidRequest minimum — a void stays visible in
@@ -49,7 +50,8 @@ const TestCard: React.FC<{
   onDelete: () => void;
   onVoid: () => void;
   onCancel: () => void;
-}> = ({ test, onClick, onDelete, onVoid, onCancel }) => {
+  onRelease: () => void;
+}> = ({ test, onClick, onDelete, onVoid, onCancel, onRelease }) => {
   const tz = useTimezone();
   return (
     <div
@@ -107,16 +109,34 @@ const TestCard: React.FC<{
               <Trash2 className="h-4 w-4" />
             </button>
           ) : test.status === 'completed' ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onVoid();
-              }}
-              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
-              aria-label={`Void test for ${test.candidate_name}`}
-            >
-              <Ban className="h-4 w-4" />
-            </button>
+            <>
+              {/* Only meaningful under the on_release mode; the endpoint is
+                  idempotent and refuses tests whose results are never shown,
+                  so offering it on any unreleased result is safe and saves the
+                  officer working out which mode a template uses. */}
+              {!test.released_at && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRelease();
+                  }}
+                  className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20"
+                  aria-label={`Release results to ${test.candidate_name}`}
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onVoid();
+                }}
+                className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
+                aria-label={`Void test for ${test.candidate_name}`}
+              >
+                <Ban className="h-4 w-4" />
+              </button>
+            </>
           ) : test.status === 'draft' || test.status === 'in_progress' ? (
             <button
               onClick={(e) => {
@@ -139,7 +159,7 @@ const TestCard: React.FC<{
 
 const SkillsTestingTestRecordsTab: React.FC = () => {
   const navigate = useNavigate();
-  const { tests, testsLoading, loadTests, deleteTest, voidTest, cancelTest, templates, loadTemplates } =
+  const { tests, testsLoading, loadTests, deleteTest, voidTest, cancelTest, releaseTest, templates, loadTemplates } =
     useSkillsTestingStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -189,6 +209,15 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
       toast.success('Test cancelled');
     } catch {
       toast.error('Failed to cancel test');
+    }
+  };
+
+  const handleRelease = async (test: SkillTestListItem) => {
+    try {
+      await releaseTest(test.id);
+      toast.success(`Results released to ${test.candidate_name}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to release results'));
     }
   };
 
@@ -285,6 +314,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               onDelete={() => void handleDelete(test)}
               onVoid={() => setVoidTarget(test)}
               onCancel={() => void handleCancel(test)}
+              onRelease={() => void handleRelease(test)}
             />
           ))}
         </div>

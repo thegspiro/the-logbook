@@ -27,6 +27,37 @@ export type TemplateVisibility = 'all_members' | 'officers_only' | 'assigned_onl
 
 export type TestResult = 'pass' | 'fail' | 'incomplete';
 
+/** How much of a result the person tested may see. Officers always see all of it. */
+export const ResultDisclosure = {
+  /** Never shown to the candidate; the test does not appear in their history. */
+  NONE: 'none',
+  /** Marks and points, but no written commentary. */
+  SCORES: 'scores',
+  /** The full scorecard, examiner notes included. */
+  FULL: 'full',
+} as const;
+export type ResultDisclosure = (typeof ResultDisclosure)[keyof typeof ResultDisclosure];
+
+/** When a visible result becomes visible. */
+export const ResultRelease = {
+  /** As soon as the examiner submits. */
+  ON_COMPLETION: 'on_completion',
+  /** Only once an officer releases it. */
+  ON_RELEASE: 'on_release',
+} as const;
+export type ResultRelease = (typeof ResultRelease)[keyof typeof ResultRelease];
+
+/** One person granted sight of a single test's result. */
+export interface SkillTestViewer {
+  id: string;
+  test_id: string;
+  user_id: string;
+  user_name?: string | undefined;
+  granted_by?: string | undefined;
+  granted_by_name?: string | undefined;
+  granted_at?: string | undefined;
+}
+
 // ==================== Template Types ====================
 
 /** A single evaluation criterion within a section */
@@ -77,6 +108,10 @@ export interface SkillTemplate {
   require_all_critical: boolean;
   /** Training-pipeline requirement this template's tests satisfy (optional) */
   requirement_id?: string;
+  /** Disclosure overrides for this template; null inherits the org default. */
+  result_disclosure?: ResultDisclosure;
+  result_release?: ResultRelease;
+  result_viewer_positions?: string[];
   /** Tags for filtering/searching */
   tags?: string[];
   created_at: string;
@@ -95,6 +130,9 @@ export interface SkillTemplateCreate {
   tags?: string[] | undefined;
   visibility?: TemplateVisibility | undefined;
   requirement_id?: string | undefined;
+  result_disclosure?: ResultDisclosure | undefined;
+  result_release?: ResultRelease | undefined;
+  result_viewer_positions?: string[] | undefined;
 }
 
 export interface SkillTemplateSectionCreate {
@@ -129,6 +167,9 @@ export interface SkillTemplateUpdate {
   require_all_critical?: boolean | undefined;
   tags?: string[] | undefined;
   requirement_id?: string | null | undefined;
+  result_disclosure?: ResultDisclosure | null | undefined;
+  result_release?: ResultRelease | null | undefined;
+  result_viewer_positions?: string[] | null | undefined;
 }
 
 // ==================== Active Test Types ====================
@@ -168,6 +209,8 @@ export interface SkillTest {
   status: SkillTestStatus;
   result: TestResult;
   is_practice: boolean;
+  /** Optimistic-concurrency counter; send back as expected_version on write. */
+  version: number;
   section_results: SectionResult[];
   /** Overall score as a percentage (0-100) */
   overall_score?: number | undefined;
@@ -178,6 +221,13 @@ export interface SkillTest {
   completed_at?: string | undefined;
   created_at: string;
   updated_at: string;
+  /** Disclosure overrides set on this test; null inherits the template's. */
+  result_disclosure?: ResultDisclosure | undefined;
+  result_release?: ResultRelease | undefined;
+  result_viewer_positions?: string[] | undefined;
+  /** Release trail — set once an officer releases the result. */
+  released_at?: string | undefined;
+  released_by?: string | undefined;
   /** Void trail — present only when an official result has been withdrawn */
   voided_at?: string | undefined;
   voided_by?: string | undefined;
@@ -206,6 +256,9 @@ export interface SkillTestUpdate {
   notes?: string;
   result?: TestResult;
   requirement_id?: string | null;
+  /** The version last seen. A stale value is refused with 409 rather than
+   *  silently overwriting whoever wrote in between. */
+  expected_version?: number;
 }
 
 // ==================== Summary / List Types ====================
@@ -241,6 +294,8 @@ export interface SkillTestListItem {
   started_at?: string;
   completed_at?: string;
   created_at: string;
+  /** Set once an officer has released the result to the candidate. */
+  released_at?: string | undefined;
   /** Explicitly widened to include undefined: with exactOptionalPropertyTypes,
    *  the store patches this field straight from a SkillTest response where it
    *  is optional, and assigning undefined to a bare `?:` property is an error. */

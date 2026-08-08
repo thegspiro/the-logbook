@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -62,6 +63,37 @@ class SkillTestResult(str, enum.Enum):
     PASS = "pass"
     FAIL = "fail"
     INCOMPLETE = "incomplete"
+
+
+class ResultDisclosure(str, enum.Enum):
+    """How much of a result the person tested may see.
+
+    Officers always see everything; this governs the candidate's own view and
+    anyone the test grants access to.
+    """
+
+    # Results are never shown to the candidate. The test does not appear in
+    # their history at all — an entry they can see but not open would only
+    # invite them to ask why.
+    NONE = "none"
+    # Per-criterion pass/fail and points, plus the overall score — but no
+    # written commentary. Examiner notes are frequently candid working notes
+    # ("hesitant, needed two prompts") meant for the training file, not
+    # feedback drafted for the member to read.
+    SCORES = "scores"
+    # The full scorecard, including every note the examiner wrote.
+    FULL = "full"
+
+
+class ResultRelease(str, enum.Enum):
+    """When a visible result becomes visible."""
+
+    # As soon as the examiner submits the test.
+    ON_COMPLETION = "on_completion"
+    # Only once an officer explicitly releases it, so results can be reviewed
+    # (or delivered in person) before the member reads them. Mirrors the
+    # shift-report review workflow, which gates trainee visibility the same way.
+    ON_RELEASE = "on_release"
 
 
 class SkillTemplate(Base):
@@ -112,6 +144,18 @@ class SkillTemplate(Base):
         nullable=True,
         index=True,
     )
+
+    # Result disclosure — NULL inherits the organization's default from
+    # TrainingModuleConfig. Set here when one skill needs different handling
+    # from the department norm: a promotional evaluation may withhold results
+    # that a routine SCBA drill shows in full.
+    result_disclosure = Column(String(20), nullable=True)
+    result_release = Column(String(20), nullable=True)
+
+    # Corporate position slugs whose holders may view results of tests taken
+    # against this template, in addition to the candidate and officers. NULL or
+    # empty grants no one extra. Mirrors InventoryItem.restricted_to_positions.
+    result_viewer_positions = Column(JSON, nullable=True)
 
     # Metadata
     tags = Column(JSON, nullable=True)
@@ -183,6 +227,15 @@ class SkillTest(Base):
     result = Column(String(20), default="incomplete")
     is_practice = Column(Boolean, default=False)
 
+    # Optimistic-concurrency counter, incremented on every mutation. A client
+    # may send the version it last saw; a mismatch means someone else wrote in
+    # between and the write is refused rather than silently overwriting them.
+    #
+    # An integer rather than updated_at: MySQL DATETIME carries no fractional
+    # seconds by default, so two writes inside the same second compare equal
+    # and the conflict goes undetected.
+    version = Column(Integer, nullable=False, default=1, server_default="1")
+
     # Frozen copy of the template as it stood when this test was created:
     # {version, sections, passing_percentage, require_all_critical,
     #  time_limit_seconds}.
@@ -207,6 +260,24 @@ class SkillTest(Base):
 
     # Notes
     notes = Column(Text, nullable=True)
+
+    # Result disclosure for this specific test — NULL inherits the template's
+    # setting, which in turn inherits the organization's.
+    result_disclosure = Column(String(20), nullable=True)
+    result_release = Column(String(20), nullable=True)
+
+    # Extra position slugs for this test only, on top of the template's.
+    result_viewer_positions = Column(JSON, nullable=True)
+
+    # Release trail — set when an officer releases the result under the
+    # on_release mode. SET NULL on the author so a departed officer's departure
+    # cannot un-release a result the member has already been shown.
+    released_at = Column(DateTime(timezone=True), nullable=True)
+    released_by = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Void trail — set only when an official result is withdrawn. SET NULL on the
     # author (a departed officer must not erase the void record), so nullable.
@@ -243,3 +314,51 @@ class SkillTest(Base):
 
     def __repr__(self):
         return f"<SkillTest(template_id={self.template_id}, candidate_id={self.candidate_id}, status={self.status})>"
+
+
+class SkillTestViewer(Base):
+    """A person granted sight of one specific test's result.
+
+    Covers the case the position and candidate rules cannot: "my preceptor
+    should see how I did on this one." Named per test rather than per template
+    because the relationship is to the *person tested*, not to the skill — a
+    trainee's FTO changes, and a standing template-wide grant would quietly
+    follow the skill onto every other candidate's results.
+
+    A viewer sees the result at the same disclosure level the candidate does.
+    They are being shown someone else's evaluation; there is no reading of
+    "share this result" that means the observer should see more of it than its
+    subject.
+    """
+
+    __tablename__ = "skill_test_viewers"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    test_id = Column(
+        String(36),
+        ForeignKey("skill_tests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # SET NULL requires nullable: the grant outlives the officer who made it.
+    granted_by = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    granted_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        # One grant per person per test — re-granting is idempotent rather than
+        # an accumulating pile of duplicate rows.
+        UniqueConstraint("test_id", "user_id", name="uq_skill_test_viewer"),
+    )
+
+    def __repr__(self):
+        return f"<SkillTestViewer(test_id={self.test_id}, user_id={self.user_id})>"

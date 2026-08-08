@@ -14,6 +14,7 @@ import type {
   SkillTestCreate,
   SkillTestListItem,
   SkillTestUpdate,
+  SkillTestViewer,
   SkillTestingSummary,
 } from '../types/skillsTesting';
 import type {
@@ -1271,6 +1272,27 @@ export const skillsTestingService = {
 
   async discardPracticeTest(testId: string): Promise<void> {
     await api.delete(`/training/skills-testing/tests/${testId}/discard`);
+  },
+
+  async releaseTest(testId: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/release`);
+    return response.data;
+  },
+
+  async getTestViewers(testId: string): Promise<SkillTestViewer[]> {
+    const response = await api.get<SkillTestViewer[]>(`/training/skills-testing/tests/${testId}/viewers`);
+    return asArray(response.data);
+  },
+
+  async addTestViewer(testId: string, userId: string): Promise<SkillTestViewer> {
+    const response = await api.post<SkillTestViewer>(`/training/skills-testing/tests/${testId}/viewers`, {
+      user_id: userId,
+    });
+    return response.data;
+  },
+
+  async removeTestViewer(testId: string, userId: string): Promise<void> {
+    await api.delete(`/training/skills-testing/tests/${testId}/viewers/${userId}`);
   },
 
   async cancelTest(testId: string, reason?: string): Promise<SkillTest> {

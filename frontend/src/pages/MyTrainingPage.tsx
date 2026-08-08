@@ -205,6 +205,17 @@ const VISIBILITY_FIELDS: Array<{ key: keyof TMConfig; label: string; description
   },
 ];
 
+const SKILLS_DISCLOSURE_OPTIONS = [
+  { value: 'full', label: 'Full results — scores and examiner notes' },
+  { value: 'scores', label: 'Scores only — pass/fail and points, no written notes' },
+  { value: 'none', label: 'Nothing — results are never shown to the member' },
+];
+
+const SKILLS_RELEASE_OPTIONS = [
+  { value: 'on_completion', label: 'As soon as the examiner submits' },
+  { value: 'on_release', label: 'Only after an officer releases the result' },
+];
+
 const REVIEW_ROLE_OPTIONS = [
   { value: 'training_officer', label: 'Training Officer' },
   { value: 'captain', label: 'Captain' },
@@ -319,6 +330,56 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                 className="form-input text-sm"
               >
                 {REVIEW_ROLE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Skills-test results — the department default. Individual templates and
+          tests may override both settings; this is what applies when they
+          don't. */}
+      <div>
+        <h3 className="text-theme-text-primary mb-3 text-sm font-semibold tracking-wide uppercase">
+          Skills-Test Results
+        </h3>
+        <div className="space-y-3">
+          <div className="bg-theme-surface rounded-lg p-3">
+            <p className="text-theme-text-primary mb-1 text-sm font-medium">What the member sees</p>
+            <p className="text-theme-text-muted mb-2 text-xs">
+              Examiner notes are often candid working notes for the training file rather than feedback written for the
+              member to read. Officers always see everything.
+            </p>
+            <select
+              value={getStringValue('skills_result_disclosure') || 'full'}
+              onChange={(e) => setDraft({ ...draft, skills_result_disclosure: e.target.value })}
+              className="form-input text-sm"
+            >
+              {SKILLS_DISCLOSURE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {getStringValue('skills_result_disclosure') !== 'none' && (
+            <div className="bg-theme-surface rounded-lg p-3">
+              <p className="text-theme-text-primary mb-1 text-sm font-medium">When they see it</p>
+              <p className="text-theme-text-muted mb-2 text-xs">
+                Requiring a release lets an officer review the scorecard, or deliver a failure in person, before the
+                member reads it. Practice attempts are never held back.
+              </p>
+              <select
+                value={getStringValue('skills_result_release') || 'on_completion'}
+                onChange={(e) => setDraft({ ...draft, skills_result_release: e.target.value })}
+                className="form-input text-sm"
+              >
+                {SKILLS_RELEASE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>

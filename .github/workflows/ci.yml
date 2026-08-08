@@ -52,16 +52,22 @@ jobs:
       # PT018 sat on main, every PR reported "Backend Lint failed" having
       # never checked formatting or import order at all. One run should
       # surface every lint problem, not just the first.
+      # alembic/ is in scope for the same reason tests/ is. It was outside every
+      # CI check while lint-staged still ran black and isort over it as part of
+      # backend/**/*.py, so a migration could pass `npm run lint` and then be
+      # rejected by the pre-commit hook — the two gates disagreed about which
+      # files exist. (alembic/versions stays excluded from flake8 by .flake8;
+      # generated migration bodies are not hand-written code.)
       - name: Run flake8
-        run: flake8 app/ tests/
+        run: flake8 app/ tests/ alembic/
 
       - name: Check formatting with black
         if: '!cancelled()'
-        run: black --check app/ tests/
+        run: black --check app/ tests/ alembic/
 
       - name: Check import order with isort
         if: '!cancelled()'
-        run: isort --check-only app/ tests/
+        run: isort --check-only app/ tests/ alembic/
 
       # Repo-root Python (generate_registry.py, scripts/) is outside the
       # backend working-directory and was linted by nothing, which let five

@@ -73,7 +73,15 @@ export const MySkillTestsList: React.FC<MySkillTestsListProps> = ({ userId }) =>
   }
 
   if (tests.length === 0) {
-    return <p className="text-theme-text-muted text-sm">You haven&apos;t taken any skills tests yet.</p>;
+    // The API omits tests whose results the department does not disclose, so
+    // an empty list does not always mean "none taken" — say so without
+    // implying a result is being kept from them, which may not be the case.
+    return (
+      <p className="text-theme-text-muted text-sm">
+        No skills-test results to show. Results your department doesn&apos;t share won&apos;t appear here — ask a
+        training officer if you&apos;re expecting one.
+      </p>
+    );
   }
 
   return (

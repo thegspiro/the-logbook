@@ -23,11 +23,7 @@ import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { trainingProgramService } from '../services/api';
 import type { TrainingRequirementEnhanced } from '../types/training';
-import type {
-  SkillTemplateSectionCreate,
-  SkillCriterionCreate,
-  CriterionType,
-} from '../types/skillsTesting';
+import type { SkillTemplateSectionCreate, SkillCriterionCreate, CriterionType } from '../types/skillsTesting';
 
 // ==================== Helpers ====================
 
@@ -81,22 +77,20 @@ const CriterionEditor: React.FC<{
   onRemove: () => void;
   index: number;
 }> = ({ criterion, onChange, onRemove, index }) => {
-  const [checklistText, setChecklistText] = useState(
-    (criterion.checklist_items ?? []).join('\n')
-  );
+  const [checklistText, setChecklistText] = useState((criterion.checklist_items ?? []).join('\n'));
 
   return (
-    <div className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border">
+    <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
       <div className="flex items-start gap-3">
-        <div className="flex items-center mt-2 text-theme-text-muted cursor-grab">
-          <GripVertical className="w-4 h-4" />
-          <span className="text-xs font-mono ml-1">{index + 1}</span>
+        <div className="text-theme-text-muted mt-2 flex cursor-grab items-center">
+          <GripVertical className="h-4 w-4" />
+          <span className="ml-1 font-mono text-xs">{index + 1}</span>
         </div>
 
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3">
+        <div className="grid flex-1 grid-cols-1 gap-3 lg:grid-cols-12">
           {/* Label */}
           <div className="lg:col-span-4">
-            <label className="block text-xs font-medium text-theme-text-muted mb-1">
+            <label className="text-theme-text-muted mb-1 block text-xs font-medium">
               Criterion Label <span className="text-red-500">*</span>
             </label>
             <input
@@ -104,20 +98,22 @@ const CriterionEditor: React.FC<{
               value={criterion.label}
               onChange={(e) => onChange({ ...criterion, label: e.target.value })}
               placeholder="e.g., Dons SCBA within 60 seconds"
-              className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+              className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
             />
           </div>
 
           {/* Type */}
           <div className="lg:col-span-2">
-            <label className="block text-xs font-medium text-theme-text-muted mb-1">Type</label>
+            <label className="text-theme-text-muted mb-1 block text-xs font-medium">Type</label>
             <select
               value={criterion.type}
               onChange={(e) => onChange({ ...criterion, type: e.target.value as CriterionType })}
-              className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+              className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
             >
               {CRITERION_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
               ))}
             </select>
           </div>
@@ -126,50 +122,63 @@ const CriterionEditor: React.FC<{
           {criterion.type === 'score' && (
             <>
               <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-theme-text-muted mb-1">Max Points</label>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium">Max Points</label>
                 <input
                   type="number"
                   min="1"
                   value={criterion.max_score ?? ''}
-                  onChange={(e) => onChange({ ...criterion, max_score: e.target.value ? Number(e.target.value) : undefined })}
+                  onChange={(e) =>
+                    onChange({ ...criterion, max_score: e.target.value ? Number(e.target.value) : undefined })
+                  }
                   placeholder="3"
-                  className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
               </div>
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-theme-text-muted mb-1">
-                  Passing Points
-                  <span className="font-normal text-theme-text-muted/70"> (critical only)</span>
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={criterion.passing_score ?? ''}
-                  onChange={(e) => onChange({ ...criterion, passing_score: e.target.value ? Number(e.target.value) : undefined })}
-                  placeholder="2"
-                  className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
-                />
-              </div>
+              {/* A passing threshold only means anything on a critical
+                  criterion: a non-critical one contributes its points to the
+                  overall score and cannot fail the test on its own, so asking
+                  for a threshold there invites an answer that is then ignored.
+                  The field used to render always, with a "(critical only)"
+                  hint doing the explaining. */}
+              {criterion.required && (
+                <div className="lg:col-span-2">
+                  <label className="text-theme-text-muted mb-1 block text-xs font-medium">Passing Points</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={criterion.passing_score ?? ''}
+                    onChange={(e) =>
+                      onChange({ ...criterion, passing_score: e.target.value ? Number(e.target.value) : undefined })
+                    }
+                    placeholder="2"
+                    className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+              )}
             </>
           )}
 
           {criterion.type === 'time_limit' && (
             <div className="lg:col-span-2">
-              <label className="block text-xs font-medium text-theme-text-muted mb-1">Time Limit (sec)</label>
+              <label className="text-theme-text-muted mb-1 block text-xs font-medium">Time Limit (sec)</label>
               <input
                 type="number"
                 min="1"
                 value={criterion.time_limit_seconds ?? ''}
-                onChange={(e) => onChange({ ...criterion, time_limit_seconds: e.target.value ? Number(e.target.value) : undefined })}
+                onChange={(e) =>
+                  onChange({ ...criterion, time_limit_seconds: e.target.value ? Number(e.target.value) : undefined })
+                }
                 placeholder="60"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
               />
             </div>
           )}
 
           {criterion.type === 'checklist' && (
             <div className="lg:col-span-4">
-              <label className="block text-xs font-medium text-theme-text-muted mb-1">Checklist Items (one per line)</label>
+              <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                Checklist Items (one per line)
+              </label>
               <textarea
                 value={checklistText}
                 onChange={(e) => {
@@ -181,60 +190,62 @@ const CriterionEditor: React.FC<{
                 }}
                 rows={3}
                 placeholder="Check airway&#10;Assess breathing&#10;Check pulse"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
               />
             </div>
           )}
 
           {criterion.type === 'statement' && (
             <div className="lg:col-span-4">
-              <label className="block text-xs font-medium text-theme-text-muted mb-1">Statement Text <span className="text-red-500">*</span></label>
+              <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                Statement Text <span className="text-red-500">*</span>
+              </label>
               <textarea
                 value={criterion.statement_text ?? ''}
                 onChange={(e) => onChange({ ...criterion, statement_text: e.target.value || undefined })}
                 rows={3}
                 placeholder="Enter the statement the evaluator must read or announce..."
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
               />
             </div>
           )}
 
           {/* Required toggle */}
-          <div className="lg:col-span-2 flex items-end">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="flex items-end lg:col-span-2">
+            <label className="flex cursor-pointer items-center gap-2">
               <input
                 type="checkbox"
                 checked={criterion.required}
                 onChange={(e) => onChange({ ...criterion, required: e.target.checked })}
-                className="rounded-sm border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
+                className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
               />
               <div>
-                <span className="text-sm text-theme-text-primary">Critical</span>
-                <p className="text-xs text-theme-text-muted">Must pass to pass the test</p>
+                <span className="text-theme-text-primary text-sm">Critical</span>
+                <p className="text-theme-text-muted text-xs">Must pass to pass the test</p>
               </div>
             </label>
           </div>
         </div>
 
         {/* Description */}
-        <div className="hidden xl:block shrink-0 w-48">
-          <label className="block text-xs font-medium text-theme-text-muted mb-1">Description</label>
+        <div className="hidden w-48 shrink-0 xl:block">
+          <label className="text-theme-text-muted mb-1 block text-xs font-medium">Description</label>
           <input
             type="text"
             value={criterion.description ?? ''}
             onChange={(e) => onChange({ ...criterion, description: e.target.value || undefined })}
             placeholder="Optional notes"
-            className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
           />
         </div>
 
         {/* Remove button */}
         <button
           onClick={onRemove}
-          className="mt-6 p-1.5 rounded-sm hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+          className="mt-6 rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
           title="Remove criterion"
         >
-          <Trash2 className="w-4 h-4 text-red-500" />
+          <Trash2 className="h-4 w-4 text-red-500" />
         </button>
       </div>
     </div>
@@ -272,47 +283,47 @@ const SectionEditor: React.FC<{
   };
 
   return (
-    <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+    <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
       {/* Section Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-theme-surface-hover/50 border-b border-theme-surface-border">
-        <GripVertical className="w-5 h-5 text-theme-text-muted cursor-grab" />
-        <span className="text-sm font-bold text-theme-text-muted">Section {index + 1}</span>
+      <div className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center gap-3 border-b px-4 py-3">
+        <GripVertical className="text-theme-text-muted h-5 w-5 cursor-grab" />
+        <span className="text-theme-text-muted text-sm font-bold">Section {index + 1}</span>
 
-        <div className="flex-1 flex gap-3">
+        <div className="flex flex-1 gap-3">
           <input
             type="text"
             value={section.name}
             onChange={(e) => onChange({ ...section, name: e.target.value })}
             placeholder="Section name (e.g., SCBA Operations)"
-            className="flex-1 px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 flex-1 rounded-lg border px-3 py-1.5 text-sm font-medium focus:ring-2 focus:outline-hidden"
           />
           <input
             type="text"
             value={section.description ?? ''}
             onChange={(e) => onChange({ ...section, description: e.target.value || undefined })}
             placeholder="Description (optional)"
-            className="hidden lg:block flex-1 px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 hidden flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden lg:block"
           />
         </div>
 
         <button
           onClick={() => onChange({ ...section, collapsed: !section.collapsed })}
-          className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors"
+          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
         >
-          {section.collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+          {section.collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </button>
         <button
           onClick={onRemove}
-          className="p-1.5 rounded-sm hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+          className="rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
           title="Remove section"
         >
-          <Trash2 className="w-4 h-4 text-red-500" />
+          <Trash2 className="h-4 w-4 text-red-500" />
         </button>
       </div>
 
       {/* Criteria */}
       {!section.collapsed && (
-        <div className="p-4 space-y-3">
+        <div className="space-y-3 p-4">
           {section.criteria.map((criterion, i) => (
             <CriterionEditor
               key={criterion.localId}
@@ -325,9 +336,9 @@ const SectionEditor: React.FC<{
 
           <button
             onClick={addCriterion}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors w-full justify-center border border-dashed border-theme-surface-border"
+            className="border-theme-surface-border flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="h-4 w-4" />
             Add Criterion
           </button>
         </div>
@@ -395,7 +406,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       setDescription(currentTemplate.description ?? '');
       setCategory(currentTemplate.category ?? '');
       setVisibility(currentTemplate.visibility ?? 'all_members');
-      setTimeLimitMinutes(currentTemplate.time_limit_seconds != null ? currentTemplate.time_limit_seconds / 60 : undefined);
+      setTimeLimitMinutes(
+        currentTemplate.time_limit_seconds != null ? currentTemplate.time_limit_seconds / 60 : undefined
+      );
       setPassingPercentage(currentTemplate.passing_percentage ?? undefined);
       setRequireAllCritical(currentTemplate.require_all_critical);
       setRequirementId(currentTemplate.requirement_id ?? '');
@@ -435,7 +448,21 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       if (section.criteria.length === 0) errors.push(`Section ${si + 1}: At least one criterion is required`);
       section.criteria.forEach((criterion, ci) => {
         if (!criterion.label.trim()) errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Label is required`);
-        if (criterion.type === 'score' && criterion.max_score != null && criterion.passing_score != null && criterion.passing_score > criterion.max_score) {
+        // Scoped to critical criteria because that is where the field is now
+        // shown. A non-critical criterion can still carry a stale passing_score
+        // from before it was unmarked, and validating that would block saving
+        // over a field the editor no longer displays — an error with no
+        // reachable cause. The value is inert while non-critical, and is
+        // deliberately kept rather than cleared: dropping it would silently
+        // reset the threshold to 0 (pass at any score) if the criterion were
+        // ever marked critical again.
+        if (
+          criterion.type === 'score' &&
+          criterion.required &&
+          criterion.max_score != null &&
+          criterion.passing_score != null &&
+          criterion.passing_score > criterion.max_score
+        ) {
           errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Passing score cannot exceed max score`);
         }
         if (criterion.type === 'checklist' && (!criterion.checklist_items || criterion.checklist_items.length === 0)) {
@@ -451,7 +478,10 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   }, [name, sections]);
 
   const buildPayload = useCallback(() => {
-    const parsedTags = tags.split(',').map((t) => t.trim()).filter(Boolean);
+    const parsedTags = tags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
     return {
       name: name.trim(),
       description: description.trim() || undefined,
@@ -480,7 +510,18 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         })),
       })),
     };
-  }, [name, description, category, visibility, timeLimitMinutes, passingPercentage, requireAllCritical, requirementId, tags, sections]);
+  }, [
+    name,
+    description,
+    category,
+    visibility,
+    timeLimitMinutes,
+    passingPercentage,
+    requireAllCritical,
+    requirementId,
+    tags,
+    sections,
+  ]);
 
   const handleSave = async () => {
     const errors = validate();
@@ -549,44 +590,44 @@ export const SkillTemplateBuilderPage: React.FC = () => {
 
   if (templateLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500" />
+      <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
+        <div className="h-12 w-12 animate-spin rounded-full border-t-4 border-b-4 border-red-500" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
           <Link
             to="/training/admin?page=skills-testing&tab=templates"
-            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
+            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 mr-2" />
+            <ArrowLeft className="mr-2 h-5 w-5" />
             Back to Skills Testing
           </Link>
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-              <ClipboardCheck className="w-8 h-8 text-red-700" />
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
+              <ClipboardCheck className="h-8 w-8 text-red-700" />
               <span>{isEditing ? 'Edit Template' : 'New Template'}</span>
             </h1>
             <div className="flex gap-2">
               <button
                 onClick={() => void handleSave()}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-theme-surface border border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors font-medium disabled:opacity-50"
+                className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-primary flex items-center gap-2 rounded-lg border px-4 py-2 font-medium transition-colors disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
+                <Save className="h-4 w-4" />
                 {isSaving ? 'Saving...' : 'Save Draft'}
               </button>
               {isEditing && (
                 <button
                   onClick={() => void handlePublish()}
-                  className="btn-success flex font-medium gap-2 items-center"
+                  className="btn-success flex items-center gap-2 font-medium"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="h-4 w-4" />
                   Publish
                 </button>
               )}
@@ -596,12 +637,16 @@ export const SkillTemplateBuilderPage: React.FC = () => {
 
         {/* Validation Errors */}
         {validationErrors.length > 0 && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+          <div
+            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"
+            role="alert"
+            aria-live="assertive"
+          >
             <div className="flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
               <div>
                 <p className="font-medium text-red-700 dark:text-red-300">Please fix the following errors:</p>
-                <ul className="mt-1 text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+                <ul className="mt-1 list-inside list-disc text-sm text-red-700 dark:text-red-300">
                   {validationErrors.map((err, i) => (
                     <li key={i}>{err}</li>
                   ))}
@@ -612,17 +657,21 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         )}
 
         {storeError && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+          <div
+            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"
+            role="alert"
+            aria-live="assertive"
+          >
             <p className="text-sm text-red-700 dark:text-red-300">{storeError}</p>
           </div>
         )}
 
         {/* Template Settings */}
-        <div className="bg-theme-surface rounded-lg p-6 border border-theme-surface-border mb-6">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Template Settings</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-theme-surface border-theme-surface-border mb-6 rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Template Settings</h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-theme-text-muted mb-1">
+              <label className="text-theme-text-muted mb-1 block text-sm font-medium">
                 Template Name <span className="text-red-500">*</span>
               </label>
               <input
@@ -630,63 +679,69 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., SCBA Proficiency Evaluation"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-muted mb-1">Category</label>
+              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Category</label>
               <input
                 type="text"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="e.g., Fire Operations, EMS, Hazmat"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-theme-text-muted mb-1">Visibility</label>
+              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Visibility</label>
               <select
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value)}
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
               >
                 <option value="all_members">All Members</option>
                 <option value="officers_only">Officers Only</option>
                 <option value="assigned_only">Assigned Members Only</option>
               </select>
-              <p className="text-xs text-theme-text-muted mt-1">
+              <p className="text-theme-text-muted mt-1 text-xs">
                 Controls who can see this test. Officers always have full access.
               </p>
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-theme-text-muted mb-1">Linked Training Requirement (optional)</label>
+              <label className="text-theme-text-muted mb-1 block text-sm font-medium">
+                Linked Training Requirement (optional)
+              </label>
               <select
                 value={requirementId}
                 onChange={(e) => setRequirementId(e.target.value)}
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
               >
                 <option value="">None — not linked to a pipeline requirement</option>
                 {requirements.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
                 ))}
               </select>
-              <p className="text-xs text-theme-text-muted mt-1">
-                When a test built from this template passes, this pipeline requirement is
-                marked complete for the candidate. Individual tests can override this.
+              <p className="text-theme-text-muted mt-1 text-xs">
+                When a test built from this template passes, this pipeline requirement is marked complete for the
+                candidate. Individual tests can override this.
               </p>
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-theme-text-muted mb-1">Description</label>
+              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Description</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
                 placeholder="Brief description of the evaluation..."
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-muted mb-1">Global Time Limit (minutes)</label>
+              <label className="text-theme-text-muted mb-1 block text-sm font-medium">
+                Global Time Limit (minutes)
+              </label>
               <input
                 type="number"
                 min="0"
@@ -694,11 +749,11 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={timeLimitMinutes ?? ''}
                 onChange={(e) => setTimeLimitMinutes(e.target.value ? Number(e.target.value) : undefined)}
                 placeholder="e.g., 30"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-muted mb-1">Passing Percentage (%)</label>
+              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Passing Percentage (%)</label>
               <input
                 type="number"
                 min="0"
@@ -706,38 +761,38 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 value={passingPercentage ?? ''}
                 onChange={(e) => setPassingPercentage(e.target.value ? Number(e.target.value) : undefined)}
                 placeholder="e.g., 70"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-muted mb-1">Tags (comma-separated)</label>
+              <label className="text-theme-text-muted mb-1 block text-sm font-medium">Tags (comma-separated)</label>
               <input
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="e.g., NFPA 1001, Probationary"
-                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
               />
             </div>
             <div className="flex items-end">
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex cursor-pointer items-center gap-2">
                 <input
                   type="checkbox"
                   checked={requireAllCritical}
                   onChange={(e) => setRequireAllCritical(e.target.checked)}
-                  className="rounded-sm border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
+                  className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
                 />
-                <span className="text-sm text-theme-text-primary">Require all critical criteria to pass</span>
+                <span className="text-theme-text-primary text-sm">Require all critical criteria to pass</span>
               </label>
             </div>
           </div>
         </div>
 
         {/* Sections */}
-        <div className="space-y-4 mb-6">
+        <div className="mb-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-theme-text-primary">Evaluation Sections</h2>
-            <span className="text-sm text-theme-text-muted">
+            <h2 className="text-theme-text-primary text-lg font-semibold">Evaluation Sections</h2>
+            <span className="text-theme-text-muted text-sm">
               {sections.length} section{sections.length !== 1 ? 's' : ''} &middot;{' '}
               {sections.reduce((sum, s) => sum + s.criteria.length, 0)} criteria
             </span>
@@ -755,27 +810,27 @@ export const SkillTemplateBuilderPage: React.FC = () => {
 
           <button
             onClick={addSection}
-            className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors w-full justify-center border-2 border-dashed border-theme-surface-border"
+            className="border-theme-surface-border flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-3 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="h-5 w-5" />
             Add Section
           </button>
         </div>
 
         {/* Bottom Save Bar */}
-        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border action-bar-safe -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 flex justify-end gap-2">
+        <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 -mx-4 flex justify-end gap-2 border-t px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <button
             onClick={() => void navigate('/training/admin?page=skills-testing&tab=templates')}
-            className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={() => void handleSave()}
             disabled={isSaving}
-            className="btn-primary flex font-medium gap-2 items-center px-6"
+            className="btn-primary flex items-center gap-2 px-6 font-medium"
           >
-            <Save className="w-4 h-4" />
+            <Save className="h-4 w-4" />
             {isSaving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Template'}
           </button>
         </div>

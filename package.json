@@ -22,7 +22,7 @@
     "test:backend": "cd backend && pytest",
     "test:frontend": "cd frontend && npm test",
     "lint": "npm run lint:backend && npm run lint:frontend",
-    "lint:backend": "cd backend && flake8 app/ tests/ && black --check app/ tests/ && isort --check-only app/ tests/",
+    "lint:backend": "cd backend && flake8 app/ tests/ alembic/ && black --check app/ tests/ alembic/ && isort --check-only app/ tests/ alembic/",
     "lint:frontend": "cd frontend && npm run lint",
     "format": "npm run format:backend && npm run format:frontend",
     "format:backend": "cd backend && black app/ tests/ && isort app/ tests/",

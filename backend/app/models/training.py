@@ -2057,6 +2057,17 @@ class TrainingModuleConfig(Base):
     show_areas_for_improvement = Column(Boolean, default=True, server_default="1")
     show_skills_observed = Column(Boolean, default=True, server_default="1")
 
+    # Skills-test results: the department-wide default for what the person
+    # tested may see of their own scorecard, and when. Templates and individual
+    # tests may override both. Defaults preserve the behavior members already
+    # have — the full scorecard as soon as the examiner submits — so enabling
+    # nothing changes nothing; a department that wants results withheld or
+    # redacted opts in.
+    skills_result_disclosure = Column(String(20), default="full", server_default="full")
+    skills_result_release = Column(
+        String(20), default="on_completion", server_default="on_completion"
+    )
+
     # Self-reported submissions
     show_submission_history = Column(Boolean, default=True, server_default="1")
 
@@ -2161,6 +2172,8 @@ class TrainingModuleConfig(Base):
             "show_areas_for_improvement": _b(self.show_areas_for_improvement),
             "show_skills_observed": _b(self.show_skills_observed),
             "show_submission_history": _b(self.show_submission_history),
+            "skills_result_disclosure": self.skills_result_disclosure or "full",
+            "skills_result_release": self.skills_result_release or "on_completion",
             "allow_member_report_export": _b(self.allow_member_report_export),
             "report_review_required": _b(self.report_review_required, False),
             "report_review_role": self.report_review_role or "training_officer",
