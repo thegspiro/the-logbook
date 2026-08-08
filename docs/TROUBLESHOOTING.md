@@ -4,7 +4,7 @@
 
 This is **the** troubleshooting guide for The Logbook — every module, plus deployment, build, migration and CI issues. It is the single source: there is nowhere else to add a troubleshooting entry, and nothing else to keep in sync with it.
 
-> **If you are looking for `docs/troubleshooting/README.md` or a hand-edited `wiki/Troubleshooting.md`, they were consolidated into this file (2026-08-08).** Three documents covering the same ground drifted apart for five months — the deployment digest and the wiki copy both froze at 2026-03-12 while this file kept moving, and each had entries the others lacked. The wiki page is now **generated** from this file by `wiki/setup-wiki.sh` at publish time, so it cannot drift again. Add new entries here.
+> **Seven troubleshooting documents were consolidated into this one (2026-08-08).** `docs/troubleshooting/README.md`, a hand-edited `wiki/Troubleshooting.md`, and the four per-area wiki pages (`Troubleshooting-Containers`, `-Backend`, `-Frontend`, `-Database`) all covered overlapping ground and drifted apart — the digest and the wiki copy froze at 2026-03-12 while this file kept moving, and each held entries the others lacked. The per-area pages were never even in `setup-wiki.sh`'s publish list, so the wiki sidebar links to them were dead. Their diagnostics now live here as [Container & Docker](#container--docker-diagnostics), [Backend Service](#backend-service-diagnostics), [Frontend & Browser](#frontend--browser-diagnostics) and [Database](#database-diagnostics), and the wiki page is **generated** from this file at publish time, so none of it can drift again. Add new entries here.
 
 **Last Updated**: 2026-08-08 (consolidated the three troubleshooting documents into this one; added the 2026-04 → 2026-08 entries that had only ever been written into the deployment digest — deployment posture and compose overrides, host-header and reverse-proxy trust, DB/Redis TLS verification, OAuth sign-in failure codes, the forced-password-change trap, audit retention and shipping, privacy rights, the offline-queue and skills-testing entries, and the rest)
 
@@ -189,7 +189,22 @@ This is **the** troubleshooting guide for The Logbook — every module, plus dep
 173. [Skills Testing: Attempts, Conflicts & Result Visibility](#skills-testing-attempts-conflicts--result-visibility-2026-08-08)
 174. [Equipment Check Submission Fails](#equipment-check-submission-fails-2026-08-08)
 175. [Development Environment: Tests, Hooks & Node Version](#development-environment-tests-hooks--node-version-2026-08-08)
-176. [Still Stuck?](#still-stuck)
+176. [Container & Docker Diagnostics](#container--docker-diagnostics)
+177. [Backend Service Diagnostics](#backend-service-diagnostics)
+178. [Frontend & Browser Diagnostics](#frontend--browser-diagnostics)
+179. [Database Diagnostics](#database-diagnostics)
+180. [Backend Memory Growth](#backend-memory-growth-2026-03-06)
+181. [Organization Settings Crash](#organization-settings-crash-2026-03-01)
+182. [SMTP Credential Decryption Failure](#smtp-credential-decryption-failure-2026-03-13)
+183. [SMTP Provider Compatibility](#smtp-provider-compatibility-2026-03-13)
+184. [Scheduled Email Pipeline Bugs](#scheduled-email-pipeline-bugs-2026-03-1314)
+185. [Automated Email Not Sending on Pipeline Advance](#automated-email-not-sending-on-pipeline-advance-2026-03-14)
+186. [IntegrityError on Prospect Activity Log](#integrityerror-on-prospect-activity-log-2026-03-13)
+187. [Custom Section Add/Edit in Pipeline Email Config](#custom-section-addedit-in-pipeline-email-config-2026-03-13)
+188. [Email Config Not Persisting from Onboarding](#email-config-not-persisting-from-onboarding-2026-03-13)
+189. [Module Enablement Defaults](#module-enablement-defaults-2026-03-01)
+190. [Post-Login 401 Cascade](#post-login-401-cascade-2026-03-06)
+191. [Still Stuck?](#still-stuck)
 
 ---
 
@@ -8488,11 +8503,854 @@ Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare 
 
 ---
 
+## Container & Docker Diagnostics
+
+_Consolidated from the former `wiki/Troubleshooting-Containers.md` (2026-08-08)._
+
+### Container Won't Start
+
+#### Check Logs
+
+```bash
+docker-compose logs backend
+docker-compose logs frontend
+docker-compose logs mysql
+docker-compose logs redis
+```
+
+#### Common Causes
+
+| Symptom                                                              | Cause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Fix                                                                                                                                                                  |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend crashes on startup                                           | Missing or invalid `.env`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Check required env vars (SECRET_KEY, ENCRYPTION_KEY, etc.)                                                                                                           |
+| Backend exits with "SECURITY FAILURE"                                | Default secrets in production                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Generate real secrets: `openssl rand -hex 32`                                                                                                                        |
+| MySQL fails to start                                                 | Port conflict or data corruption                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Check port 3306, try `docker-compose down -v` (loses data)                                                                                                           |
+| Redis marked unhealthy                                               | Health check warning suppression                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Add `--no-auth-warning` to Redis health check                                                                                                                        |
+| Frontend exits immediately                                           | Build failure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Rebuild: `docker-compose build --no-cache frontend`                                                                                                                  |
+| Frontend container **reports unhealthy** while nginx is running fine | _(Fixed 2026-08-07)_ nginx binds IPv4 only (`listen 80;`), but the container resolves `localhost` to both `127.0.0.1` and `::1`, and musl returns the IPv6 address first — so the healthcheck was refused. Both the image's `HEALTHCHECK` and the container test now name `127.0.0.1` literally. **This affected production, not just CI.** Pull latest and rebuild the frontend image                                                                                                                       |
+| Frontend build pulls unpinned dependencies                           | _(Fixed 2026-08-07)_ The image used to copy only `frontend/package.json` and run `npm install --legacy-peer-deps`, re-resolving 604 packages from the registry on every build — so production shipped versions no test had run against. The build context is now the **repository root** (`docker build -f frontend/Dockerfile .`) so the single root `package-lock.json` is in reach, and the install is `npm ci`. Update any script or compose override that still names `./frontend` as the build context |
+| Frontend build fails on `"/frontend/nginx.conf": not found`          | _(Guarded 2026-08-08)_ The compose file being built still names `./frontend` as the frontend context, while every path the Dockerfile copies is now root-relative. `docker compose config` validates YAML and interpolation only — it never opens the Dockerfile — so this passes validation and fails minutes into the build. A `git pull` does not repair a compose file the deployment maintains itself                                                                                                   | `./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml` (drop `--fix` to report only). `unraid/update.sh` now runs it between the pull and the rebuild |
+
+#### Full Rebuild
+
+```bash
+docker-compose down
+docker-compose rm -f
+docker system prune -f
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+---
+
+### Container Health Checks
+
+```bash
+# Check all container statuses
+docker-compose ps
+
+# Check specific container health
+docker inspect --format='{{.State.Health.Status}}' logbook-backend
+
+# View health check logs
+docker inspect --format='{{json .State.Health}}' logbook-backend | jq
+```
+
+#### Expected Health States
+
+| Container          | Expected | Health Check                                                                          |
+| ------------------ | -------- | ------------------------------------------------------------------------------------- |
+| `logbook-backend`  | healthy  | HTTP GET /health                                                                      |
+| `logbook-frontend` | healthy  | `wget http://127.0.0.1:80/` — the literal address, **not** `localhost` _(2026-08-07)_ |
+| `logbook-db`       | healthy  | mysqladmin ping                                                                       |
+| `logbook-redis`    | healthy  | redis-cli ping                                                                        |
+
+---
+
+### Redis Container Unhealthy
+
+**Error:** `dependency failed to start: container intranet-redis is unhealthy`
+
+**Fix:** Update the health check to suppress auth warnings:
+
+```yaml
+redis:
+  healthcheck:
+    test:
+      [
+        "CMD-SHELL",
+        "redis-cli -a $${REDIS_PASSWORD:-change_me_in_production} --no-auth-warning ping | grep PONG",
+      ]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+```
+
+---
+
+### Port Conflicts
+
+```bash
+# Check what's using a port
+lsof -i :3000
+lsof -i :3001
+lsof -i :3306
+
+# Change ports in .env
+FRONTEND_PORT=3100
+BACKEND_PORT=3101
+```
+
+---
+
+### Container Networking
+
+```bash
+# Verify containers are on same network
+docker network inspect logbook-internal
+
+# Test connectivity between containers
+docker-compose exec frontend ping -c 3 backend
+docker-compose exec backend ping -c 3 mysql
+
+# Test backend can reach database
+docker-compose exec backend python -c "import pymysql; pymysql.connect(host='mysql')"
+```
+
+---
+
+### Resource Issues
+
+```bash
+# Check resource usage
+docker stats
+
+# Check disk usage
+docker system df
+
+# Clean up unused resources
+docker image prune -a
+docker builder prune
+docker system prune -a --volumes  # ⚠️ Removes ALL unused data
+```
+
+---
+
+### Container Conflict Cleanup
+
+If containers from a previous installation conflict:
+
+```bash
+# Remove all logbook containers
+docker ps -a | grep logbook | awk '{print $1}' | xargs docker rm -f
+
+# Remove all logbook images
+docker images | grep logbook | awk '{print $3}' | xargs docker rmi -f
+
+# Remove logbook networks
+docker network ls | grep logbook | awk '{print $1}' | xargs docker network rm
+
+# Fresh start
+docker-compose up -d
+```
+
+---
+
+---
+
+## Backend Service Diagnostics
+
+_Consolidated from the former `wiki/Troubleshooting-Backend.md` (2026-08-08)._
+
+### Backend Won't Start
+
+#### "SECURITY FAILURE" Error
+
+**Cause:** Default or missing security configuration in production mode.
+
+**Fix:** Generate required secrets:
+
+```bash
+echo "SECRET_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_SALT=$(openssl rand -hex 16)"
+```
+
+Add to `.env` and restart: `docker-compose restart backend`
+
+#### "Database not initialized" Error
+
+**Cause:** Backend started before MySQL was ready.
+
+**Fix:**
+
+```bash
+docker-compose down
+docker-compose up -d mysql
+# Wait for MySQL to be healthy
+docker-compose up -d backend frontend
+```
+
+#### "Can't connect to MySQL server" Error
+
+**Cause:** `DB_HOST` doesn't match Docker service name.
+
+**Fix:** Set `DB_HOST=mysql` in `.env` (not `db`).
+
+---
+
+### API Errors
+
+#### Health Check
+
+```bash
+# Backend health
+curl http://YOUR-IP:3001/health
+# Expected: {"status":"healthy","timestamp":"..."}
+
+# Database health
+curl http://YOUR-IP:3001/health/db
+
+# Redis health
+curl http://YOUR-IP:3001/health/redis
+```
+
+#### Common API Errors
+
+| Status | Meaning           | Common Cause                             |
+| ------ | ----------------- | ---------------------------------------- |
+| 400    | Bad Request       | Invalid input, missing required fields   |
+| 401    | Unauthorized      | Expired or missing JWT token             |
+| 403    | Forbidden         | Insufficient permissions for this action |
+| 404    | Not Found         | Invalid ID or endpoint                   |
+| 409    | Conflict          | Duplicate entry (email, barcode, etc.)   |
+| 422    | Validation Error  | Request body fails schema validation     |
+| 429    | Too Many Requests | Rate limit exceeded                      |
+| 500    | Server Error      | Check backend logs for stack trace       |
+
+#### Viewing Detailed Error Logs
+
+```bash
+# Recent backend logs
+docker-compose logs --tail=100 backend
+
+# Follow logs in real-time
+docker-compose logs -f backend
+
+# Search for specific errors
+docker-compose logs backend | grep "ERROR"
+docker-compose logs backend | grep "Traceback"
+```
+
+---
+
+### Database Migration Issues
+
+#### "Multiple heads detected"
+
+```bash
+# Check migration chain
+docker-compose exec backend alembic heads
+docker-compose exec backend alembic history --verbose
+```
+
+#### Migration version mismatch
+
+```bash
+# Check current version
+docker-compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD the_logbook -e "SELECT * FROM alembic_version;"
+
+# Run all pending migrations
+docker-compose exec backend alembic upgrade head
+```
+
+---
+
+### Performance Issues
+
+#### Slow API Responses
+
+1. Check database query performance:
+
+```bash
+docker-compose exec mysql mysql -u root -p -e "SHOW PROCESSLIST;"
+```
+
+2. Check Redis is running and caching:
+
+```bash
+docker-compose exec redis redis-cli --no-auth-warning -a $REDIS_PASSWORD INFO stats
+```
+
+3. Check backend resource usage:
+
+```bash
+docker stats logbook-backend
+```
+
+---
+
+### MissingGreenlet Errors
+
+**Symptom:** `MissingGreenlet: greenlet_spawn has not been called` in logs
+
+**Cause:** Accessing lazy-loaded SQLAlchemy relationships in an async context without eager loading.
+
+**Fix:** Use `selectinload()` for relationships accessed after `await`:
+
+```python
+result = await db.execute(
+    select(User).options(selectinload(User.roles)).where(User.id == user_id)
+)
+```
+
+This was a common issue fixed across multiple modules in February 2026.
+
+---
+
+### DateTime Warnings
+
+**Symptom:** `DeprecationWarning: datetime.datetime.utcnow()` in logs
+
+**Status:** Fixed across the entire backend in February 2026. All `datetime.utcnow()` calls replaced with `datetime.now(timezone.utc)`.
+
+---
+
+### API Documentation
+
+The backend automatically generates API documentation:
+
+| URL                                | Format                   |
+| ---------------------------------- | ------------------------ |
+| `http://YOUR-IP:3001/docs`         | Swagger UI (interactive) |
+| `http://YOUR-IP:3001/redoc`        | ReDoc (read-only)        |
+| `http://YOUR-IP:3001/openapi.json` | OpenAPI JSON spec        |
+
+---
+
+---
+
+## Frontend & Browser Diagnostics
+
+_Consolidated from the former `wiki/Troubleshooting-Frontend.md` (2026-08-08)._
+
+### Blank Page (React Won't Load)
+
+#### Symptoms
+
+- HTML loads but React doesn't render
+- White screen with no content
+- 200/304 responses in nginx logs but nothing visible
+
+#### Most Common Cause
+
+Missing or incorrect `VITE_API_URL` in `frontend/.env`. Vite bakes environment variables at **build time**.
+
+#### Fix
+
+1. Create/update `frontend/.env`:
+
+```bash
+VITE_API_URL=/api/v1
+```
+
+2. Rebuild frontend:
+
+```bash
+docker-compose stop frontend
+docker-compose build --no-cache frontend
+docker-compose up -d frontend
+```
+
+---
+
+### Malformed API URLs
+
+**Symptom:** URLs show `http//` instead of `http://`
+
+**Cause:** Frontend built with wrong `VITE_API_URL`.
+
+**Fix:** Use relative URLs (`/api/v1`) and rebuild. For Unraid, use the Unraid-specific docker-compose file:
+
+```bash
+docker-compose -f unraid/docker-compose-unraid.yml build --no-cache frontend
+```
+
+---
+
+### CORS Errors
+
+**Symptom:** Browser console shows `Access-Control-Allow-Origin` errors
+
+**Fix:** Update `ALLOWED_ORIGINS` in root `.env`:
+
+```bash
+ALLOWED_ORIGINS=["http://YOUR-IP:3000"]
+```
+
+Then restart backend: `docker-compose restart backend`
+
+---
+
+### Dark Mode Issues
+
+**Symptom:** Modals or dialogs have wrong background color in dark mode
+
+**Status:** Fixed in February 2026. All modals now use `bg-theme-surface-modal` for proper dark mode contrast.
+
+**If issues persist:** Clear browser cache and reload.
+
+---
+
+### TypeScript Build Errors
+
+**Status:** All TypeScript build errors resolved as of February 2026.
+
+If you encounter build errors after pulling:
+
+```bash
+cd frontend
+rm -rf node_modules
+npm install
+npm run typecheck
+npm run build
+```
+
+---
+
+### Browser Console Errors
+
+| Error                                          | Cause                  | Fix                             |
+| ---------------------------------------------- | ---------------------- | ------------------------------- |
+| `Failed to load module script`                 | Stale build            | Rebuild frontend                |
+| `NetworkError` / `Failed to fetch`             | Wrong VITE_API_URL     | Check frontend/.env             |
+| `CORS policy` blocking                         | Missing CORS origin    | Update ALLOWED_ORIGINS          |
+| `TypeError: Cannot read property of undefined` | API response mismatch  | Clear cache, check backend logs |
+| `ChunkLoadError`                               | Outdated cached chunks | Hard refresh (Ctrl+Shift+R)     |
+
+---
+
+### PWA / Service Worker Issues
+
+**Symptom:** Old version of the app persists after update
+
+**Fix:**
+
+1. Clear browser cache
+2. Unregister service worker: Browser DevTools > Application > Service Workers > Unregister
+3. Hard refresh (Ctrl+Shift+R)
+
+---
+
+### Mobile / Responsive Issues
+
+**Symptom:** Layout breaks on mobile devices
+
+The application is designed as a Progressive Web App with responsive layouts. If issues occur:
+
+1. Check browser zoom is at 100%
+2. Try landscape orientation for complex tables
+3. Clear browser cache
+
+---
+
+### Debugging Frontend
+
+```bash
+# Check frontend logs
+docker-compose logs frontend
+
+# Check nginx config
+docker exec logbook-frontend cat /etc/nginx/conf.d/default.conf
+
+# Check what's built into the bundle
+docker exec logbook-frontend ls -la /usr/share/nginx/html/assets/
+
+# Verify API URL in bundle
+docker exec logbook-frontend sh -c "cat /usr/share/nginx/html/assets/index-*.js" | grep -o "http[^\"']*" | head -5
+```
+
+---
+
+### Stale Assets After Deployment
+
+**Symptom:** 404 errors for JS/CSS files after deploying a new version.
+
+**Status:** Fixed in February 2026. Nginx now sends `Cache-Control: no-cache` for `index.html` so browsers always fetch fresh asset references.
+
+**Workaround:** Hard refresh (Ctrl+Shift+R) or clear browser cache.
+
+---
+
+### Circular Chunk Dependency
+
+**Symptom:** `React.memo` is undefined at runtime, or `useLayoutEffect` error at startup.
+
+**Status:** Fixed in March 2026. The Vite manual chunk configuration was updated to eliminate circular dependencies between vendor chunk groups that caused runtime errors.
+
+---
+
+---
+
+## Database Diagnostics
+
+_Consolidated from the former `wiki/Troubleshooting-Database.md` (2026-08-08)._
+
+### Connection Issues
+
+#### Can't Connect to Database
+
+**Error:** `Can't connect to MySQL server on 'db'`
+
+**Cause:** `DB_HOST` set to `db` instead of `mysql`.
+
+**Fix:**
+
+```bash
+# Check your .env
+grep DB_HOST .env
+
+# Correct value
+DB_HOST=mysql
+```
+
+#### Backend Waits Forever for Database
+
+**Cause:** MySQL container not yet healthy when backend starts.
+
+**Fix:**
+
+```bash
+# Start MySQL first
+docker-compose up -d mysql
+
+# Wait for it to be healthy
+docker-compose ps  # Should show "healthy"
+
+# Then start backend
+docker-compose up -d backend
+```
+
+#### Access MySQL Shell
+
+```bash
+# Via Docker
+docker exec -it logbook-db mysql -u logbook_user -p
+
+# Once connected:
+SHOW DATABASES;
+USE the_logbook;
+SHOW TABLES;
+```
+
+---
+
+### Migration Issues
+
+#### Alembic Version Mismatch
+
+**Error:** `Can't locate revision identified by '0001'`
+
+**Fix:**
+
+```bash
+# Check current version
+docker-compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD the_logbook \
+  -e "SELECT * FROM alembic_version;"
+
+# Update to correct version
+docker-compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD the_logbook \
+  -e "UPDATE alembic_version SET version_num='20260118_0001';"
+
+# Restart backend
+docker-compose restart backend
+```
+
+#### Multiple Heads Detected
+
+**Error:** `Multiple heads detected`
+
+```bash
+# Check migration chain
+docker-compose exec backend alembic heads
+docker-compose exec backend alembic history --verbose
+
+# Look for duplicate revision IDs
+grep -h "^revision = " backend/alembic/versions/*.py | sort | uniq -d
+```
+
+#### Table Already Exists
+
+**Error:** `Table 'X' already exists`
+
+**Cause:** Migration partially ran. The table was created but the version wasn't recorded.
+
+**Fix:**
+
+```bash
+# Manually set the migration version to skip the problematic migration
+docker-compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD the_logbook \
+  -e "UPDATE alembic_version SET version_num='<target_version>';"
+docker-compose restart backend
+```
+
+#### Run All Migrations
+
+```bash
+docker-compose exec backend alembic upgrade head
+```
+
+---
+
+### Data Issues
+
+#### Enum Mismatch
+
+**Error:** `'fire_ems_combined' is not among the defined enum values`
+
+**Cause:** Database enum values don't match application expectations (case mismatch).
+
+**Fix:** Run migrations to update enum values:
+
+```bash
+docker-compose exec backend alembic upgrade head
+docker-compose restart backend
+```
+
+#### Org-Scoped Unique Constraints
+
+**Error:** `Duplicate entry for key 'uq_item_org_barcode'`
+
+**Cause:** Barcodes/asset tags must be unique within each organization.
+
+**Fix:** Search for the existing item with the same code. Either change the new item's code or update the existing one.
+
+---
+
+### Backup & Restore
+
+#### Create Backup
+
+```bash
+# Full database backup
+docker exec logbook-db mysqldump -u logbook_user -p the_logbook > backup.sql
+
+# Compressed backup
+docker exec logbook-db mysqldump -u logbook_user -p the_logbook | gzip > backup.sql.gz
+```
+
+#### Restore from Backup
+
+```bash
+# Restore
+docker exec -i logbook-db mysql -u logbook_user -p the_logbook < backup.sql
+
+# Restore compressed
+gunzip -c backup.sql.gz | docker exec -i logbook-db mysql -u logbook_user -p the_logbook
+```
+
+---
+
+### Performance
+
+#### Slow Queries
+
+```bash
+# Check active queries
+docker-compose exec mysql mysql -u root -p -e "SHOW PROCESSLIST;"
+
+# Enable slow query log
+docker-compose exec mysql mysql -u root -p -e "SET GLOBAL slow_query_log = 'ON';"
+docker-compose exec mysql mysql -u root -p -e "SET GLOBAL long_query_time = 2;"
+```
+
+#### Table Statistics
+
+```bash
+docker-compose exec mysql mysql -u root -p the_logbook \
+  -e "SELECT table_name, table_rows, data_length/1024/1024 AS 'Size (MB)' FROM information_schema.tables WHERE table_schema='the_logbook' ORDER BY data_length DESC;"
+```
+
+---
+
+---
+
+## Backend Memory Growth (2026-03-06)
+
+### Problem: Backend container memory usage climbs steadily over days
+
+**Status (Fixed):** In-memory tracking dicts in `SecurityMonitoringService` and public portal rate-limit caches grew without eviction. Added periodic cleanup and key limits.
+
+**Monitor:**
+
+```bash
+docker stats logbook-backend
+```
+
+If memory still grows, check for other unbounded in-memory caches in custom code.
+
+---
+
+---
+
+## Organization Settings Crash (2026-03-01)
+
+### Problem: `AttributeError` in OrganizationSettings.redacted()
+
+**Status (Fixed):** The `redacted()` method crash has been resolved. An associated auth secret leak that could expose sensitive configuration has also been closed.
+
+---
+
+---
+
+## SMTP Credential Decryption Failure (2026-03-13)
+
+### Problem: Encrypted SMTP password sent as-is to mail server
+
+**Symptoms:** All outbound emails fail with SMTP authentication error. Logs show `smtplib.SMTPAuthenticationError`.
+
+**Root Cause:** The email service was reading SMTP credentials from organization settings without decrypting them. The encrypted string was sent as the password.
+
+**Fix (Commit `831d72b`):** Email service now decrypts stored SMTP credentials before establishing the SMTP connection. Also guards against `None` settings to prevent `TypeError`.
+
+---
+
+---
+
+## SMTP Provider Compatibility (2026-03-13)
+
+### Problem: Email sending fails for Gmail, Office 365, or self-hosted SMTP
+
+**Symptoms:** Emails fail with SSL/TLS handshake errors or connection timeouts depending on the SMTP provider.
+
+**Root Cause:** The email service used a single connection strategy that didn't account for different SMTP providers' TLS requirements.
+
+**Fix (Commit `d809426`):**
+
+- **Gmail**: Uses STARTTLS on port 587 (not SSL). Set `EMAIL_USE_SSL=false`
+- **Office 365**: Uses STARTTLS on port 587. Set `EMAIL_USE_SSL=false`
+- **Self-hosted (SSL)**: Uses SSL on port 465. Set `EMAIL_USE_SSL=true`
+- **Self-hosted (plain)**: Uses plain SMTP on port 25. Set `EMAIL_USE_SSL=false`
+
+New `EMAIL_USE_SSL` environment variable added to `.env.example` and `.env.example.full`.
+
+---
+
+---
+
+## Scheduled Email Pipeline Bugs (2026-03-13–14)
+
+### Problem: Scheduled emails not being delivered
+
+**Symptoms:** Emails configured in pipeline stages are not sent. Scheduled emails stay in `PENDING` status indefinitely.
+
+**Root Cause:** Multiple cascading issues:
+
+1. **Stale Redis claim** — Background email loop gave up permanently when finding a stale Redis claim from a crashed worker, instead of waiting for TTL expiry and reclaiming
+2. **Missing org context** — Email template rendering failed because organization data (name, settings, logo) was not loaded before sending
+3. **Route ordering** — `GET /api/v1/email-templates/{template_id}` was matching before `GET /api/v1/email-templates/scheduled`, treating "scheduled" as a template ID
+4. **UTC future check** — Server rejected emails scheduled in the user's local timezone because it compared against UTC
+5. **UTC time display** — Scheduled email times showed raw UTC instead of local timezone
+6. **Date picker min** — Date picker used UTC date for minimum constraint, rejecting valid local dates
+
+**Fixes:**
+
+- `7810f32`: Redis claim recovery instead of permanent give-up
+- `49defff`: Redis key cleanup on application shutdown
+- `a76148d`: Polling interval reduced from 5 minutes to 60 seconds
+- `b4f86e3`: Load org context before email template rendering
+- `f1cce9e`: Route ordering fixed — `/scheduled` before `/{template_id}`
+- `8eaf002`: Removed server-side UTC-based future check on `scheduled_at`
+- `e7b5a3d`: Display scheduled times in user's local timezone
+- `e4c6e5c`: Date picker uses local date for min constraint
+- `4dc7ad2`: Message history cleanup, date filtering, email validation
+
+---
+
+---
+
+## Automated Email Not Sending on Pipeline Advance (2026-03-14)
+
+### Problem: Prospect advances to automated_email stage but no email is sent
+
+**Root Cause:** The `advance_prospect()` method was not triggering the automated email logic when the target stage type was `AUTOMATED_EMAIL`.
+
+**Fix (Commit `cbaec8b`):** Added email trigger in `advance_prospect()` — when the target stage is `automated_email`, the service now builds and sends the configured email using the stage's email configuration (subject, welcome message, FAQ link, custom sections, etc.).
+
+---
+
+---
+
+## IntegrityError on Prospect Activity Log (2026-03-13)
+
+### Problem: `IntegrityError` when system performs automated pipeline actions
+
+**Symptoms:** Background operations (e.g., auto-advance after form submission) fail with `IntegrityError: foreign key constraint fails` on the `prospect_activity_log` table.
+
+**Root Cause:** The `performed_by` column has a foreign key to the `users` table. Automated actions were setting `performed_by = 'system'`, which is not a valid user ID.
+
+**Fix (Commit `addbbb0`):** Changed automated actions to use `performed_by = None` instead of `'system'`. The column is `nullable=True`, so `None` is valid.
+
+---
+
+---
+
+## Custom Section Add/Edit in Pipeline Email Config (2026-03-13)
+
+### Problem: Custom sections in pipeline email stage config not persisting
+
+**Symptoms:** Adding or editing custom sections (title + content blocks) in the automated email stage configuration does not save correctly. Sections disappear on reload.
+
+**Fix (Commit `49ba979`):** Fixed state management in the StageConfigModal for custom section CRUD operations. Sections now persist correctly.
+
+---
+
+---
+
+## Email Config Not Persisting from Onboarding (2026-03-13)
+
+### Problem: SMTP settings configured during onboarding don't carry over
+
+**Symptoms:** Email works during onboarding but stops working after setup is complete. Organization settings show no SMTP configuration.
+
+**Root Cause:** The onboarding flow configured email in a temporary context but did not persist the SMTP settings to the organization's settings record.
+
+**Fix (Commit `b64cde7`):** Onboarding email configuration step now writes SMTP settings to the organization's persistent settings.
+
+---
+
+---
+
+## Module Enablement Defaults (2026-03-01)
+
+### Problem: Standard modules missing from navigation after fresh install
+
+**Cause:** Standard modules were not defaulting to enabled.
+
+**Status (Fixed 2026-03-01):** Standard modules now default to enabled. Settings UI redesigned with module cards.
+
+---
+
+---
+
+## Post-Login 401 Cascade (2026-03-06)
+
+### Problem: Login succeeds but dashboard shows errors and redirects to login
+
+**Status (Fixed):** Dashboard fires ~15 parallel API calls immediately after login. If cookies aren't processed yet, all return 401, triggering a refresh cascade. Fixed with: (1) Bearer token bridge using access token from login response body, (2) cookie settle polling before dashboard navigation, (3) post-login grace period with exponential backoff in 401 interceptor.
+
+**Edge Cases:** Module-specific axios instances (scheduling, admin-hours, createApiClient) each need independent Bearer token bridges — all now included. Refresh token stored in memory for environments where cookies are never stored.
+
+---
+
+---
+
 ## Still Stuck?
 
 1. **Search this guide** — Ctrl+F with keywords from your error. It is one file
    precisely so that one search covers everything.
-2. **Check the wiki's per-area pages** — [Containers](../wiki/Troubleshooting-Containers.md), [Backend](../wiki/Troubleshooting-Backend.md), [Frontend](../wiki/Troubleshooting-Frontend.md) and [Database](../wiki/Troubleshooting-Database.md). (The wiki's own **Troubleshooting** page is generated from this file, so it will not tell you anything new.)
+2. **Jump to the diagnostics for your area** — [Containers](#container--docker-diagnostics), [Backend](#backend-service-diagnostics), [Frontend](#frontend--browser-diagnostics) or [Database](#database-diagnostics). Each is a symptom-to-command runbook rather than a fix log.
 3. **Review recent changes** — [CHANGELOG.md](../CHANGELOG.md) records what shipped
    and when; an entry dated near the day the behavior changed is usually the
    explanation.

@@ -42,10 +42,7 @@ This directory contains all the wiki pages for The Logbook project. These pages 
 ### Troubleshooting
 
 - **Troubleshooting.md** — _generated at publish time_ from `docs/TROUBLESHOOTING.md`; there is no copy of it in this directory to edit. `setup-wiki.sh` writes it into the wiki clone with a do-not-edit header
-- **Troubleshooting-Containers.md** - Docker container issues
-- **Troubleshooting-Frontend.md** - Frontend issues
-- **Troubleshooting-Backend.md** - Backend API issues
-- **Troubleshooting-Database.md** - Database connection issues
+  The per-area pages (Containers / Frontend / Backend / Database) were consolidated into that same guide on 2026-08-08 and now live in it as the **Container & Docker**, **Frontend & Browser**, **Backend Service** and **Database Diagnostics** sections. They were never in `setup-wiki.sh`'s publish list, so the sidebar links to them had been dead on the published wiki.
 
 ### Reference
 
@@ -319,8 +316,7 @@ Home.md (landing page)
 │   └── ...
 ├── Troubleshooting
 │   ├── Troubleshooting
-│   ├── Troubleshooting-Containers
-│   └── ...
+│   └── (per-area diagnostics are sections inside Troubleshooting)
 └── Reference
     ├── API-Reference
     ├── Database-Schema

@@ -89,10 +89,10 @@ docker-compose up -d
 ### 🛠️ Troubleshooting
 
 - **[Common Issues](Troubleshooting)** - Solutions to common problems
-- **[Container Conflicts](Troubleshooting-Containers)** - Docker container issues
-- **[Frontend Issues](Troubleshooting-Frontend)** - Frontend not loading
-- **[Backend Issues](Troubleshooting-Backend)** - API errors
-- **[Database Issues](Troubleshooting-Database)** - Database connection problems
+- **[Container Diagnostics](Troubleshooting#container--docker-diagnostics)** - Docker container issues
+- **[Frontend Diagnostics](Troubleshooting#frontend--browser-diagnostics)** - Frontend not loading
+- **[Backend Diagnostics](Troubleshooting#backend-service-diagnostics)** - API errors
+- **[Database Diagnostics](Troubleshooting#database-diagnostics)** - Database connection problems
 
 ### 📖 Reference
 

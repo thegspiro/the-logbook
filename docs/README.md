@@ -657,7 +657,7 @@ docker-compose ps
 - Updated [docs/training/02-training.md](./training/02-training.md) and [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md) — course-library links and the freshness window
 - Updated [docs/training/15-prospective-members.md](./training/15-prospective-members.md), [docs/training/06-apparatus-facilities.md](./training/06-apparatus-facilities.md), [docs/training/03-scheduling.md](./training/03-scheduling.md)
 - Updated [wiki/Configuration-Environment.md](../wiki/Configuration-Environment.md) — Web Push and `SECURITY_REQUIRE_TLS`
-- Updated [wiki/Module-Communications.md](../wiki/Module-Communications.md), [wiki/Troubleshooting-Containers.md](../wiki/Troubleshooting-Containers.md), [wiki/Home.md](../wiki/Home.md)
+- Updated [wiki/Module-Communications.md](../wiki/Module-Communications.md), wiki/Troubleshooting-Containers.md (since consolidated into docs/TROUBLESHOOTING.md), [wiki/Home.md](../wiki/Home.md)
 - Updated [docs/youtube-scripts/](./youtube-scripts/) — new shorts 8r–8z, plus beats in Scripts 3, 5, 6 and 7
 - Updated [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md) — the equipment-check apparatus-id blocker, missing frontend routes, and the tier-configuration docs mismatch
 
