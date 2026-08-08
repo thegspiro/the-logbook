@@ -1208,8 +1208,15 @@ class MembershipPipelineService:
             -1,
         )
 
-        if current_idx < 0 or current_idx >= len(sorted_steps) - 1:
-            return prospect  # Already at the end or no current step
+        # Report a no-op as a no-op. Returning the untouched prospect made
+        # "advance" indistinguishable from "advanced": the caller got a 200,
+        # the UI reported success, and an audit entry claimed a movement that
+        # never happened — which matters for a log kept to reconstruct who
+        # moved whom through membership.
+        if current_idx < 0:
+            raise ValueError("Prospect has no current stage to advance from")
+        if current_idx >= len(sorted_steps) - 1:
+            raise ValueError("Prospect is already at the final stage")
 
         next_step = sorted_steps[current_idx + 1]
         prospect.current_step_id = next_step.id
@@ -1253,6 +1260,174 @@ class MembershipPipelineService:
             await self._send_stage_email(prospect, next_step)
 
         return await self.get_prospect(prospect_id, organization_id)
+
+    # =========================================================================
+    # Bulk Actions
+    # =========================================================================
+
+    async def _bulk_apply(
+        self,
+        prospect_ids: Iterable[str],
+        organization_id: str,
+        apply,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Run ``apply`` over each prospect id, itemizing per-id outcomes.
+
+        One failure never aborts the rest — a coordinator acting on thirty
+        applicants should not lose twenty-nine because one is at the final
+        stage. ``apply`` owns its own commit, so each prospect is durable
+        before the next is attempted; a rejected one is refused before it
+        writes anything.
+
+        ``exclude_prospect_ids`` carries the caller's own prospect record
+        (see app/api/prospect_privacy.py). Bulk ids arrive in the request
+        body, so the router's path-parameter guard cannot see them; they are
+        reported as "not found", identical to an id that does not exist, so
+        the response discloses nothing either way.
+        """
+        # Local import: app.api imports the service layer, so a module-level
+        # import here would close the cycle.
+        from app.api.prospect_privacy import normalize_prospect_id
+
+        hidden = {str(i) for i in (exclude_prospect_ids or []) if i}
+        results: List[Dict[str, Any]] = []
+
+        for raw_id in prospect_ids:
+            prospect_id = str(raw_id)
+            if normalize_prospect_id(prospect_id) in hidden:
+                results.append(
+                    {
+                        "prospect_id": prospect_id,
+                        "name": None,
+                        "succeeded": False,
+                        "error": "Prospect not found",
+                    }
+                )
+                continue
+
+            prospect = await self.get_prospect(prospect_id, organization_id)
+            if not prospect:
+                results.append(
+                    {
+                        "prospect_id": prospect_id,
+                        "name": None,
+                        "succeeded": False,
+                        "error": "Prospect not found",
+                    }
+                )
+                continue
+
+            name = prospect.full_name
+            try:
+                await apply(prospect)
+            except ValueError as exc:
+                results.append(
+                    {
+                        "prospect_id": prospect_id,
+                        "name": name,
+                        "succeeded": False,
+                        "error": str(exc),
+                    }
+                )
+                continue
+            except Exception as exc:  # pragma: no cover - defensive
+                # Leave the session usable for the ids still queued behind
+                # this one, rather than failing the whole batch.
+                await self.db.rollback()
+                logger.exception(
+                    f"Bulk action failed for prospect {prospect_id}: {exc}"
+                )
+                results.append(
+                    {
+                        "prospect_id": prospect_id,
+                        "name": name,
+                        "succeeded": False,
+                        "error": "Action failed",
+                    }
+                )
+                continue
+
+            results.append(
+                {
+                    "prospect_id": prospect_id,
+                    "name": name,
+                    "succeeded": True,
+                    "error": None,
+                }
+            )
+
+        return results
+
+    async def bulk_advance_prospects(
+        self,
+        prospect_ids: Iterable[str],
+        organization_id: str,
+        advanced_by: str,
+        notes: Optional[str] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Advance several prospects, reporting each one's outcome."""
+
+        async def _advance(prospect: ProspectiveMember) -> None:
+            await self.advance_prospect(
+                prospect_id=str(prospect.id),
+                organization_id=organization_id,
+                advanced_by=advanced_by,
+                notes=notes,
+            )
+
+        return await self._bulk_apply(
+            prospect_ids, organization_id, _advance, exclude_prospect_ids
+        )
+
+    async def bulk_set_prospect_status(
+        self,
+        prospect_ids: Iterable[str],
+        organization_id: str,
+        status: str,
+        changed_by: str,
+        reason: Optional[str] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Set the status of several prospects, reporting each one's outcome.
+
+        ``reason`` is written to the activity log only. The previous bulk
+        path sent it through ``update_prospect`` as ``notes``, which
+        *overwrote* the coordinator notes on every selected record — a bulk
+        rejection silently destroyed whatever had been written about each
+        applicant.
+        """
+        try:
+            target = ProspectStatus(status)
+        except ValueError:
+            raise ValueError(f"Invalid status: {status}")
+
+        async def _set_status(prospect: ProspectiveMember) -> None:
+            previous = (
+                prospect.status.value
+                if hasattr(prospect.status, "value")
+                else str(prospect.status)
+            )
+            if previous == target.value:
+                raise ValueError(f"Prospect is already {target.value}")
+            prospect.status = target
+            await self._log_activity(
+                prospect_id=str(prospect.id),
+                action="prospect_status_changed",
+                details={
+                    "from": previous,
+                    "to": target.value,
+                    "reason": reason,
+                    "bulk": True,
+                },
+                performed_by=changed_by,
+            )
+            await self.db.commit()
+
+        return await self._bulk_apply(
+            prospect_ids, organization_id, _set_status, exclude_prospect_ids
+        )
 
     async def regress_prospect(
         self,
