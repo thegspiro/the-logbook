@@ -6,7 +6,9 @@ This is **the** troubleshooting guide for The Logbook — every module, plus dep
 
 > **Seven troubleshooting documents were consolidated into this one (2026-08-08).** `docs/troubleshooting/README.md`, a hand-edited `wiki/Troubleshooting.md`, and the four per-area wiki pages (`Troubleshooting-Containers`, `-Backend`, `-Frontend`, `-Database`) all covered overlapping ground and drifted apart — the digest and the wiki copy froze at 2026-03-12 while this file kept moving, and each held entries the others lacked. The per-area pages were never even in `setup-wiki.sh`'s publish list, so the wiki sidebar links to them were dead. Their diagnostics now live here as [Container & Docker](#container--docker-diagnostics), [Backend Service](#backend-service-diagnostics), [Frontend & Browser](#frontend--browser-diagnostics) and [Database](#database-diagnostics), and the wiki page is **generated** from this file at publish time, so none of it can drift again. Add new entries here.
 
-**Last Updated**: 2026-08-08 (consolidated the three troubleshooting documents into this one; added the 2026-04 → 2026-08 entries that had only ever been written into the deployment digest — deployment posture and compose overrides, host-header and reverse-proxy trust, DB/Redis TLS verification, OAuth sign-in failure codes, the forced-password-change trap, audit retention and shipping, privacy rights, the offline-queue and skills-testing entries, and the rest)
+**Last Updated**: 2026-08-08, later the same day (skills-testing officer validation and the candidate-lookup guards; prospective-members kanban truncation, bulk actions, no-op advance and the `referred_by` org check; the VAPID keygen fix and the silent-401 it caused; public pages unreadable in dark mode; touch-target and minimum-text-size floors)
+
+**Previously**: 2026-08-08 (consolidated the three troubleshooting documents into this one; added the 2026-04 → 2026-08 entries that had only ever been written into the deployment digest — deployment posture and compose overrides, host-header and reverse-proxy trust, DB/Redis TLS verification, OAuth sign-in failure codes, the forced-password-change trap, audit retention and shipping, privacy rights, the offline-queue and skills-testing entries, and the rest)
 
 **Previously**: 2026-03-12 (finance module; recurring events with monthly-by-weekday and annual patterns; prospective members event linking; minutes module refactoring; QR check-in timezone fixes; timezone standardization across 34 files; ballot email notifications with org logo; auth cookie LAN HTTP fix; events settings refactor and JSON persistence fix; custom categories schema fix; form value `??` to `||` migration; 94 TypeScript error fixes; ESLint zero errors; slug internalization; plus all previous updates)
 
@@ -181,30 +183,32 @@ This is **the** troubleshooting guide for The Logbook — every module, plus dep
 165. [Member Delete & Role Save Failures](#member-delete--role-save-failures-2026-08-07)
 166. [422 Errors Reading "Invalid value"](#422-errors-reading-invalid-value-2026-08-07)
 167. [Web Push Notifications](#web-push-notifications-2026-08-07)
-168. [Pages Crashing to the Error Boundary](#pages-crashing-to-the-error-boundary-2026-08-07)
-169. [Frontend Container Unhealthy](#frontend-container-unhealthy-2026-08-07)
-170. [Frontend Build Pulls Unpinned Dependencies](#frontend-build-pulls-unpinned-dependencies-2026-08-07)
-171. [Alembic Duplicate Revision IDs](#alembic-duplicate-revision-ids-2026-08-07)
-172. [Push Subscriptions Table Collation](#push-subscriptions-table-collation-2026-08-07)
-173. [Skills Testing: Attempts, Conflicts & Result Visibility](#skills-testing-attempts-conflicts--result-visibility-2026-08-08)
-174. [Equipment Check Submission Fails](#equipment-check-submission-fails-2026-08-08)
-175. [Development Environment: Tests, Hooks & Node Version](#development-environment-tests-hooks--node-version-2026-08-08)
-176. [Container & Docker Diagnostics](#container--docker-diagnostics)
-177. [Backend Service Diagnostics](#backend-service-diagnostics)
-178. [Frontend & Browser Diagnostics](#frontend--browser-diagnostics)
-179. [Database Diagnostics](#database-diagnostics)
-180. [Backend Memory Growth](#backend-memory-growth-2026-03-06)
-181. [Organization Settings Crash](#organization-settings-crash-2026-03-01)
-182. [SMTP Credential Decryption Failure](#smtp-credential-decryption-failure-2026-03-13)
-183. [SMTP Provider Compatibility](#smtp-provider-compatibility-2026-03-13)
-184. [Scheduled Email Pipeline Bugs](#scheduled-email-pipeline-bugs-2026-03-1314)
-185. [Automated Email Not Sending on Pipeline Advance](#automated-email-not-sending-on-pipeline-advance-2026-03-14)
-186. [IntegrityError on Prospect Activity Log](#integrityerror-on-prospect-activity-log-2026-03-13)
-187. [Custom Section Add/Edit in Pipeline Email Config](#custom-section-addedit-in-pipeline-email-config-2026-03-13)
-188. [Email Config Not Persisting from Onboarding](#email-config-not-persisting-from-onboarding-2026-03-13)
-189. [Module Enablement Defaults](#module-enablement-defaults-2026-03-01)
-190. [Post-Login 401 Cascade](#post-login-401-cascade-2026-03-06)
-191. [Still Stuck?](#still-stuck)
+168. [Public Pages Unreadable in Dark Mode](#public-pages-unreadable-in-dark-mode-2026-08-08)
+169. [Touch Targets and Minimum Text Size](#touch-targets-and-minimum-text-size-2026-08-08)
+170. [Pages Crashing to the Error Boundary](#pages-crashing-to-the-error-boundary-2026-08-07)
+171. [Frontend Container Unhealthy](#frontend-container-unhealthy-2026-08-07)
+172. [Frontend Build Pulls Unpinned Dependencies](#frontend-build-pulls-unpinned-dependencies-2026-08-07)
+173. [Alembic Duplicate Revision IDs](#alembic-duplicate-revision-ids-2026-08-07)
+174. [Push Subscriptions Table Collation](#push-subscriptions-table-collation-2026-08-07)
+175. [Skills Testing: Attempts, Conflicts & Result Visibility](#skills-testing-attempts-conflicts--result-visibility-2026-08-08)
+176. [Equipment Check Submission Fails](#equipment-check-submission-fails-2026-08-08)
+177. [Development Environment: Tests, Hooks & Node Version](#development-environment-tests-hooks--node-version-2026-08-08)
+178. [Container & Docker Diagnostics](#container--docker-diagnostics)
+179. [Backend Service Diagnostics](#backend-service-diagnostics)
+180. [Frontend & Browser Diagnostics](#frontend--browser-diagnostics)
+181. [Database Diagnostics](#database-diagnostics)
+182. [Backend Memory Growth](#backend-memory-growth-2026-03-06)
+183. [Organization Settings Crash](#organization-settings-crash-2026-03-01)
+184. [SMTP Credential Decryption Failure](#smtp-credential-decryption-failure-2026-03-13)
+185. [SMTP Provider Compatibility](#smtp-provider-compatibility-2026-03-13)
+186. [Scheduled Email Pipeline Bugs](#scheduled-email-pipeline-bugs-2026-03-1314)
+187. [Automated Email Not Sending on Pipeline Advance](#automated-email-not-sending-on-pipeline-advance-2026-03-14)
+188. [IntegrityError on Prospect Activity Log](#integrityerror-on-prospect-activity-log-2026-03-13)
+189. [Custom Section Add/Edit in Pipeline Email Config](#custom-section-addedit-in-pipeline-email-config-2026-03-13)
+190. [Email Config Not Persisting from Onboarding](#email-config-not-persisting-from-onboarding-2026-03-13)
+191. [Module Enablement Defaults](#module-enablement-defaults-2026-03-01)
+192. [Post-Login 401 Cascade](#post-login-401-cascade-2026-03-06)
+193. [Still Stuck?](#still-stuck)
 
 ---
 
@@ -3069,6 +3073,91 @@ vi.mocked(api.someMethod).mockRejectedValue(
 
 ## Skills Testing Module Issues
 
+### Validation & Permissions _(2026-08-08)_
+
+#### A member ran a test but the candidate's requirement is still incomplete
+
+**Cause**: Working as designed. Examining is open to every member, but an
+official result run by someone without `training.manage` is a **submission, not
+a record** until a training officer validates it. Until `validated_at` is set it
+credits no pipeline requirement, spends no attempt against `max_attempts`, and
+is excluded from `GET /summary` (pass rate, average score).
+
+**Fix**: An officer opens **Training Admin > Skills Testing > Tests**, filters
+`pending_validation=true`, reads the scorecard, and clicks **Validate**. The
+badge count is on the summary dashboard.
+
+#### "You cannot validate a test you are the candidate in"
+
+**Cause**: Separation of duties (CS-8). Without it an officer could have a peer
+"examine" them and then sign off their own pass — the same certification fraud
+the examiner-side check prevents, one hop removed.
+
+**Fix**: A different officer validates it. There is no override.
+
+#### Validate is refused with a `400`
+
+Four distinct causes, all deliberate:
+
+| Detail message                                                          | Cause                            |
+| ----------------------------------------------------------------------- | -------------------------------- |
+| "Practice attempts are never recorded, so there is nothing to validate" | `is_practice = 1`                |
+| "Cannot validate a voided test"                                         | The result was already withdrawn |
+| "Only a completed test has a result to validate"                        | Status is not `completed`        |
+| Separation-of-duties message                                            | The caller is the candidate      |
+
+Validating an **already-validated** test is not an error — it is idempotent and
+returns the result unchanged, which matters when two officers work the same
+queue.
+
+#### Historical results appeared in the validation queue
+
+**Cause**: The `20260808_0001` backfill did not run. Every official result
+predating this feature was officer-run (only officers could create them), so the
+migration sets `validated_at = COALESCE(completed_at, updated_at)` and
+`validated_by = examiner_id` for every completed, non-practice test.
+
+**Fix**: Confirm the migration applied. Note that on deployments where
+`create_all()` materialized `skill_tests` with the columns already present, the
+migration returns early by design — but in that case the table is new and there
+is no history to backfill. If a populated database is missing the backfill,
+re-run it rather than mass-validating through the UI, which would attribute every
+sign-off to whoever clicked.
+
+```sql
+UPDATE skill_tests
+   SET validated_at = COALESCE(completed_at, updated_at),
+       validated_by = examiner_id
+ WHERE validated_at IS NULL AND is_practice = 0 AND status = 'completed';
+```
+
+#### The candidate search returns nothing / is missing entirely
+
+`GET /training/skills-testing/candidates` is a **lookup, not a listing**:
+
+| Symptom                         | Cause                                                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| No results until you type       | `q` is required, minimum **2** characters. There is no request that returns the roster                          |
+| `422` on a query of spaces      | Whitespace-only queries are refused before the `LIKE` runs — they clear `min_length` but would match everything |
+| Only 15 results, silently       | `CANDIDATE_SEARCH_MAX_RESULTS = 15`, truncated without notice. Type more of the name                            |
+| `%` or `_` behaves literally    | `LIKE` wildcards are escaped. A bare `%` would otherwise return the whole roster                                |
+| `403` / the field never renders | It needs `training.view` **or** `training.manage`. The baseline member position may carry neither               |
+| A known member does not appear  | Only `status = ACTIVE`, `deleted_at IS NULL`, same organization                                                 |
+
+Matching is on the concatenated display name, so a fragment can sit anywhere —
+`"john s"` matches John Smith.
+
+#### A practice test cannot be finished, and every retry fails
+
+**Cause**: Fixed 2026-08-08. The pre-submit save on the review screen sends
+`elapsed_seconds`, which `update_test` refuses on a completed test. If a
+completion landed server-side but its response never reached the client, every
+retry failed permanently against a test that had in fact gone through.
+
+**Fix**: Both finalize paths now show the existing results instead of retrying,
+and surface the server's own message rather than a fixed string. If you see this
+on an older build, the test is complete — reload it from the records list.
+
 ### Template Issues
 
 #### Cannot Publish Template — "Template must have sections with criteria"
@@ -4339,6 +4428,93 @@ docker logs the-logbook-backend-1 | grep "slow"
 ---
 
 ## Prospective Members Module Issues
+
+### Board, Bulk Actions & Cross-Tenant Guards _(2026-08-08)_
+
+#### The kanban board is missing applicants that exist in the table view
+
+**Cause**: The board groups applicants into stage columns **client-side**, and it
+was requesting `DEFAULT_PAGE_SIZE` (25) — the same page the table uses. Any
+department with more than 25 active applicants saw a board assembled from a
+fraction of them, with column counts to match and nothing on screen saying so.
+Switching over from the table also carried whatever page the table had been left
+on, so the board's contents depended on where the coordinator had been.
+
+**Fix**: Fixed. The board now requests `KANBAN_PAGE_SIZE` (**200**, the ceiling
+`GET /prospects` accepts), switching views refetches instead of inheriting the
+other view's page, and beyond 200 the board renders a truncation notice with the
+true per-column counts.
+
+**If it still happens on a current build**: check that the pipeline really has
+fewer than 200 active applicants, and that `returned_prospects` /
+`truncated` in the `GET /pipelines/{id}/kanban` response agree with what is on
+screen.
+
+#### `MissingGreenlet` from the kanban endpoint
+
+**Cause**: The shared list/kanban mapper reads the pipeline name and step
+progress. The kanban query did not eager-load those relationships, and a lazy
+load from the async response path **raises** rather than merely being slow.
+
+**Fix**: The kanban query loads the same relationships the list query does. If
+you add a field to `ProspectListResponse`, add its relationship to **both**
+queries — the shared mapper is what makes them impossible to diverge on shape,
+not on loading.
+
+#### A bulk rejection wiped the coordinator notes
+
+**Cause**: Before 2026-08-08 bulk actions were a client-side loop, and the
+rejection reason was sent through `PUT /prospects/{id}` as `notes` — so it
+**overwrote** the coordinator notes on every selected record.
+
+**Fix**: `POST /prospects/bulk-status` records the reason in the **activity log**
+and never touches the `notes` column. Historical overwrites are not recoverable
+from the notes field itself; the prior values are in the prospect's activity /
+audit history.
+
+#### An applicant in a bulk action is reported as "not found" but clearly exists
+
+**Cause**: Almost always the caller's **own** prospect record. Bulk ids arrive in
+the request body, where the router's path-parameter privacy guard cannot see
+them, so both bulk endpoints filter the caller's own record explicitly and report
+it as not found — deliberately indistinguishable from a non-existent id. An id
+from another organization reports identically, so the endpoint is not a
+cross-tenant existence oracle.
+
+#### "Advance" now returns `409` where it used to return `200`
+
+**Cause**: This is the fix, not a regression. `advance_prospect` used to return
+the untouched prospect when there was nowhere to advance to — already at the
+final stage, or no current stage — so the endpoint answered `200`, the UI said
+"Advanced", and a `membership_pipeline.prospect_advanced` **audit entry was
+written for a movement that never occurred**.
+
+**Fix**: Both no-op cases raise, the endpoint answers `409`, and the audit event
+is written only after a real advance.
+
+> **Auditing note.** `prospect_advanced` entries written **before 2026-08-08**
+> may describe advances that never happened. When reconstructing a membership
+> decision from that period, cross-check the applicant's stage history rather
+> than trusting the audit entry alone.
+
+#### Creating or updating a prospect returns `400` "referring member"
+
+**Cause**: `referred_by` must name a member of **your** organization. It is the
+one client-supplied foreign key these paths accept, and it is copied onto the
+new member as `User.referred_by_user_id` at conversion — so an unvalidated id
+does not merely dangle on the application, it lands in the `users` table and
+outlives it.
+
+The message is deliberately generic: a real id from another organization and an
+invented one are indistinguishable, so the endpoint cannot be used to probe
+another tenant's roster.
+
+**Also note**: these two endpoints previously surfaced this — and the existing
+"Invalid pipeline" rejection — as a `500`. A `400` here is the correction.
+
+**Legacy records**: a prospect created before this validation may carry an
+out-of-org referrer. Conversion **drops** it and logs a warning rather than
+failing — legacy data must not block a member being elected.
 
 ### Inactivity Timeout Not Triggering
 
@@ -8382,6 +8558,58 @@ Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare 
 **Status (Configuration):** Push is **off by default**. Set `PUSH_ENABLED=true` plus `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, and install `pywebpush` — it is imported behind a guard so deployments that do not want push need not install it. Unconfigured, the service reports itself so and the UI hides the toggle.
 
 **Edge Case:** On iOS the push API exists only once the PWA is installed to the home screen (16.4+), so Safari browsing correctly shows no toggle. Subscriptions are per device, and rows are pruned only when the push service answers 404/410 — the sole signal that an app was uninstalled or its site data cleared.
+
+### Problem: Push is configured, subscriptions succeed, and nothing is ever delivered _(2026-08-08)_
+
+**Status (Fixed — regenerate your keypair):** The VAPID keygen command in the docs **did not run at all**. All three copies called `Vapid01.public_key_urlsafe_base64()` / `private_key_urlsafe_base64()`, which do not exist. Anyone who worked around it by hand had a good chance of producing keys in the wrong encoding, and the two encodings are **not interchangeable**:
+
+| Key                 | Required form                                                             | What happens if wrong                                                          |
+| ------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `VAPID_PRIVATE_KEY` | Unpadded base64url of the **raw 32-octet P-256 scalar** (43 characters)   | `pywebpush` reads any other decoded length as DER and the signature is invalid |
+| `VAPID_PUBLIC_KEY`  | Unpadded base64url of the **65-octet uncompressed point** (87 characters) | `pushManager.subscribe()` rejects it as `applicationServerKey`                 |
+
+Both failures surface as a **silent 401 from the push service**, long after the browser accepted the subscription — so the subscription looks healthy and no notification is ever delivered.
+
+**Fix:**
+
+```bash
+cd backend && python scripts/generate_vapid_keys.py
+```
+
+It prints both `.env` lines already filled in, in the exact encoding each consumer requires. **Regenerating the keypair invalidates every existing subscription** — members have to re-enable push on each device — so treat them as long-lived secrets and change them only when you have reason to believe they are wrong.
+
+**Edge Case:** A push-service **outage** used to log a full traceback at ERROR for every subscription on every notification, because `pywebpush` does not wrap transport errors in `WebPushException` and the raw `requests` exception fell to the catch-all. It is now a single WARNING line — the condition is transient and, for a best-effort delivery path, non-fatal by design. If you are grepping logs for push failures, match `Web push transport error` at WARNING, not a traceback at ERROR.
+
+---
+
+---
+
+## Public Pages Unreadable in Dark Mode (2026-08-08)
+
+### Problem: The public form, ballot voting or application-status page renders white-on-white
+
+**Status (Fixed):** The dark-mode surface tokens are **translucent white** (`--surface-bg` is white/10, `--surface-secondary` is white/5) by design — they composite over `AppLayout`'s gradient. Public routes sit **outside** `AppLayout`, so those tokens composited over the browser's bare white canvas: a white page with white-on-white labels and slate-800 inputs. `body` now carries the themed gradient so no route can render over the browser's default canvas, and `/f/:slug`, ballot voting and `/application-status/:token` use the same gradient utility as `LoginPage`.
+
+**Edge Case:** Print styles already force a white body background, so printed output is unaffected. **Any new public route must use the gradient utility, not `bg-theme-surface-secondary`** — the token is correct only inside `AppLayout`.
+
+---
+
+---
+
+## Touch Targets and Minimum Text Size (2026-08-08)
+
+### Problem: A control is too small to tap, or text is too small to read, on a phone
+
+**Status (Fixed — both budgets are now zero on every route):** Undersized tap targets went 212 → 78 → **0**, and sub-12px text went to **0**, so `src/e2e/mobile-presentation.spec.ts` enforces them as hard rules rather than budgets. Almost all of the tap-target backlog came from five shared utilities rather than per-page markup: `form-input` / `form-input-sm` (rendering ~41px for an input and ~37px for a select), `form-checkbox`, the `btn-*` family, `btn-icon-sm`, and the header logo and skip-to-main links.
+
+**Implementation notes for anyone editing `styles/index.css`:**
+
+- Every rule sits inside a `max-width: 767px` query — **desktop density is deliberately untouched.**
+- The button rules switch to `inline-flex` inside that query: a bare `min-height` leaves the label at the top of the taller box for anchors styled as buttons.
+- `form-checkbox` keeps its 16px box so layouts do not move; the hit area grows via outline-style padding with a matching negative margin and `background-clip: content-box`.
+- The 12px floor is applied centrally by overriding `text-[10px]` and `text-[11px]` below `md`, **unlayered** (like the `dvh` rules) so it beats `@layer utilities` without `!important` — rather than editing 186 call sites.
+
+**Edge Case:** `text-[9px]` and below are **deliberately exempt**: chart axis labels, day cells in the pattern builder's month grid, and the simulated barcode on the label-print preview are dense fixed-size layouts where 12px would break the grid rather than help anyone read it. The exemption is documented at both the CSS rule and the spec — do not "fix" them.
 
 ---
 

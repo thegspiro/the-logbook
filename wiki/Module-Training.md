@@ -532,8 +532,12 @@ The Training module includes a **Skills Testing** sub-module for conducting stru
 - **Template Snapshots** _(2026-08-08)_ — Each test freezes the template structure and scoring rules it was created against, so editing a published template can no longer shift, drop or re-grade a completed scorecard
 - **Autosave & Optimistic Concurrency** _(2026-08-08)_ — Scoring saves itself while a test is live; a save against a stale version is refused with `409` and autosave suspends rather than silently losing one examiner's work
 - **Measured Elapsed Time** _(2026-08-08)_ — The examiner's stopwatch is recorded; wall clock is only a fallback. Time limits are pass/fail criteria, and `started_at` is stamped once, so wall clock over-reported badly
-- **Attempt Limits** _(2026-08-08)_ — A linked requirement's `max_attempts` is enforced on both create and complete. Voided results and practice attempts do not consume an attempt
+- **Attempt Limits** _(2026-08-08)_ — A linked requirement's `max_attempts` is enforced on create and, since the validation change below, spent at **validation** rather than completion. Voided results, practice attempts and unvalidated submissions do not consume an attempt
 - **Member-Facing Results** _(2026-08-08)_ — **My Training → Skills Tests** plus a read-only detail page at `/training/my-skill-tests/:testId`
+- **Member Examining & Officer Validation** _(2026-08-08)_ — **Any member may examine**, because departments routinely use senior members as evaluators. The officer's authority moved to `POST /tests/{id}/validate`: until a result is validated it is a **submission, not a record** — no pipeline credit, no attempt spent, excluded from the pass rate and average score, and shown to the candidate as _awaiting validation_ with the outcome withheld. An officer's own completion validates in the same step. Rejection is the existing **void** path. An officer cannot validate a test they are the candidate in
+- **Candidate Lookup** _(2026-08-08)_ — `GET /skills-testing/candidates?q=` returns `{ id, name }` only. A **lookup, not a listing**: `q` is required (min 2 chars), `LIKE` wildcards are escaped, results cap at 15, and it is gated on `training.view` or `training.manage`. It exists because `GET /users` needs `users.view`, which the baseline member position does not carry
+- **Per-Template Disclosure Editor** _(2026-08-08)_ — The template builder now exposes the disclosure override. Fields default to **Inherit**, and the option names what it resolves to, read from the department's training configuration. Inherit sends `null` (not an omitted field) so an override can actually be cleared
+- **Named-Viewer Panel** _(2026-08-08)_ — `TestViewersPanel` grants one person sight of a **single** test's result — a preceptor, an FTO, a mentor. Per test, not per template: the relationship is to the person tested, not the skill. A grantee never sees more than the candidate does
 - **Scoring Engine** — Automatic section scores, overall percentage, critical criteria compliance, elapsed time
 - **Summary Dashboard** — Department-wide statistics (pass rate, average score, tests this month)
 
@@ -632,14 +636,36 @@ Admin creates template → POST /training/skills-testing/templates
 Admin publishes → POST /training/skills-testing/templates/{id}/publish
   → Status: published (available for testing)
 Examiner starts test → POST /training/skills-testing/tests
-  → Select template + candidate
+  → Any member may examine (auth-only) as of 2026-08-08
+  → Candidate chosen via GET /training/skills-testing/candidates?q=<name>
   → Timer starts, criteria loaded for scoring
 Examiner scores criteria → PUT /training/skills-testing/tests/{id}
   → Real-time section scores and running total
+  → Autosaves; a stale expected_version is refused with 409
 Examiner completes → POST /training/skills-testing/tests/{id}/complete
   → Score calculated, pass/fail determined
   → Post-completion review screen with notes
-  → Training record created if linked to requirement
+  → If the examiner holds training.manage: validated in the same step
+  → Otherwise: validated_at stays NULL — a submission, not a record
+```
+
+**Validation step (member-run tests only)** _(2026-08-08)_
+
+```
+Officer opens the review queue → GET /training/skills-testing/tests?pending_validation=true
+  → Badge count comes from GET /summary → pending_validation
+
+Officer accepts → POST /training/skills-testing/tests/{id}/validate
+  → Requires training.manage; idempotent
+  → Refused (400) if the officer is the candidate — separation of duties
+  → Refused (400) for practice, voided, or not-yet-completed tests
+  → Spends one attempt against the requirement's max_attempts
+  → Credits the linked pipeline requirement if the test passed
+  → Result becomes visible to the candidate under the template's
+    disclosure rules, and enters the pass rate / average score
+
+Officer rejects → POST /training/skills-testing/tests/{id}/void
+  → Keeps the submission and the reason it was refused
 ```
 
 ### Certification Expiry Alert Flow
@@ -713,7 +739,15 @@ The training module uses 16 exported service objects in `frontend/src/services/t
 | `activeSectionIndex` | `number`                      | Current section in active test   |
 | `summary`            | `SkillTestingSummary \| null` | Department statistics            |
 
-**26 actions** covering template/test CRUD, scoring, timer management, and summary loading.
+**27 actions** covering template/test CRUD, scoring, timer management, and
+summary loading.
+
+`fetchTests` accepts a `pending_validation` filter (the officer review queue).
+`validateTest(id)` patches the matching list row in place — clearing
+`pending_validation`, stamping `validated_at`, and writing through `result` and
+`overall_score`, because the row carried a **withheld** outcome while the test
+was pending and the validated response is the first time this reader sees the
+real one.
 
 ---
 
@@ -725,6 +759,26 @@ The training module uses 16 exported service objects in `frontend/src/services/t
 | `training.manage`   | Full training admin: requirements, sessions, submissions review, compliance, skills templates, module config |
 | `training.evaluate` | Evaluate training (examiner role)                                                                            |
 | `training.view_all` | View all members' training data                                                                              |
+
+### Skills testing gates _(as built, 2026-08-08)_
+
+| Action                                                             | Gate                                                  |
+| ------------------------------------------------------------------ | ----------------------------------------------------- |
+| Create / edit / publish / duplicate / delete a template            | `training.manage`                                     |
+| Start, score, complete or cancel a test — **practice or official** | Authenticated member                                  |
+| Discard a practice attempt                                         | Authenticated member (candidate, examiner or officer) |
+| **Validate** an official result                                    | `training.manage`                                     |
+| **Void** an official result (the rejection path)                   | `training.manage`                                     |
+| **Release** a withheld result                                      | `training.manage`                                     |
+| Grant / list / revoke a **named viewer**                           | `training.manage`                                     |
+| **Delete** a test record (practice only)                           | `training.manage`                                     |
+| Look up a candidate by name (`GET /candidates`)                    | `training.view` **or** `training.manage`              |
+
+The React routes match: `/training/skills-testing`, `.../test/new`,
+`.../test/:testId` and `.../test/:testId/active` are `<ProtectedRoute>` with no
+`requiredPermission`. Per-record read access is enforced by the API, so a member
+reaching a test they are not party to gets a **`404`** rather than a route they
+should not have been able to open.
 
 ---
 

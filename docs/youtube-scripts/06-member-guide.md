@@ -207,6 +207,27 @@ Administrative]**
 > look the same, deliberately — the alternative is a screen that announces 'you
 > were evaluated and you may not know how it went,' which helps nobody."
 
+**[SCREEN: A row reading "Awaiting validation" — score and result columns
+empty.]**
+
+> "You might also see one that says **awaiting validation**, with no score on it.
+> That's not an error. As of August 2026, any member can run a skills test on
+> you — which is realistic, because the person with the clipboard is usually a
+> senior member rather than an officer."
+
+> "But a training officer still has to sign it off before it counts. Until they
+> do, it doesn't complete anything on your training pipeline, it doesn't use up
+> one of your attempts, and you don't see a pass or a fail — because nobody has
+> decided yet that it stands."
+
+**[CALLOUT: "Awaiting validation = an officer hasn't signed it yet"]**
+
+**[SCREEN: An ordinary member starting a skills test on a peer.]**
+
+> "And it works the other way too. **You** can run one. If you're the senior
+> person on a crew and you're checking somebody off, you don't need officer
+> permissions to do it — you run the sheet, and an officer signs the result."
+
 ### SUBMITTING EXTERNAL TRAINING (9:30 – 11:00)
 
 **[SCREEN: Navigate to Submit Training (SubmitTrainingPage)]**
