@@ -322,6 +322,30 @@ there is no screen.
 | **No UI for overdue property returns (members)**            | Open (LOW)                        | Three endpoints, no consumer. The Inventory members page shows an "Overdue Returns" figure, which is a different feature and may be the reason this was assumed to exist.                                                                             |
 | **Screenshot `01-22-member-lifecycle.png` was mislabelled** | ✅ Resolved (2026-08-08)          | Captured at `/members/admin` but applied under a "Member Lifecycle Management page" caption, so a real screenshot of the Members Admin hub read as evidence that the lifecycle page existed. Caption and manifest `alt` corrected; the image is fine. |
 
+## Apparatus & Facilities — Four Guide Sections With No Screen (2026-08-08)
+
+Found while capturing screenshots for `docs/training/06-apparatus-facilities.md`:
+four placeholders in that guide picture screens the frontend does not render.
+Same shape as the Member Lifecycle row above — the API is built, the screen is
+not — so they are recorded rather than papered over with an approximate image.
+Their placeholders are deliberately left open.
+
+| Guide section                     | What the guide pictures                                                                                                   | What exists                                                                                                                                                                                                          | State                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Facility **Utilities** section    | Utility accounts (electric, gas, water) with the latest reading, monthly cost and a usage trend chart                     | Nine `facilitiesService` methods over `/facilities/utility-accounts` and `/utility-readings`, **zero UI consumers**. `FacilityDetailPage` renders seven sections and Utilities is not one of them.                    | ❌ API + service only          |
+| Facility **Capital Projects**     | Project list with name, budget, status badge and timeline bar                                                             | Five `facilitiesService` methods over `/facilities/capital-projects`, **zero UI consumers**.                                                                                                                          | ❌ API + service only          |
+| Apparatus **NFPA Compliance tab** | Applicable standards with per-standard compliance status (green check / red X), last assessment date and next due date    | `ApparatusOverviewTab.tsx:242` renders a single card reading "Tracking Enabled" when the flag is set. There is no standards list, no status, no dates. The flag's only other consumer is a checkbox on the edit form. | ⚠️ Flag only, no tab           |
+| Apparatus **deficiency banner**   | A banner at the top of the detail page with the deficiency date and a link to the failed equipment check                  | A "Deficiency" badge beside the status badge, on both the list row and the detail header. `deficiencySince` is on the TypeScript type and is **never rendered**; there is no banner and no link to the check.         | ⚠️ Badge only, no date or link |
+
+Verified 2026-08-08 by counting non-test consumers of each service method under
+`frontend/src`, and by reading the render bodies rather than trusting the type
+definitions — `deficiencySince` and the utility/capital-project types are all
+declared, which is exactly what makes this class of gap easy to miss.
+
+The guide text has **not** been rewritten here. Two of these are one component
+away from being true, and deciding between "build the screen" and "cut the
+section" is a product call, not a documentation fix.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

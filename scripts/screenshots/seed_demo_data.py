@@ -510,6 +510,37 @@ class Seeder:
 
     # -- apparatus: maintenance, fuel, equipment ---------------------
 
+    def seed_evoc_levels(self) -> list[dict]:
+        """Driver/operator certification tiers.
+
+        The apparatus form hides its "Required EVOC Level" dropdown entirely
+        when no levels are defined, and scheduling has nothing to validate a
+        driver against.
+        """
+        levels = items(self.api.get("/apparatus/evoc-levels"), "levels")
+        codes = {level.get("code") for level in levels}
+        blueprint = [
+            (1, "Basic", "EVOC-1", "Emergency vehicle operation, non-transport."),
+            (2, "Intermediate", "EVOC-2", "Engine and rescue apparatus."),
+            (3, "Advanced", "EVOC-3", "Aerial and tiller-equipped apparatus."),
+        ]
+        for number, name, code, description in blueprint:
+            if code in codes:
+                continue
+            levels.append(
+                self.api.post(
+                    "/apparatus/evoc-levels",
+                    {
+                        "level_number": number,
+                        "name": name,
+                        "code": code,
+                        "description": description,
+                        "sort_order": number,
+                    },
+                )
+            )
+        return levels
+
     def seed_apparatus_activity(self, apparatus: list[dict]) -> dict[str, list[dict]]:
         if not apparatus:
             return {}
@@ -3372,6 +3403,7 @@ class Seeder:
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
         apparatus = self.step("apparatus", lambda: self.seed_apparatus(stations)) or []
+        self.step("evoc levels", self.seed_evoc_levels)
         self.step("apparatus activity", lambda: self.seed_apparatus_activity(apparatus))
         events = self.step("events", self.seed_events) or []
         self.step(

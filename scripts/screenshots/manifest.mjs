@@ -158,6 +158,41 @@ export function withQueryFromApi(apiPath, listKey, paramsFor, match) {
   };
 }
 
+/**
+ * Re-open the current route with `?ids=` naming several records at once.
+ *
+ * The shared label print page renders one label per id in that parameter, so a
+ * sheet has to be addressed with the whole set — unlike the print views
+ * withQueryFromApi serves, which take a single record.
+ */
+export function withIdsFromApi(apiPath, listKey, limit = 6) {
+  return async (page) => {
+    const ids = await page.evaluate(
+      async ([path, key, max]) => {
+        const response = await fetch(`/api/v1${path}`, {
+          credentials: "include",
+        });
+        if (!response.ok) return [];
+        const body = await response.json();
+        const records = Array.isArray(body)
+          ? body
+          : body[key] || body.items || body.results || body.data || [];
+        return records
+          .map((record) => record.id)
+          .filter(Boolean)
+          .slice(0, max);
+      },
+      [apiPath, listKey ?? "", limit],
+    );
+    if (!ids.length) {
+      throw new Error(`withIdsFromApi: ${apiPath} returned no records`);
+    }
+    const url = new URL(page.url());
+    url.searchParams.set("ids", ids.join(","));
+    await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  };
+}
+
 /** True for a shift whose date has passed — where the logged runs are. */
 export const isPastShift = (shift) => {
   const day = shift.shift_date ?? shift.shiftDate ?? "";
@@ -2037,6 +2072,79 @@ export const SHOTS = [
         await buttons.nth(index).click({ timeout: 10_000 });
       }
       throw new Error("no message requires acknowledgment");
+    },
+    fullPage: true,
+  },
+
+  // ── Seventh batch: apparatus labels, badges and EVOC ────────────────
+  {
+    id: "06-02-apparatus-label-print",
+    doc: "06-apparatus-facilities.md",
+    line: 56,
+    anchor:
+      'Screenshot of the apparatus list with the per-row "Print label" printer icon',
+    alt: "Apparatus label print page with size presets and a barcode preview",
+    route: "/apparatus/print-labels",
+    prepare: async (page) => {
+      await withIdsFromApi("/apparatus?limit=6", "apparatus")(page);
+      // Size presets live behind Settings, which starts collapsed.
+      await clickByName(/^settings$/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-08-facility-label-print",
+    doc: "06-apparatus-facilities.md",
+    line: 177,
+    anchor:
+      'Screenshot of the Facilities header showing the "Print Labels" button next to',
+    alt: "Facility label print page previewing station barcode labels",
+    route: "/facilities/print-labels",
+    prepare: async (page) => {
+      await withIdsFromApi("/facilities?limit=6", "facilities")(page);
+      // Size presets live behind Settings, which starts collapsed.
+      await clickByName(/^settings$/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-20-apparatus-badges",
+    doc: "06-apparatus-facilities.md",
+    line: 637,
+    anchor:
+      "Screenshot of the apparatus list showing apparatus cards with correct icon",
+    alt: "Apparatus list with type icons and status badges rendering correctly",
+    route: "/apparatus",
+    fullPage: true,
+  },
+  {
+    id: "06-21-apparatus-evoc-level",
+    doc: "06-apparatus-facilities.md",
+    line: 650,
+    anchor:
+      'Screenshot of the apparatus edit form showing the "Required EVOC Level" dropdown',
+    alt: "Apparatus edit form with the required EVOC level field",
+    route: "/apparatus",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus?limit=20",
+        (id) => `/apparatus/${id}/edit`,
+        "apparatus",
+      )(page);
+      // The dropdown only renders once EVOC levels are defined, and it defaults
+      // to none — the guide pictures it set.
+      const evoc = page.locator('select[name="requiredEvocLevelId"]');
+      await evoc.waitFor({ timeout: 10_000 });
+      // Options read "Level 2 — Intermediate" and their values are seeded ids,
+      // so match on the visible text rather than naming either.
+      const value = await evoc.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) =>
+            /intermediate/i.test(option.text),
+          )?.value ?? "",
+      );
+      if (!value) throw new Error("no Intermediate EVOC level defined");
+      await evoc.selectOption(value);
     },
     fullPage: true,
   },
