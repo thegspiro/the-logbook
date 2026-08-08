@@ -282,7 +282,7 @@ export const BallotVotingPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center">
         <div className="text-center" role="status" aria-live="polite">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-4 border-b-4 border-red-600 mb-4"></div>
           <p className="text-theme-text-secondary">Loading your ballot...</p>
@@ -293,7 +293,7 @@ export const BallotVotingPage: React.FC = () => {
 
   if (error && !election) {
     return (
-      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-theme-surface rounded-lg shadow-lg p-8 text-center">
           <div className="text-red-600 text-5xl mb-4">!</div>
           <h1 className="text-xl font-bold text-theme-text-primary mb-2">Unable to Load Ballot</h1>
@@ -308,7 +308,7 @@ export const BallotVotingPage: React.FC = () => {
 
   if (submitted && submitResult) {
     return (
-      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-theme-surface rounded-lg shadow-lg p-8 text-center">
           <div className="w-16 h-16 bg-green-100 dark:bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -344,7 +344,7 @@ export const BallotVotingPage: React.FC = () => {
   const ballotItems = election.ballot_items || [];
 
   return (
-    <div className="min-h-screen bg-theme-surface-secondary">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to">
       {/* Header */}
       <div className="bg-red-700 text-white">
         <div className="max-w-2xl mx-auto px-4 py-8 text-center">

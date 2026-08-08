@@ -70,7 +70,7 @@ export const ApplicationStatusPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center" role="status" aria-live="polite">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center" role="status" aria-live="polite">
         <Loader2 className="w-8 h-8 text-theme-text-muted animate-spin" aria-hidden="true" />
         <span className="sr-only">Loading application status...</span>
       </div>
@@ -79,7 +79,7 @@ export const ApplicationStatusPage: React.FC = () => {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center">
           <AlertTriangle className="w-12 h-12 text-amber-700 dark:text-amber-400 mx-auto mb-4" aria-hidden="true" />
           <h1 className="text-xl font-bold text-theme-text-primary mb-2">Application Not Found</h1>
@@ -93,7 +93,7 @@ export const ApplicationStatusPage: React.FC = () => {
   const completedCount = data.stage_timeline.filter((s) => s.status === 'completed').length;
 
   return (
-    <div className="min-h-screen bg-theme-surface-secondary py-8 px-4">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4">
       <div className="max-w-lg mx-auto">
         {/* Header */}
         <div className="text-center mb-6">
