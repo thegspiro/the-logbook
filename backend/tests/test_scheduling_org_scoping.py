@@ -24,16 +24,104 @@ def _all(items):
     return r
 
 
+def _scalars_first(obj):
+    """Mock a result whose ``.scalars().first()`` yields ``obj``.
+
+    ``apparatus_ref_exists`` queries both apparatus tables in turn, so a
+    rejection needs two misses and an acceptance needs a hit in one of them.
+    """
+    r = MagicMock()
+    r.scalars.return_value.first.return_value = obj
+    return r
+
+
 class TestCreateShiftApparatusScoping:
     async def test_rejects_foreign_apparatus(self):
+        """Neither apparatus table has it, so it is rejected before any write."""
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_one(None)])  # is_in_org -> not found
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars_first(None),  # not a full Apparatus in this org
+                _scalars_first(None),  # not a BasicApparatus in this org either
+            ]
+        )
         db.add = MagicMock()
         svc = SchedulingService(db)
         shift, err = await svc.create_shift("org-1", {"apparatus_id": "aFOREIGN"}, "u1")
         assert shift is None
         assert err == "Apparatus not found"
         db.add.assert_not_called()
+
+    async def test_accepts_a_basic_apparatus_id(self):
+        """The onboarding-only case: a shift's apparatus is a BasicApparatus."""
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars_first(None),  # not a full Apparatus
+                _scalars_first(SimpleNamespace(id="basic-1")),  # but a BasicApparatus
+            ]
+        )
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        svc = SchedulingService(db)
+
+        shift, err = await svc.create_shift("org-1", {"apparatus_id": "basic-1"}, "u1")
+
+        assert err is None
+        assert shift is not None
+        db.add.assert_called_once()
+
+    async def test_accepts_a_full_apparatus_id(self):
+        """Regression: this used to fail with "Apparatus not found".
+
+        ``GET /scheduling/apparatus-options`` serves full ``Apparatus`` ids
+        whenever that module has records, but the validator checked
+        ``BasicApparatus`` only — so a department on the Apparatus module could
+        not assign an apparatus to a shift at all. It rejected the very ids it
+        had just offered.
+        """
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[_scalars_first(SimpleNamespace(id="app-1"))]
+        )
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        svc = SchedulingService(db)
+
+        shift, err = await svc.create_shift("org-1", {"apparatus_id": "app-1"}, "u1")
+
+        assert err is None
+        assert shift is not None
+        db.add.assert_called_once()
+
+
+class TestUpdateShiftApparatusScoping:
+    async def test_rejects_foreign_apparatus_on_update(self):
+        """The update path carries the same guard as create."""
+        existing = SimpleNamespace(
+            id="s1",
+            organization_id="org-1",
+            shift_officer_id=None,
+            is_finalized=False,
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(existing),  # get_shift_by_id
+                _scalars_first(None),  # not a full Apparatus
+                _scalars_first(None),  # not a BasicApparatus
+            ]
+        )
+        svc = SchedulingService(db)
+
+        shift, err = await svc.update_shift("s1", "org-1", {"apparatus_id": "aFOREIGN"})
+
+        assert shift is None
+        assert err == "Apparatus not found"
 
 
 class TestFinalizeManualHoursScoping:

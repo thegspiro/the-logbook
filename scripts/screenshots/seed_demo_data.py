@@ -1391,32 +1391,22 @@ class Seeder:
         submitted[-1]["quantity_found"] = 0
 
         for shift in target_shifts:
-            try:
-                check = self.api.post(
-                    f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
-                    {
-                        "template_id": template_id,
-                        "check_timing": "start_of_shift",
-                        "items": submitted,
-                    },
-                )
-            except ApiError as exc:
-                if exc.code != 500:
-                    raise
-                # Known product bug, not something the seeder can route around:
-                # `shifts.apparatus_id` holds a scheduling BasicApparatus id
-                # (the column has no FK — "Link to apparatus (future)"), but
-                # `shift_equipment_checks.apparatus_id` is a real FK to
-                # `apparatus.id`. create_shift_check copies one into the other,
-                # so submitting a check for any shift with an apparatus
-                # assigned always fails the constraint.
-                self.blocked.append(
-                    "equipment checks: submitting a check for a shift with an "
-                    "apparatus 500s — shifts.apparatus_id holds a BasicApparatus "
-                    "id but shift_equipment_checks.apparatus_id is an FK to "
-                    "apparatus.id (equipment_check_service.py:691)"
-                )
-                return {"templates": templates, "checks": checks}
+            # This used to swallow a 500 and record a blocker: submitting a check
+            # for any shift with an apparatus assigned failed the FK constraint
+            # on `shift_equipment_checks.apparatus_id`. Fixed 2026-08-08 by
+            # resolving the shift's polymorphic apparatus reference (see
+            # app/utils/apparatus_ref.py), so the failure is no longer expected
+            # and is deliberately left to raise — a silent skip here is how the
+            # equipment-check screenshots went unfilled for two days without
+            # anyone noticing the feature was broken.
+            check = self.api.post(
+                f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
+                {
+                    "template_id": template_id,
+                    "check_timing": "start_of_shift",
+                    "items": submitted,
+                },
+            )
             checks.append(check)
             # A check only counts toward the compliance report once completed.
             check_id = pick(check, "id")

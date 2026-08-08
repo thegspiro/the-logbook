@@ -29,6 +29,7 @@ from app.models.training import (
 )
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
+from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
 
 
 class EquipmentCheckService:
@@ -684,12 +685,25 @@ class EquipmentCheckService:
             items_data
         )
 
+        # shifts.apparatus_id is polymorphic — it holds an apparatus.id for a
+        # department on the full Apparatus module and a basic_apparatus.id for
+        # one that only completed onboarding (see utils/apparatus_ref). This
+        # column is a real FK to apparatus.id, so the raw shift value cannot be
+        # copied across: for a BasicApparatus department it named no apparatus
+        # row and every submission failed the constraint with a 500. Resolve it,
+        # and store NULL when the department has no full apparatus record for
+        # the vehicle — the column is nullable with SET NULL precisely because
+        # a check need not be attributable to one.
+        apparatus_ref = await resolve_apparatus_ref(
+            self.db, shift.apparatus_id, organization_id
+        )
+
         check = ShiftEquipmentCheck(
             id=generate_uuid(),
             organization_id=organization_id,
             shift_id=shift_id,
             template_id=template_id,
-            apparatus_id=shift.apparatus_id,
+            apparatus_id=apparatus_ref.full_id,
             checked_by=checked_by,
             checked_at=datetime.now(timezone.utc),
             check_timing=data.get("check_timing", "start_of_shift"),
@@ -1006,17 +1020,15 @@ class EquipmentCheckService:
         )
         rows = list(result.all())
 
-        # Collect apparatus IDs for name lookup
-        apparatus_ids = {row[1].apparatus_id for row in rows if row[1].apparatus_id}
-        apparatus_map: Dict[str, str] = {}
-        if apparatus_ids:
-            app_result = await self.db.execute(
-                select(Apparatus.id, Apparatus.name).where(
-                    Apparatus.id.in_(apparatus_ids)
-                )
-            )
-            for app_id, app_name in app_result.all():
-                apparatus_map[app_id] = app_name or ""
+        # Collect apparatus IDs for name lookup. Resolved across both apparatus
+        # tables and org-scoped: shifts carry whichever id the shift form was
+        # served, so a single-table lookup left every BasicApparatus department
+        # with blank apparatus names here.
+        apparatus_map = await resolve_apparatus_labels(
+            self.db,
+            {row[1].apparatus_id for row in rows if row[1].apparatus_id},
+            organization_id,
+        )
 
         # Batch-load existing checks for all of the user's shifts at once, then
         # resolve each shift from the already-loaded shift/assignment objects —
@@ -1400,30 +1412,39 @@ class EquipmentCheckService:
         organization_id: str,
         user_position: Optional[str],
     ) -> List[EquipmentCheckTemplate]:
-        """Resolve applicable templates for a shift apparatus."""
+        """Resolve applicable templates for a shift apparatus.
+
+        Templates are defined either for one specific apparatus
+        (``EquipmentCheckTemplate.apparatus_id``, an FK to ``apparatus.id``) or
+        for an apparatus *type* (``apparatus_type``, a plain string). A
+        department on ``BasicApparatus`` has no full apparatus records, so only
+        the type-level route can ever match for it — which is why the shift's
+        id has to be classified rather than assumed.
+        """
         templates = []
 
         if shift.apparatus_id:
-            # First try apparatus-specific templates
-            apparatus_templates = await self.list_templates(
-                organization_id, apparatus_id=shift.apparatus_id
+            ref = await resolve_apparatus_ref(
+                self.db, shift.apparatus_id, organization_id
             )
-            if apparatus_templates:
-                templates = apparatus_templates
-            else:
-                # Fall back to apparatus-type templates
-                result = await self.db.execute(
-                    select(Apparatus).where(Apparatus.id == shift.apparatus_id)
+
+            # Apparatus-specific templates, only meaningful when the shift's
+            # apparatus is a full Apparatus record — the template FK targets
+            # that table, so a BasicApparatus id could never match one.
+            if ref.full is not None:
+                templates = await self.list_templates(
+                    organization_id, apparatus_id=ref.full_id
                 )
-                apparatus = result.scalars().first()
-                if apparatus and apparatus.type:
+
+            # Fall back to type-level templates. ApparatusRef.type_slug reads
+            # the type from whichever table the id came from: the normalized
+            # apparatus_types row for a full record, the inline string for a
+            # BasicApparatus one.
+            if not templates:
+                type_slug = ref.type_slug
+                if type_slug:
                     templates = await self.list_templates(
-                        organization_id,
-                        apparatus_type=(
-                            apparatus.type.value
-                            if hasattr(apparatus.type, "value")
-                            else str(apparatus.type)
-                        ),
+                        organization_id, apparatus_type=type_slug
                     )
 
         # Filter by active status
@@ -1628,16 +1649,15 @@ class EquipmentCheckService:
                 if tmpl_row:
                     template_name = tmpl_row
 
-            apparatus_name = ""
-            if shift.apparatus_id:
-                app_result = await self.db.execute(
-                    select(Apparatus.unit_number).where(
-                        Apparatus.id == shift.apparatus_id
-                    )
+            # Resolve from whichever apparatus table the shift's id belongs to,
+            # so a BasicApparatus department gets its unit number in the alert
+            # instead of a blank. Also org-scopes a lookup that previously did
+            # not (XC-1).
+            apparatus_name = (
+                await resolve_apparatus_ref(
+                    self.db, shift.apparatus_id, organization_id
                 )
-                app_row = app_result.scalar_one_or_none()
-                if app_row:
-                    apparatus_name = app_row
+            ).unit_label
 
             # Collect recipients
             recipient_ids: set[str] = set()

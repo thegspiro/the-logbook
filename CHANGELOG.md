@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Equipment checks: submitting one works again, and shifts accept either apparatus inventory (2026-08-08)
+
+**Fixed**
+
+- **Submitting an equipment check returned a server error on any shift with an
+  apparatus assigned** — in practice, on any real shift. The submission wrote the
+  shift's apparatus reference into a column whose foreign key points at the full
+  apparatus table, but for a department that set its apparatus up during
+  onboarding that reference names a _lightweight_ apparatus record instead. The
+  constraint failed and the whole check was lost. Nothing was ever saved, so
+  there are no partial checks to clean up.
+- **Equipment-check templates never resolved for those same departments.** The
+  checklist came back empty because template lookup searched the full apparatus
+  table using an id that only exists in the lightweight one — so a member opening
+  their checklist saw nothing to fill in, with no error to explain it.
+- **A department running the full Apparatus module could not assign an apparatus
+  to a shift at all.** Shift creation validated the apparatus against the
+  lightweight table only, so it rejected the very ids the shift form had just
+  offered it, with "Apparatus not found". This is the mirror image of the first
+  defect and had the same root cause.
+- **Shift lists showed blank apparatus names and lost the understaffing badge**
+  for full-Apparatus departments, because apparatus details and minimum staffing
+  were loaded from the lightweight table only.
+- **A latent crash in the apparatus-type template fallback.** That branch read a
+  `type` attribute the apparatus model does not have; it was unreachable only
+  because the id never matched, so fixing the id alone would have turned a silent
+  failure into a 500.
+- **Two apparatus lookups had no organization filter**, so an id from another
+  tenant could have been read back (XC-1). Resolution is now org-scoped
+  throughout, and an out-of-org id resolves to nothing rather than being stored.
+
+**Changed**
+
+- **`shifts.apparatus_id` is now understood to be polymorphic**, which it always
+  was in practice: `GET /scheduling/apparatus-options` serves full-`Apparatus`
+  ids when that module has records and `BasicApparatus` ids otherwise, so the
+  same column means different things in different deployments. That was
+  deliberate; what was missing was anywhere that said so. A new
+  `app/utils/apparatus_ref.py` classifies the id against both tables, and every
+  consumer now asks it instead of assuming.
+
+  Neither of the two "obvious" fixes was correct — making the column a real
+  foreign key, or consolidating the tables, would each have broken one of the two
+  department types. Resolving at the boundary requires **no migration and no
+  schema change**.
+
+- **An equipment check on a lightweight-apparatus shift stores no apparatus
+  reference** (`NULL`), which is accurate rather than lossy: that department has
+  no full apparatus record for the vehicle. The check still links to its shift,
+  which carries the reference, and the column is nullable with `SET NULL`
+  precisely because a check need not be attributable to one.
+
+**Known gap (unchanged)**
+
+- **Deficiency flags remain a full-Apparatus-module feature.** A failed check
+  cannot raise a deficiency badge for a department on the lightweight table,
+  because that safety state lives on the full apparatus record. Closing it means
+  adding the state to the lightweight table, which is a product decision. See
+  `docs/KNOWN_LIMITATIONS.md`.
+
 ### Deployment: an update could break the build on a compose file the pull never touched (2026-08-08)
 
 **Fixed**
