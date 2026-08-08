@@ -42,6 +42,10 @@ RSVP_CLOSED = re.compile(
     r"deadline has passed|already ended|no longer accepting", re.IGNORECASE
 )
 
+# Named because the seeder has to find this one again on a later run to keep it
+# current — see seed_events.
+IN_PROGRESS_EVENT_TITLE = "Company Drill — In Progress"
+
 TODAY = date.today()
 NOW = datetime.now(timezone.utc)
 
@@ -190,6 +194,7 @@ class Seeder:
         self.api = api
         self.base_url = base_url
         self.failures: list[str] = []
+        self.blocked: list[str] = []
         self.created: dict[str, list[dict]] = {}
 
     def step(self, label: str, fn) -> Any:
@@ -532,7 +537,7 @@ class Seeder:
             ("Winter Drill Series", "training", -21, 3),
             ("Quarterly Business Meeting", "business_meeting", -14, 2),
             ("Hose Testing Day", "training", -7, 4),
-            ("Company Drill — In Progress", "training", 0, 4),
+            (IN_PROGRESS_EVENT_TITLE, "training", 0, 4),
             ("Monthly Business Meeting", "business_meeting", 3, 2),
             ("Q3 Ladder Operations Drill", "training", 6, 3),
             ("Pump Operations Refresher", "training", 10, 2),
@@ -542,6 +547,27 @@ class Seeder:
             ("Annual Awards Banquet", "social", 45, 4),
         ]
         created = list(existing)
+        by_title = {e.get("title"): e for e in existing}
+
+        # The in-progress drill is the one piece of demo data that goes stale on
+        # its own: it is what the check-in monitor pictures, and by the next run
+        # it has ended. Slide it forward instead of skipping it, so repeated
+        # seeding keeps the monitor showing a live check-in window.
+        drill = by_title.get(IN_PROGRESS_EVENT_TITLE)
+        if drill and pick(drill, "id"):
+            ends = str(pick(drill, "end_datetime", "endDatetime") or "")
+            if ends and ends < iso(NOW):
+                start = (NOW - timedelta(hours=2)).replace(
+                    minute=0, second=0, microsecond=0
+                )
+                self.api.patch(
+                    f"/events/{pick(drill, 'id')}",
+                    {
+                        "start_datetime": iso(start),
+                        "end_datetime": iso(start + timedelta(hours=4)),
+                    },
+                )
+
         for title, event_type, days_out, hours in planned:
             if title in titles:
                 continue
@@ -1204,6 +1230,206 @@ class Seeder:
                 if exc.code not in (400, 409):
                     raise
         return checked_in
+
+    # -- finance: purchase requests against budgets ------------------
+
+    def seed_purchase_requests(self, finance: dict) -> list[dict]:
+        """Spend against the budgets, which is what a budget's detail shows.
+
+        A budget page lists the requests charged to it; without any, the
+        transactions panel is empty however well-funded the budget is.
+        """
+        fiscal_year = finance.get("fiscal_year") or {}
+        budgets = finance.get("budgets") or []
+        fiscal_year_id = pick(fiscal_year, "id")
+        if not fiscal_year_id or not budgets:
+            return []
+
+        requests = items(
+            self.api.get("/finance/purchase-requests"), "purchase_requests"
+        )
+        if requests:
+            return requests
+
+        planned = [
+            ("Thermal Imaging Camera", "Atlantic Fire Equipment", 8_400, "high"),
+            (
+                "Engine 1 annual pump service",
+                "Atlantic Fire Apparatus",
+                2_450,
+                "medium",
+            ),
+            ("Bunker gear replacement — 4 sets", "Globe Turnout Gear", 16_600, "high"),
+            ("Officer development course fees", "VA Fire Chiefs Assoc.", 3_200, "low"),
+            ("Portable radio batteries", "Motorola Solutions", 1_180, "medium"),
+            ("Station 2 bay door repair", "Tidewater Door Service", 1_840, "urgent"),
+        ]
+        for index, (title, vendor, amount, priority) in enumerate(planned):
+            budget = budgets[index % len(budgets)]
+            request = self.api.post(
+                "/finance/purchase-requests",
+                {
+                    "fiscal_year_id": fiscal_year_id,
+                    "budget_id": pick(budget, "id"),
+                    "title": title,
+                    "description": f"{title} — requested by the duty officer.",
+                    "vendor": vendor,
+                    "estimated_amount": amount,
+                    "priority": priority,
+                },
+            )
+            requests.append(request)
+            # Leave the last two as drafts so the list shows both states.
+            if index < len(planned) - 2:
+                request_id = pick(request, "id")
+                try:
+                    self.api.post(f"/finance/purchase-requests/{request_id}/submit")
+                except ApiError as exc:
+                    # No approval chain configured for the amount is a
+                    # configuration fact, not a seeding failure.
+                    if exc.code != 400:
+                        raise
+        return requests
+
+    # -- scheduling: equipment check templates and completed checks --
+
+    def seed_equipment_checks(self) -> dict[str, Any]:
+        """A template plus completed checks, which the reports page aggregates."""
+        templates = items(self.api.get("/equipment-checks/templates"), "templates")
+        if not templates:
+            compartments = [
+                (
+                    "Cab",
+                    ["Portable radio", "Thermal imaging camera", "Map book"],
+                ),
+                (
+                    "Compartment 1 — Driver Front",
+                    ["Hydraulic rescue tool", "Spare cylinder", "Hand light"],
+                ),
+                (
+                    "Hose Bed",
+                    ['1 3/4" attack line', '2 1/2" supply line', "Nozzle"],
+                ),
+            ]
+            templates.append(
+                self.api.post(
+                    "/equipment-checks/templates",
+                    {
+                        "name": "Engine Daily Check",
+                        "description": "Start-of-shift inventory for engine companies.",
+                        "check_timing": "start_of_shift",
+                        "apparatus_type": "engine",
+                        "is_active": True,
+                        "compartments": [
+                            {
+                                "name": name,
+                                "sort_order": order,
+                                "items": [
+                                    {
+                                        "name": item,
+                                        "sort_order": item_order,
+                                        "check_type": "presence",
+                                        "is_required": True,
+                                        "expected_quantity": 1,
+                                    }
+                                    for item_order, item in enumerate(contents)
+                                ],
+                            }
+                            for order, (name, contents) in enumerate(compartments)
+                        ],
+                    },
+                )
+            )
+
+        template = templates[0]
+        template_id = pick(template, "id")
+        if not template_id:
+            return {"templates": templates, "checks": []}
+
+        # Checks belong to a shift — there is no module-level collection to list
+        # or post to, so both the idempotency check and the create go through
+        # the shift the crew would actually have been working.
+        shifts = items(self.api.get("/scheduling/shifts?limit=20"), "shifts")
+        target_shifts = [s for s in shifts if pick(s, "id")][:3]
+        if not target_shifts:
+            return {"templates": templates, "checks": []}
+        checks = []
+        for shift in target_shifts:
+            checks.extend(
+                items(
+                    self.api.get(
+                        f"/equipment-checks/shifts/{pick(shift, 'id')}/checks"
+                    ),
+                    "checks",
+                )
+            )
+        if checks:
+            return {"templates": templates, "checks": checks}
+
+        # The template response carries the ids the check has to reference, so
+        # the submitted items are read back off it rather than reconstructed.
+        detail = self.api.get(f"/equipment-checks/templates/{template_id}")
+        submitted = []
+        for compartment in items(detail, "compartments"):
+            for item in items(compartment, "items"):
+                submitted.append(
+                    {
+                        "template_item_id": pick(item, "id"),
+                        "compartment_name": pick(compartment, "name"),
+                        "item_name": pick(item, "name"),
+                        "status": "pass",
+                        "quantity_found": 1,
+                        "required_quantity": 1,
+                    }
+                )
+        if not submitted:
+            return {"templates": templates, "checks": checks}
+
+        # One deficiency across the set, so the compliance view has something
+        # other than a wall of green to show.
+        submitted[-1]["status"] = "fail"
+        submitted[-1]["quantity_found"] = 0
+
+        for shift in target_shifts:
+            try:
+                check = self.api.post(
+                    f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
+                    {
+                        "template_id": template_id,
+                        "check_timing": "start_of_shift",
+                        "items": submitted,
+                    },
+                )
+            except ApiError as exc:
+                if exc.code != 500:
+                    raise
+                # Known product bug, not something the seeder can route around:
+                # `shifts.apparatus_id` holds a scheduling BasicApparatus id
+                # (the column has no FK — "Link to apparatus (future)"), but
+                # `shift_equipment_checks.apparatus_id` is a real FK to
+                # `apparatus.id`. create_shift_check copies one into the other,
+                # so submitting a check for any shift with an apparatus
+                # assigned always fails the constraint.
+                self.blocked.append(
+                    "equipment checks: submitting a check for a shift with an "
+                    "apparatus 500s — shifts.apparatus_id holds a BasicApparatus "
+                    "id but shift_equipment_checks.apparatus_id is an FK to "
+                    "apparatus.id (equipment_check_service.py:691)"
+                )
+                return {"templates": templates, "checks": checks}
+            checks.append(check)
+            # A check only counts toward the compliance report once completed.
+            check_id = pick(check, "id")
+            if check_id:
+                try:
+                    self.api.put(
+                        f"/equipment-checks/checks/{check_id}/complete",
+                        {"items": submitted},
+                    )
+                except ApiError as exc:
+                    if exc.code not in (400, 409):
+                        raise
+        return {"templates": templates, "checks": checks}
 
     # -- documents ---------------------------------------------------
 
@@ -2561,8 +2787,14 @@ class Seeder:
         self.step("storefront", self.seed_storefront)
         finance = self.step("finance", self.seed_finance) or {}
         self.step("dues", lambda: self.seed_dues(finance.get("fiscal_year")))
+        self.step("purchase requests", lambda: self.seed_purchase_requests(finance))
+        self.step("equipment checks", self.seed_equipment_checks)
 
         print(f"\nMembers on file: {len(members)}")
+        if self.blocked:
+            print("\nBlocked (product bugs the seeder cannot work around):")
+            for note in self.blocked:
+                print(f"  - {note}")
         if self.failures:
             print("\nFailures:")
             for failure in self.failures:
