@@ -17,6 +17,7 @@
 
 import { chromium } from "@playwright/test";
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
@@ -155,13 +156,26 @@ async function login(page) {
   await settle(page);
 }
 
+function resolveChromium() {
+  if (process.env.PLAYWRIGHT_CHROMIUM_PATH) {
+    return process.env.PLAYWRIGHT_CHROMIUM_PATH;
+  }
+  const pool = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  if (!pool) return undefined;
+  const symlink = resolve(pool, "chromium");
+  return existsSync(symlink) ? symlink : undefined;
+}
+
 async function main() {
   await mkdir(OUTPUT_DIR, { recursive: true });
 
   // PLAYWRIGHT_CHROMIUM_PATH lets an environment that ships a pre-installed
   // Chromium (whose build number may not match this Playwright release) point
-  // at it directly instead of downloading a second copy.
-  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined;
+  // at it directly instead of downloading a second copy. When the browser pool
+  // in PLAYWRIGHT_BROWSERS_PATH carries a version-agnostic `chromium` symlink,
+  // use it without being asked — bumping @playwright/test otherwise breaks
+  // capture on every such machine until someone sets the variable by hand.
+  const executablePath = resolveChromium();
   const browser = await chromium.launch({
     headless: !headed,
     ...(executablePath ? { executablePath } : {}),

@@ -129,6 +129,9 @@ class Api:
     def put(self, path: str, payload: Any) -> Any:
         return self.call("PUT", path, payload)
 
+    def delete(self, path: str) -> Any:
+        return self.call("DELETE", path)
+
     def login(self) -> None:
         self.login_as(DEMO_ADMIN_USERNAME, DEMO_ADMIN_PASSWORD)
 
@@ -1375,7 +1378,33 @@ class Seeder:
         ]
         if not started:
             return []
-        event_id = pick(started[-1], "id")
+        # The drill is the only started event whose check-in window is still
+        # open, so name it rather than trusting list order.
+        drill = next(
+            (e for e in started if e.get("title") == IN_PROGRESS_EVENT_TITLE),
+            started[-1],
+        )
+        event_id = pick(drill, "id")
+
+        # Re-read: seed_events may have slid this event's window forward on
+        # this very run, and `events` still carries the pre-patch times.
+        current = self.api.get(f"/events/{event_id}")
+        started_at = str(pick(current, "start_datetime", "startDatetime") or "")
+
+        # A check-in stamped before the event started belongs to a previous
+        # window. Left in place it makes the monitor report an average check-in
+        # of twenty-odd hours "before event start". `checked_in_at` is
+        # write-once — the override route will not move a stamp that is already
+        # set — so the whole RSVP has to go and be rebuilt by the loop below,
+        # which is also what created it (the drill's RSVP deadline has passed,
+        # so seed_event_rsvps skips it).
+        if started_at:
+            for rsvp in items(self.api.get(f"/events/{event_id}/rsvps"), "rsvps"):
+                stamp = str(pick(rsvp, "checked_in_at", "checkedInAt") or "")
+                user_id = pick(rsvp, "user_id", "userId")
+                if stamp and user_id and stamp < started_at:
+                    self.api.delete(f"/events/{event_id}/rsvps/{user_id}")
+
         checked_in = []
         for member in members[:9]:
             user_id = pick(member, "id")

@@ -209,17 +209,17 @@ export function openStaffedShift(extraMatch) {
         // eslint-disable-next-line no-new-func
         const matches = extra ? new Function(`return ${extra}`)() : () => true;
         for (const shift of pickList(await response.json()).filter(matches)) {
-          const detail = await fetch(`/api/v1/scheduling/shifts/${shift.id}`, {
-            credentials: "include",
-          });
+          // The roster comes from the assignments collection. The shift detail
+          // response has no assignment list, and its `attendees` field is
+          // check-in attendance — a different thing that is empty on a shift
+          // nobody has checked into yet.
+          const detail = await fetch(
+            `/api/v1/scheduling/shifts/${shift.id}/assignments`,
+            { credentials: "include" },
+          );
           if (!detail.ok) continue;
           const body = await detail.json();
-          // `attendees` is check-in attendance, not the roster, and the detail
-          // response carries no assignment list at all — so this cannot yet
-          // tell a staffed shift from an empty one. Left in place because the
-          // structure is right; it needs the endpoint that actually returns
-          // assignments. Until then these shots keep their existing images.
-          const crew = body.attendees || [];
+          const crew = Array.isArray(body) ? body : body.assignments || [];
           if (crew.length) return shift.id;
         }
         return null;
@@ -1760,13 +1760,7 @@ export const SHOTS = [
       "Screenshot of the Shift Detail Panel (slide-out drawer) showing shift details at",
     alt: "Shift detail panel with the crew roster and shift information",
     route: "/scheduling",
-    prepare: withQueryFromApi(
-      "/scheduling/shifts?limit=20",
-      "shifts",
-      (shift) => ({
-        shift: shift.id,
-      }),
-    ),
+    prepare: openStaffedShift(),
     fullPage: true,
   },
   {
@@ -1788,12 +1782,7 @@ export const SHOTS = [
     alt: "Inline log call form with incident type and times",
     route: "/scheduling",
     prepare: async (page) => {
-      await withQueryFromApi(
-        "/scheduling/shifts?limit=100",
-        "shifts",
-        (shift) => ({ shift: shift.id }),
-        isPastShift,
-      )(page);
+      await openStaffedShift((shift) => (shift.call_count ?? 0) > 0)(page);
       await clickByName(/log call/i)(page);
     },
     fullPage: true,
