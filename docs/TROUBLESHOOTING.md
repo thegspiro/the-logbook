@@ -6625,6 +6625,39 @@ docker-compose build --no-cache frontend
 docker-compose up -d frontend
 ```
 
+### Problem: Frontend build fails with `"/frontend/nginx.conf": not found`
+
+**Symptoms:**
+
+- The build stops on `failed to compute cache key: ... "/frontend/nginx.conf": not found`, usually alongside `"/package-lock.json": not found` and `"/frontend/package.json": not found`
+- `[frontend internal] load build context` transfers a few bytes while the backend's transfers megabytes
+- The backend image builds fine; only the frontend target fails
+
+**Root Cause:** A deployment's compose file still names `./frontend` as the frontend build context. The context moved to the repository root (see the entry above) so `npm ci` could reach the workspace lockfile, and every path the Dockerfile copies is now root-relative. `docker compose config` does not catch this — it validates YAML and interpolation, never the Dockerfile — so the mismatch surfaces only as a failed build.
+
+Deployments carrying their own compose file (custom volume paths, service names, pinned image tags) do not get the corrected `context:` from a `git pull`, because the file they run is not the one in the repository.
+
+**Fix:** Point the frontend at the repository root and make `dockerfile` relative to it:
+
+```yaml
+frontend:
+  build:
+    context: . # or the absolute path to the checkout
+    dockerfile: frontend/Dockerfile
+```
+
+**Prevention:** `scripts/sync-compose-build-context.sh` reads each Dockerfile's `COPY`/`ADD` sources and verifies they resolve inside the declared context, then repairs the context in place with `--fix`:
+
+```bash
+# Report drift (exit 1 if any context is wrong)
+./scripts/sync-compose-build-context.sh -f docker-compose.yml
+
+# Repair it, backing the file up first
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
+```
+
+`unraid/update.sh` runs it automatically after the pull and before the rebuild, and `scripts/verify-docker-build.sh` checks every shipped compose file. Self-hosted updaters that maintain their own compose file should call it in `--fix` mode between "pull" and "build" for the same protection.
+
 ### Problem: Docker build context is very large (343MB+)
 
 **Status (Fixed 2026-03-04):** Added `backend/.dockerignore` to exclude test files, virtual environments, and other non-essential files from the Docker build context.
