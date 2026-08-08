@@ -101,7 +101,7 @@ async def list_pipelines(
     """
     List all membership pipelines for the organization.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     pipelines = await service.list_pipelines(
@@ -142,7 +142,7 @@ async def create_pipeline(
     """
     Create a new membership pipeline.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     steps = None
@@ -184,7 +184,7 @@ async def get_pipeline(
     """
     Get a single pipeline with its steps.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     pipeline = await service.get_pipeline(
@@ -209,7 +209,7 @@ async def update_pipeline(
     """
     Update a pipeline's properties.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     pipeline = await service.update_pipeline(
@@ -288,7 +288,7 @@ async def delete_pipeline(
     """
     Delete a pipeline.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     try:
@@ -328,7 +328,7 @@ async def duplicate_pipeline(
     """
     Duplicate a pipeline (useful for creating from templates).
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     pipeline = await service.duplicate_pipeline(
@@ -357,7 +357,7 @@ async def seed_templates(
     """
     Seed default pipeline templates for the organization.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     await service.seed_default_templates(current_user.organization_id, current_user.id)
@@ -413,7 +413,7 @@ async def list_steps(
     """
     List all steps for a pipeline.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     pipeline = await service.get_pipeline(
@@ -442,7 +442,7 @@ async def add_step(
     """
     Add a step to a pipeline.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     step = await service.add_step(
@@ -471,7 +471,7 @@ async def reorder_steps(
     """
     Reorder steps in a pipeline by providing an ordered list of step IDs.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     try:
@@ -511,7 +511,7 @@ async def update_step(
     """
     Update a pipeline step.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     step = await service.update_step(
@@ -541,7 +541,7 @@ async def delete_step(
     """
     Remove a step from a pipeline.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     deleted = await service.delete_step(
@@ -575,7 +575,7 @@ async def get_kanban_board(
     each column's ``count`` is the true total regardless, and ``truncated``
     says whether anything was withheld.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     board = await service.get_kanban_board(
@@ -625,7 +625,7 @@ async def get_pipeline_stats(
     Counts exclude the caller's own prospective-membership record so the
     totals reconcile with the list and board views.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     stats = await service.get_pipeline_stats(
@@ -661,7 +661,7 @@ async def purge_inactive_prospects(
 
     Requires `confirm: true` in the request body to execute.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     if not data.confirm:
         raise HTTPException(
@@ -751,7 +751,7 @@ async def list_prospects(
     The caller's own prospective-membership record, if they have one, is
     omitted from the results and from ``total``.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     prospects, total = await service.list_prospects(
@@ -789,7 +789,7 @@ async def check_existing_members_for_prospect(
     decide whether to reactivate an archived member instead of creating a
     duplicate entry.
 
-    **Requires permission: members.create**
+    **Requires permission: members.create or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     matches = await service.check_existing_members(
@@ -832,7 +832,7 @@ async def create_prospect(
     email. If an archived member is found, a 409 Conflict is returned with
     the match details and a recommendation to reactivate instead.
 
-    **Requires permission: members.create**
+    **Requires permission: members.create or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
 
@@ -907,7 +907,7 @@ async def get_prospect(
     """
     Get a prospective member's full details including step progress.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     prospect = await service.get_prospect(
@@ -932,7 +932,7 @@ async def update_prospect(
     """
     Update a prospective member's information.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     try:
@@ -968,7 +968,7 @@ async def complete_step(
     If the step is the final step and auto-transfer is enabled on the pipeline,
     the prospect will be automatically transferred to full membership.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     try:
@@ -1001,7 +1001,7 @@ async def advance_prospect(
     """
     Advance a prospect to the next step in the pipeline.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     try:
@@ -1061,7 +1061,7 @@ async def bulk_advance_prospects(
     the final stage is reported as a failure, not silently counted as
     advanced.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     results = await service.bulk_advance_prospects(
@@ -1106,7 +1106,7 @@ async def bulk_set_prospect_status(
     bulk path sent the reason through the update endpoint as ``notes``,
     overwriting whatever had been written about each applicant.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     try:
@@ -1152,7 +1152,7 @@ async def regress_prospect(
     """
     Move a prospect back to the previous step in the pipeline.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     prospect = await service.regress_prospect(
@@ -1183,7 +1183,7 @@ async def transfer_prospect(
     """
     Transfer a prospect to full membership (creates a User record).
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     result = await service.transfer_to_membership(
@@ -1241,7 +1241,7 @@ async def get_prospect_activity(
     """
     Get the activity log for a prospect.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     logs = await service.get_activity_log(
@@ -1308,7 +1308,7 @@ async def list_prospect_documents(
     """
     List all documents for a prospect.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     docs = await service.get_prospect_documents(
@@ -1341,7 +1341,7 @@ async def add_prospect_document(
     its metadata is recorded against the prospect. Retrieve it via the
     `/documents/{document_id}/download` endpoint.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     content = await file.read()
     if not content:
@@ -1426,7 +1426,7 @@ async def download_prospect_document(
     """
     Download a stored prospect document.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     # get_prospect_documents enforces that the prospect belongs to the caller's
@@ -1484,7 +1484,7 @@ async def delete_prospect_document(
     """
     Delete a prospect document.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     deleted = await service.delete_prospect_document(
@@ -1522,7 +1522,7 @@ async def get_election_package(
     """
     Get the election package for a prospect.
 
-    **Requires permission: prospective_members.view or elections.view**
+    **Requires permission: prospective_members.view or prospective_members.manage or elections.view or elections.manage**
     """
     service = MembershipPipelineService(db)
     pkg = await service.get_election_package(
@@ -1554,7 +1554,7 @@ async def create_election_package(
     This captures a snapshot of the applicant's information and prepares
     it for the election/voting process.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     pkg = await service.create_election_package(
@@ -1587,7 +1587,7 @@ async def update_election_package(
     """
     Update an election package for a prospect.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     pkg = await service.update_election_package(
@@ -1626,7 +1626,7 @@ async def list_election_packages(
     The package built for the caller's own application is omitted — it
     bundles the interview and coordinator material the vote is based on.
 
-    **Requires permission: prospective_members.view or elections.view**
+    **Requires permission: prospective_members.view or prospective_members.manage or elections.view or elections.manage**
     """
     service = MembershipPipelineService(db)
     packages = await service.list_election_packages(
@@ -1657,7 +1657,7 @@ async def assign_package_to_election(
     the package's applicant snapshot and links the package to the
     election.
 
-    **Requires permission: elections.manage**
+    **Requires permission: elections.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     try:
@@ -1689,7 +1689,7 @@ async def process_inactivity(
     Marks critical prospects as inactive and logs warnings.
     Can be triggered manually or via a scheduled job.
 
-    **Requires permission: members.manage**
+    **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     result = await service.process_inactivity_warnings(
@@ -1745,7 +1745,7 @@ async def list_interviews(
     """
     List all interviews for a prospect.
 
-    **Requires permission: prospective_members.view**
+    **Requires permission: prospective_members.view or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
     try:

@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Wiki: 28 pages existed but were never published (2026-08-08)
+
+**Fixed**
+
+- **The wiki published 11 pages out of 41, and its own sidebar linked to 28 of
+  the missing ones.** `setup-wiki.sh` copied a hand-maintained array of
+  filenames. Nobody updated it when a page was added, so Module-Training,
+  API-Reference, Database-Schema, every `Security-*` and `Integration-*` page
+  and twenty-three others sat in the repository, were linked from the published
+  `_Sidebar.md`, and **404'd for anyone who clicked them**. Editing one of those
+  pages changed nothing a reader could see.
+
+  This is the same failure the generated Troubleshooting page was introduced to
+  stop, one level up: a second place that has to be updated by hand will
+  eventually disagree with the first. The publish list is now a **glob over
+  `wiki/*.md`**, which cannot fall behind. `README.md` (maintainer instructions
+  for the directory, not a page) and `Troubleshooting.md` (generated at publish
+  time) are excluded, and a hand-created `wiki/Troubleshooting.md` now fails the
+  script rather than being silently overwritten.
+
+**Added**
+
+- **`scripts/check_docs_links.py`**, run in CI as **Docs Link Check**. It
+  verifies in-page anchors, relative file links, cross-file anchors, and the
+  extensionless page links GitHub Wikis use. Renaming a heading silently breaks
+  every link to it — Markdown renders a dead anchor as ordinary text with no
+  error — and nothing else in CI opens a Markdown file.
+
+  It found the 28 dead sidebar links above plus **six** broken links across the
+  tree, including a table-of-contents entry that broke when its heading gained a
+  date suffix. External URLs are deliberately out of scope, so a third-party
+  outage cannot fail the build.
+
+- **`scripts/check_endpoint_permissions.py`**, run in CI as part of **Backend
+  Lint**. It compares every documented route handler's docstring against the
+  `require_permission(...)` dependency it actually carries.
+
+  An endpoint docstring is rendered into `/docs` and is what the wiki's API
+  reference and the module guides are written from, so a docstring that
+  disagrees with its own dependency seeds the error into every document
+  downstream — and that is discovered months later in a documentation pass
+  rather than at the commit that caused it.
+
+  It fails on a docstring naming **different** permissions than the code
+  enforces, or claiming one the route does not require at all. Across 1,312
+  handlers there were **no** routes of the second, dangerous kind. Routes that
+  merely under-document (code enforces a permission, the docstring says only
+  "Authentication required") are reported as warnings — there are 189 — and
+  `--strict` promotes them to errors once that backlog is cleared.
+
+**Changed**
+
+- **38 prospective-members endpoints advertised one of the two permissions they
+  accept.** Every one of them takes `members.manage` **or**
+  `prospective_members.manage` (respectively `prospective_members.view` or
+  `.manage`), while the docstring named only the first — so `/docs` understated
+  who could call them, and a coordinator holding only the pipeline permission
+  would read the API reference and conclude they could not.
+
+---
+
 ### Skills testing: any member can examine, and an officer decides the result stands (2026-08-08)
 
 **Added**
