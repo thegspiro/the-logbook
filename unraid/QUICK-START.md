@@ -233,11 +233,17 @@ cd /mnt/user/appdata/the-logbook
 # Pull latest code
 git pull
 
+# Repair the build contexts if a pulled Dockerfile outgrew them
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
+
 # Rebuild containers
 docker-compose down
 docker-compose build --no-cache
 docker-compose up -d
 ```
+
+> `./unraid/update.sh` does all of this — plus a verified database dump and
+> rollback instructions — in one command. Prefer it over the manual sequence.
 
 ---
 

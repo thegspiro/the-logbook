@@ -291,10 +291,22 @@ cd /mnt/user/appdata/the-logbook/unraid
 ```bash
 cd /mnt/user/appdata/the-logbook
 git pull origin main
+
+# Reconcile the compose build contexts with the Dockerfiles that were just
+# pulled. Skipping this is what produces `"/frontend/nginx.conf": not found`
+# minutes into the rebuild, with the stack already down.
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
+
 docker-compose down
 docker-compose build --no-cache
 docker-compose up -d
 ```
+
+> **Why the extra step:** a pull can change what a Dockerfile copies out of its
+> build context, and `docker compose config` never opens the Dockerfile — so a
+> stale context passes validation and fails the build. If you maintain your own
+> compose file (custom volume paths, service names, pinned tags), the pull does
+> not correct it for you. `./unraid/update.sh` runs this automatically.
 
 Back up before updating:
 

@@ -166,10 +166,21 @@ and [docs/BACKUP.md](../docs/BACKUP.md). _(2026-07-31)_
 cd /path/to/the-logbook
 docker-compose down
 git pull
+
+# Reconcile the compose build contexts with the Dockerfiles just pulled.
+# `docker compose config` validates YAML and interpolation only — it never
+# opens the Dockerfile — so a context that no longer holds what the build
+# copies passes validation and then fails the build.
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
+
 docker-compose build --no-cache
 docker-compose up -d
 docker-compose exec backend alembic upgrade head
 ```
+
+> Run the context check on every update if you maintain your own compose file:
+> a `git pull` updates the file in the repository, not the one your deployment
+> actually runs. Drop `--fix` to report drift without rewriting anything.
 
 ---
 

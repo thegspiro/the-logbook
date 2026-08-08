@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Deployment: an update could break the build on a compose file the pull never touched (2026-08-08)
+
+**Fixed**
+
+- **Updating an existing install could fail the frontend build with
+  `"/frontend/nginx.conf": not found`.** Moving the frontend build context to
+  the repository root (so `npm ci` could reach the workspace lockfile) made
+  every path the Dockerfile copies root-relative. Any deployment whose compose
+  file still named `./frontend` as the context started failing the build after
+  pulling that commit — and a `git pull` cannot repair it for the installs most
+  likely to hit it, because a deployment carrying its own compose file (custom
+  volume paths, service names, pinned image tags) does not run the file the
+  repository updated, and overwriting it with the shipped template would
+  destroy those local settings.
+- **Nothing caught it before the build.** `docker compose config --quiet` — the
+  only validation in the repo — checks YAML and interpolation and never opens
+  the Dockerfile, so a context that no longer holds what the build copies
+  passes every check and then fails minutes into a rebuild, with the stack
+  already down.
+
+**Added**
+
+- **`scripts/sync-compose-build-context.sh`** reads each Dockerfile's
+  `COPY`/`ADD` sources, confirms they resolve inside the declared context, and
+  with `--fix` walks up to a context that does satisfy them and rewrites
+  `context:` / `dockerfile:` in place, preserving everything else in the file.
+  Sources behind `--from=` are skipped (they come from an earlier stage, not
+  the context), and a trailing-slash source is checked as a directory, since
+  `compgen -G` reports success for any pattern ending in `/` whether it matches
+  anything or not. A rewrite that leaves the file unparseable is rolled back
+  from a timestamped backup — but only when the file parsed beforehand, so an
+  unrelated failure such as an unset required variable cannot silently undo a
+  correct repair.
+- Wired in at the two points that would have caught the original break:
+  `unraid/update.sh` runs it in `--fix` mode between the pull and the rebuild,
+  where a failure still costs nothing because the stack has not been touched;
+  and `scripts/verify-docker-build.sh` checks every shipped compose file, so a
+  future Dockerfile change that outgrows its context fails review rather than
+  a deployment. The Unraid templates are checked against the repository root,
+  because they are copied there before use rather than run from `./unraid`.
+
+> **Self-hosting with your own compose file?** Run
+> `./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml` between
+> "pull" and "build". The manual update paths in the Unraid and Docker
+> deployment guides now include this step.
+
 ### Documentation: the Member Lifecycle page was documented but never built (2026-08-08)
 
 **Fixed (documentation)**

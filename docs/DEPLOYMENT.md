@@ -472,6 +472,11 @@ docker compose down
 # Pull latest code
 git pull
 
+# Reconcile the compose build contexts with the Dockerfiles just pulled.
+# `docker compose config` never opens the Dockerfile, so a context that no
+# longer holds what the build copies passes validation and fails the build.
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
+
 # Rebuild images
 docker compose build
 
