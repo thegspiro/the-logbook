@@ -185,7 +185,11 @@ class NotificationLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    rule = relationship("NotificationRule", back_populates="logs")
+    # `rule` is eager (lazy="joined") like `recipient` because the rule_name
+    # property below reads self.rule during response serialization: for a log
+    # with a rule_id whose rule wasn't eager-loaded, that access triggers a lazy
+    # load in async context and raises MissingGreenlet (a 500 on the logs list).
+    rule = relationship("NotificationRule", back_populates="logs", lazy="joined")
     recipient = relationship("User", foreign_keys=[recipient_id], lazy="joined")
 
     __table_args__ = (

@@ -910,5 +910,21 @@ re-run unless directed).
   enrichment fields the service never populates (classified rendered / not
   rendered). Discovery fanned out over 5 parallel readers; findings verified and
   the high-severity ones fixed inline. See `CROSS-CUTTING.md` → BXC. (B9 membership
-  pipeline remains the next module iteration.)
+  pipeline remains the next module iteration.) **Result — 3 fixed, 2 deferred,
+  batch flagged:** BXC-1 read-leak — events `update_future_events` didn't validate
+  a reassigned `location_id` (which projects as `location_name`) while
+  `update_event`/`create_event` do → foreign location name leaked across the
+  series; **fixed**. BXC-2 reliability — notifications `rule_name` property read an
+  un-eager `rule` relationship → `MissingGreenlet`/500 on the logs list for any
+  rule-triggered entry; **fixed** (`rule` now `lazy="joined"` like `recipient`).
+  BXC-2 rendered — meetings `MeetingResponse.creator_name` never populated
+  ("Created by" never showed); **fixed** (B6 already done, so fixed here). Two
+  rendered name defects **deferred** to their imminent module slots: membership
+  `pipeline_name` (B9, next) and the two training ones (B18). **Batch flagged**
+  (DiD, no disclosure): ~18 dangling-only FK reassignments (training/events/
+  scheduling/meetings/evoc/membership/forms/finance — finance's money-critical
+  `budget_id` verified validated) + the cosmetic unpopulated-name set. grants/
+  fundraising/storefront/admin-hours and ~14 other modules verified clean on both.
+  **9 tests added** across events/notifications/meetings; gate flake8/black/tsc
+  clean.
 </content>

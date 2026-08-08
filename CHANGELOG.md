@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Notifications: the notification log list no longer errors when a rule-triggered entry is present (2026-08-06)
+
+**Fixed**
+
+- **The notification history could fail to load once automated rules had fired.**
+  A log entry created by a notification rule could cause the notifications log
+  (and the personal notifications list) to error out while loading. Those lists
+  now load reliably regardless of how each entry was generated.
+
+### Meetings: the meetings list now shows who created each meeting (2026-08-06)
+
+**Fixed**
+
+- **The meetings list never displayed the "Created by" name.** The list is meant
+  to show who created each meeting, but the creator's name was never filled in, so
+  that line stayed blank. It now shows the creator.
+
 ### Documents: the "Uploaded by" attribution now shows on the documents list (2026-08-06)
 
 **Fixed**
