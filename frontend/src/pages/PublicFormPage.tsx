@@ -277,7 +277,7 @@ const PublicFormPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-3 border-b-3 border-blue-500 mb-4"></div>
           <p className="text-theme-text-secondary">Loading form...</p>
@@ -288,7 +288,7 @@ const PublicFormPage = () => {
 
   if (error && !form) {
     return (
-      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="bg-theme-surface rounded-xl shadow-lg p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-700 dark:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -304,7 +304,7 @@ const PublicFormPage = () => {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="bg-theme-surface rounded-xl shadow-lg p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-700 dark:text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -332,7 +332,7 @@ const PublicFormPage = () => {
   if (!form) return null;
 
   return (
-    <div className="min-h-screen bg-theme-surface-secondary py-8 px-4">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="bg-theme-surface rounded-xl shadow-lg overflow-hidden mb-6">
