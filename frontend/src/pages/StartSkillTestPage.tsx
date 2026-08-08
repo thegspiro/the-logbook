@@ -4,20 +4,16 @@
  * Mobile-friendly page where an examiner selects a published template,
  * chooses between an official evaluation or practice run, then picks
  * a candidate via search to start a new skill evaluation session.
+ *
+ * Entry points that already know which test the user picked (the member-facing
+ * Skills Testing list, for example) pass `?template=<id>` so step 1 arrives
+ * pre-filled instead of asking the same question twice. `?from=member` sends
+ * the Back link to that list rather than the Training Admin hub.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router';
-import {
-  ArrowLeft,
-  ClipboardCheck,
-  Search,
-  User,
-  FileText,
-  Play,
-  Award,
-  BookOpen,
-} from 'lucide-react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router';
+import { ArrowLeft, ClipboardCheck, Search, User, FileText, Play, Award, BookOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { userService, trainingProgramService } from '../services/api';
@@ -35,9 +31,19 @@ const MAX_SEARCH_RESULTS = 10;
 
 export const StartSkillTestPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const templateParam = searchParams.get('template') ?? '';
+  const backTo =
+    searchParams.get('from') === 'member'
+      ? '/training/skills-testing'
+      : '/training/admin?page=skills-testing&tab=tests';
   const { templates, templatesLoading, loadTemplates, createTest } = useSkillsTestingStore();
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+  // The `?template=` hand-off applies exactly once, so hitting "Change" isn't
+  // undone by the next render.
+  const preselectApplied = useRef(false);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
@@ -50,9 +56,25 @@ export const StartSkillTestPage: React.FC = () => {
   const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
-    void loadTemplates({ status: 'published' });
+    void (async () => {
+      await loadTemplates({ status: 'published' });
+      setTemplatesLoaded(true);
+    })();
     void loadMembers();
   }, [loadTemplates]);
+
+  // Pre-select the template the user tapped on the previous screen. Waits for
+  // the published list so a stale/unpublished id is caught rather than silently
+  // selecting nothing.
+  useEffect(() => {
+    if (!templateParam || !templatesLoaded || preselectApplied.current) return;
+    preselectApplied.current = true;
+    if (templates.some((t) => t.id === templateParam)) {
+      setSelectedTemplateId(templateParam);
+    } else {
+      toast.error('That test is no longer available — choose one below.');
+    }
+  }, [templateParam, templatesLoaded, templates]);
 
   // Load training requirements for the optional per-test override.
   useEffect(() => {
@@ -82,9 +104,10 @@ export const StartSkillTestPage: React.FC = () => {
     }
   };
 
-  const filteredTemplates = templates.filter((t) =>
-    t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
-    (t.category ?? '').toLowerCase().includes(templateSearch.toLowerCase())
+  const filteredTemplates = templates.filter(
+    (t) =>
+      t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+      (t.category ?? '').toLowerCase().includes(templateSearch.toLowerCase())
   );
 
   const filteredMembers = useMemo(() => {
@@ -116,9 +139,7 @@ export const StartSkillTestPage: React.FC = () => {
         ...(notes.trim() ? { notes: notes.trim() } : {}),
         // Only a real (non-practice) test with an explicit override needs to send
         // a requirement; otherwise the backend inherits the template's default.
-        ...(!isPractice && overrideRequirementId
-          ? { requirement_id: overrideRequirementId }
-          : {}),
+        ...(!isPractice && overrideRequirementId ? { requirement_id: overrideRequirementId } : {}),
         is_practice: isPractice,
       });
       toast.success(isPractice ? 'Practice session started' : 'Test session started');
@@ -135,31 +156,31 @@ export const StartSkillTestPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
+      <main className="mx-auto max-w-2xl px-4 py-6 sm:py-8">
         {/* Header */}
         <div className="mb-6">
           <Link
-            to="/training/admin?page=skills-testing&tab=tests"
-            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
+            to={backTo}
+            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 mr-2" />
+            <ArrowLeft className="mr-2 h-5 w-5" />
             Back
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-            <ClipboardCheck className="w-7 h-7 sm:w-8 sm:h-8 text-red-700" />
+          <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+            <ClipboardCheck className="h-7 w-7 text-red-700 sm:h-8 sm:w-8" />
             <span>Start Skill Test</span>
           </h1>
         </div>
 
         {/* Step 1: Select Template */}
-        <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-4">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-red-600" />
+        <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
+          <h2 className="text-theme-text-primary mb-3 flex items-center gap-2 text-lg font-semibold">
+            <FileText className="h-5 w-5 text-red-600" />
             1. Select Template
           </h2>
 
           {selectedTemplate ? (
-            <div className="flex items-center justify-between p-3 bg-green-100 dark:bg-green-900/30 border border-green-500/30 rounded-lg">
+            <div className="flex items-center justify-between rounded-lg border border-green-500/30 bg-green-100 p-3 dark:bg-green-900/30">
               <div>
                 <p className="font-medium text-green-800 dark:text-green-200">{selectedTemplate.name}</p>
                 {selectedTemplate.category && (
@@ -168,7 +189,7 @@ export const StartSkillTestPage: React.FC = () => {
               </div>
               <button
                 onClick={() => setSelectedTemplateId('')}
-                className="text-sm text-green-700 dark:text-green-300 underline"
+                className="text-sm text-green-700 underline dark:text-green-300"
               >
                 Change
               </button>
@@ -176,38 +197,40 @@ export const StartSkillTestPage: React.FC = () => {
           ) : (
             <>
               <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+                <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <input
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
                   type="text"
-                  aria-label="Search templates..." placeholder="Search templates..."
+                  aria-label="Search templates..."
+                  placeholder="Search templates..."
                   value={templateSearch}
                   onChange={(e) => setTemplateSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-3 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
                 />
               </div>
               {templatesLoading ? (
                 <div className="flex justify-center py-4" role="status" aria-live="polite">
-                  <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-red-500" />
+                  <div className="h-6 w-6 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
                 </div>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="max-h-48 space-y-2 overflow-y-auto">
                   {filteredTemplates.map((t) => (
                     <button
                       key={t.id}
                       onClick={() => setSelectedTemplateId(t.id)}
-                      className="w-full text-left p-3 rounded-lg border border-theme-surface-border hover:border-red-500/50 transition-colors"
+                      className="border-theme-surface-border w-full rounded-lg border p-3 text-left transition-colors hover:border-red-500/50"
                     >
-                      <p className="font-medium text-theme-text-primary">{t.name}</p>
-                      <p className="text-xs text-theme-text-muted">
-                        {t.category ?? 'No category'} &middot; {t.section_count} sections &middot; {t.criteria_count} criteria
+                      <p className="text-theme-text-primary font-medium">{t.name}</p>
+                      <p className="text-theme-text-muted text-xs">
+                        {t.category ?? 'No category'} &middot; {t.section_count} sections &middot; {t.criteria_count}{' '}
+                        criteria
                       </p>
                     </button>
                   ))}
                   {filteredTemplates.length === 0 && (
-                    <p className="text-center text-theme-text-muted py-4 text-sm">No published templates found</p>
+                    <p className="text-theme-text-muted py-4 text-center text-sm">No published templates found</p>
                   )}
                 </div>
               )}
@@ -216,68 +239,66 @@ export const StartSkillTestPage: React.FC = () => {
         </div>
 
         {/* Step 2: Test Mode */}
-        <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-4">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-3">
-            2. Test Mode
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
+          <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">2. Test Mode</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               onClick={() => setIsPractice(false)}
-              className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+              className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
                 !isPractice
-                  ? 'border-red-600 bg-red-50 dark:bg-red-900/20 shadow-md'
+                  ? 'border-red-600 bg-red-50 shadow-md dark:bg-red-900/20'
                   : 'border-theme-surface-border hover:border-theme-text-muted'
               }`}
             >
-              <Award className={`w-8 h-8 ${!isPractice ? 'text-red-600' : 'text-theme-text-muted'}`} />
-              <span className={`font-bold text-sm ${!isPractice ? 'text-red-700 dark:text-red-300' : 'text-theme-text-primary'}`}>
+              <Award className={`h-8 w-8 ${!isPractice ? 'text-red-600' : 'text-theme-text-muted'}`} />
+              <span
+                className={`text-sm font-bold ${!isPractice ? 'text-red-700 dark:text-red-300' : 'text-theme-text-primary'}`}
+              >
                 Official Evaluation
               </span>
-              <span className="text-xs text-theme-text-muted text-center leading-tight">
+              <span className="text-theme-text-muted text-center text-xs leading-tight">
                 Results are recorded and count toward certifications
               </span>
-              {!isPractice && (
-                <div className="absolute top-2 right-2 w-3 h-3 rounded-full bg-red-600" />
-              )}
+              {!isPractice && <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-red-600" />}
             </button>
             <button
               onClick={() => setIsPractice(true)}
-              className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+              className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
                 isPractice
-                  ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 shadow-md'
+                  ? 'border-blue-600 bg-blue-50 shadow-md dark:bg-blue-900/20'
                   : 'border-theme-surface-border hover:border-theme-text-muted'
               }`}
             >
-              <BookOpen className={`w-8 h-8 ${isPractice ? 'text-blue-600' : 'text-theme-text-muted'}`} />
-              <span className={`font-bold text-sm ${isPractice ? 'text-blue-700 dark:text-blue-300' : 'text-theme-text-primary'}`}>
+              <BookOpen className={`h-8 w-8 ${isPractice ? 'text-blue-600' : 'text-theme-text-muted'}`} />
+              <span
+                className={`text-sm font-bold ${isPractice ? 'text-blue-700 dark:text-blue-300' : 'text-theme-text-primary'}`}
+              >
                 Practice Run
               </span>
-              <span className="text-xs text-theme-text-muted text-center leading-tight">
+              <span className="text-theme-text-muted text-center text-xs leading-tight">
                 Not recorded — review results or discard when done
               </span>
-              {isPractice && (
-                <div className="absolute top-2 right-2 w-3 h-3 rounded-full bg-blue-600" />
-              )}
+              {isPractice && <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-blue-600" />}
             </button>
           </div>
         </div>
 
         {/* Step 3: Select Candidate (search-only) */}
-        <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-4">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
-            <User className="w-5 h-5 text-red-600" />
+        <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
+          <h2 className="text-theme-text-primary mb-3 flex items-center gap-2 text-lg font-semibold">
+            <User className="h-5 w-5 text-red-600" />
             3. Select Candidate
           </h2>
 
           {selectedCandidate ? (
-            <div className="flex items-center justify-between p-3 bg-green-100 dark:bg-green-900/30 border border-green-500/30 rounded-lg">
+            <div className="flex items-center justify-between rounded-lg border border-green-500/30 bg-green-100 p-3 dark:bg-green-900/30">
               <div>
                 <p className="font-medium text-green-800 dark:text-green-200">{selectedCandidate.name}</p>
                 <p className="text-sm text-green-700 dark:text-green-300">{selectedCandidate.email}</p>
               </div>
               <button
                 onClick={() => setSelectedCandidateId('')}
-                className="text-sm text-green-700 dark:text-green-300 underline"
+                className="text-sm text-green-700 underline dark:text-green-300"
               >
                 Change
               </button>
@@ -285,7 +306,7 @@ export const StartSkillTestPage: React.FC = () => {
           ) : (
             <>
               <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+                <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <input
                   autoCapitalize="none"
                   autoCorrect="off"
@@ -294,19 +315,19 @@ export const StartSkillTestPage: React.FC = () => {
                   placeholder="Type a name to search..."
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                  className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-3 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
                 />
               </div>
               {membersLoading ? (
                 <div className="flex justify-center py-4" role="status" aria-live="polite">
-                  <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-red-500" />
+                  <div className="h-6 w-6 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
                 </div>
               ) : memberSearch.length < MIN_SEARCH_CHARS ? (
-                <p className="text-center text-theme-text-muted py-4 text-sm">
+                <p className="text-theme-text-muted py-4 text-center text-sm">
                   Type at least {MIN_SEARCH_CHARS} characters to search
                 </p>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="max-h-48 space-y-2 overflow-y-auto">
                   {filteredMembers.map((m) => (
                     <button
                       key={m.id}
@@ -314,17 +335,17 @@ export const StartSkillTestPage: React.FC = () => {
                         setSelectedCandidateId(m.id);
                         setMemberSearch('');
                       }}
-                      className="w-full text-left p-3 rounded-lg border border-theme-surface-border hover:border-red-500/50 transition-colors"
+                      className="border-theme-surface-border w-full rounded-lg border p-3 text-left transition-colors hover:border-red-500/50"
                     >
-                      <p className="font-medium text-theme-text-primary">{m.name}</p>
-                      <p className="text-xs text-theme-text-muted">{m.email}</p>
+                      <p className="text-theme-text-primary font-medium">{m.name}</p>
+                      <p className="text-theme-text-muted text-xs">{m.email}</p>
                     </button>
                   ))}
                   {filteredMembers.length === 0 && (
-                    <p className="text-center text-theme-text-muted py-4 text-sm">No members found</p>
+                    <p className="text-theme-text-muted py-4 text-center text-sm">No members found</p>
                   )}
                   {filteredMembers.length === MAX_SEARCH_RESULTS && (
-                    <p className="text-center text-theme-text-muted text-xs py-1">
+                    <p className="text-theme-text-muted py-1 text-center text-xs">
                       Showing first {MAX_SEARCH_RESULTS} results — refine your search
                     </p>
                   )}
@@ -336,15 +357,15 @@ export const StartSkillTestPage: React.FC = () => {
 
         {/* Step 4: Pipeline requirement (real tests only) */}
         {!isPractice && (
-          <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-4">
-            <h2 className="text-lg font-semibold text-theme-text-primary mb-3">
+          <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
+            <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">
               4. Counts Toward Requirement (optional)
             </h2>
             {(() => {
               const defaultReq = requirements.find((r) => r.id === selectedTemplate?.requirement_id);
               return (
                 <>
-                  <p className="text-sm text-theme-text-muted mb-2">
+                  <p className="text-theme-text-muted mb-2 text-sm">
                     {defaultReq
                       ? `Passing this test completes "${defaultReq.name}" for the candidate (from the template). Override below if needed.`
                       : 'This template has no linked requirement. Optionally point this test at one.'}
@@ -352,13 +373,13 @@ export const StartSkillTestPage: React.FC = () => {
                   <select
                     value={overrideRequirementId}
                     onChange={(e) => setOverrideRequirementId(e.target.value)}
-                    className="w-full px-3 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                    className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-3 focus:ring-2 focus:outline-hidden"
                   >
-                    <option value="">
-                      {defaultReq ? `Use template default (${defaultReq.name})` : 'Not linked'}
-                    </option>
+                    <option value="">{defaultReq ? `Use template default (${defaultReq.name})` : 'Not linked'}</option>
                     {requirements.map((r) => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
                     ))}
                   </select>
                 </>
@@ -368,16 +389,14 @@ export const StartSkillTestPage: React.FC = () => {
         )}
 
         {/* Step 5: Notes (optional) */}
-        <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-3">
-            5. Notes (optional)
-          </h2>
+        <div className="bg-theme-surface border-theme-surface-border mb-6 rounded-lg border p-4 sm:p-6">
+          <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">5. Notes (optional)</h2>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Any notes for this test session..."
-            className="w-full px-3 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-3 focus:ring-2 focus:outline-hidden"
           />
         </div>
 
@@ -385,13 +404,11 @@ export const StartSkillTestPage: React.FC = () => {
         <button
           onClick={() => void handleStart()}
           disabled={!selectedTemplateId || !selectedCandidateId || isStarting}
-          className={`w-full flex items-center justify-center gap-3 py-4 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-lg font-bold transition-colors ${
-            isPractice
-              ? 'bg-blue-600 hover:bg-blue-700'
-              : 'bg-red-600 hover:bg-red-700'
+          className={`flex w-full items-center justify-center gap-3 rounded-xl py-4 text-lg font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            isPractice ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'
           }`}
         >
-          <Play className="w-6 h-6" />
+          <Play className="h-6 w-6" />
           {isStarting ? 'Starting...' : isPractice ? 'Begin Practice' : 'Begin Evaluation'}
         </button>
       </main>

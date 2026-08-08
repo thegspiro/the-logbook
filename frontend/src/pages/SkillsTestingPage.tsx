@@ -240,7 +240,11 @@ export const SkillsTestingPage: React.FC = () => {
                   <TemplateCard
                     key={template.id}
                     template={template}
-                    onClick={() => void navigate(`/training/skills-testing/test/new?template=${template.id}`)}
+                    onClick={() =>
+                      void navigate(
+                        `/training/skills-testing/test/new?template=${encodeURIComponent(template.id)}&from=member`
+                      )
+                    }
                   />
                 ))}
               </div>

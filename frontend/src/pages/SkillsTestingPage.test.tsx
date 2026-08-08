@@ -157,5 +157,14 @@ describe('SkillsTestingPage', () => {
       expect(screen.getByText('Ladder Operations')).toBeInTheDocument();
       expect(screen.queryByText('SCBA Evaluation')).not.toBeInTheDocument();
     });
+
+    it('should carry the tapped template through to the start page', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillsTestingPage />);
+
+      await user.click(screen.getByText('SCBA Evaluation'));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/training/skills-testing/test/new?template=tpl-1&from=member');
+    });
   });
 });
