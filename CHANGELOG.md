@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documents: the "Uploaded by" attribution now shows on the documents list (2026-08-06)
+
+**Fixed**
+
+- **Documents never displayed who uploaded them.** The documents list is designed
+  to show "Uploaded by <name>" under each file, but the uploader's name was never
+  filled in, so that line stayed blank. The uploader (and the document's folder
+  name) are now populated.
+
 ### Minutes: executive-session minutes can no longer be published as a shared document (2026-08-06)
 
 **Fixed**

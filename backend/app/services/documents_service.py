@@ -409,6 +409,53 @@ class DocumentsService:
         )
         return result.scalar_one_or_none()
 
+    async def attach_document_names(
+        self, organization_id: UUID, documents: List[Document]
+    ) -> None:
+        """Populate uploader_name / folder_name on document responses, in place.
+
+        `DocumentResponse` declares both and `DocumentsPage` renders
+        "Uploaded by {uploader_name}", but the ORM row carries neither attribute
+        — so without this the uploader attribution never appears (the field is
+        always null). Resolves both org-scoped, one batch query each, and sets
+        plain instance attributes Pydantic reads via `from_attributes` (not
+        mapped columns; never persisted). A missing/out-of-org id simply yields
+        None, so a name never crosses an org boundary.
+        """
+        if not documents:
+            return
+        user_ids = {d.uploaded_by for d in documents if d.uploaded_by}
+        folder_ids = {d.folder_id for d in documents if d.folder_id}
+
+        uploader_names: Dict[str, str] = {}
+        if user_ids:
+            rows = await self.db.execute(
+                select(User.id, User.first_name, User.last_name).where(
+                    User.id.in_(user_ids),
+                    User.organization_id == str(organization_id),
+                )
+            )
+            uploader_names = {
+                uid: f"{first or ''} {last or ''}".strip()
+                for uid, first, last in rows.all()
+            }
+
+        folder_names: Dict[str, str] = {}
+        if folder_ids:
+            rows = await self.db.execute(
+                select(DocumentFolder.id, DocumentFolder.name).where(
+                    DocumentFolder.id.in_(folder_ids),
+                    DocumentFolder.organization_id == str(organization_id),
+                )
+            )
+            folder_names = {fid: fname for fid, fname in rows.all()}
+
+        for d in documents:
+            d.uploader_name = (
+                uploader_names.get(d.uploaded_by) if d.uploaded_by else None
+            )
+            d.folder_name = folder_names.get(d.folder_id) if d.folder_id else None
+
     async def update_document(
         self, document_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Optional[Document]:

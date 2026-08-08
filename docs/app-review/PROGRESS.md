@@ -46,7 +46,7 @@ from its open list.
 | B5 | elections | ELEC2 | ✅ (p1, p2) |
 | B6 | meetings & minutes | MM2 | ✅ (p1, p2) |
 | B7 | equipment-check | EC2 | ✅ (p1, p2) |
-| B8 | documents | DOC2 | ⬜ |
+| B8 | documents | DOC2 | ✅ (p1, p2) |
 | B9 | membership pipeline | MP2 | ⬜ |
 | B10 | messaging & communications | MSG2 | ⬜ |
 | B11 | notifications | NOTIF2 | ⬜ |
@@ -886,4 +886,19 @@ re-run unless directed).
   (`test_equipment_check_service.py`); 21 pass with org-scoping. Gate:
   flake8/black/tsc clean; no frontend change. See equipment-check.md → Pass 2.
   Next: B8 documents.
+- **B8 documents ✅ (pass 2).** Re-verified pass-1 (DOC-1/2/3/6). Pass 1 had noted
+  `uploader_name`/`folder_name` on `DocumentResponse` as "never populated" and
+  framed the fix as *remove or populate*; the B1/MS2-4 lens resolves it — the
+  frontend renders it, so populate. **1 fix applied:** DOC2-1 (LOW→MED live UI
+  defect): `get_documents`/`get_document_by_id` return the raw ORM row, so
+  `uploader_name` always serialized null and `DocumentsPage.tsx:423`'s "Uploaded
+  by …" attribution **never appeared** (degrades to blank, not "Unknown" — why it
+  survived to pass 2). New `attach_document_names` helper (MS2-4 pattern)
+  batch-resolves uploader (`uploaded_by`→User) and folder (`folder_id`→
+  DocumentFolder) names, org-scoped, wired into all four response paths (list, get,
+  upload, update). **3 tests added** (`TestAttachDocumentNames`); 39
+  documents/org-scoping tests pass. CHANGELOG updated (attribution now shows).
+  DOC-4/DOC-5 remain flagged product decisions (unchanged). Gate: flake8/black/tsc
+  clean. See documents.md → Pass 2. **Next: B9 membership pipeline** — over halfway
+  through Tier B pass 2.
 </content>

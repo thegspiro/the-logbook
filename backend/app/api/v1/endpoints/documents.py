@@ -187,6 +187,9 @@ async def list_documents(
         limit=pagination.limit,
         accessible_folder_ids=accessible,
     )
+    # Fill in the uploader/folder names the response declares (else the
+    # "Uploaded by …" attribution never renders).
+    await service.attach_document_names(current_user.organization_id, list(documents))
 
     return {
         "documents": documents,
@@ -333,6 +336,7 @@ async def upload_document(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+    await service.attach_document_names(current_user.organization_id, [document])
     return document
 
 
@@ -356,6 +360,7 @@ async def get_document(
         document, current_user.organization_id, current_user
     ):
         raise HTTPException(status_code=404, detail="Document not found")
+    await service.attach_document_names(current_user.organization_id, [document])
     return document
 
 
@@ -376,6 +381,7 @@ async def update_document(
             document_id, current_user.organization_id, update_data
         )
     result = ensure_found(updated, "Document")
+    await service.attach_document_names(current_user.organization_id, [result])
     return result
 
 
