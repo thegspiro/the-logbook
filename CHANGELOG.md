@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Prospective members: the applicant detail view now shows the pipeline name (2026-08-06)
+
+**Fixed**
+
+- **An applicant's detail/interview view never showed which pipeline they're in.**
+  The "Pipeline:" label is meant to show the applicant's pipeline name, but it was
+  only filled in on the applicant *list* — on the detail and interview views it was
+  blank, so the line didn't appear. It now shows on those views too.
+
 ### Notifications: the notification log list no longer errors when a rule-triggered entry is present (2026-08-06)
 
 **Fixed**

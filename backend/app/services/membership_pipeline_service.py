@@ -39,6 +39,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.utils.org_scoping import is_in_org
 from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
 from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
@@ -639,7 +640,18 @@ class MembershipPipelineService:
             .execution_options(populate_existing=True)
         )
         result = await self.db.execute(query)
-        return result.scalars().first()
+        prospect = result.scalars().first()
+        if prospect is not None:
+            # MP2 (BXC-2): ProspectResponse declares a flat pipeline_name that the
+            # ORM row doesn't have, so it was always null on the detail / create /
+            # update / advance / regress paths (only the list path built it) — and
+            # the applicant detail view renders it. The pipeline relationship is
+            # eager-loaded above, so populate it here (the single fetch every one
+            # of those paths returns through). Non-mapped attribute; never persisted.
+            prospect.pipeline_name = (
+                prospect.pipeline.name if prospect.pipeline else None
+            )
+        return prospect
 
     async def check_existing_members(
         self,
@@ -727,6 +739,13 @@ class MembershipPipelineService:
         if pipeline_id:
             if await self.get_pipeline(pipeline_id, organization_id) is None:
                 raise ValueError("Invalid pipeline")
+
+        # XC-1: referred_by is a client-supplied User FK — validate the referrer
+        # is an in-org member before storing it (same as update_prospect).
+        if data.get("referred_by") and not await is_in_org(
+            self.db, User, data["referred_by"], organization_id
+        ):
+            raise ValueError("Invalid referrer")
 
         # Use org default pipeline if none specified
         if not pipeline_id:
@@ -838,6 +857,15 @@ class MembershipPipelineService:
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
+
+        # XC-1: referred_by is a client-supplied User FK and is NOT in the
+        # protected set (that lists the `referrer` relationship name, not the
+        # column), so the setattr loop below would store a foreign referrer id.
+        # Validate a reassigned referrer is an in-org member (mirrors create).
+        if data.get("referred_by") and not await is_in_org(
+            self.db, User, data["referred_by"], organization_id
+        ):
+            raise ValueError("Invalid referrer")
 
         changes = {}
         for key, value in data.items():

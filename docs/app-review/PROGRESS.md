@@ -47,7 +47,7 @@ from its open list.
 | B6 | meetings & minutes | MM2 | ✅ (p1, p2) |
 | B7 | equipment-check | EC2 | ✅ (p1, p2) |
 | B8 | documents | DOC2 | ✅ (p1, p2) |
-| B9 | membership pipeline | MP2 | ⬜ |
+| B9 | membership pipeline | MP2 | ✅ (p1, p2) |
 | B10 | messaging & communications | MSG2 | ⬜ |
 | B11 | notifications | NOTIF2 | ⬜ |
 | B12 | integrations | INT2 | ⬜ |
@@ -927,4 +927,21 @@ re-run unless directed).
   fundraising/storefront/admin-hours and ~14 other modules verified clean on both.
   **9 tests added** across events/notifications/meetings; gate flake8/black/tsc
   clean.
+- **B9 membership pipeline ✅ (pass 2).** Resolved the two items the BXC sweep
+  pre-flagged for this module. **2 fixes applied:** MP2-1 (LOW→MED live UI defect):
+  `ProspectResponse.pipeline_name` was built only on the list path, so the
+  applicant **detail/interview** view (which renders it) always showed a blank
+  "Pipeline:" line — fixed at the `get_prospect` choke point (every detail/create/
+  update/advance/regress path returns through it; the pipeline relationship is
+  already eager-loaded). MP2-2 (LOW XC-1): `referred_by` (a User FK exposed by
+  `ProspectUpdate`) was reassignable unvalidated — the protected set listed the
+  relationship name `referrer`, not the column — now validated in-org via
+  `is_in_org(User, …)` on both create and update, closing one entry from the BXC-1
+  dangling batch. **Latent 500 corrected (MM-1 class):** neither the create nor
+  update prospect endpoint wrapped `ValueError`, so MP-2's existing "Invalid
+  pipeline" guard was 500-ing instead of 400 — both now convert `ValueError → 400`.
+  **6 tests added** (`test_membership_pipeline_service.py`); 44 pass with
+  membership/org-scoping. CHANGELOG updated (pipeline_name now shows). Gate:
+  flake8/black/tsc clean. See membership-pipeline.md → Pass 2. Next: B10 messaging
+  & communications.
 </content>
