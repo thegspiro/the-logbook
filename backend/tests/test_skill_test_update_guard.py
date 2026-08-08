@@ -50,6 +50,7 @@ def _completed_test(**overrides):
         "organization_id": str(ORG_ID),
         "examiner_id": str(EXAMINER_ID),
         "candidate_id": str(uuid4()),
+        "is_practice": False,
         "status": "completed",
         "version": 4,
         "validated_at": None,

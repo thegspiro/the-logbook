@@ -30,14 +30,14 @@ const MAX_CACHE_ENTRIES = 200;
  */
 const UNCACHEABLE_PREFIXES = [
   '/auth/', // credentials, session tokens, password ops
-  '/users/', // profiles, contact info, emergency contacts, audit history
+  '/users', // roster + profiles, contact info, emergency contacts (no trailing slash so GET /users list is covered too)
   '/security/', // alerts, audit log integrity, monitoring
   '/audit-logs', // org audit trail: who did what, when, from where
   '/ip-security/', // IP exceptions, blocked attempts, country rules
   '/medical-screening/', // member medical screening records & compliance (PHI)
   '/message-history', // sent-message log: recipient emails, subjects (PII)
   '/roles/my/', // current user's permissions (security-sensitive)
-  '/notifications/my/', // user-specific notification state
+  '/notifications/my', // user-specific notification state (list too, not just sub-paths)
   '/notifications/logs', // delivery logs: recipient identities (PII)
   '/email-templates/scheduled', // scheduled emails: recipient PII
   '/officers', // office holders: member names, emails, phone numbers (PII)
@@ -61,14 +61,16 @@ const UNCACHEABLE_PREFIXES = [
   '/training/records', // individual training records (scores, certs) — member PHI-adjacent
   '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
   '/facilities/emergency-contacts', // emergency contact PII
-  '/messages/', // private member-to-member messages
+  '/messages', // private member-to-member messages (list + thread; no trailing slash covers GET /messages)
   '/admin-hours/', // individual work hours and clock-in records
   '/prospective-members/', // applicant PII (name, contact, documents)
   '/scheduling/', // member shift assignments and availability
-  '/errors/', // error logs may contain user context and tracebacks
+  '/errors', // error logs (incl. GET /errors list) may contain user context and tracebacks
   '/organization/', // org settings including auth config, API keys
   '/elections', // voter lists, ballots, election results (no trailing slash so the list endpoint GET /elections is covered too)
   '/minutes-records/', // meeting minutes with potentially sensitive discussions
+  '/meetings', // meeting list + detail: attendee PII, notes/motions/agenda (no trailing slash covers both)
+  '/event-requests', // external event-request intake: contact name/email/phone, venue address (PII)
   '/forms/', // form submissions may contain PII
   '/inventory/users/', // member-specific inventory, issuances & history (PII)
   '/inventory/checkout/', // GET active/overdue: who currently holds equipment (PII)
@@ -77,9 +79,9 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/my/', // current user's own size preferences (PII)
   '/inventory/charges', // per-member cost-recovery / financial liability (PII)
   '/store/', // member orders: names, email/phone, shipping addresses, payment references, amounts owed (PII)
-  '/documents/', // private organizational documents
+  '/documents', // private organizational documents (list + detail)
   '/compliance/', // compliance attestations, member compliance data (PII)
-  '/integrations/', // integration config may contain API keys, webhook URLs, secrets
+  '/integrations', // integration config (list + detail): API keys, webhook URLs, secrets
   '/finance/', // budgets, purchase/expense/check requests & reimbursements tied to members (PII)
   '/grants/', // grant applications and donor/fundraising records (PII)
   '/roles/user/', // an arbitrary user's full permission set (authz data)

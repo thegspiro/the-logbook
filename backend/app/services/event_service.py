@@ -402,6 +402,17 @@ class EventService:
         future_events = result.scalars().all()
 
         update_data = event_data.model_dump(exclude_unset=True)
+
+        # XC-1 (BXC-1): update_event and create_event validate a newly-set
+        # location_id in-org, but this series-wide bulk update did not — and the
+        # location is eager-loaded and name-projected as location_name in the
+        # response, so a foreign location_id would leak another org's location
+        # name on every future event in the series. Validate once before the loop.
+        if update_data.get("location_id") and not await LocationService(
+            self.db
+        ).get_location(update_data["location_id"], str(organization_id)):
+            raise ValueError("Location not found")
+
         now = datetime.now(dt_timezone.utc)
         updated_count = 0
 
@@ -2470,6 +2481,17 @@ class EventService:
         if rolling_recurrence and not recurrence_end_date:
             start = event_data["start_datetime"]
             recurrence_end_date = start.replace(year=start.year + 1)
+
+        # Validate the client-supplied location belongs to the caller's org
+        # (same guard as create_event): without it a foreign location_id is
+        # stored on every occurrence and leaks that org's location name back
+        # through the eager-loaded relationship in the response.
+        if event_data.get("location_id"):
+            location_service = LocationService(self.db)
+            if not await location_service.get_location(
+                event_data["location_id"], str(organization_id)
+            ):
+                return [], "Location not found"
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(

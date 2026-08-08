@@ -1,4 +1,55 @@
-# Application Review — Membership Pipeline (Tier B, 2nd pass)
+# Application Review — Membership Pipeline (Tier B)
+
+**Prefix:** `MP2` · **Iteration:** B9 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06)
+
+Re-verified pass 1 (MP-5/6/7 fixed). This module was pre-scanned in the BXC
+cross-cutting sweep, which flagged two items to resolve here with proper module
+context.
+
+### MP2-1 — LOW→MED (live UI defect) — ProspectResponse.pipeline_name never populated — ✅ FIXED
+
+`ProspectResponse` declares a flat `pipeline_name`, and the applicant detail view
+renders it (`InterviewPage.tsx:189`, `ApplicantDetailDrawer.tsx:988`), but only
+the **list** endpoint built it — the detail / create / update / advance / regress
+endpoints returned the raw `ProspectiveMember` ORM row, which has a `pipeline`
+relationship but no flat `pipeline_name` attribute, so it always serialized null
+and the "Pipeline:" line was silently omitted (a guarded degrade, the DOC2-1
+pattern). **Fixed** at the single choke point: `get_prospect` eager-loads
+`pipeline`, and every one of those five paths returns through it
+(`create/update/complete_step` via `return await self.get_prospect(...)`, advance/
+regress fetch through it), so `get_prospect` now sets
+`prospect.pipeline_name = prospect.pipeline.name` (free — relationship already
+loaded; non-mapped attribute, never persisted).
+
+### MP2-2 — LOW — `referred_by` reassignable to a foreign user (XC-1) — ✅ FIXED
+
+`ProspectUpdate` exposes `referred_by` (a `User` FK), but the update
+protected-set listed the **relationship** name `referrer`, not the **column**
+`referred_by` — so the setattr loop stored a client-supplied referrer id
+unvalidated, and `create_prospect` did the same. Dangling-only (never
+name-projected; the prospect keeps its own `organization_id`), so no disclosure —
+but a clean XC-1 gap. **Fixed** with an in-org `is_in_org(User, …)` check on both
+create and update (mirrors MP-2's `pipeline_id` validation). Closes one entry from
+the BXC-1 dangling batch.
+
+### Latent 500 corrected (MM-1 class)
+
+Wiring the `referred_by` guards exposed that **neither the `create_prospect` nor
+the `update_prospect` endpoint wrapped `ValueError`** — so MP-2's existing
+`raise ValueError("Invalid pipeline")` was already surfacing as a **500, not the
+intended 400**, and the new referrer guards would have too. Both endpoints now
+convert `ValueError → 400` via `safe_error_detail` (matching the module's other
+write endpoints), which also corrects MP-2's error contract. The stray
+function-local `safe_error_detail` import was promoted to a module import.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `MP2` · **Iteration:** B9 · **Reviewed:** 2026-08-06
 

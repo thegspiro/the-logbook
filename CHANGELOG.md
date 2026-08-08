@@ -7,6 +7,164 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Storefront: a payment in the wrong currency is no longer auto-applied (2026-08-08)
+
+**Fixed**
+
+- **A PayPal payment made in a different currency could be automatically matched to
+  an order** when its number happened to equal the order's balance — for example a
+  50 CAD payment settling a $50 order, recording the wrong amount collected. Such
+  payments are now held for a person to review instead of being applied
+  automatically; same-currency payments are unaffected.
+
+### Security: sensitive list data is no longer briefly cached in the browser (2026-08-08)
+
+**Security**
+
+- **Several sensitive list views were being held in the app's short-lived in-memory
+  cache** — the member roster, private messages, the document list, integration
+  settings, error logs, and your notifications. Because of how the cache exclusions
+  were matched, the top-level lists slipped through even though their detail pages
+  were correctly excluded. All are now excluded (as are the meeting list and event
+  requests, which carry attendee/contact details), so this data is always fetched
+  fresh and never cached.
+
+### Onboarding: completed setup can no longer be replayed to add stations or apparatus (2026-08-08)
+
+**Security**
+
+- **After setup was finished, a still-valid setup session could still be used to add
+  stations or apparatus** to the organization, skipping the normal permission
+  checks. Those two setup steps now refuse to run once onboarding is complete, like
+  the other setup steps already did.
+
+### Compliance & skills: no self-scoring on evaluations; reports count risk correctly (2026-08-08)
+
+**Fixed**
+
+- **A member could score and complete their own official skills evaluation.** The
+  rule that an examiner can't test themselves was enforced when a test was created
+  but not when it was scored — so an officer named as the candidate on their own
+  test could enter their own results and mark it complete. Scoring and completing a
+  test now blocks the candidate from doing it to their own official evaluation
+  (practice drills are unaffected).
+- **The annual compliance report and its email always showed 0 at-risk and 0
+  non-compliant members**, even when members were behind. The report now reports the
+  correct counts.
+
+### Scheduling: looking up an apparatus's active shift no longer errors (2026-08-08)
+
+**Fixed**
+
+- **Checking the active/next shift for an apparatus returned a server error**
+  whenever that apparatus actually had a shift. The lookup now returns the shift
+  details as intended.
+
+### Members: setting a rank can no longer grant permissions beyond your own (2026-08-08)
+
+**Security**
+
+- **A member's rank grants permissions, but assigning a rank wasn't held to the
+  same limit as assigning a role.** Anyone allowed to edit ranks (for example, a
+  secretary with member-management access) could set a member — or themselves — to
+  a chief-level rank and quietly gain administrator powers like managing settings
+  and security. Rank assignment is now capped the same way role assignment is: you
+  can only assign a rank whose permissions are within your own, and a blocked
+  attempt is logged as a security alert.
+
+### Training: closed cross-department leaks in category reports and exports (2026-08-08)
+
+**Security**
+
+- **A training category from another department could show up in a member's
+  category-hours report.** The report now only resolves categories belonging to
+  your own department, and a training record can no longer be saved with a category
+  that isn't yours.
+- **An individual training PDF export could show another department's member name
+  in its title.** The export now scopes the member lookup to your department.
+
+### Events: ending an event now works, and drafts stay off public calendars (2026-08-08)
+
+**Fixed**
+
+- **Ending an in-progress event early returned a server error.** The event was
+  actually ended (members checked out, end time recorded), but the response failed
+  with a 500, making it look like the action didn't work. Ending an event now
+  completes cleanly.
+- **Unpublished draft events could appear on the public event calendar and the
+  public portal.** Draft events (community education, fundraisers, etc.) are meant
+  to stay hidden until published — they are now excluded from both public feeds.
+- **Recurring events now reject an invalid meeting location** instead of silently
+  saving the series with a location that doesn't belong to your department.
+
+### Admin hours: bulk approval can no longer be used to approve your own hours (2026-08-08)
+
+**Fixed**
+
+- **The "approve selected" action skipped the no-self-approval rule.** Approving a
+  single pending entry already blocked an officer from approving their own logged
+  hours (someone else has to sign off). The bulk "approve selected" action didn't
+  apply that rule, so an officer could approve their own hours in a batch. Bulk
+  approval now leaves your own entries pending for another approver and only
+  approves other members' entries.
+
+### Grants: awarding a grant or completing a compliance task no longer errors (2026-08-08)
+
+**Fixed**
+
+- **Marking a grant application "awarded" could fail with a server error** when the
+  reporting frequency was set in the same save — the automatic performance-report
+  tasks are generated at that moment and hit the error before saving cleanly. This
+  now completes and generates the reports as intended.
+- **Completing a grant compliance task could fail with a server error** when the
+  task type was changed in the same save. Completing a task now works reliably.
+
+### Prospective members: the applicant detail view now shows the pipeline name (2026-08-06)
+
+**Fixed**
+
+- **An applicant's detail/interview view never showed which pipeline they're in.**
+  The "Pipeline:" label is meant to show the applicant's pipeline name, but it was
+  only filled in on the applicant *list* — on the detail and interview views it was
+  blank, so the line didn't appear. It now shows on those views too.
+
+### Notifications: the notification log list no longer errors when a rule-triggered entry is present (2026-08-06)
+
+**Fixed**
+
+- **The notification history could fail to load once automated rules had fired.**
+  A log entry created by a notification rule could cause the notifications log
+  (and the personal notifications list) to error out while loading. Those lists
+  now load reliably regardless of how each entry was generated.
+
+### Meetings: the meetings list now shows who created each meeting (2026-08-06)
+
+**Fixed**
+
+- **The meetings list never displayed the "Created by" name.** The list is meant
+  to show who created each meeting, but the creator's name was never filled in, so
+  that line stayed blank. It now shows the creator.
+
+### Documents: the "Uploaded by" attribution now shows on the documents list (2026-08-06)
+
+**Fixed**
+
+- **Documents never displayed who uploaded them.** The documents list is designed
+  to show "Uploaded by <name>" under each file, but the uploader's name was never
+  filled in, so that line stayed blank. The uploader (and the document's folder
+  name) are now populated.
+
+### Minutes: executive-session minutes can no longer be published as a shared document (2026-08-06)
+
+**Fixed**
+
+- **Publishing an executive-session set of minutes to the Meeting Minutes
+  document folder is now blocked.** Executive-session minutes are visible only to
+  members who can manage minutes; publishing them created a copy in the shared
+  documents area that anyone with document access could read, sidestepping that
+  restriction. The publish action now returns an error for executive-session
+  minutes. (Regular business/other minutes publish exactly as before.)
+
 ### Wiki: 28 pages existed but were never published (2026-08-08)
 
 **Fixed**

@@ -1,6 +1,36 @@
-# Application Review — Public Portal (Tier B, 2nd pass)
+# Application Review — Public Portal (Tier B)
 
-**Prefix:** `PP2` · **Iteration:** B26 · **Reviewed:** 2026-08-06
+**Prefix:** `PP2` · **Iteration:** B26 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep — essentially clean
+
+Re-verified this unauthenticated surface: every portal query scopes on
+`api_key.organization_id` (or a resolved row's org), never on client-supplied org
+id; data-minimization holds (draft/cancelled events filtered, `event_description`
+nulled on the display board, status page returns only the prospect's own name +
+public steps); `public_rate_limit` degrades to the in-memory limiter on Redis error
+(fail-closed/protective); display-code + token bounds and high-entropy tokens
+(`token_urlsafe(48)`) make enumeration impractical; no raw SQL/SSRF. Confirmed
+no unguarded `.isoformat()` 500 (the event datetimes are non-null). **No exploitable
+defect.**
+
+**1 doc correction:** `get_application_status`'s docstring claimed "30 requests/min
+per IP" but the endpoint enforces the shared 100/min default — corrected to match
+reality (enumeration is impractical regardless, so the number isn't load-bearing).
+
+**Flagged (LOW/INFO, unchanged + new):** PP-6 (app-status token-at-rest needs a
+two-column hash+encrypted design — the token is re-read to rebuild the status URL,
+so it can't be hash-only), PP-7 residual (display-code lockout, nested-address
+whitelist). **New (LOW, hardening-consistency):** `get_application_status` uses the
+per-process `validate_ip_rate_limit` rather than the shared-Redis `public_rate_limit`
+the sibling public routes use — behind N workers the effective per-IP cap is
+100×N/min; LOW only because the status token is high-entropy. Left as a
+hardening-consistency item (switching backends + tightening to 30/min is a behavior
+change), not a drive-by.
+
+**No functional code changed.** The public surface is tenant-safe; the verifications,
+the docstring correction, and the recorded flags are the deliverable.
 
 **Backend:** `public/portal.py` (512 L) + `core/public_portal_security.py` (477 L),
 `public/calendar.py` + `ical_service.py`, `public/display.py`

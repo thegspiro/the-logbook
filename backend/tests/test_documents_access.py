@@ -185,6 +185,53 @@ class TestAccessibleFolderIds:
         assert ids == {"f-org", "f-mine"}
 
 
+class TestAttachDocumentNames:
+    """DOC2-1: the response declares uploader_name/folder_name and the UI renders
+    "Uploaded by {uploader_name}", but the ORM row has neither — so they must be
+    populated org-scoped or the attribution never appears."""
+
+    def _doc(self, uploaded_by=None, folder_id=None):
+        return SimpleNamespace(
+            uploaded_by=uploaded_by,
+            folder_id=folder_id,
+            uploader_name=None,
+            folder_name=None,
+        )
+
+    def _rows(self, data):
+        r = MagicMock()
+        r.all.return_value = data
+        return r
+
+    async def test_populates_uploader_and_folder(self):
+        db = AsyncMock()
+        svc = DocumentsService(db)
+        doc = self._doc(uploaded_by="u1", folder_id="f1")
+        # One execute per non-empty id set: users, then folders.
+        db.execute.side_effect = [
+            self._rows([("u1", "Dana", "Reyes")]),
+            self._rows([("f1", "Engine Bay")]),
+        ]
+        await svc.attach_document_names("org-1", [doc])
+        assert doc.uploader_name == "Dana Reyes"
+        assert doc.folder_name == "Engine Bay"
+
+    async def test_empty_list_makes_no_query(self):
+        db = AsyncMock()
+        svc = DocumentsService(db)
+        await svc.attach_document_names("org-1", [])
+        db.execute.assert_not_awaited()
+
+    async def test_unresolved_uploader_yields_none(self):
+        db = AsyncMock()
+        svc = DocumentsService(db)
+        doc = self._doc(uploaded_by="u-foreign")  # no folder_id
+        db.execute.side_effect = [self._rows([])]  # user not in org
+        await svc.attach_document_names("org-1", [doc])
+        assert doc.uploader_name is None
+        assert doc.folder_name is None
+
+
 if __name__ == "__main__":  # pragma: no cover
     import pytest
 

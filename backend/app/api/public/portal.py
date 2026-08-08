@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -408,6 +408,8 @@ async def get_public_events(
             select(Event)
             .where(Event.organization_id == org_id_str)
             .where(Event.is_cancelled.is_(False))
+            # Never surface unpublished drafts on the public portal.
+            .where(or_(Event.is_draft.is_(False), Event.is_draft.is_(None)))
             .where(Event.event_type == EventType.PUBLIC_EDUCATION)
             .where(Event.start_datetime >= datetime.now(timezone.utc))
             .order_by(Event.start_datetime.asc())
@@ -476,7 +478,8 @@ async def get_application_status(
     No authentication required — uses a unique token emailed to the prospect.
     Returns limited public-safe fields only.
 
-    Rate limit: 30 requests/min per IP
+    Rate limit: 100 requests/min per IP (the shared per-IP default). Enumeration
+    is impractical regardless — the status token is high-entropy.
     """
     from app.services.membership_pipeline_service import MembershipPipelineService
 

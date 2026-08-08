@@ -227,6 +227,14 @@ async def create_member(
         initial_password = generate_temporary_password()
         password_hash = hash_password(initial_password)
 
+    # A rank grants its default permissions (see _collect_user_permissions), so
+    # a client-chosen rank must clear the same ceiling as a granted role — a
+    # bare users.create/members.manage holder must not mint a member at a rank
+    # that outranks their own permissions.
+    await _enforce_rank_grant_ceiling(
+        current_user, user_data.rank, db, get_client_ip(request)
+    )
+
     # Auto-generate membership number if not provided and auto-generation is on
     membership_number = user_data.membership_number
     if not membership_number:
@@ -660,6 +668,41 @@ async def _enforce_role_grant_ceiling(
                         "beyond your own."
                     ),
                 )
+
+
+async def _enforce_rank_grant_ceiling(
+    current_user: User,
+    rank: str | None,
+    db: AsyncSession,
+    ip_address: str | None,
+) -> None:
+    """Prevent privilege escalation through the operational rank.
+
+    A member's rank contributes to their effective permissions
+    (``_collect_user_permissions`` unions each rank's default permissions), so
+    setting a rank grants those permissions exactly as assigning a role does.
+    Rank changes are otherwise gated only on ``members.manage`` — so without
+    this ceiling a secretary (who holds ``members.manage`` but not
+    ``settings.manage``/``security.manage``) could set ``rank="fire_chief"`` on
+    a new member (with a chosen password) or on themselves and escalate to
+    tenant admin through a parallel, previously-unguarded permission source.
+    The same subset rule and wildcard handling as the role ceiling apply.
+    """
+    if not rank:
+        return
+    caller_perms = _collect_user_permissions(current_user)
+    for perm in get_rank_default_permissions(rank):
+        if not _has_permission(perm, caller_perms):
+            await report_privilege_escalation_attempt(
+                db, str(current_user.id), f"rank:{rank}", ip_address
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "You cannot assign a rank that grants permissions "
+                    "beyond your own."
+                ),
+            )
 
 
 @router.put("/{user_id}/roles", response_model=UserRoleResponse)
@@ -1262,6 +1305,13 @@ async def update_user_profile(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only leadership, the secretary, or the membership coordinator can update rank, station, platoon, or membership number",
             )
+
+        # members.manage lets you set rank, but a rank grants its own
+        # permissions — so a rank change must also clear the permission-grant
+        # ceiling, or a secretary could self-promote to a chief rank and gain
+        # settings.manage/security.manage. Only enforced on an actual change.
+        if "rank" in update_data and update_data["rank"] != user.rank:
+            await _enforce_rank_grant_ceiling(perm_user, update_data["rank"], db, None)
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:

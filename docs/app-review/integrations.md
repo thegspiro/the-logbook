@@ -1,4 +1,63 @@
-# Application Review — Integrations (Tier B, 2nd pass)
+# Application Review — Integrations (Tier B)
+
+**Prefix:** `INT2` · **Iteration:** B12 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
+
+---
+
+## Pass 2 (2026-08-08, against freshly-merged main) — no code change
+
+Run after the 144-commit merge, which brought integration-relevant code to
+review: a parallel INT-4 fix (`918e0b3`, converged with pass 1 — the endpoint
+now returns `model_dump(exclude_unset=True)`) and a **new PayPal integration**
+(`2c5cff6`: `paypal_service.py`, the public `paypal_webhook.py`, storefront
+reconciliation).
+
+**Standing fixes re-verified.** INT-1's send-time `assert_outbound_url_safe` is
+intact on all five outbound senders (slack/discord/teams/webhook/calcom). Worth
+noting for cross-reference: that guard is **more robust than B11's push fix** — it
+re-resolves the hostname and asserts a **public IP at send time**
+(`_assert_hostname_resolves_public`), closing the DNS-rebinding TOCTOU window that
+B11's `validate_push_endpoint` could only flag as residual (push can't re-validate
+at send without breaking its 127.0.0.1 delivery-test harness). INT-4 converged;
+update-bypass remains clean (config is merged via `exclude_unset`, not a blind
+`setattr`); no unpopulated `*_name` response field (`channel_name` is user-supplied
+config, not enrichment).
+
+### New PayPal integration — reviewed, verified good ✅
+
+- **No outbound SSRF:** `api_base(environment)` resolves the API host from a fixed
+  `{sandbox, live}` dict (defaulting to sandbox), so the PayPal base URL is never
+  client-controlled — unlike the chat webhooks, there's nothing to point at an
+  internal host.
+- **Secrets:** `client_secret` is read from the integration's **encrypted secret
+  column** (`get_secret`) first, config only as fallback; never echoed in a
+  response.
+- **Inbound webhook fails closed, exemplary:** `POST /public/paypal/webhook` is
+  rate-limited, resolves the integration, then calls PayPal's own
+  `verify-webhook-signature` API and `raise 401` `if not verified`;
+  `verify_webhook_signature` returns **False** on a missing `webhook_id`, missing
+  signature headers, any exception, or a non-2xx PayPal response — trusting only an
+  explicit `verification_status == "SUCCESS"`. Duplicate deliveries are ignored
+  (idempotent). The `cert_url` is forwarded to PayPal for validation, not fetched
+  server-side, so no SSRF there either.
+- The storefront **reconciliation** logic (`storefront_service.py`, +274 L) is
+  payment-matching depth that belongs to a storefront (A1) pass, not the
+  integration lens; noted for that rotation.
+
+### Flagged items (unchanged)
+
+INT-3 (list/get reads on bare `get_current_user` — needs a dedicated
+`integrations.view` permission because the list is consumed cross-module) and
+INT-5 (the uninvoked `KNOWN_WEBHOOK_DOMAINS` chat-webhook allowlist + cosmetic dead
+params) both stand, in `KNOWN_LIMITATIONS.md` / here.
+
+**No code changed.** The integrations core is mature (INT-1/2/4 done) and the new
+PayPal surface is well-built; the verifications are the deliverable.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `INT2` · **Iteration:** B12 · **Reviewed:** 2026-08-06
 

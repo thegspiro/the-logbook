@@ -185,6 +185,26 @@ class TestUpdateActionItem:
         assert out.completed_at is None
 
 
+class TestAttachCreatorNames:
+    """BXC-2: MeetingResponse.creator_name is declared and rendered ("Created by
+    …") but the ORM row only has created_by — populate it org-scoped."""
+
+    async def test_populates_creator_name(self):
+        m1 = SimpleNamespace(created_by="u1", creator_name=None)
+        m2 = SimpleNamespace(created_by="u2", creator_name=None)
+        rows = MagicMock()
+        rows.all.return_value = [("u1", "Dana", "Reyes")]  # u2 out-of-org
+        db = _db([rows])
+        await MeetingsService(db).attach_creator_names("org-1", [m1, m2])
+        assert m1.creator_name == "Dana Reyes"
+        assert m2.creator_name is None
+
+    async def test_empty_list_makes_no_query(self):
+        db = _db([])
+        await MeetingsService(db).attach_creator_names("org-1", [])
+        db.execute.assert_not_awaited()
+
+
 if __name__ == "__main__":  # pragma: no cover
     import pytest
 

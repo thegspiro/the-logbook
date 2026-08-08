@@ -10,7 +10,7 @@ exception-date filter. Pure logic; no DB.
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.event import RecurrencePattern
 from app.services.event_service import EventService
@@ -151,6 +151,31 @@ class TestDurationAndExceptions:
         start = datetime(2026, 6, 1, 9, 0)
         out = _gen(start, start, "not_a_pattern", datetime(2026, 6, 30, 9, 0))
         assert len(out) == 1
+
+
+class TestCreateRecurringEventLocationValidation:
+    """EV-8 (pass 2): create_recurring_event must validate a client-supplied
+    location_id in-org before storing it on every occurrence — otherwise a
+    foreign location_id is persisted and its name leaks back through the
+    eager-loaded relationship in the 201 response (the same guard create_event
+    already has)."""
+
+    async def test_foreign_location_rejected(self):
+        svc = EventService(MagicMock())
+        event_data = {
+            "recurrence_pattern": "weekly",
+            "start_datetime": datetime(2026, 6, 1, 19, 0),
+            "end_datetime": datetime(2026, 6, 1, 21, 0),
+            "location_id": "loc-from-another-org",
+            "title": "Weekly Drill",
+        }
+        with patch("app.services.event_service.LocationService") as location_service:
+            location_service.return_value.get_location = AsyncMock(return_value=None)
+            events, error = await svc.create_recurring_event(
+                event_data, organization_id="org-1", created_by="u1"
+            )
+        assert events == []
+        assert error == "Location not found"
 
 
 def test_all_patterns_have_a_test():

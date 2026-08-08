@@ -1,4 +1,66 @@
-# Application Review — Notifications (Tier B, 2nd pass)
+# Application Review — Notifications (Tier B)
+
+**Prefix:** `NOTIF2` · **Iteration:** B11 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
+
+---
+
+## Pass 2 (2026-08-08, against freshly-merged main)
+
+Run after merging 144 commits of `main`, which brought **new notification code**
+this pass had to review: a parallel session's NOTIF-2 fix (`a604016`, same as
+pass 1 — converged), the BXC `rule_name` `lazy="joined"` fix (now merged), and —
+the substantive new surface — a **Web Push feature** (`ccea8c0`: `push_service.py`,
+`PushSubscription` model, `/push/*` endpoints, a migration, a frontend hook).
+
+Re-verified the standing fixes hold on the merged tree: `rule_name`/`recipient_name`
+relationships are both `lazy="joined"` (no `MissingGreenlet`), all six mutating
+methods route errors through `safe_error_detail`, and `update_rule`'s
+`NotificationRuleUpdate` still exposes no FK (BXC update-bypass clean). Then
+reviewed the new push code.
+
+### NOTIF2-3 — MED — Web Push endpoint URL unvalidated → blind SSRF — ✅ FIXED
+
+`POST /push/subscribe` (`get_current_user` — any member) accepts a
+`PushSubscriptionCreate.endpoint` that is a **bare string** (`Field(max_length=2048)`,
+no URL/host check), stores it, and `PushService._send_one` later hands it to
+`webpush`, which **POSTs to that URL** whenever the user is notified. So an
+authenticated member could register `endpoint=https://169.254.169.254/…` (cloud
+metadata), `https://127.0.0.1:<port>/…`, or an intranet host, and turn every push
+to themselves into a server-side request to an internal target — a **blind SSRF**
+(the response isn't returned, but the request fires). New code, merged without a
+security pass on this surface.
+
+**Fix:** a `validate_push_endpoint` helper rejects anything a real browser push
+service never is — non-HTTPS scheme, an **IP-literal host** (v4/v6, so 169.254.x /
+127.x / 10.x / ::1 and even bare public IPs), `localhost`, and `.localhost` /
+`.local` / `.internal` suffixes — raising `ValueError → 400`. Called at the **API
+boundary** (`subscribe_to_push`), where the untrusted value enters, not inside
+`service.subscribe` (which the delivery integration tests call directly with a
+`127.0.0.1` test-server endpoint — validating there would have broken the harness
+that verifies real push send). Legitimate endpoints (always HTTPS on a public DNS
+host) pass unchanged. 17 unit tests added (`test_push_endpoint_validation.py`,
+DB-free so they run in the unit job). **Residual flagged:** a public hostname that
+*resolves* to a private IP (DNS rebinding) isn't caught without a resolve-time IP
+check — recorded as a hardening follow-up.
+
+### Web push — verified good ✅
+
+- **Subscribe/unsubscribe scoping:** `send_to_user` selects `WHERE organization_id
+  AND user_id` (a member's pushes go only to their own devices); `unsubscribe` is
+  org-scoped so a known endpoint can't be deleted cross-tenant. `subscribe`
+  re-points an existing endpoint_hash to the current user (device-handoff design,
+  documented) — the endpoint is a browser secret so this isn't a takeover vector.
+- **Delivery is fail-safe:** `send_to_user` never raises (a push outage can't fail
+  or roll back the triggering action), runs the blocking `webpush` off the loop via
+  `asyncio.to_thread`, and prunes 404/410 (browser-dropped) subscriptions on send.
+- **Secrets:** the VAPID **private** key is only read server-side for signing; the
+  `/push/vapid-public-key` endpoint and `PushSubscriptionResponse` expose only the
+  public key / endpoint id — no private material leaks.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `NOTIF2` · **Iteration:** B11 · **Reviewed:** 2026-08-06
 

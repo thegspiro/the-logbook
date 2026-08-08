@@ -30,7 +30,7 @@ from app.schemas.notifications import (
     PushUnsubscribeRequest,
 )
 from app.services.notifications_service import NotificationsService
-from app.services.push_service import PushService
+from app.services.push_service import PushService, validate_push_endpoint
 
 router = APIRouter()
 
@@ -374,6 +374,10 @@ async def subscribe_to_push(
         )
     service = PushService(db)
     try:
+        # SSRF guard: the endpoint is a client-supplied URL the server later
+        # POSTs to via webpush — reject internal/non-HTTPS targets here, at the
+        # boundary where the untrusted value enters.
+        validate_push_endpoint(payload.endpoint)
         sub = await service.subscribe(
             organization_id=current_user.organization_id,
             user_id=current_user.id,

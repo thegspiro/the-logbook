@@ -836,6 +836,14 @@ class AnnualComplianceReportService:
             else 0.0
         )
 
+        # Aggregate the per-member status buckets. Without these the report's
+        # executive summary (and its email) always reported 0 at-risk and 0
+        # non-compliant members, silently understating risk.
+        at_risk_members = sum(1 for m in member_compliance if m["status"] == "at_risk")
+        non_compliant_members = sum(
+            1 for m in member_compliance if m["status"] == "non_compliant"
+        )
+
         # Requirement analysis
         requirement_analysis: List[Dict[str, Any]] = []
         for req in requirements:
@@ -932,6 +940,8 @@ class AnnualComplianceReportService:
                 "overall_compliance_pct": overall_compliance_pct,
                 "total_members": total_members,
                 "fully_compliant_members": fully_compliant,
+                "at_risk_members": at_risk_members,
+                "non_compliant_members": non_compliant_members,
                 "total_training_hours": round(total_hours, 1),
                 "total_admin_hours": total_admin_hours_approved,
                 "total_contributed_hours": total_contributed,

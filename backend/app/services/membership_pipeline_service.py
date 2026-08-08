@@ -684,7 +684,18 @@ class MembershipPipelineService:
             .execution_options(populate_existing=True)
         )
         result = await self.db.execute(query)
-        return result.scalars().first()
+        prospect = result.scalars().first()
+        if prospect is not None:
+            # MP2 (BXC-2): ProspectResponse declares a flat pipeline_name that the
+            # ORM row doesn't have, so it was always null on the detail / create /
+            # update / advance / regress paths (only the list path built it) — and
+            # the applicant detail view renders it. The pipeline relationship is
+            # eager-loaded above, so populate it here (the single fetch every one
+            # of those paths returns through). Non-mapped attribute; never persisted.
+            prospect.pipeline_name = (
+                prospect.pipeline.name if prospect.pipeline else None
+            )
+        return prospect
 
     async def check_existing_members(
         self,

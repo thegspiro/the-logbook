@@ -99,3 +99,99 @@ gets proxy IPs everywhere, and nothing warns the operator. Worth a startup
 warning (the codebase already has `startup_validators.py`) rather than only a
 comment in an example file.
 </content>
+
+---
+
+## BXC — pass-2 root-cause sweep (2026-08-06)
+
+After B1–B8 kept surfacing the same two shapes, a targeted sweep ran across the
+**remaining** modules (5 parallel readers; every finding verified against source
+and, for BXC-2, against frontend rendering). Two classes:
+
+### BXC-1 — blind `setattr`-over-`model_dump` update loops that reassign a client FK without in-org re-validation
+
+Classified by **consequence**, which is what determines severity — not the
+presence of the loop:
+
+- **READ-LEAK (MED)** — the FK is eager-loaded / name-projected into a response,
+  so a foreign id leaks another org's name. **Fixed inline:**
+  - **events `update_future_events` — `location_id`** (`event_service.py:404`).
+    `update_event` and `create_event` both validate the location in-org; the
+    series-wide bulk update did not, and `location_id` → `location_name` is
+    projected (`events.py:97,261`). A foreign location name would leak on every
+    event in the series. Fixed by validating once before the loop
+    (`ValueError → 400`, endpoint already wraps it). ✅
+- **CROSS-ORG-WRITE (MED/HIGH)** — the row has no `organization_id` of its own
+  (org-scoped only via this parent FK), so a foreign FK transfers the row into
+  another org. **None found in the swept modules** (the one candidate,
+  finance `update_chain_step.email_template_id`, keeps org scoping via the parent
+  chain and only the stored template id is unchecked → dangling).
+- **DANGLING (LOW)** — row keeps its own `organization_id`, FK stored as a raw id
+  and never name-projected → integrity only, no disclosure. **Flagged as a batch**
+  (a future DiD sweep, same disposition as AP2-2 / INV-4-remainder). ~18 sites:
+  - training: `RecertificationPathwayUpdate` (source_requirement_id,
+    assessment_course_id), `InstructorQualificationUpdate` (course_id,
+    skill_evaluation_id, category_id), `TrainingSubmissionUpdate` (category_id)
+  - events: `EventTemplateUpdate` (default_location_id)
+  - scheduling: `ShiftTemplateUpdate` (apparatus_id — asymmetry: create_shift /
+    update_shift DO validate apparatus_id), `ShiftPatternUpdate` (template_id)
+  - meetings: `ActionItemUpdate` (assigned_to — asymmetry: create_action_item
+    validates)
+  - evoc_level: `EvocLevelUpdate` (training_program_id)
+  - membership: `ProspectUpdate` (referred_by — the protected set lists the
+    relationship name `referrer`, not the FK column `referred_by`)
+  - forms: `FormFieldUpdate` (condition_field_id — within-form ref)
+  - finance (6, all keep own org_id, none name-projected): `update_budget_category`
+    (parent_category_id), `update_budget` (station_id), `update_approval_chain`
+    (budget_category_id), `update_chain_step` (email_template_id),
+    `update_purchase_request` (apparatus_id, facility_id), `update_dues_schedule`
+    (fiscal_year_id). The money-critical `budget_id` **is** validated in-org on
+    both paths via `_validate_finance_fks` — verified, no money-math corruption.
+
+**Verified clean on BXC-1:** grants, fundraising, storefront, admin-hours,
+messaging, notifications-rules, organization, operational_rank, org_template,
+template, compliance_config, location, member_leave, email_template,
+course_syllabus, course_cohort, training_program, training_module_config, and
+every `update_*` whose Update schema exposes no FK or whitelists fields.
+
+### BXC-2 — response schemas declaring `*_name` fields the service never populates
+
+The MS2-4 / DOC2-1 class. Classified by whether the frontend renders the field:
+
+- **NAME-RENDERED (live UI defect) — fixed inline where the module is done:**
+  - **meetings `MeetingResponse.creator_name`** — `MinutesPage.tsx:350` renders
+    "Created by {creator_name}"; the list returned the raw ORM so it never
+    appeared. Fixed with `attach_creator_names` (org-scoped batch), wired into the
+    list + detail endpoints. ✅ (B6 was already done, so fixed here rather than
+    deferred.)
+- **NAME-RENDERED — deferred to the module's own upcoming pass-2 iteration**
+  (they'll get proper module context there; recorded so they aren't lost):
+  - membership `ProspectResponse.pipeline_name` — "Pipeline:" line silently
+    omitted on the detail/interview view → **B9 membership pipeline (next).**
+  - training `RenewalTaskResponse.pathway_name` (shows literal "Renewal") and
+    `InstructorQualificationResponse.user_name` (shows a raw UUID) → **B18
+    training.**
+- **RELIABILITY (potential 500) — fixed inline:**
+  - **notifications `NotificationLogResponse.rule_name`** — `recipient` is
+    `lazy="joined"` but `rule` was not, and the `rule_name` property reads
+    `self.rule`; a log with a `rule_id` therefore triggered a lazy load during
+    async serialization → `MissingGreenlet` (a 500 on `GET /notifications/logs`
+    and `/my`). Fixed by making `rule` `lazy="joined"` too (mirrors `recipient`),
+    protecting all five serialization paths. ✅
+- **NAME-NOT-RENDERED (cosmetic dead field) — flagged, not fixed:** messaging
+  `MessageResponse.author_name` (inbox path populates its own schema), meetings
+  `ActionItemResponse.assignee_name` / `MeetingAttendeeResponse.user_name`,
+  training `course_name` / `skill_name` / `MemberCompetencyResponse.skill_name`,
+  finance `ApprovalStepRecordResponse.step_name` / `step_order` (masked by a
+  separate structural gap: the PR/Expense/Check models have no `approval_steps`
+  relationship, so that timeline never renders at all — an incomplete feature, not
+  a name-population fix).
+
+**Verified populated (not defects):** events (location_name, RSVP user_name),
+scheduling (apparatus/officer/user/training names via `_enrich_*`), shift-completion
+(`@property` on `lazy="joined"` relationships), reports_service hand-built dicts,
+storefront/admin-hours/grants/fundraising name fields, forms submitter/org names.
+
+**Net this iteration:** 3 fixed (events read-leak, notifications 500, meetings
+creator_name); 2 rendered name defects deferred to their imminent module slots
+(B9, B18); ~18 dangling FKs + the cosmetic name batch flagged for a DiD sweep.

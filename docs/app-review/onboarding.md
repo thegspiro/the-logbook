@@ -1,6 +1,41 @@
-# Application Review — Onboarding (Tier B, 2nd pass)
+# Application Review — Onboarding (Tier B)
 
-**Prefix:** `ONB2` · **Iteration:** B25 · **Reviewed:** 2026-08-06
+**Prefix:** `ONB2` · **Iteration:** B25 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified pass-1: post-completion `/reset` blocked; second owner/org blocked
+(`create_system_owner`/`create_organization` latch on any existing user/org);
+ONB-8 `/status` minimal-response-after-completion holds. Session token +
+CSRF entropy (`token_urlsafe(32)` + `compare_digest`), secret-at-rest encryption,
+and the fail-closed `get_or_create_session` all confirmed. **1 fix.**
+
+### ONB-9 — MED — Two onboarding steps missed the post-completion replay guard — ✅ FIXED
+
+Pass-1 added a `needs_onboarding()` gate to the mutating onboarding steps
+(`/modules`, `/notifications`, `/complete`, `/session/roles`, `/session/organization`,
+`/system-owner`) because **completion does not delete the `OnboardingSession`** — it
+stays valid for up to 30 min, so a still-valid (or stolen) `X-Session-ID` + CSRF
+could otherwise be replayed to mutate the provisioned org through the unauthenticated
+onboarding channel. `/session/stations` and `/session/apparatus` were **missed** —
+both `validate_session` then write **real `Facility`/`Location`/`BasicApparatus`
+rows** (org id from the persisted `session.data["department"]`), with no
+`needs_onboarding()` check. So a stale session could inject stations/apparatus into a
+completed org, bypassing the authenticated `facilities.manage` path. **Fix:** the
+same guard the siblings use (`if not await service.needs_onboarding(): 400`) on both
+handlers, before the write. 2 DB-free regression tests.
+
+**Flagged (unchanged / new LOW):** ONB-7 (role editor accepts client
+permissions/priority/system-flag — product decision, KNOWN_LIMITATIONS). New LOW
+items noted (not fixed — robustness, low reachability): `/complete` persists IT-team
+users before `complete_onboarding` validates required steps (a caller with a
+half-filled session gets member accounts created then a 400 — rollback likely
+reverts); `save_session_roles` has no dedup on role slug (duplicate → IntegrityError
+→ 500) and `/organization` lacks the `except Exception` its twin has; `/status` is
+the one anonymous endpoint with no `check_rate_limit`.
+
+---
 
 **Backend:** `api/v1/onboarding.py` (1,961 L, 20 routes), `services/onboarding.py`
 (1,319 L), org-template services

@@ -1682,6 +1682,7 @@ class FinanceService:
     async def create_dues_schedule(
         self, org_id: str, created_by: str, **kwargs
     ) -> DuesSchedule:
+        await self._validate_finance_fks(org_id, kwargs)
         schedule = DuesSchedule(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(schedule)
         await self.db.flush()
@@ -1694,6 +1695,7 @@ class FinanceService:
         schedule = await self.get_dues_schedule(schedule_id, org_id)
         if not schedule:
             raise ValueError("Dues schedule not found")
+        await self._validate_finance_fks(org_id, kwargs)
         for key, value in kwargs.items():
             if value is not None:
                 setattr(schedule, key, value)
