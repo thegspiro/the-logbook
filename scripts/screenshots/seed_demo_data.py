@@ -659,25 +659,32 @@ class Seeder:
                 payload["template_id"] = pick(templates[0], "id")
             patterns.append(self.api.post("/scheduling/patterns", payload))
 
-        # Shifts reference the scheduling module's own lightweight apparatus
-        # table, not the full Apparatus records seeded above — passing an
-        # apparatus-module id here fails the in-org check with
-        # "Apparatus not found". Mirror the front-line fleet into it.
-        basic = items(self.api.get("/scheduling/apparatus"), "apparatus")
-        basic_units = {pick(a, "unit_number", "unitNumber") for a in basic}
-        for unit, name, _year, _make, _model, slug in APPARATUS[:4]:
-            if unit in basic_units:
-                continue
-            basic.append(
-                self.api.post(
-                    "/scheduling/apparatus",
-                    {
-                        "unit_number": unit,
-                        "name": name,
-                        "apparatus_type": slug,
-                        "min_staffing": 2 if slug in ("ambulance", "utility") else 3,
-                    },
-                )
+        # Ask the same endpoint the shift form asks. /apparatus-options resolves
+        # the department's fleet with a documented priority — full Apparatus
+        # module records first, the lightweight basic_apparatus table second,
+        # hardcoded type defaults last — so seeding through it produces the ids a
+        # real user's shift would carry.
+        #
+        # This used to mirror the fleet into basic_apparatus instead, because
+        # passing a full-Apparatus id to create_shift failed the in-org check
+        # with "Apparatus not found". That was the SCH-6 half of the polymorphic
+        # apparatus-reference bug, fixed 2026-08-08 (see
+        # app/utils/apparatus_ref.py). The mirror is no longer needed and was
+        # actively harmful: it created a second copy of every front-line rig, so
+        # the demo department had E-1 twice under different ids, and equipment
+        # checks recorded against the basic copy left the apparatus-compliance
+        # dashboard reading "Never checked" for every unit.
+        options = items(
+            self.api.get("/scheduling/apparatus-options"), "options", "apparatus"
+        )
+        fleet = [o for o in options if pick(o, "id")]
+        if not fleet:
+            # Only reachable when the department has neither inventory — the
+            # endpoint then serves hardcoded type defaults, which carry no id
+            # and cannot be assigned to a shift.
+            self.blocked.append(
+                "scheduling: /scheduling/apparatus-options returned no "
+                "identifiable apparatus, so shifts were seeded without one"
             )
 
         shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
@@ -690,6 +697,29 @@ class Seeder:
         station_id = pick(stations[0], "id") if stations else None
         member_ids = [pick(m, "id") for m in members if pick(m, "id")]
         officers = member_ids[:8]
+        admin_id = next(
+            (
+                pick(m, "id")
+                for m in members
+                if pick(m, "username") == DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        # Which of today's shifts to put the administrator on. The demo's only
+        # equipment-check template targets the "engine" apparatus type, and a
+        # checklist resolves by type — so crewing them onto the brush truck
+        # produces a shift with no checklist, which is exactly the empty screen
+        # this is meant to avoid. Prefer an engine; fall back to the first unit
+        # so a fleet without one still gets an assignment.
+        admin_slot = next(
+            (
+                i
+                for i, unit in enumerate(fleet[:3])
+                if (pick(unit, "apparatus_type", "apparatusType") or "").lower()
+                == "engine"
+            ),
+            0,
+        )
 
         # Two weeks either side of today: the calendar, "my shifts", and the
         # open-shifts list each need past and future rows to look real.
@@ -701,7 +731,7 @@ class Seeder:
             rotation = offset % max(1, len(member_ids))
             day_pool = member_ids[rotation:] + member_ids[:rotation]
             pool_cursor = 0
-            for index, unit in enumerate(basic[:3]):
+            for index, unit in enumerate(fleet[:3]):
                 apparatus_id = pick(unit, "id")
                 if (shift_date, apparatus_id) in existing_keys:
                     continue
@@ -753,10 +783,28 @@ class Seeder:
                             "position": "officer" if slot == 0 else "firefighter",
                         },
                     )
+
+                # Put the demo administrator on today's first shift. Several
+                # member-facing screens — "My Shifts" and, in particular, "My
+                # Equipment Checklists" — are scoped to the signed-in user's own
+                # assignments, and the screenshot pipeline signs in as the
+                # administrator. Without this they capture an empty state that
+                # reads as though the feature does nothing.
+                if offset == 0 and index == admin_slot and admin_id:
+                    try:
+                        self.api.post(
+                            f"/scheduling/shifts/{shift_id}/assignments",
+                            {"user_id": admin_id, "position": "officer"},
+                        )
+                    except ApiError as exc:
+                        # Already assigned on a re-run, or the API declined the
+                        # slot — neither is worth failing the whole seed over.
+                        if exc.code not in (400, 409):
+                            raise
         return {
             "templates": templates,
             "patterns": patterns,
-            "apparatus": basic,
+            "apparatus": fleet,
             "shifts": shifts,
         }
 
@@ -1386,11 +1434,18 @@ class Seeder:
             return {"templates": templates, "checks": checks}
 
         # One deficiency across the set, so the compliance view has something
-        # other than a wall of green to show.
-        submitted[-1]["status"] = "fail"
-        submitted[-1]["quantity_found"] = 0
+        # other than a wall of green to show — but only one, so it does not read
+        # as a fleet-wide failure. This previously mutated the shared item list
+        # before the loop, which applied the deficiency to *every* check and left
+        # the compliance dashboard reporting a 0% pass rate.
+        def items_for(index: int) -> list[dict]:
+            rows = [dict(row) for row in submitted]
+            if index == len(target_shifts) - 1:
+                rows[-1]["status"] = "fail"
+                rows[-1]["quantity_found"] = 0
+            return rows
 
-        for shift in target_shifts:
+        for shift_index, shift in enumerate(target_shifts):
             # This used to swallow a 500 and record a blocker: submitting a check
             # for any shift with an apparatus assigned failed the FK constraint
             # on `shift_equipment_checks.apparatus_id`. Fixed 2026-08-08 by
@@ -1399,12 +1454,13 @@ class Seeder:
             # and is deliberately left to raise — a silent skip here is how the
             # equipment-check screenshots went unfilled for two days without
             # anyone noticing the feature was broken.
+            shift_items = items_for(shift_index)
             check = self.api.post(
                 f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
                 {
                     "template_id": template_id,
                     "check_timing": "start_of_shift",
-                    "items": submitted,
+                    "items": shift_items,
                 },
             )
             checks.append(check)
@@ -1414,7 +1470,7 @@ class Seeder:
                 try:
                     self.api.put(
                         f"/equipment-checks/checks/{check_id}/complete",
-                        {"items": submitted},
+                        {"items": shift_items},
                     )
                 except ApiError as exc:
                     if exc.code not in (400, 409):

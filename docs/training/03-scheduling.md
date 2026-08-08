@@ -722,8 +722,7 @@ Navigate to **Scheduling > Equipment Check Reports** to view three report tabs:
 
 Reports can be exported as **CSV** or **PDF**.
 
-> **Screenshot needed:**
-> _[Screenshot of the Equipment Check Reports page showing the Compliance Dashboard tab with apparatus cards showing pass rates (e.g., "Engine 1: 98% pass rate"), and the tab bar showing Compliance / Failures / Trends]_
+![Equipment Check Reports page with the compliance dashboard](./images/03-24-equipment-check-reports.png)
 
 #### Equipment Check Edge Cases
 
