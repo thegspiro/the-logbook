@@ -2479,7 +2479,14 @@ class MembershipPipelineService:
         query = (
             select(ProspectiveMember)
             .where(scope)
-            .options(selectinload(ProspectiveMember.current_step))
+            # Same eager loads as the prospect list: the card projection reads
+            # pipeline name and step progress, and a lazy load out of the async
+            # response path raises MissingGreenlet rather than just being slow.
+            .options(
+                selectinload(ProspectiveMember.current_step),
+                selectinload(ProspectiveMember.pipeline),
+                selectinload(ProspectiveMember.step_progress),
+            )
             .order_by(ProspectiveMember.created_at)
             .limit(self.MAX_KANBAN_CARDS)
         )

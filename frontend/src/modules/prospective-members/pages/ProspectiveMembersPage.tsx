@@ -736,6 +736,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <PipelineKanban
                   stages={sortedStages}
                   applicants={applicants}
+                  totalApplicants={totalApplicants}
                   onApplicantClick={handleApplicantClick}
                   selectedApplicants={selectedApplicants}
                   onToggleSelect={toggleApplicantSelection}

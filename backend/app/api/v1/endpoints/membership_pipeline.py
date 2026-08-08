@@ -51,6 +51,8 @@ from app.schemas.membership_pipeline import (
     InterviewCreate,
     InterviewResponse,
     InterviewUpdate,
+    KanbanBoardResponse,
+    KanbanColumnResponse,
     PaginatedProspectListResponse,
     PipelineCreate,
     PipelineListResponse,
@@ -556,7 +558,7 @@ async def delete_step(
 # ============================================
 
 
-@router.get("/pipelines/{pipeline_id}/kanban")
+@router.get("/pipelines/{pipeline_id}/kanban", response_model=KanbanBoardResponse)
 async def get_kanban_board(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -569,7 +571,9 @@ async def get_kanban_board(
     Get the kanban board view for a pipeline.
 
     Returns prospects grouped by their current step, omitting the caller's
-    own prospective-membership record if they have one.
+    own prospective-membership record if they have one. Cards are capped;
+    each column's ``count`` is the true total regardless, and ``truncated``
+    says whether anything was withheld.
 
     **Requires permission: prospective_members.view**
     """
@@ -583,7 +587,22 @@ async def get_kanban_board(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
         )
-    return board
+
+    now = datetime.now(timezone.utc)
+    return KanbanBoardResponse(
+        pipeline=board["pipeline"],
+        columns=[
+            KanbanColumnResponse(
+                step=column["step"],
+                prospects=[_prospect_list_item(p, now) for p in column["prospects"]],
+                count=column["count"],
+            )
+            for column in board["columns"]
+        ],
+        total_prospects=board["total_prospects"],
+        returned_prospects=board["returned_prospects"],
+        truncated=board["truncated"],
+    )
 
 
 # ============================================
@@ -671,6 +690,43 @@ async def purge_inactive_prospects(
 # ============================================
 
 
+def _prospect_list_item(prospect, now: datetime) -> ProspectListResponse:
+    """Map a prospect ORM row onto the card/list projection.
+
+    Shared by the list and kanban endpoints so a field added to one view
+    cannot silently diverge from the other — and so neither can fall back to
+    serializing the raw model, which exposes the status token.
+    """
+    enriched = MembershipPipelineService.enrich_prospect_list_item(prospect, now)
+    return ProspectListResponse(
+        id=prospect.id,
+        first_name=prospect.first_name,
+        last_name=prospect.last_name,
+        email=prospect.email,
+        phone=prospect.phone,
+        status=(
+            prospect.status.value
+            if hasattr(prospect.status, "value")
+            else prospect.status
+        ),
+        pipeline_id=prospect.pipeline_id,
+        pipeline_name=(prospect.pipeline.name if prospect.pipeline else None),
+        current_step_id=prospect.current_step_id,
+        current_step_name=(
+            prospect.current_step.name if prospect.current_step else None
+        ),
+        desired_membership_type=prospect.desired_membership_type,
+        created_at=prospect.created_at,
+        updated_at=enriched["last_activity"],
+        stage_entered_at=enriched["stage_entered_at"],
+        days_in_stage=enriched["days_in_stage"],
+        days_in_pipeline=enriched["days_in_pipeline"],
+        days_since_activity=enriched["days_since_activity"],
+        inactivity_alert_level=enriched["inactivity_alert_level"],
+        inactivity_timeout_days=enriched["inactivity_timeout_days"],
+    )
+
+
 @router.get("/prospects", response_model=PaginatedProspectListResponse)
 async def list_prospects(
     pipeline_id: UUID | None = Query(None, description="Filter by pipeline"),
@@ -709,31 +765,7 @@ async def list_prospects(
     )
 
     now = datetime.now(timezone.utc)
-    items = []
-    for p in prospects:
-        enriched = MembershipPipelineService.enrich_prospect_list_item(p, now)
-        items.append(
-            ProspectListResponse(
-                id=p.id,
-                first_name=p.first_name,
-                last_name=p.last_name,
-                email=p.email,
-                phone=p.phone,
-                status=(p.status.value if hasattr(p.status, "value") else p.status),
-                pipeline_id=p.pipeline_id,
-                pipeline_name=(p.pipeline.name if p.pipeline else None),
-                current_step_id=p.current_step_id,
-                current_step_name=(p.current_step.name if p.current_step else None),
-                created_at=p.created_at,
-                updated_at=enriched["last_activity"],
-                stage_entered_at=enriched["stage_entered_at"],
-                days_in_stage=enriched["days_in_stage"],
-                days_in_pipeline=enriched["days_in_pipeline"],
-                days_since_activity=enriched["days_since_activity"],
-                inactivity_alert_level=enriched["inactivity_alert_level"],
-                inactivity_timeout_days=enriched["inactivity_timeout_days"],
-            )
-        )
+    items = [_prospect_list_item(p, now) for p in prospects]
     return PaginatedProspectListResponse(
         items=items, total=total, limit=limit, offset=offset
     )

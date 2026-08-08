@@ -384,6 +384,45 @@ class AdvanceProspectRequest(BaseModel):
     notes: Optional[str] = Field(None, description="Optional notes for the advancement")
 
 
+# --- Kanban Board Schemas ---
+
+
+class KanbanColumnResponse(BaseModel):
+    """One stage column of the kanban board"""
+
+    model_config = _response_config
+
+    step: Optional[PipelineStepResponse] = None
+    prospects: List[ProspectListResponse] = []
+    count: int = Field(
+        0,
+        description=(
+            "True number of prospects in this column, which can exceed the "
+            "number of cards returned when the board is truncated."
+        ),
+    )
+
+
+class KanbanBoardResponse(BaseModel):
+    """Kanban board for a pipeline.
+
+    Declared explicitly rather than returned as a bare dict: without a
+    response model the endpoint serialized every ``ProspectiveMember``
+    column, which put ``status_token`` — the credential behind the public
+    application-status page — plus coordinator notes, date of birth and home
+    address into a board view. Cards carry the same fields as the prospect
+    list and nothing more.
+    """
+
+    model_config = _response_config
+
+    pipeline: PipelineResponse
+    columns: List[KanbanColumnResponse] = []
+    total_prospects: int = 0
+    returned_prospects: int = 0
+    truncated: bool = False
+
+
 # --- Bulk Action Schemas ---
 
 # A coordinator selecting 30 applicants should cost one request, not 30. The
