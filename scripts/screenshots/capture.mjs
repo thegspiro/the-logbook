@@ -16,7 +16,9 @@
  */
 
 import { chromium } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, stat, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,6 +28,38 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..", "..");
 const OUTPUT_DIR = resolve(REPO_ROOT, "docs", "training", "images");
 const BASE_URL = process.env.SCREENSHOT_BASE_URL || "http://localhost:3000";
+
+const run = promisify(execFile);
+
+/**
+ * Shrink a capture in place with pngquant.
+ *
+ * Playwright's PNGs are 24-bit and run ~500 KB each; full coverage of the
+ * guides would put well over 100 MB of binaries into git history. Git LFS is
+ * the usual answer but this environment's network policy blocks the LFS
+ * endpoint, so the bytes have to come out of the file itself. Quantising to a
+ * palette takes roughly 75% off with no visible difference on flat UI
+ * screenshots — text stays crisp, which is the only thing that matters here.
+ *
+ * Missing pngquant is not fatal: the capture is still correct, just larger.
+ */
+async function optimize(target) {
+  try {
+    const before = (await stat(target)).size;
+    await run("pngquant", [
+      "--quality=70-92",
+      "--speed",
+      "1",
+      "--force",
+      "--output",
+      target,
+      target,
+    ]);
+    return before - (await stat(target)).size;
+  } catch {
+    return 0;
+  }
+}
 
 /** Desktop framing matches the guides, which describe full-width layouts. */
 const DESKTOP = { width: 1440, height: 900 };
@@ -160,6 +194,7 @@ async function main() {
           fullPage: Boolean(shot.fullPage),
         });
       }
+      await optimize(target);
       const emptyState = shot.allowEmptyState
         ? null
         : await detectEmptyState(page);
