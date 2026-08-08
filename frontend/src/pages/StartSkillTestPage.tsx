@@ -17,7 +17,7 @@
  * the Back link to that list rather than the Training Admin hub.
  */
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
 import { ArrowLeft, ClipboardCheck, Search, User, FileText, Play, Award, BookOpen, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -32,8 +32,13 @@ interface MemberOption {
   name: string;
 }
 
+/** Must not be below the server's own floor, or a search it refuses gets sent. */
 const MIN_SEARCH_CHARS = 2;
-const MAX_SEARCH_RESULTS = 10;
+/** Mirrors CANDIDATE_SEARCH_MAX_RESULTS in the endpoint — used only to tell the
+ *  user their search was truncated, never to trim results client-side. */
+const MAX_SEARCH_RESULTS = 15;
+/** Long enough that typing a name is one request, not one per keystroke. */
+const MEMBER_SEARCH_DEBOUNCE_MS = 300;
 
 export const StartSkillTestPage: React.FC = () => {
   const navigate = useNavigate();
@@ -46,9 +51,14 @@ export const StartSkillTestPage: React.FC = () => {
   const { templates, templatesLoading, loadTemplates, createTest } = useSkillsTestingStore();
   const { user, checkPermission } = useAuthStore();
   const isOfficer = checkPermission('training.manage');
+  // Search results only — the roster is never held client-side, because the
+  // endpoint behind it will not return one.
   const [members, setMembers] = useState<MemberOption[]>([]);
-  const [membersLoading, setMembersLoading] = useState(true);
+  const [membersLoading, setMembersLoading] = useState(false);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
+  // The candidate the user actually picked, kept separately: it has to survive
+  // the search results being replaced or cleared.
+  const [selectedCandidate, setSelectedCandidate] = useState<MemberOption | null>(null);
   // The `?template=` hand-off applies exactly once, so hitting "Change" isn't
   // undone by the next render.
   const preselectApplied = useRef(false);
@@ -75,7 +85,6 @@ export const StartSkillTestPage: React.FC = () => {
       await loadTemplates({ status: 'published' });
       setTemplatesLoaded(true);
     })();
-    void loadMembers();
   }, [loadTemplates]);
 
   // Pre-select the template the user tapped on the previous screen. Waits for
@@ -102,13 +111,55 @@ export const StartSkillTestPage: React.FC = () => {
   // "Practice on your own" should be one tap, not a search for your own name.
   // Officers are excluded: an officer running a practice drill is almost always
   // drilling someone else.
+  //
+  // Built from the signed-in user rather than looked up, so defaulting to
+  // yourself costs no request — and works even though the endpoint will not
+  // hand out a roster to pick your own name out of.
   useEffect(() => {
     if (selfCandidateApplied.current || isOfficer) return;
-    if (!isPractice || !user?.id || membersLoading || selectedCandidateId) return;
-    if (!members.some((m) => m.id === user.id)) return;
+    if (!isPractice || !user?.id || selectedCandidateId) return;
+    const ownName = `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim();
+    if (!ownName) return;
     selfCandidateApplied.current = true;
     setSelectedCandidateId(user.id);
-  }, [isOfficer, isPractice, user?.id, members, membersLoading, selectedCandidateId]);
+    setSelectedCandidate({ id: user.id, name: ownName });
+  }, [isOfficer, isPractice, user?.id, user?.first_name, user?.last_name, selectedCandidateId]);
+
+  // Server-side candidate search, debounced. The endpoint requires a fragment
+  // and caps its results, so this cannot be turned into a roster fetch by
+  // clearing the box — a short query simply searches for nothing.
+  useEffect(() => {
+    const query = memberSearch.trim();
+    if (query.length < MIN_SEARCH_CHARS) {
+      setMembers([]);
+      setMembersLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMembersLoading(true);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const found = await skillsTestingService.searchCandidates(query);
+          // A slower earlier request must not overwrite a later one's results.
+          if (!cancelled) setMembers(found);
+        } catch (err: unknown) {
+          if (!cancelled) {
+            setMembers([]);
+            toast.error(getErrorMessage(err, 'Failed to search members'));
+          }
+        } finally {
+          if (!cancelled) setMembersLoading(false);
+        }
+      })();
+    }, MEMBER_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [memberSearch]);
 
   // Load training requirements for the optional per-test override.
   useEffect(() => {
@@ -121,30 +172,14 @@ export const StartSkillTestPage: React.FC = () => {
     })();
   }, []);
 
-  const loadMembers = async () => {
-    try {
-      // Not userService.getUsers(): that needs `users.view`, which the baseline
-      // member position does not carry, and every member can examine now.
-      setMembers(await skillsTestingService.getCandidates());
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load members'));
-    } finally {
-      setMembersLoading(false);
-    }
-  };
-
   const filteredTemplates = templates.filter(
     (t) =>
       t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
       (t.category ?? '').toLowerCase().includes(templateSearch.toLowerCase())
   );
 
-  const filteredMembers = useMemo(() => {
-    if (memberSearch.length < MIN_SEARCH_CHARS) return [];
-    return members
-      .filter((m) => m.name.toLowerCase().includes(memberSearch.toLowerCase()))
-      .slice(0, MAX_SEARCH_RESULTS);
-  }, [members, memberSearch]);
+  // Already filtered and capped by the server; nothing left to narrow here.
+  const filteredMembers = members;
 
   // The backend refuses an official test whose examiner and candidate are the
   // same person (separation of duties — a self-recorded pass would satisfy a
@@ -196,7 +231,6 @@ export const StartSkillTestPage: React.FC = () => {
   };
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
-  const selectedCandidate = members.find((m) => m.id === selectedCandidateId);
 
   return (
     <div className="min-h-screen">
@@ -233,6 +267,7 @@ export const StartSkillTestPage: React.FC = () => {
               </div>
               <button
                 onClick={() => setSelectedTemplateId('')}
+                aria-label="Change template"
                 className="text-sm text-green-700 underline dark:text-green-300"
               >
                 Change
@@ -362,7 +397,11 @@ export const StartSkillTestPage: React.FC = () => {
                 </p>
               </div>
               <button
-                onClick={() => setSelectedCandidateId('')}
+                onClick={() => {
+                  setSelectedCandidateId('');
+                  setSelectedCandidate(null);
+                }}
+                aria-label="Change candidate"
                 className="text-sm text-green-700 underline dark:text-green-300"
               >
                 Change
@@ -387,9 +426,9 @@ export const StartSkillTestPage: React.FC = () => {
                 <div className="flex justify-center py-4" role="status" aria-live="polite">
                   <div className="h-6 w-6 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
                 </div>
-              ) : memberSearch.length < MIN_SEARCH_CHARS ? (
+              ) : memberSearch.trim().length < MIN_SEARCH_CHARS ? (
                 <p className="text-theme-text-muted py-4 text-center text-sm">
-                  Type at least {MIN_SEARCH_CHARS} characters to search
+                  Type at least {MIN_SEARCH_CHARS} characters of a name to search
                 </p>
               ) : (
                 <div className="max-h-48 space-y-2 overflow-y-auto">
@@ -398,6 +437,7 @@ export const StartSkillTestPage: React.FC = () => {
                       key={m.id}
                       onClick={() => {
                         setSelectedCandidateId(m.id);
+                        setSelectedCandidate(m);
                         setMemberSearch('');
                       }}
                       className="border-theme-surface-border w-full rounded-lg border p-3 text-left transition-colors hover:border-red-500/50"
@@ -413,7 +453,7 @@ export const StartSkillTestPage: React.FC = () => {
                   )}
                   {filteredMembers.length === MAX_SEARCH_RESULTS && (
                     <p className="text-theme-text-muted py-1 text-center text-xs">
-                      Showing first {MAX_SEARCH_RESULTS} results — refine your search
+                      Showing the first {MAX_SEARCH_RESULTS} matches — type more of the name
                     </p>
                   )}
                 </div>

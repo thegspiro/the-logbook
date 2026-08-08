@@ -1236,10 +1236,16 @@ export const skillsTestingService = {
     return response.data;
   },
 
-  /** Selectable candidates (id + display name) for the start-test picker.
-   *  Open to every member, unlike `GET /users` which needs `users.view`. */
-  async getCandidates(): Promise<SkillTestCandidate[]> {
-    const response = await api.get<SkillTestCandidate[]>('/training/skills-testing/candidates');
+  /** Look up members by name for the start-test picker.
+   *
+   *  A search, not a listing: `q` is required server-side and results are
+   *  capped, so there is no call that returns the roster. Open to every member,
+   *  unlike `GET /users` which needs `users.view`.
+   */
+  async searchCandidates(query: string): Promise<SkillTestCandidate[]> {
+    const response = await api.get<SkillTestCandidate[]>('/training/skills-testing/candidates', {
+      params: { q: query },
+    });
     return asArray(response.data);
   },
 

@@ -53,14 +53,28 @@ vi.mock('../stores/skillsTestingStore', () => ({
   }),
 }));
 
+const mockSearchCandidates = vi.fn<(query: string) => Promise<{ id: string; name: string }[]>>();
 vi.mock('../services/api', () => ({
-  userService: {
-    getUsers: () =>
-      Promise.resolve([{ id: 'user-1', first_name: 'John', last_name: 'Smith', email: 'john@example.com' }]),
+  skillsTestingService: {
+    searchCandidates: (query: string) => mockSearchCandidates(query),
   },
   trainingProgramService: {
     getRequirementsEnhanced: () => Promise.resolve([]),
   },
+}));
+
+const mockCheckPermission = vi.fn<(permission: string) => boolean>();
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: vi.fn((selector) => {
+    const state = {
+      user: { id: 'user-1', first_name: 'Alex', last_name: 'Rivera' },
+      checkPermission: (permission: string) => mockCheckPermission(permission),
+    };
+    if (typeof selector === 'function') {
+      return (selector as (s: typeof state) => unknown)(state);
+    }
+    return state;
+  }),
 }));
 
 const mockToastError = vi.fn<(message: string) => void>();
@@ -88,16 +102,25 @@ describe('StartSkillTestPage', () => {
   beforeEach(() => {
     currentSearchParams = new URLSearchParams('');
     vi.clearAllMocks();
+    mockCheckPermission.mockReturnValue(false);
+    mockSearchCandidates.mockResolvedValue([]);
   });
 
   describe('Template pre-selection from the ?template= hand-off', () => {
+    /** The template step's own Change button. Both steps render a button
+     *  reading "Change", so they are distinguished by aria-label — which is
+     *  also what a screen-reader user needs to tell them apart. */
+    const templateChangeButton = () => screen.queryByRole('button', { name: 'Change template' });
+
     it('should pre-select the template the user tapped', async () => {
       currentSearchParams = new URLSearchParams('template=tpl-2&from=member');
       renderWithRouter(<StartSkillTestPage />);
 
-      // The selected-template summary replaces the picker, so a "Change"
-      // affordance is the signal that step 1 is already answered.
-      expect(await screen.findByRole('button', { name: 'Change' })).toBeInTheDocument();
+      // The template name alone is not the signal — it is also a row in the
+      // unselected picker. The step's Change button only exists once the
+      // selection has applied, so wait on that.
+      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument());
+
       expect(screen.getByText('Ladder Operations')).toBeInTheDocument();
       expect(screen.queryByPlaceholderText('Search templates...')).not.toBeInTheDocument();
     });
@@ -107,10 +130,11 @@ describe('StartSkillTestPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<StartSkillTestPage />);
 
-      await user.click(await screen.findByRole('button', { name: 'Change' }));
+      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument());
+      await user.click(templateChangeButton() as HTMLElement);
 
       expect(screen.getByPlaceholderText('Search templates...')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Change' })).not.toBeInTheDocument();
+      expect(templateChangeButton()).not.toBeInTheDocument();
     });
 
     it('should warn when the hand-off points at an unavailable template', async () => {
@@ -127,7 +151,60 @@ describe('StartSkillTestPage', () => {
       renderWithRouter(<StartSkillTestPage />);
 
       expect(await screen.findByPlaceholderText('Search templates...')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Change' })).not.toBeInTheDocument();
+      expect(templateChangeButton()).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Candidate lookup', () => {
+    it('should not request anything below the search floor', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<StartSkillTestPage />);
+
+      // Clear the self-default so the search box is on screen.
+      await user.click(await screen.findByRole('button', { name: 'Change candidate' }));
+      await user.type(screen.getByPlaceholderText('Type a name to search...'), 'a');
+
+      // Long enough to outlast the debounce, so this is "never fired" rather
+      // than "not fired yet".
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(mockSearchCandidates).not.toHaveBeenCalled();
+      expect(screen.getByText(/Type at least 2 characters of a name/)).toBeInTheDocument();
+    });
+
+    it('should search server-side and render the matches', async () => {
+      const user = userEvent.setup();
+      mockSearchCandidates.mockResolvedValue([{ id: 'user-9', name: 'Dana Whitfield' }]);
+      renderWithRouter(<StartSkillTestPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Change candidate' }));
+      await user.type(screen.getByPlaceholderText('Type a name to search...'), 'whit');
+
+      expect(await screen.findByText('Dana Whitfield')).toBeInTheDocument();
+      // The query goes to the server — the page never holds a roster to filter.
+      expect(mockSearchCandidates).toHaveBeenCalledWith('whit');
+    });
+
+    it('should keep the picked candidate after the results are cleared', async () => {
+      const user = userEvent.setup();
+      mockSearchCandidates.mockResolvedValue([{ id: 'user-9', name: 'Dana Whitfield' }]);
+      renderWithRouter(<StartSkillTestPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Change candidate' }));
+      await user.type(screen.getByPlaceholderText('Type a name to search...'), 'whit');
+      await user.click(await screen.findByText('Dana Whitfield'));
+
+      // Selecting clears the search box, which empties the results — the name
+      // has to survive that, since it is no longer in any list.
+      expect(await screen.findByText('Dana Whitfield')).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('Type a name to search...')).not.toBeInTheDocument();
+    });
+
+    it('should default a members practice run to themselves without a lookup', async () => {
+      renderWithRouter(<StartSkillTestPage />);
+
+      expect(await screen.findByText('Alex Rivera')).toBeInTheDocument();
+      expect(screen.getByText('(you)')).toBeInTheDocument();
+      expect(mockSearchCandidates).not.toHaveBeenCalled();
     });
   });
 
