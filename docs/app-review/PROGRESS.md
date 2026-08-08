@@ -62,10 +62,10 @@ from its open list.
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2) |
 | B22 | compliance & skills | CS2 | ✅ (p1, p2) |
 | B23 | security, audit & IP | SEC2 | ✅ (p1, p2) |
-| B24 | core infra | CI2 | ⬜ |
-| B25 | onboarding | ONB2 | ⬜ |
-| B26 | public-portal | PP2 | ⬜ |
-| B27 | frontend shared | FE2 | ⬜ |
+| B24 | core infra | CI2 | 🔄 |
+| B25 | onboarding | ONB2 | 🔄 |
+| B26 | public-portal | PP2 | 🔄 |
+| B27 | frontend shared | FE2 | 🔄 |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
