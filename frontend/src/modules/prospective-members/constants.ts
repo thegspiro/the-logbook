@@ -113,3 +113,14 @@ export const APPLICANT_STATUS_LABELS: Record<ApplicantStatus, string> = {
   rejected: 'Rejected',
   inactive: 'Inactive',
 };
+
+/**
+ * Page size used when the board view is active.
+ *
+ * The kanban groups applicants into stage columns client-side, so it needs
+ * the whole set at once — paging it to DEFAULT_PAGE_SIZE meant a department
+ * with more than 25 active applicants saw a board built from a fraction of
+ * them, with nothing on screen saying so. 200 is the ceiling the list
+ * endpoint accepts; past that the board reports what it is not showing.
+ */
+export const KANBAN_PAGE_SIZE = 200;

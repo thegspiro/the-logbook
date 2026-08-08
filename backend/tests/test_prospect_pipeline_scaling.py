@@ -290,3 +290,94 @@ class TestKanbanIsBounded:
         assert board["total_prospects"] == 1
         column = next(c for c in board["columns"] if c["step"] is not None)
         assert column["count"] == 1
+
+
+class TestKanbanResponseShape:
+    """The endpoint returned a bare dict, so FastAPI serialized every column
+    of ``ProspectiveMember`` — including ``status_token``, the credential
+    behind the public application-status page."""
+
+    async def _client(self, db_session, viewer):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.api.dependencies import get_current_user
+        from app.api.v1.endpoints import membership_pipeline as endpoints
+        from app.core.database import get_db
+
+        app = FastAPI()
+        app.include_router(endpoints.router, prefix="/prospective-members")
+        app.dependency_overrides[get_current_user] = lambda: viewer
+        app.dependency_overrides[get_db] = lambda: db_session
+        return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+    async def test_cards_never_carry_the_status_token_or_private_fields(
+        self, db_session: AsyncSession, org_and_admin
+    ):
+        from app.models.user import User
+
+        org_id, admin_id = org_and_admin
+        position_id = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO positions (id, organization_id, name, slug, permissions)"
+                " VALUES (:id, :org, 'Coord', :slug, :perms)"
+            ),
+            {
+                "id": position_id,
+                "org": org_id,
+                "slug": f"coord-{position_id[:8]}",
+                "perms": '["prospective_members.view"]',
+            },
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO user_positions (user_id, position_id)"
+                " VALUES (:uid, :pid)"
+            ),
+            {"uid": admin_id, "pid": position_id},
+        )
+        await db_session.flush()
+        viewer = await db_session.get(User, admin_id)
+        await db_session.refresh(viewer, ["positions"])
+
+        svc = MembershipPipelineService(db_session)
+        pipeline = await svc.create_pipeline(organization_id=org_id, name="P")
+        await svc.add_step(pipeline.id, org_id, {"name": "Application"})
+        await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "Ann",
+                "last_name": "Lee",
+                "email": f"ann-{_uid()[:6]}@example.com",
+                "pipeline_id": pipeline.id,
+                "notes": "Confidential coordinator note",
+                "address_street": "1 Main St",
+            },
+        )
+
+        async with await self._client(db_session, viewer) as client:
+            res = await client.get(
+                f"/prospective-members/pipelines/{pipeline.id}/kanban"
+            )
+
+        assert res.status_code == 200
+        body = res.json()
+        cards = [c for col in body["columns"] for c in col["prospects"]]
+        assert cards, "expected a card on the board"
+        leaked = {
+            "status_token",
+            "status_token_created_at",
+            "notes",
+            "date_of_birth",
+            "address_street",
+            "address_city",
+            "address_zip",
+            "metadata_",
+            "interest_reason",
+        } & set(cards[0])
+        assert leaked == set(), f"kanban card exposes private fields: {leaked}"
+        # And it still carries what a card actually renders.
+        assert cards[0]["first_name"] == "Ann"
+        assert "days_in_stage" in cards[0]
+        assert body["truncated"] is False
