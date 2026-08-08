@@ -149,6 +149,12 @@ export const isPastShift = (shift) => {
   return day && day < new Date().toISOString().slice(0, 10);
 };
 
+/** True for a shift still to come — where the assign and edit controls are. */
+export const isFutureShift = (shift) => {
+  const day = shift.shift_date ?? shift.shiftDate ?? "";
+  return day && day > new Date().toISOString().slice(0, 10);
+};
+
 export const SHOTS = [
   // ── 00 Getting Started ──────────────────────────────────────────────
   {
@@ -1718,6 +1724,44 @@ export const SHOTS = [
         isPastShift,
       )(page);
       await clickByName(/log call/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-05-assignment-form",
+    doc: "03-scheduling.md",
+    line: 124,
+    anchor:
+      "Screenshot of the assignment creation form within the Shift Detail Panel, showing",
+    alt: "Assignment form in the shift panel with member and position selectors",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await withQueryFromApi(
+        "/scheduling/shifts?limit=100",
+        "shifts",
+        (shift) => ({ shift: shift.id }),
+        isFutureShift,
+      )(page);
+      await clickByName(/^assign$/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-31-shift-edit-times",
+    doc: "03-scheduling.md",
+    line: 926,
+    anchor:
+      "Screenshot of the ShiftDetailPanel edit form showing correctly localized start and end",
+    alt: "Shift edit form showing start and end times in the department timezone",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await withQueryFromApi(
+        "/scheduling/shifts?limit=100",
+        "shifts",
+        (shift) => ({ shift: shift.id }),
+        isFutureShift,
+      )(page);
+      await clickByName(/edit shift/i)(page);
     },
     fullPage: true,
   },
