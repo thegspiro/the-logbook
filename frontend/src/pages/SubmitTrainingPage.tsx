@@ -125,7 +125,10 @@ const SubmissionForm: React.FC<{
     }
   }, [editSubmission]);
 
-  const fc = config.field_config;
+  // The three helpers below already optional-chain each field's entry, so a
+  // missing per-field config was anticipated — but a response without
+  // field_config at all made every `fc[name]` throw and took the page down.
+  const fc = config.field_config ?? {};
   const isFieldVisible = (name: string) => fc[name]?.visible !== false;
   const isFieldRequired = (name: string) => fc[name]?.required === true;
   const fieldLabel = (name: string, fallback: string) => fc[name]?.label || fallback;

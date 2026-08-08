@@ -170,7 +170,10 @@ export const adminHoursEntryService = {
         end_date: params?.endDate,
       },
     });
-    return response.data;
+    // byCategory is mapped straight into the stat tiles without a check, so a
+    // summary payload lacking it took the whole page down. Nested arrays like
+    // this sit below where the generic asArray boundary guard can reach.
+    return { ...response.data, byCategory: asArray(response.data?.byCategory) };
   },
 
   async getPendingCount(): Promise<number> {
