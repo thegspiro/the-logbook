@@ -11,10 +11,13 @@ const mockPublishTemplate = vi.fn();
 const mockLoadTemplate = vi.fn();
 const mockClearCurrentTemplate = vi.fn();
 
+let currentMockTemplate: Record<string, unknown> | null = null;
+let mockRouteId: string | undefined = undefined;
+
 vi.mock('../stores/skillsTestingStore', () => ({
   useSkillsTestingStore: vi.fn((selector) => {
     const state = {
-      currentTemplate: null,
+      currentTemplate: currentMockTemplate,
       templateLoading: false,
       loadTemplate: mockLoadTemplate,
       createTemplate: mockCreateTemplate,
@@ -30,6 +33,23 @@ vi.mock('../stores/skillsTestingStore', () => ({
   }),
 }));
 
+// The builder loads requirements, positions and the org config on mount. Left
+// unmocked these hit axios and are swallowed by the page's own try/catch, which
+// would silently leave the position list empty.
+const mockGetRoles = vi.fn();
+const mockGetConfig = vi.fn();
+vi.mock('../services/api', () => ({
+  trainingProgramService: {
+    getRequirementsEnhanced: () => Promise.resolve([]),
+  },
+  roleService: {
+    getRoles: () => mockGetRoles() as Promise<unknown>,
+  },
+  trainingModuleConfigService: {
+    getConfig: () => mockGetConfig() as Promise<unknown>,
+  },
+}));
+
 // Mock react-router
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -37,13 +57,17 @@ vi.mock('react-router', async () => {
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useParams: () => ({ id: undefined }),
+    useParams: () => ({ id: mockRouteId }),
   };
 });
 
 describe('SkillTemplateBuilderPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetRoles.mockResolvedValue([]);
+    mockGetConfig.mockResolvedValue({});
+    currentMockTemplate = null;
+    mockRouteId = undefined;
   });
 
   describe('Rendering', () => {
@@ -171,6 +195,138 @@ describe('SkillTemplateBuilderPage', () => {
           name: 'Test Template',
         })
       );
+    });
+  });
+
+  // The per-template override of the department's disclosure policy. Left on
+  // "Inherit" a template follows the organization, so the common case is to
+  // touch nothing here — but the labels have to say what inheriting means.
+  describe('Result disclosure', () => {
+    const fillMinimalTemplate = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.type(screen.getByPlaceholderText(/SCBA Proficiency Evaluation/i), 'T');
+      await user.type(screen.getByPlaceholderText(/section name/i), 'S');
+      await user.type(screen.getByPlaceholderText(/dons scba/i), 'C');
+    };
+
+    const save = async (user: ReturnType<typeof userEvent.setup>) => {
+      const buttons = screen.getAllByRole('button', { name: /save|create template/i });
+      await user.click(buttons[buttons.length - 1] as HTMLElement);
+    };
+
+    it('names the inherited department default in the Inherit option', async () => {
+      mockGetConfig.mockResolvedValue({
+        skills_result_disclosure: 'scores',
+        skills_result_release: 'on_release',
+      });
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      expect(await screen.findByRole('option', { name: /Inherit — Scores only/i })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /Inherit — Only after an officer releases/i })).toBeInTheDocument();
+    });
+
+    it('falls back to the platform default when the org config cannot be read', async () => {
+      mockGetConfig.mockRejectedValue(new Error('nope'));
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      expect(await screen.findByRole('option', { name: /Inherit — Full results/i })).toBeInTheDocument();
+    });
+
+    // Nothing to time when results are never shown at all.
+    it('hides the release question when disclosure is set to nothing', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      expect(screen.getByLabelText(/when they see it/i)).toBeInTheDocument();
+      await user.selectOptions(screen.getByLabelText(/what the member sees/i), 'none');
+
+      expect(screen.queryByLabelText(/when they see it/i)).not.toBeInTheDocument();
+    });
+
+    it('sends null for the fields left on Inherit', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await fillMinimalTemplate(user);
+      await save(user);
+
+      // null rather than undefined: the backend drops unset fields, so an
+      // undefined would leave a previous override in place instead of clearing it.
+      expect(mockCreateTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          result_disclosure: null,
+          result_release: null,
+          result_viewer_positions: null,
+        })
+      );
+    });
+
+    // Deliberately changed *last*, after the rest of the form is filled. The
+    // payload builder is memoized, so setting these first would let unrelated
+    // dependencies rebuild it and mask a missing dependency on these fields.
+    it('sends the chosen overrides', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await fillMinimalTemplate(user);
+      await user.selectOptions(screen.getByLabelText(/what the member sees/i), 'scores');
+      await user.selectOptions(screen.getByLabelText(/when they see it/i), 'on_release');
+      await save(user);
+
+      expect(mockCreateTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          result_disclosure: 'scores',
+          result_release: 'on_release',
+        })
+      );
+    });
+
+    it('sends selected position slugs, not names or ids', async () => {
+      mockGetRoles.mockResolvedValue([
+        { id: 'r1', name: 'Preceptor', slug: 'preceptor' },
+        { id: 'r2', name: 'Captain', slug: 'captain' },
+      ]);
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await fillMinimalTemplate(user);
+      await user.click(await screen.findByRole('checkbox', { name: 'Preceptor' }));
+      await save(user);
+
+      expect(mockCreateTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({ result_viewer_positions: ['preceptor'] })
+      );
+    });
+
+    // Opening an existing template must show the override it actually has, not
+    // "Inherit" — otherwise saving an untouched form would silently clear it.
+    it('hydrates the overrides of the template being edited', async () => {
+      mockRouteId = 'tpl-1';
+      currentMockTemplate = {
+        id: 'tpl-1',
+        name: 'Promotional Evaluation',
+        visibility: 'all_members',
+        require_all_critical: true,
+        sections: [],
+        tags: [],
+        result_disclosure: 'none',
+        result_release: 'on_release',
+        result_viewer_positions: ['preceptor'],
+      };
+      mockGetRoles.mockResolvedValue([{ id: 'r1', name: 'Preceptor', slug: 'preceptor' }]);
+
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      expect(await screen.findByLabelText(/what the member sees/i)).toHaveValue('none');
+      const preceptor = await screen.findByRole('checkbox', { name: 'Preceptor' });
+      expect(preceptor).toBeChecked();
+      // 'none' hides the release question, so its stored value is not rendered.
+      expect(screen.queryByLabelText(/when they see it/i)).not.toBeInTheDocument();
+    });
+
+    it('omits the position picker when the org has no positions to offer', () => {
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      expect(screen.queryByText(/also visible to these positions/i)).not.toBeInTheDocument();
     });
   });
 

@@ -130,9 +130,12 @@ export interface SkillTemplateCreate {
   tags?: string[] | undefined;
   visibility?: TemplateVisibility | undefined;
   requirement_id?: string | undefined;
-  result_disclosure?: ResultDisclosure | undefined;
-  result_release?: ResultRelease | undefined;
-  result_viewer_positions?: string[] | undefined;
+  /** null is meaningful here, not just absent: it says "inherit the department
+   *  default" explicitly, which is how an existing override gets cleared. The
+   *  backend's exclude_unset would drop an undefined and leave the old value. */
+  result_disclosure?: ResultDisclosure | null | undefined;
+  result_release?: ResultRelease | null | undefined;
+  result_viewer_positions?: string[] | null | undefined;
 }
 
 export interface SkillTemplateSectionCreate {
