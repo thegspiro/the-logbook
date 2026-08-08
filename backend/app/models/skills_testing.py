@@ -183,6 +183,15 @@ class SkillTest(Base):
     result = Column(String(20), default="incomplete")
     is_practice = Column(Boolean, default=False)
 
+    # Optimistic-concurrency counter, incremented on every mutation. A client
+    # may send the version it last saw; a mismatch means someone else wrote in
+    # between and the write is refused rather than silently overwriting them.
+    #
+    # An integer rather than updated_at: MySQL DATETIME carries no fractional
+    # seconds by default, so two writes inside the same second compare equal
+    # and the conflict goes undetected.
+    version = Column(Integer, nullable=False, default=1, server_default="1")
+
     # Frozen copy of the template as it stood when this test was created:
     # {version, sections, passing_percentage, require_all_critical,
     #  time_limit_seconds}.

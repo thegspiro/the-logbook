@@ -46,7 +46,9 @@ from app.services.separation_of_duties import (
     assert_different_person,
 )
 from app.services.skills_testing_service import (
+    AttemptLimitReached,
     apply_test_pass_to_pipeline,
+    assert_attempts_remaining,
     build_template_snapshot,
     calculate_test_result,
     resolve_elapsed_seconds,
@@ -762,6 +764,22 @@ async def create_test(
     else:
         requirement_id = template.requirement_id
 
+    # Refuse before the evaluation starts rather than after it is scored. An
+    # examiner who runs a full skills test only to be told at submission that
+    # it cannot count has wasted the candidate's attempt slot and their own
+    # time. Practice attempts are exempt — they are never credited, so they
+    # never consume one.
+    if not test_data.is_practice:
+        try:
+            await assert_attempts_remaining(
+                db=db,
+                candidate_id=str(test_data.candidate_id),
+                requirement_id=requirement_id,
+                organization_id=current_user.organization_id,
+            )
+        except AttemptLimitReached as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     new_test = SkillTest(
         organization_id=current_user.organization_id,
         template_id=str(test_data.template_id),
@@ -922,6 +940,21 @@ async def update_test(
                 detail=f"Cannot update {', '.join(sorted(disallowed))} on a completed test",
             )
 
+    # Optimistic concurrency. Refuse rather than silently overwrite when the
+    # client's copy is stale — two examiners on one test, or an officer editing
+    # the scorecard while a phone still holds unsaved criteria, previously lost
+    # one side's work and returned success to the loser. Clients that send no
+    # expected_version keep the old last-write-wins behavior.
+    expected_version = update_data.pop("expected_version", None)
+    if expected_version is not None and expected_version != test.version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This test was changed elsewhere since you opened it. "
+                "Reload to see the current results before saving again."
+            ),
+        )
+
     # Convert section_results to JSON-serializable dicts if provided
     if "section_results" in update_data and update_data["section_results"] is not None:
         update_data["section_results"] = [
@@ -940,6 +973,8 @@ async def update_test(
 
     for field, value in update_data.items():
         setattr(test, field, value)
+
+    test.version = (test.version or 1) + 1
 
     await db.commit()
     await db.refresh(test)
@@ -1039,6 +1074,21 @@ async def complete_test(
             detail="Associated template not found",
         )
 
+    # Checked again at submission, not only at creation: several tests can be
+    # started before any is completed, so the cap can fall between the two
+    # points. This is what actually protects the credit — completing is where a
+    # pass reaches the pipeline.
+    if not test.is_practice:
+        try:
+            await assert_attempts_remaining(
+                db=db,
+                candidate_id=test.candidate_id,
+                requirement_id=test.requirement_id,
+                organization_id=current_user.organization_id,
+            )
+        except AttemptLimitReached as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     # Score against the structure this test was taken under, not whatever the
     # template says now.
     overall_score, test_result = calculate_test_result(
@@ -1047,6 +1097,7 @@ async def complete_test(
 
     test.status = "completed"
     test.result = test_result
+    test.version = (test.version or 1) + 1
     test.overall_score = overall_score
     test.completed_at = datetime.now(timezone.utc)
 
@@ -1288,6 +1339,7 @@ async def cancel_test(
         )
 
     test.status = SkillTestStatus.CANCELLED.value
+    test.version = (test.version or 1) + 1
     if cancel_data.reason:
         test.notes = (
             f"{test.notes}\n\nCancelled: {cancel_data.reason}"
@@ -1388,6 +1440,7 @@ async def void_test(
     )
 
     test.status = SkillTestStatus.VOIDED.value
+    test.version = (test.version or 1) + 1
     test.voided_at = datetime.now(timezone.utc)
     test.voided_by = str(current_user.id)
     test.void_reason = void_data.reason
@@ -1807,6 +1860,7 @@ def _build_test_response(
         status=test.status,
         result=test.result,
         is_practice=test.is_practice or False,
+        version=test.version or 1,
         section_results=test.section_results,
         overall_score=test.overall_score,
         elapsed_seconds=test.elapsed_seconds,

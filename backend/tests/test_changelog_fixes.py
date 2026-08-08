@@ -853,6 +853,45 @@ class TestAlembicMigrationChain:
             f"found {len(roots)}:\n" + "\n".join(roots)
         )
 
+    def test_exactly_one_head(self):
+        """
+        There should be exactly one head — a revision no other revision
+        names as its parent. ``alembic upgrade head`` has nothing
+        unambiguous to run otherwise, and startup fails.
+
+        This catches a *fork*, which the sibling tests do not: two revisions
+        with distinct ids sharing one parent and no merge revision joining
+        them passes the duplicate-id, dangling-reference, and single-root
+        checks while still leaving the chain unresolvable. Forks arise the
+        same way duplicate ids do — two pull requests open at once, each
+        branching from the same head, each green on its own, colliding only
+        once both are merged.
+        """
+        migrations = self._parse_migration_files()
+        if not migrations:
+            pytest.skip("No migrations found")
+
+        referenced = set()
+        for meta in migrations.values():
+            down_revision = meta["down_revision"]
+            if isinstance(down_revision, list):
+                # Merge revision — names several parents.
+                referenced.update(down_revision)
+            elif down_revision:
+                referenced.add(down_revision)
+
+        heads = [
+            f"{meta['filename']} (rev: {rev})"
+            for rev, meta in migrations.items()
+            if rev not in referenced
+        ]
+
+        assert len(heads) == 1, (
+            f"Expected exactly 1 head revision, found {len(heads)}. "
+            f"Add a merge revision joining them, or rebase one onto the "
+            f"other:\n" + "\n".join(sorted(heads))
+        )
+
 
 # ===========================================================================
 # 9. Model Import Completeness

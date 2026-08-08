@@ -242,6 +242,108 @@ def calculate_test_result(
     return overall_score, test_result
 
 
+class AttemptLimitReached(Exception):
+    """Raised when a candidate has used every attempt a requirement allows."""
+
+
+async def assert_attempts_remaining(
+    db: AsyncSession,
+    candidate_id: str,
+    requirement_id: str | None,
+    organization_id: UUID,
+) -> None:
+    """Guard a requirement's ``max_attempts`` cap for skills tests.
+
+    A passing skills test completes its linked pipeline requirement, so the cap
+    has to hold here too — otherwise a candidate capped at two attempts can be
+    tested a third time and have the pass credited, while the officer-entered
+    knowledge-test path (``update_requirement_progress``) refuses the same
+    thing. This mirrors that check: attempts already spent, the cap, and an
+    exemption once the requirement is satisfied.
+
+    An attempt is a *completed*, official, non-voided test against this
+    requirement — pass or fail, because a failure is an attempt. Voided results
+    are excluded: the department withdrew them, so they should not consume a
+    candidate's remaining chances. Tests still in progress do not count, which
+    means the test currently being completed is not counted against itself.
+
+    Callers must skip practice attempts before calling — they are never
+    recorded or credited, so they never consume an attempt.
+
+    Raises:
+        AttemptLimitReached: when no attempts remain.
+    """
+    if not requirement_id:
+        return
+
+    from sqlalchemy import func, select
+
+    from app.models.skills_testing import SkillTest, SkillTestStatus
+    from app.models.training import (
+        EnrollmentStatus,
+        ProgramEnrollment,
+        RequirementProgress,
+        RequirementProgressStatus,
+        TrainingRequirement,
+    )
+
+    requirement = (
+        await db.execute(
+            select(TrainingRequirement).where(
+                TrainingRequirement.id == str(requirement_id)
+            )
+        )
+    ).scalar_one_or_none()
+
+    max_attempts = getattr(requirement, "max_attempts", None) if requirement else None
+    if not max_attempts:
+        return
+
+    # Already satisfied — nothing to ration. Matches the knowledge-test path,
+    # and keeps recertification testing possible for a completed requirement.
+    satisfied = (
+        await db.execute(
+            select(func.count(RequirementProgress.id))
+            .join(
+                ProgramEnrollment,
+                RequirementProgress.enrollment_id == ProgramEnrollment.id,
+            )
+            .where(
+                ProgramEnrollment.user_id == str(candidate_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                RequirementProgress.requirement_id == str(requirement_id),
+                RequirementProgress.status.in_(
+                    [
+                        RequirementProgressStatus.COMPLETED,
+                        RequirementProgressStatus.VERIFIED,
+                        RequirementProgressStatus.WAIVED,
+                    ]
+                ),
+            )
+        )
+    ).scalar() or 0
+    if satisfied:
+        return
+
+    spent = (
+        await db.execute(
+            select(func.count(SkillTest.id)).where(
+                SkillTest.organization_id == str(organization_id),
+                SkillTest.candidate_id == str(candidate_id),
+                SkillTest.requirement_id == str(requirement_id),
+                SkillTest.is_practice == False,  # noqa: E712
+                SkillTest.status == SkillTestStatus.COMPLETED.value,
+            )
+        )
+    ).scalar() or 0
+
+    if spent >= max_attempts:
+        raise AttemptLimitReached(
+            f"Maximum attempts ({max_attempts}) reached for this requirement. "
+            f"Practice attempts are still available and are never recorded."
+        )
+
+
 async def apply_test_pass_to_pipeline(
     db: AsyncSession,
     candidate_id: str,

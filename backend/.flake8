@@ -22,6 +22,11 @@ ignore =
 per-file-ignores =
     # Allow unused imports in __init__.py
     __init__.py:F401
+    # alembic/env.py imports every model for its side effect: importing a model
+    # module registers its table on Base.metadata, which is what autogenerate
+    # diffs the database against. They are unused by definition — dropping one
+    # silently removes a table from autogenerate's view.
+    env.py:F401
     # seed_test_users.py keeps a hand-aligned data table (inside a `# fmt: off`
     # block) for readability; ignore the column-alignment spacing codes for it.
     seed_test_users.py:E241,E231

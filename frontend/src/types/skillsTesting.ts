@@ -168,6 +168,8 @@ export interface SkillTest {
   status: SkillTestStatus;
   result: TestResult;
   is_practice: boolean;
+  /** Optimistic-concurrency counter; send back as expected_version on write. */
+  version: number;
   section_results: SectionResult[];
   /** Overall score as a percentage (0-100) */
   overall_score?: number | undefined;
@@ -206,6 +208,9 @@ export interface SkillTestUpdate {
   notes?: string;
   result?: TestResult;
   requirement_id?: string | null;
+  /** The version last seen. A stale value is refused with 409 rather than
+   *  silently overwriting whoever wrote in between. */
+  expected_version?: number;
 }
 
 // ==================== Summary / List Types ====================

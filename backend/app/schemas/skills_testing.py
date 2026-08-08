@@ -179,6 +179,10 @@ class SkillTestUpdate(BaseModel):
     notes: Optional[str] = None
     result: Optional[str] = None
     requirement_id: Optional[UUID] = None
+    # Optimistic concurrency: the version the client last saw. Omit to keep the
+    # previous last-write-wins behavior; send it to be refused with 409 rather
+    # than silently overwriting a concurrent edit.
+    expected_version: Optional[int] = None
 
 
 class SkillTestCancelRequest(BaseModel):
@@ -214,6 +218,8 @@ class SkillTestResponse(UTCResponseBase):
     status: str
     result: str
     is_practice: bool = False
+    # Optimistic-concurrency counter; send it back as expected_version on write.
+    version: int = 1
     section_results: Optional[list] = None
     overall_score: Optional[float] = None
     elapsed_seconds: Optional[int] = None
