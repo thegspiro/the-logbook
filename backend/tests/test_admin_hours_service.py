@@ -236,5 +236,58 @@ class TestOrgScopedQueries:
         assert "organization_id" in str(captured["stmt"])
 
 
+class TestBulkApproveSeparationOfDuties:
+    """AH-4: the bulk-approve path must honor the same no-self-approval control
+    the single-entry path enforces, or an officer with admin_hours.manage could
+    self-credit at scale by bulk-approving their own PENDING entries."""
+
+    @staticmethod
+    def _pending(entry_id, user_id):
+        return SimpleNamespace(
+            id=entry_id,
+            organization_id="org-1",
+            user_id=user_id,
+            status=AdminHoursEntryStatus.PENDING,
+            approved_by=None,
+            approved_at=None,
+        )
+
+    async def test_self_owned_entries_are_skipped(self):
+        approver = "officer-1"
+        own = self._pending("e-own", approver)
+        other = self._pending("e-other", "member-2")
+        db = _db([_one(own), _one(other)])
+
+        count = await AdminHoursService(db).bulk_approve(
+            entry_ids=["e-own", "e-other"],
+            organization_id="org-1",
+            approver_id=approver,
+        )
+
+        assert count == 1
+        # Self-owned entry left untouched for another approver.
+        assert own.status == AdminHoursEntryStatus.PENDING
+        assert own.approved_by is None
+        # Another member's entry is approved as before.
+        assert other.status == AdminHoursEntryStatus.APPROVED
+        assert other.approved_by == approver
+
+    async def test_batch_of_only_self_entries_approves_nothing(self):
+        approver = "officer-1"
+        own_a = self._pending("e-a", approver)
+        own_b = self._pending("e-b", approver)
+        db = _db([_one(own_a), _one(own_b)])
+
+        count = await AdminHoursService(db).bulk_approve(
+            entry_ids=["e-a", "e-b"],
+            organization_id="org-1",
+            approver_id=approver,
+        )
+
+        assert count == 0
+        assert own_a.status == AdminHoursEntryStatus.PENDING
+        assert own_b.status == AdminHoursEntryStatus.PENDING
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Admin hours: bulk approval can no longer be used to approve your own hours (2026-08-08)
+
+**Fixed**
+
+- **The "approve selected" action skipped the no-self-approval rule.** Approving a
+  single pending entry already blocked an officer from approving their own logged
+  hours (someone else has to sign off). The bulk "approve selected" action didn't
+  apply that rule, so an officer could approve their own hours in a batch. Bulk
+  approval now leaves your own entries pending for another approver and only
+  approves other members' entries.
+
+### Grants: awarding a grant or completing a compliance task no longer errors (2026-08-08)
+
+**Fixed**
+
+- **Marking a grant application "awarded" could fail with a server error** when the
+  reporting frequency was set in the same save — the automatic performance-report
+  tasks are generated at that moment and hit the error before saving cleanly. This
+  now completes and generates the reports as intended.
+- **Completing a grant compliance task could fail with a server error** when the
+  task type was changed in the same save. Completing a task now works reliably.
+
 ### Prospective members: the applicant detail view now shows the pipeline name (2026-08-06)
 
 **Fixed**

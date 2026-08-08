@@ -52,8 +52,8 @@ from its open list.
 | B11 | notifications | NOTIF2 | ✅ (p1, p2) |
 | B12 | integrations | INT2 | ✅ (p1, p2) |
 | B13 | forms | FORM2 | ✅ |
-| B14 | grants & fundraising | GF2 | ⬜ |
-| B15 | admin-hours | AH2 | ⬜ |
+| B14 | grants & fundraising | GF2 | ✅ (p1, p2) |
+| B15 | admin-hours | AH2 | ✅ (p1, p2) |
 | B16 | reports & analytics | RPT2 | ⬜ |
 | B17 | events | EV2 | ⬜ |
 | B18 | training | TR2 | ⬜ |
@@ -1005,4 +1005,32 @@ re-run unless directed).
   avoid breaking the builder's two-phase save. Gate: flake8/black clean, 9
   `TestIsEmptyValue` unit tests pass. See forms.md → Pass 2. Next: B14 grants &
   fundraising.
+- **B14 grants & fundraising ✅ (pass 2).** Re-verified pass-1 GF-6 FK validations
+  (pledge/event/application create+update). The six-lens sweep found **3 fixes**, all
+  in `grant_service.py`'s compliance-task paths (a corner pass-1's finding-focused
+  review didn't reach): **GF-10** (MED latent-500 — `update_application` calls
+  `_generate_compliance_tasks` before refresh, so `reporting_frequency` is still the
+  plain-str Literal; line 390 read `.value` on it → AttributeError → uncaught 500
+  when awarding a grant; routed through `_status_value`), **GF-11** (MED latent-500 —
+  same shape completing a compliance task: `task.task_type.value` on a plain str;
+  `_status_value`), **GF-12** (LOW XC-1 — `update_compliance_task` stored a client
+  `assigned_to` via blind setattr with no in-org check; added `assert_in_org(User,
+  allow_none=True)` matching the application path). Lenses 2/3/4/5 clean (every
+  sub-resource resolves through an org-scoped GrantApplication join; `*_name` are
+  real columns). GF-7/8/9 stay flagged. **3 regression tests** added; 23 passed.
+  flake8/black clean. Two user-visible 500→success fixes in CHANGELOG. See
+  grants-fundraising.md → Pass 2. Next: B15 admin-hours.
+- **B15 admin-hours ✅ (pass 2).** Re-verified pass-1 (AH-1/2/4 single-entry SoD,
+  AH-5's three org-scoped queries). The sweep found **1 HIGH fix — AH-6:** the
+  single-entry approve enforces `assert_different_person` ("the entire control"),
+  but `bulk_approve` (`POST /entries/bulk-approve`, same permission) approved each
+  entry with no actor-vs-subject check — and since manual entries are always created
+  PENDING, an officer could self-credit at scale by bulk-approving their own
+  entries, defeating AH-1+AH-4. Fixed: the loop skips self-owned entries (they stay
+  PENDING for another approver) and logs the skipped count. Lenses 1–4 clean.
+  **Flagged (LOW):** malformed `start_date`/`end_date` query params `fromisoformat`-
+  parsed outside try/except → 500 instead of 400 on 4 endpoints (module-wide
+  robustness nit, module-doc only). **2 regression tests** (mixed batch skips self;
+  all-self approves nothing). flake8/black clean. User-visible SoD fix in CHANGELOG.
+  See admin-hours.md → Pass 2. Next: B16 reports & analytics.
 </content>

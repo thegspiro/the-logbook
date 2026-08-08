@@ -1,6 +1,7 @@
-# Application Review — Admin Hours (Tier B, 2nd pass)
+# Application Review — Admin Hours (Tier B)
 
-**Prefix:** `AH2` · **Iteration:** B15 · **Reviewed:** 2026-08-06
+**Prefix:** `AH2` · **Iteration:** B15 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** `endpoints/admin_hours.py` (1,042 L, 27 endpoints),
 `services/admin_hours_service.py` (1,545 L), model `models/admin_hours.py`
@@ -10,6 +11,47 @@ self-credit), AH-2 (cross-tenant stale-session mutation), AH-3, AH-4 (SoD) fixed
 AH-5 (minor scoping omissions, flagged not-exploitable) left open.
 
 ---
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified the pass-1 fixes hold (AH-1 self-credit, AH-2 stale-session, AH-4 SoD
+on the single-entry approve, AH-5's three org-scoped internal queries). The
+six-lens sweep found **the single-entry AH-4 control had a sibling path that
+bypassed it** — a genuine escalation the pass-1 finding-by-finding review missed.
+
+### AH-6 — HIGH — Bulk-approve bypassed the AH-4 self-approval control — ✅ FIXED
+
+`approve_or_reject` calls `assert_different_person(approver_id, entry.user_id)` on
+approve — its own comment calls forbidding self-approval "the entire control,"
+because officers hold `admin_hours.manage` over the very pool they log hours into.
+But `bulk_approve` (`POST /entries/bulk-approve`, same permission) looped over the
+entry ids and approved each with **no actor-vs-subject check**. Since
+`create_manual_entry` always forces `status=PENDING`, an officer could create
+their own manual entries and self-approve them in bulk — fully defeating AH-1+AH-4
+at scale. **Fix:** the loop now skips entries the approver owns (they stay
+`PENDING` for a different approver) rather than aborting the whole batch on one
+self-owned id, and logs the skipped count for audit. 2 regression tests: a mixed
+batch approves only the other member's entry (self-owned stays pending), and an
+all-self batch approves nothing.
+
+**Lenses clean:** 1 (update loops — `AdminHoursCategoryUpdate`/event-mapping
+schemas expose no FK; `edit_pending_entry` re-validates `category_id` in-org), 2
+(no relationship name projected), 3 (every admin by-id op filters
+`organization_id`; clock-out is user-scoped, one org per user), 4 (no
+join-derived `*_name`).
+
+**Flagged (LOW, unchanged):** the `start_date`/`end_date` query params on four
+list/export/summary endpoints are `datetime.fromisoformat`-parsed outside any
+try/except, so a malformed value yields a `500` instead of a `400` — a
+module-wide status-code robustness gap, not a tenancy/integrity bug; recorded
+here for a future robustness sweep (not a product decision, so not mirrored to
+`KNOWN_LIMITATIONS.md`). Also noted: `edit_pending_entry` recomputes duration but
+(unlike create) doesn't re-run the future/24h/overlap guards — integrity holds
+because the entry stays `PENDING` under AH-4, so it's a parity nit, not a hole.
+
+---
+
+## Pass 1 (2026-08-06)
 
 ## Scope
 
