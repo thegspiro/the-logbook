@@ -61,7 +61,7 @@ from its open list.
 | B20 | finance | FIN2 | ✅ (p1, p2) |
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2) |
 | B22 | compliance & skills | CS2 | ✅ (p1, p2) |
-| B23 | security, audit & IP | SEC2 | 🔄 |
+| B23 | security, audit & IP | SEC2 | ✅ (p1, p2) |
 | B24 | core infra | CI2 | ⬜ |
 | B25 | onboarding | ONB2 | ⬜ |
 | B26 | public-portal | PP2 | ⬜ |
@@ -1148,4 +1148,19 @@ re-run unless directed).
   re-validated; org-scoped; handle_service_errors). **3 DB-free regression tests**
   (self-scoring guard). flake8/black clean. Both fixes user-visible in CHANGELOG.
   See compliance-skills.md → Pass 2. Next: B23 security, audit & IP.
+- **B23 security, audit & IP ✅ (pass 2).** Re-verified this exhaustively-hardened
+  surface (SEC-2 tail-truncation cross-check intact; SEC-1–9 hold; IP-rule mutations
+  org-scoped; helpers fail closed; tracking caps enforced). **1 fix — SEC-10** (LOW:
+  `GET /audit-log/entries` + `/audit-log/export` in `security_monitoring.py` scoped
+  tenancy with a `user_id IN (SELECT users.id WHERE org=…)` subquery under a **false
+  comment** that "AuditLog has no organization_id column" — it does, and the
+  canonical `audit_logs.py` filters on it. The subquery dropped org-stamped system
+  rows (NULL user_id) and resolved membership from the user's *current* org rather
+  than the row's write-time stamp, so a reassigned user could surface their old
+  org's audit rows. Switched both to the canonical `AuditLog.organization_id` filter;
+  removed the false comment). Narrow practical exposure (cross-org reassignment isn't
+  a normal flow), hence LOW. Confirmed by-design: chain-level `/status` stats and
+  org-agnostic IP block data. **2 compiled-SQL regression tests**. flake8/black
+  clean. See security-audit-ip.md → Pass 2. **B19–B23 complete — 23 of 27 Tier B
+  modules through pass 2.** Next: B24 core infra.
 </content>

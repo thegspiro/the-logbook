@@ -1,6 +1,7 @@
 # Application Review — Security / Audit / IP (Tier B, 2nd pass)
 
-**Prefix:** `SEC2` · **Iteration:** B23 · **Reviewed:** 2026-08-06
+**Prefix:** `SEC2` · **Iteration:** B23 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** `endpoints/security_monitoring.py` + `services/security_monitoring.py`,
 `endpoints/ip_security.py` + `services/ip_security_service.py`,
@@ -10,6 +11,42 @@
 (DoS caps), SEC-3/4/5, SEC-6 (security_alerts global table), SEC-7 (audit-chain
 admin ops), SEC-8 (geo-block fail-open), SEC-9 fixed; SEC-2 head-truncation fixed
 with the **tail-truncation checkpoint cross-check flagged**.
+
+---
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified this exhaustively-hardened surface: SEC-2 tail-truncation cross-check
+intact and correct (fires only on full-chain verify; no false positive on
+append-only or retention purge); SEC-1–9 spot-checks hold; every IP-rule mutation
+resolves its target org-scoped before mutating (XC-3 clean); integrity/verify
+helpers fail closed; in-memory tracking caps enforced. **1 fix.**
+
+### SEC-10 — LOW — Audit-log entries/export scoped by a user-id subquery, not the org column — ✅ FIXED
+
+`GET /audit-log/entries` and `/audit-log/export` (`security_monitoring.py`) scoped
+tenancy with `AuditLog.user_id IN (SELECT users.id WHERE organization_id = …)`
+under a comment asserting **"AuditLog has no organization_id column."** It does
+(`models/audit.py:73`, indexed), and the canonical `audit_logs.py` filters on it
+directly. The subquery form diverged two ways: it **dropped org-stamped system
+rows** (`user_id IS NULL`, e.g. scheduled jobs) that the column filter includes,
+and it resolved membership from the user's **current** org rather than the row's
+**write-time** `organization_id` stamp — so a user reassigned between orgs could
+surface their old org's audit rows to the new org's admin. **Fix:** both endpoints
+now use the canonical `AuditLog.organization_id == caller-org` filter and the false
+comment is removed. Narrow practical exposure (cross-org user reassignment isn't a
+normal flow here), hence LOW, but it aligns the two endpoints with the audit
+module's source-of-truth scoping. 2 compiled-SQL regression tests (both queries
+filter the org column, neither joins `users`).
+
+### Confirmed by-design (not bugs)
+
+`/audit-log/status` and the integrity endpoint return **chain-level** stats
+(global first/last id, counts) for the deliberately shared cross-org hash chain —
+the only per-row datum exposed is the newest entry's `event_type` string;
+`ip_security` blocked-attempts / blocked-countries are genuinely org-agnostic
+edge-security data (the block happens pre-auth, before any org is known). Both
+match pass-1/iteration-23's accepted design.
 
 ---
 
