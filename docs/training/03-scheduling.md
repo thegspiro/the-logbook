@@ -64,8 +64,7 @@ Click on any shift to open the **Shift Detail Panel** with full information, att
 > **Screenshot placeholder:**
 > _[Screenshot of the month calendar view showing several shifts across different days, with color coding for different shift types (e.g., Day shift in blue, Night shift in purple). Include the week/month toggle buttons]_
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Shift Detail Panel (slide-out drawer) showing shift details at the top (date, time, type, apparatus), an attendance list with check-in/out times, and action buttons (Edit Shift, Add Attendance)]_
+![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
 
 ---
 

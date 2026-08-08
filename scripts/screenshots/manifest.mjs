@@ -1659,4 +1659,23 @@ export const SHOTS = [
     route: "/training/shift-reports",
     fullPage: true,
   },
+
+  // ── Seventh batch: shift detail panel ──────────────────────────────
+  {
+    id: "03-02-shift-detail-panel",
+    doc: "03-scheduling.md",
+    line: 67,
+    anchor:
+      "Screenshot of the Shift Detail Panel (slide-out drawer) showing shift details at",
+    alt: "Shift detail panel with the crew roster and shift information",
+    route: "/scheduling",
+    prepare: withQueryFromApi(
+      "/scheduling/shifts?limit=20",
+      "shifts",
+      (shift) => ({
+        shift: shift.id,
+      }),
+    ),
+    fullPage: true,
+  },
 ];

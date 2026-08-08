@@ -27,6 +27,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from http.cookiejar import CookieJar
 from time import sleep
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from bootstrap_demo import DEMO_ADMIN_PASSWORD, DEMO_ADMIN_USERNAME
 
@@ -41,6 +42,10 @@ DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 RSVP_CLOSED = re.compile(
     r"deadline has passed|already ended|no longer accepting", re.IGNORECASE
 )
+
+# The demo organization's timezone, which the UI renders in. Clock times in the
+# seed data are local to it and converted on the way out.
+ORG_TIMEZONE = ZoneInfo("America/New_York")
 
 # Named because the seeder has to find this one again on a later run to keep it
 # current — see seed_events.
@@ -712,16 +717,21 @@ class Seeder:
                 # timestamps — a bare "07:00" is rejected. A shift whose end
                 # time is earlier than its start crosses midnight, so its end
                 # lands on the following day.
+                #
+                # The clock times above are *local* to the department, and the
+                # UI renders in the organization's timezone. Building them as
+                # UTC put a "07:00" day shift on screen as 3:00 AM, which reads
+                # as nonsense on a fire department roster.
                 start_at = datetime.combine(
                     TODAY + timedelta(days=offset),
                     time.fromisoformat(start),
-                    tzinfo=timezone.utc,
-                )
+                    tzinfo=ORG_TIMEZONE,
+                ).astimezone(timezone.utc)
                 end_at = datetime.combine(
                     TODAY + timedelta(days=offset + (1 if end <= start else 0)),
                     time.fromisoformat(end),
-                    tzinfo=timezone.utc,
-                )
+                    tzinfo=ORG_TIMEZONE,
+                ).astimezone(timezone.utc)
                 payload = {
                     "shift_date": shift_date,
                     "start_time": iso(start_at),
