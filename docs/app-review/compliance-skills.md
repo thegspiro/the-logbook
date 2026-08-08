@@ -1,6 +1,7 @@
-# Application Review — Compliance / Skills (Tier B, 2nd pass)
+# Application Review — Compliance / Skills (Tier B)
 
-**Prefix:** `CS2` · **Iteration:** B22 · **Reviewed:** 2026-08-06
+**Prefix:** `CS2` · **Iteration:** B22 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** `endpoints/skills_testing.py` + `skills_testing_service.py`,
 `endpoints/compliance_officer.py` + `compliance_officer_service.py` +
@@ -9,6 +10,53 @@
 **Prior audit:** `docs/module-audit/compliance-skills.md` (iteration 22) — CS-1–7
 fixed; CS-8 (skills self-cert fixed; attestation SoD open); CS-9 (injection +
 input-validation fixed; monthly-window + recipient allow-list + officer #6 open).
+
+---
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified pass-1 (CS-9 officer #6 UUID normalization; CS-8 skills self-cert
+`assert_different_person` on `create_test`; config/profile FK re-validation on
+update). **2 fixes.**
+
+### CS-10 — MED — A candidate could score & complete their OWN official skills test — ✅ FIXED
+
+`create_test` enforces `assert_different_person(examiner, candidate)` — an
+instructor can't create a test where they're the candidate. But the **scoring**
+mutations (`PUT /tests/{id}` = `update_test`, `POST /tests/{id}/complete` =
+`complete_test`) authorize only through `_authorize_test_write`, which returns
+early for anyone with `training.manage` and **never checked actor ≠ candidate**.
+Officers routinely hold `training.manage` *and* get tested for higher certs — so
+officer B, named candidate on a test officer A created, could enter their own
+`section_results` and complete it, self-crediting the linked pipeline/cert
+requirement. The guard's own docstring already states "a candidate gets no write
+access," so this was a bypass, not a design choice. **Fix:** `_authorize_test_write`
+now blocks a non-practice test whose `candidate_id == actor` **before** the officer
+short-circuit (practice stays exempt — uncredited peer drills). The two callers are
+exactly the credit-granting mutations, so nothing else is over-blocked. 3 DB-free
+regression tests.
+
+### CS-11 — LOW — Compliance report always reported 0 at-risk / 0 non-compliant — ✅ FIXED
+
+`generate_annual_report` computes each member's `status`
+(`compliant`/`at_risk`/`non_compliant`) but its `executive_summary` emitted only
+`fully_compliant_members`. The consumer (`compliance_config_service`) reads
+`exec_summary.get("at_risk_members", 0)` / `("non_compliant_members", 0)` — so the
+stored report **and its email** always showed **0** at-risk and **0** non-compliant,
+silently understating risk (the `.get(..., 0)` prevented a crash, so it went
+unnoticed). **Fix:** aggregate the per-member statuses and emit both keys in
+`executive_summary`. Verified by inspection against the already-tested consumer
+path; the aggregation is a straight `sum(... == "at_risk")` over `member_compliance`.
+
+**Flagged (unchanged, deferred):** CS-8 attestation SoD / dual-control
+(`create_attestation` writes a client `compliance_percentage`, bound-only, no
+recompute/second-approver), CS-9 recipient allow-list (report email accepts
+arbitrary external addresses — PHI-adjacent), CS-9 monthly windowing (monthly
+report reuses the full-year dataset, mislabeled). Lenses 1/3/4 clean:
+`SkillTestUpdate` exposes no `candidate_id`/`examiner_id`/`template_id` (blind
+setattr can't reassign FKs); the one updatable FK (`requirement_id`) is re-validated
+on update; every read/write org-scoped; endpoints wrap service calls in
+`handle_service_errors` (ValueError→400).
 
 ---
 

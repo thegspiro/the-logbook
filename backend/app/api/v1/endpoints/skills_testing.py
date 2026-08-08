@@ -108,6 +108,17 @@ def _authorize_test_write(test: SkillTest, user: User) -> None:
     attempt: they are being evaluated in it, so letting them edit criteria would
     make the record self-scored.
     """
+    # SoD: the candidate must never score or complete their OWN official test —
+    # even an officer who holds training.manage. create_test already blocks
+    # examiner==candidate; this closes the same self-credit hole on the scoring
+    # path (update_test / complete_test are the only callers of this guard).
+    # Practice attempts are exempt: they are uncredited and self-drilling is the
+    # point, so this check must run before the officer short-circuit below.
+    if not test.is_practice and test.candidate_id == str(user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot score or complete your own evaluation",
+        )
     if _can_manage_tests(user):
         return
     if test.is_practice and test.examiner_id == str(user.id):

@@ -60,7 +60,7 @@ from its open list.
 | B19 | scheduling | SCH2 | ✅ (p1, p2) |
 | B20 | finance | FIN2 | ✅ (p1, p2) |
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2) |
-| B22 | compliance & skills | CS2 | 🔄 |
+| B22 | compliance & skills | CS2 | ✅ (p1, p2) |
 | B23 | security, audit & IP | SEC2 | 🔄 |
 | B24 | core infra | CI2 | ⬜ |
 | B25 | onboarding | ONB2 | ⬜ |
@@ -1132,4 +1132,20 @@ re-run unless directed).
   noted. **2 regression tests** (create + update reject a foreign fiscal year).
   flake8/black clean. No user-visible change. See finance.md → Pass 2. Next: B22
   compliance & skills.
+- **B22 compliance & skills ✅ (pass 2).** Re-verified CS-8/9 pass-1. **2 fixes:**
+  CS-10 (MED SoD: `create_test` blocks examiner==candidate, but the scoring
+  mutations `update_test`/`complete_test` authorize only via `_authorize_test_write`,
+  which short-circuits on `training.manage` and never checked actor≠candidate — so
+  an officer-candidate could score & complete their *own* official test and
+  self-credit the linked requirement. Added a candidate≠actor block before the
+  officer short-circuit, non-practice only; the two callers are exactly the
+  credit-granting mutations), CS-11 (LOW correctness: `generate_annual_report`
+  computed each member's status but `executive_summary` omitted `at_risk_members`/
+  `non_compliant_members`, so the report + email always showed 0 — silent risk
+  understatement; aggregate and emit both keys). **Flagged (deferred):** CS-8
+  attestation SoD, CS-9 recipient allow-list + monthly windowing. Lenses 1/3/4 clean
+  (SkillTestUpdate exposes no candidate/examiner/template FK; requirement_id
+  re-validated; org-scoped; handle_service_errors). **3 DB-free regression tests**
+  (self-scoring guard). flake8/black clean. Both fixes user-visible in CHANGELOG.
+  See compliance-skills.md → Pass 2. Next: B23 security, audit & IP.
 </content>

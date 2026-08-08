@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Compliance & skills: no self-scoring on evaluations; reports count risk correctly (2026-08-08)
+
+**Fixed**
+
+- **A member could score and complete their own official skills evaluation.** The
+  rule that an examiner can't test themselves was enforced when a test was created
+  but not when it was scored — so an officer named as the candidate on their own
+  test could enter their own results and mark it complete. Scoring and completing a
+  test now blocks the candidate from doing it to their own official evaluation
+  (practice drills are unaffected).
+- **The annual compliance report and its email always showed 0 at-risk and 0
+  non-compliant members**, even when members were behind. The report now reports the
+  correct counts.
+
 ### Scheduling: looking up an apparatus's active shift no longer errors (2026-08-08)
 
 **Fixed**
