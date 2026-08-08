@@ -70,6 +70,7 @@ interface SkillsTestingState {
   discardPracticeTest: (id: string) => Promise<void>;
   voidTest: (id: string, reason: string) => Promise<SkillTest>;
   cancelTest: (id: string, reason?: string) => Promise<SkillTest>;
+  releaseTest: (id: string) => Promise<SkillTest>;
   emailTestResults: (id: string) => Promise<string>;
 
   // Active test session actions
@@ -328,6 +329,24 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
       return voided;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to void test');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
+  releaseTest: async (id: string) => {
+    set({ error: null });
+    try {
+      const released = await skillsTestingService.releaseTest(id);
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.map((t: SkillTestListItem) =>
+          t.id === id ? { ...t, released_at: released.released_at } : t
+        ),
+        currentTest: state.currentTest?.id === id ? released : state.currentTest,
+      }));
+      return released;
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to release results');
       set({ error: msg });
       throw err;
     }
