@@ -869,6 +869,17 @@ export type TrainingRequirementEnhanced = TrainingRequirement;
 
 export type TrainingRequirementEnhancedCreate = TrainingRequirementCreate;
 
+/**
+ * When a program warns an enrolled member about their completion deadline.
+ * `days_before_deadline` defaults to the program's own `warning_days_before`
+ * plus 14- and 7-day follow-ups; `send_if_below_percentage` suppresses the
+ * warning for members already at or above that completion mark.
+ */
+export interface ReminderConditions {
+  days_before_deadline?: number[] | undefined;
+  send_if_below_percentage?: number | undefined;
+}
+
 // Training Program
 export interface TrainingProgram {
   id: string;
@@ -884,11 +895,7 @@ export interface TrainingProgram {
   allows_concurrent_enrollment: boolean;
   time_limit_days?: number;
   warning_days_before: number;
-  reminder_conditions?: {
-    milestone_threshold?: number;
-    days_before_deadline?: number;
-    send_if_below_percentage?: number;
-  };
+  reminder_conditions?: ReminderConditions;
   is_template: boolean;
   active: boolean;
   recert_enabled: boolean;
@@ -911,13 +918,7 @@ export interface TrainingProgramCreate {
   allows_concurrent_enrollment?: boolean | undefined;
   time_limit_days?: number | undefined;
   warning_days_before?: number | undefined;
-  reminder_conditions?:
-    | {
-        milestone_threshold?: number | undefined;
-        days_before_deadline?: number | undefined;
-        send_if_below_percentage?: number | undefined;
-      }
-    | undefined;
+  reminder_conditions?: ReminderConditions | undefined;
   is_template?: boolean | undefined;
   recert_enabled?: boolean | undefined;
   recert_interval_months?: number | undefined;
@@ -997,6 +998,7 @@ export interface TrainingProgramUpdate {
   structure_type?: ProgramStructureType | undefined;
   time_limit_days?: number | undefined;
   warning_days_before?: number | undefined;
+  reminder_conditions?: ReminderConditions | undefined;
   is_template?: boolean | undefined;
   active?: boolean | undefined;
   recert_enabled?: boolean | undefined;
@@ -1010,6 +1012,8 @@ export interface ProgramPhaseUpdate {
   description?: string | undefined;
   time_limit_days?: number | undefined;
   requires_manual_advancement?: boolean | undefined;
+  /** Phases in the same program that must be finished before this one opens. */
+  prerequisite_phase_ids?: string[] | undefined;
 }
 
 export interface ProgramMilestoneUpdate {
@@ -1158,6 +1162,12 @@ export interface MemberProgramProgress {
   next_milestones: ProgramMilestone[];
   time_remaining_days?: number;
   is_behind_schedule: boolean;
+  /**
+   * Requirement id -> names of the prerequisites still blocking it. Present so
+   * a gated step can be greyed out with the reason instead of being offered and
+   * then refused by the API.
+   */
+  locked_requirements?: Record<string, string[]>;
 }
 
 export interface RegistryImportResult {

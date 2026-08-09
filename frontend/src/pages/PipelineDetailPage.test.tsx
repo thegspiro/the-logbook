@@ -333,6 +333,83 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     expect(await screen.findByRole('button', { name: 'Optional' })).toBeInTheDocument();
   });
 
+  it('marks a requirement as the one to do first', async () => {
+    const phase1 = {
+      id: 'ph-1',
+      program_id: 'prog-1',
+      phase_number: 1,
+      name: 'Basics',
+      requires_manual_advancement: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockGetProgramPhases.mockResolvedValue([phase1]);
+    mockGetProgramRequirements.mockResolvedValue([
+      {
+        id: 'pr-1',
+        program_id: 'prog-1',
+        phase_id: 'ph-1',
+        requirement_id: 'req-1',
+        is_required: true,
+        is_prerequisite: false,
+        sort_order: 0,
+        created_at: '2026-01-01T00:00:00Z',
+        requirement: { id: 'req-1', name: 'Orientation', requirement_type: 'checklist' },
+      },
+    ]);
+    mockUpdateProgramRequirement.mockResolvedValue({
+      id: 'pr-1',
+      program_id: 'prog-1',
+      phase_id: 'ph-1',
+      requirement_id: 'req-1',
+      is_required: true,
+      is_prerequisite: true,
+      sort_order: 0,
+      created_at: '2026-01-01T00:00:00Z',
+    });
+
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Any order/ }));
+
+    await waitFor(() =>
+      expect(mockUpdateProgramRequirement).toHaveBeenCalledWith('prog-1', 'pr-1', {
+        is_prerequisite: true,
+      })
+    );
+    expect(await screen.findByRole('button', { name: /Do this first/ })).toBeInTheDocument();
+  });
+
+  it('says which phases gate a phase that has prerequisites', async () => {
+    mockGetProgramPhases.mockResolvedValue([
+      {
+        id: 'ph-1',
+        program_id: 'prog-1',
+        phase_number: 1,
+        name: 'Classroom',
+        requires_manual_advancement: false,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'ph-2',
+        program_id: 'prog-1',
+        phase_number: 2,
+        name: 'Ride-Along',
+        prerequisite_phase_ids: ['ph-1'],
+        requires_manual_advancement: false,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+    mockGetProgramRequirements.mockResolvedValue([]);
+
+    renderWithRouter(<PipelineDetailPage />);
+
+    // Phases render expanded, so the gate is visible without a click.
+    expect(await screen.findByText(/can't start this phase until they finish Classroom/)).toBeInTheDocument();
+  });
+
   it('hides the Required toggle for members without training.manage', async () => {
     mockHasPermission = false;
     mockGetProgramPhases.mockResolvedValue([

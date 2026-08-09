@@ -1285,6 +1285,9 @@ async def get_enrollment_progress(
         next_milestones=next_milestones,
         time_remaining_days=time_remaining_days,
         is_behind_schedule=is_behind_schedule,
+        locked_requirements=await service.prerequisite_locks(
+            enrollment.id, enrollment.program_id
+        ),
     )
 
 

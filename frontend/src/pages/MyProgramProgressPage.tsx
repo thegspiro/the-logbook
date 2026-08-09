@@ -21,6 +21,7 @@ import {
   BadgeCheck,
   LogOut,
   Circle,
+  Lock,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
@@ -42,7 +43,10 @@ import type {
   RequirementProgressRecord,
 } from '../types/training';
 
-const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ record }) => {
+const RequirementRow: React.FC<{ record: RequirementProgressRecord; lockedBy?: string[] | undefined }> = ({
+  record,
+  lockedBy,
+}) => {
   const meta = STATUS_META[record.status];
   const done = record.status === 'completed' || record.status === 'verified';
   const score = record.progress_notes?.latest_score;
@@ -56,11 +60,21 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ recor
   const visibleSteps = isChecklist ? visibleChecklistItems(record.requirement?.checklist_items) : [];
   const hiddenSteps = isChecklist ? hiddenChecklistCount(record.requirement?.checklist_items) : 0;
   const doneIds = checklistDoneIds(record);
+  // Gated behind a prerequisite the member hasn't finished. Shown greyed with
+  // the reason rather than hidden — a step that vanishes reads as a bug, and a
+  // step offered without explanation gets attempted and refused.
+  const locked = !done && !!lockedBy?.length;
   return (
-    <div className="bg-theme-surface-secondary flex items-start justify-between gap-3 rounded-lg p-3">
+    <div
+      className={`bg-theme-surface-secondary flex items-start justify-between gap-3 rounded-lg p-3 ${
+        locked ? 'opacity-60' : ''
+      }`}
+    >
       <div className="flex min-w-0 flex-1 items-start gap-2">
         {done ? (
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+        ) : locked ? (
+          <Lock className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         ) : (
           <div className="border-theme-surface-border mt-0.5 h-4 w-4 shrink-0 rounded-full border" />
         )}
@@ -116,11 +130,19 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ recor
               )}
             </ul>
           )}
-          {!done && action && (
-            <p className="text-theme-text-muted mt-1 flex items-center gap-1 text-xs">
-              <ArrowRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-              <span>{action}</span>
+          {locked ? (
+            <p className="mt-1 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-400">
+              <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+              <span>Locked until you finish {(lockedBy ?? []).join(' and ')}.</span>
             </p>
+          ) : (
+            !done &&
+            action && (
+              <p className="text-theme-text-muted mt-1 flex items-center gap-1 text-xs">
+                <ArrowRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span>{action}</span>
+              </p>
+            )
           )}
         </div>
       </div>
@@ -321,7 +343,11 @@ const MyProgramProgressPage: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     {group.records.map((record) => (
-                      <RequirementRow key={record.id} record={record} />
+                      <RequirementRow
+                        key={record.id}
+                        record={record}
+                        lockedBy={data.locked_requirements?.[record.requirement_id]}
+                      />
                     ))}
                   </div>
                 </div>

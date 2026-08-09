@@ -30,6 +30,7 @@ import {
   Flag,
   RotateCcw,
   EyeOff,
+  Lock,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -168,11 +169,23 @@ const RequirementList: React.FC<{
   canManage: boolean;
   savingReqId: string | null;
   onToggleRequired: (pr: ProgramRequirement) => Promise<void>;
+  onTogglePrerequisite: (pr: ProgramRequirement) => Promise<void>;
   onMove: (pr: ProgramRequirement, dir: -1 | 1) => Promise<void>;
   onEdit: (pr: ProgramRequirement) => void;
   onRemove: (pr: ProgramRequirement) => void;
   onAdd: () => void;
-}> = ({ links, emptyLabel, canManage, savingReqId, onToggleRequired, onMove, onEdit, onRemove, onAdd }) => (
+}> = ({
+  links,
+  emptyLabel,
+  canManage,
+  savingReqId,
+  onToggleRequired,
+  onTogglePrerequisite,
+  onMove,
+  onEdit,
+  onRemove,
+  onAdd,
+}) => (
   <>
     {links.length === 0 ? (
       <p className="text-theme-text-muted py-4 text-center text-sm">{emptyLabel}</p>
@@ -209,6 +222,33 @@ const RequirementList: React.FC<{
                     </button>
                   ) : (
                     pr.is_required && <span className="text-xs text-red-700 dark:text-red-400">Required</span>
+                  )}
+                  {canManage ? (
+                    <button
+                      type="button"
+                      onClick={() => void onTogglePrerequisite(pr)}
+                      disabled={savingReqId === pr.id}
+                      title={
+                        pr.is_prerequisite
+                          ? 'Must be finished before the other items in this stage — click to unlock them'
+                          : 'Click to make members finish this before the other items in this stage'
+                      }
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                        pr.is_prerequisite
+                          ? 'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-400'
+                          : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
+                      }`}
+                    >
+                      <Lock className="h-3 w-3" aria-hidden="true" />
+                      {pr.is_prerequisite ? 'Do this first' : 'Any order'}
+                    </button>
+                  ) : (
+                    pr.is_prerequisite && (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+                        <Lock className="h-3 w-3" aria-hidden="true" />
+                        Do this first
+                      </span>
+                    )
                   )}
                 </div>
                 {pr.requirement?.description && (
@@ -1400,6 +1440,25 @@ const PipelineDetailPage: React.FC = () => {
     }
   };
 
+  const handleTogglePrerequisite = async (pr: ProgramRequirement) => {
+    if (!programId) return;
+    const next = !pr.is_prerequisite;
+    setSavingReqId(pr.id);
+    try {
+      const updated = await trainingProgramService.updateProgramRequirement(programId, pr.id, {
+        is_prerequisite: next,
+      });
+      setProgramReqs((prev) =>
+        prev.map((r) => (r.id === pr.id ? { ...r, is_prerequisite: updated.is_prerequisite } : r))
+      );
+      toast.success(next ? 'Members must finish this before the rest of this stage' : 'No longer a prerequisite');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update requirement'));
+    } finally {
+      setSavingReqId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
@@ -1689,6 +1748,17 @@ const PipelineDetailPage: React.FC = () => {
                           {phase.description && (
                             <p className="text-theme-text-muted mb-4 text-sm">{phase.description}</p>
                           )}
+                          {phase.prerequisite_phase_ids && phase.prerequisite_phase_ids.length > 0 && (
+                            <p className="mb-4 flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+                              <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+                              Members can't start this phase until they finish{' '}
+                              {phase.prerequisite_phase_ids
+                                .map((id) => phases.find((p) => p.id === id)?.name)
+                                .filter((n): n is string => !!n)
+                                .join(', ')}
+                              .
+                            </p>
+                          )}
 
                           <RequirementList
                             links={phaseReqs}
@@ -1696,6 +1766,7 @@ const PipelineDetailPage: React.FC = () => {
                             canManage={canManage}
                             savingReqId={savingReqId}
                             onToggleRequired={handleToggleRequired}
+                            onTogglePrerequisite={handleTogglePrerequisite}
                             onMove={moveRequirement}
                             onEdit={(pr) => setReqModal({ phaseId: phase.id, link: pr })}
                             onRemove={confirmRemoveRequirement}
@@ -1736,6 +1807,7 @@ const PipelineDetailPage: React.FC = () => {
                   canManage={canManage}
                   savingReqId={savingReqId}
                   onToggleRequired={handleToggleRequired}
+                  onTogglePrerequisite={handleTogglePrerequisite}
                   onMove={moveRequirement}
                   onEdit={(pr) => setReqModal({ phaseId: null, link: pr })}
                   onRemove={confirmRemoveRequirement}
@@ -1889,6 +1961,7 @@ const PipelineDetailPage: React.FC = () => {
         <PhaseFormModal
           programId={programId}
           phase={phaseModal.phase}
+          allPhases={phases}
           nextPhaseNumber={phases.reduce((max, p) => Math.max(max, p.phase_number), 0) + 1}
           onClose={() => setPhaseModal(null)}
           onSaved={afterEdit}

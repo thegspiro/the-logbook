@@ -25,6 +25,10 @@ from app.models.training import (
     TrainingProgram,
 )
 from app.models.user import User
+from app.utils.reminder_conditions import (
+    normalize_reminder_conditions,
+    should_send_warning,
+)
 
 # Don't re-alert the same struggling member more often than this.
 _STRUGGLING_ALERT_COOLDOWN_DAYS = 14
@@ -197,11 +201,18 @@ class StrugglingMemberService:
         }
 
     async def send_deadline_warnings(self, organization_id: str) -> Dict:
-        """Send warnings for enrollments approaching their deadline."""
-        warning_days = [30, 14, 7]
+        """Send warnings for enrollments approaching their deadline.
 
+        Which days count, and whether a member who is already on track hears
+        anything at all, come from the enrolling program's own settings
+        (``warning_days_before`` + ``reminder_conditions``) rather than a fixed
+        schedule — a 12-week recruit academy and a two-year recert cycle do not
+        want the same ramp.
+        """
         result = await self.db.execute(
-            select(ProgramEnrollment).where(
+            select(ProgramEnrollment)
+            .options(selectinload(ProgramEnrollment.program))
+            .where(
                 ProgramEnrollment.organization_id == organization_id,
                 ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
                 ProgramEnrollment.target_completion_date.isnot(None),
@@ -212,24 +223,30 @@ class StrugglingMemberService:
         warnings_sent = 0
         for enrollment in enrollments:
             days_left = (enrollment.target_completion_date - date.today()).days
-            if days_left in warning_days:
-                # Only send if not already sent recently
-                if (
-                    enrollment.deadline_warning_sent
-                    and enrollment.deadline_warning_sent_at
-                ):
-                    last_warn = enrollment.deadline_warning_sent_at
-                    if last_warn.tzinfo is None:
-                        last_warn = last_warn.replace(tzinfo=timezone.utc)
-                    if (datetime.now(timezone.utc) - last_warn).days < 5:
-                        continue
+            program = getattr(enrollment, "program", None)
+            conditions = normalize_reminder_conditions(
+                getattr(program, "reminder_conditions", None),
+                getattr(program, "warning_days_before", None),
+            )
+            if not should_send_warning(
+                days_left, enrollment.progress_percentage, conditions
+            ):
+                continue
 
-                await self._send_deadline_notification(
-                    organization_id, enrollment, days_left
-                )
-                enrollment.deadline_warning_sent = True
-                enrollment.deadline_warning_sent_at = datetime.now(timezone.utc)
-                warnings_sent += 1
+            # Only send if not already sent recently
+            if enrollment.deadline_warning_sent and enrollment.deadline_warning_sent_at:
+                last_warn = enrollment.deadline_warning_sent_at
+                if last_warn.tzinfo is None:
+                    last_warn = last_warn.replace(tzinfo=timezone.utc)
+                if (datetime.now(timezone.utc) - last_warn).days < 5:
+                    continue
+
+            await self._send_deadline_notification(
+                organization_id, enrollment, days_left
+            )
+            enrollment.deadline_warning_sent = True
+            enrollment.deadline_warning_sent_at = datetime.now(timezone.utc)
+            warnings_sent += 1
 
         if warnings_sent > 0:
             await self.db.commit()

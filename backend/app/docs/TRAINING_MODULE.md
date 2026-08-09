@@ -33,12 +33,14 @@ The Training Module backend provides a comprehensive RESTful API for managing tr
 Defines how training requirement due dates are calculated.
 
 **Values:**
+
 - `calendar_period`: Due by end of a calendar period (e.g., December 31st of each year). Uses `period_start_month` and `period_start_day` to define when the period starts.
 - `rolling`: Due X months from last completion. Uses `rolling_period_months` to define the interval.
 - `certification_period`: Due when the associated certification expires. Tied to the certification's expiration date.
 - `fixed_date`: Due by a specific fixed date. Used for one-time requirements with hard deadlines.
 
 **Example Usage:**
+
 ```python
 # Annual training due by calendar year end
 requirement.due_date_type = DueDateType.CALENDAR_PERIOD
@@ -58,6 +60,7 @@ requirement.due_date_type = DueDateType.CERTIFICATION_PERIOD
 Hierarchical categories for organizing training courses and requirements. Categories allow grouping of related training topics and can be nested for sub-categories.
 
 **Fields:**
+
 - `id`: UUID primary key
 - `organization_id`: Organization this category belongs to (FK to organizations)
 - `name`: Category name (required, max 255 chars)
@@ -73,12 +76,14 @@ Hierarchical categories for organizing training courses and requirements. Catego
 - `created_by`: User who created the category (FK to users)
 
 **Relationships:**
+
 - `parent`: Self-referential relationship to parent category
 - `children`: Self-referential relationship to child categories
 - `courses`: Many-to-many with TrainingCourse via category_ids JSON field
 - `requirements`: Many-to-many with TrainingRequirement via category_ids JSON field
 
 **Example Category Hierarchy:**
+
 ```
 Firefighting (parent)
 ├── Structural Firefighting
@@ -97,9 +102,11 @@ Hazardous Materials (parent)
 ```
 
 ### TrainingCourse
+
 Basic training course catalog.
 
 **Fields:**
+
 - `name`: Course name
 - `code`: Course code (optional)
 - `training_type`: Type of training
@@ -110,9 +117,11 @@ Basic training course catalog.
 - `category_ids`: Array of category UUIDs this course belongs to (JSONB)
 
 ### TrainingRecord
+
 Individual member training history.
 
 **Fields:**
+
 - `user_id`: Member who completed training
 - `course_id`: Reference to course (optional)
 - `course_name`: Course name
@@ -130,9 +139,11 @@ Individual member training history.
 - `attachments`: JSON array of attached document/certificate metadata (`file_name`, `file_path`, `file_type`, `file_size`, `uploaded_at`, `uploaded_by`). Files are stored on disk; see "Training-Record Attachments (2026-05)" under API Endpoints. Mutated via `flag_modified` (CLAUDE.md pitfall #12)
 
 ### TrainingRequirement
+
 Requirements that members must complete.
 
 **Fields:**
+
 - `name`: Requirement name
 - `requirement_type`: hours | courses | certification | shifts | calls | skills_evaluation | checklist
 - `source`: department | state | national
@@ -149,6 +160,7 @@ Requirements that members must complete.
 - `required_positions`: Array of positions this applies to
 
 **Due Date Configuration Fields:**
+
 - `due_date_type`: How the due date is calculated (see DueDateType enum above)
   - `calendar_period`: Due by end of calendar period (default)
   - `rolling`: Due X months from last completion
@@ -163,6 +175,7 @@ Requirements that members must complete.
 **Due Date Calculation Examples:**
 
 1. **Calendar Period (Annual by Calendar Year)**
+
    ```python
    due_date_type = "calendar_period"
    period_start_month = 1  # January
@@ -171,6 +184,7 @@ Requirements that members must complete.
    ```
 
 2. **Calendar Period (Fiscal Year - July to June)**
+
    ```python
    due_date_type = "calendar_period"
    period_start_month = 7  # July
@@ -179,6 +193,7 @@ Requirements that members must complete.
    ```
 
 3. **Rolling (Every 12 months from completion)**
+
    ```python
    due_date_type = "rolling"
    rolling_period_months = 12
@@ -192,9 +207,11 @@ Requirements that members must complete.
    ```
 
 ### TrainingProgram
+
 Structured training pathways.
 
 **Fields:**
+
 - `name`: Program name
 - `version`: Version number for tracking duplicates
 - `target_position`: probationary | firefighter | driver_candidate | officer | aic
@@ -202,39 +219,58 @@ Structured training pathways.
 - `prerequisite_program_ids`: Programs that must be completed first (JSONB)
 - `allows_concurrent_enrollment`: Can member be in multiple programs?
 - `time_limit_days`: Overall deadline
-- `warning_days_before`: Send warning X days before deadline
-- `reminder_conditions`: Conditional reminder rules (JSONB)
+- `warning_days_before`: Send the first deadline warning X days before the due date
+- `reminder_conditions`: Deadline-reminder policy (JSONB). Honored keys:
+  `days_before_deadline` (int or list of ints — the full warning schedule;
+  defaults to `warning_days_before` plus 14 and 7) and
+  `send_if_below_percentage` (0–100 — skip members already at or above this
+  completion mark). `milestone_threshold` is from an early sketch and is
+  ignored; `ProgramMilestone` rows cover progress-triggered notifications.
 - `is_template`: Can be used as template
 
 ### ProgramPhase
+
 Phases within a program.
 
 **Fields:**
+
 - `program_id`: Parent program
 - `phase_number`: Order in program
 - `name`: Phase name
-- `prerequisite_phase_ids`: Phases that must be completed first (JSONB)
+- `prerequisite_phase_ids`: Phases that must be **finished** before this one
+  opens (JSONB array of phase-id strings — not UUID objects; the column is
+  serialized with `json.dumps`). Distinct from `phase_number`, which is only the
+  display/walk order. Enforced on manual and automatic advancement (`force`
+  overrides). Validated same-program, non-self, acyclic on write; stripped from
+  siblings when a phase is deleted.
 - `requires_manual_advancement`: Officer must approve advancement
 - `time_limit_days`: Phase-specific deadline
 
 ### ProgramRequirement
+
 Links requirements to programs/phases.
 
 **Fields:**
+
 - `program_id`: Parent program
 - `phase_id`: Parent phase (null if program-level)
 - `requirement_id`: The requirement
 - `is_required`: Required vs. optional
-- `is_prerequisite`: Must complete before other requirements
+- `is_prerequisite`: Gates the other requirements in the same scope (its phase,
+  or the program-level pool). Officer sign-off on a gated requirement is refused
+  and the member's page shows it locked with the reason. Automatic credit from
+  logged training is deliberately not blocked.
 - `sort_order`: Display order
 - `program_specific_description`: Override requirement description
 - `custom_deadline_days`: Override requirement time_limit_days
 - `notification_message`: Custom message when assigned
 
 ### ProgramMilestone
+
 Checkpoints within programs.
 
 **Fields:**
+
 - `program_id`: Parent program
 - `phase_id`: Parent phase (null if program-level)
 - `name`: Milestone name
@@ -243,9 +279,11 @@ Checkpoints within programs.
 - `requires_verification`: Officer must verify
 
 ### ProgramEnrollment
+
 Tracks member participation in programs.
 
 **Fields:**
+
 - `user_id`: Enrolled member
 - `program_id`: The program
 - `enrolled_at`: Enrollment timestamp
@@ -263,9 +301,11 @@ Tracks member participation in programs.
   isn't re-sent every run
 
 ### RequirementProgress
+
 Tracks progress on individual requirements.
 
 **Fields:**
+
 - `enrollment_id`: Parent enrollment
 - `requirement_id`: The requirement
 - `status`: not_started | in_progress | completed | verified | waived
@@ -278,6 +318,7 @@ Tracks progress on individual requirements.
 - `verified_at`: Verification timestamp
 
 ### RequirementProgressCredit
+
 Idempotency ledger for automated requirement-progress credit — one row per
 `(requirement progress, source record)` accrual. The unique constraint is the
 safeguard that stops a single real training from being counted twice across the
@@ -286,6 +327,7 @@ session, or a re-approved submission is a no-op). Each row records the units it
 contributed, which is what makes a credit cleanly reversible.
 
 **Fields:**
+
 - `progress_id`: The requirement-progress row credited
 - `source_type`: `ProgressCreditSource` — training_session | shift_report |
   external_import | officer_apply
@@ -296,9 +338,11 @@ contributed, which is what makes a credit cleanly reversible.
 - **Unique:** `(progress_id, source_type, source_id)`
 
 ### SkillEvaluation & SkillCheckoff
+
 Skills assessment framework.
 
 **SkillEvaluation:**
+
 - `name`: Skill name
 - `category`: Firefighting, EMS, Driver, Officer
 - `evaluation_criteria`: Criteria definition (JSONB)
@@ -306,6 +350,7 @@ Skills assessment framework.
 - `required_for_programs`: Programs requiring this skill (JSONB)
 
 **SkillCheckoff:**
+
 - `user_id`: Member being evaluated
 - `skill_evaluation_id`: The skill
 - `evaluator_id`: Officer doing evaluation
@@ -320,22 +365,26 @@ The shift models are shared with the Scheduling module. For full documentation o
 **Key models used by Training:**
 
 **Shift:**
+
 - `shift_date`, `start_time`, `end_time`
 - `apparatus_id`, `station_id`
 - `shift_officer_id`
 - `activities`: What happened during shift (JSONB)
 
 **ShiftAttendance:**
+
 - `shift_id`, `user_id`
 - `checked_in_at`, `checked_out_at`
 - `duration_minutes`
 
 **ShiftCall:**
+
 - `shift_id`, `incident_number`, `incident_type`
 - `cancelled_en_route`, `medical_refusal`
 - `responding_members`: Who responded (JSONB)
 
 **BasicApparatus** (new):
+
 - `unit_number`, `name`, `apparatus_type`
 - `min_staffing`, `positions` (JSON)
 - Lightweight vehicle definitions for departments without the full Apparatus module
@@ -404,6 +453,7 @@ async def duplicate_program(
 ```
 
 **Duplication Logic:**
+
 1. Copies program with all fields
 2. Increments version number
 3. Creates new phases with mapped IDs
@@ -423,6 +473,7 @@ async def enroll_member(
 ```
 
 **Enrollment Logic:**
+
 1. Validates program exists
 2. Checks prerequisite programs completed
 3. Checks concurrent enrollment restrictions
@@ -442,6 +493,7 @@ async def bulk_enroll_members(
 ```
 
 **Bulk Enrollment Logic:**
+
 1. Validates program exists
 2. Checks prerequisites for each member
 3. Checks concurrent enrollment for each member
@@ -462,6 +514,7 @@ async def update_requirement_progress(
 ```
 
 **Progress Calculation:**
+
 1. Updates status and progress_value
 2. Fetches active waivers/leaves for the user
 3. Calculates progress_percentage based on requirement type (using waiver-adjusted required values):
@@ -473,7 +526,7 @@ async def update_requirement_progress(
 
 **Authorization guard:** when `acting_user_id` is supplied (a member-initiated
 request) and `can_manage` is False, the member may mark a requirement
-*in-progress* but may **not** set a numeric progress value, record a test score,
+_in-progress_ but may **not** set a numeric progress value, record a test score,
 or mark it complete/verified/waived — those are officer-only. System callers
 (the feeds) omit `acting_user_id` and are always permitted.
 
@@ -500,7 +553,7 @@ async def reverse_credits_for_source(organization_id, source_id, source_type=Non
 ```
 
 `revoke_*` reverses one credit (drops the ledger row, subtracts its units,
-floored at 0). `reverse_credits_for_source` reverses *every* credit a given
+floored at 0). `reverse_credits_for_source` reverses _every_ credit a given
 record/submission produced — the primitive behind voiding a record and reversing
 an approval.
 
@@ -511,6 +564,7 @@ async def _recalculate_enrollment_progress(
 ```
 
 **Enrollment Progress Calculation:**
+
 1. Gets all required requirement progress
 2. Calculates average percentage
 3. Updates enrollment.progress_percentage
@@ -529,6 +583,7 @@ async def import_registry_requirements(
 ```
 
 **Import Logic:**
+
 1. Loads JSON file
 2. Checks for existing requirements (if skip_existing)
 3. Creates new requirements
@@ -539,6 +594,7 @@ async def import_registry_requirements(
 Shared calculation service (`training_waiver_service.py`) for adjusting training requirements based on active waivers and leaves of absence. All compliance views in the system use this service to ensure consistent waiver adjustments.
 
 **Data Sources:**
+
 - `training_waivers` table — training-specific waivers, may target specific requirement IDs via `requirement_ids` JSON column
 - `member_leaves_of_absence` table — department-wide leaves from the Member Lifecycle UI, apply to all requirements
 
@@ -551,6 +607,7 @@ async def fetch_user_waivers(
     db: AsyncSession, org_id: str, user_id: str
 ) -> List[WaiverPeriod]
 ```
+
 Fetches all active waiver/leave periods for a single user from both tables.
 
 ```python
@@ -558,6 +615,7 @@ async def fetch_org_waivers(
     db: AsyncSession, org_id: str
 ) -> Dict[str, List[WaiverPeriod]]
 ```
+
 Batch-fetches all active waivers/leaves for an entire organization, indexed by `user_id`. Used by compliance matrix, competency matrix, and other batch evaluators to avoid N+1 queries.
 
 #### Calculation Helpers (Pure, No I/O)
@@ -569,6 +627,7 @@ def count_waived_months(
     req_id: Optional[str] = None
 ) -> int
 ```
+
 Counts calendar months within the evaluation window covered by ≥15 days of waiver. Deduplicates overlapping waivers via a set of `(year, month)` tuples.
 
 ```python
@@ -579,9 +638,11 @@ def adjust_required(
     req_id: Optional[str] = None
 ) -> Tuple[float, int, int]
 ```
+
 Returns `(adjusted_required, waived_months_count, active_months_count)` using the formula: `adjusted = base_required × (active_months / total_months)`.
 
 **Where Used:**
+
 - `training_module_config.py` — My Training self-view
 - `training.py` — Compliance Matrix (`_evaluate_member_requirement`)
 - `competency_matrix_service.py` — Competency Matrix / Heat Map
@@ -608,6 +669,7 @@ un-applies any pipeline-requirement credit the record produced via
 records, so a voided one stops counting immediately.
 
 **Bulk Create Request:**
+
 ```json
 {
   "records": [
@@ -624,6 +686,7 @@ records, so a voided one stops counting immediately.
 
 **Duplicate Detection:**
 A record is flagged as a potential duplicate when another record exists with:
+
 - Same `user_id`
 - Same `course_name` (case-insensitive)
 - `completion_date` within ±1 day
@@ -671,6 +734,7 @@ POST   /api/v1/training/reports/export                      # Officer export (tr
   compliance report was removed).
 
 **Compliance Summary Response:**
+
 ```json
 {
   "user_id": "uuid",
@@ -692,6 +756,7 @@ POST   /api/v1/training/certifications/process-alerts/all-orgs  # Run daily cert
 ```
 
 Processes certification expiration alerts for all organizations:
+
 - 90/60/30/7-day tiered notifications (in-app + email)
 - Expired certification escalation to training, compliance, and chief officers
 - Each tier sent only once per certification (tracked by `alert_*_sent_at` timestamps)
@@ -709,9 +774,11 @@ DELETE /api/v1/training/categories/{id}         # Delete category (soft delete)
 ```
 
 **List Categories Query Parameters:**
+
 - `active_only`: Boolean, filter to active categories only (default: true)
 
 **Create/Update Category Request:**
+
 ```json
 {
   "name": "Firefighting",
@@ -725,6 +792,7 @@ DELETE /api/v1/training/categories/{id}         # Delete category (soft delete)
 ```
 
 **Category Response:**
+
 ```json
 {
   "id": "uuid",
@@ -755,6 +823,7 @@ DELETE /api/v1/training/requirements/{id}             # Soft delete (sets active
 ```
 
 **Create Requirement with Due Date Type:**
+
 ```json
 {
   "name": "Annual Fire Training",
@@ -825,7 +894,7 @@ POST   /api/v1/training/programs/programs/{id}/bulk-enroll
 PATCH  /api/v1/training/programs/progress/{id}
 ```
 
-### Shift Completion Reports *(2026-03-28)*
+### Shift Completion Reports _(2026-03-28)_
 
 ```
 POST   /api/v1/training/shift-reports                                  # Create report
@@ -849,69 +918,70 @@ GET    /api/v1/training/shift-reports/flagged                         # Get flag
 
 **ShiftCompletionReport Model:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | UUID, PK | Report identifier |
-| `organization_id` | FK → organizations | Org scoping |
-| `shift_id` | FK → shifts, nullable | Optional link to source shift |
-| `shift_date` | Date, indexed | When the shift occurred |
-| `trainee_id` | FK → users, indexed | Trainee being evaluated |
-| `officer_id` | FK → users, indexed | Officer filing the report |
-| `hours_on_shift` | Float | Shift duration in hours |
-| `calls_responded` | Integer, default=0 | Number of calls |
-| `call_types` | JSON | Array of incident type strings |
-| `performance_rating` | Integer, 1-5 | Rating scale (optional) |
-| `areas_of_strength` | EncryptedText | AES-256 encrypted |
-| `areas_for_improvement` | EncryptedText | AES-256 encrypted |
-| `officer_narrative` | EncryptedText | Free-form assessment |
-| `skills_observed` | JSON | `[{skill_name, demonstrated, score (1-5), notes, comment}]` |
-| `tasks_performed` | JSON | `[{task, description, comment}]` |
-| `enrollment_id` | FK → program_enrollments, nullable | Linked enrollment |
-| `requirements_progressed` | JSON | `[{requirement_progress_id, value_added}]` |
-| `data_sources` | JSON | Audit: `{"hours_on_shift": "shift_attendance", ...}` |
-| `review_status` | String | `draft`, `pending_review`, `approved`, `flagged` |
-| `reviewed_by` | FK → users, nullable | Reviewer |
-| `reviewed_at` | DateTime, nullable | Review timestamp |
-| `reviewer_notes` | EncryptedText | Never exposed to trainee |
-| `trainee_acknowledged` | Boolean, default=False | Acknowledgment flag |
-| `trainee_acknowledged_at` | DateTime, nullable | Acknowledgment timestamp |
-| `trainee_comments` | Text, nullable | Trainee feedback |
+| Field                     | Type                               | Description                                                 |
+| ------------------------- | ---------------------------------- | ----------------------------------------------------------- |
+| `id`                      | UUID, PK                           | Report identifier                                           |
+| `organization_id`         | FK → organizations                 | Org scoping                                                 |
+| `shift_id`                | FK → shifts, nullable              | Optional link to source shift                               |
+| `shift_date`              | Date, indexed                      | When the shift occurred                                     |
+| `trainee_id`              | FK → users, indexed                | Trainee being evaluated                                     |
+| `officer_id`              | FK → users, indexed                | Officer filing the report                                   |
+| `hours_on_shift`          | Float                              | Shift duration in hours                                     |
+| `calls_responded`         | Integer, default=0                 | Number of calls                                             |
+| `call_types`              | JSON                               | Array of incident type strings                              |
+| `performance_rating`      | Integer, 1-5                       | Rating scale (optional)                                     |
+| `areas_of_strength`       | EncryptedText                      | AES-256 encrypted                                           |
+| `areas_for_improvement`   | EncryptedText                      | AES-256 encrypted                                           |
+| `officer_narrative`       | EncryptedText                      | Free-form assessment                                        |
+| `skills_observed`         | JSON                               | `[{skill_name, demonstrated, score (1-5), notes, comment}]` |
+| `tasks_performed`         | JSON                               | `[{task, description, comment}]`                            |
+| `enrollment_id`           | FK → program_enrollments, nullable | Linked enrollment                                           |
+| `requirements_progressed` | JSON                               | `[{requirement_progress_id, value_added}]`                  |
+| `data_sources`            | JSON                               | Audit: `{"hours_on_shift": "shift_attendance", ...}`        |
+| `review_status`           | String                             | `draft`, `pending_review`, `approved`, `flagged`            |
+| `reviewed_by`             | FK → users, nullable               | Reviewer                                                    |
+| `reviewed_at`             | DateTime, nullable                 | Review timestamp                                            |
+| `reviewer_notes`          | EncryptedText                      | Never exposed to trainee                                    |
+| `trainee_acknowledged`    | Boolean, default=False             | Acknowledgment flag                                         |
+| `trainee_acknowledged_at` | DateTime, nullable                 | Acknowledgment timestamp                                    |
+| `trainee_comments`        | Text, nullable                     | Trainee feedback                                            |
 
-**Relationships** *(2026-04-07):*
+**Relationships** _(2026-04-07):_
 
-| Relationship | Target | Description |
-|-------------|--------|-------------|
-| `trainee` | User | Eager-loaded relationship to the trainee user, provides `trainee_name` on the response schema |
-| `officer` | User | Eager-loaded relationship to the filing officer, provides `officer_name` on the response schema |
+| Relationship | Target | Description                                                                                     |
+| ------------ | ------ | ----------------------------------------------------------------------------------------------- |
+| `trainee`    | User   | Eager-loaded relationship to the trainee user, provides `trainee_name` on the response schema   |
+| `officer`    | User   | Eager-loaded relationship to the filing officer, provides `officer_name` on the response schema |
 
-**BatchReviewRequest Schema** *(2026-04-07):*
+**BatchReviewRequest Schema** _(2026-04-07):_
 
-| Field | Type | Constraints | Description |
-|-------|------|-------------|-------------|
-| `report_ids` | `list[str]` | min=1, max=100 | Report IDs to review |
-| `review_status` | `str` | `approved` or `flagged` | Status to apply to all reports |
-| `reviewer_notes` | `str \| None` | Optional | Notes applied to all reports |
+| Field            | Type          | Constraints             | Description                    |
+| ---------------- | ------------- | ----------------------- | ------------------------------ |
+| `report_ids`     | `list[str]`   | min=1, max=100          | Report IDs to review           |
+| `review_status`  | `str`         | `approved` or `flagged` | Status to apply to all reports |
+| `reviewer_notes` | `str \| None` | Optional                | Notes applied to all reports   |
 
-**Authorization on `GET /shift-reports/{report_id}`** *(2026-04-07):*
+**Authorization on `GET /shift-reports/{report_id}`** _(2026-04-07):_
 
 The endpoint now enforces that the requester is one of:
+
 1. The **trainee** — sees visibility-filtered data; `reviewer_notes` always stripped
 2. The **filing officer** — sees full report data
 3. A user with **`training.manage`** permission — sees full report data
 
 Unauthorized access returns 403 Forbidden. This addresses a HIPAA minimum-necessary violation where any org member could previously read any report by ID.
 
-**Audit Logging** *(2026-04-07):*
+**Audit Logging** _(2026-04-07):_
 
 All shift report operations now call `log_audit_event()`:
 
-| Event | Trigger | Metadata |
-|-------|---------|----------|
-| `shift_report_created` | Officer files a new report | `report_id`, `trainee_id`, `shift_date` |
-| `shift_report_updated` | Officer updates a draft | `report_id`, updated fields |
-| `shift_report_reviewed` | Reviewer approves/flags/redacts | `report_id`, `review_status`, `reviewer_id` |
-| `shift_report_acknowledged` | Trainee acknowledges | `report_id`, `trainee_id` |
-| `shift_reports_bulk_submitted` | Officer submits all drafts | `count`, `officer_id` |
+| Event                          | Trigger                         | Metadata                                    |
+| ------------------------------ | ------------------------------- | ------------------------------------------- |
+| `shift_report_created`         | Officer files a new report      | `report_id`, `trainee_id`, `shift_date`     |
+| `shift_report_updated`         | Officer updates a draft         | `report_id`, updated fields                 |
+| `shift_report_reviewed`        | Reviewer approves/flags/redacts | `report_id`, `review_status`, `reviewer_id` |
+| `shift_report_acknowledged`    | Trainee acknowledges            | `report_id`, `trainee_id`                   |
+| `shift_reports_bulk_submitted` | Officer submits all drafts      | `count`, `officer_id`                       |
 
 **Save as Draft:**
 
@@ -932,19 +1002,19 @@ When a report is created (non-draft) or transitions from `draft` to `approved`/`
 
 **Edge Cases:**
 
-| Scenario | Behavior |
-|----------|----------|
-| Report `shift_date` doesn't match linked shift date | Validation error returned |
-| Trainee has assignment but no attendance | Auto-populate returns zeros; manual entry allowed |
-| Duplicate report for same shift + trainee | Blocked by unique constraint; descriptive error |
-| Draft saved with missing required fields | Accepted; validation deferred to final submission |
-| Equipment check `shift_id` is NULL | Standalone ad-hoc check; not linked to shift finalization |
-| Skill score outside 1-5 range | Rejected by `Field(ge=1, le=5)` with 422 *(2026-04-07)* |
-| Batch review >100 report IDs | Rejected by `max_length=100` on `BatchReviewRequest` *(2026-04-07)* |
-| Batch review with invalid IDs | Valid reports processed; `failed` count returned *(2026-04-07)* |
-| Flagged report re-approved | Triggers deferred pipeline progress *(2026-04-07)* |
-| Non-authorized user reads report by ID | Returns 403 Forbidden *(2026-04-07)* |
-| MySQL SUM() returns Decimal | Wrapped in `float()` before division in calendar endpoints *(2026-04-07)* |
+| Scenario                                            | Behavior                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------- |
+| Report `shift_date` doesn't match linked shift date | Validation error returned                                                 |
+| Trainee has assignment but no attendance            | Auto-populate returns zeros; manual entry allowed                         |
+| Duplicate report for same shift + trainee           | Blocked by unique constraint; descriptive error                           |
+| Draft saved with missing required fields            | Accepted; validation deferred to final submission                         |
+| Equipment check `shift_id` is NULL                  | Standalone ad-hoc check; not linked to shift finalization                 |
+| Skill score outside 1-5 range                       | Rejected by `Field(ge=1, le=5)` with 422 _(2026-04-07)_                   |
+| Batch review >100 report IDs                        | Rejected by `max_length=100` on `BatchReviewRequest` _(2026-04-07)_       |
+| Batch review with invalid IDs                       | Valid reports processed; `failed` count returned _(2026-04-07)_           |
+| Flagged report re-approved                          | Triggers deferred pipeline progress _(2026-04-07)_                        |
+| Non-authorized user reads report by ID              | Returns 403 Forbidden _(2026-04-07)_                                      |
+| MySQL SUM() returns Decimal                         | Wrapped in `float()` before division in calendar endpoints _(2026-04-07)_ |
 
 ### Module Configuration
 
@@ -959,29 +1029,29 @@ GET    /api/v1/training/module-config/skill-names          # Get active SkillEva
 
 **TrainingModuleConfig Model (key fields):**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `show_*` columns | Boolean | Trainee visibility controls (what trainees see after report submission) |
-| `form_show_performance_rating` | Boolean | Toggle performance rating on report creation form *(2026-04-04)* |
-| `form_show_areas_of_strength` | Boolean | Toggle strengths section on report creation form *(2026-04-04)* |
-| `form_show_areas_for_improvement` | Boolean | Toggle improvement section on report creation form *(2026-04-04)* |
-| `form_show_officer_narrative` | Boolean | Toggle narrative on report creation form *(2026-04-04)* |
-| `form_show_skills_observed` | Boolean | Toggle skills checklist on report creation form *(2026-04-04)* |
-| `form_show_tasks_performed` | Boolean | Toggle tasks list on report creation form *(2026-04-04)* |
-| `form_show_call_types` | Boolean | Toggle call type selection on report creation form *(2026-04-04)* |
-| `apparatus_type_skills` | JSON | Per-apparatus-type skill lists (e.g., `{"engine": ["Pump ops"]}`) *(2026-04-04)* |
-| `apparatus_type_tasks` | JSON | Per-apparatus-type task lists *(2026-04-04)* |
-| `rating_label` | String | Custom label for performance rating *(2026-04-04)* |
-| `rating_scale_type` | String | "stars" or "descriptive" *(2026-04-04)* |
-| `rating_scale_labels` | JSON | Custom labels per level *(2026-04-04)* |
-| `shift_review_call_types` | JSON | Default call types list |
-| `shift_review_default_skills` | JSON | Default skills list |
-| `shift_review_default_tasks` | JSON | Default tasks list |
-| `report_review_required` | Boolean | Whether reports need reviewer approval |
-| `report_review_role` | String | Role required for review (default: training_officer) |
-| `allow_member_report_export` | Boolean | Gates the member self-export endpoint (default `False`; **403** when off) |
-| `manual_entry_enabled` | Boolean | Whether members may manually enter training (default `False`) |
-| `manual_entry_require_apparatus` | Boolean | Require apparatus on manual entries (default `True`) |
+| Field                             | Type    | Description                                                                      |
+| --------------------------------- | ------- | -------------------------------------------------------------------------------- |
+| `show_*` columns                  | Boolean | Trainee visibility controls (what trainees see after report submission)          |
+| `form_show_performance_rating`    | Boolean | Toggle performance rating on report creation form _(2026-04-04)_                 |
+| `form_show_areas_of_strength`     | Boolean | Toggle strengths section on report creation form _(2026-04-04)_                  |
+| `form_show_areas_for_improvement` | Boolean | Toggle improvement section on report creation form _(2026-04-04)_                |
+| `form_show_officer_narrative`     | Boolean | Toggle narrative on report creation form _(2026-04-04)_                          |
+| `form_show_skills_observed`       | Boolean | Toggle skills checklist on report creation form _(2026-04-04)_                   |
+| `form_show_tasks_performed`       | Boolean | Toggle tasks list on report creation form _(2026-04-04)_                         |
+| `form_show_call_types`            | Boolean | Toggle call type selection on report creation form _(2026-04-04)_                |
+| `apparatus_type_skills`           | JSON    | Per-apparatus-type skill lists (e.g., `{"engine": ["Pump ops"]}`) _(2026-04-04)_ |
+| `apparatus_type_tasks`            | JSON    | Per-apparatus-type task lists _(2026-04-04)_                                     |
+| `rating_label`                    | String  | Custom label for performance rating _(2026-04-04)_                               |
+| `rating_scale_type`               | String  | "stars" or "descriptive" _(2026-04-04)_                                          |
+| `rating_scale_labels`             | JSON    | Custom labels per level _(2026-04-04)_                                           |
+| `shift_review_call_types`         | JSON    | Default call types list                                                          |
+| `shift_review_default_skills`     | JSON    | Default skills list                                                              |
+| `shift_review_default_tasks`      | JSON    | Default tasks list                                                               |
+| `report_review_required`          | Boolean | Whether reports need reviewer approval                                           |
+| `report_review_role`              | String  | Role required for review (default: training_officer)                             |
+| `allow_member_report_export`      | Boolean | Gates the member self-export endpoint (default `False`; **403** when off)        |
+| `manual_entry_enabled`            | Boolean | Whether members may manually enter training (default `False`)                    |
+| `manual_entry_require_apparatus`  | Boolean | Require apparatus on manual entries (default `True`)                             |
 
 > **Boolean column robustness (2026-05):** all `training_module_configs` boolean
 > columns gained DB-level `server_default`s (migration `20260502_0003`), and
@@ -992,9 +1062,11 @@ GET    /api/v1/training/module-config/skill-names          # Get active SkillEva
 ## Database Migrations
 
 ### Initial Training System
+
 **File:** `20260122_0015_add_training_programs_and_requirements.py`
 
 Creates:
+
 - Enums for requirement types, sources, program structures
 - training_requirements table (enhanced)
 - training_programs table
@@ -1010,9 +1082,11 @@ Creates:
 - shift_calls table (framework)
 
 ### Enhanced Features
+
 **File:** `20260122_0030_add_enhanced_training_program_features.py`
 
 Adds:
+
 - `version` to training_programs
 - `prerequisite_program_ids` to training_programs
 - `allows_concurrent_enrollment` to training_programs
@@ -1027,18 +1101,22 @@ Adds:
 - Adds `is_prerequisite` to program_requirements
 
 ### Training Categories and Due Date Types
+
 **File:** `20260205_0100_add_training_categories_and_due_date_type.py`
 
 Creates:
+
 - `training_categories` table with hierarchical structure support
   - `parent_category_id` for nested categories
   - `color`, `icon`, `sort_order` for UI display
   - Indexes on `organization_id`, `code`, and `parent_category_id`
 
 Adds to `training_courses`:
+
 - `category_ids` (JSON): Array of category UUIDs the course belongs to
 
 Adds to `training_requirements`:
+
 - `due_date_type` (String): How due date is calculated (calendar_period, rolling, certification_period, fixed_date)
 - `rolling_period_months` (Integer): Months between completions for rolling requirements
 - `period_start_month` (Integer): Start month for calendar period (1-12)
@@ -1048,6 +1126,7 @@ Adds to `training_requirements`:
 ### Report Form & Apparatus Mappings (2026-04-04)
 
 **Files:**
+
 - `20260404_0100_fix_shift_equipment_checks_shift_id_nullable.py` — Makes `shift_id` nullable on `shift_equipment_checks` for standalone ad-hoc checks
 - `20260404_0200_add_report_form_section_toggles.py` — Adds 7 `form_show_*` boolean columns to `training_module_configs`
 - `20260404_0300_add_apparatus_type_skills_tasks.py` — Adds `apparatus_type_skills` and `apparatus_type_tasks` JSON columns
@@ -1057,6 +1136,7 @@ Adds to `training_requirements`:
 ### Training Config & Evaluation Period (2026-05)
 
 **Files:**
+
 - `20260502_0001_backfill_training_config_null_booleans.py` — Backfills NULL boolean columns in `training_module_configs` so legacy rows have concrete values
 - `20260502_0003_add_server_defaults_to_training_module_config_booleans.py` — Adds DB-level `server_default`s to every `training_module_configs` boolean flag
 - `20260502_0004_drop_training_session_approval_required.py` — **Drops** the unused `approval_required` column from `training_sessions`. Finalize/sign-off is governed solely by `require_completion_confirmation` (false → auto-approve + complete records + no email; true → pending + notify officers)
@@ -1084,9 +1164,11 @@ See `docs/ALEMBIC_MIGRATIONS.md` for the full revision chain (these branch off
 ## Registry Data Files
 
 ### NFPA Requirements
+
 **File:** `backend/app/data/registries/nfpa_requirements.json`
 
 Contains 7 NFPA standards:
+
 - NFPA 1001: Firefighter I & II
 - NFPA 1002: Driver/Operator
 - NFPA 1021: Fire Officer I-IV
@@ -1096,16 +1178,20 @@ Contains 7 NFPA standards:
 - NFPA 1582: Medical Fitness
 
 ### NREMT Requirements
+
 **File:** `backend/app/data/registries/nremt_requirements.json`
 
 Contains 8 NREMT certifications:
+
 - EMR, EMT, AEMT, Paramedic
 - CPR/BLS, ACLS, PALS, PHTLS
 
 ### Pro Board Requirements
+
 **File:** `backend/app/data/registries/proboard_requirements.json`
 
 Contains 8 Pro Board certifications:
+
 - Firefighter I & II
 - Driver/Operator Pumper & Aerial
 - Fire Officer I & II
@@ -1115,6 +1201,7 @@ Contains 8 Pro Board certifications:
 ## Testing
 
 ### Unit Tests
+
 Test individual service methods:
 
 ```python
@@ -1131,6 +1218,7 @@ async def test_create_program():
 ```
 
 ### Integration Tests
+
 Test full workflows:
 
 ```python
@@ -1158,6 +1246,7 @@ async def test_enroll_with_prerequisites():
 ### Common Error Cases
 
 **Prerequisite Not Met:**
+
 ```json
 {
   "detail": "User has not completed prerequisite program"
@@ -1165,6 +1254,7 @@ async def test_enroll_with_prerequisites():
 ```
 
 **Concurrent Enrollment Violation:**
+
 ```json
 {
   "detail": "User is already enrolled in another program. This program does not allow concurrent enrollment."
@@ -1172,6 +1262,7 @@ async def test_enroll_with_prerequisites():
 ```
 
 **Non-Editable Requirement:**
+
 ```json
 {
   "detail": "This requirement cannot be edited"
@@ -1179,6 +1270,7 @@ async def test_enroll_with_prerequisites():
 ```
 
 **Invalid Phase Progression:**
+
 ```json
 {
   "detail": "Phase 2 already exists for this program"
@@ -1190,6 +1282,7 @@ async def test_enroll_with_prerequisites():
 ### Query Optimization
 
 **Use selectinload for relationships:**
+
 ```python
 query = select(TrainingProgram).options(
     selectinload(TrainingProgram.phases)
@@ -1198,6 +1291,7 @@ query = select(TrainingProgram).options(
 ```
 
 **Batch operations:**
+
 ```python
 # Good: Single query for all enrollments
 enrollments = await bulk_enroll_members(program_id, user_ids)
@@ -1210,6 +1304,7 @@ for user_id in user_ids:
 ### Caching
 
 Consider caching for:
+
 - Registry requirements (rarely change)
 - Program details (moderate change frequency)
 - Enrollment lists (frequent updates)
@@ -1217,6 +1312,7 @@ Consider caching for:
 ### Background Jobs
 
 Recommended for:
+
 - Deadline reminder emails
 - Progress recalculation for large programs
 - Batch imports from registries
@@ -1230,13 +1326,13 @@ The external training integration system allows organizations to connect to exte
 
 ### Supported Providers
 
-| Provider | Type | Description |
-|----------|------|-------------|
-| Vector Solutions | `vector_solutions` | Fire and EMS online training platform |
-| Target Solutions | `target_solutions` | Public safety training and compliance |
-| Lexipol | `lexipol` | Policy acknowledgment and training |
-| I Am Responding | `i_am_responding` | Response tracking with training features |
-| Custom API | `custom_api` | Generic adapter for any compatible API |
+| Provider         | Type               | Description                              |
+| ---------------- | ------------------ | ---------------------------------------- |
+| Vector Solutions | `vector_solutions` | Fire and EMS online training platform    |
+| Target Solutions | `target_solutions` | Public safety training and compliance    |
+| Lexipol          | `lexipol`          | Policy acknowledgment and training       |
+| I Am Responding  | `i_am_responding`  | Response tracking with training features |
+| Custom API       | `custom_api`       | Generic adapter for any compatible API   |
 
 ### Models
 
@@ -1245,6 +1341,7 @@ The external training integration system allows organizations to connect to exte
 Configuration for connecting to external training platforms.
 
 **Fields:**
+
 - `id`: UUID primary key
 - `organization_id`: Organization this provider belongs to
 - `name`: Display name (e.g., "Vector Solutions - Main Account")
@@ -1269,6 +1366,7 @@ Configuration for connecting to external training platforms.
 Maps external training categories to internal TrainingCategories.
 
 **Fields:**
+
 - `provider_id`: Reference to ExternalTrainingProvider
 - `external_category_id`: Category ID in external system
 - `external_category_name`: Category name from external system
@@ -1282,6 +1380,7 @@ Maps external training categories to internal TrainingCategories.
 Maps external users to internal Users.
 
 **Fields:**
+
 - `provider_id`: Reference to ExternalTrainingProvider
 - `external_user_id`: User ID in external system
 - `external_username`: Username from external system
@@ -1296,6 +1395,7 @@ Maps external users to internal Users.
 Tracks sync operations for auditing and debugging.
 
 **Fields:**
+
 - `provider_id`: Reference to ExternalTrainingProvider
 - `sync_type`: `full`, `incremental`, or `manual`
 - `status`: `pending`, `in_progress`, `completed`, `failed`, `partial`
@@ -1313,6 +1413,7 @@ Tracks sync operations for auditing and debugging.
 Stores imported training records before they become TrainingRecords.
 
 **Fields:**
+
 - `provider_id`: Reference to ExternalTrainingProvider
 - `sync_log_id`: Reference to the sync operation
 - `external_record_id`: Unique ID from external system
@@ -1345,6 +1446,7 @@ async def test_connection(
     provider: ExternalTrainingProvider
 ) -> Tuple[bool, str]
 ```
+
 Tests connection to an external provider. Returns success flag and message.
 
 ```python
@@ -1356,6 +1458,7 @@ async def sync_training_records(
     user_id: Optional[str] = None
 ) -> ExternalTrainingSyncLog
 ```
+
 Synchronizes training records from an external provider. Returns sync log with results.
 
 ```python
@@ -1365,6 +1468,7 @@ async def import_single_record(
     category_id: Optional[str] = None
 ) -> TrainingRecord
 ```
+
 Creates a TrainingRecord from an imported external record.
 
 ```python
@@ -1374,6 +1478,7 @@ async def bulk_import_records(
     import_all_pending: bool = False
 ) -> Dict[str, int]
 ```
+
 Bulk imports multiple external training records. Returns counts of imported, failed, and skipped.
 
 ### API Endpoints
@@ -1408,7 +1513,7 @@ POST   /api/v1/training/external/providers/{id}/imports/{import_id}/import
 POST   /api/v1/training/external/providers/{id}/imports/bulk
 ```
 
-### Security (SSRF & Import Tenancy) *(2026-07-02)*
+### Security (SSRF & Import Tenancy) _(2026-07-02)_
 
 - **`api_base_url` is SSRF-validated.** Because the sync service issues server-side requests to the provider URL, `create_provider`/`update_provider` validate it with `validate_integration_url()` (`app/utils/url_validator.py`) — HTTPS-only, and it rejects hosts resolving to private/loopback/link-local ranges or cloud-metadata endpoints (e.g. `169.254.169.254`). `ExternalTrainingSyncService` re-validates before every network call (`test_connection`, record fetch, category fetch) so DNS re-binding between save and fetch can't bypass the check.
 - **Import target users are org-validated.** `import_single_record` and `bulk_import_records` verify the resolved `user_id` (from the request body or a stored user mapping) belongs to the caller's organization before creating a `TrainingRecord` — a forged or cross-org user ID cannot receive a forged completion record.
@@ -1480,6 +1585,7 @@ POST   /api/v1/training/external/providers/{id}/imports/bulk
 **File:** `20260205_0200_add_external_training_integration.py`
 
 Creates:
+
 - `external_training_providers` table
 - `external_category_mappings` table
 - `external_user_mappings` table
@@ -1487,6 +1593,7 @@ Creates:
 - `external_training_imports` table
 
 Indexes for performance:
+
 - `idx_ext_provider_org`: Provider lookup by organization
 - `idx_ext_provider_type`: Filter by provider type
 - `idx_ext_mapping_external`: Quick category mapping lookup
@@ -1499,14 +1606,16 @@ Indexes for performance:
 ### Permissions Required
 
 **Training Officer:**
+
 - `training.manage`: Create/edit programs and requirements
 - `training.view_all`: View all member progress
 
 **Member:**
+
 - `training.view`: View own progress
 - `training.update`: Update own progress (if self-reporting enabled)
 
-### Multi-Tenant Isolation *(reviewed 2026-07-02)*
+### Multi-Tenant Isolation _(reviewed 2026-07-02)_
 
 Every training record is scoped to an `organization_id`, and that scope is the
 tenant boundary. The 2026-07-02 review enforced it at the **service layer** for
@@ -1523,6 +1632,7 @@ the query by `organization_id` in the **service method**, not just the handler.
 ### Data Validation
 
 All inputs validated with Pydantic schemas:
+
 - Required fields enforced
 - Type checking automatic
 - Range validation (e.g., `ge=0` for hours; `score` has no upper cap — percentage or points)
@@ -1546,4 +1656,4 @@ pitfall #2). See migration `20260702_0001`.
 
 ---
 
-*Last Updated: July 2, 2026*
+_Last Updated: July 2, 2026_

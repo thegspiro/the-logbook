@@ -60,6 +60,7 @@ def _phase(pid, number, name, manual=False):
         phase_number=number,
         name=name,
         requires_manual_advancement=manual,
+        prerequisite_phase_ids=None,
     )
 
 
