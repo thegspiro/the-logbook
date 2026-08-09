@@ -39,33 +39,33 @@ from its open list.
 
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ✅ (p1, p2, p3, p4) |
-| B2 | apparatus | AP2 | ✅ (p1, p2, p3, p4) |
-| B3 | inventory | INV2 | ✅ (p1, p2, p3, p4) |
-| B4 | facilities | FAC2 | ✅ (p1, p2, p3, p4) |
-| B5 | elections | ELEC2 | ✅ (p1, p2, p3, p4) |
-| B6 | meetings & minutes | MM2 | ✅ (p1, p2, p3, p4) |
-| B7 | equipment-check | EC2 | ✅ (p1, p2, p3, p4) |
-| B8 | documents | DOC2 | ✅ (p1, p2, p3, p4) |
-| B9 | membership pipeline | MP2 | ✅ (p1, p2, p3, p4) |
-| B10 | messaging & communications | MSG2 | ✅ (p1, p2, p3, p4) |
-| B11 | notifications | NOTIF2 | ✅ (p1, p2, p3, p4) |
-| B12 | integrations | INT2 | ✅ (p1, p2, p3, p4) |
-| B13 | forms | FORM2 | ✅ (p1, p2, p3, p4) |
-| B14 | grants & fundraising | GF2 | ✅ (p1, p2, p3, p4) |
-| B15 | admin-hours | AH2 | ✅ (p1, p2, p3, p4) |
-| B16 | reports & analytics | RPT2 | ✅ (p1, p2, p3, p4) |
-| B17 | events | EV2 | ✅ (p1, p2, p3, p4) |
-| B18 | training | TR2 | ✅ (p1, p2, p3, p4) |
-| B19 | scheduling | SCH2 | ✅ (p1, p2, p3, p4) |
-| B20 | finance | FIN2 | ✅ (p1, p2, p3, p4) |
-| B21 | orgs, roles & users | ORU2 | ✅ (p1, p2, p3, p4) |
-| B22 | compliance & skills | CS2 | ✅ (p1, p2, p3, p4) |
-| B23 | security, audit & IP | SEC2 | ✅ (p1, p2, p3, p4) |
-| B24 | core infra | CI2 | ✅ (p1, p2, p3, p4) |
-| B25 | onboarding | ONB2 | ✅ (p1, p2, p3, p4) |
-| B26 | public-portal | PP2 | ✅ (p1, p2, p3, p4) |
-| B27 | frontend shared | FE2 | ✅ (p1, p2, p3, p4) |
+| B1 | medical-screening | MS2 | ⬜ |
+| B2 | apparatus | AP2 | ⬜ |
+| B3 | inventory | INV2 | ⬜ |
+| B4 | facilities | FAC2 | ⬜ |
+| B5 | elections | ELEC2 | ⬜ |
+| B6 | meetings & minutes | MM2 | ⬜ |
+| B7 | equipment-check | EC2 | ⬜ |
+| B8 | documents | DOC2 | ⬜ |
+| B9 | membership pipeline | MP2 | ⬜ |
+| B10 | messaging & communications | MSG2 | ⬜ |
+| B11 | notifications | NOTIF2 | ⬜ |
+| B12 | integrations | INT2 | ⬜ |
+| B13 | forms | FORM2 | ⬜ |
+| B14 | grants & fundraising | GF2 | ⬜ |
+| B15 | admin-hours | AH2 | ⬜ |
+| B16 | reports & analytics | RPT2 | ⬜ |
+| B17 | events | EV2 | ⬜ |
+| B18 | training | TR2 | ⬜ |
+| B19 | scheduling | SCH2 | ⬜ |
+| B20 | finance | FIN2 | ⬜ |
+| B21 | orgs, roles & users | ORU2 | ⬜ |
+| B22 | compliance & skills | CS2 | ⬜ |
+| B23 | security, audit & IP | SEC2 | ⬜ |
+| B24 | core infra | CI2 | ⬜ |
+| B25 | onboarding | ONB2 | ⬜ |
+| B26 | public-portal | PP2 | ⬜ |
+| B27 | frontend shared | FE2 | ⬜ |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -2004,3 +2004,37 @@ infra items flagged in the module docs + `KNOWN_LIMITATIONS.md`; regression test
 added for every code change; gate green (flake8/black/tsc/eslint; DB-backed tests
 are the known no-MySQL sandbox limit; the migration `ALTER`s need CI/staging
 verification). Tier A remains ✅ (front-loaded surfaces, not re-run in pass 4).
+
+---
+
+## 🔄 Pass 5 opened (2026-08-09)
+
+Tier B reset to ⬜ for a fifth full pass; Tier A remains ✅ (not re-run unless
+directed). Four passes have now driven the mechanical lenses to completion — the
+latent-500 enum sweep, the E712 sweep, and the cross-tenant client-FK re-audit are
+done and comprehensively verified across the write surface, so pass 5's marginal
+value is **not** another sweep of those. What remains, and where pass 5 should look:
+
+- **The flagged items still open in `KNOWN_LIMITATIONS.md` and the module docs** —
+  now mostly product/behavior/infra/migration decisions rather than defects. Pass 5
+  should (a) re-verify every pass-1..4 fix still holds (no regression re-opened a
+  finding), and (b) pick off any flagged item that has since become safely
+  closeable, the way pass 4 closed MS-1 once `EncryptedText` made a backfill-free
+  migration possible. Candidates: FIN-7 float→Decimal (money-math refactor), the
+  training dangling-FK batch (session/recert/recurring/waiver — LOW, not projected),
+  the B13 forms `condition_field_id` same-form correctness check, RPT-6 (>100%
+  completion edge), PP-6 (Redis limiter + two-column status token), CI-4 full
+  fail-closed decrypt (gated on the app-wide encryption backfill), CI-11.
+- **Depth reads beyond tenant isolation** — the business-logic corners the
+  security-first passes deliberately didn't reach (e.g. the apparatus
+  maintenance-scheduling / EVOC logic, the finance approval-chain state machine),
+  each as its own focused iteration.
+- **The MS-1 migration** must be verified against real MySQL (CI/staging, with a DB
+  backup) before deploy — carry this forward until confirmed.
+
+Same discipline as always: verified/safe fixes only, flag the rest, regression tests
+for every change, gate green. Next feature: **B1 medical-screening**.
+
+### Pass 5 log
+
+(pending)
