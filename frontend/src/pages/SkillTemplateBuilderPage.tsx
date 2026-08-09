@@ -231,6 +231,25 @@ const CriterionEditor: React.FC<{
                 placeholder="Enter the statement the evaluator must read or announce..."
                 className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
               />
+              {/* Sheets differ on this and the difference is invisible from the
+                  scorecard afterwards: an opening brief read before the
+                  candidate is in position is off the clock, while a prompt
+                  delivered mid-evolution runs against the time limit. */}
+              <label className="mt-2 flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={criterion.starts_timer ?? false}
+                  onChange={(e) => onChange({ ...criterion, starts_timer: e.target.checked })}
+                  className="border-theme-surface-border focus:ring-theme-focus-ring mt-0.5 rounded-sm text-blue-600"
+                />
+                <span>
+                  <span className="text-theme-text-primary text-xs">Read inside the time limit</span>
+                  <p className="text-theme-text-muted text-xs">
+                    The examiner gets a &ldquo;Start clock &amp; read&rdquo; button on this statement. Leave off for an
+                    opening brief read before the clock starts.
+                  </p>
+                </span>
+              </label>
             </div>
           )}
 
@@ -475,14 +494,19 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       setViewerPositions(currentTemplate.result_viewer_positions ?? []);
       setTags((currentTemplate.tags ?? []).join(', '));
       setSections(
+        // localId falls back to a generated one: the API serves a template's
+        // sections straight out of the JSON column, and nothing ever wrote an
+        // `id` into it, so `s.id` / `c.id` arrive undefined on every load. They
+        // are React keys — undefined for every row means duplicate keys and a
+        // list React cannot reconcile.
         currentTemplate.sections.map((s) => ({
-          localId: s.id,
+          localId: s.id || generateLocalId(),
           name: s.name,
           description: s.description,
           sort_order: s.sort_order,
           collapsed: false,
           criteria: s.criteria.map((c) => ({
-            localId: c.id,
+            localId: c.id || generateLocalId(),
             label: c.label,
             description: c.description,
             type: c.type,
@@ -493,6 +517,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
             time_limit_seconds: c.time_limit_seconds,
             checklist_items: c.checklist_items,
             statement_text: c.statement_text,
+            starts_timer: c.starts_timer ?? false,
           })),
         }))
       );
@@ -575,6 +600,10 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           time_limit_seconds: c.time_limit_seconds,
           checklist_items: c.checklist_items?.length ? c.checklist_items : undefined,
           statement_text: c.statement_text?.trim() || undefined,
+          // Only meaningful on a statement, and a stale true left behind by a
+          // type change would put a start-clock button on a step that has no
+          // statement to read.
+          starts_timer: c.type === 'statement' ? (c.starts_timer ?? false) : false,
         })),
       })),
     };

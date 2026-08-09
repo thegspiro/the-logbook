@@ -32,6 +32,14 @@ class SkillCriterionSchema(BaseModel):
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     checklist_items: Optional[List[str]] = None
     statement_text: Optional[str] = None
+    # Statements only. Whether reading this one aloud is inside the timed
+    # evolution. Sheets differ: an opening statement that briefs the candidate
+    # before they are in position is read off the clock, while a mid-evolution
+    # prompt ("the patient is now in the elevator") happens within the time
+    # limit and must be timed. Defaults off, which is how statements have always
+    # behaved — they mark themselves as a section renders, and that is nobody's
+    # action, so it must not start a clock on its own.
+    starts_timer: bool = False
 
 
 class SkillTemplateSectionSchema(BaseModel):

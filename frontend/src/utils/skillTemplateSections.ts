@@ -35,6 +35,7 @@ export function hydrateTemplateSections(raw: Record<string, unknown>[] | undefin
         time_limit_seconds: c.time_limit_seconds as number | undefined,
         checklist_items: c.checklist_items as string[] | undefined,
         statement_text: c.statement_text as string | undefined,
+        starts_timer: (c.starts_timer as boolean | undefined) ?? false,
       })),
     };
   });

@@ -78,6 +78,12 @@ export interface SkillCriterion {
   checklist_items?: string[] | undefined;
   /** For 'statement' type: text the evaluator must read/state */
   statement_text?: string | undefined;
+  /** For 'statement' type: whether reading this aloud falls inside the timed
+   *  evolution. An opening statement that briefs a candidate who is not yet in
+   *  position is read off the clock; a prompt delivered mid-evolution is not.
+   *  Defaults to false — statements mark themselves as a section renders, and
+   *  that is nobody's action, so it cannot start a clock on its own. */
+  starts_timer?: boolean | undefined;
 }
 
 /** A section grouping related criteria within a template */
@@ -160,6 +166,7 @@ export interface SkillCriterionCreate {
   time_limit_seconds?: number | undefined;
   checklist_items?: string[] | undefined;
   statement_text?: string | undefined;
+  starts_timer?: boolean | undefined;
 }
 
 export interface SkillTemplateUpdate {

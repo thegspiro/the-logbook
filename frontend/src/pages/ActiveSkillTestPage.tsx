@@ -500,7 +500,12 @@ const StatementCriterion: React.FC<{
   criterion: SkillCriterion;
   result: CriterionResult | undefined;
   onChange: (result: Partial<CriterionResult>) => void;
-}> = ({ criterion, result, onChange }) => {
+  /** Whether the test clock is already running. */
+  timerRunning: boolean;
+  /** Start the clock. Only offered on statements the template marks as falling
+   *  inside the timed evolution. */
+  onStartTimer: () => void;
+}> = ({ criterion, result, onChange, timerRunning, onStartTimer }) => {
   // NOTE: the mount-time onChange below is the one criterion write the examiner
   // did not make. SectionView tags it `autoMarked` so it cannot start the
   // clock — otherwise merely opening a test whose first section leads with a
@@ -522,6 +527,13 @@ const StatementCriterion: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Deliberately a button rather than a mount effect. Whether a statement is
+  // read on or off the clock is a property of the sheet, but *when* it is read
+  // is not: an examiner opens the test to have it ready and reads the prompt
+  // when the candidate is in position, which may be minutes later. Starting on
+  // render would time the wait.
+  const startsTimer = criterion.type === 'statement' && criterion.starts_timer === true;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -537,6 +549,26 @@ const StatementCriterion: React.FC<{
           {criterion.statement_text}
         </p>
       </div>
+      {startsTimer &&
+        (timerRunning ? (
+          <p className="text-theme-text-muted flex items-center gap-1.5 text-xs">
+            <Timer className="h-3 w-3 shrink-0" />
+            This statement is inside the time limit. The clock is running.
+          </p>
+        ) : (
+          <div className="space-y-1">
+            <button
+              onClick={onStartTimer}
+              className="mobile-touch-target flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-bold text-white shadow-lg shadow-green-600/30 transition-colors hover:bg-green-700"
+            >
+              <Play className="h-6 w-6" />
+              START CLOCK &amp; READ
+            </button>
+            <p className="text-theme-text-muted text-xs">
+              This statement is read inside the time limit — start the clock as you begin reading it.
+            </p>
+          </div>
+        ))}
     </div>
   );
 };
@@ -592,7 +624,18 @@ const SectionView: React.FC<{
     criterionLabel?: string,
     options?: { autoMarked?: boolean }
   ) => void;
-}> = ({ section, sectionNumber, sectionCount, sectionResults, requireAllCritical, onUpdateCriterion }) => {
+  timerRunning: boolean;
+  onStartTimer: () => void;
+}> = ({
+  section,
+  sectionNumber,
+  sectionCount,
+  sectionResults,
+  requireAllCritical,
+  onUpdateCriterion,
+  timerRunning,
+  onStartTimer,
+}) => {
   const getResult = (criterionId: string) => sectionResults.find((r) => r.criterion_id === criterionId);
 
   // Statements are excluded from every count here. They read aloud and mark
@@ -667,6 +710,8 @@ const SectionView: React.FC<{
                 criterion={criterion}
                 result={result}
                 onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label, { autoMarked: true })}
+                timerRunning={timerRunning}
+                onStartTimer={onStartTimer}
               />
             )}
             <CriterionNotes
@@ -1204,6 +1249,17 @@ export const ActiveSkillTestPage: React.FC = () => {
     manuallyPausedRef.current = false;
     startTimer();
   }, [activeTestRunning, setActiveTestRunning, startTimer]);
+
+  /** The examiner tapping "Start clock & read" on a statement the template
+   *  places inside the timed evolution.
+   *
+   *  Deliberate in the way pressing play is, so it clears a manual pause —
+   *  unlike autoStartTimer, which honours one. An examiner who paused the clock
+   *  and then chose to read a timed prompt means to be timing again. */
+  const startTimerForStatement = useCallback(() => {
+    manuallyPausedRef.current = false;
+    startTimer();
+  }, [startTimer]);
 
   /** Start the clock on the examiner's first real action.
    *
@@ -2186,6 +2242,8 @@ export const ActiveSkillTestPage: React.FC = () => {
                 options
               )
             }
+            timerRunning={activeTestRunning}
+            onStartTimer={startTimerForStatement}
           />
         )}
         {/* A published template with nothing in it, or a section list the API
