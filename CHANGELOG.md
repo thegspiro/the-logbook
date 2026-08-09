@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Demo seeder: every member was flagged with an unrecognised rank (2026-08-09)
+
+**Fixed (tooling)**
+
+- **`User.rank` holds a rank _code_, not a display name.** The screenshot
+  seeder wrote labels ("Lieutenant", "Firefighter/EMT", "Paramedic"), so
+  Settings → Ranks — which validates every active member against the
+  configured codes — bannered the demo department with "21 active members with
+  unrecognised ranks", listing its own seed data. Members now seed with the
+  eight codes an organization is created with, the three recruits start at
+  `emt` so the seeded promotions remain real rank changes, and the recruits the
+  training programs enrol are named explicitly rather than derived from a
+  "probationary" rank that no organization has.
+- **The seeder raced the admin password-reset limiter instead of pacing under
+  it.** That route allows 5 requests per 5 minutes and answers the sixth with a
+  **15-minute lockout**, so a run needing several member sessions spent over an
+  hour asleep in backoff. Resets are now spaced to stay below the ceiling. The
+  429 handling stays for the case where another client shares the IP.
+- **`dev_env.sh` hardcoded `backend/.venv/bin/python`**, which is exactly what a
+  container reclaim removes — the situation the script exists for. It now
+  prefers the virtualenv where one exists and falls back to the system
+  interpreter, and imports the app before backgrounding it so a missing
+  dependency is reported immediately instead of surfacing as a seven-minute
+  readiness timeout.
+
+**Fixed (documentation)**
+
+- **A "Registry Code" field on a training-category edit form.** The column and
+  its API exist; the screen does not — no page in the application creates or
+  edits training categories. The guide now describes how registry codes
+  actually arrive: attached to requirements imported from a standards registry.
+- **Scheduling settings, four corrections.** Shift Reports is a section
+  navigator of eight sections, not a page of three cards, and the section is
+  labelled **Form Sections**. Apparatus skills are chosen from a pill selector,
+  one type at a time, not an accordion. The rating scale is a two-button
+  toggle whose per-level labels appear only under **Labeled Bubbles**. The
+  notification panels have no CC-address field.
+- **Two different eligibility screens were conflated.** Per-rank shift-position
+  eligibility is set on **Settings → Ranks**; **Scheduling → Settings →
+  Eligibility** governs which _membership types_ may self-sign-up. The guide
+  described the first and pointed at the second.
+- **Manual entry settings look empty when the feature is off** — everything
+  below the enable checkbox is conditional on it. Now stated, so a
+  single-checkbox panel is not read as a broken page.
+
+---
+
 ### Documentation: the prospective-members bulk actions are pictured, and the list of them corrected (2026-08-09)
 
 **Fixed (documentation)**
