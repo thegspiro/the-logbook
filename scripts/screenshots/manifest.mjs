@@ -127,6 +127,27 @@ export const isUpcoming = (event) => {
 };
 
 /**
+ * True for an event still open for RSVPs.
+ *
+ * "Upcoming" is not enough. The RSVP button needs `requires_rsvp` *and* a
+ * deadline still in the future, and the seeder sets that deadline a day before
+ * the event — so the nearest upcoming event, the one `isUpcoming` picks first,
+ * has usually closed already. That is what left the RSVP modal shot clicking a
+ * button that was not on the page.
+ *
+ * The list response carries `requires_rsvp` but not `rsvp_deadline`, so the
+ * window is inferred from the start: two days' margin clears the seeder's
+ * one-day lead with room to spare.
+ */
+export const isRsvpOpen = (event) => {
+  if (!(event.requires_rsvp ?? event.requiresRsvp)) return false;
+  if (event.is_cancelled ?? event.isCancelled) return false;
+  const start = event.start_datetime ?? event.startDatetime ?? "";
+  const margin = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+  return start > margin;
+};
+
+/**
  * Re-open the current route with query parameters taken from an API record.
  *
  * The print views are addressed by query string rather than path — they read
@@ -2738,12 +2759,12 @@ export const SHOTS = [
     alt: "RSVP modal with its dietary and accessibility fields",
     route: "/events",
     prepare: async (page) => {
-      // An event still open for RSVPs — a past one offers no RSVP button.
+      // Open for RSVPs, not merely upcoming — see isRsvpOpen.
       await openFirstFromApi(
         "/events?limit=100",
         (id) => `/events/${id}`,
         "events",
-        isUpcoming,
+        isRsvpOpen,
       )(page);
       await clickByName(/rsvp now|update rsvp/i)(page);
     },
@@ -2906,6 +2927,45 @@ export const SHOTS = [
       "Screenshot of the Shift Reports Settings tab showing three cards",
     alt: "Shift report settings with checklist timing, validation and form sections",
     route: "/scheduling/settings?tab=shift-reports",
+    fullPage: true,
+  },
+  {
+    id: "08-36-template-search",
+    doc: "08-admin-reports.md",
+    line: 1336,
+    anchor: "Screenshot of the template list sidebar showing the search field with “welcome” typed",
+    alt: "Email template sidebar filtered to templates matching welcome",
+    route: "/communications/email-templates",
+    prepare: async (page) => {
+      await page
+        .getByPlaceholder(/filter templates/i)
+        .first()
+        .fill("welcome", { timeout: 10_000 });
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-37-email-officers",
+    doc: "08-admin-reports.md",
+    line: 1437,
+    anchor: "Screenshot of the Officers tab showing the office list with holders",
+    alt: "Officers tab listing each office and the member holding it",
+    route: "/communications/email-templates",
+    prepare: clickByName(/^Officers$/),
+    fullPage: true,
+  },
+  {
+    id: "08-38-email-configuration",
+    doc: "08-admin-reports.md",
+    line: 1479,
+    anchor: "Screenshot of the Email Configuration page showing the Cloudflare platform",
+    alt: "Email configuration with the sending platform and credentials",
+    route: "/settings?tab=email",
+    // The credential fields are per-platform and the demo org has none set, so
+    // the page opens on "Other / None" with nothing below it. Selecting
+    // Cloudflare reveals the fields the placeholder names; it is local state
+    // until Save, so nothing is written.
+    prepare: clickByName(/^Cloudflare$/),
     fullPage: true,
   },
   {

@@ -1333,7 +1333,7 @@ You can now send a test email to verify your template changes before they go liv
 
 The template list now includes a **search field** that filters templates as you type. Search matches against template name and template type, making it faster to find specific templates in departments with many customized templates.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the template list sidebar showing the search field with "welcome" typed, and the filtered list showing only templates whose names contain "welcome" (e.g., "Welcome New Member", "Welcome Back")._
+![Email template sidebar filtered to templates matching welcome](./images/08-36-template-search.png)
 
 ### Standardized Email Footers
 
@@ -1434,7 +1434,7 @@ The resolved values refresh when an office is edited, when the **Officers** tab
 is loaded, and **nightly** — that last one is what catches a change made to the
 _member_ behind an office rather than to the assignment itself.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Officers tab showing the office list with holders, a "Linked member" column, an override indicator on one row, and the variables each office exposes._
+![Officers tab listing each office and the member holding it](./images/08-37-email-officers.png)
 
 See [DEPARTMENT_OFFICERS.md](../DEPARTMENT_OFFICERS.md) for the full variable
 catalogue and the API.
@@ -1476,7 +1476,9 @@ The Logbook now supports **Cloudflare Email Routing** as an email delivery platf
 | Email disabled in settings           | `send_batch` returns immediately without attempting delivery  |
 | Cloudflare API timeout               | Retried; failure logged to message history with error details |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Email Configuration page showing the Cloudflare platform selected, with Account ID and API Token fields, and a "Send Test Email" button._
+![Email configuration with the sending platform and credentials](./images/08-38-email-configuration.png)
+
+The credential fields are per-platform: pick **Cloudflare** and the Account ID and API Token appear beneath the sender fields. There is no **Send Test Email** button on this page — the closest thing is the test send in the email template editor, which uses whatever platform is configured here.
 
 ---
 

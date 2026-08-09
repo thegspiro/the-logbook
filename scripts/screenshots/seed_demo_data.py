@@ -2252,6 +2252,45 @@ class Seeder:
 
     # -- department messages -----------------------------------------
 
+    def seed_officers(self, members: list[dict]) -> None:
+        """Fill the department's offices.
+
+        Email templates sign messages with the officeholder's name, and the
+        Officers tab is otherwise a column of "Vacant / No holder" rows with
+        nothing to picture. One office is given an override so the tab shows
+        both kinds of entry — a linked member, and a linked member whose
+        signature title differs from the default.
+        """
+        by_username = {m.get("username"): m for m in members}
+        assignments = [
+            ("chief", "chief", None),
+            ("deputy_chief", "mbell", None),
+            ("assistant_chief", "praman", None),
+            ("safety_officer", "hvance", None),
+            # Linked member, department-specific signature title.
+            ("training_officer", "okittredge", "Training & Safety Officer"),
+            ("president", "smarchetti", None),
+            ("secretary", "aosei", None),
+            ("treasurer", "tlindqvist", None),
+            ("quartermaster", "whalloway", None),
+        ]
+        directory = items(self.api.get("/officers"), "offices")
+        filled = {
+            o.get("office_key") for o in directory if pick(o, "user_id", "userId")
+        }
+        known = {o.get("office_key") for o in directory}
+        for office_key, username, title in assignments:
+            if office_key in filled or office_key not in known:
+                continue
+            member = by_username.get(username)
+            user_id = pick(member, "id") if member else None
+            if not user_id:
+                continue
+            payload: dict[str, Any] = {"user_id": user_id}
+            if title:
+                payload["title"] = title
+            self.api.call("PUT", f"/officers/{office_key}", payload)
+
     def seed_messages(self, base_url: str, members: list[dict]) -> list[dict]:
         """Post department announcements and have some members acknowledge.
 
@@ -4487,6 +4526,7 @@ class Seeder:
         self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)
         self.step("notification rules", self.seed_notification_rules)
+        self.step("officers", lambda: self.seed_officers(members))
         self.step("messages", lambda: self.seed_messages(self.base_url, members))
         forms = self.step("forms", self.seed_forms) or []
         self.step(
