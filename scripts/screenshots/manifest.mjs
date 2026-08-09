@@ -2673,4 +2673,39 @@ export const SHOTS = [
     prepare: clickByName(/^compliance$/i),
     fullPage: true,
   },
+  {
+    id: "04-08-calendar-view",
+    doc: "04-events-meetings.md",
+    line: 218,
+    anchor: "Screenshot of the CalendarView component showing a monthly grid",
+    alt: "Events calendar month grid with events marked on their days",
+    route: "/events",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Calendar view" })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
+  },
+  {
+    id: "04-09-rsvp-modal",
+    doc: "04-events-meetings.md",
+    line: 284,
+    anchor:
+      "Screenshot of the RSVP form showing the dietary restrictions text field",
+    alt: "RSVP modal with its dietary and accessibility fields",
+    route: "/events",
+    prepare: async (page) => {
+      // An event still open for RSVPs — a past one offers no RSVP button.
+      await openFirstFromApi(
+        "/events?limit=100",
+        (id) => `/events/${id}`,
+        "events",
+        isUpcoming,
+      )(page);
+      await clickByName(/rsvp now|update rsvp/i)(page);
+    },
+    fullPage: false,
+  },
 ];
