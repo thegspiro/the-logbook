@@ -296,6 +296,26 @@ export function openStaffedShift(extraMatch) {
  * Table view is the reliable entry: the name cell carries the click handler,
  * where the kanban card's clickable region is a styled div with no role.
  */
+/**
+ * Open a named integration's connect dialog.
+ *
+ * Every card carries an identical "Connect" button and the dialog is component
+ * state with no URL of its own, so the click has to be scoped to the card by
+ * the provider's name.
+ */
+export function openIntegrationConnect(providerName) {
+  return async (page) => {
+    const card = page
+      .locator(".stat-card")
+      .filter({ hasText: providerName })
+      .first();
+    await card.waitFor({ timeout: 10_000 });
+    await card
+      .getByRole("button", { name: "Connect" })
+      .click({ timeout: 10_000 });
+  };
+}
+
 export function openApplicantDrawer(name) {
   return async (page) => {
     await clickByName(/^table$/i)(page);
@@ -2598,5 +2618,37 @@ export const SHOTS = [
     alt: "Skills test records listing sessions with candidate, template and status",
     route: "/training/admin?page=skills-testing&tab=tests",
     fullPage: true,
+  },
+  {
+    id: "16-04-documenso-connect",
+    doc: "16-integrations.md",
+    line: 176,
+    anchor: "Screenshot of the Documenso connect dialog showing the API Token",
+    alt: "Documenso connect dialog with its API token and webhook fields",
+    route: "/integrations",
+    prepare: openIntegrationConnect("Documenso"),
+    fullPage: false,
+  },
+  {
+    id: "16-06-paypal-connect",
+    doc: "16-integrations.md",
+    line: 283,
+    anchor:
+      "Screenshot of the PayPal connect dialog showing the Environment dropdown",
+    alt: "PayPal connect dialog with environment and credential fields",
+    route: "/integrations",
+    prepare: openIntegrationConnect("PayPal"),
+    fullPage: false,
+  },
+  {
+    id: "16-02-slack-connect",
+    doc: "16-integrations.md",
+    line: 89,
+    anchor:
+      "Screenshot of an integration connection dialog (e.g., Slack) showing the webhook URL",
+    alt: "Slack connect dialog with its webhook URL field",
+    route: "/integrations",
+    prepare: openIntegrationConnect("Slack"),
+    fullPage: false,
   },
 ];
