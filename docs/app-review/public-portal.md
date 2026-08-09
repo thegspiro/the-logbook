@@ -1,7 +1,26 @@
 # Application Review — Public Portal (Tier B)
 
 **Prefix:** `PP2` · **Iteration:** B26 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+## Pass 4 (2026-08-09) — invariants re-verified, no code change
+
+Re-verified this unauthenticated surface: **PP-1** webhook auth uses constant-time
+verifiers; **PP-4** public feeds/display rate-limit before expensive work;
+**PP-2/PP-3/PP-5/PP-7** ICS escaping, ASCII display-code regex, auto-escaped
+access-log render, throttled `last_used_at` all hold; every portal query scopes on
+`api_key.organization_id`; `app/api/public/` E712-free; the one public write (form
+submission) flows through the forms module's validated request schemas.
+
+Open items unchanged, both infra/schema: **PP-6** (Redis-backed rate limiter +
+two-column status-token storage — hash-for-lookup plus encrypted-for-display, since
+the token is re-read to rebuild status URLs), **PP-7 residual** (display-code
+lockout + per-subfield address whitelisting).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
+
+---
 
 ## Pass 3 (2026-08-09) — verified clean, no code change
 

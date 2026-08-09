@@ -1,7 +1,36 @@
 # Application Review — Onboarding (Tier B)
 
 **Prefix:** `ONB2` · **Iteration:** B25 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — 4 E712 the pass-3 sweep missed (ONB2-2)
+
+Re-verified the completion/replay hardening holds (ONB-3/ONB-9 second-completion
+and stale-session write guards; ONB-8 minimal `/status` post-completion).
+
+### ONB2-2 — NIT — 4 `== True/False  # noqa: E712` the pass-3 sweep missed — ✅ FIXED
+
+Pass 3's ONB2-1 swept the two `OnboardingStatus.is_completed` E712 comparisons and
+declared the module "E712-free" — but **four** more survived in `api/v1/onboarding.py`
+that the sweep didn't reach: `Organization.active == True` (lines 573, 1044, the
+first-org/existing-org lookups) and `Role.is_system == True/False` (1889, 1897, the
+system-role reconcile on org provisioning). All four are boolean columns
+(`Organization.active`, `Role.is_system` — verified in `models/user.py`), so
+`.is_(True)`/`.is_(False)` is behavior-neutral (Pitfall #10). Swept all four; the
+module is now genuinely E712-free. (Same class as B5's ELEC2-2 — a pass-3
+"E712-free" claim that had covered only part of the file.)
+
+### Still flagged (unchanged)
+
+- **ONB-7** (role editor accepts client permissions/priority/system-flag — product
+  decision, `KNOWN_LIMITATIONS.md`), **ONB-8 residual** (reset re-auth policy +
+  durable reset-audit commit).
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · onboarding DB-free tests unaffected (the sweep changes
+only boolean-predicate SQL syntax, never which rows match).
 
 ## Pass 3 (2026-08-09) — verified clean; 2 E712 swept
 

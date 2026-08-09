@@ -570,7 +570,7 @@ async def _persist_session_data_to_org(
     # Find the organization (single-org system)
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.active == True)  # noqa: E712
+        .where(Organization.active.is_(True))
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -1041,7 +1041,7 @@ async def create_system_owner(
 
     result = await db.execute(
         select(Organization)
-        .where(Organization.active == True)  # noqa: E712
+        .where(Organization.active.is_(True))
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -1886,7 +1886,7 @@ async def save_session_roles(
     await db.execute(
         delete(Role).where(
             Role.organization_id == organization_id,
-            Role.is_system == False,  # noqa: E712
+            Role.is_system.is_(False),
         )
     )
 
@@ -1894,7 +1894,7 @@ async def save_session_roles(
     result = await db.execute(
         select(Role).where(
             Role.organization_id == organization_id,
-            Role.is_system == True,  # noqa: E712
+            Role.is_system.is_(True),
         )
     )
     existing_system_roles = {role.slug: role for role in result.scalars().all()}

@@ -1,7 +1,32 @@
 # Application Review — Frontend Shared (Tier B)
 
 **Prefix:** `FE` · **Iteration:** B27 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3) · **(final Tier B item)**
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4) · **(final Tier B item)**
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; Tier B pass 4 closed — no code change
+
+The final Tier B item. Re-verified the shared-frontend infrastructure:
+
+- **FE-2 (HIPAA cache exclusion) holds** — the PII/PHI list endpoints stay in
+  `UNCACHEABLE_PREFIXES` with the trailing-slash bug fixed; the exclusion runs via
+  `url.startsWith(prefix)`. This is also where this session's Decision-2/Decision-3
+  PII gating interacts — the excluded set is intact.
+- **FE-1 holds** — `toAppError` handles object/array `detail` (no `[object Object]`).
+- **Auth invariants** — httpOnly-cookie auth, shared `refreshPromise`, CSRF
+  double-submit, `has_session` flag (no token in localStorage) unchanged.
+- **Banned date/number APIs** — the shared layer still passes ESLint's
+  `toLocaleDateString`/`date-fns` bans and Pitfall #1 (`||` not `??` on outgoing form
+  values).
+
+The backend DNS-rebinding convergence this session (B11 push, B12 integrations) is
+server-side and doesn't touch the shared frontend. Open: the accumulated
+frontend-cleanup follow-ups (unused `markLogRead`) — a future dedicated frontend
+iteration, not defects.
+
+**Completion gate (pass 4):** no code changed; `tsc --noEmit` **0**; `eslint` **0**
+across the shared scope; shared-layer tests unchanged.
 
 ---
 

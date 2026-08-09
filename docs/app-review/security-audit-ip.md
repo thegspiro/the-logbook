@@ -1,7 +1,25 @@
 # Application Review — Security / Audit / IP (Tier B, 2nd pass)
 
 **Prefix:** `SEC2` · **Iteration:** B23 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified, no code change
+
+Re-verified this exhaustively-hardened surface: **SEC-6** alert queries/mutations
+resolve and filter `organization_id`; **SEC-10** audit reads/exports filter the
+`AuditLog.organization_id` column directly (4 refs in `audit_logs.py`), not a
+user-id subquery; **SEC-2** tail-truncation cross-check intact; DoS caps, LIKE
+escape, geo fail-closed, keyed rehash hold; `severity` is server-set (latent-500
+N/A); `security_monitoring.py` and `ip_security_service.py` E712-free.
+
+Open item unchanged: **SEC-2 residual** — tail-truncation of the newest audit rows
+is detectable only at the DB level (no API delete path exists); a periodic external
+chain-tip attestation is the remaining hardening (infra/future).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 **Backend:** `endpoints/security_monitoring.py` + `services/security_monitoring.py`,
 `endpoints/ip_security.py` + `services/ip_security_service.py`,

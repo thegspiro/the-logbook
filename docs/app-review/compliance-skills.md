@@ -1,7 +1,45 @@
 # Application Review — Compliance / Skills (Tier B)
 
 **Prefix:** `CS2` · **Iteration:** B22 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — full FK re-audit: zero gaps; no code change
+
+Ran a fresh, exhaustive client-FK audit across every `create_*`/`update_*` writer
+in all four services plus the three endpoint files (a sub-agent traced each against
+its request schema and model). **No missed client-FK write** — every FK that
+reaches a persisted column is validated in-org before the write:
+
+- **Skill tests** — `create_test`/`update_test` validate `template_id` and
+  `candidate_id` via org-scoped selects (404 if not in org), `requirement_id` via
+  `_validate_requirement_link`, and `examiner_id` is server-set; `SkillTestUpdate`
+  exposes no `candidate_id`/`examiner_id`/`template_id`, so the `setattr` loop can't
+  rebind tenancy. `add_test_viewer` proves its `user_id` in-org before storing
+  (Pitfall #14c, quoted in-code). CS-10 (examiner≠candidate) and CS-8
+  (`assert_different_person`) both hold.
+- **Compliance config/profiles** — `create_profile`/`update_profile` route every
+  client FK (`required/optional_requirement_ids`→`TrainingRequirement`,
+  `role_ids`→`Position`, `admin_hours_requirements[].category_id`→
+  `AdminHoursCategory`) through `_validate_profile_fks` (org-scoped, raises on any
+  `wanted − found`); `config_id` is server-derived and `ComplianceProfileUpdate` has
+  no `config_id`, so the parent can't be rebound. This is the "config/profile FK
+  re-validation on update" the prior pass added — re-confirmed covering both paths.
+- Attestation/report writers persist only server-derived actor/org ids;
+  `training_compliance.py` is read/evaluate-only.
+
+**Latent-500 lens N/A** (no strict enum columns — statuses are validated strings /
+config-driven); **E712-free** (CS2-1 swept both in pass 3).
+
+Open items unchanged, both product/feature: **CS-8 attestation** (server-side
+recompute / dual-control — a workflow change) and **CS-9 monthly windowing** (a
+data-layer feature).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a · `test_skill_test_update_guard.py` **2 passed** (DB-free).
+
+---
 
 **Backend:** `endpoints/skills_testing.py` + `skills_testing_service.py`,
 `endpoints/compliance_officer.py` + `compliance_officer_service.py` +

@@ -60,12 +60,12 @@ from its open list.
 | B19 | scheduling | SCH2 | ✅ (p1, p2, p3, p4) |
 | B20 | finance | FIN2 | ✅ (p1, p2, p3, p4) |
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2, p3, p4) |
-| B22 | compliance & skills | CS2 | ⬜ |
-| B23 | security, audit & IP | SEC2 | ⬜ |
-| B24 | core infra | CI2 | ⬜ |
-| B25 | onboarding | ONB2 | ⬜ |
-| B26 | public-portal | PP2 | ⬜ |
-| B27 | frontend shared | FE2 | ⬜ |
+| B22 | compliance & skills | CS2 | ✅ (p1, p2, p3, p4) |
+| B23 | security, audit & IP | SEC2 | ✅ (p1, p2, p3, p4) |
+| B24 | core infra | CI2 | ✅ (p1, p2, p3, p4) |
+| B25 | onboarding | ONB2 | ✅ (p1, p2, p3, p4) |
+| B26 | public-portal | PP2 | ✅ (p1, p2, p3, p4) |
+| B27 | frontend shared | FE2 | ✅ (p1, p2, p3, p4) |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -1926,3 +1926,81 @@ Next feature: **B1 medical-screening**.
   privilege-escalation ceiling guards (ORU-7a/b permission+role-edit, ORU-7d CRITICAL
   rank-grant) all wired; latent-500 clean; E712-free. Open: ORU-7c (org-wide member
   role mass-edit — intended but sharp, owner decision). See orgs-roles-users.md.
+
+- **B22 compliance & skills ✅ (pass 4) — full FK re-audit: zero gaps, no code
+  change.** A fresh exhaustive client-FK audit (sub-agent) across all four services
+  found every writer covered: skill-test `template_id`/`candidate_id` org-scoped
+  selects, `requirement_id` via `_validate_requirement_link`, `add_test_viewer`
+  user_id in-org (Pitfall #14c); compliance-profile `requirement_ids`/`role_ids`/
+  `category_id` via `_validate_profile_fks` on create AND update. CS-8/CS-10 hold.
+  Open: CS-8 attestation, CS-9 monthly windowing (product/feature). See
+  compliance-skills.md → Pass 4.
+
+- **B23 security/audit/IP ✅ (pass 4) — invariants re-verified, no code change.**
+  SEC-6 alert org-scoping, SEC-10 audit org-column filter, SEC-2 tail cross-check,
+  DoS caps/LIKE/geo all hold; E712-free. Open: SEC-2 residual (external chain-tip
+  attestation, infra). See security-audit-ip.md → Pass 4.
+
+- **B24 core-infra ✅ (pass 4) — invariants re-verified, no code change.** CI-1
+  SafeCsvWriter, CI-4 InvalidToken-narrow decrypt (same fail-closed posture as B1/B18
+  this session), CI-5 AES-256-GCM, Pitfall #4 pure-ASGI middleware all hold;
+  E712-free. Open: CI-9/CI-4-full/CI-11/CI-10 (ops/config/migration-gated). See
+  core-infra.md → Pass 4.
+
+- **B25 onboarding ✅ (pass 4) — ONB2-2: 4 E712 the pass-3 sweep missed.** Pass 3's
+  ONB2-1 swept 2 `is_completed` E712 and claimed "E712-free," but 4 more survived in
+  `api/v1/onboarding.py` (`Organization.active`, `Role.is_system` — boolean columns).
+  Swept all 4 to `.is_(...)`; module now genuinely E712-free (same class as B5's
+  ELEC2-2). Open: ONB-7 (role editor product), ONB-8 residual. See onboarding.md.
+
+- **B26 public-portal ✅ (pass 4) — invariants re-verified, no code change.** PP-1
+  constant-time webhook auth, PP-4 rate-limit-before-work, PP-2/3/5/7 escaping/regex
+  guards, per-org api-key scoping all hold; `app/api/public/` E712-free. Open: PP-6
+  (Redis limiter + two-column status token — infra/schema), PP-7 residual. See
+  public-portal.md → Pass 4.
+
+- **B27 frontend shared ✅ (pass 4) — invariants re-verified, no code change; Tier B
+  pass 4 closed.** FE-2 HIPAA cache exclusion, FE-1 object-detail handling, httpOnly
+  auth / CSRF / refreshPromise, banned date/number APIs all hold. Open:
+  frontend-cleanup follow-ups (a future dedicated iteration). See frontend-shared.md.
+
+---
+
+## 🏁 Tier B pass 4 complete (2026-08-09) — all 27 features re-reviewed
+
+Tier B (B1–B27) has now been through a **fourth** full pass. Where pass 3's
+throughline was the latent-500 enum lens, pass 4's was the **deeper, migration- and
+audit-shaped items** pass 3 had deferred — plus a **fresh, exhaustive client-FK
+re-audit** (via sub-agents) of the largest write-surface modules to catch anything
+the incremental passes missed. Headline outcomes:
+
+**Substantive fixes (10 modules):**
+- **B1** MS-1 — PHI encrypted at rest (new `EncryptedJSON` type + Alembic migration).
+- **B3** INV-4 — the deferred ~13-method inventory FK org-scoping sweep.
+- **B6** MM2-3 — the two genuinely-unsafe meeting/action-item `status` validators.
+- **B9** MP2-5 — two client-FK gaps the MP-5 sweep missed (`add_prospect_document`
+  step, step-writer `email_template_id`) + a latent-500 endpoint wrapper.
+- **B11** NOTIF2-3 — push DNS-rebinding SSRF closed at **send** time (the insight
+  that sidestepped the test-harness collision that kept it deferred).
+- **B17** EV2-2 — a real cross-org **read-leak** (`schedule_request` location) + a
+  dangling template FK, found by the fresh FK audit.
+- **B18** TR-6 — external-credential decrypt now **fails closed** (`InvalidTag`
+  propagates instead of serving an unverified credential).
+- **B5** ELEC2-2 / **B25** ONB2-2 — E712 residuals two prior "E712-free" claims had
+  missed (endpoint files the service-only sweeps skipped).
+
+**Fresh FK re-audits that came back clean** (verify-only with evidence, not a rubber
+stamp): **B14** grants (money module), **B13** forms (one already-flagged
+non-security dangling ref), **B22** compliance/skills. Cross-tenant discipline
+(assert_in_org / is_in_org / `_validate_*_fks` / org-scoped fetch) is now
+comprehensively verified across the write surface.
+
+**Convergence noted:** B11's send-time push guard now matches B12 integrations'
+outbound SSRF re-check, and the fail-closed decrypt posture (B1 EncryptedText, B18
+`_decrypt_field`, B24 CI-4) is consistent across the crypto surface.
+
+Same discipline throughout: verified/safe fixes only; product/behavior/migration/
+infra items flagged in the module docs + `KNOWN_LIMITATIONS.md`; regression tests
+added for every code change; gate green (flake8/black/tsc/eslint; DB-backed tests
+are the known no-MySQL sandbox limit; the migration `ALTER`s need CI/staging
+verification). Tier A remains ✅ (front-loaded surfaces, not re-run in pass 4).
