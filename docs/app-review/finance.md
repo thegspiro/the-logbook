@@ -1,7 +1,54 @@
 # Application Review — Finance (Tier B)
 
 **Prefix:** `FIN2` · **Iteration:** B20 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3)
+
+---
+
+## Pass 3 (2026-08-09) — FIN-4 & FIN-5 now resolved; latent-500 fixed
+
+Two of the module's standing flags were **closed earlier this session** via owner
+decisions, and re-verified here:
+
+- **FIN-4 — ✅ RESOLVED (person-based SoD).** The disburse-side self-service gap is
+  closed: `mark_pr_paid`, `mark_expense_paid`, `issue_check`, and `waive_dues` now
+  call `assert_different_person` (service 649/1288/1511/1649/1898), so the requester
+  can't also disburse — the same person-based guard `approve_step` already used
+  (owner decision 2026-08-09, chosen over minting a new `finance.disburse`
+  permission). Automatic payment reconciliation stays exempt.
+- **FIN-5 — ✅ RESOLVED.** `list_expense_reports`/`get_expense_report` take
+  `restrict_to_user` (service 1345/1365); a plain `finance.view` holder sees only
+  their own reimbursements, treasurers the full queue.
+
+### FIN2-1 — LOW/MED — Approval/PR/dues/expense/export enum fields 500 on a bad value — ✅ FIXED
+
+**What:** `applies_to`, `step_type`, `approver_type` (approval chains/steps),
+`frequency` (dues), `expense_type` (line items), `mapping_type` (QB export), and
+`priority` (purchase requests) — **13 fields across 8 request schemas** — map to
+strict MySQL ENUM columns but were typed as free `str` with **no `field_validator`**
+and stored raw, so an out-of-set value 500'd at MySQL. The B1 class, in the money
+module.
+
+**Fix (input-validation only — no money math touched):** a shared `_enum_check`
+helper + `@field_validator`s on all 8 request classes, each deriving its set from the
+model enum (`ApprovalEntityType`/`ApprovalStepType`/`ApproverType`/`DuesFrequency`/
+`ExpenseType`/`ExportMappingType`/`PurchaseRequestPriority`), → 422. Amounts and the
+FIN-7 float→Decimal item are untouched. Request-only, so responses are unchanged.
+**8 tests added.** (E712 was already swept in pass 2; `finance_service.py` stays
+E712-free.)
+
+### Still flagged (unchanged)
+
+- **FIN-7 residual** — float→Decimal money-math refactor, unbounded transaction
+  export/pagination, overspend guard, org-wide pending-approvals queue.
+- **FIN-N** — the `ApprovalStepRecord` helpers stay unfiltered (verified not-live;
+  threading `org_id` through the critical money-approval path isn't worth the churn).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · new enum tests **8 passed** + finance unit tests **32
+passed** (DB-free; the `db_session` errors are the known no-MySQL fixture failures).
+
+---
 
 **Backend:** `endpoints/finance.py` (~1,370 L, 41 endpoints),
 `services/finance_service.py` (~1,930 L)

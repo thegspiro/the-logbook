@@ -58,7 +58,7 @@ from its open list.
 | B17 | events | EV2 | ✅ (p1, p2, p3) |
 | B18 | training | TR2 | ✅ (p1, p2, p3) |
 | B19 | scheduling | SCH2 | ✅ (p1, p2, p3) |
-| B20 | finance | FIN2 | ⬜ |
+| B20 | finance | FIN2 | ✅ (p1, p2, p3) |
 | B21 | orgs, roles & users | ORU2 | ⬜ |
 | B22 | compliance & skills | CS2 | ⬜ |
 | B23 | security, audit & IP | SEC2 | ⬜ |
@@ -1613,3 +1613,15 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   SCH-6 residual stay flagged. 109 scheduling tests pass (DB-heavy module; db_session
   errors are the no-MySQL limit). Gate: flake8/black clean; tsc n/a. No CHANGELOG. See
   scheduling.md → Pass 3. Next: B20 finance.
+
+- **B20 finance ✅ (pass 3) — B15–B20 batch complete.** Two standing flags closed
+  this session and re-verified: **FIN-4 RESOLVED** (person-based SoD —
+  `assert_different_person` on mark_pr_paid/mark_expense_paid/issue_check/waive_dues,
+  Decision 1) and **FIN-5 RESOLVED** (`restrict_to_user` scoping, Decision 3). **Fixed
+  FIN2-1** (latent-500): 13 free-str enum fields (applies_to/step_type/approver_type/
+  frequency/expense_type/mapping_type/priority) across 8 request schemas mapped to
+  strict ENUMs, no validator, stored raw → 500. Added a shared `_enum_check` +
+  `@field_validator`s — input validation only, money math untouched. **8 tests
+  added**; finance unit tests pass. E712 already clean (pass 2). FIN-7 residual
+  (float→Decimal) + FIN-N stay flagged. Gate: flake8/black clean; tsc n/a. CHANGELOG
+  updated. See finance.md → Pass 3.

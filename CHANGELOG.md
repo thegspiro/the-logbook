@@ -169,6 +169,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fixes above; the event forms already send valid values, so only malformed API
   requests are affected.
 
+- **Finance: saving an approval-chain step, purchase-request priority, dues
+  frequency, expense type, or export mapping with an unrecognized value now returns
+  a clear validation error instead of a server error (2026-08-09).** Same class as
+  the fixes above — input validation only; amounts and money handling are unchanged.
+  The finance forms already send valid values, so only malformed API requests are
+  affected.
+
 ### Money: you can no longer approve/record and pay out the same item yourself (2026-08-09)
 
 **Security**
