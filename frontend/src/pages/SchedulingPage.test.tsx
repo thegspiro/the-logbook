@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SchedulingPage from './SchedulingPage';
@@ -19,6 +19,12 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getWeekCalendar: vi.fn().mockResolvedValue([]),
     getMonthCalendar: vi.fn().mockResolvedValue([]),
     getSupplyExpiringItems: vi.fn().mockResolvedValue({ total: 0, items: [] }),
+    getMyChecklists: vi.fn().mockResolvedValue([]),
+    getMyChecklistHistory: vi.fn().mockResolvedValue([]),
+    getEquipmentCheckTemplates: vi.fn().mockResolvedValue([]),
+    getMyAssignments: vi.fn().mockResolvedValue([]),
+    getMyShifts: vi.fn().mockResolvedValue([]),
+    getOpenShifts: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -64,6 +70,8 @@ describe('SchedulingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckPermission.mockReturnValue(false);
+    // Tab selection is mirrored into ?tab=, so reset the URL between tests.
+    window.history.replaceState({}, '', '/scheduling');
   });
 
   describe('Tab Rendering', () => {
@@ -163,6 +171,46 @@ describe('SchedulingPage', () => {
       await waitFor(() => {
         expectTabVisible('My Shifts');
       });
+    });
+
+    // Regression: the tab-sync effect re-read ?tab= whenever activeTab changed
+    // and, finding no param, reset the page to Schedule — so clicking a tab
+    // selected it and immediately snapped back. Assert on the tab's *content*,
+    // not just its label: the labels stay in the DOM either way, which is why
+    // the older assertion above did not catch this.
+    it('should open the Equipment Checks tab on click', async () => {
+      renderWithRouter(<SchedulingPage />);
+      const user = userEvent.setup();
+
+      const tabBar = await screen.findByRole('navigation', { name: /Scheduling tabs/i });
+      await user.click(within(tabBar).getByRole('button', { name: /Equipment Checks/i }));
+
+      expect(await screen.findByText('My Equipment Checklists')).toBeInTheDocument();
+      expect(window.location.search).toContain('tab=equipment-checks');
+    });
+
+    it('should return to the Schedule tab and drop the tab param', async () => {
+      renderWithRouter(<SchedulingPage />);
+      const user = userEvent.setup();
+
+      const tabBar = await screen.findByRole('navigation', { name: /Scheduling tabs/i });
+      await user.click(within(tabBar).getByRole('button', { name: /Equipment Checks/i }));
+      await screen.findByText('My Equipment Checklists');
+
+      await user.click(within(tabBar).getByRole('button', { name: /Schedule/i }));
+
+      await waitFor(() => {
+        expect(screen.queryByText('My Equipment Checklists')).not.toBeInTheDocument();
+      });
+      expect(window.location.search).not.toContain('tab=');
+    });
+
+    it('should honour a ?tab= deep link on first render', async () => {
+      window.history.replaceState({}, '', '/scheduling?tab=equipment-checks');
+
+      renderWithRouter(<SchedulingPage />);
+
+      expect(await screen.findByText('My Equipment Checklists')).toBeInTheDocument();
     });
   });
 
