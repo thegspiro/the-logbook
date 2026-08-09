@@ -941,6 +941,10 @@ export interface ProgramRequirement {
   is_required: boolean;
   is_prerequisite: boolean;
   sort_order: number;
+  // False when an existing department requirement was linked in rather than
+  // created for this program: editing it changes the department's copy, and
+  // unlinking leaves that copy in place.
+  owns_requirement?: boolean;
   program_specific_description?: string;
   custom_deadline_days?: number;
   notification_message?: string;
@@ -954,6 +958,9 @@ export interface ProgramRequirementCreate {
   requirement_id: string;
   is_required?: boolean;
   is_prerequisite?: boolean;
+  // Send true only when this caller just created `requirement_id` for the
+  // program — it lets unlinking delete the requirement as well.
+  owns_requirement?: boolean;
   sort_order?: number;
   program_specific_description?: string;
   custom_deadline_days?: number;

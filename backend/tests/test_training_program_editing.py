@@ -216,7 +216,9 @@ class TestDeletePhase:
 
 class TestRemoveRequirement:
     async def test_deletes_progress_link_and_orphan(self):
-        link = SimpleNamespace(id=str(uuid4()), requirement_id=str(uuid4()))
+        link = SimpleNamespace(
+            id=str(uuid4()), requirement_id=str(uuid4()), owns_requirement=True
+        )
         e1 = str(uuid4())
         db = RecordingSession(
             [
@@ -237,6 +239,39 @@ class TestRemoveRequirement:
         assert error is None
         assert link in db.deleted
         assert db.stmt_types().count("Delete") == 2  # progress rows + orphan req
+        svc._recalculate_enrollment_progress.assert_awaited_once()
+
+    async def test_keeps_linked_in_department_requirement(self):
+        """
+        A requirement linked in from the library belongs to the department, so
+        unlinking it drops the link and the progress rows but must leave the
+        requirement itself standing — otherwise removing CPR from one recruit
+        phase would delete the department's CPR requirement.
+        """
+        link = SimpleNamespace(
+            id=str(uuid4()), requirement_id=str(uuid4()), owns_requirement=False
+        )
+        db = RecordingSession(
+            [
+                _one(link),  # the link
+                _rows([(str(uuid4()),)]),  # program enrollments
+                MagicMock(),  # delete RequirementProgress
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc._recalculate_enrollment_progress = AsyncMock()
+        svc._maybe_auto_advance_phase = AsyncMock()
+
+        ok, error = await svc.remove_requirement_from_program(uuid4(), uuid4(), uuid4())
+
+        assert ok is True
+        assert error is None
+        assert link in db.deleted
+        # Progress rows only — the requirement itself is never deleted, and the
+        # "is it orphaned?" lookup is not even issued (the link + enrollment
+        # selects are the only two).
+        assert db.stmt_types().count("Delete") == 1
+        assert db.stmt_types().count("Select") == 2
         svc._recalculate_enrollment_progress.assert_awaited_once()
 
 

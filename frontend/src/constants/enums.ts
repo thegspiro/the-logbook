@@ -470,6 +470,32 @@ export const DATE_ROLL_POLICY_LABELS: Record<string, string> = {
   next_meeting_day: 'Move to the next meeting day',
 };
 
+// ============================================
+// Training Requirements
+// ============================================
+export const REQUIREMENT_TYPE_LABELS: Record<string, string> = {
+  hours: 'Training hours',
+  shifts: 'Shifts',
+  calls: 'Call responses',
+  courses: 'Courses',
+  skills_evaluation: 'Skills evaluation',
+  knowledge_test: 'Knowledge test',
+  checklist: 'Checklist',
+  certification: 'Certification',
+};
+
+/** Order the requirement-type picker offers, commonest first. */
+export const REQUIREMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  'hours',
+  'shifts',
+  'calls',
+  'courses',
+  'skills_evaluation',
+  'knowledge_test',
+  'checklist',
+  'certification',
+].map((value) => ({ value, label: REQUIREMENT_TYPE_LABELS[value] ?? value }));
+
 /** Weekday numbers used by meeting patterns (0 = Monday, matching Python). */
 export const MEETING_WEEKDAYS: { value: number; label: string; short: string }[] = [
   { value: 0, label: 'Monday', short: 'Mon' },

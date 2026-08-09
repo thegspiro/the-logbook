@@ -261,6 +261,10 @@ class ProgramRequirementCreate(ProgramRequirementBase):
     program_id: UUID
     phase_id: Optional[UUID] = None
     requirement_id: UUID
+    # Set True only by the caller that just created ``requirement_id`` for this
+    # program — it makes unlinking delete the requirement too. Defaults False so
+    # linking an existing department requirement never puts it up for deletion.
+    owns_requirement: bool = False
 
 
 class ProgramRequirementUpdate(BaseModel):
@@ -292,6 +296,9 @@ class ProgramRequirementResponse(ProgramRequirementBase, UTCResponseBase):
     program_id: UUID
     phase_id: Optional[UUID] = None
     requirement_id: UUID
+    # Surfaced so the editor can warn that edits to a linked-in department
+    # requirement apply everywhere it is used, not just in this program.
+    owns_requirement: bool = True
     # Nested so the UI can show the requirement's name/type without a second
     # lookup. The endpoints eager-load this relationship; from_attributes reads
     # only declared fields, so without it the name is silently dropped.

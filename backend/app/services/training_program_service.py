@@ -682,6 +682,9 @@ class TrainingProgramService:
                         requirement_id=requirement.id,
                         is_required=req_input.is_required,
                         sort_order=req_input.sort_order or idx,
+                        # The requirement was created just above for this
+                        # program, so unlinking it may clean it up.
+                        owns_requirement=True,
                     )
                 )
 
@@ -1211,6 +1214,7 @@ class TrainingProgramService:
             is_required=program_requirement_data.is_required,
             is_prerequisite=program_requirement_data.is_prerequisite,
             sort_order=program_requirement_data.sort_order,
+            owns_requirement=program_requirement_data.owns_requirement,
         )
 
         self.db.add(program_requirement)
@@ -1332,8 +1336,8 @@ class TrainingProgramService:
         """
         Unlink a requirement from the program (auto-clean): delete its progress
         rows for this program's enrollments, drop the link, delete the now-
-        orphaned requirement if nothing else references it, then recompute the
-        affected enrollments. Returns (ok, error_message).
+        orphaned requirement if this link owned it and nothing else references
+        it, then recompute the affected enrollments. Returns (ok, error_message).
         """
         result = await self.db.execute(
             select(ProgramRequirement)
@@ -1349,6 +1353,7 @@ class TrainingProgramService:
             return False, "Program requirement not found"
 
         requirement_id = str(link.requirement_id)
+        owned = bool(link.owns_requirement)
 
         enroll_result = await self.db.execute(
             select(ProgramEnrollment.id).where(
@@ -1367,19 +1372,23 @@ class TrainingProgramService:
         await self.db.delete(link)
         await self.db.flush()
 
-        # If no other program links this requirement, remove the orphan so it
-        # doesn't linger in the requirements library.
-        others = await self.db.execute(
-            select(ProgramRequirement.id)
-            .where(ProgramRequirement.requirement_id == requirement_id)
-            .limit(1)
-        )
-        if others.scalar_one_or_none() is None:
-            await self.db.execute(
-                delete(TrainingRequirement).where(
-                    TrainingRequirement.id == requirement_id
-                )
+        # If this link created the requirement and no other program links it,
+        # remove the orphan so it doesn't linger in the requirements library. A
+        # requirement that was linked in from the library (owns_requirement
+        # False) belongs to the department, not to this program — deleting it
+        # here would take the department's own copy with it.
+        if owned:
+            others = await self.db.execute(
+                select(ProgramRequirement.id)
+                .where(ProgramRequirement.requirement_id == requirement_id)
+                .limit(1)
             )
+            if others.scalar_one_or_none() is None:
+                await self.db.execute(
+                    delete(TrainingRequirement).where(
+                        TrainingRequirement.id == requirement_id
+                    )
+                )
 
         await self.db.commit()
 
@@ -3307,6 +3316,9 @@ class TrainingProgramService:
                     program_specific_description=source_req.program_specific_description,
                     custom_deadline_days=source_req.custom_deadline_days,
                     notification_message=source_req.notification_message,
+                    # The copy shares the source program's requirement rather
+                    # than cloning it, so ownership stays with the source.
+                    owns_requirement=False,
                 )
                 self.db.add(new_req)
 
@@ -3361,6 +3373,8 @@ class TrainingProgramService:
                 program_specific_description=source_req.program_specific_description,
                 custom_deadline_days=source_req.custom_deadline_days,
                 notification_message=source_req.notification_message,
+                # Shared with the source program — see the phase copy above.
+                owns_requirement=False,
             )
             self.db.add(new_req)
 
@@ -3635,7 +3649,7 @@ class TrainingProgramService:
             await self.db.flush()
 
             for req_data in phase_data.get("requirements", []):
-                req_id = await self._resolve_or_create_requirement(
+                req_id, req_created = await self._resolve_or_create_requirement(
                     req_data.get("requirement", {}),
                     organization_id,
                     created_by,
@@ -3654,6 +3668,7 @@ class TrainingProgramService:
                             ),
                             custom_deadline_days=req_data.get("custom_deadline_days"),
                             notification_message=req_data.get("notification_message"),
+                            owns_requirement=req_created,
                         )
                     )
 
@@ -3677,7 +3692,7 @@ class TrainingProgramService:
 
         # Program-level requirements
         for req_data in data.get("program_requirements", []):
-            req_id = await self._resolve_or_create_requirement(
+            req_id, req_created = await self._resolve_or_create_requirement(
                 req_data.get("requirement", {}),
                 organization_id,
                 created_by,
@@ -3696,6 +3711,7 @@ class TrainingProgramService:
                         ),
                         custom_deadline_days=req_data.get("custom_deadline_days"),
                         notification_message=req_data.get("notification_message"),
+                        owns_requirement=req_created,
                     )
                 )
 
@@ -3725,10 +3741,17 @@ class TrainingProgramService:
         req_data: dict,
         organization_id: UUID,
         created_by: UUID,
-    ) -> str | None:
-        """Find an existing requirement by name+source, or create it."""
+    ) -> Tuple[Optional[str], bool]:
+        """
+        Find an existing requirement by name+source, or create it.
+
+        Returns ``(requirement_id, created)``. The caller needs ``created`` to
+        decide whether its ProgramRequirement link owns the requirement: a
+        resolved match is a pre-existing department requirement that must
+        survive the program being edited or deleted.
+        """
         if not req_data or not req_data.get("name"):
-            return None
+            return None, False
 
         name = req_data["name"]
 
@@ -3776,7 +3799,7 @@ class TrainingProgramService:
         )
         found = existing.scalar_one_or_none()
         if found:
-            return found.id
+            return found.id, False
 
         req = TrainingRequirement(
             organization_id=organization_id,
@@ -3801,7 +3824,7 @@ class TrainingProgramService:
         )
         self.db.add(req)
         await self.db.flush()
-        return req.id
+        return req.id, True
 
     # ==================== Bulk Enrollment Methods ====================
 
