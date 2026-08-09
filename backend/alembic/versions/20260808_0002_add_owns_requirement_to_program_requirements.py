@@ -14,8 +14,8 @@ records which links may trigger the cleanup.
 Existing rows are backfilled to TRUE: they all came from the inline create
 flow, so this preserves the current behavior exactly.
 
-Revision ID: 20260808_0003
-Revises: 20260808_0002
+Revision ID: 20260808_0002
+Revises: 20260808_0001
 Create Date: 2026-08-08 12:00:00.000000
 
 """
@@ -24,8 +24,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260808_0003"
-down_revision = "20260808_0002"
+revision = "20260808_0002"
+down_revision = "20260808_0001"
 branch_labels = None
 depends_on = None
 
