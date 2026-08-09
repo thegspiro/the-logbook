@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.core.utils import generate_uuid
 from app.models.apparatus import (
     Apparatus,
+    ApparatusEquipment,
     CheckTemplateCompartment,
     CheckTemplateItem,
     EquipmentCheckTemplate,
@@ -228,7 +229,18 @@ class EquipmentCheckService:
         if not template:
             return None
 
+        # EC2-3: a client-supplied parent_compartment_id must be in-org
+        # (integrity-only — not projected — but validate on both paths).
+        if data.get("parent_compartment_id") and not await self._get_compartment(
+            data["parent_compartment_id"], organization_id
+        ):
+            raise ValueError("Invalid parent compartment")
+
         items_data = data.pop("items", None) or []
+        # EC2-4: nested items carry the same client-supplied inventory_item_id /
+        # equipment_id as add_item; validate each in-org before creating them.
+        for item_data in items_data:
+            await self._validate_item_fks(item_data, organization_id)
         compartment = CheckTemplateCompartment(
             id=generate_uuid(),
             template_id=template_id,
@@ -261,6 +273,13 @@ class EquipmentCheckService:
         compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
             return None
+
+        # EC2-3: validate a reassigned parent_compartment_id in-org before the
+        # setattr loop applies it.
+        if data.get("parent_compartment_id") and not await self._get_compartment(
+            data["parent_compartment_id"], organization_id
+        ):
+            raise ValueError("Invalid parent compartment")
 
         for key, value in data.items():
             if key not in self.PROTECTED_FIELDS and hasattr(compartment, key):
@@ -312,6 +331,26 @@ class EquipmentCheckService:
     # Item CRUD
     # ------------------------------------------------------------------
 
+    async def _validate_item_fks(
+        self, data: Dict[str, Any], organization_id: str
+    ) -> None:
+        """Reject a client-supplied inventory_item_id / equipment_id that isn't
+        in the caller's org (EC2-3 / EC2-4).
+
+        inventory_item_id is projected as ``inventory_item_name`` in
+        ``get_my_checklists`` (the org-scoped name lookup is the definitive guard;
+        this validates the write side too). equipment_id is integrity-only, but
+        validated here for defense-in-depth. Only checked when supplied.
+        """
+        if data.get("inventory_item_id") and not await is_in_org(
+            self.db, InventoryItem, data["inventory_item_id"], organization_id
+        ):
+            raise ValueError("Invalid inventory item")
+        if data.get("equipment_id") and not await is_in_org(
+            self.db, ApparatusEquipment, data["equipment_id"], organization_id
+        ):
+            raise ValueError("Invalid equipment")
+
     async def add_item(
         self,
         compartment_id: str,
@@ -322,6 +361,8 @@ class EquipmentCheckService:
         compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
             return None
+
+        await self._validate_item_fks(data, organization_id)
 
         item = CheckTemplateItem(
             id=generate_uuid(),
@@ -354,6 +395,10 @@ class EquipmentCheckService:
             data["compartment_id"], organization_id
         ):
             raise ValueError("Invalid compartment")
+
+        # EC2-3/EC2-4: a reassigned inventory_item_id/equipment_id must be in-org
+        # (inventory_item_id is name-projected in get_my_checklists).
+        await self._validate_item_fks(data, organization_id)
 
         for key, value in data.items():
             if key not in self.PROTECTED_FIELDS and hasattr(item, key):
@@ -1305,9 +1350,16 @@ class EquipmentCheckService:
         )
         item_names: Dict[str, str] = {}
         if inv_ids:
+            # EC2-4: org-scope this name lookup (the adjacent apparatus_names query
+            # already does). inventory_item_id is a client-supplied FK stored raw by
+            # add_item/update_item; without this filter a checklist item pointing at
+            # a foreign org's inventory item would render that item's NAME into the
+            # checklist response (a cross-tenant read leak). A foreign id now resolves
+            # to no name.
             nres = await self.db.execute(
                 select(InventoryItem.id, InventoryItem.name).where(
-                    InventoryItem.id.in_(inv_ids)
+                    InventoryItem.id.in_(inv_ids),
+                    InventoryItem.organization_id == organization_id,
                 )
             )
             item_names = {iid: name for iid, name in nres.all()}

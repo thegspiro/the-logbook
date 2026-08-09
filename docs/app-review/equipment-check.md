@@ -1,7 +1,64 @@
 # Application Review — Equipment Check / Shift Completion (Tier B)
 
 **Prefix:** `EC2` · **Iteration:** B7 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3)
+
+---
+
+## Pass 3 (2026-08-09) — a read-leak pass 2 misclassified; EC2-3 closed
+
+Re-verifying EC2-3 (which pass 2 called "integrity-only, not projected by name")
+found that one of its FKs **is** projected by name — an actual cross-tenant read
+leak, not a dangling reference. Fixed that plus the write-side sweep.
+
+### EC2-4 — MED — Foreign `inventory_item_id` leaks the item name into the checklist — ✅ FIXED
+
+**What pass 2 missed:** `get_my_checklists` resolves each item's `inventory_item_id`
+to an `inventory_item_name` in the response (service ~1337). The adjacent
+`apparatus_names` lookup filters `organization_id`, but the **`item_names`
+(InventoryItem) lookup did not** — and `inventory_item_id` is a client-supplied FK
+that `add_item`/`update_item` store **raw** through their generic constructors/setattr
+loops (only `compartment_id` was validated, per EC2-2). So a manager who sets an
+item's `inventory_item_id` to another org's inventory item causes that org's item
+**name** to render in the checklist every member on the shift sees — the EC2-1 shape,
+which pass 2 had ruled out for this FK.
+
+**Fix (two layers, mirroring EC2-1):**
+1. *The leak:* the `item_names` lookup now filters
+   `InventoryItem.organization_id == organization_id` — a foreign id resolves to no
+   name. This is the definitive guard regardless of how a bad id was stored.
+2. *Write side (EC2-3, now closed):* a new `_validate_item_fks` validates
+   `inventory_item_id` **and** `equipment_id` in-org (via `is_in_org`) on `add_item`,
+   `update_item`, and `add_compartment`'s nested-item path; `parent_compartment_id`
+   is validated via the org-scoped `_get_compartment` on `add_compartment` /
+   `update_compartment`.
+
+**Latent-500 corrected along the way:** the `add_compartment`, `update_compartment`,
+and `add_item` **endpoints had no `ValueError` handling** (only `update_item` did), so
+the new guards — and any pre-existing service `ValueError` — would have surfaced as
+500s. All three gained the module-standard `except ValueError → 400 + safe_error_detail`
+(the same latent-500 class pass 2 fixed on `update_template`). **6 tests added**
+(`TestItemFkValidation`, `TestCompartmentParentValidation`); the module's existing
+equipment-check service tests still pass.
+
+### EC2-5 — NIT — 2 `== True  # noqa: E712` in shift_completion swept — ✅ FIXED
+
+`shift_completion_service.py` carried 2 boolean-column E712 suppressions
+(`User.is_active`, `SkillEvaluation.active`); converted to `.is_(True)`. The main
+`equipment_check_service.py` was already E712-free.
+
+### Still flagged (unchanged)
+
+- **EC-11** — compliance metrics (`checks_expected`/`overdue_count`) hardcoded to 0;
+  needs an expected-check-cadence model (feature).
+- **EC-7 residual** — the submit endpoints keep bare `get_current_user` (each
+  org-scopes its target); whether writes should require `equipment_check.submit` is
+  the owner's intra-org permission call.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit` 0
+(no frontend change) · eslint unaffected · `test_equipment_check_service.py`
+**12 passed** (6 + 6 new) + sibling equipment tests 18 passed (all DB-free; the
+shift_completion `db_session` errors are the known no-MySQL fixture failures).
 
 ---
 

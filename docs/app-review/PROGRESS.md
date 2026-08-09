@@ -45,7 +45,7 @@ from its open list.
 | B4 | facilities | FAC2 | ✅ (p1, p2, p3) |
 | B5 | elections | ELEC2 | ✅ (p1, p2, p3) |
 | B6 | meetings & minutes | MM2 | ✅ (p1, p2, p3) |
-| B7 | equipment-check | EC2 | ⬜ |
+| B7 | equipment-check | EC2 | ✅ (p1, p2, p3) |
 | B8 | documents | DOC2 | ⬜ |
 | B9 | membership pipeline | MP2 | ⬜ |
 | B10 | messaging & communications | MSG2 | ⬜ |
@@ -1461,3 +1461,21 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   follow-up rather than a guessed sweep. Gate: flake8/black/tsc clean. CHANGELOG
   updated (500→422 on malformed input). See meetings-minutes.md → Pass 3. Next: B7
   equipment-check.
+
+- **B7 equipment-check ✅ (pass 3).** Re-verifying the EC2-3 "integrity-only" flag
+  found it was **mis**classified: **EC2-4 (MED read-leak)** — `get_my_checklists`
+  projects each item's `inventory_item_id` as `inventory_item_name`, but the
+  `item_names` (InventoryItem) lookup lacked the org filter the adjacent
+  `apparatus_names` query has, and `add_item`/`update_item` store the client-supplied
+  `inventory_item_id` raw. So a manager setting a foreign `inventory_item_id` leaked
+  another org's item name into the checklist (the EC2-1 shape). **Fixed two layers:**
+  org-scoped the `item_names` lookup (definitive), and added `_validate_item_fks`
+  (inventory_item_id + equipment_id in-org) on add_item/update_item/add_compartment
+  nested items + `parent_compartment_id` validation on both compartment paths —
+  **closing EC2-3.** Also fixed a latent-500: add_compartment/update_compartment/
+  add_item endpoints had no `ValueError→400` handling (only update_item did), so the
+  new guards would've 500'd; added the standard wrapper. **Swept EC2-5** (2 E712 in
+  shift_completion). **6 tests added** (12 total); sibling equipment tests pass. Gate:
+  flake8/black/tsc clean. No CHANGELOG (internal cross-tenant hardening, no
+  user-visible change — matching EC2-1/EC2-2). See equipment-check.md → Pass 3.
+  Next: B8 documents.

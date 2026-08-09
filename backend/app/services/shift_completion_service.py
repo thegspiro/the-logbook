@@ -600,7 +600,7 @@ class ShiftCompletionService:
                 .join(user_roles, User.id == user_roles.c.user_id)
                 .where(user_roles.c.position_id == t_role.id)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)  # noqa: E712
+                .where(User.is_active.is_(True))
             )
             officers = list(officers_result.scalars().all())
             if not officers:
@@ -673,7 +673,7 @@ class ShiftCompletionService:
         result = await self.db.execute(
             select(SkillEvaluation).where(
                 SkillEvaluation.organization_id == str(organization_id),
-                SkillEvaluation.active == True,  # noqa: E712
+                SkillEvaluation.active.is_(True),
             )
         )
         all_skills = result.scalars().all()
