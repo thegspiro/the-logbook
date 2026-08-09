@@ -1351,6 +1351,85 @@ class Seeder:
 
     # -- inventory: kits, storage, allowances, assignments -----------
 
+    def _seed_size_preferences(self, members: list[dict]) -> None:
+        """Record sizes for the roster.
+
+        Quartermaster screens read these — the kit-issue flow picks a coat
+        variant from a member's jacket size, and the sizes modal is otherwise
+        a grid of empty dropdowns with nothing to picture.
+        """
+        # A spread wide enough that the size/colour variant screens have more
+        # than one bucket to fill, cycled across the roster. The size and style
+        # fields are dropdowns keyed on lowercase codes (STANDARD_SIZES,
+        # GARMENT_STYLES) — a display label like "L" or "Regular" is stored
+        # happily by the API and then renders as an unselected "--".
+        blueprint = [
+            {
+                "shirt_size": "l",
+                "shirt_style": "long_sleeve",
+                "pant_waist": "34",
+                "pant_inseam": "32",
+                "jacket_size": "l",
+                "boot_size": "10",
+                "boot_width": "D",
+                "glove_size": "l",
+                "hat_size": "7 1/4",
+            },
+            {
+                "shirt_size": "m",
+                "shirt_style": "short_sleeve",
+                "pant_waist": "32",
+                "pant_inseam": "34",
+                "jacket_size": "m",
+                "boot_size": "9",
+                "boot_width": "EE",
+                "glove_size": "m",
+                "hat_size": "7",
+            },
+            {
+                "shirt_size": "xl",
+                "shirt_style": "polo",
+                "pant_waist": "38",
+                "pant_inseam": "30",
+                "jacket_size": "xl",
+                "boot_size": "12",
+                "boot_width": "D",
+                "glove_size": "xl",
+                "hat_size": "7 5/8",
+            },
+            {
+                "shirt_size": "s",
+                "shirt_style": "quarter_zip",
+                "pant_waist": "30",
+                "pant_inseam": "30",
+                "jacket_size": "s",
+                "boot_size": "7",
+                "boot_width": "B",
+                "glove_size": "s",
+                "hat_size": "6 7/8",
+            },
+        ]
+        for index, member in enumerate(members):
+            user_id = pick(member, "id")
+            if not user_id:
+                continue
+            try:
+                existing = self.api.get(
+                    f"/inventory/members/{user_id}/size-preferences"
+                )
+            except ApiError as exc:
+                # No record yet is the normal first-run case, not a failure.
+                if exc.code != 404:
+                    raise
+                existing = None
+            if existing and pick(existing, "shirt_size", "shirtSize"):
+                continue
+            self.api.call(
+                "PUT",
+                f"/inventory/members/{user_id}/size-preferences",
+                blueprint[index % len(blueprint)],
+            )
+
     def seed_inventory_operations(
         self,
         categories: list[dict],
@@ -1360,6 +1439,8 @@ class Seeder:
     ) -> dict[str, list[dict]]:
         category_ids = {c.get("name"): pick(c, "id") for c in categories}
         items_by_name = {i.get("name"): i for i in inventory_items}
+
+        self._seed_size_preferences(members)
 
         areas = items(self.api.get("/inventory/storage-areas"), "storage_areas")
         area_names = {a.get("name") for a in areas}

@@ -213,8 +213,7 @@ Members can record their preferred uniform and PPE sizes, making equipment order
 
 > **Privacy note:** Size preferences are body-measurement data. The size-preference endpoints (`/inventory/my/`, `/inventory/members/`) are excluded from client-side caching and are gated by permission (`inventory.view` to read another member's, `inventory.manage` to edit).
 
-> **Screenshot needed:**
-> _[Screenshot of the Size Preferences modal titled "Sizes — Jane Doe" showing the two-column grid of fields: Shirt Size (dropdown) and Shirt Style (dropdown) on top, Pant Waist and Pant Inseam text inputs, Jacket Size and Glove Size dropdowns, Boot Size dropdown and Boot Width text input, Hat Size text input, and the "Save Sizes" button]_
+![Size preferences modal for one member](./images/05-46-size-preferences.png)
 
 ---
 

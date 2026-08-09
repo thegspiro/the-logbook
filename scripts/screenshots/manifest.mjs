@@ -2873,6 +2873,16 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "05-46-size-preferences",
+    doc: "05-inventory.md",
+    line: 216,
+    anchor: "Screenshot of the Size Preferences modal titled “Sizes — Jane Doe”",
+    alt: "Size preferences modal for one member",
+    route: "/inventory/admin/members",
+    prepare: clickByName(/^Sizes$/),
+    fullPage: false,
+  },
+  {
     id: "08-32-module-management",
     doc: "08-admin-reports.md",
     line: 142,
