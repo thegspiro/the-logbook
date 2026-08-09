@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
@@ -835,6 +835,68 @@ describe('ActiveSkillTestPage', () => {
       renderWithRouter(<ActiveSkillTestPage />);
 
       expect(mockSetActiveSectionIndex).not.toHaveBeenCalled();
+    });
+  });
+
+  // The examiner's original complaint: the controls that change section sit at
+  // the bottom of the page, so without this the next section renders still
+  // scrolled down, below its own instructions. An examiner watching a candidate
+  // never looks up, so anything above the fold is simply missed.
+  //
+  // The content sits in its own `overflow-y-auto` container, so resetting the
+  // window alone was never enough — that container's offset is what these
+  // assert. jsdom has no layout, so scrollTop always reads 0 and a plain
+  // assertion would pass whether or not the code wrote anything; and entering
+  // review swaps in a different node, so watching one element would miss it.
+  // Recording writes on the prototype covers whichever node the effect targets.
+  describe('Landing at the top of each screen', () => {
+    let writes: number[] = [];
+    let restoreScrollTop: (() => void) | null = null;
+
+    const watchScrollTopWrites = () => {
+      writes = [];
+      const original = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop');
+      Object.defineProperty(Element.prototype, 'scrollTop', {
+        get: () => 400,
+        set: (value: number) => {
+          writes.push(value);
+        },
+        configurable: true,
+      });
+      restoreScrollTop = () => {
+        if (original) Object.defineProperty(Element.prototype, 'scrollTop', original);
+        else delete (Element.prototype as unknown as Record<string, unknown>)['scrollTop'];
+      };
+    };
+
+    afterEach(() => {
+      restoreScrollTop?.();
+      restoreScrollTop = null;
+    });
+
+    it('scrolls the section body back to the top when the section changes', () => {
+      currentMockTest = mockTestWithSections;
+      const { rerender } = renderWithRouter(<ActiveSkillTestPage />);
+
+      watchScrollTopWrites();
+      mockSectionIndex = 1;
+      rerender(<ActiveSkillTestPage />);
+
+      expect(writes).toContain(0);
+    });
+
+    it('scrolls back to the top on the way into review', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockFullyScoredTest;
+      mockSectionIndex = 1;
+      mockUpdateTest.mockResolvedValue(mockFullyScoredTest);
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      watchScrollTopWrites();
+      await user.click(screen.getByRole('button', { name: /finish & review/i }));
+      await screen.findByText('Check the scorecard');
+
+      expect(writes).toContain(0);
     });
   });
 
