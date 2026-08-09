@@ -1,7 +1,7 @@
 # Application Review — Forms (Tier B)
 
 **Prefix:** `FORM2` · **Iteration:** B13 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/forms.py` (752 L, 21 endpoints), `public/forms.py` (209 L),
 `services/forms_service.py` (2,290 L), models `models/forms.py`
@@ -10,6 +10,47 @@
 cross-org integration writes) and FORM-3 fixed; FORM-4 (definition text unescaped),
 FORM-5 (require_authentication not enforced), FORM-6 (required = presence-only)
 left open.
+
+---
+
+## Pass 4 (2026-08-09) — full FK re-audit; the one residual re-confirmed non-security
+
+Pass 4 ran a fresh, exhaustive client-FK audit across every `create_*`/`update_*`
+path in the module (a sub-agent traced each writer against its request schema).
+Everything the FORM-1/FORM-2 fixes covered holds, and the sweep found **no new
+cross-org write gap**:
+
+- `create_form`/`update_form`/`add_integration`/`update_integration` — the only
+  FKs are server-derived (`organization_id`/`created_by`) or the server-set,
+  org-verified `form_id`; `field_mappings` is validated to reference only the
+  form's own field ids (`_validate_field_mappings`); `target_module`/
+  `integration_type` are enums, not resource FKs.
+- `submit_form`/`submit_public_form` — `form_id` is org-scoped via
+  `get_form_by_id`/`get_form_by_slug`; the submitter-mapped integration FKs
+  (`member_id`/`item_id`/`event_id`) are validated in-org via `_entity_in_org`;
+  submission `data` keys are filtered to known field ids.
+
+The audit's only finding is the **already-flagged BXC-1 residual**:
+`FormField.condition_field_id` is written through `create_form`/`add_field`/
+`update_field` without a same-form/org check. Re-confirmed this pass that it is
+**not a security gap**: the column is a *soft* reference (`String(36)`, **no** DB
+`ForeignKey`), it has **no** `organization_id` of its own (org-scoped only via the
+parent `Form`), and — decisively — it is **never dereferenced server-side**. It
+drives only client-side conditional-visibility rendering, which matches against
+fields of the *current* form, so a foreign/garbage value is a dangling,
+never-matching reference (a broken visibility rule), never cross-org data reach.
+
+**Left flagged, not fixed.** The one worthwhile hardening would be a *same-form*
+validation (reject a `condition_field_id` not among this form's fields) — a
+correctness guard, not a security one. It's deferred deliberately: the semantics
+are builder-specific (a field's visibility can depend on another field created in
+the same `create_form` call, whose id is server-generated), so scoping the check
+wrong would reject legitimate cross-field rules — exactly the kind of change that
+wants its own DB-backed verification rather than a rotation-tick guess. Recorded
+as the BXC-1 correctness follow-up.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 

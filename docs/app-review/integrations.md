@@ -1,7 +1,36 @@
 # Application Review — Integrations (Tier B)
 
 **Prefix:** `INT2` · **Iteration:** B12 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; one cross-reference note updated
+
+No code change. Re-verified the module's guards hold:
+
+- **INT-1 send-time SSRF intact** — `assert_outbound_url_safe` appears at **2**
+  sites (store + send) in every channel service (slack/discord/teams/webhook/calcom),
+  re-resolving the host and asserting a public IP before each POST.
+- **INT-3 read-permission gate intact**; **INT-4** `exclude_unset` config merge
+  intact; **latent-500 lens N/A** (config is JSON, no enum columns);
+  **E712-free** across the package and endpoints.
+
+**Cross-reference correction (B11 has now converged):** pass 2 recorded INT-1's
+send-time guard as "more robust than B11's push fix," because at the time B11 could
+only flag DNS rebinding as a residual — it couldn't re-resolve at send without
+breaking its `127.0.0.1` delivery-test harness. **That gap closed in this
+session's B11 pass 4:** `PushService._send_one` now calls the same
+`assert_outbound_url_safe` at send time (gated to production/staging so the
+loopback wire-format tests still run). The two outbound surfaces now use the
+identical send-time SSRF re-check; the "more robust than push" note is superseded.
+
+**Still flagged (unchanged):** INT-5 (the `KNOWN_WEBHOOK_DOMAINS` allowlist stays
+uninvoked — an owner behavior decision; INT-1 covers the internal-IP case
+regardless).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 

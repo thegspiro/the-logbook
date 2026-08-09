@@ -1,7 +1,7 @@
 # Application Review — Grants & Fundraising (Tier B)
 
 **Prefix:** `GF2` · **Iteration:** B14 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/grants.py` (1,842 L, 45 endpoints), `services/grant_service.py`
 (1,000 L), `services/fundraising_service.py` (540 L), model `models/grant.py`
@@ -9,6 +9,43 @@
 **Prior audit:** `docs/module-audit/grants-fundraising.md` (iteration 14) — GF-1
 (CRITICAL), GF-2/3 (HIGH), GF-4/5 fixed; GF-6 (remaining unvalidated FKs), GF-7
 (state machine), GF-8 (anonymity), GF-9 (float/PII) left open.
+
+---
+
+## Pass 4 (2026-08-09) — full FK re-audit: zero gaps; no code change
+
+Pass 4 ran a fresh, exhaustive client-FK audit across every `create_*`/`update_*`
+writer in both `grant_service.py` and `fundraising_service.py` (a sub-agent traced
+each against its request schema). **Every writer comes back clean** — this is a
+money module, so the FK surface got the closest look:
+
+- Grant side: `create_application`/`update_application` (`opportunity_id`,
+  `assigned_to`, `linked_campaign_id`) via `_opportunity_in_org` +
+  `_validate_application_fks`; `create_expenditure`/`update_expenditure`
+  (`budget_item_id`) via `_budget_item_in_application`; `update_compliance_task`
+  (`assigned_to`) via `assert_in_org`; `create_budget_item`/`create_note` have
+  their `application_id` popped from the org-verified URL path.
+- Fundraising side: `create_donation`/`update_donation` (`campaign_id`,
+  `donor_id`) via `_entity_in_org`; `create_pledge`/`update_pledge` via
+  `_validate_pledge_fks`; `create_fundraising_event` via
+  `_validate_fundraising_event_fks`.
+- The three fields most likely to slip a create path — `Donor.user_id`,
+  `GrantExpenditure.approved_by`, `GrantComplianceTask.assigned_to` — are
+  **response-only** (absent from their request schemas), so a client cannot inject
+  them; `model_dump(exclude_unset=True)` + Pydantic's drop of undeclared fields
+  closes that door.
+
+GF-10/GF-11 enum fixes and the `Literal`-typed schema validation hold; both
+services E712-free.
+
+**Still flagged (unchanged, all product/refactor-shaped):** GF-7 (financial state
+machine + overspend guard), GF-8 (`is_anonymous` not enforced in staff donor
+responses — a genuine **product decision**: whether an anonymous gift should hide
+donor identity from `fundraising.view` vs `.manage`, per `KNOWN_LIMITATIONS.md`),
+GF-9 (float money math + donor-PII gate breadth).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 

@@ -50,11 +50,11 @@ from its open list.
 | B9 | membership pipeline | MP2 | ✅ (p1, p2, p3, p4) |
 | B10 | messaging & communications | MSG2 | ✅ (p1, p2, p3, p4) |
 | B11 | notifications | NOTIF2 | ✅ (p1, p2, p3, p4) |
-| B12 | integrations | INT2 | ⬜ |
-| B13 | forms | FORM2 | ⬜ |
-| B14 | grants & fundraising | GF2 | ⬜ |
-| B15 | admin-hours | AH2 | ⬜ |
-| B16 | reports & analytics | RPT2 | ⬜ |
+| B12 | integrations | INT2 | ✅ (p1, p2, p3, p4) |
+| B13 | forms | FORM2 | ✅ (p1, p2, p3, p4) |
+| B14 | grants & fundraising | GF2 | ✅ (p1, p2, p3, p4) |
+| B15 | admin-hours | AH2 | ✅ (p1, p2, p3, p4) |
+| B16 | reports & analytics | RPT2 | ✅ (p1, p2, p3, p4) |
 | B17 | events | EV2 | ⬜ |
 | B18 | training | TR2 | ⬜ |
 | B19 | scheduling | SCH2 | ⬜ |
@@ -1845,3 +1845,46 @@ Next feature: **B1 medical-screening**.
   pass 3 flagged; it's gated to production/staging so the loopback wire-format tests
   (development env) still dispatch, and the subscribe-time IP-literal/localhost guard
   still runs everywhere. 4 DB-free tests. See notifications.md → Pass 4.
+
+- **B12 integrations ✅ (pass 4) — invariants re-verified, no code change.** INT-1
+  send-time SSRF (`assert_outbound_url_safe` at store+send in all 5 channel
+  services), INT-3 read gate, INT-4 `exclude_unset` merge all hold; E712-free.
+  Doc correction: pass 2's "INT-1 more robust than B11's push fix" note is
+  superseded — B11 pass 4 gave push the same send-time guard, so the two outbound
+  surfaces have converged. Open: INT-5 allowlist (owner decision). See integrations.md.
+
+- **B13 forms ✅ (pass 4) — full FK re-audit; the one residual re-confirmed
+  non-security, no code change.** A fresh exhaustive client-FK audit (sub-agent)
+  found no new cross-org write gap: FORM-1/2 integration writes covered,
+  `field_mappings` validated against the form's own fields, submit-path integration
+  FKs `_entity_in_org`-checked. The only finding is the already-flagged BXC-1
+  `condition_field_id` residual — a *soft* reference (no DB FK), no org column,
+  never dereferenced server-side (drives client-side conditional visibility only),
+  so a foreign value is a dangling reference, not cross-org reach. Left flagged: the
+  worthwhile hardening is a *same-form* validation (correctness, not security), but
+  its builder semantics (self-referential fields created in the same call, server-gen
+  ids) want a DB-backed pass, not a rotation-tick guess. See forms.md → Pass 4.
+
+- **B14 grants & fundraising ✅ (pass 4) — full FK re-audit: zero gaps, no code
+  change.** Money module, so the FK surface got the closest look: every
+  create/update writer's client FK is validated (`_validate_application_fks`,
+  `_budget_item_in_application`, `_entity_in_org`, `_validate_pledge_fks`,
+  `_validate_fundraising_event_fks`, `assert_in_org`) or popped from the org-verified
+  URL path; the three response-only fields (`Donor.user_id`,
+  `GrantExpenditure.approved_by`, create-path `assigned_to`) can't be client-injected.
+  Open: GF-7/GF-8/GF-9 (product/refactor; GF-8 anonymity-in-staff-views is a genuine
+  product decision). See grants-fundraising.md → Pass 4.
+
+- **B15 admin-hours ✅ (pass 4) — invariants re-verified, no code change.** AH-4/AH-6
+  separation-of-duties (`assert_different_person` + bulk self-skip), AH-1 PENDING
+  default, AH-5 org-scoping, enum-typed request fields, E712-free all hold. Open:
+  per-org SoD toggle (product/config). See admin-hours.md → Pass 4.
+
+- **B16 reports & analytics ✅ (pass 4) — invariants re-verified; RPT-7 reconfirmed
+  defensive-only, no code change.** RPT-1 cross-org leak guard, RPT-2 `_safe_int`,
+  RPT-3 PII gate hold; E712-free. RPT-7 (the `except ValueError→400` wrapper on
+  `/generate`+`/run`) re-traced and left flagged — both paths already map the
+  generators' `{"error"}` dict to 400 and dates/filters are Pydantic-validated, so
+  there's no `ValueError` path today and the wrapper would be dead code
+  (anti-speculation). Open: RPT-6 (>100% completion edge), RPT-5c (float→Decimal).
+  See reports-analytics.md → Pass 4.

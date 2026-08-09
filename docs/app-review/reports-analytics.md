@@ -1,7 +1,7 @@
 # Application Review — Reports & Analytics (Tier B)
 
 **Prefix:** `RPT2` · **Iteration:** B16 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/reports.py` (7), `analytics.py` (3), `platform_analytics.py`
 (1), `services/reports_service.py` (1,952 L)
@@ -9,6 +9,32 @@
 **Prior audit:** `docs/module-audit/reports-analytics.md` (iteration 16) — RPT-1
 (HIGH cross-org leak) and RPT-2 (500 on bad filter) fixed; RPT-3 (PII at
 `reports.view`), RPT-4 (org-id typing), RPT-5 (aggregate correctness) left open.
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; RPT-7 reconfirmed defensive-only
+
+Re-verified: RPT-1 (cross-org aggregate leak) and RPT-2 (`_safe_int` filter
+guards) hold; RPT-3 PII gate (`_enforce_report_pii_permission`) intact on
+`/generate` and `/saved/{id}/run`; `SavedReport` has no enum columns (latent-500
+lens N/A); both files E712-free.
+
+**RPT-7 re-examined and deliberately left flagged.** The candidate was adding the
+`except ValueError → 400` wrapper to `/generate` and `/run`. Traced both paths:
+`generate_report` returns a dict and the endpoint already maps `"error"` → 400
+(reports.py 106); dates/filters are Pydantic-validated (422, not a handler
+`ValueError`); the generators return `{"error": …}` rather than raising. So there
+is **no `ValueError` path today** — the wrapper would be dead code, which
+CLAUDE.md's anti-speculation guidance argues against. It stays a
+defensive-consistency item for a future robustness sweep (best paired with a
+generator that actually raises), not a rotation-tick addition.
+
+**Still flagged (unchanged):** RPT-6 (completion % can exceed 100% in the
+shared-requirement double-enrollment case — the numerator fix risks skewing the
+common case), RPT-5c (inventory float→Decimal, with FIN-7).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 

@@ -1,7 +1,7 @@
 # Application Review — Admin Hours (Tier B)
 
 **Prefix:** `AH2` · **Iteration:** B15 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/admin_hours.py` (1,042 L, 27 endpoints),
 `services/admin_hours_service.py` (1,545 L), model `models/admin_hours.py`
@@ -9,6 +9,25 @@
 **Prior audit:** `docs/module-audit/admin-hours.md` (iteration 15) — AH-1 (HIGH
 self-credit), AH-2 (cross-tenant stale-session mutation), AH-3, AH-4 (SoD) fixed;
 AH-5 (minor scoping omissions, flagged not-exploitable) left open.
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified, no code change
+
+Re-verified this HIGH-sensitivity self-credit / SoD module holds:
+
+- **AH-4 / AH-6 separation-of-duties intact** — `assert_different_person` guards
+  the single-entry approve path, and `bulk_approve` skips approver-owned entries
+  (both approval paths covered; 2 refs).
+- **AH-1** manual entries start `PENDING`; **AH-5** internal queries org-scoped;
+  **latent-500 lens clean** (`entry_method`/`status` enum-typed in the request
+  schemas); **E712-free**.
+
+Open item unchanged: the per-org SoD toggle (only for a genuine sole-officer
+department) — a deliberate product/config decision.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 
