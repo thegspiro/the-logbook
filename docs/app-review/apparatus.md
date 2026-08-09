@@ -1,7 +1,32 @@
 # Application Review — Apparatus (Tier B)
 
 **Prefix:** `AP2` · **Iteration:** B2 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; no code change
+
+Pass 3 closed every open code item on this module (AP2-2 FK validation on both
+paths, the full E712 sweep, the latent-500 lens). Pass 4 re-verified the landed
+state holds and found nothing to change:
+
+- **FK validation intact** — `assert_in_org` is wired at **17** sites across
+  `apparatus_service.py` (create + update for apparatus type/status/station, EVOC
+  level, maintenance component/service-provider, component-note provider). The
+  create-path (AP-1) and update-path (AP2-1/AP2-2) FK classes remain closed.
+- **E712-free** — 0 `# noqa: E712` in `apparatus_service.py`.
+- **Latent-500 lens clean** — `fuel_type` is `Optional[FuelTypeEnum]` on both
+  `ApparatusCreate`/`Update` and enum-typed on the response; the component-note
+  enums are enum-typed. No free-string→ENUM write path.
+
+The only open items remain the ones flagged since pass 2 — a MySQL-backed
+apparatus-service integration test (blocked by the no-DB sandbox) and a future
+depth read of the maintenance-scheduling / EVOC business logic as its own focused
+iteration. Neither is a defect.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 

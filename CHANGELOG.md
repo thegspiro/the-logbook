@@ -147,6 +147,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already send valid types, so only malformed API requests are affected. Valid
   minutes types (including executive-session minutes) are unchanged.
 
+- **Meetings: updating a meeting's or an action item's status with an
+  unrecognized value now returns a clear validation error instead of a server
+  error (or silently storing a blank status) (2026-08-09).** Same class as the
+  fixes above; the meeting screens already send valid statuses, so only malformed
+  API requests are affected.
+
 - **Membership pipeline: saving a pipeline step or prospect status with an
   unrecognized type/status now returns a clear validation error instead of a
   server error (2026-08-09).** Same class as the fixes above — the pipeline
@@ -175,6 +181,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the fixes above — input validation only; amounts and money handling are unchanged.
   The finance forms already send valid values, so only malformed API requests are
   affected.
+
+### Security: inventory records can no longer reference another department's data (2026-08-09)
+
+**Security**
+
+- Creating or editing inventory records — items, categories, maintenance records,
+  reorder and return requests, write-offs, size-variant batches, and equipment
+  kits — accepts several optional references (a parent category, a location, a
+  storage area, a variant group, an assigned member, the person who performed
+  maintenance, the assignment/issuance/checkout a return is against, etc.). These
+  references are now verified to belong to your own department before they are
+  saved. Previously a hand-crafted API request could attach the id of another
+  department's record; that record was never exposed in a response, but the stray
+  reference is now rejected outright with a clear error. No change for normal use —
+  the app already offers only your own department's records in these pickers.
 
 ### Security: medical-screening health information is now encrypted at rest (2026-08-09)
 

@@ -1,7 +1,30 @@
 # Application Review — Elections (Tier B)
 
 **Prefix:** `ELEC2` · **Iteration:** B5 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; 2 E712 the pass-3 sweep missed
+
+Re-verified the headline invariants hold (`create_candidate` `user_id`
+`assert_in_org`; `CandidateUpdate` exposes no FK fields; `get_client_ip` at every
+site; `'/elections'` in `UNCACHEABLE_PREFIXES`; the `status` enum column is
+enum-typed in the schemas, so the latent-500 lens stays clean).
+
+### ELEC2-2 — NIT — 2 `== True  # noqa: E712` the pass-3 sweep missed — ✅ FIXED
+
+Pass 3's ELEC2-1 swept the 31 E712 comparisons in **`election_service.py`** and
+claimed "every E712 noqa from the module," but two survived in the **endpoint**
+file `api/v1/endpoints/elections.py` (`Candidate.accepted == True  # noqa: E712`
+at lines 409 and 3504 — the accepted-candidates filter in two list paths).
+`Candidate.accepted` is a plain `Boolean` column, so `.is_(True)` is the
+behavior-neutral conversion (Pitfall #10). Swept both; the module (service **and**
+endpoints) is now fully E712-free.
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · elections DB-free tests unaffected (the sweep changes
+only boolean-predicate SQL syntax, never which rows match).
 
 ---
 

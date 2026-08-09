@@ -406,7 +406,7 @@ async def lookup_ballot_by_token(
     result = await db.execute(
         select(Candidate)
         .where(Candidate.election_id == election.id)
-        .where(Candidate.accepted == True)  # noqa: E712
+        .where(Candidate.accepted.is_(True))
         .order_by(Candidate.position, Candidate.display_order)
     )
     candidates = list(result.scalars().all())
@@ -3501,7 +3501,7 @@ async def preview_ballot_for_user(
     candidates_result = await db.execute(
         select(Candidate)
         .where(Candidate.election_id == str(election_id))
-        .where(Candidate.accepted == True)  # noqa: E712
+        .where(Candidate.accepted.is_(True))
         .order_by(Candidate.position, Candidate.display_order)
     )
     candidates = candidates_result.scalars().all()

@@ -1,7 +1,70 @@
 # Application Review — Meetings & Minutes (Tier B)
 
 **Prefix:** `MM2` · **Iteration:** B6 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — MM2-3 resolved: the two genuinely-unsafe `status` fields fixed; the rest confirmed false positives
+
+Pass 3 flagged `status`/`priority` free-str fields for "per-field verification
+before a fix, not a blanket sweep." Pass 4 did that verification across **both**
+action-item code paths (the module has two distinct ones) and split the flag into
+a real fix and a set of confirmed false positives.
+
+**The module has two separate meeting/minutes stacks**, and the pass-3 note
+partially conflated them:
+
+- `app.schemas.minute` → `MinuteService` → the `minute.py` models (`Motion`,
+  `ActionItem`). Here `priority` maps to a strict `ActionItemPriority` **ENUM**
+  (not the Integer column pass 3 cited — that Integer is on the *other* model),
+  and `status` maps to `MotionStatus` / `MinutesActionItemStatus`.
+- `app.schemas.meetings` → `MeetingsService` → the `meeting.py` models
+  (`Meeting`, `MeetingActionItem`). Here `priority` **is** the bounded Integer
+  (`Field(ge=0, le=2)` — already validated), and `status` maps to `MeetingStatus`
+  / `ActionItemStatus`.
+
+**Verified safe (false positives — no change):** every `minute.py`-path field
+(`Motion.status` on create/update, `ActionItem.priority`/`status` on
+create/update, and the inline motions/action-items in `create_minutes`) is
+coerced through the **enum constructor** in the service (`MotionStatus(data.status)`,
+`ActionItemPriority(data.priority)`, …). A bad value raises `ValueError` *in
+Python* before the bind, and every one of those endpoints runs inside
+`handle_service_errors`, which turns `ValueError` into a clean **400** — never a
+500, never a silent `''`. This is the documented "coercion path raising caught
+ValueError" false-positive category. `MeetingsService`'s `priority` is a
+Pydantic-validated `int` (0–2). None of these needs a validator.
+
+### MM2-3 — LOW/MED — Two `MeetingsService` `status` fields reach the ENUM via a blind `setattr` — ✅ FIXED
+
+**What:** `MeetingUpdate.status` and `ActionItemUpdate.status` (both in
+`app.schemas.meetings`) were free `str`, and `MeetingsService.update_meeting` /
+`update_action_item` apply the update dict with a **blind `setattr(obj, key,
+value)`** — no enum-constructor coercion, unlike the `MinuteService` twins. So a
+value outside the enum reaches MySQL. Both service methods wrap the write in
+`try/except Exception → return (None, str(e))` (so the endpoint 400s rather than
+500s), but that leaves two real problems: under **non-strict** MySQL the bad value
+is silently stored as `''`, and even under strict mode the client gets a raw
+(sanitized) DB-error string instead of a clear validation message.
+
+**Fix:** added `@field_validator("status")` to both schemas (and factored the
+existing `_validate_meeting_type` into a shared `_validate_enum` helper), deriving
+the allowed set from `MeetingStatus` / `ActionItemStatus`, lowercase-normalizing,
+and rejecting unknown → **422** with the allowed-values list. Response schemas are
+untouched (built from the ORM enum). Valid callers and the existing tests are
+unaffected. **10 tests added** (`test_meetings_status_validation.py`): every valid
+status accepted, case-normalized, unknown rejected, `None` passes through on a
+partial update, and `priority` stays a bounded int.
+
+### Flagged / future (unchanged)
+
+- The maintenance-scheduling / executive-session business-logic depth read
+  (beyond tenant isolation and the latent-500 lens) remains the next increment as
+  its own focused iteration.
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_meetings_status_validation.py` **10 passed** +
+`test_meetings_meeting_type_validation.py` **10 passed** (all DB-free).
 
 ---
 

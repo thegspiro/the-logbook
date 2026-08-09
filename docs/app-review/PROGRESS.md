@@ -40,11 +40,11 @@ from its open list.
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
 | B1 | medical-screening | MS2 | ✅ (p1, p2, p3, p4) |
-| B2 | apparatus | AP2 | ⬜ |
-| B3 | inventory | INV2 | ⬜ |
-| B4 | facilities | FAC2 | ⬜ |
-| B5 | elections | ELEC2 | ⬜ |
-| B6 | meetings & minutes | MM2 | ⬜ |
+| B2 | apparatus | AP2 | ✅ (p1, p2, p3, p4) |
+| B3 | inventory | INV2 | ✅ (p1, p2, p3, p4) |
+| B4 | facilities | FAC2 | ✅ (p1, p2, p3, p4) |
+| B5 | elections | ELEC2 | ✅ (p1, p2, p3, p4) |
+| B6 | meetings & minutes | MM2 | ✅ (p1, p2, p3, p4) |
 | B7 | equipment-check | EC2 | ⬜ |
 | B8 | documents | DOC2 | ⬜ |
 | B9 | membership pipeline | MP2 | ⬜ |
@@ -1753,3 +1753,57 @@ Next feature: **B1 medical-screening**.
   backfill can't run in the no-MySQL sandbox — must be verified in CI/staging with
   a DB backup first; partial runs are safe to re-run. Gate: flake8 0 · black clean
   · tsc n/a. See medical-screening.md → Pass 4. Next: B2 apparatus.
+
+- **B2 apparatus ✅ (pass 4) — invariants re-verified, no code change.** Pass 3
+  closed every code item; pass 4 confirmed the landed state holds: `assert_in_org`
+  wired at 17 sites (create + update FK classes), 0 E712 noqa, `fuel_type`
+  enum-typed (latent-500 lens clean). Open items unchanged (a MySQL-backed
+  integration test blocked by the no-DB sandbox; a future maintenance/EVOC
+  business-logic depth read). See apparatus.md → Pass 4.
+
+- **B3 inventory ✅ (pass 4) — INV-4 closed: the dedicated XC-1 FK-scoping sweep.**
+  Did the one substantive item the prior passes deferred: ~13 create/update methods
+  persisted client-supplied FK ids (category parent, item location/storage/
+  variant-group/assignee, maintenance performed_by, write-off clearance, return
+  assignment/issuance/checkout, reorder item/category, equipment-kit line items,
+  reorder-from-plan stock category) without an in-org check. Mapped every FK via a
+  sub-agent (all targets org-scoped), then validated each with the shared
+  `assert_in_org(..., allow_none=True)` — two DRY helpers (`_assert_item_fks_in_org`,
+  `_assert_reorder_fks_in_org`) where a method group shares the FK set, direct
+  calls elsewhere. `create_reorder_from_plan` now fails closed on a foreign stock
+  category (it previously stamped the client id as a dangling FK). `EquipmentKitItem`
+  child FKs validated directly (no org column of its own). Added `DepartureClearance`/
+  `StorageArea`/`Location` imports. Integrity-only class (read-leak subset already
+  closed in INV2-1), so a foreign id is now a clean `ValueError → 400`, no behavior
+  change for valid callers. **10 DB-free tests** (`test_inventory_inv4_fk_scoping.py`).
+  Closes the biggest standing item on the module. Gate: flake8 0 · black clean · tsc
+  n/a. See inventory.md → Pass 4.
+
+- **B4 facilities ✅ (pass 4) — invariants re-verified, no code change.**
+  `_assert_facility_in_org` wired at 10 sites (all 9 `facility_id` update paths +
+  `update_compliance_item`'s `checklist_id`), 0 E712 noqa, 16 enum columns all
+  enum-typed (latent-500 clean). One open item: FAC-4 (`list_facilities` `search`
+  wired but not exposed on `GET /facilities`) — an owner call, not a bug. See
+  facilities.md → Pass 4.
+
+- **B5 elections ✅ (pass 4) — 2 E712 the pass-3 sweep missed (ELEC2-2).** Pass 3's
+  ELEC2-1 swept the 31 E712 in `election_service.py` but missed two in the endpoint
+  file `elections.py` (`Candidate.accepted == True  # noqa: E712` at lines 409/3504,
+  a Boolean column). Swept both to `.is_(True)`; the module (service + endpoints) is
+  now fully E712-free. Headline invariants (create_candidate FK validation,
+  CandidateUpdate no-FK, get_client_ip, cache exclusion, enum-typed status)
+  re-verified. Gate: flake8 0 · black clean. See elections.md → Pass 4.
+
+- **B6 meetings & minutes ✅ (pass 4) — MM2-3 resolved.** Pass 3 flagged
+  `status`/`priority` free-str fields for per-field verification. Did that across
+  both action-item stacks: the `app.schemas.minute` → `MinuteService` fields
+  (`Motion.status`, `ActionItem.priority`/`status`) are **already safe** — the
+  service coerces through the enum constructor (`MotionStatus(...)`), raising a
+  caught `ValueError → 400`, so they're false positives (the pass-3 note also
+  misread `priority` against the wrong model's Integer column). The genuine gap was
+  the `app.schemas.meetings` → `MeetingsService` fields `MeetingUpdate.status` and
+  `ActionItemUpdate.status`, applied via a blind `setattr` (bad value reaches
+  MySQL: 500/DB-error under strict mode, silent `''` under non-strict). Fixed with
+  `@field_validator`s (shared `_validate_enum` helper) → clean 422. **10 tests**
+  (`test_meetings_status_validation.py`). Gate: flake8 0 · black clean · tsc n/a.
+  See meetings-minutes.md → Pass 4.

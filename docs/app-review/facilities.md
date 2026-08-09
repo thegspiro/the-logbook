@@ -1,7 +1,30 @@
 # Application Review — Facilities (Tier B)
 
 **Prefix:** `FAC2` · **Iteration:** B4 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; no code change
+
+Pass 3 closed the FK-validation class (create + all update paths), swept the last
+E712, and cleared the latent-500 lens. Pass 4 re-verified the landed state:
+
+- **FK validation intact** — `_assert_facility_in_org` is wired at **10** sites
+  in `facilities_service.py` (all 9 `facility_id` sub-entity update paths plus
+  `update_compliance_item`'s `checklist_id`), each guarding "only when supplied."
+  The create-path (FAC-3) validation is unchanged; 95/95 endpoints
+  permission-gated.
+- **E712-free** — 0 `# noqa: E712` in `facilities_service.py`.
+- **Latent-500 lens clean** — the 16 facilities enum columns are all enum-typed in
+  their `*Create`/`*Update` schemas; no free-string→ENUM write path.
+
+The one open item stays **FAC-4** (the `list_facilities` `search` arg is wired in
+the service but `GET /facilities` forwards no `search` param) — an owner call on
+an unrequested API-surface change, not a bug.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 

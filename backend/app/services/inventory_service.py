@@ -21,6 +21,7 @@ from app.core.audit import log_audit_event
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
+    DepartureClearance,
     EquipmentKit,
     EquipmentKitItem,
     EquipmentRequest,
@@ -47,10 +48,12 @@ from app.models.inventory import (
     ReturnRequest,
     ReturnRequestStatus,
     ReturnRequestType,
+    StorageArea,
     TrackingType,
     WriteOffRequest,
     WriteOffStatus,
 )
+from app.models.location import Location
 from app.models.notification import NotificationLog
 from app.models.operational_rank import OperationalRank
 from app.models.user import (
@@ -395,6 +398,15 @@ class InventoryService:
             # Rename "metadata" → "extra_data" (DB column name; "metadata" is reserved by SQLAlchemy)
             if "metadata" in category_data:
                 category_data["extra_data"] = category_data.pop("metadata")
+            # INV-4 (XC-1): a client-supplied parent must be in the caller's org.
+            await assert_in_org(
+                self.db,
+                InventoryCategory,
+                category_data.get("parent_category_id"),
+                organization_id,
+                allow_none=True,
+                label="parent category",
+            )
             category = InventoryCategory(
                 organization_id=organization_id, created_by=created_by, **category_data
             )
@@ -456,6 +468,17 @@ class InventoryService:
             # Rename "metadata" → "extra_data" (DB column name)
             if "metadata" in update_data:
                 update_data["extra_data"] = update_data.pop("metadata")
+
+            # INV-4 (XC-1): a re-pointed parent must be in the caller's org.
+            if "parent_category_id" in update_data:
+                await assert_in_org(
+                    self.db,
+                    InventoryCategory,
+                    update_data.get("parent_category_id"),
+                    organization_id,
+                    allow_none=True,
+                    label="parent category",
+                )
 
             for key, value in update_data.items():
                 if hasattr(category, key):
@@ -527,6 +550,31 @@ class InventoryService:
             return f"Serial number '{serial_number}' is already in use by another item in this organization"
         return None
 
+    # INV-4 (XC-1): client-supplied FKs on an item, other than category_id
+    # (validated separately via _validate_category_requirements). Only the keys
+    # present in the payload are checked, so a partial update leaves unmentioned
+    # FKs untouched; each is nullable, so allow_none.
+    _ITEM_FK_CHECKS = (
+        ("location_id", Location, "location"),
+        ("storage_area_id", StorageArea, "storage area"),
+        ("variant_group_id", ItemVariantGroup, "variant group"),
+        ("assigned_to_user_id", User, "assignee"),
+    )
+
+    async def _assert_item_fks_in_org(
+        self, data: Dict[str, Any], organization_id: UUID
+    ) -> None:
+        for field, model, label in self._ITEM_FK_CHECKS:
+            if field in data:
+                await assert_in_org(
+                    self.db,
+                    model,
+                    data.get(field),
+                    organization_id,
+                    allow_none=True,
+                    label=label,
+                )
+
     async def create_item(
         self, organization_id: UUID, item_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
@@ -538,6 +586,9 @@ class InventoryService:
             )
             if cat_err:
                 return None, cat_err
+
+            # INV-4 (XC-1): location/storage/variant-group/assignee must be in-org.
+            await self._assert_item_fks_in_org(item_data, organization_id)
 
             # Validate pool items have quantity >= 1
             tracking = item_data.get("tracking_type", "individual")
@@ -817,6 +868,10 @@ class InventoryService:
             )
             if state_err:
                 return None, state_err
+
+            # INV-4 (XC-1): a re-pointed location/storage/variant-group/assignee
+            # must be in the caller's org.
+            await self._assert_item_fks_in_org(update_data, organization_id)
 
             for key, value in update_data.items():
                 setattr(item, key, value)
@@ -1606,6 +1661,15 @@ class InventoryService:
                 for k, v in maintenance_data.items()
                 if k in self._MAINTENANCE_ALLOWED_FIELDS
             }
+            # INV-4 (XC-1): a client-supplied performed_by must be an in-org user.
+            await assert_in_org(
+                self.db,
+                User,
+                safe_data.get("performed_by"),
+                organization_id,
+                allow_none=True,
+                label="performed_by",
+            )
             maintenance = MaintenanceRecord(
                 organization_id=organization_id,
                 item_id=item_id,
@@ -1684,6 +1748,17 @@ class InventoryService:
             }
 
             was_completed_before = record.is_completed
+
+            # INV-4 (XC-1): a re-pointed performed_by must be an in-org user.
+            if "performed_by" in safe_data:
+                await assert_in_org(
+                    self.db,
+                    User,
+                    safe_data.get("performed_by"),
+                    organization_id,
+                    allow_none=True,
+                    label="performed_by",
+                )
 
             for key, value in safe_data.items():
                 setattr(record, key, value)
@@ -2018,8 +2093,6 @@ class InventoryService:
         self, organization_id: UUID
     ) -> List[Dict[str, Any]]:
         """Get inventory summary grouped by location"""
-        from app.models.location import Location
-
         result = await self.db.execute(
             select(
                 Location.id,
@@ -2842,6 +2915,18 @@ class InventoryService:
                     f"Invalid reason. Must be one of: {', '.join(sorted(valid_reasons))}",
                 )
 
+            # INV-4 (XC-1): a client-supplied clearance must be in the caller's
+            # org. clearance_item_id has no DB FK (a plain id column), so it can't
+            # be validated by model here — it is bounded by the clearance's org.
+            await assert_in_org(
+                self.db,
+                DepartureClearance,
+                clearance_id,
+                organization_id,
+                allow_none=True,
+                label="clearance",
+            )
+
             write_off = WriteOffRequest(
                 organization_id=organization_id,
                 item_id=item_id,
@@ -3425,6 +3510,33 @@ class InventoryService:
                 for style in style_list:
                     combos.append((size, color, style))
 
+        # INV-4 (XC-1): the category/location/storage applied to every generated
+        # item must belong to the caller's org (each is optional).
+        await assert_in_org(
+            self.db,
+            InventoryCategory,
+            kwargs.get("category_id"),
+            organization_id,
+            allow_none=True,
+            label="category",
+        )
+        await assert_in_org(
+            self.db,
+            Location,
+            kwargs.get("location_id"),
+            organization_id,
+            allow_none=True,
+            label="location",
+        )
+        await assert_in_org(
+            self.db,
+            StorageArea,
+            kwargs.get("storage_area_id"),
+            organization_id,
+            allow_none=True,
+            label="storage area",
+        )
+
         # Optionally create a variant group to link all items
         variant_group_id: Optional[str] = None
         if create_variant_group:
@@ -3656,6 +3768,33 @@ class InventoryService:
         dupe_result = await self.db.execute(dupe_query)
         if dupe_result.scalar_one_or_none():
             return None, "You already have a pending return request for this item"
+
+        # INV-4 (XC-1): the client may cite the assignment/issuance/checkout this
+        # return is against — each must be in the caller's org (all optional).
+        await assert_in_org(
+            self.db,
+            ItemAssignment,
+            assignment_id,
+            organization_id,
+            allow_none=True,
+            label="assignment",
+        )
+        await assert_in_org(
+            self.db,
+            ItemIssuance,
+            issuance_id,
+            organization_id,
+            allow_none=True,
+            label="issuance",
+        )
+        await assert_in_org(
+            self.db,
+            CheckOutRecord,
+            checkout_id,
+            organization_id,
+            allow_none=True,
+            label="checkout",
+        )
 
         condition_enum = (
             ItemCondition(reported_condition)
@@ -4091,6 +4230,31 @@ class InventoryService:
         )
         return result.scalars().first()
 
+    async def _assert_reorder_fks_in_org(
+        self, data: Dict[str, Any], organization_id: UUID
+    ) -> None:
+        # INV-4 (XC-1): a reorder can name a specific item and/or category; each
+        # is optional and must belong to the caller's org. Only keys present are
+        # checked, so a partial update leaves the others untouched.
+        if "item_id" in data:
+            await assert_in_org(
+                self.db,
+                InventoryItem,
+                data.get("item_id"),
+                organization_id,
+                allow_none=True,
+                label="item",
+            )
+        if "category_id" in data:
+            await assert_in_org(
+                self.db,
+                InventoryCategory,
+                data.get("category_id"),
+                organization_id,
+                allow_none=True,
+                label="category",
+            )
+
     async def create_reorder_request(
         self,
         organization_id: UUID,
@@ -4099,6 +4263,7 @@ class InventoryService:
     ) -> Tuple[Optional[ReorderRequest], Optional[str]]:
         """Create a new reorder request."""
         try:
+            await self._assert_reorder_fks_in_org(data, organization_id)
             reorder = ReorderRequest(
                 organization_id=str(organization_id),
                 requested_by=requested_by,
@@ -4124,6 +4289,8 @@ class InventoryService:
             reorder = await self.get_reorder_request(request_id, organization_id)
             if not reorder:
                 return None, "Reorder request not found"
+
+            await self._assert_reorder_fks_in_org(data, organization_id)
 
             now = datetime.now(timezone.utc)
             new_status = data.get("status")
@@ -4304,6 +4471,25 @@ class InventoryService:
 
             line_items_data = data.get("line_items", [])
             for idx, item_data in enumerate(line_items_data):
+                # INV-4 (XC-1): EquipmentKitItem has no organization_id (it is
+                # org-scoped only through its parent kit), so validate its
+                # client-supplied child FKs against the caller's org directly.
+                await assert_in_org(
+                    self.db,
+                    InventoryItem,
+                    item_data.get("item_id"),
+                    organization_id,
+                    allow_none=True,
+                    label="item",
+                )
+                await assert_in_org(
+                    self.db,
+                    InventoryCategory,
+                    item_data.get("category_id"),
+                    organization_id,
+                    allow_none=True,
+                    label="category",
+                )
                 kit_item = EquipmentKitItem(
                     kit_id=kit.id,
                     item_id=(
@@ -5342,7 +5528,12 @@ class InventoryService:
             .where(InventoryCategory.id == stock_category_id)
             .where(InventoryCategory.organization_id == org_id)
         )
-        base_name = category.name if category else "Item"
+        # INV-4 (XC-1): fail closed on a foreign/missing stock category rather
+        # than stamping the client id onto the generated reorders as a dangling
+        # FK. A legitimate in-org category always resolves here.
+        if category is None:
+            raise ValueError("Stock category not found")
+        base_name = category.name
         size_label = self._SIZE_FIELD_LABELS.get(filters.get("size_field"), "")
 
         vendor = reorder_meta.get("vendor")
