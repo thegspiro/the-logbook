@@ -1289,6 +1289,38 @@ export const SHOTS = [
     },
   },
   {
+    id: "15-09-bulk-action-result",
+    doc: "15-prospective-members.md",
+    line: 495,
+    anchor: "The pair of notifications after a bulk advance that",
+    alt: "Bulk advance reporting how many moved and naming the applicants it skipped",
+    route: "/prospective-members",
+    // Runs a real bulk advance, so it *changes the seeded data* — which is why
+    // it sits last among the 15-* shots. Re-running the seeder restores a mixed
+    // page (it tops the pipeline up and re-parks two applicants at the final
+    // stage), so the shot is repeatable; it is just not idempotent on its own.
+    //
+    // The partial failure is the point. Page one is deliberately mixed: most
+    // rows are at intake and a few are at the final stage, where advancing is
+    // refused. Selecting the page produces both toasts — the count that moved,
+    // and the named applicants that could not.
+    prepare: async (page) => {
+      await clickByName("Table")(page);
+      const selectAll = page.locator("thead th:first-child button");
+      await selectAll.waitFor({ state: "visible", timeout: 15_000 });
+      await selectAll.click();
+      await clickByName("Advance All")(page);
+      // Both toasts, not just the first: the success one renders immediately
+      // and the skipped one follows the response, so waiting on either alone
+      // races the capture.
+      await page
+        .getByText(/Skipped \d+:/)
+        .first()
+        .waitFor({ state: "visible", timeout: 30_000 });
+      await page.waitForTimeout(600);
+    },
+  },
+  {
     id: "15-10-pipeline-settings",
     doc: "15-prospective-members.md",
     line: 371,
@@ -2230,6 +2262,15 @@ export const SHOTS = [
     alt: "Applicant detail drawer with contact details and current stage",
     route: "/prospective-members",
     prepare: async (page) => {
+      // Search first, then click. The board shows the newest 200 applicants,
+      // so on a pipeline padded by `--bulk-prospects` these named ones are not
+      // on screen at all and a bare click times out. Narrowing the list makes
+      // the shot work at either size.
+      const search = page.getByPlaceholder(/search applicants/i);
+      if (await search.isVisible().catch(() => false)) {
+        await search.fill("Rivera");
+        await page.waitForTimeout(900);
+      }
       await page
         .locator("[class*='cursor-pointer']")
         .filter({ hasText: /Rivera|Fields|Okafor/ })

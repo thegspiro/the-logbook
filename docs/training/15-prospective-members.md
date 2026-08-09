@@ -474,14 +474,19 @@ Individual stages can override the pipeline timeout. For example, a background c
 
 Select multiple applicants on the pipeline dashboard to perform bulk actions:
 
-1. Check the boxes next to applicant names
-2. A bottom action bar appears with available actions:
-   - **Advance** — Move all selected to next stage
+1. Check the boxes next to applicant names — in **Table** view, the checkbox in
+   the header row selects everything on the current page
+2. An action bar appears with the available actions:
+   - **Advance** / **Advance All** — Move all selected to the next stage
    - **Hold** — Put all selected on hold
-   - **Reject** — Reject all selected
-   - **Reactivate** — Reactivate all selected
-   - **Delete** — Permanently remove (requires confirmation)
+   - **Reject** / **Reject All** — Reject all selected, with a reason
+   - **Print Badges** — Open the label sheet for the selected applicants
+   - On the **Inactive Applications** tab the same bar offers **Reactivate**
 3. Confirm the bulk action
+
+> **There is no bulk delete.** Applicants are withdrawn, rejected or purged by
+> the inactivity policy, not deleted in bulk — this list previously named a
+> **Delete** button that does not exist.
 
 ![Pipeline table with applicants selected and the bulk action bar](./images/15-11-table-bulk-actions.png)
 
@@ -500,10 +505,7 @@ applicant's name and the reason.
 **One failure never stops the rest.** If applicant #7 is already at the final
 stage, the other twenty-nine still advance.
 
-> **[SCREENSHOT NEEDED]:** _The bulk-action result summary after advancing 12
-> applicants where 2 failed — showing "10 advanced, 2 skipped" with the two
-> named applicants listed beneath and the reason next to each ("Already at the
-> final stage")._
+![Bulk advance reporting how many moved and naming the applicants it skipped](./images/15-09-bulk-action-result.png)
 
 #### A rejection reason no longer overwrites your notes
 

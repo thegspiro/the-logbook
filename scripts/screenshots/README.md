@@ -135,6 +135,27 @@ many applicants, because the newest 200 are all sitting at intake.
 To get back to a small pipeline, drop the filler by email prefix — or reseed
 onto an empty database, which is the cleaner reset.
 
+It also parks the two most recently created applicants at the **final** stage.
+The table lists newest first, so those land on page one and make a select-all
+there a genuinely mixed batch — most advance, those two cannot. That partial
+failure is the subject of `15-09-bulk-action-result`, and without it a bulk
+advance from page one succeeds uniformly and pictures nothing.
+
+> **`15-09` changes the data it pictures.** It runs a real bulk advance, so the
+> applicants on page one move a stage. That is why it sits last among the `15-*`
+> shots. Re-running the seeder restores a mixed page, so the shot is repeatable
+> — it is just not idempotent on its own.
+
+> **Capture the two bulk shots narrowly.** A bulk-seeded pipeline is visible in
+> every other prospective-member shot — the board fills with `Applicant 0284`
+> cards and the stat card reads 320 rather than the handful of named applicants
+> the guide walks through. So run the bulk seed, capture with
+> `--only 15-02` and `--only 15-09`, and leave the rest of the `15-*` images
+> alone. Re-capturing the whole guide against filler data replaces good
+> screenshots with worse ones, and nothing in the harness flags that: filler
+> applicants are real records, so the shots pass every check and simply read
+> badly.
+
 ## How a shot finds its placeholder
 
 Each entry records the placeholder's `line`, but that is only a hint: applying

@@ -3431,6 +3431,7 @@ class Seeder:
 
         print(f"    creating {missing} filler applicants ({current} -> {target})")
         created = 0
+        created_ids: list[str] = []
         for index in range(missing):
             # Deterministic addresses so a re-run recognises its own filler and
             # tops up rather than duplicating it.
@@ -3460,6 +3461,8 @@ class Seeder:
                     raise
                 continue
 
+            created_ids.append(pick(prospect, "id"))
+
             # Every fourth one moves down the board. Advancing past the final
             # stage is refused with a 409, so the count is bounded by the
             # pipeline length rather than relying on the API to absorb it.
@@ -3469,6 +3472,28 @@ class Seeder:
                 self.api.post(
                     f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
                 )
+
+        # Park the two most recently created at the *final* stage.
+        #
+        # The table lists newest first, so these land on page one — which is
+        # what makes a select-all there a genuinely mixed batch: most advance,
+        # these two cannot. That partial failure is the whole subject of the
+        # bulk-action screenshot, and without it a bulk advance from page one
+        # succeeds uniformly and pictures nothing.
+        for prospect_id in created_ids[-2:]:
+            if not prospect_id:
+                continue
+            for _ in range(len(self.PIPELINE_STAGES)):
+                try:
+                    self.api.post(
+                        f"/prospective-members/prospects/{prospect_id}/advance"
+                    )
+                except ApiError as exc:
+                    # 409 is the pipeline saying "already at the end", which is
+                    # exactly where this is trying to get to.
+                    if exc.code != 409:
+                        raise
+                    break
         return created
 
     # -- grants & fundraising ----------------------------------------

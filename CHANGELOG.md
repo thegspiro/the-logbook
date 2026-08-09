@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation: the prospective-members bulk actions are pictured, and the list of them corrected (2026-08-09)
+
+**Fixed (documentation)**
+
+- **The bulk-actions list named a `Delete` button that does not exist.**
+  Applicants are withdrawn, rejected, or purged by the inactivity policy —
+  there is no bulk delete anywhere in the module. The list also omitted **Print
+  Badges**, and did not say that **Reactivate** appears on the Inactive
+  Applications tab rather than alongside the others.
+
+**Known cosmetic issue, now documented**
+
+- **Table view shows two selection bars.** The page renders one (Print Badges /
+  Advance All / Reject All) and the table component renders its own (Advance /
+  Hold / Reject), so selecting an applicant produces two bars reading
+  "_N_ selected". Both work. The guide's screenshot shows them as they are
+  rather than cropping to one, since that is what a reader will see.
+
+---
+
 ### Prospective members: adding an applicant who is already on file returned a server error (2026-08-09)
 
 **Fixed**
@@ -185,7 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **An applicant's detail/interview view never showed which pipeline they're in.**
   The "Pipeline:" label is meant to show the applicant's pipeline name, but it was
-  only filled in on the applicant *list* — on the detail and interview views it was
+  only filled in on the applicant _list_ — on the detail and interview views it was
   blank, so the line didn't appear. It now shows on those views too.
 
 ### Notifications: the notification log list no longer errors when a rule-triggered entry is present (2026-08-06)
