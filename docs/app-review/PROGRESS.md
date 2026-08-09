@@ -55,7 +55,7 @@ from its open list.
 | B14 | grants & fundraising | GF2 | ✅ (p1, p2, p3) |
 | B15 | admin-hours | AH2 | ✅ (p1, p2, p3) |
 | B16 | reports & analytics | RPT2 | ✅ (p1, p2, p3) |
-| B17 | events | EV2 | ⬜ |
+| B17 | events | EV2 | ✅ (p1, p2, p3) |
 | B18 | training | TR2 | ⬜ |
 | B19 | scheduling | SCH2 | ⬜ |
 | B20 | finance | FIN2 | ⬜ |
@@ -1580,3 +1580,13 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   RPT-7 (defensive ValueError wrapper), RPT-5c stay flagged. 108 report/analytics
   tests pass. Gate: flake8/black clean; tsc n/a. No CHANGELOG. See
   reports-analytics.md → Pass 3. Next: B17 events.
+
+- **B17 events ✅ (pass 3).** Re-verified EV-8 (location_id in-org on create/update),
+  EV-9/EV-10, EV-1/2/6/7 hold; E712-free. **Fixed EV2-1** (the widest latent-500 this
+  pass): `event_type`/`check_in_window_type`/`recurrence_pattern`/RSVP `status` are
+  strict ENUMs but were free-str across **9 request schemas** with no validator,
+  inserted raw → 500. Added a shared `_enum_check` + `@field_validator`s on all 9
+  request classes (EventType/CheckInWindowType/RecurrencePattern/RSVPStatus), on the
+  concrete request classes not the shared bases → responses untouched. **10 tests
+  added**; 139 event tests pass. Gate: flake8/black clean; tsc n/a. CHANGELOG updated.
+  See events.md → Pass 3. Next: B18 training.

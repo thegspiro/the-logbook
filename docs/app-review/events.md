@@ -13,6 +13,45 @@ TypeError) left open.
 
 ---
 
+## Pass 3 (2026-08-09) — large latent-500 on event/RSVP enums
+
+Re-verified the landed fixes hold: EV-8 (`create_event`/`update_event` validate
+`location_id` in-org, service ~74/301), EV-9 (`end_event` audit signature), EV-10
+(draft events excluded from public feeds), EV-1/2/6/7. `event_service.py` is
+E712-free. The B1 enum lens then surfaced the module's largest latent-500 surface.
+
+### EV2-1 — LOW/MED — event/RSVP enum fields 500 on a bad value — ✅ FIXED
+
+**What:** four enum columns — `event_type`, `check_in_window_type` (Event),
+`recurrence_pattern` (RecurringEvent), and RSVP `status` — are **strict MySQL ENUMs**,
+but were typed as free `str` across **nine request schemas**
+(`EventCreate`/`EventUpdate`, `EventDefaultsUpdate`, `EventTemplateCreate`/`Update`,
+`RecurringEventCreate`, `RSVPCreate`, `ManagerAddAttendee`, `BulkAddAttendees`) and
+inserted **raw** (`create_event` via `Event(**dict)`, the update `setattr` loops, the
+RSVP/template creates). The schemas had **no** `field_validator`, so an out-of-set
+value passed Pydantic, reached MySQL, and 500'd. The B1 class, at the widest scale
+seen this pass.
+
+**Fix:** a shared `_enum_check(valid, field)` helper + `@field_validator`s on all nine
+request classes, each deriving its value set from the model enum (`EventType`,
+`CheckInWindowType`, `RecurrencePattern`, `RSVPStatus`), lowercase-normalizing and
+rejecting unknowns → 422. Validators live on the concrete **request** classes, not the
+shared `EventBase`/`RSVPBase` (which the response schemas inherit), so responses are
+untouched. **10 tests added.**
+
+### Still flagged (unchanged)
+
+- **EV-5** (public request intake: per-org opt-in + honeypot/daily-cap parity with
+  forms — feature + config), **EV-7 logo** (exempt `organization_logo_img` from
+  escaping in `send_template_email` if the logo should render).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · new enum tests **10 passed** + existing event tests
+**139 passed** (all DB-free; the `db_session` errors are unrelated files matched by
+the `-k` substring).
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified pass-1 (EV-1–4 solid; EV-6 rejects draft/past RSVPs; EV-7 coerces

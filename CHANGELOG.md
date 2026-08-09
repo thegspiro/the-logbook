@@ -163,6 +163,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   server error (2026-08-09).** Same class as the fixes above; the form builder
   already sends valid values, so only malformed API requests are affected.
 
+- **Events: saving an event, template, or RSVP with an unrecognized event type,
+  check-in window, recurrence pattern, or RSVP status now returns a clear
+  validation error instead of a server error (2026-08-09).** Same class as the
+  fixes above; the event forms already send valid values, so only malformed API
+  requests are affected.
+
 ### Money: you can no longer approve/record and pay out the same item yourself (2026-08-09)
 
 **Security**
