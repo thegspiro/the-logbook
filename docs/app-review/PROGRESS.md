@@ -55,11 +55,11 @@ from its open list.
 | B14 | grants & fundraising | GF2 | ✅ (p1, p2, p3, p4) |
 | B15 | admin-hours | AH2 | ✅ (p1, p2, p3, p4) |
 | B16 | reports & analytics | RPT2 | ✅ (p1, p2, p3, p4) |
-| B17 | events | EV2 | ⬜ |
-| B18 | training | TR2 | ⬜ |
-| B19 | scheduling | SCH2 | ⬜ |
-| B20 | finance | FIN2 | ⬜ |
-| B21 | orgs, roles & users | ORU2 | ⬜ |
+| B17 | events | EV2 | ✅ (p1, p2, p3, p4) |
+| B18 | training | TR2 | ✅ (p1, p2, p3, p4) |
+| B19 | scheduling | SCH2 | ✅ (p1, p2, p3, p4) |
+| B20 | finance | FIN2 | ✅ (p1, p2, p3, p4) |
+| B21 | orgs, roles & users | ORU2 | ✅ (p1, p2, p3, p4) |
 | B22 | compliance & skills | CS2 | ⬜ |
 | B23 | security, audit & IP | SEC2 | ⬜ |
 | B24 | core infra | CI2 | ⬜ |
@@ -1888,3 +1888,41 @@ Next feature: **B1 medical-screening**.
   there's no `ValueError` path today and the wrapper would be dead code
   (anti-speculation). Open: RPT-6 (>100% completion edge), RPT-5c (float→Decimal).
   See reports-analytics.md → Pass 4.
+
+- **B17 events ✅ (pass 4) — EV2-2: a cross-org read-leak + a dangling FK on the
+  location paths.** A fresh full FK audit (sub-agent) confirmed EV-8/BXC-1 hold on
+  every event-write path and found two location FKs on the adjacent surfaces: (1)
+  `schedule_request` (event-request→event) stored `event_location_id` unvalidated
+  when `create_calendar_event` was false (the default), and `_get_location_name`
+  wasn't org-scoped — so a foreign location's name leaked into `event_location_name`
+  (a real XC-1 read-leak); fixed two-layer (org-scope the enrichment + validate on
+  write via assert_in_org → 400). (2) `create_template`/`update_template` stored
+  `default_location_id` unvalidated (dangling-only, not projected); fixed with a
+  shared `_assert_template_location_in_org` + the module-standard `except ValueError
+  →400` on both template endpoints (previously absent — latent-500). 6 tests. See
+  events.md → Pass 4.
+
+- **B18 training ✅ (pass 4) — TR-6: external-credential decrypt now fails closed.**
+  `ExternalTrainingSyncService._decrypt_field` caught `except Exception: return
+  value`, so a genuine GCM auth failure (InvalidTag — tampered/wrong-key) handed the
+  raw stored value to the external LMS as a live credential. Narrowed the catch to
+  `except InvalidToken` (the legacy-plaintext case) so InvalidTag propagates and
+  fails closed — the same posture as the MS-1 EncryptedText type. 4 tests. The LOW
+  not-projected dangling-FK batch (session/recert/recurring/waiver + sync backstops)
+  stays a deliberate future FK-hardening batch. See training.md → Pass 4.
+
+- **B19 scheduling ✅ (pass 4) — invariants re-verified, no code change.** SCH-7
+  `apparatus_id` in-org validation, SCH-8 no-500, update-bypass clean, E712-free.
+  Open: SCH-5 (swap workflow), SCH-6 residual (conditional on unbuilt station link).
+  See scheduling.md → Pass 4.
+
+- **B20 finance ✅ (pass 4) — invariants re-verified, no code change.** FIN-4
+  disburse-side SoD (`assert_different_person`, 6 refs), FIN-5 view scoping,
+  `_validate_finance_fks` (13 refs), FIN2-1 enum validators hold; E712-free; FIN-N
+  re-confirmed not-live. Open: FIN-7 (float→Decimal refactor + pagination). See
+  finance.md → Pass 4.
+
+- **B21 orgs/roles/users ✅ (pass 4) — invariants re-verified, no code change.** The
+  privilege-escalation ceiling guards (ORU-7a/b permission+role-edit, ORU-7d CRITICAL
+  rank-grant) all wired; latent-500 clean; E712-free. Open: ORU-7c (org-wide member
+  role mass-edit — intended but sharp, owner decision). See orgs-roles-users.md.

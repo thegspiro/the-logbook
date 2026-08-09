@@ -1,7 +1,7 @@
 # Application Review — Orgs / Roles / Users (Tier B)
 
 **Prefix:** `ORU2` · **Iteration:** B21 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** the privilege-management surface — `endpoints/roles.py` +
 `role_service.py` + `core/permissions.py`, `endpoints/organizations.py` +
@@ -11,6 +11,29 @@
 (create-member escalation), ORU-2/3/5 (settings secret leaks), ORU-4 (cross-tenant
 module read), ORU-6, ORU-8 (PII), ORU-9 fixed; ORU-7 (role-edit ceiling, last-admin,
 member-role guard) left open.
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified, no code change
+
+Re-verified this highest-risk (privilege-escalation) module's ceiling guards hold:
+
+- **ORU-7a/7b** — `_enforce_permission_grant_ceiling` / `_enforce_role_edit_ceiling`
+  wired into the role create/update/grant paths; last-admin/lockout protection
+  intact (6 ceiling refs in `roles.py`).
+- **ORU-7d (CRITICAL)** — `_enforce_rank_grant_ceiling` wired into both
+  `create_member` and `update_user_profile` (rank-change path), so a rank can't be
+  used to grant permissions beyond the caller's own (3 ceiling refs in `users.py`).
+- **Latent-500 lens clean** (user/role/org enum fields typed in the request
+  schemas); **E712-free** across `role_service.py`/`organization_service.py`/
+  `user_service.py`.
+
+Open item unchanged: **ORU-7c** — mass-editing the org-wide `member` role can
+escalate every member at once; intended (an org-wide role *should* be broadly
+editable) but sharp — an optional confirmation/guard is the owner's call.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 

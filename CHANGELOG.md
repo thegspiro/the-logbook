@@ -182,6 +182,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The finance forms already send valid values, so only malformed API requests are
   affected.
 
+### Security: event-request scheduling can't reference another department's location (2026-08-09)
+
+**Security**
+
+- When an outreach event request is scheduled, the location assigned to it is now
+  verified to belong to your own department before it is saved, and the location
+  name shown on the request is looked up within your department only. Previously a
+  hand-crafted API request could attach another department's location id (when no
+  calendar event was created), and its name would then appear on the request. No
+  change for normal use — the scheduling screen only offers your own department's
+  locations.
+
+### Security: external-training credentials fail closed on a decryption error (2026-08-09)
+
+**Security**
+
+- API credentials for an external training provider (e.g. Vector Solutions) are
+  stored encrypted and decrypted just before the platform contacts the provider.
+  If decryption now fails because the stored value has been tampered with or the
+  encryption key is wrong, the sync is stopped instead of sending the unverified
+  value to the provider. Legitimate credentials, and older values saved before
+  encryption was added, are unaffected.
+
 ### Security: membership-pipeline references are scoped to your department (2026-08-09)
 
 **Security**

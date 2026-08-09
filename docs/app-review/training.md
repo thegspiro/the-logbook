@@ -1,7 +1,49 @@
 # Application Review — Training (Tier B)
 
 **Prefix:** `TR2` · **Iteration:** B18 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — TR-6: external-credential decrypt now fails closed
+
+The actionable half of the TR-6 residual — making the external-provider credential
+decrypt **fail closed** — is a clean, contained security fix, and pass 4 lands it.
+
+### TR-6 (decrypt) — LOW/MED — `_decrypt_field` swallowed a tamper/wrong-key failure — ✅ FIXED
+
+**What:** `ExternalTrainingSyncService._decrypt_field`
+(`external_training_service.py`) decrypts a provider's stored `api_key`/`api_secret`
+right before `_get_auth_headers` sends them to the external LMS. It caught
+`except Exception: return value` — the broadest possible catch — so a **genuine**
+GCM authentication failure (`InvalidTag` — tampered ciphertext or the wrong
+key) fell through and the **raw stored value was handed to the provider as a live
+credential**. That's the opposite of fail-closed: a corrupted/tampered secret
+should stop the call, not be sent unverified.
+
+**Fix:** narrow the catch to `except InvalidToken` — the one case that legitimately
+means "legacy pre-encryption plaintext, return as-is" per `decrypt_data`'s
+documented contract. `InvalidTag` now propagates, so a tamper/wrong-key failure
+aborts the sync/auth rather than emitting an unverified credential. This is exactly
+the posture the MS-1 `EncryptedText` column type uses (catch `InvalidToken`, let
+`InvalidTag` fail closed). **4 DB-free tests added** (`test_external_training_
+decrypt_failclosed.py`): valid ciphertext round-trips, legacy plaintext passes
+through, None/empty → None, and a tampered value (`InvalidTag`) propagates.
+
+### Still flagged (unchanged)
+
+- **TR-4** (`year` default in requirements-progress — compliance-semantics decision).
+- **TR-6 residual (dangling-FK batch)** — the LOW, **not-projected** client-FK stores
+  (session-create category/program/phase/requirement/instructor, recert
+  `source_requirement_id`, recurring `template_id`, waiver `requirement_ids`, and the
+  bulk_enroll/sync re-fetch backstops) remain a deliberate future FK-hardening batch:
+  none is read back into a response, so each is a dangling-reference correctness item
+  rather than a cross-org leak, and the doc has consistently batched them for their
+  own focused pass rather than a rotation tick.
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_external_training_decrypt_failclosed.py`
+**5 passed** + training tests unchanged (DB-free).
 
 ---
 

@@ -1,7 +1,7 @@
 # Application Review — Scheduling (Tier B)
 
 **Prefix:** `SCH2` · **Iteration:** B19 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/scheduling.py` (~1,900 L), `services/scheduling_service.py`
 (~5,000 L)
@@ -10,6 +10,25 @@
 escalation), SCH-2 (self-signup guards), SCH-3 (DoS), SCH-4 (`shift_officer_id` +
 hours-report join) fixed; SCH-5 (swap accept-path), SCH-6 (`manual_hours` + FKs)
 left open.
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified, no code change
+
+Re-verified: **SCH-7** `create_template`/`update_template` validate the client
+`apparatus_id` in-org (`apparatus_ref_exists`); **SCH-8** `_get_apparatus_map`
+called with both args (no `TypeError` 500); SCH-1/2/3/4/6 hold; update-bypass clean
+(`model_dump(exclude_unset=True)`, FK re-validation on `update_shift`);
+`scheduling_service.py` E712-free; latent-500 lens clear (shift enum fields typed
+in the request schemas).
+
+Open items unchanged: **SCH-5** (swap accept-path re-validation + approver identity
+— a swap-workflow design change, not a drive-by) and **SCH-6 residual** (validate
+`station_id`/`template_id` *if/when* the station link is wired — conditional on a
+feature not yet built).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 

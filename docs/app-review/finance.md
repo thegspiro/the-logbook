@@ -1,7 +1,28 @@
 # Application Review — Finance (Tier B)
 
 **Prefix:** `FIN2` · **Iteration:** B20 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified, no code change
+
+Re-verified this well-hardened money module: **FIN-4** disburse-side SoD
+(`assert_different_person` on `mark_pr_paid`/`mark_expense_paid`/`issue_check`/
+`waive_dues`, 6 refs), **FIN-5** `restrict_to_user` view scoping, and
+`_validate_finance_fks` (13 refs — wired into the budget/PR/CR/expense create+update
+paths) all hold; FIN2-1 enum validators intact; `finance_service.py` E712-free.
+The known DiD gap (`get_approval_records`/`get_current_pending_step` unscoped)
+stays re-confirmed **not live** — every call site passes an already-org-resolved
+`entity_id`.
+
+Open items unchanged, both refactor-shaped: **FIN-7** (float→Decimal money math +
+unbounded transaction export/pagination + overspend guard) and **FIN-N** (the
+`ApprovalStepRecord` helpers stay unfiltered — verified not-live; threading `org_id`
+through the critical money-approval path isn't worth the churn).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
 
 ---
 

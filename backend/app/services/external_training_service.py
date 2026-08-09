@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+from cryptography.fernet import InvalidToken
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -221,8 +222,13 @@ class ExternalTrainingSyncService:
             return None
         try:
             return decrypt_data(value)
-        except Exception:
-            # If decryption fails, the value may be stored in plaintext (pre-encryption migration)
+        except InvalidToken:
+            # TR-6: fail closed. Only a legacy pre-encryption plaintext value
+            # (InvalidToken) is returned as-is for backward compatibility. A
+            # genuine GCM authentication failure (InvalidTag — tampered
+            # ciphertext or the wrong key) is NOT swallowed: it propagates
+            # rather than handing an unverified value to an external provider as
+            # a live API credential. This matches the EncryptedText contract.
             return value
 
     def _get_auth_headers(self, provider: ExternalTrainingProvider) -> Dict[str, str]:

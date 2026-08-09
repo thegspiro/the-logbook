@@ -32,6 +32,7 @@ from app.models.event_request import (
     EventRequestEmailTemplate,
     EventRequestStatus,
 )
+from app.models.location import Location
 from app.models.user import Organization, User
 from app.schemas.event_request import (
     EmailTemplateCreate,
@@ -50,6 +51,7 @@ from app.schemas.event_request import (
     SendTemplateEmail,
     TaskCompletionUpdate,
 )
+from app.utils.org_scoping import assert_in_org
 
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
 
@@ -85,11 +87,21 @@ async def _get_user_name(db: AsyncSession, user_id: str) -> str | None:
     return None
 
 
-async def _get_location_name(db: AsyncSession, location_id: str) -> str | None:
-    """Look up a location name."""
-    from app.models.location import Location
+async def _get_location_name(
+    db: AsyncSession, location_id: str, organization_id: str
+) -> str | None:
+    """Look up a location name, scoped to the caller's org.
 
-    result = await db.execute(select(Location.name).where(Location.id == location_id))
+    EV2-2 (XC-1): the enrichment is org-filtered so a `event_location_id` that
+    points at another org's location (however it was stored) resolves to no name
+    instead of leaking that org's location name into the response.
+    """
+    result = await db.execute(
+        select(Location.name).where(
+            Location.id == location_id,
+            Location.organization_id == str(organization_id),
+        )
+    )
     row = result.first()
     return row[0] if row else None
 
@@ -270,7 +282,9 @@ async def _build_response(
 
     location_name = None
     if event_request.event_location_id:
-        location_name = await _get_location_name(db, event_request.event_location_id)
+        location_name = await _get_location_name(
+            db, event_request.event_location_id, event_request.organization_id
+        )
 
     activity_items = []
     for entry in event_request.activity_log:
@@ -959,6 +973,23 @@ async def schedule_request(
     event_request.event_date = data.event_date
     event_request.event_end_date = data.event_end_date
     if data.location_id:
+        # EV2-2 (XC-1): validate the scheduled location is in the caller's org
+        # before storing it. Without this a foreign location_id is persisted on
+        # the request (and, when create_calendar_event is False, create_event —
+        # which validates — is never reached), then its name leaks back through
+        # the response enrichment. schedule_request has no ValueError wrapper, so
+        # surface the rejection as a clean 400.
+        try:
+            await assert_in_org(
+                db,
+                Location,
+                data.location_id,
+                current_user.organization_id,
+                allow_none=True,
+                label="location",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
         event_request.event_location_id = data.location_id
 
     event_id = None
@@ -1004,7 +1035,9 @@ async def schedule_request(
                     status_code=409,
                     detail="This room/location is already booked during this time. Please choose a different time or location.",
                 )
-            location_name = await _get_location_name(db, data.location_id)
+            location_name = await _get_location_name(
+                db, data.location_id, current_user.organization_id
+            )
 
         from app.schemas.event import EventCreate
 
