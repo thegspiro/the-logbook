@@ -53,7 +53,7 @@ from its open list.
 | B12 | integrations | INT2 | ✅ (p1, p2, p3) |
 | B13 | forms | FORM2 | ✅ (p1, p2, p3) |
 | B14 | grants & fundraising | GF2 | ✅ (p1, p2, p3) |
-| B15 | admin-hours | AH2 | ⬜ |
+| B15 | admin-hours | AH2 | ✅ (p1, p2, p3) |
 | B16 | reports & analytics | RPT2 | ⬜ |
 | B17 | events | EV2 | ⬜ |
 | B18 | training | TR2 | ⬜ |
@@ -1560,3 +1560,12 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   implies intentional free-text custom methods); folds into the GF-9 follow-up rather
   than a money-module auto-fix. GF-7/8/9 remain flagged. No CHANGELOG. See
   grants-fundraising.md → Pass 3. **B9–B14 batch complete.**
+
+- **B15 admin-hours ✅ (pass 3) — verified clean, no code change.** Re-verified the
+  self-credit/SoD guards hold on both approval paths: AH-4 single-entry
+  `assert_different_person` (service ~750) and AH-6 bulk-approve skips self-owned
+  entries (`skipped_self`, ~917); AH-1 (entries start PENDING) and AH-5 (org-scoped
+  internal queries) intact. Latent-500 lens clean (`entry_method`/`status` properly
+  typed); E712-free. FIN-7 float-money concern N/A — admin hours are time (24h/entry
+  cap), not currency. Per-org SoD toggle stays flagged. No CHANGELOG. See
+  admin-hours.md → Pass 3. Next: B16 reports & analytics.

@@ -12,6 +12,34 @@ AH-5 (minor scoping omissions, flagged not-exploitable) left open.
 
 ---
 
+## Pass 3 (2026-08-09) — verified clean, no code change
+
+Re-verified this HIGH-sensitivity (self-credit / SoD) module's guards all hold:
+
+- **AH-4 single-entry self-approval** — `review_entry`'s approve path calls
+  `assert_different_person(approver_id, entry.user_id, …)` (service ~750).
+- **AH-6 bulk-approve** — `bulk_approve` (service 889) iterates and **skips**
+  self-owned entries (`if entry.user_id == approver_id: skipped_self += 1; continue`,
+  ~917), so the bulk path can't self-approve; it returns a `skipped_self` count. The
+  AH-1+AH-4 control is intact on both approval paths.
+- **AH-1** — manual entries still start `PENDING`; **AH-5** internal queries stay
+  org-scoped.
+
+**Latent-500 lens clean:** the only enum columns (`entry_method`, `status`) are
+properly typed in the request schemas — no free-string→ENUM path. **E712-free.** The
+FIN-7 float-money concern doesn't map here — admin hours are *time*, not currency,
+bounded by AH-1's 24h-per-entry cap.
+
+### Still flagged (unchanged)
+
+- **Per-org SoD toggle** (AH-4 refinement) — only if a genuine sole-officer department
+  needs to self-approve; a deliberate product/config decision, unchanged.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · no tests changed (no code change).
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified the pass-1 fixes hold (AH-1 self-credit, AH-2 stale-session, AH-4 SoD
