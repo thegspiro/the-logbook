@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Eye, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { storefrontService } from '../services/api';
 import { NotificationPreviewModal } from './NotificationPreviewModal';
 import {
@@ -238,27 +239,27 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
     const payload: StoreSettingsUpdate = {
       isEnabled: form.isEnabled,
       storeName: form.storeName.trim() || 'Department Store',
-      tagline: form.tagline.trim() || undefined,
-      description: form.description.trim() || undefined,
+      tagline: blankToNull(form.tagline),
+      description: blankToNull(form.description),
       acceptedPaymentMethods: form.acceptedPaymentMethods,
       paymentPolicy: form.paymentPolicy as StorePaymentPolicy,
-      venmoHandle: form.venmoHandle.trim() || undefined,
-      paypalMeUrl: form.paypalMeUrl.trim() || undefined,
-      paypalEmail: form.paypalEmail.trim() || undefined,
-      cashAppCashtag: form.cashAppCashtag.trim() || undefined,
-      zelleHandle: form.zelleHandle.trim() || undefined,
-      zelleInstructions: form.zelleInstructions.trim() || undefined,
-      checkPayableTo: form.checkPayableTo.trim() || undefined,
-      checkMailingAddress: form.checkMailingAddress.trim() || undefined,
-      cashInstructions: form.cashInstructions.trim() || undefined,
-      payrollDeductionInstructions: form.payrollDeductionInstructions.trim() || undefined,
-      otherPaymentInstructions: form.otherPaymentInstructions.trim() || undefined,
-      paymentInstructions: form.paymentInstructions.trim() || undefined,
+      venmoHandle: blankToNull(form.venmoHandle),
+      paypalMeUrl: blankToNull(form.paypalMeUrl),
+      paypalEmail: blankToNull(form.paypalEmail),
+      cashAppCashtag: blankToNull(form.cashAppCashtag),
+      zelleHandle: blankToNull(form.zelleHandle),
+      zelleInstructions: blankToNull(form.zelleInstructions),
+      checkPayableTo: blankToNull(form.checkPayableTo),
+      checkMailingAddress: blankToNull(form.checkMailingAddress),
+      cashInstructions: blankToNull(form.cashInstructions),
+      payrollDeductionInstructions: blankToNull(form.payrollDeductionInstructions),
+      otherPaymentInstructions: blankToNull(form.otherPaymentInstructions),
+      paymentInstructions: blankToNull(form.paymentInstructions),
       taxRate: Number(form.taxRatePercent || 0) / 100,
-      shippingFlatRate: form.shippingFlatRate ? Number(form.shippingFlatRate) : undefined,
+      shippingFlatRate: numberOrNull(form.shippingFlatRate),
       allowPickup: form.allowPickup,
       allowShipping: form.allowShipping,
-      pickupLocation: form.pickupLocation.trim() || undefined,
+      pickupLocation: blankToNull(form.pickupLocation),
       notifyEmails: form.notifyEmails
         .split(',')
         .map((email) => email.trim())
@@ -274,8 +275,8 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       sendVendorOrderUpdates: form.sendVendorOrderUpdates,
       paymentReminderDays: Number(form.paymentReminderDays || 3),
       windowReminderHours: Number(form.windowReminderHours || 48),
-      termsText: form.termsText.trim() || undefined,
-      receiptFooter: form.receiptFooter.trim() || undefined,
+      termsText: blankToNull(form.termsText),
+      receiptFooter: blankToNull(form.receiptFooter),
     };
 
     setSaving(true);
