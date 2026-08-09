@@ -43,6 +43,9 @@ class RecordingSession:
         self.flush = AsyncMock()
 
     async def execute(self, statement, *args, **kwargs):
+        # Compile before answering: a mocked session never exercises the ORM,
+        # and an un-joinable select only raises at compile time.
+        str(statement)
         self.statements.append(statement)
         return self._results.pop(0) if self._results else MagicMock()
 
@@ -223,6 +226,7 @@ class TestRemoveRequirement:
         db = RecordingSession(
             [
                 _one(link),  # the link
+                _one(None),  # no sibling link in this program
                 _rows([(e1,)]),  # program enrollments
                 MagicMock(),  # delete RequirementProgress
                 _one(None),  # no other program references it -> orphan
@@ -254,6 +258,7 @@ class TestRemoveRequirement:
         db = RecordingSession(
             [
                 _one(link),  # the link
+                _one(None),  # no sibling link in this program
                 _rows([(str(uuid4()),)]),  # program enrollments
                 MagicMock(),  # delete RequirementProgress
             ]
@@ -268,11 +273,39 @@ class TestRemoveRequirement:
         assert error is None
         assert link in db.deleted
         # Progress rows only — the requirement itself is never deleted, and the
-        # "is it orphaned?" lookup is not even issued (the link + enrollment
-        # selects are the only two).
+        # "is it orphaned?" lookup is not even issued (the link, sibling-link
+        # and enrollment selects are the only three).
         assert db.stmt_types().count("Delete") == 1
-        assert db.stmt_types().count("Select") == 2
+        assert db.stmt_types().count("Select") == 3
         svc._recalculate_enrollment_progress.assert_awaited_once()
+
+
+class TestRemoveRequirementKeepsSiblingProgress:
+    async def test_progress_survives_when_another_phase_still_links_it(self):
+        """
+        Unlinking one of two links to the same requirement leaves the program
+        still tracking it, so the members' progress rows must stay — deleting
+        them would silently reset work already signed off.
+        """
+        link = SimpleNamespace(
+            id=str(uuid4()), requirement_id=str(uuid4()), owns_requirement=True
+        )
+        db = RecordingSession(
+            [
+                _one(link),  # the link
+                _one(SimpleNamespace(id="other-link")),  # a sibling link remains
+                _rows([(str(uuid4()),)]),  # program enrollments
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc._recalculate_enrollment_progress = AsyncMock()
+        svc._maybe_auto_advance_phase = AsyncMock()
+
+        ok, error = await svc.remove_requirement_from_program(uuid4(), uuid4(), uuid4())
+
+        assert ok is True
+        assert error is None
+        assert db.stmt_types().count("Delete") == 0
 
 
 class TestReorderRequirements:

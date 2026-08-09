@@ -1250,9 +1250,23 @@ async def get_enrollment_progress(
     )
     next_milestones = milestones_result.scalars().all()
 
-    # Count completed requirements
+    # Count requirements the same way the percentage does, so the two never
+    # disagree in the UI ("3/5 complete · 100%"): only *required* items count
+    # toward the total, and every satisfied state — completed, officer-verified,
+    # or waived — counts as done, not just the literal "completed" status.
+    required_ids = set(
+        await service.get_required_requirement_ids(program_id=enrollment.program_id)
+    )
+    done_statuses = {"completed", "verified", "waived"}
+    tracked = {
+        str(rp.requirement_id): rp
+        for rp in enrollment.requirement_progress
+        if str(rp.requirement_id) in required_ids
+    }
     completed_requirements = sum(
-        1 for rp in enrollment.requirement_progress if rp.status == "completed"
+        1
+        for rp in tracked.values()
+        if str(getattr(rp.status, "value", rp.status)) in done_statuses
     )
 
     return MemberProgramProgress(
@@ -1261,7 +1275,7 @@ async def get_enrollment_progress(
         current_phase=enrollment.current_phase,
         requirement_progress=enrollment.requirement_progress,
         completed_requirements=completed_requirements,
-        total_requirements=len(enrollment.requirement_progress),
+        total_requirements=len(tracked),
         next_milestones=next_milestones,
         time_remaining_days=time_remaining_days,
         is_behind_schedule=is_behind_schedule,

@@ -711,6 +711,11 @@ class ProgramBuildRequest(BaseModel):
 
     program: TrainingProgramCreate
     phases: List[ProgramBuildPhaseInput] = []
+    # Requirements that belong to the program rather than to any phase. A
+    # flexible program has no phases at all, so without these the wizard could
+    # only ever produce an empty one.
+    requirements: List[ProgramBuildRequirementInput] = []
+    milestones: List[ProgramBuildMilestoneInput] = []
 
 
 class MemberEligibilityResponse(BaseModel):

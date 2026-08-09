@@ -1238,6 +1238,10 @@ export interface ProgramBuildPhaseInput {
 export interface ProgramBuildRequest {
   program: TrainingProgramCreate;
   phases: ProgramBuildPhaseInput[];
+  // Requirements and milestones that belong to the program itself rather than
+  // to a phase — what a flexible (no-phase) program is made of.
+  requirements?: (ProgramBuildRequirementInput | ProgramBuildRequirementLink)[];
+  milestones?: ProgramBuildMilestoneInput[];
 }
 
 // ==================== External Training Integration Types ====================

@@ -23,10 +23,14 @@ import type {
   TrainingProgram,
 } from '../types/training';
 
+// "Sequential" is deliberately absent: nothing in the system ever enforced an
+// order between requirements, so it behaved exactly like Flexible while telling
+// the officer otherwise. Programs already saved as sequential keep the value —
+// it is added back to this list below when one is being edited — but it is not
+// offered as a new choice.
 const STRUCTURE_TYPES: { value: ProgramStructureType; label: string }[] = [
-  { value: 'phases', label: 'Phases (staged)' },
-  { value: 'sequential', label: 'Sequential (in order)' },
-  { value: 'flexible', label: 'Flexible (any order)' },
+  { value: 'phases', label: 'Phases — stages, in order' },
+  { value: 'flexible', label: 'One list — any order' },
 ];
 
 const MONTHS: { value: number; label: string }[] = [
@@ -203,7 +207,10 @@ export const EditProgramModal: React.FC<{
             value={structureType}
             onChange={(e) => setStructureType(e.target.value as ProgramStructureType)}
           >
-            {STRUCTURE_TYPES.map((s) => (
+            {(STRUCTURE_TYPES.some((s) => s.value === structureType)
+              ? STRUCTURE_TYPES
+              : [...STRUCTURE_TYPES, { value: structureType, label: 'Sequential (legacy)' }]
+            ).map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
               </option>

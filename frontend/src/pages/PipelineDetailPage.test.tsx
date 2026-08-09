@@ -576,3 +576,50 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     );
   });
 });
+
+describe('PipelineDetailPage — requirements outside any phase', () => {
+  const programLevelLink = {
+    id: 'pr-flat',
+    program_id: 'prog-1',
+    phase_id: null,
+    requirement_id: 'req-ce',
+    is_required: true,
+    is_prerequisite: false,
+    sort_order: 0,
+    owns_requirement: true,
+    created_at: '2026-01-01T00:00:00Z',
+    requirement: {
+      id: 'req-ce',
+      name: 'Annual CE Hours',
+      requirement_type: 'hours',
+      required_hours: 24,
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockResolvedValue({ ...program, structure_type: 'flexible' });
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockResolvedValue([programLevelLink]);
+    mockGetProgramEnrollments.mockResolvedValue([]);
+  });
+
+  it('renders a requirement that belongs to the program rather than a phase', async () => {
+    // A flexible pipeline has no phases at all, so its requirements only ever
+    // appear here — the page used to render phase requirements exclusively and
+    // showed such a program as empty.
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByText('Requirements outside any phase')).toBeInTheDocument();
+    expect(await screen.findByText('Annual CE Hours')).toBeInTheDocument();
+  });
+
+  it('offers an officer a way to add one', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Add requirement/i }));
+
+    expect(await screen.findByRole('dialog', { name: /Add requirement/i })).toBeInTheDocument();
+  });
+});
