@@ -12,6 +12,41 @@
 
 ---
 
+## Pass 3 (2026-08-09) — RPT-3 confirmed resolved; 4 E712 swept
+
+Re-verified the module: RPT-1 (cross-org aggregate leak) and RPT-2 (`_safe_int`
+filter guards) hold; **RPT-3 confirmed RESOLVED** — the PII-report gate landed
+earlier this session via the owner read-permission decision
+(`PII_REPORT_PERMISSIONS` + `_enforce_report_pii_permission` on `/generate` and
+`/saved/{id}/run`, `/available` filters the catalog). Update-bypass stays clean
+(`SavedReportUpdate` exposes no org/`created_by`/`report_type`).
+
+**Latent-500 lens clean:** `SavedReport` (the analytics model) has **no** enum
+columns — `report_type`/`schedule_frequency` are `String`, so no free-string→ENUM
+path; the report generators return `{"error": …}` handled explicitly at the endpoint.
+
+### RPT2-1 — NIT — 4 boolean-column E712 swept — ✅ FIXED
+
+`reports.py` (`SavedReport.is_active`) and `platform_analytics.py`
+(`Event.is_cancelled` ×2, `EventRSVP.checked_in`) carried `== True/False  # noqa: E712`
+comparisons; converted to `.is_(...)`. Both files are now E712-free.
+
+### Still flagged (unchanged)
+
+- **RPT-6** — `requirement_breakdown` completion % can exceed 100% in the
+  shared-requirement + double-enrollment case; the numerator fix risks skewing the
+  common-case metric, so it stays flagged rather than auto-applied.
+- **RPT-7** — `/generate` and `/run` lack the `except ValueError→400` wrapper; no
+  generator raises `ValueError` deterministically today (they return `{"error"}`), so
+  it's a defensive-consistency item for a robustness sweep, not a live fault.
+- **RPT-5c** — inventory float→Decimal (with FIN-7), other polish.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · report/analytics tests **108 passed** (DB-free; the
+`db_session` errors are unrelated files matched by the `-k` substring).
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep — no code change
 
 Re-verified all four pass-1 fixes hold: RPT-1 (every query in

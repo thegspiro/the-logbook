@@ -124,7 +124,7 @@ async def list_saved_reports(
         select(SavedReport)
         .where(
             SavedReport.organization_id == str(current_user.organization_id),
-            SavedReport.is_active == True,  # noqa: E712
+            SavedReport.is_active.is_(True),
         )
         .order_by(SavedReport.name)
     )

@@ -54,7 +54,7 @@ from its open list.
 | B13 | forms | FORM2 | ✅ (p1, p2, p3) |
 | B14 | grants & fundraising | GF2 | ✅ (p1, p2, p3) |
 | B15 | admin-hours | AH2 | ✅ (p1, p2, p3) |
-| B16 | reports & analytics | RPT2 | ⬜ |
+| B16 | reports & analytics | RPT2 | ✅ (p1, p2, p3) |
 | B17 | events | EV2 | ⬜ |
 | B18 | training | TR2 | ⬜ |
 | B19 | scheduling | SCH2 | ⬜ |
@@ -1569,3 +1569,14 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   typed); E712-free. FIN-7 float-money concern N/A — admin hours are time (24h/entry
   cap), not currency. Per-org SoD toggle stays flagged. No CHANGELOG. See
   admin-hours.md → Pass 3. Next: B16 reports & analytics.
+
+- **B16 reports & analytics ✅ (pass 3).** Re-verified RPT-1/RPT-2 hold and **RPT-3
+  confirmed resolved** (the PII-report gate landed this session via the owner
+  decision — `PII_REPORT_PERMISSIONS`/`_enforce_report_pii_permission` on
+  generate/run + `/available` filtering). Update-bypass clean. **Latent-500 lens
+  clean:** SavedReport has no enum columns (report_type/schedule_frequency are
+  String). **Swept RPT2-1** — 4 boolean-column E712 in reports.py (is_active) and
+  platform_analytics.py (is_cancelled ×2, checked_in). RPT-6 (>100% completion),
+  RPT-7 (defensive ValueError wrapper), RPT-5c stay flagged. 108 report/analytics
+  tests pass. Gate: flake8/black clean; tsc n/a. No CHANGELOG. See
+  reports-analytics.md → Pass 3. Next: B17 events.
