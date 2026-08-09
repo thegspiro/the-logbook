@@ -516,6 +516,21 @@ bar should offer — is a product call.
 The guide screenshot (`15-11-table-bulk-actions.png`) shows both bars, because
 that is what the page does today.
 
+## Skills Testing — No Summary Dashboard (2026-08-09)
+
+`docs/training/09-skills-testing.md` pictures a **Skills Testing Summary
+dashboard** with "six stat cards in a 3x2 grid: Total Templates, Published,
+…", and elsewhere a **Pending Validation** card on that same dashboard.
+
+There is no such page. Skills testing lives under
+`/training/admin?page=skills-testing` with two tabs, Templates and Test
+Records. The Templates tab carries **four** stat cards — Templates, Tests This
+Month, Pass Rate, Avg Score — and no pending-validation figure anywhere.
+
+Three placeholders in that guide describe this dashboard and are left open.
+The validation workflow itself shipped (2026-08-08); what is missing is the
+officer-facing surface that would show how much of it is waiting.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

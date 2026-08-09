@@ -107,8 +107,7 @@ Add sections to organize the evaluation, then add criteria (scored items) within
 4. Set the **point value** (default 1) for weighted scoring. Higher-value criteria carry more weight in the overall score.
 5. Check **Required** if this is a critical criterion — failing a required criterion triggers automatic fail when "Require All Critical" is enabled on the template.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the template builder showing two sections ("Scene Size-Up" and "Primary Survey") expanded with criteria listed under each. Each criterion row shows: description text, a type indicator, point value, a "Required" checkbox (some checked with a red asterisk), and drag handles for reordering. An "Add Criterion" button appears at the bottom of each section]_
+![Skill template builder with its sections and scored criteria](./images/09-04-template-builder.png)
 
 > **Hint:** Required (critical) criteria are the digital equivalent of the "Critical Criteria" section at the bottom of NREMT skill sheets. If a candidate triggers any of these, the result is an automatic FAIL regardless of their point score. Non-critical criteria that are unchecked display as "Not Completed" (not "FAIL").
 
@@ -245,8 +244,7 @@ them — so you can run a practice test on yourself freely.
 
 - The template's sections and criteria loaded for scoring
 
-> **Screenshot placeholder:**
-> _[Screenshot of the New Test form showing a template dropdown (with "Patient Assessment/Management — Trauma v2" selected), a candidate dropdown showing a member search, and a prominent "Start Test" button]_
+![Start skill test form with its template and candidate fields](./images/09-06-new-test-form.png)
 
 ### Test Statuses
 
@@ -507,8 +505,7 @@ template used to rewrite the structure that _completed_ tests read from — so:
 > those tests displayed, so nothing visible changed. What the backfill buys is
 > that they are now frozen against _future_ edits.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Skills Tests list page showing a table of test sessions with columns: candidate name, template name, examiner, date, score, result (PASS/FAIL badge), and status. Show filters at the top for status, candidate, and template dropdowns]_
+![Skills test records listing sessions with candidate, template and status](./images/09-09-test-records.png)
 
 ---
 
@@ -546,8 +543,7 @@ Navigate to **Training Admin > Skills Testing > Summary** for a department-wide 
 > with a non-zero **Pending Validation** card visible, so the review-queue badge
 > that drives officers to the queue can be seen alongside the other stats._
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Skills Testing Summary dashboard showing six stat cards in a 3x2 grid: Total Templates (12), Published Templates (8), Total Tests (156), Tests This Month (14), Pass Rate (82%), Average Score (76.4%). Each card has an icon and is color-coded]_
+![Skills testing summary with its stat cards](./images/09-10-templates-tab.png)
 
 ---
 

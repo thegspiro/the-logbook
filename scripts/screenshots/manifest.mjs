@@ -2566,4 +2566,37 @@ export const SHOTS = [
     },
     fullPage: true,
   },
+  {
+    id: "09-04-template-builder",
+    doc: "09-skills-testing.md",
+    line: 111,
+    anchor: "Screenshot of the template builder showing two sections",
+    alt: "Skill template builder with its sections and scored criteria",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/templates?limit=20",
+      (id) => `/training/skills-testing/templates/${id}/edit`,
+      "templates",
+    ),
+    fullPage: true,
+  },
+  {
+    id: "09-06-new-test-form",
+    doc: "09-skills-testing.md",
+    line: 249,
+    anchor: "Screenshot of the New Test form showing a template dropdown",
+    alt: "Start skill test form with its template and candidate fields",
+    route: "/training/skills-testing/test/new",
+    fullPage: true,
+  },
+  {
+    id: "09-09-test-records",
+    doc: "09-skills-testing.md",
+    line: 511,
+    anchor:
+      "Screenshot of the Skills Tests list page showing a table of test sessions",
+    alt: "Skills test records listing sessions with candidate, template and status",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    fullPage: true,
+  },
 ];
