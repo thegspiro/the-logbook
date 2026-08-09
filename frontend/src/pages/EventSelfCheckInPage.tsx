@@ -7,6 +7,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime } from '../utils/dateFormatting';
 import { EventType as EventTypeEnum } from '../constants/enums';
 
+import { useConfirm } from '../hooks/useConfirm';
 /**
  * Event Self Check-In Page
  *
@@ -17,6 +18,7 @@ import { EventType as EventTypeEnum } from '../constants/enums';
  * 4. Validates the time window before allowing check-in
  */
 const EventSelfCheckInPage: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirm();
   const { id: eventId } = useParams<{ id: string }>();
   const userTz = useTimezone();
 
@@ -68,7 +70,15 @@ const EventSelfCheckInPage: React.FC = () => {
         // Soft pipeline phase gate — confirm, then retry with override.
         const warning = getPhaseGateWarning(err);
         if (!warning) throw err;
-        if (!window.confirm(`${warning}\n\nCheck in anyway?`)) {
+        if (
+          !(await confirm({
+            title: 'Check in anyway?',
+            message: warning,
+            confirmLabel: 'Check in',
+            cancelLabel: 'Not now',
+            variant: 'warning',
+          }))
+        ) {
           setCheckingIn(false);
           return;
         }
@@ -479,6 +489,7 @@ const EventSelfCheckInPage: React.FC = () => {
           </Link>
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 };

@@ -42,7 +42,9 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
+import { useConfirm } from '../../../hooks/useConfirm';
 export const ProspectiveMembersPage: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
   const tz = useTimezone();
   const {
@@ -300,9 +302,13 @@ export const ProspectiveMembersPage: React.FC = () => {
           newApplicant.last_name.trim()
         );
         if (check.has_matches) {
-          const proceed = window.confirm(
-            `This email or name matches ${check.match_count} existing member(s). Do you want to continue creating this applicant?`
-          );
+          const proceed = await confirm({
+            title: 'This may be a duplicate',
+            message: `The email or name matches ${String(check.match_count)} existing ${check.match_count === 1 ? 'member' : 'members'}. Create this applicant anyway?`,
+            confirmLabel: 'Create anyway',
+            cancelLabel: 'Go back',
+            variant: 'warning',
+          });
           if (!proceed) {
             setIsCreating(false);
             return;
@@ -1285,6 +1291,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 };

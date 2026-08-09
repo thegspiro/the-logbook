@@ -47,6 +47,7 @@ export default function InspectionsSection({ facilityId }: Props) {
     openEdit,
     handleSave,
     handleDelete,
+    confirmDialog,
   } = useInspectionForm({ facilityId });
 
   return (
@@ -351,6 +352,7 @@ export default function InspectionsSection({ facilityId }: Props) {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

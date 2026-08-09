@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { ApprovalEntityType, ApprovalStepType, ApproverType } from '../types';
 import type { ApprovalChain } from '../types';
 
+import { useConfirm } from '../../../hooks/useConfirm';
 // =============================================================================
 // Constants
 // =============================================================================
@@ -168,6 +169,7 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
 // =============================================================================
 
 const ApprovalChainsSettingsPage: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirm();
   const {
     approvalChains,
     budgetCategories,
@@ -230,7 +232,15 @@ const ApprovalChainsSettingsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this approval chain?')) {
+    if (
+      !(await confirm({
+        title: 'Delete approval chain',
+        message:
+          'Requests that already went through this chain keep their approval history, but nothing new will be routed by it.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    ) {
       return;
     }
 
@@ -433,6 +443,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
           ))}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 };

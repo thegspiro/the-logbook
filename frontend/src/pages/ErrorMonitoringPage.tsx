@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
 
+import { useConfirm } from '../hooks/useConfirm';
 /**
  * Where the error was raised. Rows written before the `source` context key
  * existed carry neither marker, so they fall back to "Client".
@@ -24,6 +25,7 @@ function sourceLabel(error: ErrorLog): string {
  * Data is fetched from the backend API.
  */
 const ErrorMonitoringPage: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirm();
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
   const canClearErrors = checkPermission('audit.manage');
@@ -66,7 +68,14 @@ const ErrorMonitoringPage: React.FC = () => {
   };
 
   const clearAllErrors = async () => {
-    if (window.confirm('Are you sure you want to clear all errors? This cannot be undone.')) {
+    if (
+      await confirm({
+        title: 'Clear all errors?',
+        message: 'Every recorded error is discarded, along with the history behind these statistics.',
+        confirmLabel: 'Clear all',
+        cancelLabel: 'Keep them',
+      })
+    ) {
       await errorTracker.clearErrors();
       setErrors([]);
       setStats(null);
@@ -307,6 +316,7 @@ const ErrorMonitoringPage: React.FC = () => {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 };

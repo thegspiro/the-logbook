@@ -31,6 +31,7 @@ import toast from 'react-hot-toast';
 import { formatDate, formatDateCustom } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { complianceConfigService } from '../services/trainingServices';
+import { useConfirm } from '../hooks/useConfirm';
 import type {
   ComplianceConfigData,
   ComplianceConfigUpdate,
@@ -69,6 +70,7 @@ const REPORT_FREQUENCIES = [
 ];
 
 export default function ComplianceRequirementsConfigPage() {
+  const { confirm, confirmDialog } = useConfirm();
   const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<ActiveTab>('thresholds');
   const [isLoading, setIsLoading] = useState(true);
@@ -266,7 +268,15 @@ export default function ComplianceRequirementsConfigPage() {
   };
 
   const handleDeleteProfile = async (profileId: string) => {
-    if (!window.confirm('Delete this compliance profile?')) return;
+    if (
+      !(await confirm({
+        title: 'Delete compliance profile',
+        message: 'The profile and the requirements configured on it are removed. Records already filed are unaffected.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await complianceConfigService.deleteProfile(profileId);
       toast.success('Profile deleted');
@@ -324,7 +334,15 @@ export default function ComplianceRequirementsConfigPage() {
   };
 
   const handleDeleteReport = async (reportId: string) => {
-    if (!window.confirm('Delete this report?')) return;
+    if (
+      !(await confirm({
+        title: 'Delete report',
+        message: 'This generated report is removed for good. The underlying records are not touched.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await complianceConfigService.deleteReport(reportId);
       toast.success('Report deleted');
@@ -1179,6 +1197,7 @@ export default function ComplianceRequirementsConfigPage() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

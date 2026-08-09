@@ -39,6 +39,7 @@ import { getInitials } from '../utils';
 import type { Interview, InterviewRecommendation, StageHistoryEntry } from '../types';
 import { INTERVIEW_RECOMMENDATION_LABELS, INTERVIEW_RECOMMENDATION_COLORS } from '../types';
 
+import { useConfirm } from '../../../hooks/useConfirm';
 // ---------------------------------------------------------------------------
 // Shared Tailwind class constants
 // ---------------------------------------------------------------------------
@@ -395,12 +396,21 @@ interface InterviewCardProps {
 }
 
 const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, isOwn, timezone, onRefresh }) => {
+  const { confirm, confirmDialog } = useConfirm();
   const { deleteInterview } = useProspectiveMembersStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = useCallback(async () => {
-    if (!window.confirm('Are you sure you want to delete this interview?')) return;
+    if (
+      !(await confirm({
+        title: 'Delete interview',
+        message: 'The interview and its notes and recommendation are removed for good.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     setIsDeleting(true);
     try {
       await deleteInterview(interview.id);
@@ -410,7 +420,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteInterview, interview.id]);
+  }, [confirm, deleteInterview, interview.id]);
 
   if (isEditing) {
     return (
@@ -502,6 +512,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
           <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{interview.recommendation_notes}</p>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 };

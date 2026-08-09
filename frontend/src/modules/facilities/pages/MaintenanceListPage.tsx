@@ -61,6 +61,7 @@ export default function MaintenanceListPage() {
     handleSave,
     handleComplete,
     handleDelete,
+    confirmDialog,
   } = useMaintenanceForm({ initialStatusFilter: initialStatus });
 
   const getFacilityName = (facilityId: string) => facilities.find((f) => f.id === facilityId)?.name || 'Unknown';
@@ -385,6 +386,7 @@ export default function MaintenanceListPage() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

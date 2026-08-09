@@ -26,6 +26,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
+import { useConfirm } from '../../hooks/useConfirm';
 const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 
 // ---------------------------------------------------------------------------
@@ -95,6 +96,7 @@ const statusBadge = (status: string) => {
 // ---------------------------------------------------------------------------
 
 export const MyChecklistsPage: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirm();
   const timezone = useTimezone();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('scheduling.manage') || checkPermission('equipment_check.manage');
@@ -203,13 +205,21 @@ export const MyChecklistsPage: React.FC = () => {
     }
   }, [fetchActiveChecklists, fetchHistory, showHistory]);
 
-  const handleBack = useCallback(() => {
-    if (!window.confirm('Leave this check? Your progress is saved as a draft and will be restored when you return.'))
+  const handleBack = useCallback(async () => {
+    if (
+      !(await confirm({
+        title: 'Leave this check?',
+        message: 'Your progress is saved as a draft and will be waiting for you when you come back to it.',
+        confirmLabel: 'Leave',
+        cancelLabel: 'Stay here',
+        variant: 'info',
+      }))
+    )
       return;
     setActiveTemplate(null);
     setActiveShiftId(null);
     setActiveCheckId(null);
-  }, []);
+  }, [confirm]);
 
   const handleOpenTemplatePicker = useCallback(async () => {
     setShowTemplatePicker(true);
@@ -277,7 +287,7 @@ export const MyChecklistsPage: React.FC = () => {
           shiftId={activeShiftId || undefined}
           template={activeTemplate}
           onComplete={handleComplete}
-          onBack={handleBack}
+          onBack={() => void handleBack()}
           existingCheckId={activeCheckId || undefined}
         />
       </Suspense>
@@ -738,6 +748,7 @@ export const MyChecklistsPage: React.FC = () => {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 };

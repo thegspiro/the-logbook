@@ -6,6 +6,7 @@ import type { Inspection } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 
+import { useConfirm } from '../../../hooks/useConfirm';
 interface InspectionFormData {
   facility_id: string;
   inspection_type: string;
@@ -82,6 +83,7 @@ interface UseInspectionFormOptions {
 }
 
 export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {}) {
+  const { confirm, confirmDialog } = useConfirm();
   const tz = useTimezone();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -173,7 +175,15 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
   };
 
   const handleDelete = async (insp: Inspection) => {
-    if (!window.confirm(`Delete inspection "${insp.title}"?`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete inspection',
+        message: `Delete "${insp.title}"? Its findings and corrective actions go with it.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await facilitiesService.deleteInspection(insp.id);
       toast.success('Inspection deleted');
@@ -185,6 +195,8 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
 
   return {
     inspections: filtered,
+    /** Rendered by the consuming component; this hook cannot render JSX. */
+    confirmDialog,
     allInspections: inspections,
     isLoading,
     loadError,

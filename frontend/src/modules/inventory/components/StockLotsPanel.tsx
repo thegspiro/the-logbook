@@ -16,6 +16,7 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { formatDate, getTodayLocalDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 
+import { useConfirm } from '../../../hooks/useConfirm';
 interface StockLotsPanelProps {
   itemId: string;
   canManage: boolean;
@@ -32,6 +33,7 @@ function emptyForm(): InventoryLotCreate {
 }
 
 const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) => {
+  const { confirm, confirmDialog } = useConfirm();
   const tz = useTimezone();
   const [lots, setLots] = useState<InventoryLot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,7 +83,15 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
   };
 
   const handleDelete = async (lot: InventoryLot) => {
-    if (!window.confirm('Delete this stock lot? This cannot be undone.')) return;
+    if (
+      !(await confirm({
+        title: 'Delete stock lot',
+        message: 'Delete this stock lot? Its quantity and expiry come off the item, and this cannot be undone.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await inventoryService.deleteItemLot(lot.id);
       setLots((prev) => prev.filter((l) => l.id !== lot.id));
@@ -320,6 +330,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
           })}
         </ul>
       )}
+      {confirmDialog}
     </div>
   );
 };

@@ -28,6 +28,7 @@ import { TEMPLATE_TYPE_LABELS, type TemplateType } from '../types/equipmentCheck
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { PromptDialog } from '../../../components/ux';
 
+import { useConfirm } from '../../../hooks/useConfirm';
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const TIMING_LABELS: Record<string, { label: string; color: string }> = {
@@ -59,6 +60,7 @@ function cloneNameFor(template: EquipmentCheckTemplate): string {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export const EquipmentCheckTemplateList: React.FC = () => {
+  const { confirm, confirmDialog } = useConfirm();
   const [templates, setTemplates] = useState<EquipmentCheckTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -99,7 +101,14 @@ export const EquipmentCheckTemplateList: React.FC = () => {
   };
 
   const handleDelete = async (template: EquipmentCheckTemplate) => {
-    if (!window.confirm(`Delete "${template.name}"? This removes all compartments and items. This cannot be undone.`))
+    if (
+      !(await confirm({
+        title: 'Delete check template',
+        message: `Delete "${template.name}"? Every compartment and item on it goes with it, and this cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
       return;
     setDeletingId(template.id);
     try {
@@ -354,6 +363,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
         confirmLabel="Clone template"
         loading={cloning}
       />
+      {confirmDialog}
     </div>
   );
 };

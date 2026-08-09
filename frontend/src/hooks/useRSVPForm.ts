@@ -12,6 +12,7 @@ import type { RSVPStatus, Event } from '../types/event';
 import { RSVPStatus as RSVPStatusEnum } from '../constants/enums';
 import { getPhaseGateWarning } from '../utils/errorHandling';
 
+import { useConfirm } from '../hooks/useConfirm';
 interface UseRSVPFormOptions {
   eventId: string | undefined;
   event: Event | null;
@@ -19,6 +20,7 @@ interface UseRSVPFormOptions {
 }
 
 export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) => {
+  const { confirm, confirmDialog } = useConfirm();
   const [showRSVPModal, setShowRSVPModal] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>(RSVPStatusEnum.GOING);
   const [guestCount, setGuestCount] = useState(0);
@@ -76,7 +78,15 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
             // Soft pipeline phase gate — confirm, then retry with override.
             const warning = getPhaseGateWarning(err);
             if (!warning) throw err;
-            if (!window.confirm(`${warning}\n\nRSVP anyway?`)) {
+            if (
+              !(await confirm({
+                title: 'RSVP anyway?',
+                message: warning,
+                confirmLabel: 'RSVP',
+                cancelLabel: 'Not now',
+                variant: 'warning',
+              }))
+            ) {
               setSubmitting(false);
               return;
             }
@@ -95,6 +105,7 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
       }
     },
     [
+      confirm,
       eventId,
       event,
       rsvpStatus,
@@ -110,6 +121,8 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
 
   return {
     showRSVPModal,
+    /** Rendered by the consuming component; this hook cannot render JSX. */
+    confirmDialog,
     setShowRSVPModal,
     rsvpStatus,
     setRsvpStatus,

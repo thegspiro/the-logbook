@@ -12,11 +12,13 @@ import { inputCls, labelCls, COMPLIANCE_TYPE_OPTIONS } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 
+import { useConfirm } from '../../../hooks/useConfirm';
 interface Props {
   facilityId: string;
 }
 
 export default function ComplianceSection({ facilityId }: Props) {
+  const { confirm, confirmDialog } = useConfirm();
   const tz = useTimezone();
   const [checklists, setChecklists] = useState<ComplianceChecklist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,7 +75,15 @@ export default function ComplianceSection({ facilityId }: Props) {
   };
 
   const handleDelete = async (checklist: ComplianceChecklist) => {
-    if (!window.confirm(`Delete checklist "${checklist.title}"?`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete checklist',
+        message: `Delete the compliance checklist "${checklist.title}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await facilitiesService.deleteComplianceChecklist(checklist.id);
       toast.success('Checklist deleted');
@@ -223,6 +233,7 @@ export default function ComplianceSection({ facilityId }: Props) {
           </div>
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 }

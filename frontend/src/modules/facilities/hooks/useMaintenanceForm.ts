@@ -6,6 +6,7 @@ import type { MaintenanceRecord, MaintenanceType } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 
+import { useConfirm } from '../../../hooks/useConfirm';
 interface MaintenanceFormData {
   facility_id: string;
   maintenance_type_id: string;
@@ -71,6 +72,7 @@ interface UseMaintenanceFormOptions {
 }
 
 export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: UseMaintenanceFormOptions = {}) {
+  const { confirm, confirmDialog } = useConfirm();
   const tz = useTimezone();
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [maintenanceTypes, setMaintenanceTypes] = useState<MaintenanceType[]>([]);
@@ -177,7 +179,15 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
   };
 
   const handleDelete = async (record: MaintenanceRecord) => {
-    if (!window.confirm('Delete this maintenance record?')) return;
+    if (
+      !(await confirm({
+        title: 'Delete maintenance record',
+        message: 'The record and its cost, vendor and work-order details are removed for good.',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await facilitiesService.deleteMaintenanceRecord(record.id);
       toast.success('Record deleted');
@@ -189,6 +199,8 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
 
   return {
     records: filtered,
+    /** Rendered by the consuming component; this hook cannot render JSX. */
+    confirmDialog,
     allRecords: records,
     maintenanceTypes,
     isLoading,
