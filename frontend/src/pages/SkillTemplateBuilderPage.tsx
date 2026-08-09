@@ -24,6 +24,7 @@ import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { trainingProgramService, trainingModuleConfigService, roleService } from '../services/api';
 import type { TrainingRequirementEnhanced, TrainingModuleConfig as TMConfig } from '../types/training';
 import type { Role } from '../types/role';
+import { ConfirmDialog } from '../components/ux';
 import type {
   SkillTemplateSectionCreate,
   SkillCriterionCreate,
@@ -408,6 +409,8 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   const [orgConfig, setOrgConfig] = useState<TMConfig | null>(null);
   const [sections, setSections] = useState<LocalSection[]>([createEmptySection(0)]);
   const [isSaving, setIsSaving] = useState(false);
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Load the org's training requirements for the optional pipeline link.
@@ -612,24 +615,32 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     }
   };
 
-  const handlePublish = async () => {
+  /** Validate first, then ask. Publishing saves the current edits as well, so
+   *  the confirmation has to say so — the officer is agreeing to both. */
+  const requestPublish = () => {
     if (!isEditing || !id) return;
     const errors = validate();
     if (errors.length > 0) {
       setValidationErrors(errors);
       return;
     }
+    setShowPublishConfirm(true);
+  };
 
-    if (window.confirm('Publish this template? Once published, it can be used for testing.')) {
-      try {
-        const payload = buildPayload();
-        await updateTemplate(id, payload);
-        await publishTemplate(id);
-        toast.success('Template published');
-        void navigate('/training/admin?page=skills-testing&tab=templates');
-      } catch {
-        toast.error('Failed to publish template');
-      }
+  const handlePublish = async () => {
+    if (!isEditing || !id) return;
+    setIsPublishing(true);
+    try {
+      const payload = buildPayload();
+      await updateTemplate(id, payload);
+      await publishTemplate(id);
+      setShowPublishConfirm(false);
+      toast.success('Template published');
+      void navigate('/training/admin?page=skills-testing&tab=templates');
+    } catch {
+      toast.error('Failed to publish template');
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -686,10 +697,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 {isSaving ? 'Saving...' : 'Save Draft'}
               </button>
               {isEditing && (
-                <button
-                  onClick={() => void handlePublish()}
-                  className="btn-success flex items-center gap-2 font-medium"
-                >
+                <button onClick={requestPublish} className="btn-success flex items-center gap-2 font-medium">
                   <Send className="h-4 w-4" />
                   Publish
                 </button>
@@ -1000,6 +1008,18 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           </button>
         </div>
       </main>
+
+      <ConfirmDialog
+        isOpen={showPublishConfirm}
+        onClose={() => setShowPublishConfirm(false)}
+        onConfirm={() => void handlePublish()}
+        title="Publish this template?"
+        message={`Saves your changes and makes "${name || 'this template'}" available to start tests from. Each test keeps a copy of the template it was taken against, so later edits never re-score a test already run.`}
+        cancelLabel="Not yet"
+        confirmLabel="Publish"
+        variant="info"
+        loading={isPublishing}
+      />
     </div>
   );
 };

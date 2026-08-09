@@ -37,6 +37,7 @@ import {
   Mail,
   RotateCcw,
   Ban,
+  CircleSlash,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
@@ -1057,7 +1058,13 @@ export const ActiveSkillTestPage: React.FC = () => {
   // used to reset was never the one holding the examiner partway down the page.
   // The window call stays for the outer document (header offset, footer).
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const showingResults = currentTest?.status === 'completed' || currentTest?.status === 'voided';
+  // Every status that is finished with, in one way or another. `cancelled`
+  // belongs here for the same reason `voided` does: update_test rejects writes
+  // to it with a 400, so falling through to the live evaluation screen handed
+  // an officer editable criteria, a running clock and a Finish button for a
+  // record the API will not accept a single one of them on.
+  const showingResults =
+    currentTest?.status === 'completed' || currentTest?.status === 'voided' || currentTest?.status === 'cancelled';
   const loadedTestKey = currentTest?.id;
   useEffect(() => {
     // Assignment rather than scrollTo(): this runs on every screen change and
@@ -1662,9 +1669,11 @@ export const ActiveSkillTestPage: React.FC = () => {
               <p className="text-theme-text-muted text-xs">
                 {currentTest.status === 'voided'
                   ? 'Voided Result'
-                  : currentTest.is_practice
-                    ? 'Practice Results'
-                    : 'Test Results'}
+                  : currentTest.status === 'cancelled'
+                    ? 'Cancelled Test'
+                    : currentTest.is_practice
+                      ? 'Practice Results'
+                      : 'Test Results'}
               </p>
             </div>
             <div className="w-16" /> {/* Spacer for centering */}
@@ -1710,6 +1719,20 @@ export const ActiveSkillTestPage: React.FC = () => {
                   {currentTest.overall_score != null
                     ? ` (recorded ${currentTest.result === 'pass' ? 'pass' : 'fail'}, ${Math.round(currentTest.overall_score)}%)`
                     : ''}
+                </p>
+              </div>
+            </div>
+          ) : currentTest.status === 'cancelled' ? (
+            /* Closed out before it was finished. Whatever was scored stays on
+               display as the record of how far the evaluation got, but there is
+               no outcome here — it was never completed, so nothing was decided. */
+            <div className="bg-theme-surface border-theme-surface-border mb-4 flex items-center gap-3 rounded-xl border p-4">
+              <CircleSlash className="text-theme-text-muted h-10 w-10 shrink-0" />
+              <div className="flex-1">
+                <p className="text-theme-text-primary text-lg font-bold">Cancelled</p>
+                <p className="text-theme-text-muted text-sm font-medium">
+                  This test was closed out before it finished. Anything scored below is kept as a record, but there is
+                  no pass or fail, and it counts toward nothing.
                 </p>
               </div>
             </div>
@@ -1810,8 +1833,9 @@ export const ActiveSkillTestPage: React.FC = () => {
               after a year, so a durable grant on one would outlive the thing it
               points at. Officers only — the viewer endpoints require
               training.manage, so a member examiner would see a panel whose every
-              call 403s. */}
-          {!currentTest.is_practice && isOfficer && (
+              call 403s. Not on a cancelled test either: it never produced a
+              result, so there is nothing for a named viewer to be shown. */}
+          {!currentTest.is_practice && isOfficer && currentTest.status !== 'cancelled' && (
             <div className="mt-4">
               <TestViewersPanel
                 testId={currentTest.id}

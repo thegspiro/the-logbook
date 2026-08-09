@@ -261,6 +261,21 @@ describe('SkillTestOfficerActions', () => {
     });
   });
 
+  // Without its own branch this panel fell through to the normal state and
+  // told the officer the result "counts toward the candidate's record" — of a
+  // test that was abandoned and counts toward nothing.
+  describe('A cancelled test', () => {
+    it('offers no actions and does not claim the result counts', () => {
+      render(<SkillTestOfficerActions test={buildTest({ status: 'cancelled', result: 'incomplete' })} />);
+
+      expect(screen.queryByRole('button', { name: /void result/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /accept result/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /release to candidate/i })).not.toBeInTheDocument();
+      expect(screen.getByText('Test cancelled')).toBeInTheDocument();
+      expect(screen.getByText(/counts toward nothing/)).toBeInTheDocument();
+    });
+  });
+
   describe('Responses predating the effective-policy fields', () => {
     it('describes the permissive default rather than claiming results are withheld', () => {
       render(

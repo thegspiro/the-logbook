@@ -91,9 +91,16 @@ const TestCard: React.FC<{
             {test.overall_score != null && (
               <p className="text-theme-text-primary text-lg font-bold">{Math.round(test.overall_score)}%</p>
             )}
-            <p className="text-theme-text-muted text-xs">
-              {test.completed_at ? formatDate(test.completed_at, tz) : test.started_at ? 'In Progress' : 'Not Started'}
-            </p>
+            {/* An unfinished test is the one row on this screen with work
+                waiting on it, and it read as muted grey status text — nothing
+                said the row was the way back into the evaluation. */}
+            {test.completed_at ? (
+              <p className="text-theme-text-muted text-xs">{formatDate(test.completed_at, tz)}</p>
+            ) : (
+              <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                {test.started_at ? 'Tap to resume' : 'Tap to start'}
+              </p>
+            )}
           </div>
           {/* Three different ways a test leaves the active list, and they are
             not interchangeable:
@@ -370,7 +377,17 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             <TestCard
               key={test.id}
               test={test}
-              onClick={() => void navigate(`/training/skills-testing/test/${test.id}`)}
+              // An unfinished test opens on the scoring screen, a finished one
+              // on its scorecard. Both routes render the same page, which picks
+              // by status — this just keeps the address bar honest about which
+              // one the officer is looking at.
+              onClick={() =>
+                void navigate(
+                  test.completed_at
+                    ? `/training/skills-testing/test/${test.id}`
+                    : `/training/skills-testing/test/${test.id}/active`
+                )
+              }
               onDelete={() => setDeleteTarget(test)}
               onVoid={() => setVoidTarget(test)}
               onCancel={() => setCancelTarget(test)}

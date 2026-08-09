@@ -54,6 +54,15 @@ const mockCompletedPracticeTest = {
   is_practice: true,
 };
 
+/** Abandoned mid-session. update_test rejects every write to it with a 400. */
+const mockCancelledTest = {
+  ...mockCompletedTest,
+  status: 'cancelled' as const,
+  result: 'incomplete' as const,
+  overall_score: undefined,
+  completed_at: undefined,
+};
+
 const mockVoidedTest = {
   ...mockCompletedTest,
   status: 'voided' as const,
@@ -156,6 +165,7 @@ let currentMockTest:
   | typeof mockScoredStepTest
   | typeof mockFullyScoredTest
   | typeof mockVoidedTest
+  | typeof mockCancelledTest
   | null = null;
 // The page reads the running flag through getState() as well as through the
 // hook, so the mock has to hold it like the real store does.
@@ -290,6 +300,29 @@ describe('ActiveSkillTestPage', () => {
       expect(screen.getByText('Voided')).toBeInTheDocument();
       expect(screen.getByText(/withdrawn and counts toward nothing/)).toBeInTheDocument();
       expect(screen.queryByText('Passed')).not.toBeInTheDocument();
+    });
+  });
+
+  // A cancelled test used to fall through to the live evaluation screen, for
+  // the same reason a voided one did — but that fix only covered voided. The
+  // API refuses every write to a cancelled test with a 400.
+  describe('Cancelled test view', () => {
+    it('should show the read-only result view, not the live evaluation screen', () => {
+      currentMockTest = mockCancelledTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.queryByRole('button', { name: /finish/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /back to tests/i })).toBeInTheDocument();
+    });
+
+    it('should state that nothing was decided rather than showing a pass or fail', () => {
+      currentMockTest = mockCancelledTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByText('Cancelled')).toBeInTheDocument();
+      expect(screen.getByText(/closed out before it finished/)).toBeInTheDocument();
+      expect(screen.queryByText('Passed')).not.toBeInTheDocument();
+      expect(screen.queryByText('Failed')).not.toBeInTheDocument();
     });
   });
 
