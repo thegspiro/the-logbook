@@ -2527,4 +2527,43 @@ export const SHOTS = [
     fullPage: false,
     allowEmptyState: true,
   },
+  {
+    id: "15-13-application-status",
+    doc: "15-prospective-members.md",
+    line: 575,
+    anchor:
+      "Screenshot of the public application status page showing the applicant name",
+    alt: "Public application status page showing an applicant's progress through the pipeline",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      // The status link is addressed by a per-applicant token, and the token
+      // is only on the prospect *detail* response — the list omits it.
+      const token = await page.evaluate(async () => {
+        const list = await fetch(
+          "/api/v1/prospective-members/prospects?limit=20",
+          { credentials: "include" },
+        );
+        if (!list.ok) return "";
+        const body = await list.json();
+        for (const row of body.items || []) {
+          const detail = await fetch(
+            `/api/v1/prospective-members/prospects/${row.id}`,
+            { credentials: "include" },
+          );
+          if (!detail.ok) continue;
+          const record = await detail.json();
+          if (record.status_token) return record.status_token;
+        }
+        return "";
+      });
+      if (!token) throw new Error("no applicant carries a status token");
+      await page.goto(
+        new URL(`/application-status/${token}`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+    },
+    fullPage: true,
+  },
 ];

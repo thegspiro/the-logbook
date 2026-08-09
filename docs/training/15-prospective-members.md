@@ -572,7 +572,7 @@ Applicants receive a link to check their application status without logging in:
 - Token is generated when the applicant is created and included in automated emails
 - Token does not rotate on page view (stable link)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the public application status page showing the department name, applicant name, a progress bar with completed stages checked and the current stage highlighted, and a "What's Next" section._
+![Public application status page showing an applicant's progress through the pipeline](./images/15-13-application-status.png)
 
 ---
 

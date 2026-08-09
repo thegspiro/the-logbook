@@ -3119,8 +3119,28 @@ class Seeder:
                 self.api.post(
                     f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
                 )
+        self._enable_public_status(pipelines)
         self._seed_election_packages(prospects)
         return {"pipelines": pipelines, "prospects": prospects}
+
+    def _enable_public_status(self, pipelines: list[dict]) -> None:
+        """Turn on the public application-status page.
+
+        Set at creation, but a pipeline seeded before that flag existed still
+        has it off, and the token link then refuses to render. Idempotent, so
+        it also repairs an older demo database.
+        """
+        for pipeline in pipelines:
+            pipeline_id = pick(pipeline, "id")
+            if not pipeline_id:
+                continue
+            detail = self.api.get(f"/prospective-members/pipelines/{pipeline_id}")
+            if pick(detail, "public_status_enabled", "publicStatusEnabled"):
+                continue
+            self.api.put(
+                f"/prospective-members/pipelines/{pipeline_id}",
+                {"public_status_enabled": True},
+            )
 
     def _seed_election_packages(self, prospects: list[dict]) -> None:
         """Build the election package for whoever is at the membership vote.

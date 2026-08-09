@@ -20,7 +20,9 @@ from app.services.membership_pipeline_service import MembershipPipelineService
 
 def _prospect(token="tok_original", created_at=None, public_enabled=True):
     now = datetime.now(timezone.utc)
-    step = SimpleNamespace(id="s1", public_visible=True, name="Interview")
+    # sort_order matters: the timeline is ordered by pipeline position, so a
+    # step stub without it is not a faithful stand-in for the model.
+    step = SimpleNamespace(id="s1", public_visible=True, name="Interview", sort_order=0)
     return SimpleNamespace(
         id="p1",
         first_name="Jane",
