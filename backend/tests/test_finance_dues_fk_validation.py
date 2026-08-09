@@ -40,9 +40,7 @@ class TestDuesScheduleFiscalYearScoping:
         db.flush = AsyncMock()
         svc = FinanceService(db)
         with pytest.raises(ValueError, match="Fiscal year not found"):
-            await svc.update_dues_schedule(
-                "ds1", "org-1", fiscal_year_id="fy-FOREIGN"
-            )
+            await svc.update_dues_schedule("ds1", "org-1", fiscal_year_id="fy-FOREIGN")
 
 
 if __name__ == "__main__":  # pragma: no cover
