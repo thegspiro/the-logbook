@@ -26,6 +26,7 @@ const InspectionsListPage = lazyWithRetry(() => import('./pages/InspectionsListP
 const LocationsPage = lazyWithRetry(() => import('../../pages/LocationsPage'));
 const ApparatusBasicPage = lazyWithRetry(() => import('../../pages/ApparatusBasicPage'));
 const LocationKioskPage = lazyWithRetry(() => import('../../pages/LocationKioskPage'));
+const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPage'));
 
 /** Protected facilities routes (rendered inside AppLayout). */
 export const getFacilitiesRoutes = () => (
@@ -94,7 +95,7 @@ export const getFacilitiesRoutes = () => (
   </React.Fragment>
 );
 
-/** Public location kiosk route (no auth — for tablets in rooms). */
+/** Public location kiosk routes (no auth — for tablets in rooms). */
 export const getFacilitiesPublicRoutes = () => (
   <React.Fragment>
     <Route
@@ -102,6 +103,16 @@ export const getFacilitiesPublicRoutes = () => (
       element={
         <Suspense fallback={null}>
           <LocationKioskPage />
+        </Suspense>
+      }
+    />
+    {/* Guest sign-in landing page. Addressed through the room's display code
+        so the backend can resolve the department without a session. */}
+    <Route
+      path="/display/:code/events/:eventId/guest"
+      element={
+        <Suspense fallback={null}>
+          <GuestCheckInPage />
         </Suspense>
       }
     />
