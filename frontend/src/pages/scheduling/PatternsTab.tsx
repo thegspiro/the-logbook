@@ -9,7 +9,7 @@
  * - Generate shifts from any pattern for a given date range
  */
 
-import React, { useState, useEffect, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import {
   Plus,
   RefreshCw,
@@ -23,59 +23,55 @@ import {
   SlidersHorizontal,
   Sun,
   Moon,
-} from "lucide-react";
-import toast from "react-hot-toast";
-import { schedulingService } from "../../modules/scheduling/services/api";
-import type { ShiftTemplateRecord } from "../../modules/scheduling/services/api";
-import type { ShiftPattern } from "../../types/scheduling";
-import { useTimezone } from "../../hooks/useTimezone";
-import { formatDateCustom } from "../../utils/dateFormatting";
-import { getErrorMessage } from "../../utils/errorHandling";
-import type { PresetPatternDef, CycleEntry } from "./shiftPatternPresets";
-import { PlatoonSelector } from "./PlatoonSelector";
-import { useSchedulingStore } from "../../modules/scheduling/store/schedulingStore";
-import { lazyWithRetry } from "../../utils/lazyWithRetry";
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { schedulingService } from '../../modules/scheduling/services/api';
+import type { ShiftTemplateRecord } from '../../modules/scheduling/services/api';
+import type { ShiftPattern } from '../../types/scheduling';
+import { useTimezone } from '../../hooks/useTimezone';
+import { formatDateCustom } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
+import type { PresetPatternDef, CycleEntry } from './shiftPatternPresets';
+import { PlatoonSelector } from './PlatoonSelector';
+import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
+import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const PresetPatterns = lazyWithRetry(() => import("./PresetPatterns"));
-const CustomPatternBuilder = lazyWithRetry(
-  () => import("./CustomPatternBuilder"),
-);
+const PresetPatterns = lazyWithRetry(() => import('./PresetPatterns'));
+const CustomPatternBuilder = lazyWithRetry(() => import('./CustomPatternBuilder'));
 
-type CreationMode = "preset" | "custom" | "manual";
+type CreationMode = 'preset' | 'custom' | 'manual';
 
 const PATTERN_TYPE_LABELS: Record<string, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  platoon: "Platoon Rotation",
-  custom: "Custom",
+  daily: 'Daily',
+  weekly: 'Weekly',
+  platoon: 'Platoon Rotation',
+  custom: 'Custom',
 };
 
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const inputCls =
-  "w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500";
+  'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
 
 const LazyFallback = () => (
   <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
-    <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
+    <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
   </div>
 );
 
 /** Visual cycle strip for patterns that have a cycle_pattern in their config. */
-const CycleStrip: React.FC<{ config: Record<string, unknown> }> = ({
-  config,
-}) => {
+const CycleStrip: React.FC<{ config: Record<string, unknown> }> = ({ config }) => {
   const cp = config.cycle_pattern;
   if (!Array.isArray(cp) || cp.length === 0) return null;
   const entries = cp as string[];
-  const summary = entries.map((e, i) => `Day ${i + 1}: ${e}`).join(", ");
+  const summary = entries.map((e, i) => `Day ${i + 1}: ${e}`).join(', ');
   return (
-    <div className="flex gap-px mt-1.5" role="img" aria-label={`Cycle pattern: ${summary}`}>
+    <div className="mt-1.5 flex gap-px" role="img" aria-label={`Cycle pattern: ${summary}`}>
       {entries.map((entry, i) => {
-        let bg = "bg-theme-surface-hover";
-        if (entry === "on") bg = "bg-violet-500";
-        else if (entry === "day") bg = "bg-amber-400 dark:bg-amber-500";
-        else if (entry === "night") bg = "bg-indigo-500 dark:bg-indigo-400";
+        let bg = 'bg-theme-surface-hover';
+        if (entry === 'on') bg = 'bg-violet-500';
+        else if (entry === 'day') bg = 'bg-amber-400 dark:bg-amber-500';
+        else if (entry === 'night') bg = 'bg-indigo-500 dark:bg-indigo-400';
         return (
           <div
             key={i}
@@ -97,12 +93,10 @@ export const PatternsTab: React.FC = () => {
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
-  const [creationMode, setCreationMode] = useState<CreationMode>("preset");
-  const [selectedPreset, setSelectedPreset] = useState<PresetPatternDef | null>(
-    null,
-  );
+  const [creationMode, setCreationMode] = useState<CreationMode>('preset');
+  const [selectedPreset, setSelectedPreset] = useState<PresetPatternDef | null>(null);
   const [customCyclePattern, setCustomCyclePattern] = useState<CycleEntry[]>(
-    Array.from({ length: 7 }, () => "off" as const),
+    Array.from({ length: 7 }, () => 'off' as const)
   );
 
   const [createForm, setCreateForm] = useState<{
@@ -119,14 +113,14 @@ export const PatternsTab: React.FC = () => {
     rotation_days: number;
     weekdays: number[];
   }>({
-    name: "",
-    description: "",
-    pattern_type: "weekly",
-    template_id: "",
-    day_template_id: "",
-    night_template_id: "",
-    start_date: "",
-    end_date: "",
+    name: '',
+    description: '',
+    pattern_type: 'weekly',
+    template_id: '',
+    day_template_id: '',
+    night_template_id: '',
+    start_date: '',
+    end_date: '',
     days_on: 1,
     days_off: 1,
     rotation_days: 3,
@@ -136,13 +130,13 @@ export const PatternsTab: React.FC = () => {
 
   // Platoons declared by a rotation pattern (membership lives on profiles)
   const { members, loadMembers, platoonsEnabled, loadSettings } = useSchedulingStore();
-  const [platoons, setPlatoons] = useState<string[]>(["A", "B", "C"]);
+  const [platoons, setPlatoons] = useState<string[]>(['A', 'B', 'C']);
 
   // Generate form
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
   const [generateForm, setGenerateForm] = useState({
-    start_date: "",
-    end_date: "",
+    start_date: '',
+    end_date: '',
   });
   const [generating, setGenerating] = useState(false);
 
@@ -162,7 +156,7 @@ export const PatternsTab: React.FC = () => {
       setPatterns(patternsData);
       setTemplates(templatesData);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to load patterns"));
+      toast.error(getErrorMessage(err, 'Failed to load patterns'));
     } finally {
       setLoading(false);
     }
@@ -180,10 +174,10 @@ export const PatternsTab: React.FC = () => {
   // Escape key closes inline confirmations
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && confirmingDelete) setConfirmingDelete(null);
+      if (e.key === 'Escape' && confirmingDelete) setConfirmingDelete(null);
     };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [confirmingDelete]);
 
   // When a preset is selected, populate the form
@@ -201,24 +195,24 @@ export const PatternsTab: React.FC = () => {
         rotation_days: preset.cycleDays,
       }));
     },
-    [selectedPreset],
+    [selectedPreset]
   );
 
   const resetCreateForm = useCallback(() => {
     setShowCreate(false);
-    setCreationMode("preset");
+    setCreationMode('preset');
     setSelectedPreset(null);
-    setCustomCyclePattern(Array.from({ length: 7 }, () => "off" as const));
-    setPlatoons(["A", "B", "C"]);
+    setCustomCyclePattern(Array.from({ length: 7 }, () => 'off' as const));
+    setPlatoons(['A', 'B', 'C']);
     setCreateForm({
-      name: "",
-      description: "",
-      pattern_type: "weekly",
-      template_id: "",
-      day_template_id: "",
-      night_template_id: "",
-      start_date: "",
-      end_date: "",
+      name: '',
+      description: '',
+      pattern_type: 'weekly',
+      template_id: '',
+      day_template_id: '',
+      night_template_id: '',
+      start_date: '',
+      end_date: '',
       days_on: 1,
       days_off: 1,
       rotation_days: 3,
@@ -228,26 +222,24 @@ export const PatternsTab: React.FC = () => {
 
   /** Determine if the current creation config uses day/night entries. */
   const hasDayNight = (): boolean => {
-    if (creationMode === "preset" && selectedPreset) {
+    if (creationMode === 'preset' && selectedPreset) {
       return selectedPreset.hasDayNight;
     }
-    if (creationMode === "custom") {
-      return customCyclePattern.some((e) => e === "day" || e === "night");
+    if (creationMode === 'custom') {
+      return customCyclePattern.some((e) => e === 'day' || e === 'night');
     }
     return false;
   };
 
   const handleCreate = async () => {
     if (!createForm.name || !createForm.start_date) {
-      toast.error("Name and start date are required");
+      toast.error('Name and start date are required');
       return;
     }
 
     // Template is required for generation
     if (!createForm.template_id && !createForm.day_template_id) {
-      toast.error(
-        "A shift template is required — select one in the Templates tab first",
-      );
+      toast.error('A shift template is required — select one in the Templates tab first');
       return;
     }
 
@@ -259,7 +251,7 @@ export const PatternsTab: React.FC = () => {
       let daysOff: number | undefined;
       let rotationDays: number | undefined;
 
-      if (creationMode === "preset" && selectedPreset) {
+      if (creationMode === 'preset' && selectedPreset) {
         patternType = selectedPreset.patternType;
         if (selectedPreset.cyclePattern) {
           scheduleConfig.cycle_pattern = selectedPreset.cyclePattern;
@@ -268,11 +260,11 @@ export const PatternsTab: React.FC = () => {
           daysOff = selectedPreset.daysOff;
         }
         rotationDays = selectedPreset.cycleDays;
-      } else if (creationMode === "custom") {
-        patternType = "platoon";
-        const hasOnDuty = customCyclePattern.some((e) => e !== "off");
+      } else if (creationMode === 'custom') {
+        patternType = 'platoon';
+        const hasOnDuty = customCyclePattern.some((e) => e !== 'off');
         if (!hasOnDuty) {
-          toast.error("Custom pattern must have at least one on-duty day");
+          toast.error('Custom pattern must have at least one on-duty day');
           setCreating(false);
           return;
         }
@@ -280,10 +272,10 @@ export const PatternsTab: React.FC = () => {
         rotationDays = customCyclePattern.length;
       } else {
         // Manual mode
-        if (patternType === "weekly") {
+        if (patternType === 'weekly') {
           scheduleConfig.weekdays = createForm.weekdays;
         }
-        if (patternType === "platoon") {
+        if (patternType === 'platoon') {
           daysOn = createForm.days_on;
           daysOff = createForm.days_off;
           rotationDays = createForm.rotation_days;
@@ -303,7 +295,7 @@ export const PatternsTab: React.FC = () => {
       // Declare the platoons a rotation covers. Generation pulls current
       // members by their profile platoon (User.platoon) — no per-pattern crew
       // snapshot is stored.
-      if (platoonsEnabled && patternType === "platoon" && platoons.length > 0) {
+      if (platoonsEnabled && patternType === 'platoon' && platoons.length > 0) {
         scheduleConfig.platoons = platoons;
       }
 
@@ -311,21 +303,19 @@ export const PatternsTab: React.FC = () => {
         name: createForm.name,
         description: createForm.description || undefined,
         pattern_type: patternType,
-        template_id:
-          (createForm.template_id || createForm.day_template_id) || undefined,
+        template_id: createForm.template_id || createForm.day_template_id || undefined,
         start_date: createForm.start_date,
         end_date: createForm.end_date || undefined,
         days_on: daysOn,
         days_off: daysOff,
         rotation_days: rotationDays,
-        schedule_config:
-          Object.keys(scheduleConfig).length > 0 ? scheduleConfig : undefined,
+        schedule_config: Object.keys(scheduleConfig).length > 0 ? scheduleConfig : undefined,
       });
-      toast.success("Pattern created");
+      toast.success('Pattern created');
       resetCreateForm();
       void loadData();
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to create pattern"));
+      toast.error(getErrorMessage(err, 'Failed to create pattern'));
     } finally {
       setCreating(false);
     }
@@ -333,24 +323,21 @@ export const PatternsTab: React.FC = () => {
 
   const handleGenerate = async (patternId: string) => {
     if (!generateForm.start_date || !generateForm.end_date) {
-      toast.error("Start and end dates are required");
+      toast.error('Start and end dates are required');
       return;
     }
     setGenerating(true);
     try {
-      const result = await schedulingService.generateShiftsFromPattern(
-        patternId,
-        {
-          start_date: generateForm.start_date,
-          end_date: generateForm.end_date,
-        },
-      );
+      const result = await schedulingService.generateShiftsFromPattern(patternId, {
+        start_date: generateForm.start_date,
+        end_date: generateForm.end_date,
+      });
       const count = Number(result.shifts_created ?? 0);
-      toast.success(`Generated ${count} shift${count !== 1 ? "s" : ""}`);
+      toast.success(`Generated ${count} shift${count !== 1 ? 's' : ''}`);
       setGeneratingFor(null);
-      setGenerateForm({ start_date: "", end_date: "" });
+      setGenerateForm({ start_date: '', end_date: '' });
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to generate shifts"));
+      toast.error(getErrorMessage(err, 'Failed to generate shifts'));
     } finally {
       setGenerating(false);
     }
@@ -359,20 +346,18 @@ export const PatternsTab: React.FC = () => {
   const handleDelete = async (patternId: string) => {
     try {
       await schedulingService.deletePattern(patternId);
-      toast.success("Pattern deleted");
+      toast.success('Pattern deleted');
       setConfirmingDelete(null);
       void loadData();
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to delete pattern"));
+      toast.error(getErrorMessage(err, 'Failed to delete pattern'));
     }
   };
 
   const toggleWeekday = (day: number) => {
     setCreateForm((prev) => ({
       ...prev,
-      weekdays: prev.weekdays.includes(day)
-        ? prev.weekdays.filter((d) => d !== day)
-        : [...prev.weekdays, day].sort(),
+      weekdays: prev.weekdays.includes(day) ? prev.weekdays.filter((d) => d !== day) : [...prev.weekdays, day].sort(),
     }));
   };
 
@@ -381,7 +366,7 @@ export const PatternsTab: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-        <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
+        <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
         <span className="sr-only">Loading shift patterns…</span>
       </div>
     );
@@ -390,30 +375,26 @@ export const PatternsTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-lg font-semibold text-theme-text-primary">
-            Shift Patterns
-          </h3>
-          <p className="text-sm text-theme-text-muted">
-            Create recurring patterns and generate shifts in bulk.
-          </p>
+          <h3 className="text-theme-text-primary text-lg font-semibold">Shift Patterns</h3>
+          <p className="text-theme-text-muted text-sm">Create recurring patterns and generate shifts in bulk.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               void loadData();
             }}
-            className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary rounded-lg p-2 transition-colors"
             aria-label="Refresh patterns"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="h-4 w-4" />
           </button>
           <button
             onClick={() => setShowCreate(!showCreate)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
           >
-            <Plus className="w-4 h-4" /> New Pattern
+            <Plus className="h-4 w-4" /> New Pattern
           </button>
         </div>
       </div>
@@ -422,31 +403,29 @@ export const PatternsTab: React.FC = () => {
           CREATE FORM
           ============================================ */}
       {showCreate && (
-        <div className="border border-violet-500/20 rounded-xl bg-violet-500/5 overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-violet-500/20 bg-violet-500/5">
           {/* Creation mode selector */}
-          <div className="p-4 sm:p-5 border-b border-violet-500/10">
-            <h4 className="text-sm font-semibold text-theme-text-primary mb-3">
-              Create Shift Pattern
-            </h4>
-            <div className="flex gap-2 flex-wrap">
+          <div className="border-b border-violet-500/10 p-4 sm:p-5">
+            <h4 className="text-theme-text-primary mb-3 text-sm font-semibold">Create Shift Pattern</h4>
+            <div className="flex flex-wrap gap-2">
               {[
                 {
-                  mode: "preset" as const,
-                  label: "Fire Dept Presets",
+                  mode: 'preset' as const,
+                  label: 'Fire Dept Presets',
                   icon: Zap,
-                  desc: "Common schedules",
+                  desc: 'Common schedules',
                 },
                 {
-                  mode: "custom" as const,
-                  label: "Custom Builder",
+                  mode: 'custom' as const,
+                  label: 'Custom Builder',
                   icon: Wrench,
-                  desc: "Build your own cycle",
+                  desc: 'Build your own cycle',
                 },
                 {
-                  mode: "manual" as const,
-                  label: "Manual Setup",
+                  mode: 'manual' as const,
+                  label: 'Manual Setup',
                   icon: SlidersHorizontal,
-                  desc: "Daily / weekly / platoon",
+                  desc: 'Daily / weekly / platoon',
                 },
               ].map(({ mode, label, icon: Icon, desc }) => (
                 <button
@@ -455,13 +434,13 @@ export const PatternsTab: React.FC = () => {
                     setCreationMode(mode);
                     setSelectedPreset(null);
                   }}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-all ${
                     creationMode === mode
-                      ? "border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300"
-                      : "border-theme-surface-border text-theme-text-muted hover:border-violet-500/40"
+                      ? 'border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                      : 'border-theme-surface-border text-theme-text-muted hover:border-violet-500/40'
                   }`}
                 >
-                  <Icon className="w-4 h-4 shrink-0" />
+                  <Icon className="h-4 w-4 shrink-0" />
                   <div>
                     <p className="text-xs font-semibold">{label}</p>
                     <p className="text-[10px] opacity-70">{desc}</p>
@@ -471,34 +450,26 @@ export const PatternsTab: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-4 sm:p-5 space-y-4">
+          <div className="space-y-4 p-4 sm:p-5">
             {/* Preset selection */}
-            {creationMode === "preset" && (
+            {creationMode === 'preset' && (
               <Suspense fallback={<LazyFallback />}>
-                <PresetPatterns
-                  onSelect={handlePresetSelect}
-                  selectedId={selectedPreset?.id}
-                />
+                <PresetPatterns onSelect={handlePresetSelect} selectedId={selectedPreset?.id} />
               </Suspense>
             )}
 
             {/* Custom builder */}
-            {creationMode === "custom" && (
+            {creationMode === 'custom' && (
               <Suspense fallback={<LazyFallback />}>
-                <CustomPatternBuilder
-                  cyclePattern={customCyclePattern}
-                  onChange={setCustomCyclePattern}
-                />
+                <CustomPatternBuilder cyclePattern={customCyclePattern} onChange={setCustomCyclePattern} />
               </Suspense>
             )}
 
             {/* Manual mode: pattern type & type-specific fields */}
-            {creationMode === "manual" && (
+            {creationMode === 'manual' && (
               <>
                 <div>
-                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                    Pattern Type
-                  </label>
+                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Pattern Type</label>
                   <select
                     value={createForm.pattern_type}
                     onChange={(e) =>
@@ -517,20 +488,18 @@ export const PatternsTab: React.FC = () => {
                 </div>
 
                 {/* Weekly: weekday picker */}
-                {createForm.pattern_type === "weekly" && (
+                {createForm.pattern_type === 'weekly' && (
                   <div>
-                    <label className="block text-xs font-medium text-theme-text-secondary mb-2">
-                      Active Days
-                    </label>
-                    <div className="flex gap-1.5 flex-wrap">
+                    <label className="text-theme-text-secondary mb-2 block text-xs font-medium">Active Days</label>
+                    <div className="flex flex-wrap gap-1.5">
                       {WEEKDAY_LABELS.map((label, i) => (
                         <button
                           key={i}
                           onClick={() => toggleWeekday(i)}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                             createForm.weekdays.includes(i)
-                              ? "bg-violet-600 text-white border-violet-600"
-                              : "border-theme-surface-border text-theme-text-muted hover:border-violet-500"
+                              ? 'border-violet-600 bg-violet-600 text-white'
+                              : 'border-theme-surface-border text-theme-text-muted hover:border-violet-500'
                           }`}
                         >
                           {label}
@@ -541,13 +510,11 @@ export const PatternsTab: React.FC = () => {
                 )}
 
                 {/* Platoon: days on/off */}
-                {createForm.pattern_type === "platoon" && (
+                {createForm.pattern_type === 'platoon' && (
                   <div>
                     <div className="form-grid-3">
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                          Days On
-                        </label>
+                        <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Days On</label>
                         <input
                           type="number"
                           min="1"
@@ -562,9 +529,7 @@ export const PatternsTab: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                          Days Off
-                        </label>
+                        <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Days Off</label>
                         <input
                           type="number"
                           min="1"
@@ -579,7 +544,7 @@ export const PatternsTab: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-secondary mb-1">
+                        <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                           Rotation Cycle
                         </label>
                         <input
@@ -596,9 +561,8 @@ export const PatternsTab: React.FC = () => {
                         />
                       </div>
                     </div>
-                    <p className="text-xs text-theme-text-muted mt-2">
-                      Example: A common 24/48 schedule uses 1 day on, 2 days
-                      off, with a 3-day rotation cycle.
+                    <p className="text-theme-text-muted mt-2 text-xs">
+                      Example: A common 24/48 schedule uses 1 day on, 2 days off, with a 3-day rotation cycle.
                     </p>
                   </div>
                 )}
@@ -606,32 +570,26 @@ export const PatternsTab: React.FC = () => {
             )}
 
             {/* ---- Common fields for all modes ---- */}
-            {(creationMode !== "preset" || selectedPreset) && (
+            {(creationMode !== 'preset' || selectedPreset) && (
               <>
-                <div className="border-t border-violet-500/10 pt-4 space-y-4">
-                  <h5 className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider">
+                <div className="space-y-4 border-t border-violet-500/10 pt-4">
+                  <h5 className="text-theme-text-secondary text-xs font-semibold tracking-wider uppercase">
                     Pattern Details
                   </h5>
 
                   <div className="form-grid-2">
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                        Pattern Name *
-                      </label>
+                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Pattern Name *</label>
                       <input
                         type="text"
                         value={createForm.name}
-                        onChange={(e) =>
-                          setCreateForm((p) => ({ ...p, name: e.target.value }))
-                        }
+                        onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
                         placeholder="e.g., A-Shift 24/48"
                         className={inputCls}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                        Description
-                      </label>
+                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Description</label>
                       <input
                         type="text"
                         value={createForm.description}
@@ -650,16 +608,15 @@ export const PatternsTab: React.FC = () => {
                   {/* Template selection — different UI for day/night vs single */}
                   {hasDayNight() ? (
                     <div className="space-y-3">
-                      <p className="text-xs text-theme-text-muted flex items-center gap-1.5">
-                        <Sun className="w-3.5 h-3.5 text-amber-500" />
-                        <Moon className="w-3.5 h-3.5 text-indigo-700 dark:text-indigo-400" />
-                        This pattern uses day and night shifts. Select a
-                        template for each.
+                      <p className="text-theme-text-muted flex items-center gap-1.5 text-xs">
+                        <Sun className="h-3.5 w-3.5 text-amber-500" />
+                        <Moon className="h-3.5 w-3.5 text-indigo-700 dark:text-indigo-400" />
+                        This pattern uses day and night shifts. Select a template for each.
                       </p>
                       <div className="form-grid-2">
                         <div>
-                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                            <Sun className="w-3 h-3 inline text-amber-500 mr-1" />
+                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                            <Sun className="mr-1 inline h-3 w-3 text-amber-500" />
                             Day Shift Template *
                           </label>
                           <select
@@ -676,15 +633,14 @@ export const PatternsTab: React.FC = () => {
                             <option value="">Select template...</option>
                             {activeTemplates.map((t) => (
                               <option key={t.id} value={t.id}>
-                                {t.name} ({t.start_time_of_day} -{" "}
-                                {t.end_time_of_day})
+                                {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
                               </option>
                             ))}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                            <Moon className="w-3 h-3 inline text-indigo-700 dark:text-indigo-400 mr-1" />
+                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                            <Moon className="mr-1 inline h-3 w-3 text-indigo-700 dark:text-indigo-400" />
                             Night Shift Template *
                           </label>
                           <select
@@ -700,8 +656,7 @@ export const PatternsTab: React.FC = () => {
                             <option value="">Select template...</option>
                             {activeTemplates.map((t) => (
                               <option key={t.id} value={t.id}>
-                                {t.name} ({t.start_time_of_day} -{" "}
-                                {t.end_time_of_day})
+                                {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
                               </option>
                             ))}
                           </select>
@@ -710,7 +665,7 @@ export const PatternsTab: React.FC = () => {
                     </div>
                   ) : (
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">
+                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                         Shift Template *
                       </label>
                       <select
@@ -726,15 +681,13 @@ export const PatternsTab: React.FC = () => {
                         <option value="">Select template...</option>
                         {activeTemplates.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.name} ({t.start_time_of_day} -{" "}
-                            {t.end_time_of_day})
+                            {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
                           </option>
                         ))}
                       </select>
                       {activeTemplates.length === 0 && (
-                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
-                          No templates found. Create one in the Templates tab
-                          first.
+                        <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                          No templates found. Create one in the Templates tab first.
                         </p>
                       )}
                     </div>
@@ -742,9 +695,7 @@ export const PatternsTab: React.FC = () => {
 
                   <div className="form-grid-2">
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                        Start Date *
-                      </label>
+                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Start Date *</label>
                       <input
                         type="date"
                         value={createForm.start_date}
@@ -756,12 +707,10 @@ export const PatternsTab: React.FC = () => {
                         }
                         className={inputCls}
                       />
-                      <p className="text-[11px] text-theme-text-muted mt-1">
-                        The cycle begins counting from this date
-                      </p>
+                      <p className="text-theme-text-muted mt-1 text-[11px]">The cycle begins counting from this date</p>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">
+                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                         End Date (optional)
                       </label>
                       <input
@@ -781,22 +730,17 @@ export const PatternsTab: React.FC = () => {
 
                 {/* Platoon declaration (platoon rotations only) */}
                 {platoonsEnabled &&
-                  ((creationMode === "preset" && selectedPreset) ||
-                  creationMode === "custom" ||
-                  (creationMode === "manual" &&
-                    createForm.pattern_type === "platoon")) && (
-                  <PlatoonSelector
-                    members={members}
-                    platoons={platoons}
-                    onPlatoonsChange={setPlatoons}
-                  />
-                )}
+                  ((creationMode === 'preset' && selectedPreset) ||
+                    creationMode === 'custom' ||
+                    (creationMode === 'manual' && createForm.pattern_type === 'platoon')) && (
+                    <PlatoonSelector members={members} platoons={platoons} onPlatoonsChange={setPlatoons} />
+                  )}
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 justify-end pt-2">
+                <div className="flex items-center justify-end gap-2 pt-2">
                   <button
                     onClick={resetCreateForm}
-                    className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+                    className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
                   >
                     Cancel
                   </button>
@@ -805,13 +749,9 @@ export const PatternsTab: React.FC = () => {
                       void handleCreate();
                     }}
                     disabled={creating}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+                    className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
                   >
-                    {creating ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Plus className="w-3.5 h-3.5" />
-                    )}
+                    {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                     Create Pattern
                   </button>
                 </div>
@@ -825,19 +765,17 @@ export const PatternsTab: React.FC = () => {
           PATTERN LIST
           ============================================ */}
       {patterns.length === 0 && !showCreate ? (
-        <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
-          <RefreshCw className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-theme-text-primary mb-1">
-            No patterns yet
-          </h3>
-          <p className="text-theme-text-muted text-sm mb-4">
+        <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
+          <RefreshCw className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+          <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No patterns yet</h3>
+          <p className="text-theme-text-muted mb-4 text-sm">
             Create a shift pattern to automatically generate recurring shifts.
           </p>
           <button
             onClick={() => setShowCreate(true)}
-            className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm inline-flex items-center gap-1.5"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-700"
           >
-            <Plus className="w-4 h-4" /> Create First Pattern
+            <Plus className="h-4 w-4" /> Create First Pattern
           </button>
         </div>
       ) : (
@@ -845,11 +783,8 @@ export const PatternsTab: React.FC = () => {
           {patterns.map((pattern) => {
             const isExpanded = expandedId === pattern.id;
             const isGenerating = generatingFor === pattern.id;
-            const templateName = templates.find(
-              (t) => t.id === pattern.template_id,
-            )?.name;
-            const config: Record<string, unknown> =
-              pattern.schedule_config ?? {};
+            const templateName = templates.find((t) => t.id === pattern.template_id)?.name;
+            const config: Record<string, unknown> = pattern.schedule_config ?? {};
             const weekdays = config.weekdays as number[] | undefined;
             const cyclePattern = config.cycle_pattern as string[] | undefined;
             const patternPlatoons = config.platoons as string[] | undefined;
@@ -857,78 +792,71 @@ export const PatternsTab: React.FC = () => {
             return (
               <div
                 key={pattern.id}
-                className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-hidden"
+                className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border"
               >
                 <button
                   onClick={() => setExpandedId(isExpanded ? null : pattern.id)}
-                  className="w-full p-4 sm:p-5 text-left flex items-start sm:items-center justify-between gap-3"
+                  className="flex w-full items-start justify-between gap-3 p-4 text-left sm:items-center sm:p-5"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex min-w-0 items-center gap-3">
                     <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                        pattern.is_active
-                          ? "bg-violet-500/10"
-                          : "bg-theme-surface-secondary"
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                        pattern.is_active ? 'bg-violet-500/10' : 'bg-theme-surface-secondary'
                       }`}
                     >
                       <RefreshCw
-                        className={`w-5 h-5 ${pattern.is_active ? "text-violet-500" : "text-theme-text-muted"}`}
+                        className={`h-5 w-5 ${pattern.is_active ? 'text-violet-500' : 'text-theme-text-muted'}`}
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold text-theme-text-primary">
-                          {pattern.name}
-                        </p>
-                        <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-400 capitalize">
-                          {PATTERN_TYPE_LABELS[pattern.pattern_type] ??
-                            pattern.pattern_type}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-theme-text-primary text-sm font-semibold">{pattern.name}</p>
+                        <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 capitalize dark:text-violet-400">
+                          {PATTERN_TYPE_LABELS[pattern.pattern_type] ?? pattern.pattern_type}
                         </span>
                         {!pattern.is_active && (
-                          <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-theme-surface-secondary text-theme-text-muted">
+                          <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-[10px] font-medium">
                             Inactive
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-theme-text-muted mt-0.5">
-                        {templateName && (
-                          <span>Template: {templateName} · </span>
-                        )}
-                        Starts:{" "}
+                      <p className="text-theme-text-muted mt-0.5 text-xs">
+                        {templateName && <span>Template: {templateName} · </span>}
+                        Starts:{' '}
                         {formatDateCustom(
-                          pattern.start_date + "T12:00:00",
+                          pattern.start_date + 'T12:00:00',
                           {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
                           },
-                          tz,
+                          tz
                         )}
                         {pattern.end_date && (
                           <span>
-                            {" "}
-                            · Ends:{" "}
+                            {' '}
+                            · Ends:{' '}
                             {formatDateCustom(
-                              pattern.end_date + "T12:00:00",
+                              pattern.end_date + 'T12:00:00',
                               {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
                               },
-                              tz,
+                              tz
                             )}
                           </span>
                         )}
                       </p>
                       {weekdays && weekdays.length > 0 && (
-                        <div className="flex gap-1 mt-1">
+                        <div className="mt-1 flex gap-1">
                           {WEEKDAY_LABELS.map((label, i) => (
                             <span
                               key={i}
-                              className={`px-1.5 py-0.5 text-[9px] rounded font-medium ${
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
                                 weekdays.includes(i)
-                                  ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
-                                  : "text-theme-text-muted opacity-40"
+                                  ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                                  : 'text-theme-text-muted opacity-40'
                               }`}
                             >
                               {label.charAt(0)}
@@ -939,57 +867,45 @@ export const PatternsTab: React.FC = () => {
                       {cyclePattern && <CycleStrip config={config} />}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex shrink-0 items-center gap-2">
                     {isExpanded ? (
-                      <ChevronUp className="w-4 h-4 text-theme-text-muted" />
+                      <ChevronUp className="text-theme-text-muted h-4 w-4" />
                     ) : (
-                      <ChevronDown className="w-4 h-4 text-theme-text-muted" />
+                      <ChevronDown className="text-theme-text-muted h-4 w-4" />
                     )}
                   </div>
                 </button>
 
                 {/* Expanded details */}
                 {isExpanded && (
-                  <div className="border-t border-theme-surface-border p-4 sm:p-5 space-y-4">
-                    {pattern.description && (
-                      <p className="text-sm text-theme-text-secondary">
-                        {pattern.description}
-                      </p>
-                    )}
+                  <div className="border-theme-surface-border space-y-4 border-t p-4 sm:p-5">
+                    {pattern.description && <p className="text-theme-text-secondary text-sm">{pattern.description}</p>}
 
-                    {pattern.pattern_type === "platoon" && !cyclePattern && (
+                    {pattern.pattern_type === 'platoon' && !cyclePattern && (
                       <div className="flex flex-wrap gap-4 text-sm">
                         <span className="text-theme-text-muted">
-                          Days on:{" "}
-                          <span className="text-theme-text-primary font-medium">
-                            {pattern.days_on}
-                          </span>
+                          Days on: <span className="text-theme-text-primary font-medium">{pattern.days_on}</span>
                         </span>
                         <span className="text-theme-text-muted">
-                          Days off:{" "}
-                          <span className="text-theme-text-primary font-medium">
-                            {pattern.days_off}
-                          </span>
+                          Days off: <span className="text-theme-text-primary font-medium">{pattern.days_off}</span>
                         </span>
                         <span className="text-theme-text-muted">
-                          Rotation:{" "}
-                          <span className="text-theme-text-primary font-medium">
-                            {pattern.rotation_days} days
-                          </span>
+                          Rotation:{' '}
+                          <span className="text-theme-text-primary font-medium">{pattern.rotation_days} days</span>
                         </span>
                       </div>
                     )}
 
                     {patternPlatoons && patternPlatoons.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-theme-text-secondary">
+                        <p className="text-theme-text-secondary text-xs font-medium">
                           Platoons (members assigned on their profile)
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {patternPlatoons.map((p) => (
                             <span
                               key={p}
-                              className="px-2 py-0.5 text-[11px] rounded-full bg-violet-500/10 text-theme-text-secondary border border-violet-500/20"
+                              className="text-theme-text-secondary rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[11px]"
                             >
                               Platoon {p}
                             </span>
@@ -1000,30 +916,18 @@ export const PatternsTab: React.FC = () => {
 
                     {cyclePattern && (
                       <div className="space-y-2">
-                        <p className="text-xs font-medium text-theme-text-secondary">
+                        <p className="text-theme-text-secondary text-xs font-medium">
                           Cycle Pattern ({cyclePattern.length}-day rotation)
                         </p>
-                        <div className="flex gap-1 flex-wrap">
+                        <div className="flex flex-wrap gap-1">
                           {cyclePattern.map((entry, i) => {
-                            let cls =
-                              "bg-theme-surface-hover text-theme-text-muted";
-                            if (entry === "on")
-                              cls =
-                                "bg-violet-500/20 text-violet-600 dark:text-violet-400";
-                            else if (entry === "day")
-                              cls =
-                                "bg-amber-500/20 text-amber-700 dark:text-amber-400";
-                            else if (entry === "night")
-                              cls =
-                                "bg-indigo-500/20 text-indigo-600 dark:text-indigo-400";
+                            let cls = 'bg-theme-surface-hover text-theme-text-muted';
+                            if (entry === 'on') cls = 'bg-violet-500/20 text-violet-600 dark:text-violet-400';
+                            else if (entry === 'day') cls = 'bg-amber-500/20 text-amber-700 dark:text-amber-400';
+                            else if (entry === 'night') cls = 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400';
                             return (
-                              <span
-                                key={i}
-                                className={`px-2 py-1 text-[10px] font-semibold rounded-sm ${cls}`}
-                              >
-                                D{i + 1}:{" "}
-                                {String(entry).charAt(0).toUpperCase() +
-                                  String(entry).slice(1)}
+                              <span key={i} className={`rounded-sm px-2 py-1 text-[10px] font-semibold ${cls}`}>
+                                D{i + 1}: {String(entry).charAt(0).toUpperCase() + String(entry).slice(1)}
                               </span>
                             );
                           })}
@@ -1033,18 +937,17 @@ export const PatternsTab: React.FC = () => {
 
                     {/* Generate shifts form */}
                     {isGenerating ? (
-                      <div className="p-4 border border-emerald-500/20 rounded-lg bg-emerald-500/5 space-y-3">
-                        <h4 className="text-sm font-medium text-theme-text-primary flex items-center gap-2">
-                          <Play className="w-3.5 h-3.5 text-emerald-500" />{" "}
-                          Generate Shifts
+                      <div className="space-y-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+                        <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
+                          <Play className="h-3.5 w-3.5 text-emerald-500" /> Generate Shifts
                         </h4>
-                        <p className="text-xs text-theme-text-muted">
-                          Creates a shift for each matching day in the selected
-                          range. Duplicates are skipped automatically.
+                        <p className="text-theme-text-muted text-xs">
+                          Creates a shift for each matching day in the selected range. Duplicates are skipped
+                          automatically.
                         </p>
                         <div className="form-grid-2">
                           <div>
-                            <label className="block text-xs font-medium text-theme-text-secondary mb-1">
+                            <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                               Start Date *
                             </label>
                             <input
@@ -1060,7 +963,7 @@ export const PatternsTab: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-theme-text-secondary mb-1">
+                            <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                               End Date *
                             </label>
                             <input
@@ -1076,10 +979,10 @@ export const PatternsTab: React.FC = () => {
                             />
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => setGeneratingFor(null)}
-                            className="px-3 py-1.5 text-sm text-theme-text-secondary"
+                            className="text-theme-text-secondary px-3 py-1.5 text-sm"
                           >
                             Cancel
                           </button>
@@ -1088,12 +991,12 @@ export const PatternsTab: React.FC = () => {
                               void handleGenerate(pattern.id);
                             }}
                             disabled={generating}
-                            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm disabled:opacity-50"
+                            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
                           >
                             {generating ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
-                              <Play className="w-3.5 h-3.5" />
+                              <Play className="h-3.5 w-3.5" />
                             )}
                             Generate
                           </button>
@@ -1104,31 +1007,30 @@ export const PatternsTab: React.FC = () => {
                         <button
                           onClick={() => {
                             setGeneratingFor(pattern.id);
-                            setGenerateForm({ start_date: "", end_date: "" });
+                            setGenerateForm({ start_date: '', end_date: '' });
                           }}
-                          className="flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+                          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-700"
                         >
-                          <Play className="w-3.5 h-3.5" /> Generate Shifts
+                          <Play className="h-3.5 w-3.5" /> Generate Shifts
                         </button>
                         <div className="flex-1" />
                         {confirmingDelete === pattern.id ? (
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-red-500">
-                              Delete pattern? Existing shifts will not be
-                              removed.
+                              Delete pattern? Existing shifts will not be removed.
                             </span>
                             <button
                               onClick={() => {
                                 void handleDelete(pattern.id);
                               }}
-                              className="btn-primary px-2.5 py-1.5 rounded-md text-xs"
+                              className="btn-primary rounded-md px-2.5 py-1.5 text-xs"
                               aria-label="Confirm delete"
                             >
                               Yes, delete
                             </button>
                             <button
                               onClick={() => setConfirmingDelete(null)}
-                              className="px-2.5 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary"
+                              className="text-theme-text-muted hover:text-theme-text-primary px-2.5 py-1.5 text-xs"
                               aria-label="Cancel delete"
                             >
                               Cancel
@@ -1137,9 +1039,9 @@ export const PatternsTab: React.FC = () => {
                         ) : (
                           <button
                             onClick={() => setConfirmingDelete(pattern.id)}
-                            className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+                            className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
                           >
-                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                            <Trash2 className="h-3.5 w-3.5" /> Delete
                           </button>
                         )}
                       </div>

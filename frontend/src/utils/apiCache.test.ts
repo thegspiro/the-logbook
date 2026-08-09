@@ -453,6 +453,25 @@ describe('apiCache', () => {
       expect(isCacheable('/events/123/external-attendees')).toBe(false);
       expect(isCacheable('/events/123/check-in-monitoring')).toBe(false);
     });
+
+    it('excludes the bare PII list endpoints, not just their sub-paths (FE-2)', () => {
+      // Regression: a trailing-slash prefix (e.g. '/users/') let the bare list
+      // endpoint escape isCacheable and get cached with member/PII data.
+      expect(isCacheable('/users')).toBe(false); // member roster
+      expect(isCacheable('/messages')).toBe(false); // private messages
+      expect(isCacheable('/integrations')).toBe(false); // configs with secrets
+      expect(isCacheable('/documents')).toBe(false); // private documents
+      expect(isCacheable('/errors')).toBe(false); // error logs
+      expect(isCacheable('/notifications/my')).toBe(false); // user notifications
+      expect(isCacheable('/meetings')).toBe(false); // attendee PII + minutes
+      expect(isCacheable('/event-requests')).toBe(false); // external contact PII
+      // Sub-paths stay excluded too...
+      expect(isCacheable('/users/123')).toBe(false);
+      expect(isCacheable('/meetings/123')).toBe(false);
+      // ...and a similarly-named non-PII path is not accidentally caught.
+      expect(isCacheable('/message-history')).toBe(false); // (its own exclusion)
+      expect(isCacheable('/events')).toBe(true); // event list stays cacheable
+    });
   });
 
   // ---- clearCache ----

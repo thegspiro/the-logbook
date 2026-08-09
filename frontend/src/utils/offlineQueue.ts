@@ -7,9 +7,7 @@
  * online the queue drains automatically.
  */
 
-import type {
-  ShiftEquipmentCheckCreate,
-} from '@/modules/scheduling/types/equipmentCheck';
+import type { ShiftEquipmentCheckCreate } from '@/modules/scheduling/types/equipmentCheck';
 import { openOfflineDb, STORE_PENDING_CHECKS } from './offlineDb';
 
 // ---------------------------------------------------------------------------
@@ -43,10 +41,7 @@ const STORE_CHECKS = STORE_PENDING_CHECKS;
 
 const openDB = openOfflineDb;
 
-function txStore(
-  db: IDBDatabase,
-  mode: IDBTransactionMode,
-): IDBObjectStore {
+function txStore(db: IDBDatabase, mode: IDBTransactionMode): IDBObjectStore {
   return db.transaction(STORE_CHECKS, mode).objectStore(STORE_CHECKS);
 }
 
@@ -63,7 +58,7 @@ function queueId(): string {
 export async function enqueueCheck(
   shiftId: string,
   payload: ShiftEquipmentCheckCreate,
-  photoItems: { itemId: string; files: File[] }[],
+  photoItems: { itemId: string; files: File[] }[]
 ): Promise<string> {
   const photos: QueuedPhoto[] = [];
   for (const group of photoItems) {

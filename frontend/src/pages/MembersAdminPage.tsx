@@ -93,9 +93,14 @@ export const MembersAdminPage: React.FC = () => {
     void fetchData();
 
     // Load stations for dropdown (exclude rooms — they belong to facilities)
-    locationsService.getLocations({ is_active: true, exclude_rooms: true }).then((locs) => {
-      setAvailableStations(locs.filter((l: Location) => l.address));
-    }).catch(() => { /* non-critical UI data */ });
+    locationsService
+      .getLocations({ is_active: true, exclude_rooms: true })
+      .then((locs) => {
+        setAvailableStations(locs.filter((l: Location) => l.address));
+      })
+      .catch(() => {
+        /* non-critical UI data */
+      });
   }, []);
 
   const fetchData = async () => {
@@ -103,10 +108,7 @@ export const MembersAdminPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const [usersData, rolesData] = await Promise.all([
-        userService.getUsersWithRoles(),
-        roleService.getRoles(),
-      ]);
+      const [usersData, rolesData] = await Promise.all([userService.getUsersWithRoles(), roleService.getRoles()]);
 
       setUsers(usersData);
       setRoles(rolesData);
@@ -126,9 +128,7 @@ export const MembersAdminPage: React.FC = () => {
   const handleEditMembers = (role: Role) => {
     setSelectedRole(role);
     // Find all users with this role
-    const usersWithRole = users.filter((user) =>
-      user.roles.some((r) => r.id === role.id)
-    );
+    const usersWithRole = users.filter((user) => user.roles.some((r) => r.id === role.id));
     setSelectedUserIds(usersWithRole.map((u) => u.id));
     setEditingMembers(true);
   };
@@ -147,7 +147,8 @@ export const MembersAdminPage: React.FC = () => {
       if (profileForm.last_name !== (profileUser.last_name || '')) updateData.last_name = profileForm.last_name;
       if (profileForm.phone !== (profileUser.phone || '')) updateData.phone = profileForm.phone;
       if (profileForm.mobile !== (profileUser.mobile || '')) updateData.mobile = profileForm.mobile;
-      if (profileForm.membership_number !== (profileUser.membership_number || '')) updateData.membership_number = profileForm.membership_number;
+      if (profileForm.membership_number !== (profileUser.membership_number || ''))
+        updateData.membership_number = profileForm.membership_number;
       if (profileForm.rank !== (profileUser.rank || '')) updateData.rank = profileForm.rank;
       if (profileForm.station !== (profileUser.station || '')) updateData.station = profileForm.station;
 
@@ -206,9 +207,7 @@ export const MembersAdminPage: React.FC = () => {
       setError(null);
 
       // Find users whose role assignments changed
-      const currentUsersWithRole = users.filter((user) =>
-        user.roles.some((r) => r.id === selectedRole.id)
-      );
+      const currentUsersWithRole = users.filter((user) => user.roles.some((r) => r.id === selectedRole.id));
       const currentUserIds = currentUsersWithRole.map((u) => u.id);
 
       // Users to add the role to
@@ -256,19 +255,11 @@ export const MembersAdminPage: React.FC = () => {
   };
 
   const handleToggleRole = (roleId: string) => {
-    setSelectedRoleIds((prev) =>
-      prev.includes(roleId)
-        ? prev.filter((id) => id !== roleId)
-        : [...prev, roleId]
-    );
+    setSelectedRoleIds((prev) => (prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]));
   };
 
   const handleToggleUser = (userId: string) => {
-    setSelectedUserIds((prev) =>
-      prev.includes(userId)
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
-    );
+    setSelectedUserIds((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]));
   };
 
   const handleQuickRemoveRole = async (user: UserWithRoles, roleId: string) => {
@@ -379,9 +370,11 @@ export const MembersAdminPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex justify-center items-center h-64">
-            <div className="text-theme-text-muted" role="status" aria-live="polite">Loading...</div>
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex h-64 items-center justify-center">
+            <div className="text-theme-text-muted" role="status" aria-live="polite">
+              Loading...
+            </div>
           </div>
         </div>
       </div>
@@ -391,8 +384,8 @@ export const MembersAdminPage: React.FC = () => {
   if (error && !editingRoles && !editingMembers && !editingProfile && !resetPasswordUser && !resetMfaUser) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
             <div className="flex">
               <div className="ml-3">
                 <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
@@ -406,658 +399,714 @@ export const MembersAdminPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6 flex justify-between items-start">
-        <div>
-          <h2 className="text-2xl font-bold text-theme-text-primary">Members Administration</h2>
-          <p className="mt-1 text-sm text-theme-text-muted">
-            Manage member roles, permissions, and contact information
-          </p>
-        </div>
-        {canCreateMembers && (
-          // This page is the admin hub's "manage" tab, so Add Member selects
-          // the hub's sibling tab rather than routing anywhere new. The old
-          // target, /admin/members/add, matched no route at all — only the
-          // exact path /admin/members is redirected — so the button fell
-          // through to the catch-all and bounced the user to the dashboard.
-          <Link
-            to="/members/admin?tab=add"
-            className="btn-primary font-medium inline-flex items-center rounded-md text-sm"
-          >
-            <svg
-              className="-ml-1 mr-2 h-5 w-5"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              aria-hidden="true"
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <h2 className="text-theme-text-primary text-2xl font-bold">Members Administration</h2>
+            <p className="text-theme-text-muted mt-1 text-sm">
+              Manage member roles, permissions, and contact information
+            </p>
+          </div>
+          {canCreateMembers && (
+            // This page is the admin hub's "manage" tab, so Add Member selects
+            // the hub's sibling tab rather than routing anywhere new. The old
+            // target, /admin/members/add, matched no route at all — only the
+            // exact path /admin/members is redirected — so the button fell
+            // through to the catch-all and bounced the user to the dashboard.
+            <Link
+              to="/members/admin?tab=add"
+              className="btn-primary inline-flex items-center rounded-md text-sm font-medium"
             >
-              <path
-                fillRule="evenodd"
-                d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Add Member
-          </Link>
+              <svg
+                className="mr-2 -ml-1 h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Add Member
+            </Link>
+          )}
+        </div>
+
+        {error && (
+          <div
+            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"
+            role="alert"
+            aria-live="assertive"
+          >
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+          </div>
         )}
-      </div>
 
-      {error && (
-        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
-          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+        {/* View Toggle */}
+        <div className="mb-6">
+          <div className="inline-flex rounded-md shadow-xs" role="group" aria-label="View mode">
+            <button
+              type="button"
+              onClick={() => setViewMode('by-member')}
+              className={`border px-4 py-2 text-sm font-medium ${
+                viewMode === 'by-member'
+                  ? 'z-10 border-blue-600 bg-blue-600 text-white'
+                  : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
+              } focus:ring-theme-focus-ring rounded-l-lg focus:z-10 focus:ring-2`}
+            >
+              View by Member
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('by-role')}
+              className={`border px-4 py-2 text-sm font-medium ${
+                viewMode === 'by-role'
+                  ? 'z-10 border-blue-600 bg-blue-600 text-white'
+                  : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
+              } focus:ring-theme-focus-ring rounded-r-lg focus:z-10 focus:ring-2`}
+            >
+              View by Role
+            </button>
+          </div>
         </div>
-      )}
 
-      {/* View Toggle */}
-      <div className="mb-6">
-        <div className="inline-flex rounded-md shadow-xs" role="group" aria-label="View mode">
-          <button
-            type="button"
-            onClick={() => setViewMode('by-member')}
-            className={`px-4 py-2 text-sm font-medium border ${
-              viewMode === 'by-member'
-                ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
-            } rounded-l-lg focus:z-10 focus:ring-2 focus:ring-theme-focus-ring`}
-          >
-            View by Member
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('by-role')}
-            className={`px-4 py-2 text-sm font-medium border ${
-              viewMode === 'by-role'
-                ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
-            } rounded-r-lg focus:z-10 focus:ring-2 focus:ring-theme-focus-ring`}
-          >
-            View by Role
-          </button>
-        </div>
-      </div>
-
-      {/* View by Member */}
-      {viewMode === 'by-member' && (
-        <div className="bg-theme-surface backdrop-blur-xs shadow-sm overflow-x-auto sm:rounded-lg">
-          <table className="rwd-table min-w-full divide-y divide-theme-surface-border" aria-label="Members and their roles">
-            <thead className="bg-theme-surface-secondary">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Member
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Member #
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Roles
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Status
-                </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-theme-surface-border">
-              {users.map((user) => (
-                <tr key={user.id} className="hover:bg-theme-surface-hover">
-                  <td data-label="Member" className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="shrink-0 h-10 w-10 rounded-full bg-theme-surface flex items-center justify-center">
-                        <span className="text-theme-text-secondary font-medium">
-                          {(user.first_name?.[0] ?? user.username[0] ?? '').toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-theme-text-primary">
-                          {user.full_name || user.username}
+        {/* View by Member */}
+        {viewMode === 'by-member' && (
+          <div className="bg-theme-surface overflow-x-auto shadow-sm backdrop-blur-xs sm:rounded-lg">
+            <table
+              className="rwd-table divide-theme-surface-border min-w-full divide-y"
+              aria-label="Members and their roles"
+            >
+              <thead className="bg-theme-surface-secondary">
+                <tr>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Member
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Member #
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Roles
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Status
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                  >
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-theme-surface-border divide-y">
+                {users.map((user) => (
+                  <tr key={user.id} className="hover:bg-theme-surface-hover">
+                    <td data-label="Member" className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="bg-theme-surface flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
+                          <span className="text-theme-text-secondary font-medium">
+                            {(user.first_name?.[0] ?? user.username[0] ?? '').toUpperCase()}
+                          </span>
                         </div>
-                        <div className="text-sm text-theme-text-muted">@{user.username}</div>
+                        <div className="ml-4">
+                          <div className="text-theme-text-primary text-sm font-medium">
+                            {user.full_name || user.username}
+                          </div>
+                          <div className="text-theme-text-muted text-sm">@{user.username}</div>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td data-label="Member #" className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
-                    {user.membership_number || '-'}
-                  </td>
-                  <td data-label="Roles" className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1 justify-end md:justify-start">
-                      {user.roles.length === 0 ? (
-                        <span className="text-sm text-theme-text-muted">No roles</span>
-                      ) : (
-                        user.roles.map((role) => (
-                          <span
-                            key={role.id}
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-                              role.is_system
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
-                                : 'bg-theme-surface text-theme-text-secondary'
-                            }`}
+                    </td>
+                    <td data-label="Member #" className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
+                      {user.membership_number || '-'}
+                    </td>
+                    <td data-label="Roles" className="px-6 py-4">
+                      <div className="flex flex-wrap justify-end gap-1 md:justify-start">
+                        {user.roles.length === 0 ? (
+                          <span className="text-theme-text-muted text-sm">No roles</span>
+                        ) : (
+                          user.roles.map((role) => (
+                            <span
+                              key={role.id}
+                              className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
+                                role.is_system
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                  : 'bg-theme-surface text-theme-text-secondary'
+                              }`}
+                            >
+                              {role.name}
+                              <button
+                                onClick={() => {
+                                  void handleQuickRemoveRole(user, role.id);
+                                }}
+                                className="ml-1 hover:text-red-600"
+                                aria-label={`Remove ${role.name} role from ${user.full_name || user.username}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </td>
+                    <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex rounded-full px-2 text-xs leading-5 font-semibold ${
+                          user.status === UserStatus.ACTIVE
+                            ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                            : 'bg-theme-surface-secondary text-theme-text-secondary'
+                        }`}
+                      >
+                        {user.status}
+                      </span>
+                    </td>
+                    <td data-label="Actions" className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
+                      <div className="flex flex-wrap justify-end gap-3">
+                        <button
+                          onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
+                          className="text-green-700 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleEditRoles(user)}
+                          className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          Manage Roles
+                        </button>
+                        {currentUser?.id !== user.id && (
+                          <button
+                            onClick={() => setResetPasswordUser(user)}
+                            className="text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
-                            {role.name}
+                            Reset Password
+                          </button>
+                        )}
+                        {currentUser?.id !== user.id && user.mfa_enabled && (
+                          <button
+                            onClick={() => setResetMfaUser(user)}
+                            className="text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
+                          >
+                            Reset MFA
+                          </button>
+                        )}
+                        {currentUser?.id !== user.id && (
+                          <button
+                            onClick={() => handleDeleteUser(user)}
+                            className="text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* View by Role */}
+        {viewMode === 'by-role' && (
+          <div className="space-y-4">
+            {roles.map((role) => {
+              const usersWithRole = users.filter((user) => user.roles.some((r) => r.id === role.id));
+
+              return (
+                <div key={role.id} className="bg-theme-surface shadow-sm backdrop-blur-xs sm:rounded-lg">
+                  <div className="border-theme-surface-border border-b px-6 py-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-3">
+                          <h3 className="text-theme-text-primary text-lg font-medium">{role.name}</h3>
+                          {role.is_system && (
+                            <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                              System
+                            </span>
+                          )}
+                        </div>
+                        {role.description && <p className="text-theme-text-muted mt-1 text-sm">{role.description}</p>}
+                        <p className="text-theme-text-muted mt-1 text-xs">
+                          {role.permissions.length} permissions • {usersWithRole.length} members
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleEditMembers(role)}
+                        className="hover:bg-theme-surface-hover rounded-md border border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        Manage Members
+                      </button>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4">
+                    {usersWithRole.length === 0 ? (
+                      <p className="text-theme-text-muted text-sm italic">No members assigned to this role</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {usersWithRole.map((user) => (
+                          <div
+                            key={user.id}
+                            className="bg-theme-surface-secondary hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg px-3 py-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="bg-theme-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                                <span className="text-theme-text-muted text-xs font-medium">
+                                  {(user.first_name?.[0] || user.username[0] || '').toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="text-theme-text-primary text-sm font-medium">
+                                  {user.full_name || user.username}
+                                </div>
+                                {user.membership_number && (
+                                  <div className="text-theme-text-muted text-xs">#{user.membership_number}</div>
+                                )}
+                              </div>
+                            </div>
                             <button
-                              onClick={() => { void handleQuickRemoveRole(user, role.id); }}
-                              className="ml-1 hover:text-red-600"
-                              aria-label={`Remove ${role.name} role from ${user.full_name || user.username}`}
+                              onClick={() => {
+                                void handleQuickRemoveUser(user.id, role);
+                              }}
+                              className="text-theme-text-muted ml-2 hover:text-red-600"
+                              aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
                             >
                               ×
                             </button>
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </td>
-                  <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        user.status === UserStatus.ACTIVE
-                          ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                          : 'bg-theme-surface-secondary text-theme-text-secondary'
-                      }`}
-                    >
-                      {user.status}
-                    </span>
-                  </td>
-                  <td data-label="Actions" className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex flex-wrap justify-end gap-3">
-                      <button
-                        onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
-                        className="text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleEditRoles(user)}
-                        className="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                      >
-                        Manage Roles
-                      </button>
-                      {currentUser?.id !== user.id && (
-                        <button
-                          onClick={() => setResetPasswordUser(user)}
-                          className="text-yellow-700 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-300"
-                        >
-                          Reset Password
-                        </button>
-                      )}
-                      {currentUser?.id !== user.id && user.mfa_enabled && (
-                        <button
-                          onClick={() => setResetMfaUser(user)}
-                          className="text-yellow-700 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-300"
-                        >
-                          Reset MFA
-                        </button>
-                      )}
-                      {currentUser?.id !== user.id && (
-                        <button
-                          onClick={() => handleDeleteUser(user)}
-                          className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* View by Role */}
-      {viewMode === 'by-role' && (
-        <div className="space-y-4">
-          {roles.map((role) => {
-            const usersWithRole = users.filter((user) =>
-              user.roles.some((r) => r.id === role.id)
-            );
-
-            return (
-              <div key={role.id} className="bg-theme-surface backdrop-blur-xs shadow-sm sm:rounded-lg">
-                <div className="px-6 py-4 border-b border-theme-surface-border">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
-                        {role.is_system && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
-                            System
-                          </span>
-                        )}
-                      </div>
-                      {role.description && (
-                        <p className="mt-1 text-sm text-theme-text-muted">{role.description}</p>
-                      )}
-                      <p className="mt-1 text-xs text-theme-text-muted">
-                        {role.permissions.length} permissions • {usersWithRole.length} members
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleEditMembers(role)}
-                      className="px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-400 rounded-md hover:bg-theme-surface-hover"
-                    >
-                      Manage Members
-                    </button>
-                  </div>
-                </div>
-                <div className="px-6 py-4">
-                  {usersWithRole.length === 0 ? (
-                    <p className="text-sm text-theme-text-muted italic">No members assigned to this role</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {usersWithRole.map((user) => (
-                        <div
-                          key={user.id}
-                          className="inline-flex items-center gap-2 px-3 py-2 bg-theme-surface-secondary rounded-lg hover:bg-theme-surface-hover"
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
-                              <span className="text-xs text-theme-text-muted font-medium">
-                                {(user.first_name?.[0] || user.username[0] || '').toUpperCase()}
-                              </span>
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-theme-text-primary">
-                                {user.full_name || user.username}
-                              </div>
-                              {user.membership_number && (
-                                <div className="text-xs text-theme-text-muted">#{user.membership_number}</div>
-                              )}
-                            </div>
                           </div>
-                          <button
-                            onClick={() => { void handleQuickRemoveUser(user.id, role); }}
-                            className="ml-2 text-theme-text-muted hover:text-red-600"
-                            aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Edit Profile Modal */}
+        <Modal
+          isOpen={editingProfile && !!profileUser}
+          onClose={() => {
+            setEditingProfile(false);
+            setProfileUser(null);
+            setError(null);
+          }}
+          title={`Edit Information for ${profileUser?.full_name || profileUser?.username}`}
+          footer={
+            <>
+              <button
+                onClick={() => {
+                  void handleSaveProfile();
+                }}
+                disabled={savingProfile}
+                className="btn-info w-full rounded-md text-sm font-medium focus:ring-offset-(--ring-offset-bg) sm:ml-3 sm:w-auto"
+              >
+                {savingProfile ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => {
+                  setEditingProfile(false);
+                  setProfileUser(null);
+                  setError(null);
+                }}
+                disabled={savingProfile}
+                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
+              >
+                Cancel
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            {/* Name Fields */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">First Name</label>
+                <input
+                  type="text"
+                  value={profileForm.first_name}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  disabled={savingProfile}
+                />
               </div>
-            );
-          })}
-        </div>
-      )}
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Middle Name</label>
+                <input
+                  type="text"
+                  value={profileForm.middle_name}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, middle_name: e.target.value }))}
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  disabled={savingProfile}
+                />
+              </div>
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Last Name</label>
+                <input
+                  type="text"
+                  value={profileForm.last_name}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  disabled={savingProfile}
+                />
+              </div>
+            </div>
 
-      {/* Edit Profile Modal */}
-      <Modal
-        isOpen={editingProfile && !!profileUser}
-        onClose={() => { setEditingProfile(false); setProfileUser(null); setError(null); }}
-        title={`Edit Information for ${profileUser?.full_name || profileUser?.username}`}
-        footer={
-          <>
-            <button
-              onClick={() => { void handleSaveProfile(); }}
-              disabled={savingProfile}
-              className="btn-info focus:ring-offset-(--ring-offset-bg) font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
-            >
-              {savingProfile ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button
-              onClick={() => { setEditingProfile(false); setProfileUser(null); setError(null); }}
-              disabled={savingProfile}
-              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-(--ring-offset-bg) disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          {/* Name Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">First Name</label>
-              <input
-                type="text"
-                value={profileForm.first_name}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
-                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                disabled={savingProfile}
-              />
+            {/* Contact Fields */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Phone</label>
+                <input
+                  type="tel"
+                  value={profileForm.phone}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  disabled={savingProfile}
+                />
+              </div>
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Mobile</label>
+                <input
+                  type="tel"
+                  value={profileForm.mobile}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, mobile: e.target.value }))}
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  disabled={savingProfile}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Middle Name</label>
-              <input
-                type="text"
-                value={profileForm.middle_name}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, middle_name: e.target.value }))}
-                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                disabled={savingProfile}
-              />
+
+            {/* Department Fields */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Membership #</label>
+                <input
+                  type="text"
+                  value={profileForm.membership_number}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, membership_number: e.target.value }))}
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  disabled={savingProfile}
+                />
+              </div>
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Rank</label>
+                <select
+                  value={profileForm.rank}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  disabled={savingProfile}
+                >
+                  <option value="">Select Rank</option>
+                  {rankOptions.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Station</label>
+                <select
+                  value={profileForm.station}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, station: e.target.value }))}
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  disabled={savingProfile}
+                >
+                  <option value="">Select Station</option>
+                  {availableStations.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Last Name</label>
-              <input
-                type="text"
-                value={profileForm.last_name}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
-                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                disabled={savingProfile}
-              />
-            </div>
+
+            {error && <div className="text-sm text-red-700 dark:text-red-400">{error}</div>}
           </div>
+        </Modal>
 
-          {/* Contact Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Phone</label>
-              <input
-                type="tel"
-                value={profileForm.phone}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                disabled={savingProfile}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Mobile</label>
-              <input
-                type="tel"
-                value={profileForm.mobile}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, mobile: e.target.value }))}
-                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                disabled={savingProfile}
-              />
-            </div>
-          </div>
-
-          {/* Department Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Membership #</label>
-              <input
-                type="text"
-                value={profileForm.membership_number}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, membership_number: e.target.value }))}
-                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                disabled={savingProfile}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Rank</label>
-              <select
-                value={profileForm.rank}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
-                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                disabled={savingProfile}
+        {/* Reset Password Modal */}
+        <Modal
+          isOpen={!!resetPasswordUser}
+          onClose={() => {
+            setResetPasswordUser(null);
+            setResetNewPassword('');
+            setResetConfirmPassword('');
+            setError(null);
+          }}
+          title={`Reset Password for ${resetPasswordUser?.full_name || resetPasswordUser?.username}`}
+          footer={
+            <>
+              <button
+                onClick={() => {
+                  void handleResetPassword();
+                }}
+                disabled={savingReset || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
+                className="btn-warning w-full rounded-md text-sm font-medium focus:ring-offset-(--ring-offset-bg) sm:ml-3 sm:w-auto"
               >
-                <option value="">Select Rank</option>
-                {rankOptions.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Station</label>
-              <select
-                value={profileForm.station}
-                onChange={(e) => setProfileForm((prev) => ({ ...prev, station: e.target.value }))}
-                className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                disabled={savingProfile}
+                {savingReset ? 'Resetting...' : 'Reset Password'}
+              </button>
+              <button
+                onClick={() => {
+                  setResetPasswordUser(null);
+                  setResetNewPassword('');
+                  setResetConfirmPassword('');
+                  setError(null);
+                }}
+                disabled={savingReset}
+                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
               >
-                <option value="">Select Station</option>
-                {availableStations.map((s) => (
-                  <option key={s.id} value={s.name}>{s.name}</option>
-                ))}
-              </select>
+                Cancel
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">New Password</label>
+              <input
+                type="password"
+                value={resetNewPassword}
+                onChange={(e) => setResetNewPassword(e.target.value)}
+                className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                placeholder="Minimum 12 characters"
+                disabled={savingReset}
+                autoComplete="new-password"
+              />
             </div>
-          </div>
 
-          {error && (
-            <div className="text-sm text-red-700 dark:text-red-400">{error}</div>
-          )}
-        </div>
-      </Modal>
+            <div>
+              <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Confirm Password</label>
+              <input
+                type="password"
+                value={resetConfirmPassword}
+                onChange={(e) => setResetConfirmPassword(e.target.value)}
+                className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                placeholder="Re-enter password"
+                disabled={savingReset}
+                autoComplete="new-password"
+              />
+              {resetConfirmPassword && resetNewPassword !== resetConfirmPassword && (
+                <p className="mt-1 text-xs text-red-700 dark:text-red-400">Passwords do not match</p>
+              )}
+            </div>
 
-      {/* Reset Password Modal */}
-      <Modal
-        isOpen={!!resetPasswordUser}
-        onClose={() => { setResetPasswordUser(null); setResetNewPassword(''); setResetConfirmPassword(''); setError(null); }}
-        title={`Reset Password for ${resetPasswordUser?.full_name || resetPasswordUser?.username}`}
-        footer={
-          <>
-            <button
-              onClick={() => { void handleResetPassword(); }}
-              disabled={savingReset || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
-              className="btn-warning focus:ring-offset-(--ring-offset-bg) font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
-            >
-              {savingReset ? 'Resetting...' : 'Reset Password'}
-            </button>
-            <button
-              onClick={() => { setResetPasswordUser(null); setResetNewPassword(''); setResetConfirmPassword(''); setError(null); }}
-              disabled={savingReset}
-              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-(--ring-offset-bg) disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">New Password</label>
-            <input
-              type="password"
-              value={resetNewPassword}
-              onChange={(e) => setResetNewPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-              placeholder="Minimum 12 characters"
-              disabled={savingReset}
-              autoComplete="new-password"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Confirm Password</label>
-            <input
-              type="password"
-              value={resetConfirmPassword}
-              onChange={(e) => setResetConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-              placeholder="Re-enter password"
-              disabled={savingReset}
-              autoComplete="new-password"
-            />
-            {resetConfirmPassword && resetNewPassword !== resetConfirmPassword && (
-              <p className="mt-1 text-xs text-red-700 dark:text-red-400">Passwords do not match</p>
-            )}
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={resetForceChange}
-              onChange={(e) => setResetForceChange(e.target.checked)}
-              className="form-checkbox border-theme-surface-border"
-              disabled={savingReset}
-            />
-            <span className="text-sm text-theme-text-secondary">
-              Require user to change password on next login
-            </span>
-          </label>
-
-          {error && (
-            <div className="text-sm text-red-700 dark:text-red-400">{error}</div>
-          )}
-        </div>
-      </Modal>
-
-      {/* Reset MFA Modal */}
-      <Modal
-        isOpen={!!resetMfaUser}
-        onClose={() => { setResetMfaUser(null); setError(null); }}
-        title={`Reset MFA for ${resetMfaUser?.full_name || resetMfaUser?.username}`}
-        footer={
-          <>
-            <button
-              onClick={() => { void handleResetMfa(); }}
-              disabled={savingMfaReset}
-              className="btn-warning focus:ring-offset-(--ring-offset-bg) font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
-            >
-              {savingMfaReset ? 'Resetting...' : 'Reset MFA'}
-            </button>
-            <button
-              onClick={() => { setResetMfaUser(null); setError(null); }}
-              disabled={savingMfaReset}
-              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-(--ring-offset-bg) disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <p className="text-sm text-theme-text-secondary">
-            This disables two-factor authentication and clears the member's
-            authenticator and recovery codes. Use this only when the member has
-            lost their device and recovery codes.
-          </p>
-          <p className="text-sm text-theme-text-secondary">
-            They'll be signed out of active sessions and can re-enroll from their
-            own Security settings. If your department requires MFA, they'll be
-            prompted to set it up again on next login.
-          </p>
-          {error && (
-            <div className="text-sm text-red-700 dark:text-red-400">{error}</div>
-          )}
-        </div>
-      </Modal>
-
-      {/* Role Assignment Modal (for View by Member) */}
-      <Modal
-        isOpen={editingRoles && !!selectedUser}
-        onClose={() => { setEditingRoles(false); setSelectedUser(null); setError(null); }}
-        title={`Manage Roles for ${selectedUser?.full_name || selectedUser?.username}`}
-        footer={
-          <>
-            <button
-              onClick={() => { void handleSaveRoles(); }}
-              disabled={saving}
-              className="btn-info focus:ring-offset-(--ring-offset-bg) font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button
-              onClick={() => { setEditingRoles(false); setSelectedUser(null); setError(null); }}
-              disabled={saving}
-              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-(--ring-offset-bg) disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </>
-        }
-      >
-        <p className="text-sm text-theme-text-muted mb-4">
-          Select the roles to assign to this member
-        </p>
-
-        <div className="space-y-2">
-          {roles.map((role) => (
-            <label
-              key={role.id}
-              className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
-            >
+            <label className="flex cursor-pointer items-center gap-2">
               <input
                 type="checkbox"
-                checked={selectedRoleIds.includes(role.id)}
-                onChange={() => handleToggleRole(role.id)}
-                className="form-checkbox border-theme-surface-border mt-1"
+                checked={resetForceChange}
+                onChange={(e) => setResetForceChange(e.target.checked)}
+                className="form-checkbox border-theme-surface-border"
+                disabled={savingReset}
               />
-              <div className="ml-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-theme-text-primary">
-                    {role.name}
-                  </span>
-                  {role.is_system && (
-                    <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 px-2 py-0.5 rounded-sm">
-                      System
+              <span className="text-theme-text-secondary text-sm">Require user to change password on next login</span>
+            </label>
+
+            {error && <div className="text-sm text-red-700 dark:text-red-400">{error}</div>}
+          </div>
+        </Modal>
+
+        {/* Reset MFA Modal */}
+        <Modal
+          isOpen={!!resetMfaUser}
+          onClose={() => {
+            setResetMfaUser(null);
+            setError(null);
+          }}
+          title={`Reset MFA for ${resetMfaUser?.full_name || resetMfaUser?.username}`}
+          footer={
+            <>
+              <button
+                onClick={() => {
+                  void handleResetMfa();
+                }}
+                disabled={savingMfaReset}
+                className="btn-warning w-full rounded-md text-sm font-medium focus:ring-offset-(--ring-offset-bg) sm:ml-3 sm:w-auto"
+              >
+                {savingMfaReset ? 'Resetting...' : 'Reset MFA'}
+              </button>
+              <button
+                onClick={() => {
+                  setResetMfaUser(null);
+                  setError(null);
+                }}
+                disabled={savingMfaReset}
+                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
+              >
+                Cancel
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <p className="text-theme-text-secondary text-sm">
+              This disables two-factor authentication and clears the member's authenticator and recovery codes. Use this
+              only when the member has lost their device and recovery codes.
+            </p>
+            <p className="text-theme-text-secondary text-sm">
+              They'll be signed out of active sessions and can re-enroll from their own Security settings. If your
+              department requires MFA, they'll be prompted to set it up again on next login.
+            </p>
+            {error && <div className="text-sm text-red-700 dark:text-red-400">{error}</div>}
+          </div>
+        </Modal>
+
+        {/* Role Assignment Modal (for View by Member) */}
+        <Modal
+          isOpen={editingRoles && !!selectedUser}
+          onClose={() => {
+            setEditingRoles(false);
+            setSelectedUser(null);
+            setError(null);
+          }}
+          title={`Manage Roles for ${selectedUser?.full_name || selectedUser?.username}`}
+          footer={
+            <>
+              <button
+                onClick={() => {
+                  void handleSaveRoles();
+                }}
+                disabled={saving}
+                className="btn-info w-full rounded-md text-sm font-medium focus:ring-offset-(--ring-offset-bg) sm:ml-3 sm:w-auto"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => {
+                  setEditingRoles(false);
+                  setSelectedUser(null);
+                  setError(null);
+                }}
+                disabled={saving}
+                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
+              >
+                Cancel
+              </button>
+            </>
+          }
+        >
+          <p className="text-theme-text-muted mb-4 text-sm">Select the roles to assign to this member</p>
+
+          <div className="space-y-2">
+            {roles.map((role) => (
+              <label
+                key={role.id}
+                className="hover:bg-theme-surface-hover flex cursor-pointer items-start rounded-lg p-3"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedRoleIds.includes(role.id)}
+                  onChange={() => handleToggleRole(role.id)}
+                  className="form-checkbox border-theme-surface-border mt-1"
+                />
+                <div className="ml-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-theme-text-primary text-sm font-medium">{role.name}</span>
+                    {role.is_system && (
+                      <span className="rounded-sm bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                        System
+                      </span>
+                    )}
+                  </div>
+                  {role.description && <p className="text-theme-text-muted mt-1 text-xs">{role.description}</p>}
+                </div>
+              </label>
+            ))}
+          </div>
+        </Modal>
+
+        {/* Member Assignment Modal (for View by Role) */}
+        <Modal
+          isOpen={editingMembers && !!selectedRole}
+          onClose={() => {
+            setEditingMembers(false);
+            setSelectedRole(null);
+            setError(null);
+          }}
+          title={`Manage Members for ${selectedRole?.name}`}
+          footer={
+            <>
+              <button
+                onClick={() => {
+                  void handleSaveMembers();
+                }}
+                disabled={saving}
+                className="btn-info w-full rounded-md text-sm font-medium focus:ring-offset-(--ring-offset-bg) sm:ml-3 sm:w-auto"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => {
+                  setEditingMembers(false);
+                  setSelectedRole(null);
+                  setError(null);
+                }}
+                disabled={saving}
+                className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring w-full rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50 sm:w-auto"
+              >
+                Cancel
+              </button>
+            </>
+          }
+        >
+          <p className="text-theme-text-muted mb-4 text-sm">Select the members to assign to this role</p>
+
+          <div className="space-y-2">
+            {users.map((user) => (
+              <label
+                key={user.id}
+                className="hover:bg-theme-surface-hover flex cursor-pointer items-start rounded-lg p-3"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedUserIds.includes(user.id)}
+                  onChange={() => handleToggleUser(user.id)}
+                  className="form-checkbox border-theme-surface-border mt-1"
+                />
+                <div className="ml-3 flex items-center gap-2">
+                  <div className="bg-theme-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                    <span className="text-theme-text-muted text-xs font-medium">
+                      {(user.first_name?.[0] || user.username[0] || '').toUpperCase()}
                     </span>
-                  )}
-                </div>
-                {role.description && (
-                  <p className="text-xs text-theme-text-muted mt-1">{role.description}</p>
-                )}
-              </div>
-            </label>
-          ))}
-        </div>
-      </Modal>
-
-      {/* Member Assignment Modal (for View by Role) */}
-      <Modal
-        isOpen={editingMembers && !!selectedRole}
-        onClose={() => { setEditingMembers(false); setSelectedRole(null); setError(null); }}
-        title={`Manage Members for ${selectedRole?.name}`}
-        footer={
-          <>
-            <button
-              onClick={() => { void handleSaveMembers(); }}
-              disabled={saving}
-              className="btn-info focus:ring-offset-(--ring-offset-bg) font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button
-              onClick={() => { setEditingMembers(false); setSelectedRole(null); setError(null); }}
-              disabled={saving}
-              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-(--ring-offset-bg) disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </>
-        }
-      >
-        <p className="text-sm text-theme-text-muted mb-4">
-          Select the members to assign to this role
-        </p>
-
-        <div className="space-y-2">
-          {users.map((user) => (
-            <label
-              key={user.id}
-              className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={selectedUserIds.includes(user.id)}
-                onChange={() => handleToggleUser(user.id)}
-                className="form-checkbox border-theme-surface-border mt-1"
-              />
-              <div className="ml-3 flex items-center gap-2">
-                <div className="shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
-                  <span className="text-xs text-theme-text-muted font-medium">
-                    {(user.first_name?.[0] || user.username[0] || '').toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-theme-text-primary">
-                    {user.full_name || user.username}
                   </div>
-                  <div className="text-xs text-theme-text-muted">
-                    @{user.username}
-                    {user.membership_number && ` • #${user.membership_number}`}
+                  <div>
+                    <div className="text-theme-text-primary text-sm font-medium">{user.full_name || user.username}</div>
+                    <div className="text-theme-text-muted text-xs">
+                      @{user.username}
+                      {user.membership_number && ` • #${user.membership_number}`}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </label>
-          ))}
-        </div>
-      </Modal>
+              </label>
+            ))}
+          </div>
+        </Modal>
 
-      {/* Delete Member Modal */}
-      <DeleteMemberModal
-        isOpen={!!deleteModalUser}
-        onClose={() => setDeleteModalUser(null)}
-        member={deleteModalUser}
-        onSoftDelete={handleSoftDelete}
-        onHardDelete={handleHardDelete}
-      />
+        {/* Delete Member Modal */}
+        <DeleteMemberModal
+          isOpen={!!deleteModalUser}
+          onClose={() => setDeleteModalUser(null)}
+          member={deleteModalUser}
+          onSoftDelete={handleSoftDelete}
+          onHardDelete={handleHardDelete}
+        />
       </div>
     </div>
   );

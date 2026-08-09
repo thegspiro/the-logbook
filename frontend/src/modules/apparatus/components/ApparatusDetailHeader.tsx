@@ -27,17 +27,17 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
   const navigate = useNavigate();
 
   return (
-    <header className="bg-theme-surface-secondary backdrop-blur-xs border-b border-theme-surface-border px-6 py-4">
-      <div className="max-w-7xl mx-auto">
+    <header className="bg-theme-surface-secondary border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
+      <div className="mx-auto max-w-7xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => void navigate('/apparatus')}
-              className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="h-5 w-5" />
             </button>
-            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-600 text-lg font-bold text-white">
               {currentApparatus.unitNumber.substring(0, 2)}
             </div>
             <div>
@@ -45,13 +45,13 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
                 <h1 className="text-theme-text-primary text-xl font-bold">{currentApparatus.unitNumber}</h1>
                 {status && <StatusBadge status={status} />}
                 {currentApparatus.hasDeficiency && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20">
-                    <AlertTriangle className="w-3 h-3" />
+                  <span className="inline-flex items-center gap-1 rounded border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400">
+                    <AlertTriangle className="h-3 w-3" />
                     Deficiency
                   </span>
                 )}
                 {isArchived && (
-                  <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-muted text-xs rounded-sm border border-theme-surface-border">
+                  <span className="bg-theme-surface-hover text-theme-text-muted border-theme-surface-border rounded-sm border px-2 py-1 text-xs">
                     ARCHIVED
                   </span>
                 )}
@@ -65,17 +65,17 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
           <div className="flex items-center space-x-2">
             <button
               onClick={() => void navigate(`/apparatus/${id}/edit`)}
-              className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
+              className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
             >
-              <Edit className="w-4 h-4" />
+              <Edit className="h-4 w-4" />
               <span>Edit</span>
             </button>
             {!isArchived && (
               <button
                 onClick={() => void navigate(`/apparatus/${id}/archive`)}
-                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg transition-colors"
+                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-secondary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
               >
-                <Archive className="w-4 h-4" />
+                <Archive className="h-4 w-4" />
                 <span>Archive</span>
               </button>
             )}

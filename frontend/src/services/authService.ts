@@ -4,7 +4,15 @@
 
 import api from './apiClient';
 import { clearCache } from '../utils/apiCache';
-import type { CurrentUser, LoginCredentials, PasswordChangeData, PasswordResetConfirm, PasswordResetRequest, RegisterData, TokenResponse } from '../types/auth';
+import type {
+  CurrentUser,
+  LoginCredentials,
+  PasswordChangeData,
+  PasswordResetConfirm,
+  PasswordResetRequest,
+  RegisterData,
+  TokenResponse,
+} from '../types/auth';
 
 export const authService = {
   /**
@@ -18,11 +26,7 @@ export const authService = {
   /**
    * Complete an MFA-gated login with a TOTP code or a recovery code.
    */
-  async mfaLogin(payload: {
-    temp_token: string;
-    code?: string;
-    recovery_code?: string;
-  }): Promise<TokenResponse> {
+  async mfaLogin(payload: { temp_token: string; code?: string; recovery_code?: string }): Promise<TokenResponse> {
     const response = await api.post<TokenResponse>('/auth/mfa/login', payload);
     return response.data;
   },
@@ -31,9 +35,7 @@ export const authService = {
    * Begin MFA enrollment: returns the secret + otpauth provisioning URI.
    */
   async setupMfa(): Promise<{ secret: string; qr_code_url: string }> {
-    const response = await api.post<{ secret: string; qr_code_url: string }>(
-      '/auth/mfa/setup',
-    );
+    const response = await api.post<{ secret: string; qr_code_url: string }>('/auth/mfa/setup');
     return response.data;
   },
 
@@ -41,10 +43,7 @@ export const authService = {
    * Confirm enrollment with a code; returns one-time recovery codes.
    */
   async verifyMfaSetup(code: string): Promise<{ recovery_codes: string[] }> {
-    const response = await api.post<{ recovery_codes: string[] }>(
-      '/auth/mfa/verify-setup',
-      { code },
-    );
+    const response = await api.post<{ recovery_codes: string[] }>('/auth/mfa/verify-setup', { code });
     return response.data;
   },
 
@@ -61,10 +60,7 @@ export const authService = {
    * Returns a fresh one-time set; previous codes stop working.
    */
   async regenerateRecoveryCodes(code: string): Promise<{ recovery_codes: string[] }> {
-    const response = await api.post<{ recovery_codes: string[] }>(
-      '/auth/mfa/recovery-codes',
-      { code },
-    );
+    const response = await api.post<{ recovery_codes: string[] }>('/auth/mfa/recovery-codes', { code });
     return response.data;
   },
 

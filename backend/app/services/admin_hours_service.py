@@ -895,6 +895,7 @@ class AdminHoursService:
         """Approve multiple pending entries at once. Returns count of approved entries."""
         now = datetime.now(timezone.utc)
         approved_count = 0
+        skipped_self = 0
 
         for entry_id in entry_ids:
             result = await self.db.execute(
@@ -905,14 +906,28 @@ class AdminHoursService:
                 )
             )
             entry = result.scalar_one_or_none()
-            if entry:
-                entry.status = AdminHoursEntryStatus.APPROVED
-                entry.approved_by = approver_id
-                entry.approved_at = now
-                approved_count += 1
+            if not entry:
+                continue
+            # SEC (AH-4): the single-entry approve path forbids self-approval as
+            # "the entire control" — the bulk path must honor the same
+            # separation of duties, or an officer could self-credit at scale.
+            # Skip self-owned entries (they stay PENDING for another approver)
+            # rather than aborting the whole batch on one included id.
+            if entry.user_id == approver_id:
+                skipped_self += 1
+                continue
+            entry.status = AdminHoursEntryStatus.APPROVED
+            entry.approved_by = approver_id
+            entry.approved_at = now
+            approved_count += 1
 
         await self.db.flush()
-        logger.info("Bulk approved {} entries by {}", approved_count, approver_id)
+        logger.info(
+            "Bulk approved {} entries by {} ({} self-owned entries skipped)",
+            approved_count,
+            approver_id,
+            skipped_self,
+        )
         return approved_count
 
     # =========================================================================

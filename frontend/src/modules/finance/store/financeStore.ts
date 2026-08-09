@@ -59,19 +59,12 @@ interface FinanceState {
 
   // Fiscal Year Actions
   fetchFiscalYears: () => Promise<void>;
-  createFiscalYear: (data: {
-    name: string;
-    startDate: string;
-    endDate: string;
-  }) => Promise<FiscalYear>;
+  createFiscalYear: (data: { name: string; startDate: string; endDate: string }) => Promise<FiscalYear>;
   activateFiscalYear: (id: string) => Promise<void>;
 
   // Budget Actions
   fetchBudgetCategories: () => Promise<void>;
-  fetchBudgets: (params?: {
-    fiscalYearId?: string;
-    categoryId?: string;
-  }) => Promise<void>;
+  fetchBudgets: (params?: { fiscalYearId?: string; categoryId?: string }) => Promise<void>;
   fetchBudgetSummary: (fiscalYearId: string) => Promise<void>;
   createBudget: (data: {
     fiscalYearId: string;
@@ -82,53 +75,35 @@ interface FinanceState {
 
   // Approval Chain Actions
   fetchApprovalChains: () => Promise<void>;
-  createApprovalChain: (
-    data: Partial<ApprovalChain>,
-  ) => Promise<ApprovalChain>;
+  createApprovalChain: (data: Partial<ApprovalChain>) => Promise<ApprovalChain>;
   deleteApprovalChain: (id: string) => Promise<void>;
 
   // Approval Actions
   fetchPendingApprovals: () => Promise<void>;
-  approveStep: (
-    stepRecordId: string,
-    notes?: string,
-  ) => Promise<void>;
+  approveStep: (stepRecordId: string, notes?: string) => Promise<void>;
   denyStep: (stepRecordId: string, notes?: string) => Promise<void>;
 
   // Purchase Request Actions
-  fetchPurchaseRequests: (params?: {
-    status?: string;
-    fiscalYearId?: string;
-  }) => Promise<void>;
+  fetchPurchaseRequests: (params?: { status?: string; fiscalYearId?: string }) => Promise<void>;
   fetchPurchaseRequest: (id: string) => Promise<void>;
-  createPurchaseRequest: (
-    data: Partial<PurchaseRequest>,
-  ) => Promise<PurchaseRequest>;
+  createPurchaseRequest: (data: Partial<PurchaseRequest>) => Promise<PurchaseRequest>;
   submitPurchaseRequest: (id: string) => Promise<void>;
 
   // Expense Report Actions
   fetchExpenseReports: (params?: { status?: string }) => Promise<void>;
   fetchExpenseReport: (id: string) => Promise<void>;
-  createExpenseReport: (
-    data: Partial<ExpenseReport>,
-  ) => Promise<ExpenseReport>;
+  createExpenseReport: (data: Partial<ExpenseReport>) => Promise<ExpenseReport>;
   submitExpenseReport: (id: string) => Promise<void>;
 
   // Check Request Actions
   fetchCheckRequests: (params?: { status?: string }) => Promise<void>;
   fetchCheckRequest: (id: string) => Promise<void>;
-  createCheckRequest: (
-    data: Partial<CheckRequest>,
-  ) => Promise<CheckRequest>;
+  createCheckRequest: (data: Partial<CheckRequest>) => Promise<CheckRequest>;
   submitCheckRequest: (id: string) => Promise<void>;
 
   // Dues Actions
   fetchDuesSchedules: () => Promise<void>;
-  fetchMemberDues: (params?: {
-    scheduleId?: string;
-    userId?: string;
-    status?: string;
-  }) => Promise<void>;
+  fetchMemberDues: (params?: { scheduleId?: string; userId?: string; status?: string }) => Promise<void>;
   fetchDuesSummary: (scheduleId?: string) => Promise<void>;
 
   // Dashboard
@@ -350,13 +325,8 @@ export const useFinanceStore = create<FinanceState>((set) => ({
     try {
       const pr = await purchaseRequestService.submit(id);
       set((state) => ({
-        purchaseRequests: state.purchaseRequests.map((p) =>
-          p.id === id ? pr : p,
-        ),
-        selectedPurchaseRequest:
-          state.selectedPurchaseRequest?.id === id
-            ? pr
-            : state.selectedPurchaseRequest,
+        purchaseRequests: state.purchaseRequests.map((p) => (p.id === id ? pr : p)),
+        selectedPurchaseRequest: state.selectedPurchaseRequest?.id === id ? pr : state.selectedPurchaseRequest,
         isLoading: false,
       }));
     } catch (err) {
@@ -405,13 +375,8 @@ export const useFinanceStore = create<FinanceState>((set) => ({
     try {
       const er = await expenseReportService.submit(id);
       set((state) => ({
-        expenseReports: state.expenseReports.map((e) =>
-          e.id === id ? er : e,
-        ),
-        selectedExpenseReport:
-          state.selectedExpenseReport?.id === id
-            ? er
-            : state.selectedExpenseReport,
+        expenseReports: state.expenseReports.map((e) => (e.id === id ? er : e)),
+        selectedExpenseReport: state.selectedExpenseReport?.id === id ? er : state.selectedExpenseReport,
         isLoading: false,
       }));
     } catch (err) {
@@ -460,13 +425,8 @@ export const useFinanceStore = create<FinanceState>((set) => ({
     try {
       const cr = await checkRequestService.submit(id);
       set((state) => ({
-        checkRequests: state.checkRequests.map((c) =>
-          c.id === id ? cr : c,
-        ),
-        selectedCheckRequest:
-          state.selectedCheckRequest?.id === id
-            ? cr
-            : state.selectedCheckRequest,
+        checkRequests: state.checkRequests.map((c) => (c.id === id ? cr : c)),
+        selectedCheckRequest: state.selectedCheckRequest?.id === id ? cr : state.selectedCheckRequest,
         isLoading: false,
       }));
     } catch (err) {

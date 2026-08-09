@@ -45,11 +45,7 @@ export const ipSecurityService = {
   },
 
   // Admin: get all exceptions
-  async getAllExceptions(
-    status?: string,
-    limit = 50,
-    offset = 0,
-  ): Promise<IPExceptionListResponse> {
+  async getAllExceptions(status?: string, limit = 50, offset = 0): Promise<IPExceptionListResponse> {
     const res = await api.get<IPExceptionListResponse>(`${BASE}/exceptions`, {
       params: { status: status || undefined, limit, offset },
     });
@@ -76,18 +72,12 @@ export const ipSecurityService = {
 
   // Admin: get audit log for an exception
   async getExceptionAuditLog(exceptionId: string): Promise<IPExceptionAuditLog[]> {
-    const res = await api.get<IPExceptionAuditLog[]>(
-      `${BASE}/exceptions/${exceptionId}/audit-log`,
-    );
+    const res = await api.get<IPExceptionAuditLog[]>(`${BASE}/exceptions/${exceptionId}/audit-log`);
     return asArray(res.data);
   },
 
   // Admin: get blocked access attempts
-  async getBlockedAttempts(
-    limit = 50,
-    offset = 0,
-    countryCode?: string,
-  ): Promise<BlockedAttemptsListResponse> {
+  async getBlockedAttempts(limit = 50, offset = 0, countryCode?: string): Promise<BlockedAttemptsListResponse> {
     const res = await api.get<BlockedAttemptsListResponse>(`${BASE}/blocked-attempts`, {
       params: { limit, offset, country_code: countryCode || undefined },
     });

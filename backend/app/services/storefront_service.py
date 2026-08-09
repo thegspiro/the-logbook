@@ -2182,12 +2182,25 @@ class StorefrontService:
             event.note = "No order number found in the payment reference."
         else:
             event.matched_order_id = order.id
+            store_currency = (
+                (await self.get_settings(organization_id)).currency or "USD"
+            ).upper()
             balance = _money(
                 Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
             )
             if order.status == StoreOrderStatus.CANCELLED:
                 event.status = StorePaymentEventStatus.AMBIGUOUS
                 event.note = f"Order {order.order_number} is cancelled."
+            elif (event.currency or "USD").upper() != store_currency:
+                # A capture whose currency differs from the store currency must
+                # never auto-settle: the numeric amount can equal the balance
+                # while being worth materially more or less (StoreOrder has no
+                # currency column to catch it downstream). Route to a human.
+                event.status = StorePaymentEventStatus.AMBIGUOUS
+                event.note = (
+                    f"Payment currency {event.currency} does not match the store "
+                    f"currency {store_currency} on order {order.order_number}."
+                )
             elif balance <= 0:
                 event.status = StorePaymentEventStatus.AMBIGUOUS
                 event.note = f"Order {order.order_number} already has no balance due."

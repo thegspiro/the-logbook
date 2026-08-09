@@ -56,7 +56,7 @@ export async function enqueueGeneric(
   kind: GenericQueueKind,
   url: string,
   body: unknown,
-  label: string,
+  label: string
 ): Promise<GenericQueuedItem> {
   const entry: GenericQueuedItem = {
     id: queueId(),

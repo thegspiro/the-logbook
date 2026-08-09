@@ -93,7 +93,11 @@ describe('errorHandling', () => {
           data: {
             detail: [
               { loc: ['body', 'email'], msg: 'field required', type: 'value_error.missing' },
-              { loc: ['body', 'name'], msg: 'ensure this value has at least 1 characters', type: 'value_error.any_str.min_length' },
+              {
+                loc: ['body', 'name'],
+                msg: 'ensure this value has at least 1 characters',
+                type: 'value_error.any_str.min_length',
+              },
             ],
           },
           status: 422,
@@ -131,9 +135,7 @@ describe('errorHandling', () => {
       const result = toAppError(axiosError);
 
       expect(result.status).toBe(422);
-      expect(result.message).toBe(
-        'date_of_birth: Invalid date format. emergency_contacts.0.email: Invalid value.'
-      );
+      expect(result.message).toBe('date_of_birth: Invalid date format. emergency_contacts.0.email: Invalid value.');
     });
 
     it('does not double the period on messages that already carry one', () => {
@@ -193,9 +195,7 @@ describe('errorHandling', () => {
       const result = toAppError(axiosError);
 
       expect(result.status).toBe(409);
-      expect(result.message).toBe(
-        'A previously archived member matches this prospect.',
-      );
+      expect(result.message).toBe('A previously archived member matches this prospect.');
       expect(result.message).not.toContain('[object Object]');
     });
 

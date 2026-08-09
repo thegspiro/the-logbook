@@ -26,13 +26,7 @@ function snapToQuarter(time: string): string {
   return `${h}:${String(snapped).padStart(2, '0')}`;
 }
 
-const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
-  value,
-  onChange,
-  className,
-  id,
-  required,
-}) => {
+const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({ value, onChange, className, id, required }) => {
   const { datePart, timePart } = useMemo(() => {
     if (!value) return { datePart: '', timePart: '' };
     const sep = value.includes('T') ? 'T' : ' ';
@@ -51,7 +45,7 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
   };
 
   return (
-    <div className="flex gap-2 items-center">
+    <div className="flex items-center gap-2">
       <input
         type="date"
         id={id}

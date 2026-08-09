@@ -14,12 +14,7 @@ interface SkeletonProps {
   rounded?: 'none' | 'sm' | 'md' | 'lg' | 'full';
 }
 
-export const Skeleton: React.FC<SkeletonProps> = ({
-  className = '',
-  width,
-  height,
-  rounded = 'md',
-}) => {
+export const Skeleton: React.FC<SkeletonProps> = ({ className = '', width, height, rounded = 'md' }) => {
   const roundedClasses = {
     none: '',
     sm: 'rounded-xs',
@@ -48,7 +43,7 @@ export const SkeletonRow: React.FC<{ columns?: number }> = ({ columns = 5 }) => 
 
 /** Skeleton card for grid loading states */
 export const SkeletonCard: React.FC = () => (
-  <div className="card p-5 space-y-3 animate-fade-in">
+  <div className="card animate-fade-in space-y-3 p-5">
     <Skeleton className="h-5 w-3/4" />
     <Skeleton className="h-3 w-1/2" />
     <div className="flex gap-2 pt-2">
@@ -63,16 +58,13 @@ export const SkeletonCard: React.FC = () => (
 );
 
 /** Skeleton for list page loading (stat cards + table rows) */
-export const SkeletonPage: React.FC<{ rows?: number; showStats?: boolean }> = ({
-  rows = 5,
-  showStats = true,
-}) => (
+export const SkeletonPage: React.FC<{ rows?: number; showStats?: boolean }> = ({ rows = 5, showStats = true }) => (
   <div className="space-y-6" aria-label="Loading content" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
     {showStats && (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="card p-4 space-y-2">
+          <div key={i} className="card space-y-2 p-4">
             <Skeleton className="h-3 w-20" />
             <Skeleton className="h-8 w-14" />
           </div>
@@ -81,7 +73,7 @@ export const SkeletonPage: React.FC<{ rows?: number; showStats?: boolean }> = ({
     )}
     <div className="card overflow-hidden">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="border-b border-theme-surface-border last:border-b-0">
+        <div key={i} className="border-theme-surface-border border-b last:border-b-0">
           <SkeletonRow />
         </div>
       ))}
@@ -91,7 +83,7 @@ export const SkeletonPage: React.FC<{ rows?: number; showStats?: boolean }> = ({
 
 /** Skeleton for event card grid */
 export const SkeletonCardGrid: React.FC<{ count?: number }> = ({ count = 6 }) => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="status" aria-live="polite">
+  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
     {Array.from({ length: count }).map((_, i) => (
       <SkeletonCard key={i} />

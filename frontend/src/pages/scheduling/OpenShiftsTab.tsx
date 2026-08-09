@@ -6,10 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Clock, Users, UserPlus, Truck, Loader2,
-  CalendarDays, Filter, Check, MapPin,
-} from 'lucide-react';
+import { Clock, Users, UserPlus, Truck, Loader2, CalendarDays, Filter, Check, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
@@ -37,9 +34,11 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   const [signingUp, setSigningUp] = useState(false);
 
   // Fetch eligible positions for the currently selected shift
-  const { positions: eligiblePositions, isExcluded, loading: eligibilityLoading } = useEligiblePositions(
-    signupShiftId ?? undefined,
-  );
+  const {
+    positions: eligiblePositions,
+    isExcluded,
+    loading: eligibilityLoading,
+  } = useEligiblePositions(signupShiftId ?? undefined);
 
   const loadShifts = useCallback(async () => {
     setLoading(true);
@@ -69,13 +68,12 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
     }
   }, [dateFilter, tz]);
 
-  useEffect(() => { void loadShifts(); }, [loadShifts]);
+  useEffect(() => {
+    void loadShifts();
+  }, [loadShifts]);
 
   const surfaceWarnings = (res: { evoc_warnings?: { message: string }[]; overtime_warnings?: string[] }) => {
-    const messages = [
-      ...(res.evoc_warnings ?? []).map((w) => w.message),
-      ...(res.overtime_warnings ?? []),
-    ];
+    const messages = [...(res.evoc_warnings ?? []).map((w) => w.message), ...(res.overtime_warnings ?? [])];
     if (messages.length > 0) toast(messages.join(' '), { icon: '⚠️' });
   };
 
@@ -122,111 +120,122 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   return (
     <div className="space-y-6">
       {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-        <div className="flex items-center gap-2 flex-1">
-          <Filter className="w-4 h-4 text-theme-text-muted shrink-0" />
-          <span className="text-sm text-theme-text-secondary shrink-0">From:</span>
-          <input type="date" value={dateFilter}
-            onChange={e => setDateFilter(e.target.value)}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className="flex flex-1 items-center gap-2">
+          <Filter className="text-theme-text-muted h-4 w-4 shrink-0" />
+          <span className="text-theme-text-secondary shrink-0 text-sm">From:</span>
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
             aria-label="Filter open shifts from date"
-            className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden sm:flex-none"
           />
         </div>
-        <button onClick={() => { void loadShifts(); }}
-          className="px-3 py-2 text-sm text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors w-full sm:w-auto"
+        <button
+          onClick={() => {
+            void loadShifts();
+          }}
+          className="w-full rounded-lg px-3 py-2 text-sm text-violet-600 transition-colors hover:bg-violet-500/10 sm:w-auto dark:text-violet-400"
         >
           Refresh
         </button>
       </div>
 
       {/* Info */}
-      <div className="flex items-start gap-3 p-4 bg-violet-500/5 border border-violet-500/20 rounded-xl">
-        <UserPlus className="w-5 h-5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
-        <div className="text-sm text-theme-text-secondary">
-          <p>Browse available shifts and sign up for open positions. A scheduling manager will review and confirm your signup.</p>
+      <div className="flex items-start gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+        <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
+        <div className="text-theme-text-secondary text-sm">
+          <p>
+            Browse available shifts and sign up for open positions. A scheduling manager will review and confirm your
+            signup.
+          </p>
         </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-          <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
+          <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
           <span className="sr-only">Loading open shifts…</span>
         </div>
       ) : sortedDates.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
-          <CalendarDays className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-theme-text-primary mb-1">No open shifts available</h3>
-          <p className="text-theme-text-muted text-sm">
-            Check back later or adjust your date filter for more results.
-          </p>
+        <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
+          <CalendarDays className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+          <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No open shifts available</h3>
+          <p className="text-theme-text-muted text-sm">Check back later or adjust your date filter for more results.</p>
         </div>
       ) : (
         <div className="space-y-6">
-          {sortedDates.map(date => {
+          {sortedDates.map((date) => {
             const dateObj = new Date(date + 'T12:00:00');
             const dayShifts = groupedByDate[date];
 
             return (
               <div key={date}>
-                <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3">
+                <h3 className="text-theme-text-secondary mb-3 text-sm font-semibold tracking-wider uppercase">
                   {formatDateCustom(dateObj, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }, tz)}
                 </h3>
                 <div className="space-y-3">
-                  {dayShifts?.map(shift => (
-                    <div key={shift.id}
-                      className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 hover:border-violet-500/30 transition-colors"
+                  {dayShifts?.map((shift) => (
+                    <div
+                      key={shift.id}
+                      className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 transition-colors hover:border-violet-500/30 sm:p-5"
                     >
-                      <div className="flex items-start sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
-                            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
+                      <div className="flex items-start justify-between gap-3 sm:items-center">
+                        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
+                            <Clock className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm sm:text-base font-semibold text-theme-text-primary">
+                            <p className="text-theme-text-primary text-sm font-semibold sm:text-base">
                               {formatTime(shift.start_time, tz)}
                               {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
                             </p>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-                              <span className="flex items-center gap-1 text-xs text-theme-text-muted">
-                                <Users className="w-3 h-3" />
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                              <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                                <Users className="h-3 w-3" />
                                 {shift.apparatus_positions && shift.apparatus_positions.length > 0
                                   ? `${shift.attendee_count} / ${shift.apparatus_positions.length} filled`
-                                  : `${shift.attendee_count} assigned`
-                                }
+                                  : `${shift.attendee_count} assigned`}
                               </span>
                               {shift.apparatus_unit_number && (
-                                <span className="flex items-center gap-1 text-xs text-theme-text-muted">
-                                  <Truck className="w-3 h-3" /> {shift.apparatus_unit_number}
-                                  {shift.apparatus_name && <span className="hidden sm:inline"> — {shift.apparatus_name}</span>}
+                                <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                                  <Truck className="h-3 w-3" /> {shift.apparatus_unit_number}
+                                  {shift.apparatus_name && (
+                                    <span className="hidden sm:inline"> — {shift.apparatus_name}</span>
+                                  )}
                                 </span>
                               )}
                               {shift.shift_officer_name && (
-                                <span className="hidden sm:flex items-center gap-1 text-xs text-theme-text-muted">
-                                  <MapPin className="w-3 h-3" /> {shift.shift_officer_name}
+                                <span className="text-theme-text-muted hidden items-center gap-1 text-xs sm:flex">
+                                  <MapPin className="h-3 w-3" /> {shift.shift_officer_name}
                                 </span>
                               )}
                             </div>
                             {shift.notes && (
-                              <p className="text-xs text-theme-text-muted mt-1 truncate">{shift.notes}</p>
+                              <p className="text-theme-text-muted mt-1 truncate text-xs">{shift.notes}</p>
                             )}
                           </div>
                         </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button onClick={() => setSignupShiftId(shift.id)}
-                              className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors"
-                              aria-label="Sign up for this shift"
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            onClick={() => setSignupShiftId(shift.id)}
+                            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-violet-700 sm:text-sm"
+                            aria-label="Sign up for this shift"
+                          >
+                            <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">Sign Up</span>
+                            <span className="sm:hidden">Join</span>
+                          </button>
+                          {onViewShift && (
+                            <button
+                              onClick={() => onViewShift(shift)}
+                              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover hidden rounded-lg border px-3 py-2 text-sm transition-colors sm:block"
+                              aria-label="View shift details"
                             >
-                              <UserPlus className="w-4 h-4" /> <span className="hidden sm:inline">Sign Up</span><span className="sm:hidden">Join</span>
+                              Details
                             </button>
-                            {onViewShift && (
-                              <button onClick={() => onViewShift(shift)}
-                                className="hidden sm:block px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
-                                aria-label="View shift details"
-                              >
-                                Details
-                              </button>
-                            )}
-                          </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -237,63 +246,93 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         </div>
       )}
       {/* Signup Modal */}
-      {signupShiftId && (() => {
-        const targetShift = shifts.find(s => s.id === signupShiftId);
-        return (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Sign up for shift"
-            onKeyDown={e => { if (e.key === 'Escape') setSignupShiftId(null); }}
-          >
-            <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-sm w-full">
-              <div className="p-5 border-b border-theme-surface-border">
-                <h2 className="text-lg font-bold text-theme-text-primary">Sign Up for Shift</h2>
-                {targetShift && (
-                  <p className="text-sm text-theme-text-secondary mt-1">
-                    {formatDateCustom(targetShift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz)}
-                    {' '}{formatTime(targetShift.start_time, tz)}
-                    {targetShift.end_time ? ` - ${formatTime(targetShift.end_time, tz)}` : ''}
-                    {targetShift.apparatus_unit_number ? ` (${targetShift.apparatus_unit_number})` : ''}
-                  </p>
-                )}
-              </div>
-              <div className="p-5 space-y-4">
-                {eligibilityLoading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
-                  </div>
-                ) : isExcluded || eligiblePositions.length === 0 ? (
-                  <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                    <p className="text-sm text-amber-600 dark:text-amber-400">
-                      You are not eligible to sign up for this shift. Contact a scheduling admin for assistance.
+      {signupShiftId &&
+        (() => {
+          const targetShift = shifts.find((s) => s.id === signupShiftId);
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sign up for shift"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setSignupShiftId(null);
+              }}
+            >
+              <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-sm rounded-xl border">
+                <div className="border-theme-surface-border border-b p-5">
+                  <h2 className="text-theme-text-primary text-lg font-bold">Sign Up for Shift</h2>
+                  {targetShift && (
+                    <p className="text-theme-text-secondary mt-1 text-sm">
+                      {formatDateCustom(
+                        targetShift.shift_date + 'T12:00:00',
+                        { weekday: 'short', month: 'short', day: 'numeric' },
+                        tz
+                      )}{' '}
+                      {formatTime(targetShift.start_time, tz)}
+                      {targetShift.end_time ? ` - ${formatTime(targetShift.end_time, tz)}` : ''}
+                      {targetShift.apparatus_unit_number ? ` (${targetShift.apparatus_unit_number})` : ''}
                     </p>
-                  </div>
-                ) : (
-                  <div>
-                    <label htmlFor="signup-position" className="block text-sm font-medium text-theme-text-secondary mb-1">Position</label>
-                    <select id="signup-position" value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
-                      className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
-                    >
-                      {eligiblePositions.map((pos) => (
-                        <option key={pos} value={pos}>{POSITION_LABELS[pos] ?? pos}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-              <div className="flex justify-end gap-3 p-5 border-t border-theme-surface-border">
-                <button onClick={() => setSignupShiftId(null)} className="px-4 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-                {!isExcluded && eligiblePositions.length > 0 && (
-                  <button onClick={() => { void handleSignup(signupShiftId); }} disabled={signingUp}
-                    className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1"
+                  )}
+                </div>
+                <div className="space-y-4 p-5">
+                  {eligibilityLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
+                    </div>
+                  ) : isExcluded || eligiblePositions.length === 0 ? (
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                      <p className="text-sm text-amber-600 dark:text-amber-400">
+                        You are not eligible to sign up for this shift. Contact a scheduling admin for assistance.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label
+                        htmlFor="signup-position"
+                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                      >
+                        Position
+                      </label>
+                      <select
+                        id="signup-position"
+                        value={signupPosition}
+                        onChange={(e) => setSignupPosition(e.target.value)}
+                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden"
+                      >
+                        {eligiblePositions.map((pos) => (
+                          <option key={pos} value={pos}>
+                            {POSITION_LABELS[pos] ?? pos}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <div className="border-theme-surface-border flex justify-end gap-3 border-t p-5">
+                  <button
+                    onClick={() => setSignupShiftId(null)}
+                    className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm"
                   >
-                    {signingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    Confirm Sign Up
+                    Cancel
                   </button>
-                )}
+                  {!isExcluded && eligiblePositions.length > 0 && (
+                    <button
+                      onClick={() => {
+                        void handleSignup(signupShiftId);
+                      }}
+                      disabled={signingUp}
+                      className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                    >
+                      {signingUp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      Confirm Sign Up
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
     </div>
   );
 };

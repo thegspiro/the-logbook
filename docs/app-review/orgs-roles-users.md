@@ -1,6 +1,7 @@
-# Application Review — Orgs / Roles / Users (Tier B, 2nd pass)
+# Application Review — Orgs / Roles / Users (Tier B)
 
-**Prefix:** `ORU2` · **Iteration:** B21 · **Reviewed:** 2026-08-06
+**Prefix:** `ORU2` · **Iteration:** B21 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** the privilege-management surface — `endpoints/roles.py` +
 `role_service.py` + `core/permissions.py`, `endpoints/organizations.py` +
@@ -10,6 +11,52 @@
 (create-member escalation), ORU-2/3/5 (settings secret leaks), ORU-4 (cross-tenant
 module read), ORU-6, ORU-8 (PII), ORU-9 fixed; ORU-7 (role-edit ceiling, last-admin,
 member-role guard) left open.
+
+---
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified pass-1 ORU-7a (`_enforce_role_edit_ceiling`) and ORU-7b (last-admin
+retention) hold. The privilege-escalation lens then found a **CRITICAL** parallel
+escalation path the role-ceiling work didn't cover.
+
+### ORU-7d — CRITICAL — Operational rank bypassed the permission-grant ceiling — ✅ FIXED
+
+Effective permissions are the **union of a member's positions *and* their
+operational rank** (`_collect_user_permissions` in `dependencies.py`:
+`perms.update(get_rank_default_permissions(user.rank))`). Every role/position
+grant is ceiling-checked — `_enforce_role_grant_ceiling` blocks a caller from
+handing out permissions beyond their own — but **rank had no such ceiling**, and a
+rank change is gated only on `members.manage`. The `fire_chief` rank's
+`default_permissions` include `settings.manage`, `security.manage`, and
+`positions.manage_permissions`; the default **secretary** position holds
+`members.manage`/`users.create` but none of those. Two live exploit paths:
+
+- `POST /users` (`create_member`) — needs only `users.create`; it set
+  `rank=user_data.rank` **unchecked** while only `role_ids` were ceiling-checked.
+  A secretary creates a member with `rank="fire_chief"` and a chosen `password`,
+  then logs in as a near-superadmin.
+- `PATCH /users/{id}/profile` (`update_user_profile`) — `rank` is a "restricted
+  field" gated on `members.manage` only, so a secretary sets **their own**
+  `rank="fire_chief"` and instantly gains `settings.manage`/`security.manage`.
+
+This defeats the exact segregation the settings-secret work (ORU-2/3) established.
+**Fix:** a new `_enforce_rank_grant_ceiling` mirrors the role ceiling — a rank may
+be assigned only if every permission it grants is within the caller's own
+effective permissions (wildcards honored via `_has_permission`), else `403` +
+`report_privilege_escalation_attempt` (CRITICAL alert). Wired into `create_member`
+(any provided rank) and `update_user_profile` (only when the rank actually
+changes, so ordinary profile edits aren't blocked). A chief keeps setting any
+rank; a secretary can still set low ranks that carry ≤ their own permissions. 4
+DB-free regression tests (`test_rank_grant_ceiling.py`).
+
+**Flagged (unchanged):** ORU-7c (org-wide `member` role mass-escalation). Two LOW
+latent-500s noted (both effectively unreachable): `acknowledge_setup_checklist_item`
+and `create_member`'s `generate_next_membership_id` (100k-collision cap) raise
+`ValueError` outside a 400-mapping wrapper. Lenses 1–4 otherwise clean:
+`update_user_profile` uses an `ALLOWED_PROFILE_FIELDS` allowlist (no
+`role_ids`/`permissions`/`organization_id` mass-assignment), every by-id read/write
+is org-scoped, and role assignment validates `Role.organization_id`.
 
 ---
 

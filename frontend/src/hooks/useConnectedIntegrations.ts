@@ -31,9 +31,7 @@ export const useConnectedIntegrations = (): UseConnectedIntegrationsResult => {
       .getIntegrations()
       .then((items) => {
         if (cancelled) return;
-        setConnected(
-          new Set(items.filter((i) => i.status === 'connected').map((i) => i.integration_type)),
-        );
+        setConnected(new Set(items.filter((i) => i.status === 'connected').map((i) => i.integration_type)));
       })
       .catch(() => {
         // Swallow — absence of the list simply means no optional affordances.
@@ -46,10 +44,7 @@ export const useConnectedIntegrations = (): UseConnectedIntegrationsResult => {
     };
   }, []);
 
-  const isConnected = useCallback(
-    (integrationType: string) => connected.has(integrationType),
-    [connected],
-  );
+  const isConnected = useCallback((integrationType: string) => connected.has(integrationType), [connected]);
 
   return { connected, loading, isConnected };
 };

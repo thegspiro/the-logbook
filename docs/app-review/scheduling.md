@@ -1,6 +1,7 @@
-# Application Review — Scheduling (Tier B, 2nd pass)
+# Application Review — Scheduling (Tier B)
 
-**Prefix:** `SCH2` · **Iteration:** B19 · **Reviewed:** 2026-08-06
+**Prefix:** `SCH2` · **Iteration:** B19 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** `endpoints/scheduling.py` (~1,900 L), `services/scheduling_service.py`
 (~5,000 L)
@@ -9,6 +10,44 @@
 escalation), SCH-2 (self-signup guards), SCH-3 (DoS), SCH-4 (`shift_officer_id` +
 hours-report join) fixed; SCH-5 (swap accept-path), SCH-6 (`manual_hours` + FKs)
 left open.
+
+---
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified pass-1 (SCH-1–4, SCH-6; SCH-5 still flagged). Update-bypass is clean
+(all update endpoints use `model_dump(exclude_unset=True)`; `ShiftAssignmentUpdate`/
+`ShiftAttendanceUpdate` omit `user_id`; `update_shift` re-validates
+`shift_officer_id`/`apparatus_id`). **2 fixes.**
+
+### SCH-8 — MED — `GET /apparatus/{id}/active-shift` 500'd on its success path — ✅ FIXED
+
+`get_active_shift_for_apparatus` called `service._get_apparatus_map(
+current_user.organization_id)` — but the signature is `_get_apparatus_map(self,
+organization_id, apparatus_ids)` with **no default** for `apparatus_ids` (every
+other of its four call sites passes both). So the moment an apparatus actually had
+an active shift, the enrichment call raised `TypeError` → uncaught `500`. **Fix:**
+pass `apparatus_ids=[shift.apparatus_id] if shift.apparatus_id else []`, matching
+the other call sites.
+
+### SCH-7 — LOW — `create_template` / `update_template` stored a client `apparatus_id` unvalidated — ✅ FIXED
+
+`create_shift` validates a client `apparatus_id` in-org via `apparatus_ref_exists`;
+the template create/update paths funneled straight into `_crud_create`/`_crud_update`
+with no such check. A template's `apparatus_id` is stamped onto **every** shift
+`generate_shifts_from_pattern` produces, so a foreign id persisted a dangling FK
+and silently dropped the min-staffing/checklist wiring on the generated shifts.
+Not a read-leak (apparatus enrichment resolves via the org-scoped
+`resolve_apparatus_display_map`, so a foreign id renders blank), hence LOW — but the
+standard XC-1 shape. **Fix:** the same in-org `apparatus_ref_exists` guard on both
+template paths. Swept an adjacent `is_active == True  # noqa: E712` to `.is_(True)`.
+2 regression tests (create + update reject a foreign apparatus).
+
+**Flagged (unchanged):** SCH-5 (swap accept-path re-validation + approver identity —
+workflow design, KNOWN_LIMITATIONS). Lenses 2–5 clean: name-map reads are fed only
+by org-scoped, create-validated ids; swap/time-off/assignment by-id all filter
+`organization_id`. Latent-500 otherwise clean (endpoints wrap service `str(e)` in
+`_safe_detail`).
 
 ---
 

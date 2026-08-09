@@ -13,8 +13,7 @@ export const TrainingExportPeriod = {
   YEAR: 'year',
   LIFETIME: 'lifetime',
 } as const;
-export type TrainingExportPeriod =
-  (typeof TrainingExportPeriod)[keyof typeof TrainingExportPeriod];
+export type TrainingExportPeriod = (typeof TrainingExportPeriod)[keyof typeof TrainingExportPeriod];
 
 export const TRAINING_PERIOD_LABELS: Record<TrainingExportPeriod, string> = {
   month: 'This Month',
@@ -32,10 +31,7 @@ export interface TrainingPeriodWindow {
  * Compute the {start_date, end_date} window for an export period.
  * Dates are ISO `YYYY-MM-DD` strings. Lifetime returns no `start_date`.
  */
-export function getTrainingPeriodWindow(
-  period: TrainingExportPeriod,
-  timezone?: string,
-): TrainingPeriodWindow {
+export function getTrainingPeriodWindow(period: TrainingExportPeriod, timezone?: string): TrainingPeriodWindow {
   const today = getTodayLocalDate(timezone); // 'YYYY-MM-DD'
   const parts = today.split('-');
   const year = parts[0] ?? '1970';

@@ -1520,6 +1520,17 @@ async def save_session_stations(
         )
 
     service = OnboardingService(db)
+
+    # Reject once onboarding is complete — completion does not delete the
+    # session, so a still-valid (or stolen) session must not be replayable to
+    # write real Facility/Location rows into the provisioned org, bypassing the
+    # authenticated facilities.manage path. Matches the sibling steps.
+    if not await service.needs_onboarding():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+        )
+
     previous_ids = (session.data or {}).get("stations", {}).get("facility_ids", [])
 
     try:
@@ -1573,6 +1584,16 @@ async def save_session_apparatus(
         )
 
     service = OnboardingService(db)
+
+    # Reject once onboarding is complete — a still-valid (or stolen) session
+    # must not be replayable to write real BasicApparatus rows into the
+    # provisioned org after setup. Matches the sibling steps.
+    if not await service.needs_onboarding():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+        )
+
     previous_ids = (session.data or {}).get("apparatus", {}).get("apparatus_ids", [])
 
     try:

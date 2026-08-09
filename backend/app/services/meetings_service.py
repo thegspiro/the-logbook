@@ -161,6 +161,35 @@ class MeetingsService:
 
         return meetings, total
 
+    async def attach_creator_names(
+        self, organization_id: UUID, meetings: List[Meeting]
+    ) -> None:
+        """Populate MeetingResponse.creator_name, in place (BXC-2).
+
+        The response declares `creator_name` and MinutesPage renders
+        "Created by {creator_name}", but the Meeting row only has the
+        `created_by` id — so without this the attribution never appears. One
+        org-scoped batch query; sets a non-mapped instance attribute Pydantic
+        reads via from_attributes. A missing/out-of-org id yields None.
+        """
+        if not meetings:
+            return
+        user_ids = {m.created_by for m in meetings if m.created_by}
+        names: dict = {}
+        if user_ids:
+            rows = await self.db.execute(
+                select(User.id, User.first_name, User.last_name).where(
+                    User.id.in_(user_ids),
+                    User.organization_id == str(organization_id),
+                )
+            )
+            names = {
+                uid: f"{first or ''} {last or ''}".strip()
+                for uid, first, last in rows.all()
+            }
+        for m in meetings:
+            m.creator_name = names.get(m.created_by) if m.created_by else None
+
     async def get_meeting_by_id(
         self, meeting_id: UUID, organization_id: UUID
     ) -> Optional[Meeting]:

@@ -41,37 +41,23 @@ export const fiscalYearService = {
     return response.data;
   },
 
-  async create(data: {
-    name: string;
-    startDate: string;
-    endDate: string;
-  }): Promise<FiscalYear> {
+  async create(data: { name: string; startDate: string; endDate: string }): Promise<FiscalYear> {
     const response = await api.post<FiscalYear>('/finance/fiscal-years', data);
     return response.data;
   },
 
-  async update(
-    id: string,
-    data: Partial<FiscalYear>,
-  ): Promise<FiscalYear> {
-    const response = await api.put<FiscalYear>(
-      `/finance/fiscal-years/${id}`,
-      data,
-    );
+  async update(id: string, data: Partial<FiscalYear>): Promise<FiscalYear> {
+    const response = await api.put<FiscalYear>(`/finance/fiscal-years/${id}`, data);
     return response.data;
   },
 
   async activate(id: string): Promise<FiscalYear> {
-    const response = await api.post<FiscalYear>(
-      `/finance/fiscal-years/${id}/activate`,
-    );
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/activate`);
     return response.data;
   },
 
   async lock(id: string): Promise<FiscalYear> {
-    const response = await api.post<FiscalYear>(
-      `/finance/fiscal-years/${id}/lock`,
-    );
+    const response = await api.post<FiscalYear>(`/finance/fiscal-years/${id}/lock`);
     return response.data;
   },
 };
@@ -82,9 +68,7 @@ export const fiscalYearService = {
 
 export const budgetCategoryService = {
   async list(): Promise<BudgetCategory[]> {
-    const response = await api.get<BudgetCategory[]>(
-      '/finance/budget-categories',
-    );
+    const response = await api.get<BudgetCategory[]>('/finance/budget-categories');
     return asArray(response.data);
   },
 
@@ -95,21 +79,12 @@ export const budgetCategoryService = {
     sortOrder?: number;
     qbAccountName?: string;
   }): Promise<BudgetCategory> {
-    const response = await api.post<BudgetCategory>(
-      '/finance/budget-categories',
-      data,
-    );
+    const response = await api.post<BudgetCategory>('/finance/budget-categories', data);
     return response.data;
   },
 
-  async update(
-    id: string,
-    data: Partial<BudgetCategory>,
-  ): Promise<BudgetCategory> {
-    const response = await api.put<BudgetCategory>(
-      `/finance/budget-categories/${id}`,
-      data,
-    );
+  async update(id: string, data: Partial<BudgetCategory>): Promise<BudgetCategory> {
+    const response = await api.put<BudgetCategory>(`/finance/budget-categories/${id}`, data);
     return response.data;
   },
 
@@ -123,10 +98,7 @@ export const budgetCategoryService = {
 // =============================================================================
 
 export const budgetService = {
-  async list(params?: {
-    fiscalYearId?: string;
-    categoryId?: string;
-  }): Promise<Budget[]> {
+  async list(params?: { fiscalYearId?: string; categoryId?: string }): Promise<Budget[]> {
     const response = await api.get<Budget[]>('/finance/budgets', {
       params: {
         fiscal_year_id: params?.fiscalYearId,
@@ -171,35 +143,22 @@ export const budgetService = {
 
 export const approvalChainService = {
   async list(): Promise<ApprovalChain[]> {
-    const response = await api.get<ApprovalChain[]>(
-      '/finance/approval-chains',
-    );
+    const response = await api.get<ApprovalChain[]>('/finance/approval-chains');
     return asArray(response.data);
   },
 
   async get(id: string): Promise<ApprovalChain> {
-    const response = await api.get<ApprovalChain>(
-      `/finance/approval-chains/${id}`,
-    );
+    const response = await api.get<ApprovalChain>(`/finance/approval-chains/${id}`);
     return response.data;
   },
 
   async create(data: Partial<ApprovalChain>): Promise<ApprovalChain> {
-    const response = await api.post<ApprovalChain>(
-      '/finance/approval-chains',
-      data,
-    );
+    const response = await api.post<ApprovalChain>('/finance/approval-chains', data);
     return response.data;
   },
 
-  async update(
-    id: string,
-    data: Partial<ApprovalChain>,
-  ): Promise<ApprovalChain> {
-    const response = await api.put<ApprovalChain>(
-      `/finance/approval-chains/${id}`,
-      data,
-    );
+  async update(id: string, data: Partial<ApprovalChain>): Promise<ApprovalChain> {
+    const response = await api.put<ApprovalChain>(`/finance/approval-chains/${id}`, data);
     return response.data;
   },
 
@@ -209,48 +168,36 @@ export const approvalChainService = {
 
   async addStep(
     chainId: string,
-    data: Partial<ApprovalChain['steps'][number]>,
+    data: Partial<ApprovalChain['steps'][number]>
   ): Promise<ApprovalChain['steps'][number]> {
-    const response = await api.post<ApprovalChain['steps'][number]>(
-      `/finance/approval-chains/${chainId}/steps`,
-      data,
-    );
+    const response = await api.post<ApprovalChain['steps'][number]>(`/finance/approval-chains/${chainId}/steps`, data);
     return response.data;
   },
 
   async updateStep(
     chainId: string,
     stepId: string,
-    data: Partial<ApprovalChain['steps'][number]>,
+    data: Partial<ApprovalChain['steps'][number]>
   ): Promise<ApprovalChain['steps'][number]> {
     const response = await api.put<ApprovalChain['steps'][number]>(
       `/finance/approval-chains/${chainId}/steps/${stepId}`,
-      data,
+      data
     );
     return response.data;
   },
 
   async deleteStep(chainId: string, stepId: string): Promise<void> {
-    await api.delete(
-      `/finance/approval-chains/${chainId}/steps/${stepId}`,
-    );
+    await api.delete(`/finance/approval-chains/${chainId}/steps/${stepId}`);
   },
 
-  async preview(params: {
-    entityType: string;
-    amount: number;
-    categoryId?: string;
-  }): Promise<ApprovalChain> {
-    const response = await api.get<ApprovalChain>(
-      '/finance/approval-chains/preview',
-      {
-        params: {
-          entity_type: params.entityType,
-          amount: params.amount,
-          category_id: params.categoryId,
-        },
+  async preview(params: { entityType: string; amount: number; categoryId?: string }): Promise<ApprovalChain> {
+    const response = await api.get<ApprovalChain>('/finance/approval-chains/preview', {
+      params: {
+        entity_type: params.entityType,
+        amount: params.amount,
+        category_id: params.categoryId,
       },
-    );
+    });
     return response.data;
   },
 };
@@ -261,31 +208,21 @@ export const approvalChainService = {
 
 export const approvalService = {
   async getPending(): Promise<PendingApproval[]> {
-    const response = await api.get<PendingApproval[]>(
-      '/finance/approvals/pending',
-    );
+    const response = await api.get<PendingApproval[]>('/finance/approvals/pending');
     return asArray(response.data);
   },
 
-  async approve(
-    stepRecordId: string,
-    notes?: string,
-  ): Promise<ApprovalStepRecord> {
-    const response = await api.post<ApprovalStepRecord>(
-      `/finance/approvals/${stepRecordId}/approve`,
-      { notes: notes || undefined },
-    );
+  async approve(stepRecordId: string, notes?: string): Promise<ApprovalStepRecord> {
+    const response = await api.post<ApprovalStepRecord>(`/finance/approvals/${stepRecordId}/approve`, {
+      notes: notes || undefined,
+    });
     return response.data;
   },
 
-  async deny(
-    stepRecordId: string,
-    notes?: string,
-  ): Promise<ApprovalStepRecord> {
-    const response = await api.post<ApprovalStepRecord>(
-      `/finance/approvals/${stepRecordId}/deny`,
-      { notes: notes || undefined },
-    );
+  async deny(stepRecordId: string, notes?: string): Promise<ApprovalStepRecord> {
+    const response = await api.post<ApprovalStepRecord>(`/finance/approvals/${stepRecordId}/deny`, {
+      notes: notes || undefined,
+    });
     return response.data;
   },
 };
@@ -295,87 +232,55 @@ export const approvalService = {
 // =============================================================================
 
 export const purchaseRequestService = {
-  async list(params?: {
-    status?: string;
-    fiscalYearId?: string;
-  }): Promise<PurchaseRequest[]> {
-    const response = await api.get<PurchaseRequest[]>(
-      '/finance/purchase-requests',
-      {
-        params: {
-          status: params?.status,
-          fiscal_year_id: params?.fiscalYearId,
-        },
+  async list(params?: { status?: string; fiscalYearId?: string }): Promise<PurchaseRequest[]> {
+    const response = await api.get<PurchaseRequest[]>('/finance/purchase-requests', {
+      params: {
+        status: params?.status,
+        fiscal_year_id: params?.fiscalYearId,
       },
-    );
+    });
     return asArray(response.data);
   },
 
   async get(id: string): Promise<PurchaseRequest> {
-    const response = await api.get<PurchaseRequest>(
-      `/finance/purchase-requests/${id}`,
-    );
+    const response = await api.get<PurchaseRequest>(`/finance/purchase-requests/${id}`);
     return response.data;
   },
 
-  async create(
-    data: Partial<PurchaseRequest>,
-  ): Promise<PurchaseRequest> {
-    const response = await api.post<PurchaseRequest>(
-      '/finance/purchase-requests',
-      data,
-    );
+  async create(data: Partial<PurchaseRequest>): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>('/finance/purchase-requests', data);
     return response.data;
   },
 
-  async update(
-    id: string,
-    data: Partial<PurchaseRequest>,
-  ): Promise<PurchaseRequest> {
-    const response = await api.put<PurchaseRequest>(
-      `/finance/purchase-requests/${id}`,
-      data,
-    );
+  async update(id: string, data: Partial<PurchaseRequest>): Promise<PurchaseRequest> {
+    const response = await api.put<PurchaseRequest>(`/finance/purchase-requests/${id}`, data);
     return response.data;
   },
 
   async submit(id: string): Promise<PurchaseRequest> {
-    const response = await api.post<PurchaseRequest>(
-      `/finance/purchase-requests/${id}/submit`,
-    );
+    const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/submit`);
     return response.data;
   },
 
   async markOrdered(id: string): Promise<PurchaseRequest> {
-    const response = await api.post<PurchaseRequest>(
-      `/finance/purchase-requests/${id}/mark-ordered`,
-    );
+    const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/mark-ordered`);
     return response.data;
   },
 
   async markReceived(id: string): Promise<PurchaseRequest> {
-    const response = await api.post<PurchaseRequest>(
-      `/finance/purchase-requests/${id}/mark-received`,
-    );
+    const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/mark-received`);
     return response.data;
   },
 
-  async markPaid(
-    id: string,
-    actualAmount?: number,
-  ): Promise<PurchaseRequest> {
-    const response = await api.post<PurchaseRequest>(
-      `/finance/purchase-requests/${id}/mark-paid`,
-      undefined,
-      { params: { actual_amount: actualAmount } },
-    );
+  async markPaid(id: string, actualAmount?: number): Promise<PurchaseRequest> {
+    const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/mark-paid`, undefined, {
+      params: { actual_amount: actualAmount },
+    });
     return response.data;
   },
 
   async cancel(id: string): Promise<PurchaseRequest> {
-    const response = await api.post<PurchaseRequest>(
-      `/finance/purchase-requests/${id}/cancel`,
-    );
+    const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/cancel`);
     return response.data;
   },
 };
@@ -386,66 +291,39 @@ export const purchaseRequestService = {
 
 export const expenseReportService = {
   async list(params?: { status?: string }): Promise<ExpenseReport[]> {
-    const response = await api.get<ExpenseReport[]>(
-      '/finance/expense-reports',
-      { params: { status: params?.status } },
-    );
+    const response = await api.get<ExpenseReport[]>('/finance/expense-reports', { params: { status: params?.status } });
     return asArray(response.data);
   },
 
   async get(id: string): Promise<ExpenseReport> {
-    const response = await api.get<ExpenseReport>(
-      `/finance/expense-reports/${id}`,
-    );
+    const response = await api.get<ExpenseReport>(`/finance/expense-reports/${id}`);
     return response.data;
   },
 
   async create(data: Partial<ExpenseReport>): Promise<ExpenseReport> {
-    const response = await api.post<ExpenseReport>(
-      '/finance/expense-reports',
-      data,
-    );
+    const response = await api.post<ExpenseReport>('/finance/expense-reports', data);
     return response.data;
   },
 
-  async update(
-    id: string,
-    data: Partial<ExpenseReport>,
-  ): Promise<ExpenseReport> {
-    const response = await api.put<ExpenseReport>(
-      `/finance/expense-reports/${id}`,
-      data,
-    );
+  async update(id: string, data: Partial<ExpenseReport>): Promise<ExpenseReport> {
+    const response = await api.put<ExpenseReport>(`/finance/expense-reports/${id}`, data);
     return response.data;
   },
 
-  async addLineItem(
-    id: string,
-    data: Partial<ExpenseLineItem>,
-  ): Promise<ExpenseLineItem> {
-    const response = await api.post<ExpenseLineItem>(
-      `/finance/expense-reports/${id}/items`,
-      data,
-    );
+  async addLineItem(id: string, data: Partial<ExpenseLineItem>): Promise<ExpenseLineItem> {
+    const response = await api.post<ExpenseLineItem>(`/finance/expense-reports/${id}/items`, data);
     return response.data;
   },
 
   async submit(id: string): Promise<ExpenseReport> {
-    const response = await api.post<ExpenseReport>(
-      `/finance/expense-reports/${id}/submit`,
-    );
+    const response = await api.post<ExpenseReport>(`/finance/expense-reports/${id}/submit`);
     return response.data;
   },
 
-  async markPaid(
-    id: string,
-    paymentMethod?: string,
-  ): Promise<ExpenseReport> {
-    const response = await api.post<ExpenseReport>(
-      `/finance/expense-reports/${id}/mark-paid`,
-      undefined,
-      { params: { payment_method: paymentMethod } },
-    );
+  async markPaid(id: string, paymentMethod?: string): Promise<ExpenseReport> {
+    const response = await api.post<ExpenseReport>(`/finance/expense-reports/${id}/mark-paid`, undefined, {
+      params: { payment_method: paymentMethod },
+    });
     return response.data;
   },
 };
@@ -456,59 +334,39 @@ export const expenseReportService = {
 
 export const checkRequestService = {
   async list(params?: { status?: string }): Promise<CheckRequest[]> {
-    const response = await api.get<CheckRequest[]>(
-      '/finance/check-requests',
-      { params: { status: params?.status } },
-    );
+    const response = await api.get<CheckRequest[]>('/finance/check-requests', { params: { status: params?.status } });
     return asArray(response.data);
   },
 
   async get(id: string): Promise<CheckRequest> {
-    const response = await api.get<CheckRequest>(
-      `/finance/check-requests/${id}`,
-    );
+    const response = await api.get<CheckRequest>(`/finance/check-requests/${id}`);
     return response.data;
   },
 
   async create(data: Partial<CheckRequest>): Promise<CheckRequest> {
-    const response = await api.post<CheckRequest>(
-      '/finance/check-requests',
-      data,
-    );
+    const response = await api.post<CheckRequest>('/finance/check-requests', data);
     return response.data;
   },
 
-  async update(
-    id: string,
-    data: Partial<CheckRequest>,
-  ): Promise<CheckRequest> {
-    const response = await api.put<CheckRequest>(
-      `/finance/check-requests/${id}`,
-      data,
-    );
+  async update(id: string, data: Partial<CheckRequest>): Promise<CheckRequest> {
+    const response = await api.put<CheckRequest>(`/finance/check-requests/${id}`, data);
     return response.data;
   },
 
   async submit(id: string): Promise<CheckRequest> {
-    const response = await api.post<CheckRequest>(
-      `/finance/check-requests/${id}/submit`,
-    );
+    const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/submit`);
     return response.data;
   },
 
   async issue(id: string, checkNumber: string): Promise<CheckRequest> {
-    const response = await api.post<CheckRequest>(
-      `/finance/check-requests/${id}/issue`,
-      undefined,
-      { params: { check_number: checkNumber } },
-    );
+    const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/issue`, undefined, {
+      params: { check_number: checkNumber },
+    });
     return response.data;
   },
 
   async void(id: string): Promise<CheckRequest> {
-    const response = await api.post<CheckRequest>(
-      `/finance/check-requests/${id}/void`,
-    );
+    const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/void`);
     return response.data;
   },
 };
@@ -519,47 +377,26 @@ export const checkRequestService = {
 
 export const duesService = {
   async listSchedules(): Promise<DuesSchedule[]> {
-    const response = await api.get<DuesSchedule[]>(
-      '/finance/dues-schedules',
-    );
+    const response = await api.get<DuesSchedule[]>('/finance/dues-schedules');
     return asArray(response.data);
   },
 
-  async createSchedule(
-    data: Partial<DuesSchedule>,
-  ): Promise<DuesSchedule> {
-    const response = await api.post<DuesSchedule>(
-      '/finance/dues-schedules',
-      data,
-    );
+  async createSchedule(data: Partial<DuesSchedule>): Promise<DuesSchedule> {
+    const response = await api.post<DuesSchedule>('/finance/dues-schedules', data);
     return response.data;
   },
 
-  async updateSchedule(
-    id: string,
-    data: Partial<DuesSchedule>,
-  ): Promise<DuesSchedule> {
-    const response = await api.put<DuesSchedule>(
-      `/finance/dues-schedules/${id}`,
-      data,
-    );
+  async updateSchedule(id: string, data: Partial<DuesSchedule>): Promise<DuesSchedule> {
+    const response = await api.put<DuesSchedule>(`/finance/dues-schedules/${id}`, data);
     return response.data;
   },
 
-  async generateDues(
-    scheduleId: string,
-  ): Promise<{ generated: number }> {
-    const response = await api.post<{ generated: number }>(
-      `/finance/dues-schedules/${scheduleId}/generate`,
-    );
+  async generateDues(scheduleId: string): Promise<{ generated: number }> {
+    const response = await api.post<{ generated: number }>(`/finance/dues-schedules/${scheduleId}/generate`);
     return response.data;
   },
 
-  async listMemberDues(params?: {
-    scheduleId?: string;
-    userId?: string;
-    status?: string;
-  }): Promise<MemberDues[]> {
+  async listMemberDues(params?: { scheduleId?: string; userId?: string; status?: string }): Promise<MemberDues[]> {
     const response = await api.get<MemberDues[]>('/finance/dues', {
       params: {
         schedule_id: params?.scheduleId,
@@ -577,23 +414,14 @@ export const duesService = {
       paymentMethod?: string;
       transactionReference?: string;
       notes?: string;
-    },
+    }
   ): Promise<MemberDues> {
-    const response = await api.put<MemberDues>(
-      `/finance/dues/${duesId}`,
-      data,
-    );
+    const response = await api.put<MemberDues>(`/finance/dues/${duesId}`, data);
     return response.data;
   },
 
-  async waive(
-    duesId: string,
-    reason: string,
-  ): Promise<MemberDues> {
-    const response = await api.post<MemberDues>(
-      `/finance/dues/${duesId}/waive`,
-      { reason },
-    );
+  async waive(duesId: string, reason: string): Promise<MemberDues> {
+    const response = await api.post<MemberDues>(`/finance/dues/${duesId}/waive`, { reason });
     return response.data;
   },
 
@@ -609,16 +437,13 @@ export const duesService = {
 // Export
 // =============================================================================
 
-
 // =============================================================================
 // Dashboard
 // =============================================================================
 
 export const financeDashboardService = {
   async getDashboard(): Promise<FinanceDashboard> {
-    const response = await api.get<FinanceDashboard>(
-      '/finance/dashboard',
-    );
+    const response = await api.get<FinanceDashboard>('/finance/dashboard');
     return response.data;
   },
 };

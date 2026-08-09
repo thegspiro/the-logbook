@@ -1,6 +1,7 @@
-# Application Review — Training (Tier B, 2nd pass)
+# Application Review — Training (Tier B)
 
-**Prefix:** `TR2` · **Iteration:** B18 · **Reviewed:** 2026-08-06
+**Prefix:** `TR2` · **Iteration:** B18 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** the largest module — 8 endpoint files (~8,100 L, 154 endpoints) + ~13
 services (~9,300 L). Focus this pass: `external_training.py` +
@@ -9,6 +10,62 @@ services (~9,300 L). Focus this pass: `external_training.py` +
 **Prior audit:** `docs/module-audit/training.md` (iteration 18) — TR-1 (PHI leak),
 TR-2 (record `user_id`), TR-3 (external user-mapping leak) fixed; TR-4 (year
 default), TR-5 (auto-approve SoD), TR-6 (external/enhancement FKs) left open.
+
+---
+
+## Pass 2 (2026-08-08) — six-lens sweep across all 13 services
+
+Re-verified the pass-1 TR-6 fixes hold (`update_category_mapping` in-org validation
++ org-scoped enrichment; `provider.default_category_id` validated; enhancement
+by-id methods org-scoped) and TR-5 stays correctly flagged. Sweeping the
+projection-read-leak lens across the whole module — its proven weak spot — surfaced
+**two more live cross-org read-leaks the pass-1 external-training focus didn't
+reach**, plus two consistency gaps. **4 fixes.**
+
+### TR-7 — MED — Category-hours breakdown leaked another org's category name/code — ✅ FIXED
+
+`GET .../category-hours` (self-or-training-officer) sums a member's records by
+`category_id`, then looked up the categories with
+`select(TrainingCategory).where(id.in_(cat_ids))` — **no org filter** — and
+projected `name`/`code`/`registry_code`. The `category_id` on a record is
+client-supplied and was **never validated in-org** (neither `create_record` nor
+`update_record` checked it; the update path blind-`setattr`s it), so an org-A
+training officer could set one of their own records' `category_id` to an org-B
+category UUID and read that category's name/code/registry_code back — the live TR-3
+shape, for categories. **Fix (both the leak and its root cause):** org-scope the
+breakdown lookup, **and** validate a client `category_id` in-org on `create_record`
+and `update_record` (404 if foreign). 2 regression tests (create + update reject a
+foreign category).
+
+### TR-8 — MED-LOW — Individual training PDF leaked an arbitrary user's name across orgs — ✅ FIXED
+
+`generate_individual_pdf` (`training.manage`, `user_id` from the request body)
+fetched the member with `select(User).where(User.id == user_id)` — no org filter —
+and rendered `first_name last_name` into the PDF title. The records below it are
+org-scoped (a foreign user yields an empty report), but the **title still projected
+the foreign member's name**. **Fix:** org-scope the User lookup
+(`User.organization_id == organization_id`), matching the records query.
+
+### TR-9 / TR-10 — LOW — Two enrichment/lookup reads not org-scoped (consistency) — ✅ FIXED
+
+- `list_user_mappings` enriched `internal_user_name`/`_email` via
+  `select(User.full_name, User.email).where(User.id == …)` with no org filter — the
+  lone TR-3-shape read whose two sibling paths already carry the org filter. Not
+  currently exploitable (`internal_user_id` is in-org-guaranteed by the write
+  paths), but tightened to match.
+- The **bulk** record-create's expiration lookup fetched `TrainingCourse` by id
+  with no org filter, while the single-create at the top of the same file scopes it.
+  Influence-only (`expiration_months` isn't projected), fixed for consistency.
+
+**Flagged (unchanged):** TR-5 (auto-approve branch spawns a COMPLETED self-credit
+with no reviewer — SoD product decision, KNOWN_LIMITATIONS), TR-4 (year default),
+TR-6 residual (bulk_enroll / sync re-fetch backstops). LOW dangling-FK stores that
+are **not** projected (session-create category/program/phase/requirement/instructor,
+recert `source_requirement_id`, recurring `template_id`, waiver `requirement_ids`)
+are noted for a future FK-hardening batch, not fixed here — no read-back leak.
+**Lens 6 (latent-500) clean:** submission endpoints route service `ValueError`/
+`PermissionError` through `handle_service_errors`; enhancement endpoints each have
+`except ValueError→400`.
 
 ---
 

@@ -1,4 +1,76 @@
-# Application Review — Apparatus (Tier B, 2nd pass)
+# Application Review — Apparatus (Tier B)
+
+**Prefix:** `AP2` · **Iteration:** B2 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06)
+
+Re-verified pass 1: AP-1 create-path FK validation intact (`create_operator`,
+`create_photo`, `create_document`, `create_maintenance_record` all validate
+in-org); AP-2 `.is_(True)` intact. Then applied the B1 lesson — **can update
+paths change FKs the create path validates, bypassing the guard?** — across every
+FK-accepting update method. They can, and several are cross-tenant read leaks.
+
+### AP2-1 — MED — Update paths didn't re-validate client FKs that are eager-loaded into responses — ✅ FIXED
+
+**What:** the create/change paths validate their client-supplied FKs in-org, but
+the corresponding **update** methods did a blind `model_dump(exclude_unset=True)`
++ `setattr` loop with no validation. Each of these FKs is **eager-loaded into a
+response relationship**, so a foreign id stored via update is not a dangling
+reference — it is projected back into the caller's response, leaking the other
+org's row (the exact vector `create_operator`'s comment describes and guards):
+
+| Update method | Unvalidated FK(s) | Eager-loaded into | create/change counterpart validates? |
+|---|---|---|---|
+| `update_apparatus` | `apparatus_type_id`, `status_id`, `primary_station_id` | `apparatus_type`, `status_record`, `primary_station` | type/status yes (`create_apparatus`, `change_apparatus_status`); **station no — unvalidated on create too** |
+| `update_operator` | `evoc_level_id` | `evoc_level` | yes (`create_operator`) |
+| `update_maintenance_record` | `maintenance_type_id` | `maintenance_type` | yes (`create_maintenance_record`) |
+
+`update_apparatus` additionally copied an unvalidated `status_id` into
+`ApparatusStatusHistory`, so the forgery persisted into the status audit trail.
+The operator case is the sharpest: `ApparatusOperatorUpdate` blocks `user_id`/
+`apparatus_id` (so no member-PII leak), but `evoc_level_id` was updatable and the
+operator response eager-loads `evoc_level`.
+
+**Fix:** each update method now validates the supplied FK in-org before writing,
+reusing the **same validator the create path already uses** — `get_apparatus_type`
+/ `get_apparatus_status` for apparatus, `get_maintenance_type` for maintenance,
+`assert_in_org(EvocLevel, …, allow_none=True)` for the operator EVOC level — and
+only when the id was actually supplied (`exclude_unset` semantics preserved). The
+**station** FK was the one eager-loaded apparatus FK unvalidated on *both* paths,
+so `create_apparatus` and `update_apparatus` both gained
+`assert_in_org(Location, primary_station_id, …, allow_none=True)` (`Location` is
+org-scoped, confirmed in the A8 review). All three update endpoints already
+convert `ValueError → 400` via `safe_error_detail`, so the rejections surface
+cleanly. 6 unit tests added (`test_apparatus_service.py`): foreign type/status/
+station/evoc/maintenance-type each rejected, plus a no-change path that makes no
+extra query.
+
+### AP2-2 — LOW — Dangling (non-projected) FKs still unvalidated — 🚩 OPEN
+
+The FKs that are **not** eager-loaded into any response — so they can only dangle,
+not leak — remain unvalidated on create *and* update: `apparatus.required_evoc_level_id`
+(SET NULL, not projected), `maintenance.component_id` / `maintenance.service_provider_id`,
+and `component_note.service_provider_id`. These are the same integrity-only XC-1
+shape pass 1 hardened in other modules (MSG-2, GF-6) as defense-in-depth. Left
+open rather than fixed in this iteration to keep the change scoped to the
+confirmed read-leak set; recommend a follow-up sweep validating them via the
+shared `assert_in_org` on both paths. No disclosure risk in the interim (nothing
+reads them back cross-tenant).
+
+### MS2-4 class checked — not present here
+
+The B1 defect (a response schema declaring flat name fields the service never
+populates) does **not** recur in the paths reviewed: the apparatus/operator/
+maintenance responses surface related-entity names through **eager-loaded
+relationships** (`apparatus_type`, `status_record`, `evoc_level`,
+`maintenance_type`), which are populated, not blank scalar fields.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `AP2` · **Iteration:** B2 · **Reviewed:** 2026-08-06
 

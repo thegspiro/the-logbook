@@ -198,33 +198,73 @@ export function enumLabel(value: string | undefined | null): string {
 }
 
 export const INSPECTION_TYPES = [
-  'fire', 'building_code', 'health', 'ada', 'environmental',
-  'insurance', 'routine', 'other',
+  'fire',
+  'building_code',
+  'health',
+  'ada',
+  'environmental',
+  'insurance',
+  'routine',
+  'other',
 ] as const;
 
 export const MAINTENANCE_CATEGORIES = [
-  'preventive', 'repair', 'inspection', 'renovation',
-  'cleaning', 'safety', 'other',
+  'preventive',
+  'repair',
+  'inspection',
+  'renovation',
+  'cleaning',
+  'safety',
+  'other',
 ] as const;
 
 export const ROOM_TYPES = [
-  'apparatus_bay', 'bunk_room', 'kitchen', 'bathroom', 'office',
-  'training_room', 'storage', 'mechanical', 'lobby', 'common_area',
-  'laundry', 'gym', 'decontamination', 'dispatch', 'other',
+  'apparatus_bay',
+  'bunk_room',
+  'kitchen',
+  'bathroom',
+  'office',
+  'training_room',
+  'storage',
+  'mechanical',
+  'lobby',
+  'common_area',
+  'laundry',
+  'gym',
+  'decontamination',
+  'dispatch',
+  'other',
 ] as const;
 
 export const SYSTEM_TYPES = [
-  'hvac', 'electrical', 'plumbing', 'fire_suppression', 'fire_alarm',
-  'security', 'roofing', 'structural', 'elevator', 'generator',
-  'communications', 'doors_windows', 'flooring', 'painting',
-  'landscaping', 'parking', 'exhaust_extraction', 'cascade_air',
-  'decontamination', 'bay_door', 'air_quality_monitor', 'ppe_cleaning',
-  'alerting_system', 'shore_power', 'other',
+  'hvac',
+  'electrical',
+  'plumbing',
+  'fire_suppression',
+  'fire_alarm',
+  'security',
+  'roofing',
+  'structural',
+  'elevator',
+  'generator',
+  'communications',
+  'doors_windows',
+  'flooring',
+  'painting',
+  'landscaping',
+  'parking',
+  'exhaust_extraction',
+  'cascade_air',
+  'decontamination',
+  'bay_door',
+  'air_quality_monitor',
+  'ppe_cleaning',
+  'alerting_system',
+  'shore_power',
+  'other',
 ] as const;
 
-export const ZONE_CLASSIFICATIONS = [
-  'hot', 'transition', 'cold', 'unclassified',
-] as const;
+export const ZONE_CLASSIFICATIONS = ['hot', 'transition', 'cold', 'unclassified'] as const;
 
 /** Color mapping for zone classification badges */
 export const ZONE_CLASSIFICATION_COLORS: Record<string, string> = {

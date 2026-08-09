@@ -20,8 +20,8 @@ produced. This does not reconcile the two apparatus tables — that remains open
 it stops the mismatch from breaking the daily equipment check, which is a core
 workflow in the shift guides.
 
-Revision ID: 20260808_0001
-Revises: 20260807_0009
+Revision ID: 20260808_0002
+Revises: 20260808_0001
 Create Date: 2026-08-08 00:00:00.000000
 
 """
@@ -30,8 +30,10 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260808_0001"
-down_revision = "20260807_0009"
+revision = "20260808_0002"
+# Renumbered on merge: main landed 20260808_0001 (skill test validation) off
+# the same parent, so this chains after it rather than forking the head.
+down_revision = "20260808_0001"
 branch_labels = None
 depends_on = None
 

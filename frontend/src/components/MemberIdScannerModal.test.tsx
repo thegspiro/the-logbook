@@ -6,9 +6,7 @@ import { MemberIdScannerModal } from './MemberIdScannerModal';
 // Mock html5-qrcode
 const mockStart = vi.fn().mockResolvedValue(undefined);
 const mockStop = vi.fn().mockResolvedValue(undefined);
-const mockGetCameras = vi.fn().mockResolvedValue([
-  { id: 'cam-1', label: 'Front Camera' },
-]);
+const mockGetCameras = vi.fn().mockResolvedValue([{ id: 'cam-1', label: 'Front Camera' }]);
 vi.mock('html5-qrcode', async (importOriginal) => {
   const actual = await importOriginal<typeof import('html5-qrcode')>();
   return {
@@ -17,7 +15,7 @@ vi.mock('html5-qrcode', async (importOriginal) => {
       vi.fn().mockImplementation(function () {
         return { start: mockStart, stop: mockStop };
       }),
-      { getCameras: (...args: unknown[]) => mockGetCameras(...args) as unknown },
+      { getCameras: (...args: unknown[]) => mockGetCameras(...args) as unknown }
     ),
   };
 });
@@ -70,9 +68,7 @@ describe('MemberIdScannerModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetCameras.mockResolvedValue([
-      { id: 'cam-1', label: 'Front Camera' },
-    ]);
+    mockGetCameras.mockResolvedValue([{ id: 'cam-1', label: 'Front Camera' }]);
   });
 
   it('should not render when closed', () => {
@@ -81,7 +77,7 @@ describe('MemberIdScannerModal', () => {
         isOpen={false}
         onClose={defaultProps.onClose}
         onMemberIdentified={defaultProps.onMemberIdentified}
-      />,
+      />
     );
 
     expect(screen.queryByText('Scan Member ID')).not.toBeInTheDocument();
@@ -102,17 +98,13 @@ describe('MemberIdScannerModal', () => {
   it('should display instruction text', () => {
     render(<MemberIdScannerModal {...defaultProps} />);
 
-    expect(
-      screen.getByText(/Point the camera at a member/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Point the camera at a member/)).toBeInTheDocument();
   });
 
   it('should have a close button', () => {
     render(<MemberIdScannerModal {...defaultProps} />);
 
-    expect(
-      screen.getByRole('button', { name: /close scanner/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /close scanner/i })).toBeInTheDocument();
   });
 
   it('should call onClose when close button is clicked', async () => {
@@ -131,12 +123,7 @@ describe('MemberIdScannerModal', () => {
       expect(mockGetCameras).toHaveBeenCalledWith();
     });
     await waitFor(() => {
-      expect(mockStart).toHaveBeenCalledWith(
-        'cam-1',
-        expect.any(Object),
-        expect.any(Function),
-        expect.any(Function),
-      );
+      expect(mockStart).toHaveBeenCalledWith('cam-1', expect.any(Object), expect.any(Function), expect.any(Function));
     });
   });
 
@@ -153,7 +140,7 @@ describe('MemberIdScannerModal', () => {
         'cam-back',
         expect.any(Object),
         expect.any(Function),
-        expect.any(Function),
+        expect.any(Function)
       );
     });
   });

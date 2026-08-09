@@ -29,30 +29,30 @@ const MAX_CACHE_ENTRIES = 200;
  * and caching them — even in-memory — conflicts with HIPAA §164.312.
  */
 const UNCACHEABLE_PREFIXES = [
-  '/auth/',           // credentials, session tokens, password ops
-  '/users/',          // profiles, contact info, emergency contacts, audit history
-  '/security/',       // alerts, audit log integrity, monitoring
-  '/audit-logs',      // org audit trail: who did what, when, from where
-  '/ip-security/',    // IP exceptions, blocked attempts, country rules
+  '/auth/', // credentials, session tokens, password ops
+  '/users', // roster + profiles, contact info, emergency contacts (no trailing slash so GET /users list is covered too)
+  '/security/', // alerts, audit log integrity, monitoring
+  '/audit-logs', // org audit trail: who did what, when, from where
+  '/ip-security/', // IP exceptions, blocked attempts, country rules
   '/medical-screening/', // member medical screening records & compliance (PHI)
-  '/message-history',  // sent-message log: recipient emails, subjects (PII)
-  '/roles/my/',       // current user's permissions (security-sensitive)
-  '/notifications/my/', // user-specific notification state
+  '/message-history', // sent-message log: recipient emails, subjects (PII)
+  '/roles/my/', // current user's permissions (security-sensitive)
+  '/notifications/my', // user-specific notification state (list too, not just sub-paths)
   '/notifications/logs', // delivery logs: recipient identities (PII)
   '/email-templates/scheduled', // scheduled emails: recipient PII
-  '/officers',        // office holders: member names, emails, phone numbers (PII)
-  '/training/waivers',  // medical/health waivers (PHI)
+  '/officers', // office holders: member names, emails, phone numbers (PII)
+  '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data
-  '/training/stats/user/',    // individual compliance stats
-  '/training/reports/user/',  // individual training reports
+  '/training/stats/user/', // individual compliance stats
+  '/training/reports/user/', // individual training reports
   '/training/compliance-summary/', // per-member compliance status
   '/training/requirements/progress/', // per-member requirement progress
   '/training/category-hours/', // per-member hours by category (GET /category-hours/{user_id})
-  '/training/competency/',    // per-member competency evaluations
+  '/training/competency/', // per-member competency evaluations
   '/training/recertification/tasks/', // per-member renewal tasks
   '/training/module-config/my-training', // current user's full training record
-  '/training/programs/enrollments/',  // per-member program enrollment & progress
+  '/training/programs/enrollments/', // per-member program enrollment & progress
   '/training/instructors/qualifications', // per-member instructor credentials
   '/training/compliance-matrix', // org-wide per-member compliance rollup (names + status)
   '/training/certifications/expiring', // member cert-expiry list (names, numbers)
@@ -61,29 +61,31 @@ const UNCACHEABLE_PREFIXES = [
   '/training/records', // individual training records (scores, certs) — member PHI-adjacent
   '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
   '/facilities/emergency-contacts', // emergency contact PII
-  '/messages/',       // private member-to-member messages
-  '/admin-hours/',    // individual work hours and clock-in records
+  '/messages', // private member-to-member messages (list + thread; no trailing slash covers GET /messages)
+  '/admin-hours/', // individual work hours and clock-in records
   '/prospective-members/', // applicant PII (name, contact, documents)
-  '/scheduling/',     // member shift assignments and availability
-  '/errors/',         // error logs may contain user context and tracebacks
-  '/organization/',   // org settings including auth config, API keys
-  '/elections',       // voter lists, ballots, election results (no trailing slash so the list endpoint GET /elections is covered too)
+  '/scheduling/', // member shift assignments and availability
+  '/errors', // error logs (incl. GET /errors list) may contain user context and tracebacks
+  '/organization/', // org settings including auth config, API keys
+  '/elections', // voter lists, ballots, election results (no trailing slash so the list endpoint GET /elections is covered too)
   '/minutes-records/', // meeting minutes with potentially sensitive discussions
-  '/forms/',          // form submissions may contain PII
-  '/inventory/users/',       // member-specific inventory, issuances & history (PII)
-  '/inventory/checkout/',    // GET active/overdue: who currently holds equipment (PII)
+  '/meetings', // meeting list + detail: attendee PII, notes/motions/agenda (no trailing slash covers both)
+  '/event-requests', // external event-request intake: contact name/email/phone, venue address (PII)
+  '/forms/', // form submissions may contain PII
+  '/inventory/users/', // member-specific inventory, issuances & history (PII)
+  '/inventory/checkout/', // GET active/overdue: who currently holds equipment (PII)
   '/inventory/members-summary', // per-member inventory roster (names, membership numbers)
-  '/inventory/members/',     // member size preferences — body measurements (PII)
-  '/inventory/my/',          // current user's own size preferences (PII)
-  '/inventory/charges',      // per-member cost-recovery / financial liability (PII)
-  '/store/',               // member orders: names, email/phone, shipping addresses, payment references, amounts owed (PII)
-  '/documents/',           // private organizational documents
-  '/compliance/',          // compliance attestations, member compliance data (PII)
-  '/integrations/',        // integration config may contain API keys, webhook URLs, secrets
-  '/finance/',             // budgets, purchase/expense/check requests & reimbursements tied to members (PII)
-  '/grants/',              // grant applications and donor/fundraising records (PII)
-  '/roles/user/',          // an arbitrary user's full permission set (authz data)
-  '/roles/admin-access',   // admin-status probe (authz decision — must not go stale)
+  '/inventory/members/', // member size preferences — body measurements (PII)
+  '/inventory/my/', // current user's own size preferences (PII)
+  '/inventory/charges', // per-member cost-recovery / financial liability (PII)
+  '/store/', // member orders: names, email/phone, shipping addresses, payment references, amounts owed (PII)
+  '/documents', // private organizational documents (list + detail)
+  '/compliance/', // compliance attestations, member compliance data (PII)
+  '/integrations', // integration config (list + detail): API keys, webhook URLs, secrets
+  '/finance/', // budgets, purchase/expense/check requests & reimbursements tied to members (PII)
+  '/grants/', // grant applications and donor/fundraising records (PII)
+  '/roles/user/', // an arbitrary user's full permission set (authz data)
+  '/roles/admin-access', // admin-status probe (authz decision — must not go stale)
   '/facilities/occupants', // facility occupant PII
   '/facilities/access-keys', // physical building access-key inventory
 ] as const;
@@ -95,9 +97,9 @@ const UNCACHEABLE_PREFIXES = [
  * id sits mid-path, so a `startsWith` prefix cannot target them.
  */
 const UNCACHEABLE_SUBSTRINGS = [
-  '/rsvps',              // event attendance roster (member names/status — PII)
-  '/rsvp-history',       // per-member attendance/decline history (PII) — not matched by '/rsvps'
-  '/eligible-members',   // returns member first/last name + email (PII)
+  '/rsvps', // event attendance roster (member names/status — PII)
+  '/rsvp-history', // per-member attendance/decline history (PII) — not matched by '/rsvps'
+  '/eligible-members', // returns member first/last name + email (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)
 ] as const;
@@ -119,10 +121,7 @@ const pendingRevalidations = new Set<string>();
 /**
  * Build a deterministic cache key from a URL path and optional query params.
  */
-export function getCacheKey(
-  url: string,
-  params?: Record<string, unknown>,
-): string {
+export function getCacheKey(url: string, params?: Record<string, unknown>): string {
   if (!params || Object.keys(params).length === 0) return url;
 
   const sorted = Object.entries(params)

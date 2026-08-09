@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { flattenCompartmentTree } from './compartmentTree';
 import type { CheckTemplateCompartment } from '../types/equipmentCheck';
 
-function comp(
-  over: Partial<CheckTemplateCompartment> & { id: string; name: string },
-): CheckTemplateCompartment {
+function comp(over: Partial<CheckTemplateCompartment> & { id: string; name: string }): CheckTemplateCompartment {
   return {
     templateId: 'tmpl',
     sortOrder: 0,
@@ -74,17 +72,9 @@ describe('flattenCompartmentTree', () => {
     const names = compartments[0]?.items.map((i) => i.name);
     // The grandchild's item must NOT be dropped (the bug this fixes).
     expect(names).toContain('IV Catheter');
-    expect(names).toEqual([
-      'Flashlight',
-      '› Bag: Airway Bag',
-      'BVM',
-      '› › Pack: IV Pack',
-      'IV Catheter',
-    ]);
+    expect(names).toEqual(['Flashlight', '› Bag: Airway Bag', 'BVM', '› › Pack: IV Pack', 'IV Catheter']);
     // Storage path reflects the full location for reports.
-    expect(storagePathByItemId.get('i3')).toBe(
-      'Compartment › Airway Bag › IV Pack',
-    );
+    expect(storagePathByItemId.get('i3')).toBe('Compartment › Airway Bag › IV Pack');
     expect(storagePathByItemId.get('i1')).toBe('Compartment');
   });
 
@@ -106,9 +96,7 @@ describe('flattenCompartmentTree', () => {
         items: [],
       }),
     ]);
-    const headers = compartments[0]?.items
-      .filter((i) => i.checkType === 'header')
-      .map((i) => i.name);
+    const headers = compartments[0]?.items.filter((i) => i.checkType === 'header').map((i) => i.name);
     expect(headers).toEqual(['› First', '› Second']);
   });
 

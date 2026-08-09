@@ -45,7 +45,12 @@ describe('EquipmentRequestsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetEquipmentRequests.mockResolvedValue({ requests: [makeRequest()] });
-    mockGetItems.mockResolvedValue({ items: [{ id: 'item-9', name: 'Radio XTS 5000', tracking_type: 'individual' }], total: 1, skip: 0, limit: 500 });
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-9', name: 'Radio XTS 5000', tracking_type: 'individual' }],
+      total: 1,
+      skip: 0,
+      limit: 500,
+    });
   });
 
   it('renders page title and subtitle', async () => {
@@ -188,7 +193,13 @@ describe('EquipmentRequestsPage', () => {
     mockGetEquipmentRequests.mockResolvedValue({
       requests: [makeRequest({ status: 'approved', request_type: 'issuance', item_id: 'item-9', quantity: 2 })],
     });
-    mockFulfillEquipmentRequest.mockResolvedValue({ id: 'req-1', status: 'fulfilled', fulfillment_type: 'issuance', fulfillment_reference_id: 'iss-1', message: 'ok' });
+    mockFulfillEquipmentRequest.mockResolvedValue({
+      id: 'req-1',
+      status: 'fulfilled',
+      fulfillment_type: 'issuance',
+      fulfillment_reference_id: 'iss-1',
+      message: 'ok',
+    });
     renderWithRouter(<EquipmentRequestsPage />);
     await waitFor(() => {
       expect(screen.getByText('Radio XTS 5000')).toBeInTheDocument();
@@ -209,7 +220,9 @@ describe('EquipmentRequestsPage', () => {
 
   it('displays fulfillment details for fulfilled requests', async () => {
     mockGetEquipmentRequests.mockResolvedValue({
-      requests: [makeRequest({ status: 'fulfilled', fulfillment_type: 'issuance', fulfilled_at: '2026-01-16T10:00:00Z' })],
+      requests: [
+        makeRequest({ status: 'fulfilled', fulfillment_type: 'issuance', fulfilled_at: '2026-01-16T10:00:00Z' }),
+      ],
     });
     renderWithRouter(<EquipmentRequestsPage />);
     await waitFor(() => {

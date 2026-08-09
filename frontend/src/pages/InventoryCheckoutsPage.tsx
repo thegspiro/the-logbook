@@ -6,15 +6,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import {
-  Package,
-  AlertTriangle,
-  RefreshCw,
-  ArrowDownToLine,
-  Clock,
-  Search,
-  CalendarClock,
-} from 'lucide-react';
+import { Package, AlertTriangle, RefreshCw, ArrowDownToLine, Clock, Search, CalendarClock } from 'lucide-react';
 import { inventoryService } from '../services/api';
 import type { UserCheckoutItem } from '../services/api';
 import { MobileCheckoutCard } from '../components/ux/MobileCheckoutCard';
@@ -43,7 +35,12 @@ export const InventoryCheckoutsPage: React.FC = () => {
   const [returnCondition, setReturnCondition] = useState('good');
   const [damageNotes, setDamageNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [extendModal, setExtendModal] = useState<{ open: boolean; checkoutId: string; itemName: string; currentDue: string }>({ open: false, checkoutId: '', itemName: '', currentDue: '' });
+  const [extendModal, setExtendModal] = useState<{
+    open: boolean;
+    checkoutId: string;
+    itemName: string;
+    currentDue: string;
+  }>({ open: false, checkoutId: '', itemName: '', currentDue: '' });
   const [extendDate, setExtendDate] = useState('');
 
   const fetchCheckouts = useCallback(async () => {
@@ -116,17 +113,21 @@ export const InventoryCheckoutsPage: React.FC = () => {
     : currentList;
 
   const formatDate = (dateString: string) =>
-    formatDateCustom(dateString, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }, tz);
+    formatDateCustom(
+      dateString,
+      {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      },
+      tz
+    );
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center space-y-4" role="status" aria-live="polite">
-          <RefreshCw className="w-10 h-10 text-theme-text-muted animate-spin" aria-hidden="true" />
+          <RefreshCw className="text-theme-text-muted h-10 w-10 animate-spin" aria-hidden="true" />
           <p className="text-theme-text-secondary text-sm">Loading checkouts...</p>
         </div>
       </div>
@@ -135,33 +136,39 @@ export const InventoryCheckoutsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-3 min-w-0">
-            <div className="bg-blue-600 rounded-lg p-2 shrink-0">
-              <Package className="w-6 h-6 text-white" aria-hidden="true" />
+        <div className="mb-8 flex items-center justify-between">
+          <div className="flex min-w-0 items-center space-x-3">
+            <div className="shrink-0 rounded-lg bg-blue-600 p-2">
+              <Package className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-theme-text-primary text-xl sm:text-2xl font-bold">Inventory Checkouts</h1>
-              <p className="text-theme-text-secondary text-sm hidden sm:block">
+              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Inventory Checkouts</h1>
+              <p className="text-theme-text-secondary hidden text-sm sm:block">
                 Manage active and overdue equipment checkouts
               </p>
             </div>
           </div>
           <button
-            onClick={() => { void fetchCheckouts(); }}
-            className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg border border-theme-surface-border transition-colors shrink-0"
+            onClick={() => {
+              void fetchCheckouts();
+            }}
+            className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary border-theme-surface-border flex shrink-0 items-center space-x-2 rounded-lg border px-3 py-2 transition-colors sm:px-4"
           >
-            <RefreshCw className="w-4 h-4" aria-hidden="true" />
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
-            <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
+          <div
+            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"
+            role="alert"
+            aria-live="assertive"
+          >
+            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}
 
@@ -171,16 +178,16 @@ export const InventoryCheckoutsPage: React.FC = () => {
             onClick={() => setActiveTab('active')}
             role="tab"
             aria-selected={activeTab === 'active'}
-            className={`px-4 py-3 text-sm font-medium flex items-center gap-2 ${
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium ${
               activeTab === 'active'
-                ? 'text-blue-700 dark:text-blue-400 border-b-2 border-blue-500'
+                ? 'border-b-2 border-blue-500 text-blue-700 dark:text-blue-400'
                 : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
-            <Clock className="w-4 h-4" aria-hidden="true" />
+            <Clock className="h-4 w-4" aria-hidden="true" />
             Active Checkouts
             {activeCheckouts.length > 0 && (
-              <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+              <span className="ml-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
                 {activeCheckouts.length}
               </span>
             )}
@@ -189,16 +196,16 @@ export const InventoryCheckoutsPage: React.FC = () => {
             onClick={() => setActiveTab('overdue')}
             role="tab"
             aria-selected={activeTab === 'overdue'}
-            className={`px-4 py-3 text-sm font-medium flex items-center gap-2 ${
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium ${
               activeTab === 'overdue'
-                ? 'text-red-700 dark:text-red-400 border-b-2 border-red-500'
+                ? 'border-b-2 border-red-500 text-red-700 dark:text-red-400'
                 : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
-            <AlertTriangle className="w-4 h-4" aria-hidden="true" />
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
             Overdue
             {overdueCheckouts.length > 0 && (
-              <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
+              <span className="ml-1 rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-700 dark:bg-red-500/20 dark:text-red-400">
                 {overdueCheckouts.length}
               </span>
             )}
@@ -208,18 +215,24 @@ export const InventoryCheckoutsPage: React.FC = () => {
         {/* Search */}
         <div className="mb-6">
           <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-theme-text-muted" aria-hidden="true" />
-            <label htmlFor="checkout-search" className="sr-only">Search checkouts</label>
+            <Search
+              className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform"
+              aria-hidden="true"
+            />
+            <label htmlFor="checkout-search" className="sr-only">
+              Search checkouts
+            </label>
             <input
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
               id="checkout-search"
               type="text"
-              aria-label="Search by item or member name..." placeholder="Search by item or member name..."
+              aria-label="Search by item or member name..."
+              placeholder="Search by item or member name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="form-input pl-10 placeholder-theme-text-muted pr-4"
+              className="form-input placeholder-theme-text-muted pr-4 pl-10"
             />
           </div>
         </div>
@@ -228,8 +241,8 @@ export const InventoryCheckoutsPage: React.FC = () => {
         <div role="tabpanel">
           {filteredList.length === 0 ? (
             <div className="card-secondary p-8 text-center">
-              <Package className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
-              <h3 className="text-lg font-semibold text-theme-text-primary mb-2">
+              <Package className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
+              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">
                 {activeTab === 'active' ? 'No Active Checkouts' : 'No Overdue Checkouts'}
               </h3>
               <p className="text-theme-text-muted">
@@ -240,99 +253,134 @@ export const InventoryCheckoutsPage: React.FC = () => {
             </div>
           ) : (
             <>
-            {/* Mobile card view */}
-            <div className="sm:hidden space-y-3">
-              {filteredList.map((checkout) => (
-                <MobileCheckoutCard
-                  key={checkout.checkout_id}
-                  itemName={checkout.item_name}
-                  memberName={checkout.user_name || undefined}
-                  checkoutDate={formatDate(checkout.checked_out_at)}
-                  dueDate={checkout.expected_return_at ? formatDate(checkout.expected_return_at) : undefined}
-                  isOverdue={checkout.is_overdue}
-                  onCheckIn={() => openCheckInModal(checkout.checkout_id, checkout.item_name)}
-                  onExtend={() => { setExtendModal({ open: true, checkoutId: checkout.checkout_id, itemName: checkout.item_name, currentDue: checkout.expected_return_at || '' }); setExtendDate(''); }}
-                />
-              ))}
-              <div className="text-center py-2 text-xs text-theme-text-muted">
-                {filteredList.length} checkout{filteredList.length !== 1 ? 's' : ''}
+              {/* Mobile card view */}
+              <div className="space-y-3 sm:hidden">
+                {filteredList.map((checkout) => (
+                  <MobileCheckoutCard
+                    key={checkout.checkout_id}
+                    itemName={checkout.item_name}
+                    memberName={checkout.user_name || undefined}
+                    checkoutDate={formatDate(checkout.checked_out_at)}
+                    dueDate={checkout.expected_return_at ? formatDate(checkout.expected_return_at) : undefined}
+                    isOverdue={checkout.is_overdue}
+                    onCheckIn={() => openCheckInModal(checkout.checkout_id, checkout.item_name)}
+                    onExtend={() => {
+                      setExtendModal({
+                        open: true,
+                        checkoutId: checkout.checkout_id,
+                        itemName: checkout.item_name,
+                        currentDue: checkout.expected_return_at || '',
+                      });
+                      setExtendDate('');
+                    }}
+                  />
+                ))}
+                <div className="text-theme-text-muted py-2 text-center text-xs">
+                  {filteredList.length} checkout{filteredList.length !== 1 ? 's' : ''}
+                </div>
               </div>
-            </div>
-            {/* Desktop table view */}
-            <div className="hidden sm:block card-secondary overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-theme-surface-border bg-theme-surface">
-                      <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item Name</th>
-                      <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
-                      <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Checkout Date</th>
-                      <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Due Date</th>
-                      <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
-                      <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredList.map((checkout) => (
-                      <tr
-                        key={checkout.checkout_id}
-                        className={`border-b border-theme-surface-border hover:bg-theme-surface-hover ${
-                          checkout.is_overdue ? 'bg-red-500/5' : ''
-                        }`}
-                      >
-                        <td className="p-3">
-                          <p className="text-theme-text-primary font-medium text-sm">{checkout.item_name}</p>
-                        </td>
-                        <td className="hidden sm:table-cell p-3 text-theme-text-secondary text-sm">
-                          {checkout.user_name || '--'}
-                        </td>
-                        <td className="hidden sm:table-cell p-3 text-theme-text-secondary text-sm">
-                          {formatDate(checkout.checked_out_at)}
-                        </td>
-                        <td className="hidden sm:table-cell p-3 text-theme-text-secondary text-sm">
-                          {checkout.expected_return_at
-                            ? formatDate(checkout.expected_return_at)
-                            : '--'}
-                        </td>
-                        <td className="p-3">
-                          {checkout.is_overdue ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
-                              Overdue
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
-                              Active
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => openCheckInModal(checkout.checkout_id, checkout.item_name)}
-                              className="btn-info flex gap-1.5 items-center px-3 py-1.5 text-xs"
-                            >
-                              <ArrowDownToLine className="w-3.5 h-3.5" aria-hidden="true" />
-                              Check In
-                            </button>
-                            <button
-                              onClick={() => { setExtendModal({ open: true, checkoutId: checkout.checkout_id, itemName: checkout.item_name, currentDue: checkout.expected_return_at || '' }); setExtendDate(''); }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover text-xs rounded-lg transition-colors"
-                              title="Extend return date"
-                            >
-                              <CalendarClock className="w-3.5 h-3.5" aria-hidden="true" />
-                              <span className="hidden sm:inline">Extend</span>
-                            </button>
-                          </div>
-                        </td>
+              {/* Desktop table view */}
+              <div className="card-secondary hidden overflow-hidden sm:block">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-theme-surface-border bg-theme-surface border-b">
+                        <th scope="col" className="text-theme-text-muted p-3 text-left text-xs font-medium uppercase">
+                          Item Name
+                        </th>
+                        <th
+                          scope="col"
+                          className="text-theme-text-muted hidden p-3 text-left text-xs font-medium uppercase sm:table-cell"
+                        >
+                          Member
+                        </th>
+                        <th
+                          scope="col"
+                          className="text-theme-text-muted hidden p-3 text-left text-xs font-medium uppercase sm:table-cell"
+                        >
+                          Checkout Date
+                        </th>
+                        <th
+                          scope="col"
+                          className="text-theme-text-muted hidden p-3 text-left text-xs font-medium uppercase sm:table-cell"
+                        >
+                          Due Date
+                        </th>
+                        <th scope="col" className="text-theme-text-muted p-3 text-left text-xs font-medium uppercase">
+                          Status
+                        </th>
+                        <th scope="col" className="text-theme-text-muted p-3 text-left text-xs font-medium uppercase">
+                          Action
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {filteredList.map((checkout) => (
+                        <tr
+                          key={checkout.checkout_id}
+                          className={`border-theme-surface-border hover:bg-theme-surface-hover border-b ${
+                            checkout.is_overdue ? 'bg-red-500/5' : ''
+                          }`}
+                        >
+                          <td className="p-3">
+                            <p className="text-theme-text-primary text-sm font-medium">{checkout.item_name}</p>
+                          </td>
+                          <td className="text-theme-text-secondary hidden p-3 text-sm sm:table-cell">
+                            {checkout.user_name || '--'}
+                          </td>
+                          <td className="text-theme-text-secondary hidden p-3 text-sm sm:table-cell">
+                            {formatDate(checkout.checked_out_at)}
+                          </td>
+                          <td className="text-theme-text-secondary hidden p-3 text-sm sm:table-cell">
+                            {checkout.expected_return_at ? formatDate(checkout.expected_return_at) : '--'}
+                          </td>
+                          <td className="p-3">
+                            {checkout.is_overdue ? (
+                              <span className="inline-flex items-center rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                                Overdue
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                                Active
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => openCheckInModal(checkout.checkout_id, checkout.item_name)}
+                                className="btn-info flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                              >
+                                <ArrowDownToLine className="h-3.5 w-3.5" aria-hidden="true" />
+                                Check In
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setExtendModal({
+                                    open: true,
+                                    checkoutId: checkout.checkout_id,
+                                    itemName: checkout.item_name,
+                                    currentDue: checkout.expected_return_at || '',
+                                  });
+                                  setExtendDate('');
+                                }}
+                                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors"
+                                title="Extend return date"
+                              >
+                                <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span className="hidden sm:inline">Extend</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="border-theme-surface-border text-theme-text-muted border-t p-3 text-xs">
+                  {filteredList.length} checkout{filteredList.length !== 1 ? 's' : ''}
+                </div>
               </div>
-              <div className="p-3 border-t border-theme-surface-border text-xs text-theme-text-muted">
-                {filteredList.length} checkout{filteredList.length !== 1 ? 's' : ''}
-              </div>
-            </div>
             </>
           )}
         </div>
@@ -348,17 +396,24 @@ export const InventoryCheckoutsPage: React.FC = () => {
               if (e.key === 'Escape') setCheckInModal({ open: false, checkoutId: '', itemName: '' });
             }}
           >
-            <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" aria-hidden="true" onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}></div>
-              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border z-10">
-                <div className="px-4 sm:px-6 pt-5 pb-4">
-                  <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">
+            <div className="flex min-h-screen items-center justify-center px-4">
+              <div
+                className="fixed inset-0 bg-black/60"
+                aria-hidden="true"
+                onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
+              ></div>
+              <div className="bg-theme-surface-modal border-theme-surface-border relative z-10 w-full max-w-md rounded-lg border shadow-xl">
+                <div className="px-4 pt-5 pb-4 sm:px-6">
+                  <h3 id="checkin-modal-title" className="text-theme-text-primary mb-4 text-lg font-medium">
                     Check In: {checkInModal.itemName}
                   </h3>
 
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="return-condition" className="block text-sm font-medium text-theme-text-primary mb-1">
+                      <label
+                        htmlFor="return-condition"
+                        className="text-theme-text-primary mb-1 block text-sm font-medium"
+                      >
                         Return Condition <span aria-hidden="true">*</span>
                       </label>
                       <select
@@ -367,14 +422,16 @@ export const InventoryCheckoutsPage: React.FC = () => {
                         onChange={(e) => setReturnCondition(e.target.value)}
                         className="form-input"
                       >
-                        {RETURN_CONDITION_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        {RETURN_CONDITION_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
                         ))}
                       </select>
                     </div>
 
                     <div>
-                      <label htmlFor="damage-notes" className="block text-sm font-medium text-theme-text-primary mb-1">
+                      <label htmlFor="damage-notes" className="text-theme-text-primary mb-1 block text-sm font-medium">
                         Damage Notes (optional)
                       </label>
                       <textarea
@@ -389,19 +446,21 @@ export const InventoryCheckoutsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-3 sm:gap-0 rounded-b-lg">
+                <div className="bg-theme-input-bg flex flex-col-reverse gap-2 rounded-b-lg px-4 py-3 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-3 sm:px-6">
                   <button
                     onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+                    className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={() => { void handleCheckIn(); }}
+                    onClick={() => {
+                      void handleCheckIn();
+                    }}
                     disabled={submitting}
                     className="btn-info inline-flex items-center space-x-2"
                   >
-                    {submitting && <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />}
+                    {submitting && <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />}
                     <span>{submitting ? 'Checking In...' : 'Check In'}</span>
                   </button>
                 </div>
@@ -417,21 +476,39 @@ export const InventoryCheckoutsPage: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="extend-modal-title"
-            onKeyDown={(e) => { if (e.key === 'Escape') setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' }); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' });
+            }}
           >
-            <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" aria-hidden="true" onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}></div>
-              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border z-10">
-                <div className="px-4 sm:px-6 pt-5 pb-4">
-                  <h3 id="extend-modal-title" className="text-lg font-medium text-theme-text-primary mb-1">Extend Return Date</h3>
-                  <p className="text-theme-text-muted text-sm mb-4">{extendModal.itemName}</p>
+            <div className="flex min-h-screen items-center justify-center px-4">
+              <div
+                className="fixed inset-0 bg-black/60"
+                aria-hidden="true"
+                onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
+              ></div>
+              <div className="bg-theme-surface-modal border-theme-surface-border relative z-10 w-full max-w-sm rounded-lg border shadow-xl">
+                <div className="px-4 pt-5 pb-4 sm:px-6">
+                  <h3 id="extend-modal-title" className="text-theme-text-primary mb-1 text-lg font-medium">
+                    Extend Return Date
+                  </h3>
+                  <p className="text-theme-text-muted mb-4 text-sm">{extendModal.itemName}</p>
                   {extendModal.currentDue && (
-                    <p className="text-theme-text-secondary text-xs mb-3">
-                      Currently due: {formatDateCustom(extendModal.currentDue, { month: 'short', day: 'numeric', year: 'numeric' }, tz)}
+                    <p className="text-theme-text-secondary mb-3 text-xs">
+                      Currently due:{' '}
+                      {formatDateCustom(
+                        extendModal.currentDue,
+                        { month: 'short', day: 'numeric', year: 'numeric' },
+                        tz
+                      )}
                     </p>
                   )}
                   <div>
-                    <label htmlFor="admin-extend-date" className="block text-sm font-medium text-theme-text-primary mb-1">New return date *</label>
+                    <label
+                      htmlFor="admin-extend-date"
+                      className="text-theme-text-primary mb-1 block text-sm font-medium"
+                    >
+                      New return date *
+                    </label>
                     <input
                       id="admin-extend-date"
                       type="date"
@@ -442,17 +519,19 @@ export const InventoryCheckoutsPage: React.FC = () => {
                     />
                   </div>
                 </div>
-                <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-3 sm:gap-0 rounded-b-lg">
+                <div className="bg-theme-input-bg flex flex-col-reverse gap-2 rounded-b-lg px-4 py-3 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-3 sm:px-6">
                   <button
                     onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+                    className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={() => { void handleExtend(); }}
+                    onClick={() => {
+                      void handleExtend();
+                    }}
                     disabled={submitting || !extendDate}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
                   >
                     {submitting ? 'Extending...' : 'Extend'}
                   </button>

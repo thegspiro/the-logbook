@@ -12,17 +12,13 @@
 import { useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../services/apiClient';
-import {
-  flushOne,
-  listGenericPending,
-  GENERIC_QUEUE_MAX_RETRIES,
-} from '../utils/genericOfflineQueue';
+import { flushOne, listGenericPending, GENERIC_QUEUE_MAX_RETRIES } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 
 let draining = false;
 
 async function drainGenericQueue(): Promise<void> {
-  if (draining || typeof navigator !== 'undefined' && !navigator.onLine) return;
+  if (draining || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
   draining = true;
   const setStatus = usePendingSyncStore.getState().setStatus;
   const refresh = usePendingSyncStore.getState().refresh;
@@ -41,15 +37,13 @@ async function drainGenericQueue(): Promise<void> {
       }
     }
     if (succeeded > 0) {
-      toast.success(
-        succeeded === 1 ? 'Synced 1 pending item' : `Synced ${succeeded} pending items`,
-      );
+      toast.success(succeeded === 1 ? 'Synced 1 pending item' : `Synced ${succeeded} pending items`);
     }
     if (droppedRetries > 0) {
       toast.error(
         droppedRetries === 1
           ? '1 pending item failed permanently and was discarded'
-          : `${droppedRetries} pending items failed permanently and were discarded`,
+          : `${droppedRetries} pending items failed permanently and were discarded`
       );
     }
     setStatus(succeeded > 0 ? 'idle' : 'error');

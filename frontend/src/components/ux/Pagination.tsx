@@ -54,28 +54,26 @@ export const Pagination: React.FC<PaginationProps> = ({
   if (totalItems === 0) return null;
 
   return (
-    <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-3 ${className}`}>
+    <div className={`flex flex-col items-center justify-between gap-3 px-2 py-3 sm:flex-row ${className}`}>
       {/* Info text */}
-      <div className="text-sm text-theme-text-muted">
-        Showing <span className="font-medium text-theme-text-secondary">{startItem}</span>
-        {' '}&ndash;{' '}
-        <span className="font-medium text-theme-text-secondary">{endItem}</span>
-        {' '}of{' '}
-        <span className="font-medium text-theme-text-secondary">{totalItems}</span>
+      <div className="text-theme-text-muted text-sm">
+        Showing <span className="text-theme-text-secondary font-medium">{startItem}</span> &ndash;{' '}
+        <span className="text-theme-text-secondary font-medium">{endItem}</span> of{' '}
+        <span className="text-theme-text-secondary font-medium">{totalItems}</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 sm:gap-4">
         {/* Page size selector */}
         {onPageSizeChange && (
           <div className="flex items-center gap-2">
-            <label htmlFor="page-size" className="text-sm text-theme-text-muted">
+            <label htmlFor="page-size" className="text-theme-text-muted text-sm">
               Per page:
             </label>
             <select
               id="page-size"
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-input-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring"
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-2 py-1.5 text-sm focus:ring-1 focus:outline-hidden"
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>
@@ -91,32 +89,32 @@ export const Pagination: React.FC<PaginationProps> = ({
           <button
             onClick={() => onPageChange(1)}
             disabled={currentPage === 1}
-            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
             aria-label="First page"
           >
-            <ChevronsLeft className="w-4 h-4" />
+            <ChevronsLeft className="h-4 w-4" />
           </button>
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
             aria-label="Previous page"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="h-4 w-4" />
           </button>
 
           {getPageNumbers().map((page, idx) =>
             page === 'ellipsis' ? (
-              <span key={`e${idx}`} className="px-1 text-theme-text-muted" aria-hidden="true">
+              <span key={`e${idx}`} className="text-theme-text-muted px-1" aria-hidden="true">
                 &hellip;
               </span>
             ) : (
               <button
                 key={page}
                 onClick={() => onPageChange(page)}
-                className={`min-w-[44px] h-11 sm:min-w-[40px] sm:h-10 inline-flex items-center justify-center rounded-md text-sm font-medium transition-all duration-150 ${
+                className={`inline-flex h-11 min-w-[44px] items-center justify-center rounded-md text-sm font-medium transition-all duration-150 sm:h-10 sm:min-w-[40px] ${
                   page === currentPage
-                    ? 'bg-red-600 text-white shadow-sm scale-105'
+                    ? 'scale-105 bg-red-600 text-white shadow-sm'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover hover:shadow-sm active:scale-95'
                 }`}
                 aria-current={page === currentPage ? 'page' : undefined}
@@ -129,18 +127,18 @@ export const Pagination: React.FC<PaginationProps> = ({
           <button
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
             aria-label="Next page"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="h-4 w-4" />
           </button>
           <button
             onClick={() => onPageChange(totalPages)}
             disabled={currentPage === totalPages}
-            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
             aria-label="Last page"
           >
-            <ChevronsRight className="w-4 h-4" />
+            <ChevronsRight className="h-4 w-4" />
           </button>
         </nav>
       </div>

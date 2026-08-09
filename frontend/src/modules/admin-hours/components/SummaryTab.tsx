@@ -19,37 +19,37 @@ const SummaryTab: React.FC = () => {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Hours Summary</h2>
+      <h2 className="text-theme-text-primary mb-4 text-xl font-semibold">Hours Summary</h2>
       {!summary ? (
-        <div className="text-center py-8 text-theme-text-secondary">Loading summary...</div>
+        <div className="text-theme-text-secondary py-8 text-center">Loading summary...</div>
       ) : (
         <div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-theme-surface rounded-lg shadow-md p-6">
-              <p className="text-sm text-theme-text-muted">Total Hours</p>
-              <p className="text-3xl font-bold text-theme-text-primary">{summary.totalHours}</p>
-              <p className="text-xs text-theme-text-muted mt-1">{summary.totalEntries} entries</p>
+          <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="bg-theme-surface rounded-lg p-6 shadow-md">
+              <p className="text-theme-text-muted text-sm">Total Hours</p>
+              <p className="text-theme-text-primary text-3xl font-bold">{summary.totalHours}</p>
+              <p className="text-theme-text-muted mt-1 text-xs">{summary.totalEntries} entries</p>
             </div>
-            <div className="bg-theme-surface rounded-lg shadow-md p-6">
+            <div className="bg-theme-surface rounded-lg p-6 shadow-md">
               <p className="text-sm text-green-700 dark:text-green-400">Approved Hours</p>
               <p className="text-3xl font-bold text-green-700 dark:text-green-400">{summary.approvedHours}</p>
-              <p className="text-xs text-theme-text-muted mt-1">{summary.approvedEntries} entries</p>
+              <p className="text-theme-text-muted mt-1 text-xs">{summary.approvedEntries} entries</p>
             </div>
-            <div className="bg-theme-surface rounded-lg shadow-md p-6">
+            <div className="bg-theme-surface rounded-lg p-6 shadow-md">
               <p className="text-sm text-yellow-700 dark:text-yellow-400">Pending Hours</p>
               <p className="text-3xl font-bold text-yellow-700 dark:text-yellow-400">{summary.pendingHours}</p>
-              <p className="text-xs text-theme-text-muted mt-1">{summary.pendingEntries} entries</p>
+              <p className="text-theme-text-muted mt-1 text-xs">{summary.pendingEntries} entries</p>
             </div>
           </div>
 
           {summary.byCategory.length > 0 && (
-            <div className="bg-theme-surface rounded-lg shadow-md p-6">
-              <h3 className="font-semibold text-theme-text-primary mb-4">By Category</h3>
+            <div className="bg-theme-surface rounded-lg p-6 shadow-md">
+              <h3 className="text-theme-text-primary mb-4 font-semibold">By Category</h3>
               <div className="space-y-3">
                 {summary.byCategory.map((cat) => (
                   <div key={cat.categoryId} className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.categoryColor ?? '#6B7280' }} />
-                    <span className="flex-1 text-theme-text-primary">{cat.categoryName}</span>
+                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: cat.categoryColor ?? '#6B7280' }} />
+                    <span className="text-theme-text-primary flex-1">{cat.categoryName}</span>
                     <span className="text-theme-text-secondary">{cat.totalHours}h</span>
                     <span className="text-theme-text-muted text-sm">({cat.entryCount} entries)</span>
                   </div>

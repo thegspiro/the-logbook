@@ -1,4 +1,50 @@
-# Application Review — Documents (Tier B, 2nd pass)
+# Application Review — Documents (Tier B)
+
+**Prefix:** `DOC2` · **Iteration:** B8 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06)
+
+Re-verified pass 1 (DOC-1/2/3 and the DOC-6 write-path FK/enum fixes intact).
+Pass 1 recorded `uploader_name`/`folder_name` on `DocumentResponse` as "never
+populated — always null" and framed the fix as *remove or populate*. The B1
+(MS2-4) lesson resolves that ambiguity: the frontend **renders** the field, so
+it's a live silently-dead feature, and the fix is to **populate**, not remove.
+
+### DOC2-1 — LOW→MED (live UI defect) — Uploader/folder names never populated — ✅ FIXED
+
+**What:** `DocumentResponse` declares `uploader_name` and `folder_name`, but
+`get_documents` / `get_document_by_id` return the raw `Document` ORM row, which
+has neither attribute — so both always serialized as `null`. `DocumentsPage.tsx:423`
+renders `doc.uploader_name ? "Uploaded by " + doc.uploader_name : ''`, so the
+**uploader attribution never appeared** on any document in the list. Unlike MS2-4
+(which showed a hard "Unknown"), this degrades to blank — the feature is simply
+invisible, which is why it survived to a second pass: nothing looked broken, the
+line just silently never rendered.
+
+**Fix:** a new `attach_document_names` helper (the MS2-4 pattern) batch-resolves
+the uploader (`uploaded_by` → `User`) and folder (`folder_id` → `DocumentFolder`)
+names — one org-scoped query each, no N+1 — and sets them as instance attributes
+Pydantic reads via `from_attributes`. Wired into all four document response paths
+(list, get-by-id, upload, update). Org-scoping is load-bearing and tested: a
+missing/out-of-org id yields `None`, so a name never crosses an org boundary. This
+generalizes the MS2-4 repair (B1 medical-screening) to the documents module.
+3 tests added (`TestAttachDocumentNames`).
+
+### DOC-4 / DOC-5 — still flagged (unchanged, product decisions)
+
+DOC-4 (summary ignores the folder ACL — count-only, no content) and DOC-5
+(per-folder ACL isn't hierarchical, so apparatus/facility child folders under a
+`LEADERSHIP` root are directly readable) both remain owner decisions, unchanged
+from pass 1 and already in `KNOWN_LIMITATIONS.md`. Re-confirmed member **personal**
+folders are `OWNER`-visibility, so the sensitive case stays closed regardless of
+the DOC-5 decision.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `DOC2` · **Iteration:** B8 · **Reviewed:** 2026-08-06
 

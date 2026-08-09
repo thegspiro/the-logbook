@@ -269,6 +269,27 @@ class SkillTest(Base):
     # Extra position slugs for this test only, on top of the template's.
     result_viewer_positions = Column(JSON, nullable=True)
 
+    # Validation trail — an official result only counts against the candidate's
+    # record once a training officer signs it off.
+    #
+    # Any member may examine an official test, because departments routinely use
+    # senior members as evaluators. What a member cannot do is decide that the
+    # result stands: until an officer validates it, the test is a submission,
+    # not a record. Nothing derived from it happens before this is set — no
+    # pipeline requirement is credited, no attempt is consumed, and the
+    # candidate sees the test listed as pending rather than scored.
+    #
+    # An officer's own completion validates in the same step (they are the
+    # authority the second step exists to obtain), so this is NULL only while a
+    # peer-run test awaits review. SET NULL on the author: a validated result
+    # must not revert to pending because the officer who signed it later left.
+    validated_at = Column(DateTime(timezone=True), nullable=True)
+    validated_by = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Release trail — set when an officer releases the result under the
     # on_release mode. SET NULL on the author so a departed officer's departure
     # cannot un-release a result the member has already been shown.
@@ -310,6 +331,13 @@ class SkillTest(Base):
         # Sweep index for the practice-attempt purge job, which scans by
         # is_practice + age.
         Index("idx_skill_test_practice_created", "is_practice", "created_at"),
+        # The officer review queue scans for official tests awaiting validation.
+        Index(
+            "idx_skill_test_org_validation",
+            "organization_id",
+            "is_practice",
+            "validated_at",
+        ),
     )
 
     def __repr__(self):

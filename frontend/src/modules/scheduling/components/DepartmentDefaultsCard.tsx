@@ -5,27 +5,22 @@
  * minimum staffing, overtime threshold, and assignment confirmation.
  */
 
-import React from "react";
-import type { ShiftSettings } from "../types/shiftSettings";
+import React from 'react';
+import type { ShiftSettings } from '../types/shiftSettings';
 
 interface DepartmentDefaultsCardProps {
   settings: ShiftSettings;
   onSettingsChange: (updater: (prev: ShiftSettings) => ShiftSettings) => void;
 }
 
-export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({
-  settings,
-  onSettingsChange,
-}) => {
+export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ settings, onSettingsChange }) => {
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 space-y-5">
-      <h3 className="text-base font-semibold text-theme-text-primary">
-        Department Defaults
-      </h3>
+    <div className="bg-theme-surface border-theme-surface-border space-y-5 rounded-xl border p-5">
+      <h3 className="text-theme-text-primary text-base font-semibold">Department Defaults</h3>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
             Default Shift Duration (hours)
           </label>
           <input
@@ -44,9 +39,7 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-            Default Min Staffing
-          </label>
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Default Min Staffing</label>
           <input
             type="number"
             value={settings.defaultMinStaffing}
@@ -62,7 +55,7 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
             Overtime Threshold (hours/week)
           </label>
           <input
@@ -71,8 +64,7 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({
             onChange={(e) =>
               onSettingsChange((prev) => ({
                 ...prev,
-                overtimeThresholdHoursPerWeek:
-                  parseInt(e.target.value, 10) || 48,
+                overtimeThresholdHoursPerWeek: parseInt(e.target.value, 10) || 48,
               }))
             }
             className="form-input focus:ring-violet-500"
@@ -81,7 +73,7 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({
           />
         </div>
         <div className="flex items-center">
-          <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+          <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={settings.requireAssignmentConfirmation}
@@ -91,7 +83,7 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({
                   requireAssignmentConfirmation: e.target.checked,
                 }))
               }
-              className="rounded-sm border-theme-input-border"
+              className="border-theme-input-border rounded-sm"
             />
             Require assignment confirmation
           </label>

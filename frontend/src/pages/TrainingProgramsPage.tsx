@@ -18,13 +18,18 @@ import {
   Sparkles,
   Layers,
   Loader2,
+  Edit,
 } from 'lucide-react';
-import { trainingProgramService } from '../services/api';
+import { trainingProgramService, trainingService } from '../services/api';
 import RegistryImportModal from './RegistryImportModal';
+import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
 import type {
   TrainingProgram,
   TrainingRequirementEnhanced,
+  TrainingRequirementCreate,
+  TrainingRequirementUpdate,
+  TrainingCategory,
   RegistryInfo,
   SampleTemplateSummary,
 } from '../types/training';
@@ -42,6 +47,9 @@ const TrainingProgramsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [registryModal, setRegistryModal] = useState<{ key: string; name: string } | null>(null);
+  const [categories, setCategories] = useState<TrainingCategory[]>([]);
+  const [showRequirementModal, setShowRequirementModal] = useState(false);
+  const [editingRequirement, setEditingRequirement] = useState<TrainingRequirementEnhanced | null>(null);
   const importFileRef = React.useRef<HTMLInputElement>(null);
 
   const handleExportProgram = async (e: React.MouseEvent, programId: string, programName: string) => {
@@ -94,12 +102,16 @@ const TrainingProgramsPage: React.FC = () => {
           }
         }
       } else if (activeTab === 'requirements') {
-        const [reqs, regs] = await Promise.all([
+        const [reqs, regs, cats] = await Promise.all([
           trainingProgramService.getRequirementsEnhanced(),
           trainingProgramService.getRegistries(),
+          // Categories feed the edit form's category picker; a failure there
+          // must not blank the requirements list, so it degrades to empty.
+          trainingService.getCategories(false).catch(() => [] as TrainingCategory[]),
         ]);
         setRequirements(reqs);
         setRegistries(regs);
+        setCategories(cats);
       }
     } catch (_error) {
       // Error silently handled - empty state shown
@@ -111,6 +123,28 @@ const TrainingProgramsPage: React.FC = () => {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const handleSaveRequirement = async (
+    data: TrainingRequirementCreate | TrainingRequirementUpdate,
+    isEdit: boolean,
+    id?: string
+  ) => {
+    try {
+      if (isEdit && id) {
+        const updated = await trainingService.updateRequirement(id, data);
+        setRequirements((prev) => prev.map((r) => (r.id === id ? updated : r)));
+        toast.success('Requirement updated');
+      } else {
+        const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
+        setRequirements((prev) => [...prev, created]);
+        toast.success('Requirement created');
+      }
+      setShowRequirementModal(false);
+      setEditingRequirement(null);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save requirement'));
+    }
+  };
 
   const handleAddSampleTemplate = async (template: SampleTemplateSummary) => {
     setInstantiatingKey(template.key);
@@ -125,29 +159,29 @@ const TrainingProgramsPage: React.FC = () => {
     }
   };
 
-  const filteredPrograms = programs.filter((p) =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredPrograms = programs.filter(
+    (p) =>
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredRequirements = requirements.filter((r) =>
-    r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredRequirements = requirements.filter(
+    (r) =>
+      r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-              <GraduationCap className="w-8 h-8 text-red-700 dark:text-red-500" aria-hidden="true" />
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
+              <GraduationCap className="h-8 w-8 text-red-700 dark:text-red-500" aria-hidden="true" />
               <span>Training Programs</span>
             </h1>
-            <p className="text-theme-text-muted mt-2">
-              Manage training programs, requirements, and member progress
-            </p>
+            <p className="text-theme-text-muted mt-2">Manage training programs, requirements, and member progress</p>
           </div>
 
           {activeTab === 'programs' && (
@@ -156,42 +190,61 @@ const TrainingProgramsPage: React.FC = () => {
                 ref={importFileRef}
                 type="file"
                 accept=".json"
-                onChange={(e) => { void handleImportProgram(e); }}
+                onChange={(e) => {
+                  void handleImportProgram(e);
+                }}
                 className="hidden"
                 aria-label="Import pipeline JSON file"
               />
               <button
                 onClick={() => importFileRef.current?.click()}
-                className="flex items-center space-x-2 px-4 py-2 max-md:min-h-[44px] bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
+                className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors max-md:min-h-[44px]"
               >
-                <Upload className="w-5 h-5" aria-hidden="true" />
+                <Upload className="h-5 w-5" aria-hidden="true" />
                 <span>Import</span>
               </button>
               <button
                 onClick={() => void navigate('/training/programs/new')}
                 className="btn-primary flex items-center space-x-2"
               >
-                <Plus className="w-5 h-5" aria-hidden="true" />
+                <Plus className="h-5 w-5" aria-hidden="true" />
                 <span>New Pipeline</span>
               </button>
             </div>
           )}
+
+          {activeTab === 'requirements' && (
+            <button
+              onClick={() => {
+                setEditingRequirement(null);
+                setShowRequirementModal(true);
+              }}
+              className="btn-primary flex items-center space-x-2"
+            >
+              <Plus className="h-5 w-5" aria-hidden="true" />
+              <span>New Requirement</span>
+            </button>
+          )}
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-theme-surface-secondary p-1 rounded-lg mb-6" role="tablist" aria-label="Training program views">
+        <div
+          className="bg-theme-surface-secondary mb-6 flex space-x-1 rounded-lg p-1"
+          role="tablist"
+          aria-label="Training program views"
+        >
           <button
             onClick={() => setActiveTab('programs')}
             role="tab"
             aria-selected={activeTab === 'programs'}
             aria-controls="tab-panel-programs"
-            className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+            className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
               activeTab === 'programs'
                 ? 'bg-red-600 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
-            <Target className="w-4 h-4 inline mr-2" aria-hidden="true" />
+            <Target className="mr-2 inline h-4 w-4" aria-hidden="true" />
             Programs
           </button>
           <button
@@ -199,13 +252,13 @@ const TrainingProgramsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'requirements'}
             aria-controls="tab-panel-requirements"
-            className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+            className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
               activeTab === 'requirements'
                 ? 'bg-red-600 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
-            <ListChecks className="w-4 h-4 inline mr-2" aria-hidden="true" />
+            <ListChecks className="mr-2 inline h-4 w-4" aria-hidden="true" />
             Requirements
           </button>
           <button
@@ -213,13 +266,13 @@ const TrainingProgramsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'templates'}
             aria-controls="tab-panel-templates"
-            className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+            className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
               activeTab === 'templates'
                 ? 'bg-red-600 text-white'
                 : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
-            <Award className="w-4 h-4 inline mr-2" aria-hidden="true" />
+            <Award className="mr-2 inline h-4 w-4" aria-hidden="true" />
             Templates
           </button>
         </div>
@@ -227,8 +280,13 @@ const TrainingProgramsPage: React.FC = () => {
         {/* Search Bar */}
         <div className="mb-6">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
-            <label htmlFor="programs-search" className="sr-only">Search {activeTab}</label>
+            <Search
+              className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform"
+              aria-hidden="true"
+            />
+            <label htmlFor="programs-search" className="sr-only">
+              Search {activeTab}
+            </label>
             <input
               autoCapitalize="none"
               autoCorrect="off"
@@ -238,15 +296,18 @@ const TrainingProgramsPage: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={`Search ${activeTab}...`}
-              className="form-input pl-10 pr-4"
+              className="form-input pr-4 pl-10"
             />
           </div>
         </div>
 
         {/* Content */}
         {loading ? (
-          <div className="text-center py-12" role="status" aria-live="polite">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500" aria-hidden="true"></div>
+          <div className="py-12 text-center" role="status" aria-live="polite">
+            <div
+              className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-red-500"
+              aria-hidden="true"
+            ></div>
             <p className="text-theme-text-muted mt-4">Loading {activeTab}...</p>
           </div>
         ) : (
@@ -255,49 +316,51 @@ const TrainingProgramsPage: React.FC = () => {
               <div id="tab-panel-programs" role="tabpanel">
                 {activeTab === 'templates' && !searchTerm && sampleTemplates.length > 0 && (
                   <section className="mb-8" aria-label="Sample templates">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <Sparkles className="w-5 h-5 text-red-700 dark:text-red-500" aria-hidden="true" />
-                      <h2 className="text-lg font-semibold text-theme-text-primary">Start from a sample template</h2>
+                    <div className="mb-1 flex items-center space-x-2">
+                      <Sparkles className="h-5 w-5 text-red-700 dark:text-red-500" aria-hidden="true" />
+                      <h2 className="text-theme-text-primary text-lg font-semibold">Start from a sample template</h2>
                     </div>
-                    <p className="text-theme-text-muted text-sm mb-4">
+                    <p className="text-theme-text-muted mb-4 text-sm">
                       Real-world starting points you can add to your department, then edit and enroll members.
                     </p>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {sampleTemplates.map((template) => (
                         <div
                           key={template.key}
-                          className="flex flex-col bg-theme-surface-secondary rounded-lg p-5 border border-theme-surface-border"
+                          className="bg-theme-surface-secondary border-theme-surface-border flex flex-col rounded-lg border p-5"
                         >
-                          <h3 className="text-base font-semibold text-theme-text-primary mb-1">{template.name}</h3>
+                          <h3 className="text-theme-text-primary mb-1 text-base font-semibold">{template.name}</h3>
                           {template.description && (
-                            <p className="text-theme-text-muted text-sm mb-3 line-clamp-4">{template.description}</p>
+                            <p className="text-theme-text-muted mb-3 line-clamp-4 text-sm">{template.description}</p>
                           )}
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted mt-auto mb-4">
+                          <div className="text-theme-text-muted mt-auto mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                             <span className="flex items-center space-x-1">
-                              <Layers className="w-3.5 h-3.5" aria-hidden="true" />
+                              <Layers className="h-3.5 w-3.5" aria-hidden="true" />
                               <span>{template.phase_count} phases</span>
                             </span>
                             <span className="flex items-center space-x-1">
-                              <ListChecks className="w-3.5 h-3.5" aria-hidden="true" />
+                              <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
                               <span>{template.requirement_count} requirements</span>
                             </span>
                             {template.time_limit_days && (
                               <span className="flex items-center space-x-1">
-                                <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                                <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
                                 <span>{template.time_limit_days} days</span>
                               </span>
                             )}
                           </div>
                           <button
-                            onClick={() => { void handleAddSampleTemplate(template); }}
+                            onClick={() => {
+                              void handleAddSampleTemplate(template);
+                            }}
                             disabled={instantiatingKey !== null}
                             className="btn-primary flex items-center justify-center space-x-2 disabled:opacity-50"
                             aria-label={`Add ${template.name} to my department`}
                           >
                             {instantiatingKey === template.key ? (
-                              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                             ) : (
-                              <Plus className="w-4 h-4" aria-hidden="true" />
+                              <Plus className="h-4 w-4" aria-hidden="true" />
                             )}
                             <span>Add to my department</span>
                           </button>
@@ -307,109 +370,112 @@ const TrainingProgramsPage: React.FC = () => {
                   </section>
                 )}
 
-              <div className="grid gap-4">
-                {filteredPrograms.length === 0 ? (
-                  <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-                    <GraduationCap className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" aria-hidden="true" />
-                    <p className="text-theme-text-muted">
-                      {searchTerm ? 'No programs found' : `No ${activeTab} yet`}
-                    </p>
-                    {!searchTerm && activeTab === 'programs' && (
-                      <button
-                        onClick={() => void navigate('/training/programs/new')}
-                        className="btn-primary mt-4"
+                <div className="grid gap-4">
+                  {filteredPrograms.length === 0 ? (
+                    <div className="bg-theme-surface-secondary rounded-lg py-12 text-center">
+                      <GraduationCap className="text-theme-text-secondary mx-auto mb-4 h-16 w-16" aria-hidden="true" />
+                      <p className="text-theme-text-muted">
+                        {searchTerm ? 'No programs found' : `No ${activeTab} yet`}
+                      </p>
+                      {!searchTerm && activeTab === 'programs' && (
+                        <button onClick={() => void navigate('/training/programs/new')} className="btn-primary mt-4">
+                          Create Your First Pipeline
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    filteredPrograms.map((program) => (
+                      <div
+                        key={program.id}
+                        className="bg-theme-surface-secondary hover:bg-theme-surface-hover cursor-pointer rounded-lg p-6 transition-colors"
+                        onClick={() => void navigate(`/training/programs/${program.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            void navigate(`/training/programs/${program.id}`);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="link"
+                        aria-label={`${program.name}${program.target_position ? ` - ${program.target_position}` : ''} - ${program.structure_type}`}
                       >
-                        Create Your First Pipeline
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  filteredPrograms.map((program) => (
-                    <div
-                      key={program.id}
-                      className="bg-theme-surface-secondary rounded-lg p-6 hover:bg-theme-surface-hover cursor-pointer transition-colors"
-                      onClick={() => void navigate(`/training/programs/${program.id}`)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void navigate(`/training/programs/${program.id}`); } }}
-                      tabIndex={0}
-                      role="link"
-                      aria-label={`${program.name}${program.target_position ? ` - ${program.target_position}` : ''} - ${program.structure_type}`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <h3 className="text-xl font-semibold text-theme-text-primary">{program.name}</h3>
-                            {program.target_position && (
-                              <span className="px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-400 text-xs rounded-sm">
-                                {program.target_position}
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="mb-2 flex items-center space-x-3">
+                              <h3 className="text-theme-text-primary text-xl font-semibold">{program.name}</h3>
+                              {program.target_position && (
+                                <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 dark:text-red-400">
+                                  {program.target_position}
+                                </span>
+                              )}
+                              <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-xs text-blue-700 dark:text-blue-400">
+                                {program.structure_type}
                               </span>
-                            )}
-                            <span className="px-2 py-1 bg-blue-500/20 text-blue-700 dark:text-blue-400 text-xs rounded-sm">
-                              {program.structure_type}
-                            </span>
-                          </div>
-                          {program.description && (
-                            <p className="text-theme-text-muted mb-3">{program.description}</p>
-                          )}
-                          <div className="flex items-center space-x-6 text-sm text-theme-text-muted">
-                            {program.time_limit_days && (
+                            </div>
+                            {program.description && <p className="text-theme-text-muted mb-3">{program.description}</p>}
+                            <div className="text-theme-text-muted flex items-center space-x-6 text-sm">
+                              {program.time_limit_days && (
+                                <div className="flex items-center space-x-1">
+                                  <Calendar className="h-4 w-4" aria-hidden="true" />
+                                  <span>{program.time_limit_days} days</span>
+                                </div>
+                              )}
                               <div className="flex items-center space-x-1">
-                                <Calendar className="w-4 h-4" aria-hidden="true" />
-                                <span>{program.time_limit_days} days</span>
+                                <Users className="h-4 w-4" aria-hidden="true" />
+                                <span>0 enrolled</span>
                               </div>
-                            )}
-                            <div className="flex items-center space-x-1">
-                              <Users className="w-4 h-4" aria-hidden="true" />
-                              <span>0 enrolled</span>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={(e) => { void handleExportProgram(e, program.id, program.name); }}
-                            className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg transition-colors"
-                            title="Export as JSON"
-                            aria-label={`Export ${program.name}`}
-                          >
-                            <Download className="w-4 h-4" aria-hidden="true" />
-                          </button>
-                          <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={(e) => {
+                                void handleExportProgram(e, program.id, program.name);
+                              }}
+                              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2 transition-colors"
+                              title="Export as JSON"
+                              aria-label={`Export ${program.name}`}
+                            >
+                              <Download className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <ChevronRight className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
               </div>
             ) : (
               <div id="tab-panel-requirements" role="tabpanel">
                 {/* Registry Import Section */}
-                <div className="bg-theme-surface-secondary rounded-lg p-6 mb-6">
-                  <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Import from Registry</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {(registries.length > 0 ? registries : [
-                      { key: 'nfpa', name: 'NFPA', description: '', requirement_count: 0 },
-                      { key: 'proboard', name: 'Pro Board', description: '', requirement_count: 0 },
-                      { key: 'emr', name: 'NREMT — EMR', description: '', requirement_count: 0 },
-                      { key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 0 },
-                      { key: 'aemt', name: 'NREMT — Advanced EMT (AEMT)', description: '', requirement_count: 0 },
-                      { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 0 },
-                    ]).map((registry) => (
+                <div className="bg-theme-surface-secondary mb-6 rounded-lg p-6">
+                  <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Import from Registry</h3>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    {(registries.length > 0
+                      ? registries
+                      : [
+                          { key: 'nfpa', name: 'NFPA', description: '', requirement_count: 0 },
+                          { key: 'proboard', name: 'Pro Board', description: '', requirement_count: 0 },
+                          { key: 'emr', name: 'NREMT — EMR', description: '', requirement_count: 0 },
+                          { key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 0 },
+                          { key: 'aemt', name: 'NREMT — Advanced EMT (AEMT)', description: '', requirement_count: 0 },
+                          { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 0 },
+                        ]
+                    ).map((registry) => (
                       <button
                         key={registry.key}
                         onClick={() => setRegistryModal({ key: registry.key, name: registry.name })}
-                        className="flex flex-col items-center px-4 py-3 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover"
+                        className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex flex-col items-center rounded-lg px-4 py-3"
                       >
                         <div className="flex items-center space-x-2">
-                          <Download className="w-5 h-5" aria-hidden="true" />
+                          <Download className="h-5 w-5" aria-hidden="true" />
                           <span>Import {registry.name}</span>
                         </div>
                         {registry.last_updated && (
-                          <span className="text-xs text-theme-text-muted mt-1">
-                            Updated {registry.last_updated}
-                          </span>
+                          <span className="text-theme-text-muted mt-1 text-xs">Updated {registry.last_updated}</span>
                         )}
                         {registry.requirement_count > 0 && (
-                          <span className="text-xs text-theme-text-muted">
+                          <span className="text-theme-text-muted text-xs">
                             {registry.requirement_count} requirements
                           </span>
                         )}
@@ -419,9 +485,9 @@ const TrainingProgramsPage: React.FC = () => {
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+                            className="mt-1 flex items-center space-x-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
                           >
-                            <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                            <ExternalLink className="h-3 w-3" aria-hidden="true" />
                             <span>Source</span>
                           </a>
                         )}
@@ -433,8 +499,8 @@ const TrainingProgramsPage: React.FC = () => {
                 {/* Requirements List */}
                 <div className="grid gap-4">
                   {filteredRequirements.length === 0 ? (
-                    <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-                      <ListChecks className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" aria-hidden="true" />
+                    <div className="bg-theme-surface-secondary rounded-lg py-12 text-center">
+                      <ListChecks className="text-theme-text-secondary mx-auto mb-4 h-16 w-16" aria-hidden="true" />
                       <p className="text-theme-text-muted">
                         {searchTerm ? 'No requirements found' : 'No requirements yet'}
                       </p>
@@ -446,48 +512,63 @@ const TrainingProgramsPage: React.FC = () => {
                     filteredRequirements.map((req) => (
                       <div
                         key={req.id}
-                        className="bg-theme-surface-secondary rounded-lg p-6 hover:bg-theme-surface-hover transition-colors"
+                        className="bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg p-6 transition-colors"
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <h3 className="text-lg font-semibold text-theme-text-primary">{req.name}</h3>
-                              <span className={`px-2 py-1 text-xs rounded ${
-                                req.source === 'national' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
-                                req.source === 'state' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
-                                'bg-theme-surface-secondary text-theme-text-muted'
-                              }`}>
+                            <div className="mb-2 flex items-center space-x-3">
+                              <h3 className="text-theme-text-primary text-lg font-semibold">{req.name}</h3>
+                              <span
+                                className={`rounded px-2 py-1 text-xs ${
+                                  req.source === 'national'
+                                    ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                                    : req.source === 'state'
+                                      ? 'bg-green-500/20 text-green-700 dark:text-green-400'
+                                      : 'bg-theme-surface-secondary text-theme-text-muted'
+                                }`}
+                              >
                                 {req.source}
                               </span>
                               {req.registry_name && (
-                                <span className="px-2 py-1 bg-purple-500/20 text-purple-700 dark:text-purple-400 text-xs rounded-sm">
+                                <span className="rounded-sm bg-purple-500/20 px-2 py-1 text-xs text-purple-700 dark:text-purple-400">
                                   {req.registry_name}
                                 </span>
                               )}
-                              <span className="px-2 py-1 bg-orange-500/20 text-orange-700 dark:text-orange-400 text-xs rounded-sm">
+                              <span className="rounded-sm bg-orange-500/20 px-2 py-1 text-xs text-orange-700 dark:text-orange-400">
                                 {req.requirement_type}
                               </span>
                             </div>
-                            {req.description && (
-                              <p className="text-theme-text-muted text-sm mb-2">{req.description}</p>
-                            )}
-                            <div className="flex items-center space-x-4 text-sm text-theme-text-muted">
-                              {req.required_hours && (
-                                <span>{req.required_hours} hours</span>
-                              )}
-                              {req.required_shifts && (
-                                <span>{req.required_shifts} shifts</span>
-                              )}
-                              {req.required_calls && (
-                                <span>{req.required_calls} calls</span>
-                              )}
+                            {req.description && <p className="text-theme-text-muted mb-2 text-sm">{req.description}</p>}
+                            <div className="text-theme-text-muted flex items-center space-x-4 text-sm">
+                              {req.required_hours && <span>{req.required_hours} hours</span>}
+                              {req.required_shifts && <span>{req.required_shifts} shifts</span>}
+                              {req.required_calls && <span>{req.required_calls} calls</span>}
                               <span>{req.frequency}</span>
                             </div>
                           </div>
-                          {!req.is_editable && (
+                          {/* Registry-imported requirements are locked upstream
+                              (the backend refuses to update them), so the edit
+                              affordance is replaced by the read-only marker
+                              rather than shown and failing on save. */}
+                          {req.is_editable === false ? (
                             <div aria-label="Registry requirement (read-only)">
-                              <AlertCircle className="w-5 h-5 text-yellow-700 dark:text-yellow-500" aria-hidden="true" />
+                              <AlertCircle
+                                className="h-5 w-5 text-yellow-700 dark:text-yellow-500"
+                                aria-hidden="true"
+                              />
                             </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditingRequirement(req);
+                                setShowRequirementModal(true);
+                              }}
+                              className="ml-4 rounded-lg bg-blue-600/20 p-2 text-blue-700 transition-colors hover:bg-blue-600/30 dark:text-blue-400"
+                              title="Edit"
+                              aria-label={`Edit ${req.name}`}
+                            >
+                              <Edit className="h-5 w-5" aria-hidden="true" />
+                            </button>
                           )}
                         </div>
                       </div>
@@ -505,7 +586,23 @@ const TrainingProgramsPage: React.FC = () => {
           registryKey={registryModal.key}
           registryName={registryModal.name}
           onClose={() => setRegistryModal(null)}
-          onImported={() => { void loadData(); }}
+          onImported={() => {
+            void loadData();
+          }}
+        />
+      )}
+
+      {showRequirementModal && (
+        <RequirementModal
+          requirement={editingRequirement}
+          categories={categories}
+          onClose={() => {
+            setShowRequirementModal(false);
+            setEditingRequirement(null);
+          }}
+          onSave={(...args) => {
+            void handleSaveRequirement(...args);
+          }}
         />
       )}
     </div>

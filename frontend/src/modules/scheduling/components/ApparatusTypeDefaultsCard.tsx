@@ -5,15 +5,11 @@
  * Includes inline editing with the shared PositionListEditor.
  */
 
-import React, { useState, useMemo } from "react";
-import { Truck } from "lucide-react";
-import { PositionListEditor } from "./PositionListEditor";
-import type {
-  ApparatusTypeDefaults,
-  PositionOption,
-  ShiftSettings,
-} from "../types/shiftSettings";
-import { DEFAULT_APPARATUS_TYPE_POSITIONS } from "../types/shiftSettings";
+import React, { useState, useMemo } from 'react';
+import { Truck } from 'lucide-react';
+import { PositionListEditor } from './PositionListEditor';
+import type { ApparatusTypeDefaults, PositionOption, ShiftSettings } from '../types/shiftSettings';
+import { DEFAULT_APPARATUS_TYPE_POSITIONS } from '../types/shiftSettings';
 
 interface ApparatusTypeDefaultsCardProps {
   settings: ShiftSettings;
@@ -28,9 +24,12 @@ interface ApparatusTypeDefaultsCardProps {
   }>;
 }
 
-export const ApparatusTypeDefaultsCard: React.FC<
-  ApparatusTypeDefaultsCardProps
-> = ({ settings, onSettingsChange, allPositionOptions, apparatusList }) => {
+export const ApparatusTypeDefaultsCard: React.FC<ApparatusTypeDefaultsCardProps> = ({
+  settings,
+  onSettingsChange,
+  allPositionOptions,
+  apparatusList,
+}) => {
   const [editingType, setEditingType] = useState<string | null>(null);
   const [editPositions, setEditPositions] = useState<string[]>([]);
   const [editMinStaffing, setEditMinStaffing] = useState(1);
@@ -74,67 +73,52 @@ export const ApparatusTypeDefaultsCard: React.FC<
   };
 
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-      <h3 className="text-base font-semibold text-theme-text-primary mb-1">
-        Apparatus Type Defaults
-      </h3>
-      <p className="text-xs text-theme-text-muted mb-4">
-        Define default crew positions and minimum staffing per vehicle type.
-        These defaults are used when creating new apparatus or generating
-        shift templates.
+    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+      <h3 className="text-theme-text-primary mb-1 text-base font-semibold">Apparatus Type Defaults</h3>
+      <p className="text-theme-text-muted mb-4 text-xs">
+        Define default crew positions and minimum staffing per vehicle type. These defaults are used when creating new
+        apparatus or generating shift templates.
       </p>
       <div className="space-y-2">
         {knownApparatusTypes.map((type) => {
-          const defaults: ApparatusTypeDefaults = settings
-            .apparatusTypeDefaults[type] ??
+          const defaults: ApparatusTypeDefaults = settings.apparatusTypeDefaults[type] ??
             DEFAULT_APPARATUS_TYPE_POSITIONS[type] ?? {
               positions: [],
               minStaffing: 1,
             };
-          const vehiclesOfType = apparatusList.filter(
-            (a) => a.apparatus_type === type,
-          );
+          const vehiclesOfType = apparatusList.filter((a) => a.apparatus_type === type);
           const isEditing = editingType === type;
 
           return (
-            <div
-              key={type}
-              className="p-3 bg-theme-surface-hover/50 rounded-lg"
-            >
+            <div key={type} className="bg-theme-surface-hover/50 rounded-lg p-3">
               {isEditing ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-theme-text-primary capitalize">
-                      {type}
-                    </h4>
+                    <h4 className="text-theme-text-primary text-sm font-semibold capitalize">{type}</h4>
                     <div className="flex gap-2">
                       <button
                         onClick={cancelEdit}
-                        className="text-xs text-theme-text-muted hover:text-theme-text-primary"
+                        className="text-theme-text-muted hover:text-theme-text-primary text-xs"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={saveEdit}
-                        className="text-xs text-violet-600 dark:text-violet-400 font-medium hover:underline"
+                        className="text-xs font-medium text-violet-600 hover:underline dark:text-violet-400"
                       >
                         Save
                       </button>
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                      Min Staffing
-                    </label>
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Min Staffing</label>
                     <input
                       type="number"
                       value={editMinStaffing}
                       min={1}
                       max={20}
-                      onChange={(e) =>
-                        setEditMinStaffing(parseInt(e.target.value, 10) || 1)
-                      }
-                      className="w-24 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
+                      onChange={(e) => setEditMinStaffing(parseInt(e.target.value, 10) || 1)}
+                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-24 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
                     />
                   </div>
                   <PositionListEditor
@@ -147,33 +131,29 @@ export const ApparatusTypeDefaultsCard: React.FC<
                   />
                 </div>
               ) : (
-                <div className="flex items-start sm:items-center justify-between gap-2">
+                <div className="flex items-start justify-between gap-2 sm:items-center">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-red-500 shrink-0" />
-                      <h4 className="text-sm font-semibold text-theme-text-primary capitalize">
-                        {type}
-                      </h4>
-                      <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded-sm">
+                      <Truck className="h-4 w-4 shrink-0 text-red-500" />
+                      <h4 className="text-theme-text-primary text-sm font-semibold capitalize">{type}</h4>
+                      <span className="text-theme-text-muted bg-theme-surface-hover rounded-sm px-1.5 py-0.5 text-[10px]">
                         min {defaults.minStaffing}
                       </span>
                       {vehiclesOfType.length > 0 && (
-                        <span className="text-[10px] text-theme-text-muted">
+                        <span className="text-theme-text-muted text-[10px]">
                           ({vehiclesOfType.length} unit
-                          {vehiclesOfType.length !== 1 ? "s" : ""})
+                          {vehiclesOfType.length !== 1 ? 's' : ''})
                         </span>
                       )}
                     </div>
                     {defaults.positions.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
+                      <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
                         {defaults.positions.map((pos, i) => {
-                          const label =
-                            allPositionOptions.find((o) => o.value === pos)
-                              ?.label || pos;
+                          const label = allPositionOptions.find((o) => o.value === pos)?.label || pos;
                           return (
                             <span
                               key={i}
-                              className="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-700 dark:text-red-400 rounded-sm capitalize"
+                              className="rounded-sm bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-700 capitalize dark:text-red-400"
                             >
                               {label}
                             </span>
@@ -184,7 +164,7 @@ export const ApparatusTypeDefaultsCard: React.FC<
                   </div>
                   <button
                     onClick={() => startEdit(type)}
-                    className="text-xs text-violet-600 dark:text-violet-400 hover:underline shrink-0"
+                    className="shrink-0 text-xs text-violet-600 hover:underline dark:text-violet-400"
                   >
                     Edit
                   </button>

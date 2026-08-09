@@ -157,3 +157,44 @@ class TestFinalizeManualHoursScoping:
         assert result is None
         assert err == "One or more members are not in your organization"
         db.add.assert_not_called()
+
+
+class TestTemplateApparatusScoping:
+    """SCH-7 (pass 2): a shift template's apparatus_id is stamped onto every
+    generated shift, so create/update_template must validate it in-org like
+    create_shift — otherwise a foreign apparatus persists on the template and
+    silently drops the min-staffing/checklist wiring on generated shifts."""
+
+    async def test_create_rejects_foreign_apparatus(self):
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars_first(None),  # not a full Apparatus in this org
+                _scalars_first(None),  # not a BasicApparatus either
+            ]
+        )
+        db.add = MagicMock()
+        svc = SchedulingService(db)
+        template, err = await svc.create_template(
+            "org-1", {"name": "A shift", "apparatus_id": "aFOREIGN"}, "u1"
+        )
+        assert template is None
+        assert err == "Apparatus not found"
+        db.add.assert_not_called()
+
+    async def test_update_rejects_foreign_apparatus(self):
+        template = SimpleNamespace(id="t1", organization_id="org-1")
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(template),  # get_template_by_id (in-org)
+                _scalars_first(None),  # not a full Apparatus
+                _scalars_first(None),  # not a BasicApparatus
+            ]
+        )
+        svc = SchedulingService(db)
+        result, err = await svc.update_template(
+            "t1", "org-1", {"apparatus_id": "aFOREIGN"}
+        )
+        assert result is None
+        assert err == "Apparatus not found"

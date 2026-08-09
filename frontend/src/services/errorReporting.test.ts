@@ -22,9 +22,7 @@ function axiosError(overrides: Partial<AxiosError> & { status?: number }): Axios
     message: 'Request failed',
     isAxiosError: true,
     config: { url: '/events', method: 'get', baseURL: '/api/v1' },
-    ...(status !== undefined
-      ? { response: { status, data: {}, statusText: '', headers: {}, config: {} } }
-      : {}),
+    ...(status !== undefined ? { response: { status, data: {}, statusText: '', headers: {}, config: {} } } : {}),
     ...rest,
   } as AxiosError;
 }
@@ -45,7 +43,7 @@ function sentBody(callIndex = 0): Record<string, unknown> {
 
 function sentBodies(): Array<Record<string, unknown>> {
   return mockFetch.mock.calls.map(
-    (call) => JSON.parse((call[1] as RequestInit).body as string) as Record<string, unknown>,
+    (call) => JSON.parse((call[1] as RequestInit).body as string) as Record<string, unknown>
   );
 }
 
@@ -80,8 +78,7 @@ describe('reportError', () => {
     expect(sentBody()).toMatchObject({
       error_type: 'NETWORK_ERROR',
       error_message: 'offline',
-      user_message:
-        'Unable to connect to the server. Please check your internet connection.',
+      user_message: 'Unable to connect to the server. Please check your internet connection.',
     });
   });
 
@@ -118,9 +115,7 @@ describe('reportError', () => {
   it('does not throw when the post fails', async () => {
     mockFetch.mockRejectedValue(new Error('endpoint down'));
 
-    expect(() =>
-      reportError({ errorType: 'NETWORK_ERROR', errorMessage: 'offline' }),
-    ).not.toThrow();
+    expect(() => reportError({ errorType: 'NETWORK_ERROR', errorMessage: 'offline' })).not.toThrow();
     await settle();
   });
 });
@@ -192,14 +187,10 @@ describe('throttling', () => {
     }
     await settle();
 
-    const reports = sentBodies().filter(
-      (b) => b['error_type'] !== 'REPORTING_THROTTLED',
-    );
+    const reports = sentBodies().filter((b) => b['error_type'] !== 'REPORTING_THROTTLED');
     expect(reports).toHaveLength(20);
     // The 30 it refused are accounted for rather than forgotten.
-    expect(sentBodies().some((b) => b['error_type'] === 'REPORTING_THROTTLED')).toBe(
-      true,
-    );
+    expect(sentBodies().some((b) => b['error_type'] === 'REPORTING_THROTTLED')).toBe(true);
   });
 
   it('reports what the rate cap discarded rather than going silently quiet', async () => {
@@ -232,9 +223,7 @@ describe('delivery', () => {
 
   it('retries a report the network never delivered', async () => {
     vi.useFakeTimers();
-    mockFetch
-      .mockImplementationOnce(() => Promise.reject(new Error('offline')))
-      .mockImplementation(ok);
+    mockFetch.mockImplementationOnce(() => Promise.reject(new Error('offline'))).mockImplementation(ok);
 
     reportError({ errorType: 'NETWORK_ERROR', errorMessage: 'offline' });
     await vi.runAllTimersAsync();
@@ -255,9 +244,7 @@ describe('delivery', () => {
 
   it('does not retry a report the server rejected outright', async () => {
     vi.useFakeTimers();
-    mockFetch.mockImplementation(() =>
-      Promise.resolve({ ok: false, status: 429 } as Response),
-    );
+    mockFetch.mockImplementation(() => Promise.resolve({ ok: false, status: 429 } as Response));
 
     reportError({ errorType: 'API_SERVER_ERROR', errorMessage: 'HTTP 500' });
     await vi.runAllTimersAsync();
@@ -268,9 +255,7 @@ describe('delivery', () => {
 
   it('holds a report whose session lapsed mid-flight, rather than losing it', async () => {
     vi.useFakeTimers();
-    mockFetch.mockImplementation(() =>
-      Promise.resolve({ ok: false, status: 401 } as Response),
-    );
+    mockFetch.mockImplementation(() => Promise.resolve({ ok: false, status: 401 } as Response));
 
     reportError({ errorType: 'API_SERVER_ERROR', errorMessage: 'HTTP 500' });
     await vi.runAllTimersAsync();
@@ -326,7 +311,7 @@ describe('reportApiError', () => {
       axiosError({
         status: 500,
         config: { url: '/events/1', method: 'post', baseURL: '/api/v1' },
-      }),
+      })
     );
     await settle();
 
@@ -352,15 +337,12 @@ describe('reportApiError', () => {
     expect(sentBody()).toMatchObject({ error_type: 'API_FORBIDDEN' });
   });
 
-  it.each([400, 401, 404, 409, 422])(
-    'does not report routine %i responses',
-    async (status) => {
-      reportApiError(axiosError({ status }));
-      await settle();
+  it.each([400, 401, 404, 409, 422])('does not report routine %i responses', async (status) => {
+    reportApiError(axiosError({ status }));
+    await settle();
 
-      expect(mockFetch).not.toHaveBeenCalled();
-    },
-  );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 
   it('reports a transport failure as a network error', async () => {
     reportApiError(axiosError({ message: 'Network Error', code: 'ERR_NETWORK' }));
@@ -370,9 +352,7 @@ describe('reportApiError', () => {
   });
 
   it('reports an aborted-by-timeout request as a timeout', async () => {
-    reportApiError(
-      axiosError({ message: 'timeout of 30000ms exceeded', code: 'ECONNABORTED' }),
-    );
+    reportApiError(axiosError({ message: 'timeout of 30000ms exceeded', code: 'ECONNABORTED' }));
     await settle();
 
     expect(sentBody()).toMatchObject({ error_type: 'API_TIMEOUT' });
@@ -390,7 +370,7 @@ describe('reportApiError', () => {
       axiosError({
         status: 500,
         config: { url: '/errors/log', method: 'post', baseURL: '/api/v1' },
-      }),
+      })
     );
     await settle();
 
@@ -402,7 +382,7 @@ describe('reportApiError', () => {
       axiosError({
         status: 500,
         config: { url: '/users?search=jane+doe', method: 'get', baseURL: '/api/v1' },
-      }),
+      })
     );
     await settle();
 
@@ -431,7 +411,7 @@ describe('setupGlobalErrorHandlers', () => {
         message: 'Cannot read properties of undefined',
         filename: 'app.js',
         lineno: 12,
-      }),
+      })
     );
     await settle();
 
@@ -452,7 +432,7 @@ describe('setupGlobalErrorHandlers', () => {
     window.dispatchEvent(
       new ErrorEvent('error', {
         message: 'ResizeObserver loop completed with undelivered notifications.',
-      }),
+      })
     );
     await settle();
 

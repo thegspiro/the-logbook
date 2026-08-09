@@ -98,7 +98,9 @@ const TrainingWaiversTab: React.FC = () => {
 
   const membersById = useMemo(() => {
     const map: Record<string, User> = {};
-    members.forEach((m) => { map[m.id] = m; });
+    members.forEach((m) => {
+      map[m.id] = m;
+    });
     return map;
   }, [members]);
 
@@ -111,27 +113,29 @@ const TrainingWaiversTab: React.FC = () => {
       }
     }
 
-    return trainingWaivers.map((w) => {
-      const member = membersById[w.user_id];
-      const linkedLeave = linkedWaiverToLeave[w.id];
-      const grantedByMember = w.granted_by ? membersById[w.granted_by] : null;
+    return trainingWaivers
+      .map((w) => {
+        const member = membersById[w.user_id];
+        const linkedLeave = linkedWaiverToLeave[w.id];
+        const grantedByMember = w.granted_by ? membersById[w.granted_by] : null;
 
-      return {
-        id: w.id,
-        user_id: w.user_id,
-        member_name: member?.full_name || member?.username || w.user_id,
-        member_rank: member?.rank || '',
-        waiver_type: w.waiver_type,
-        reason: w.reason,
-        start_date: w.start_date,
-        end_date: w.end_date,
-        requirement_ids: w.requirement_ids,
-        granted_by_name: grantedByMember?.full_name || grantedByMember?.username || '',
-        active: w.active,
-        source: linkedLeave ? 'leave_linked' as const : 'standalone' as const,
-        leave_id: linkedLeave?.id,
-      };
-    }).sort((a, b) => b.start_date.localeCompare(a.start_date));
+        return {
+          id: w.id,
+          user_id: w.user_id,
+          member_name: member?.full_name || member?.username || w.user_id,
+          member_rank: member?.rank || '',
+          waiver_type: w.waiver_type,
+          reason: w.reason,
+          start_date: w.start_date,
+          end_date: w.end_date,
+          requirement_ids: w.requirement_ids,
+          granted_by_name: grantedByMember?.full_name || grantedByMember?.username || '',
+          active: w.active,
+          source: linkedLeave ? ('leave_linked' as const) : ('standalone' as const),
+          leave_id: linkedLeave?.id,
+        };
+      })
+      .sort((a, b) => b.start_date.localeCompare(a.start_date));
   }, [trainingWaivers, leaves, membersById]);
 
   // Apply filters
@@ -151,10 +155,11 @@ const TrainingWaiversTab: React.FC = () => {
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      result = result.filter((w) =>
-        w.member_name.toLowerCase().includes(q) ||
-        w.member_rank.toLowerCase().includes(q) ||
-        (w.reason || '').toLowerCase().includes(q)
+      result = result.filter(
+        (w) =>
+          w.member_name.toLowerCase().includes(q) ||
+          w.member_rank.toLowerCase().includes(q) ||
+          (w.reason || '').toLowerCase().includes(q)
       );
     }
 
@@ -172,7 +177,7 @@ const TrainingWaiversTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex h-64 items-center justify-center">
         <div className="text-theme-text-muted">Loading training waivers...</div>
       </div>
     );
@@ -180,37 +185,37 @@ const TrainingWaiversTab: React.FC = () => {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-700 dark:text-red-400 text-sm">
+      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-400">
         {error}
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-          <p className="text-xs text-theme-text-muted uppercase tracking-wider">Active</p>
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+          <p className="text-theme-text-muted text-xs tracking-wider uppercase">Active</p>
           <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.active}</p>
         </div>
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-          <p className="text-xs text-theme-text-muted uppercase tracking-wider">Future</p>
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+          <p className="text-theme-text-muted text-xs tracking-wider uppercase">Future</p>
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.future}</p>
         </div>
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-          <p className="text-xs text-theme-text-muted uppercase tracking-wider">Expired</p>
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+          <p className="text-theme-text-muted text-xs tracking-wider uppercase">Expired</p>
           <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{stats.expired}</p>
         </div>
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-          <p className="text-xs text-theme-text-muted uppercase tracking-wider">Total</p>
-          <p className="text-2xl font-bold text-theme-text-primary">{stats.total}</p>
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+          <p className="text-theme-text-muted text-xs tracking-wider uppercase">Total</p>
+          <p className="text-theme-text-primary text-2xl font-bold">{stats.total}</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="flex rounded-lg border border-theme-surface-border overflow-hidden">
+      <div className="mb-4 flex flex-wrap gap-3">
+        <div className="border-theme-surface-border flex overflow-hidden rounded-lg border">
           {(['all', 'active', 'future', 'expired', 'inactive'] as const).map((f) => (
             <button
               key={f}
@@ -229,73 +234,110 @@ const TrainingWaiversTab: React.FC = () => {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          aria-label="Search by name, rank, or reason..." placeholder="Search by name, rank, or reason..."
-          className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring w-72"
+          aria-label="Search by name, rank, or reason..."
+          placeholder="Search by name, rank, or reason..."
+          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring w-72 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
         />
-        <div className="ml-auto text-xs text-theme-text-muted self-center">
+        <div className="text-theme-text-muted ml-auto self-center text-xs">
           {filteredWaivers.length} waiver{filteredWaivers.length !== 1 ? 's' : ''}
         </div>
       </div>
 
       {/* Waiver Table */}
       {filteredWaivers.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
           <p className="text-theme-text-muted">No training waivers match the current filter.</p>
         </div>
       ) : (
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
-          <table className="min-w-full divide-y divide-theme-surface-border">
+        <div className="bg-theme-surface border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
+          <table className="divide-theme-surface-border min-w-full divide-y">
             <thead className="bg-theme-surface-hover">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Member</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Type</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Period</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Scope</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Source</th>
+                <th
+                  scope="col"
+                  className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                >
+                  Member
+                </th>
+                <th
+                  scope="col"
+                  className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                >
+                  Status
+                </th>
+                <th
+                  scope="col"
+                  className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                >
+                  Type
+                </th>
+                <th
+                  scope="col"
+                  className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                >
+                  Period
+                </th>
+                <th
+                  scope="col"
+                  className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                >
+                  Scope
+                </th>
+                <th
+                  scope="col"
+                  className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                >
+                  Reason
+                </th>
+                <th
+                  scope="col"
+                  className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                >
+                  Source
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-theme-surface-border">
+            <tbody className="divide-theme-surface-border divide-y">
               {filteredWaivers.map((waiver) => {
                 const badge = getStatusBadge(waiver, getTodayLocalDate(tz));
                 return (
                   <tr key={waiver.id} className="hover:bg-theme-surface-hover">
                     <td className="px-4 py-3">
-                      <Link to={`/members/${waiver.user_id}`} className="text-sm font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                      <Link
+                        to={`/members/${waiver.user_id}`}
+                        className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
                         {waiver.member_name}
                       </Link>
-                      {waiver.member_rank && (
-                        <p className="text-xs text-theme-text-muted">{waiver.member_rank}</p>
-                      )}
+                      {waiver.member_rank && <p className="text-theme-text-muted text-xs">{waiver.member_rank}</p>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${badge.color}`}>
-                        {badge.label}
-                      </span>
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.color}`}>{badge.label}</span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
                       {WAIVER_TYPE_LABELS[waiver.waiver_type] || waiver.waiver_type}
                     </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
                       <span>{formatDate(waiver.start_date, tz)}</span>
                       <span className="text-theme-text-muted mx-1">to</span>
                       <span>{waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}</span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-muted">
+                    <td className="text-theme-text-muted px-4 py-3 text-sm">
                       {waiver.requirement_ids
                         ? `${waiver.requirement_ids.length} requirement${waiver.requirement_ids.length !== 1 ? 's' : ''}`
                         : 'All requirements'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-muted max-w-xs truncate">
+                    <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                       {waiver.reason || '-'}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        waiver.source === 'leave_linked'
-                          ? 'bg-purple-500/20 text-purple-700 dark:text-purple-400'
-                          : 'bg-theme-surface-hover text-theme-text-secondary'
-                      }`}>
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs ${
+                          waiver.source === 'leave_linked'
+                            ? 'bg-purple-500/20 text-purple-700 dark:text-purple-400'
+                            : 'bg-theme-surface-hover text-theme-text-secondary'
+                        }`}
+                      >
                         {waiver.source === 'leave_linked' ? 'Auto (LOA)' : 'Manual'}
                       </span>
                     </td>
@@ -311,7 +353,7 @@ const TrainingWaiversTab: React.FC = () => {
       <div className="mt-4 text-center">
         <Link
           to="/members/admin/waivers"
-          className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+          className="text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           Open full Waiver Management page (includes meetings & shifts)
         </Link>

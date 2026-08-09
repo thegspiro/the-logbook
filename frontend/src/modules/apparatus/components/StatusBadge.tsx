@@ -90,14 +90,14 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
   if (status.color) {
     return (
       <span
-        className={`${sizeClasses} font-semibold rounded-sm border inline-flex items-center gap-1`}
+        className={`${sizeClasses} inline-flex items-center gap-1 rounded-sm border font-semibold`}
         style={{
           backgroundColor: `${status.color}20`,
           color: status.color,
           borderColor: `${status.color}50`,
         }}
       >
-        {IconComponent && <IconComponent className="w-3 h-3" />}
+        {IconComponent && <IconComponent className="h-3 w-3" />}
         {status.name.toUpperCase()}
       </span>
     );
@@ -105,9 +105,9 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
 
   return (
     <span
-      className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} font-semibold rounded-sm border inline-flex items-center gap-1`}
+      className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} inline-flex items-center gap-1 rounded-sm border font-semibold`}
     >
-      {IconComponent && <IconComponent className="w-3 h-3" />}
+      {IconComponent && <IconComponent className="h-3 w-3" />}
       {status.name.toUpperCase()}
     </span>
   );

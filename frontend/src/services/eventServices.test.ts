@@ -538,7 +538,12 @@ describe('eventRequestService', () => {
 
   describe('generateForm', () => {
     it('should POST to /event-requests/generate-form', async () => {
-      const response = { message: 'Generated', form_id: 'f1', public_slug: 'abc', public_url: 'http://example.com/abc' };
+      const response = {
+        message: 'Generated',
+        form_id: 'f1',
+        public_slug: 'abc',
+        public_url: 'http://example.com/abc',
+      };
       mockPost.mockResolvedValueOnce({ data: response });
 
       const result = await eventRequestService.generateForm();

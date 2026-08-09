@@ -1,9 +1,5 @@
 import React from 'react';
-import type {
-  MeetingStageConfig,
-  MeetingType,
-  StageConfig,
-} from '../../types';
+import type { MeetingStageConfig, MeetingType, StageConfig } from '../../types';
 import type { EventListItem } from '@/types/event';
 
 interface MeetingConfigProps {
@@ -87,7 +83,9 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
           value={meetingConfig.linked_event_type ?? ''}
           onChange={(e) => {
             const eventType = e.target.value || undefined;
-            const nextEvent = eventType ? getNextEventForType(eventType, meetingConfig.linked_event_category) : undefined;
+            const nextEvent = eventType
+              ? getNextEventForType(eventType, meetingConfig.linked_event_category)
+              : undefined;
             setConfig({
               ...meetingConfig,
               linked_event_type: eventType,
@@ -140,9 +138,7 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
         </div>
       )}
       {meetingConfig.linked_event_type && (
-        <div>
-          {renderEventPreview(meetingConfig.linked_event_type, meetingConfig.linked_event_category)}
-        </div>
+        <div>{renderEventPreview(meetingConfig.linked_event_type, meetingConfig.linked_event_category)}</div>
       )}
       <div>
         <label htmlFor="stage-meeting-description" className="text-theme-text-muted mb-2 block text-sm">
@@ -211,7 +207,7 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
           to add a booking link to this stage.
         </p>
       )}
-      <label className="text-theme-text-secondary flex items-center gap-2 text-sm mt-4">
+      <label className="text-theme-text-secondary mt-4 flex items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={meetingConfig.auto_advance ?? false}
@@ -220,7 +216,7 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
         />
         Auto-advance when attendance is recorded
       </label>
-      <p className="text-theme-text-muted text-xs ml-6">
+      <p className="text-theme-text-muted ml-6 text-xs">
         Automatically complete this step and advance the prospect when their attendance is recorded at the linked event.
       </p>
     </div>

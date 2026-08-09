@@ -19,11 +19,7 @@ import { EmptyState } from '../components/ux';
 import { GraduationCap, Download, Paperclip, Upload, X } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
-import {
-  getTrainingPeriodWindow,
-  TRAINING_PERIOD_LABELS,
-  TrainingExportPeriod,
-} from '../utils/trainingPeriods';
+import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod } from '../utils/trainingPeriods';
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
@@ -75,53 +71,47 @@ const RecordAttachmentsModal: React.FC<{
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
-            <Paperclip className="w-5 h-5" /> Attachments
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-theme-surface w-full max-w-lg rounded-lg p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+            <Paperclip className="h-5 w-5" /> Attachments
           </h3>
           <button onClick={onClose} aria-label="Close" className="text-theme-text-muted hover:text-theme-text-primary">
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
-        <p className="text-sm text-theme-text-muted mb-4">{courseName}</p>
+        <p className="text-theme-text-muted mb-4 text-sm">{courseName}</p>
 
         {loading ? (
-          <p className="text-sm text-theme-text-muted py-2">Loading…</p>
+          <p className="text-theme-text-muted py-2 text-sm">Loading…</p>
         ) : attachments.length === 0 ? (
-          <p className="text-sm text-theme-text-muted py-2">No attachments yet.</p>
+          <p className="text-theme-text-muted py-2 text-sm">No attachments yet.</p>
         ) : (
-          <ul className="space-y-2 mb-4">
+          <ul className="mb-4 space-y-2">
             {attachments.map((a) => (
               <li
                 key={a.index}
-                className="flex items-center justify-between border border-theme-surface-border rounded-lg px-3 py-2 gap-3"
+                className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
               >
-                <span className="text-sm text-theme-text-primary truncate">
+                <span className="text-theme-text-primary truncate text-sm">
                   {a.file_name || `Attachment ${a.index + 1}`}
                 </span>
                 <a
                   href={documentService.getAttachmentDownloadUrl(recordId, a.index)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-red-600 hover:text-red-500 inline-flex items-center gap-1 shrink-0"
+                  className="inline-flex shrink-0 items-center gap-1 text-sm text-red-600 hover:text-red-500"
                 >
-                  <Download className="w-4 h-4" /> Download
+                  <Download className="h-4 w-4" /> Download
                 </a>
               </li>
             ))}
           </ul>
         )}
 
-        <label className="inline-flex items-center gap-2 px-4 py-2 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover cursor-pointer">
-          <Upload className="w-4 h-4" />
+        <label className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium">
+          <Upload className="h-4 w-4" />
           <span>{uploading ? 'Uploading…' : 'Upload certificate'}</span>
           <input
             type="file"
@@ -152,9 +142,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Export
-  const [exportPeriod, setExportPeriod] = useState<TrainingExportPeriod>(
-    TrainingExportPeriod.YEAR,
-  );
+  const [exportPeriod, setExportPeriod] = useState<TrainingExportPeriod>(TrainingExportPeriod.YEAR);
   const [exporting, setExporting] = useState(false);
 
   // Attachments
@@ -317,8 +305,8 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex justify-center items-center h-64">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex h-64 items-center justify-center">
             <div className="text-theme-text-primary">Loading training history...</div>
           </div>
         </div>
@@ -329,8 +317,8 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   if (error || !user) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4">
             <p className="text-sm text-red-700 dark:text-red-400">{error || 'Failed to load training history'}</p>
           </div>
         </div>
@@ -340,30 +328,28 @@ export const MemberTrainingHistoryPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6">
-          <Breadcrumbs items={[
-            { label: 'Members', path: '/members' },
-            { label: user.full_name || user.username, path: `/members/${userId}` },
-            { label: 'Training History' },
-          ]} />
+          <Breadcrumbs
+            items={[
+              { label: 'Members', path: '/members' },
+              { label: user.full_name || user.username, path: `/members/${userId}` },
+              { label: 'Training History' },
+            ]}
+          />
 
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-theme-text-primary">
-                Training History
-              </h1>
-              <p className="text-theme-text-muted mt-1">
-                {user.full_name || user.username}
-              </p>
+              <h1 className="text-theme-text-primary text-3xl font-bold">Training History</h1>
+              <p className="text-theme-text-muted mt-1">{user.full_name || user.username}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2 print:hidden">
               <select
                 aria-label="Export period"
                 value={exportPeriod}
                 onChange={(e) => setExportPeriod(e.target.value as TrainingExportPeriod)}
-                className="text-sm px-3 py-2 border border-theme-surface-border rounded-lg bg-theme-surface text-theme-text-primary"
+                className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-2 text-sm"
               >
                 {Object.values(TrainingExportPeriod).map((p) => (
                   <option key={p} value={p}>
@@ -374,22 +360,27 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <button
                 onClick={() => void handleExport('csv')}
                 disabled={exporting}
-                className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
-                <Download className="w-4 h-4" />
+                <Download className="h-4 w-4" />
                 CSV
               </button>
               <button
                 onClick={() => void handleExport('pdf')}
                 disabled={exporting}
-                className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
-                <Download className="w-4 h-4" />
+                <Download className="h-4 w-4" />
                 PDF
               </button>
               <button
-                onClick={() => window.open(`/training/print/member?id=${userId}&name=${encodeURIComponent(user.full_name || user.username)}`, '_blank')}
-                className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+                onClick={() =>
+                  window.open(
+                    `/training/print/member?id=${userId}&name=${encodeURIComponent(user.full_name || user.username)}`,
+                    '_blank'
+                  )
+                }
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
               >
                 Print Record
               </button>
@@ -398,7 +389,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-6">
           <StatCard label="Total Records" value={stats.total} />
           <StatCard label="Completed" value={stats.completed} color="green" />
           <StatCard label="Total Hours" value={stats.totalHours} color="blue" />
@@ -409,15 +400,16 @@ export const MemberTrainingHistoryPage: React.FC = () => {
 
         {/* Filters */}
         <div className="card mb-6 p-4">
-          <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex flex-wrap items-center gap-4">
             {/* Search */}
-            <div className="flex-1 min-w-[200px]">
+            <div className="min-w-[200px] flex-1">
               <input
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
                 type="text"
-                aria-label="Search courses..." placeholder="Search courses..."
+                aria-label="Search courses..."
+                placeholder="Search courses..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input placeholder-theme-text-muted"
@@ -428,7 +420,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
-              className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
             >
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
@@ -446,7 +438,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 setSortField(field as SortField);
                 setSortOrder(order as SortOrder);
               }}
-              className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
             >
               <option value="date-desc">Newest First</option>
               <option value="date-asc">Oldest First</option>
@@ -486,33 +478,54 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-theme-surface-border">
+              <table className="divide-theme-surface-border min-w-full divide-y">
                 <thead className="bg-theme-surface-secondary">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
                       Course
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
                       Type
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
                       Date
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
                       Hours
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
                       Expires
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
                       Status
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
                       Files
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-theme-surface-border">
+                <tbody className="divide-theme-surface-border divide-y">
                   {filteredTrainings.map((training) => (
                     <tr key={training.id} className="hover:bg-theme-surface-hover transition-colors">
                       <td className="px-6 py-4">
@@ -522,29 +535,27 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                             <div className="text-theme-text-muted text-sm">{training.course_code}</div>
                           )}
                           {training.certification_number && (
-                            <div className="text-theme-text-muted text-xs mt-1">
+                            <div className="text-theme-text-muted mt-1 text-xs">
                               Cert #: {training.certification_number}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-theme-text-secondary text-sm capitalize">
+                      <td className="text-theme-text-secondary px-6 py-4 text-sm capitalize">
                         {training.training_type?.replace('_', ' ') || '-'}
                       </td>
-                      <td className="px-6 py-4 text-theme-text-secondary text-sm">
+                      <td className="text-theme-text-secondary px-6 py-4 text-sm">
                         {formatDate(training.completion_date || training.scheduled_date, tz)}
                       </td>
-                      <td className="px-6 py-4 text-theme-text-secondary text-sm">
-                        {training.hours_completed || 0}
-                      </td>
+                      <td className="text-theme-text-secondary px-6 py-4 text-sm">{training.hours_completed || 0}</td>
                       <td className="px-6 py-4 text-sm">
                         <span
                           className={
                             isExpired(training)
                               ? 'text-red-700 dark:text-red-400'
                               : isExpiringSoon(training)
-                              ? 'text-yellow-700 dark:text-yellow-400'
-                              : 'text-theme-text-secondary'
+                                ? 'text-yellow-700 dark:text-yellow-400'
+                                : 'text-theme-text-secondary'
                           }
                         >
                           {formatDate(training.expiration_date, tz)}
@@ -553,19 +564,19 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
                           <span
-                            className={`inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit ${getStatusColor(
+                            className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(
                               training.status
                             )}`}
                           >
                             {training.status.replace('_', ' ')}
                           </span>
                           {isExpired(training) && (
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                            <span className="inline-flex w-fit rounded-full bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
                               expired
                             </span>
                           )}
                           {!isExpired(training) && isExpiringSoon(training) && (
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
+                            <span className="inline-flex w-fit rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
                               expiring soon
                             </span>
                           )}
@@ -574,9 +585,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                       <td className="px-6 py-4">
                         <button
                           onClick={() => setAttachmentRecord(training)}
-                          className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 print:hidden"
+                          className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 text-sm print:hidden"
                         >
-                          <Paperclip className="w-4 h-4" />
+                          <Paperclip className="h-4 w-4" />
                           Files
                         </button>
                       </td>
@@ -590,7 +601,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
 
         {/* Summary */}
         {filteredTrainings.length > 0 && (
-          <div className="mt-4 text-sm text-theme-text-muted text-right">
+          <div className="text-theme-text-muted mt-4 text-right text-sm">
             Showing {filteredTrainings.length} of {trainings.length} records
           </div>
         )}
@@ -625,10 +636,8 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
 
   return (
     <div className="card p-4">
-      <p className="text-theme-text-muted text-xs uppercase font-medium">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${color ? colorClasses[color] : 'text-theme-text-primary'}`}>
-        {value}
-      </p>
+      <p className="text-theme-text-muted text-xs font-medium uppercase">{label}</p>
+      <p className={`mt-1 text-2xl font-bold ${color ? colorClasses[color] : 'text-theme-text-primary'}`}>{value}</p>
     </div>
   );
 };

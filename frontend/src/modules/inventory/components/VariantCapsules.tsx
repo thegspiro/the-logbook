@@ -11,7 +11,9 @@ interface CapsuleProps {
 }
 
 const Capsule: React.FC<CapsuleProps> = ({ label, colorClass }) => (
-  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border leading-none ${colorClass}`}>
+  <span
+    className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] leading-none font-semibold ${colorClass}`}
+  >
     {label}
   </span>
 );
@@ -32,27 +34,16 @@ export const VariantCapsules: React.FC<VariantCapsulesProps> = ({ item, showLabe
 
   if (!size && !color && !style) return null;
 
-  const formatStyle = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const formatStyle = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
       {size && (
-        <Capsule
-          label={showLabels ? `Size: ${size.toUpperCase()}` : size.toUpperCase()}
-          colorClass={SIZE_COLORS}
-        />
+        <Capsule label={showLabels ? `Size: ${size.toUpperCase()}` : size.toUpperCase()} colorClass={SIZE_COLORS} />
       )}
-      {color && (
-        <Capsule
-          label={showLabels ? `Color: ${color}` : color}
-          colorClass={COLOR_COLORS}
-        />
-      )}
+      {color && <Capsule label={showLabels ? `Color: ${color}` : color} colorClass={COLOR_COLORS} />}
       {style && (
-        <Capsule
-          label={showLabels ? `Style: ${formatStyle(style)}` : formatStyle(style)}
-          colorClass={STYLE_COLORS}
-        />
+        <Capsule label={showLabels ? `Style: ${formatStyle(style)}` : formatStyle(style)} colorClass={STYLE_COLORS} />
       )}
     </span>
   );

@@ -7,15 +7,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router';
-import {
-  BarChart3,
-  Calendar,
-  CheckCircle,
-  Clock,
-  TrendingUp,
-  Users,
-  ArrowLeft,
-} from 'lucide-react';
+import { BarChart3, Calendar, CheckCircle, Clock, TrendingUp, Users, ArrowLeft } from 'lucide-react';
 import { eventService } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { formatDate } from '../utils/dateFormatting';
@@ -212,7 +204,7 @@ export const EventAnalyticsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs />
         <SkeletonPage />
       </div>
@@ -221,16 +213,15 @@ export const EventAnalyticsPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs />
-        <div
-          className="bg-red-500/10 border border-red-500/30 rounded-lg p-4"
-          role="alert" aria-live="assertive"
-        >
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
-            onClick={() => { void fetchData(); }}
-            className="mt-2 text-sm underline text-red-600 dark:text-red-400"
+            onClick={() => {
+              void fetchData();
+            }}
+            className="mt-2 text-sm text-red-600 underline dark:text-red-400"
           >
             Retry
           </button>
@@ -246,11 +237,11 @@ export const EventAnalyticsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs />
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-3">
             <Link
               to="/events"
@@ -260,11 +251,11 @@ export const EventAnalyticsPage: React.FC = () => {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-theme-text-primary flex items-center gap-2">
+              <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold sm:text-3xl">
                 <BarChart3 className="h-7 w-7" />
                 Attendance Trends
               </h1>
-              <p className="mt-1 text-sm text-theme-text-secondary">
+              <p className="text-theme-text-secondary mt-1 text-sm">
                 Event analytics, attendance rates, and check-in insights
               </p>
             </div>
@@ -281,7 +272,7 @@ export const EventAnalyticsPage: React.FC = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard
             icon={<Calendar className="h-5 w-5 text-blue-500" />}
             label="Total Events"
@@ -306,9 +297,9 @@ export const EventAnalyticsPage: React.FC = () => {
 
         {/* Avg check-in lead time */}
         {data.avgCheckinMinutesBefore != null && (
-          <div className="mb-8 bg-theme-surface border border-theme-surface-border rounded-lg p-4 flex items-center gap-3">
-            <Clock className="h-5 w-5 text-theme-text-muted" />
-            <span className="text-sm text-theme-text-secondary">
+          <div className="bg-theme-surface border-theme-surface-border mb-8 flex items-center gap-3 rounded-lg border p-4">
+            <Clock className="text-theme-text-muted h-5 w-5" />
+            <span className="text-theme-text-secondary text-sm">
               Members check in on average{' '}
               <strong className="text-theme-text-primary">
                 {Math.abs(data.avgCheckinMinutesBefore).toFixed(0)} min
@@ -319,27 +310,21 @@ export const EventAnalyticsPage: React.FC = () => {
         )}
 
         {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Event Type Distribution (#46) */}
-          <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-5">
-            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
-              Event Type Distribution
-            </h2>
+          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-5">
+            <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Event Type Distribution</h2>
             {data.eventTypeDistribution.length === 0 ? (
-              <p className="text-sm text-theme-text-muted">No event data available.</p>
+              <p className="text-theme-text-muted text-sm">No event data available.</p>
             ) : (
               <div className="space-y-3">
                 {data.eventTypeDistribution.map((d) => (
                   <div key={d.eventType}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-theme-text-secondary">
-                        {getEventTypeLabel(d.eventType)}
-                      </span>
-                      <span className="text-theme-text-primary font-medium">
-                        {d.count}
-                      </span>
+                    <div className="mb-1 flex justify-between text-sm">
+                      <span className="text-theme-text-secondary">{getEventTypeLabel(d.eventType)}</span>
+                      <span className="text-theme-text-primary font-medium">{d.count}</span>
                     </div>
-                    <div className="w-full bg-theme-surface-hover rounded-full h-3">
+                    <div className="bg-theme-surface-hover h-3 w-full rounded-full">
                       <div
                         className={`h-3 rounded-full transition-all ${barColor(d.eventType)}`}
                         style={{
@@ -354,94 +339,83 @@ export const EventAnalyticsPage: React.FC = () => {
           </div>
 
           {/* Monthly Trend (#44) */}
-          <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-5">
-            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
-              Monthly Event Trend
-            </h2>
+          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-5">
+            <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Monthly Event Trend</h2>
             {data.monthlyEventCounts.length === 0 ? (
-              <p className="text-sm text-theme-text-muted">No event data available.</p>
+              <p className="text-theme-text-muted text-sm">No event data available.</p>
             ) : (
               <div className="overflow-x-auto">
-              <div className="flex items-end gap-2 h-48 min-w-full">
-                {data.monthlyEventCounts.map((m) => {
-                  const heightPct = Math.max(
-                    Math.round((m.count / maxMonthlyCount) * 100),
-                    4,
-                  );
-                  return (
-                    <div
-                      key={m.month}
-                      className="flex-1 min-w-[36px] flex flex-col items-center justify-end h-full"
-                    >
-                      <span className="text-xs text-theme-text-primary font-medium mb-1">
-                        {m.count}
-                      </span>
-                      <div
-                        className="w-full bg-blue-500 rounded-t transition-all"
-                        style={{ height: `${heightPct}%` }}
-                        title={`${monthLabel(m.month)}: ${m.count} events`}
-                      />
-                      <span className="text-[10px] text-theme-text-muted mt-1 truncate w-full text-center">
-                        {monthLabel(m.month)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                <div className="flex h-48 min-w-full items-end gap-2">
+                  {data.monthlyEventCounts.map((m) => {
+                    const heightPct = Math.max(Math.round((m.count / maxMonthlyCount) * 100), 4);
+                    return (
+                      <div key={m.month} className="flex h-full min-w-[36px] flex-1 flex-col items-center justify-end">
+                        <span className="text-theme-text-primary mb-1 text-xs font-medium">{m.count}</span>
+                        <div
+                          className="w-full rounded-t bg-blue-500 transition-all"
+                          style={{ height: `${heightPct}%` }}
+                          title={`${monthLabel(m.month)}: ${m.count} events`}
+                        />
+                        <span className="text-theme-text-muted mt-1 w-full truncate text-center text-[10px]">
+                          {monthLabel(m.month)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
         </div>
 
         {/* Top Events by Attendance (#47) */}
-        <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-5">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
-            Top Events by Attendance
-          </h2>
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-5">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Top Events by Attendance</h2>
           {data.topEvents.length === 0 ? (
-            <p className="text-sm text-theme-text-muted">No attendance data available.</p>
+            <p className="text-theme-text-muted text-sm">No attendance data available.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-theme-surface-border text-left text-theme-text-secondary">
-                    <th scope="col" className="pb-2 pr-4">Event</th>
-                    <th scope="col" className="pb-2 pr-4">Type</th>
-                    <th scope="col" className="pb-2 pr-4">Date</th>
-                    <th scope="col" className="pb-2 pr-4 text-right">RSVPs</th>
-                    <th scope="col" className="pb-2 pr-4 text-right">Checked In</th>
-                    <th scope="col" className="pb-2 text-right">Rate</th>
+                  <tr className="border-theme-surface-border text-theme-text-secondary border-b text-left">
+                    <th scope="col" className="pr-4 pb-2">
+                      Event
+                    </th>
+                    <th scope="col" className="pr-4 pb-2">
+                      Type
+                    </th>
+                    <th scope="col" className="pr-4 pb-2">
+                      Date
+                    </th>
+                    <th scope="col" className="pr-4 pb-2 text-right">
+                      RSVPs
+                    </th>
+                    <th scope="col" className="pr-4 pb-2 text-right">
+                      Checked In
+                    </th>
+                    <th scope="col" className="pb-2 text-right">
+                      Rate
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.topEvents.map((e) => (
-                    <tr
-                      key={e.eventId}
-                      className="border-b border-theme-surface-border/50 last:border-0"
-                    >
+                    <tr key={e.eventId} className="border-theme-surface-border/50 border-b last:border-0">
                       <td className="py-2 pr-4">
                         <Link
                           to={`/events/${e.eventId}`}
-                          className="text-theme-text-primary hover:underline font-medium"
+                          className="text-theme-text-primary font-medium hover:underline"
                         >
                           {e.title}
                         </Link>
                       </td>
-                      <td className="py-2 pr-4 text-theme-text-secondary">
-                        {getEventTypeLabel(e.eventType)}
-                      </td>
-                      <td className="py-2 pr-4 text-theme-text-secondary">
-                        {formatDate(e.startDatetime, tz)}
-                      </td>
-                      <td className="py-2 pr-4 text-right text-theme-text-primary">
-                        {e.goingCount}
-                      </td>
-                      <td className="py-2 pr-4 text-right text-theme-text-primary">
-                        {e.checkedInCount}
-                      </td>
+                      <td className="text-theme-text-secondary py-2 pr-4">{getEventTypeLabel(e.eventType)}</td>
+                      <td className="text-theme-text-secondary py-2 pr-4">{formatDate(e.startDatetime, tz)}</td>
+                      <td className="text-theme-text-primary py-2 pr-4 text-right">{e.goingCount}</td>
+                      <td className="text-theme-text-primary py-2 pr-4 text-right">{e.checkedInCount}</td>
                       <td className="py-2 text-right">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                             e.attendanceRate >= 0.8
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                               : e.attendanceRate >= 0.5
@@ -475,11 +449,11 @@ interface SummaryCardProps {
 }
 
 const SummaryCard: React.FC<SummaryCardProps> = ({ icon, label, value }) => (
-  <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-4 flex items-center gap-4">
-    <div className="p-2 rounded-lg bg-theme-surface-hover">{icon}</div>
+  <div className="bg-theme-surface border-theme-surface-border flex items-center gap-4 rounded-lg border p-4">
+    <div className="bg-theme-surface-hover rounded-lg p-2">{icon}</div>
     <div>
-      <p className="text-sm text-theme-text-secondary">{label}</p>
-      <p className="text-2xl font-bold text-theme-text-primary">{value}</p>
+      <p className="text-theme-text-secondary text-sm">{label}</p>
+      <p className="text-theme-text-primary text-2xl font-bold">{value}</p>
     </div>
   </div>
 );

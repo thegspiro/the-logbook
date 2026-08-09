@@ -7,22 +7,26 @@ The Documents module provides centralized file storage for SOPs, policies, and s
 ## Table of Contents
 
 ### Documents
+
 1. [Documents Overview](#documents-overview)
 2. [Folders and Organization](#folders-and-organization)
 3. [Uploading and Managing Documents](#uploading-and-managing-documents)
 
 ### Custom Forms
+
 4. [Forms Overview](#forms-overview)
 5. [Building a Form](#building-a-form)
 6. [Publishing and Sharing Forms](#publishing-and-sharing-forms)
 7. [Viewing Submissions](#viewing-submissions)
 
 ### Communications
-8. [Notifications](#notifications)
+
+8. [Notification Rules & Logs](#notification-rules--logs)
 9. [Department Messages](#department-messages)
 10. [External Integrations](#external-integrations)
 
 ### Worked Examples
+
 11. [Realistic Example: Building a Vehicle Pre-Trip Inspection Form](#realistic-example-building-a-vehicle-pre-trip-inspection-form)
 12. [Troubleshooting](#troubleshooting)
 
@@ -33,6 +37,7 @@ The Documents module provides centralized file storage for SOPs, policies, and s
 Navigate to **Documents** in the sidebar to access the department's document library.
 
 The Documents page provides:
+
 - **Folder tree** on the left for navigation
 - **File list** on the right showing documents in the selected folder
 - **Grid and List view** toggles
@@ -47,6 +52,7 @@ The Documents page provides:
 Documents are organized into folders. The system provides default folders, and administrators can create additional ones.
 
 **System Folders** (created automatically):
+
 - SOPs
 - Policies
 - Training Materials
@@ -92,6 +98,7 @@ Documents are organized into folders. The system provides default folders, and a
 Navigate to **Forms** in the sidebar (under Administration) to access the form builder.
 
 Custom forms let you collect structured data for:
+
 - Incident reports
 - Equipment inspections
 - Shift reports
@@ -117,28 +124,29 @@ Custom forms let you collect structured data for:
 
 The form builder supports these field types:
 
-| Field Type | Description |
-|-----------|-------------|
-| **Text** | Single-line text input |
-| **Textarea** | Multi-line text area |
-| **Number** | Numeric input |
-| **Email** | Email address with validation |
-| **Phone** | Phone number input |
-| **Date** | Date picker |
-| **Time** | Time picker |
-| **Select** | Dropdown selection |
-| **Multi-Select** | Multiple choice selection |
-| **Radio** | Single choice radio buttons |
-| **Checkbox** | Boolean checkbox |
-| **File Upload** | File attachment |
-| **Signature** | Digital signature capture |
-| **Section Header** | Visual divider with heading |
-| **Hidden** | Hidden field for metadata |
-| **Calculated** | Auto-calculated from other fields |
-| **DateTime** | Combined date and time picker |
-| **Member Lookup** | Search and select existing members |
+| Field Type         | Description                        |
+| ------------------ | ---------------------------------- |
+| **Text**           | Single-line text input             |
+| **Textarea**       | Multi-line text area               |
+| **Number**         | Numeric input                      |
+| **Email**          | Email address with validation      |
+| **Phone**          | Phone number input                 |
+| **Date**           | Date picker                        |
+| **Time**           | Time picker                        |
+| **Select**         | Dropdown selection                 |
+| **Multi-Select**   | Multiple choice selection          |
+| **Radio**          | Single choice radio buttons        |
+| **Checkbox**       | Boolean checkbox                   |
+| **File Upload**    | File attachment                    |
+| **Signature**      | Digital signature capture          |
+| **Section Header** | Visual divider with heading        |
+| **Hidden**         | Hidden field for metadata          |
+| **Calculated**     | Auto-calculated from other fields  |
+| **DateTime**       | Combined date and time picker      |
+| **Member Lookup**  | Search and select existing members |
 
 For each field, configure:
+
 - Label and help text
 - Required or optional
 - Validation rules (min/max, pattern)
@@ -148,6 +156,7 @@ For each field, configure:
 ### Form Builder Features
 
 The form builder includes advanced capabilities:
+
 - **Drag-and-drop reordering**: Rearrange fields by dragging them to new positions
 - **Field duplication**: Click the duplicate button on any field to create a copy
 - **Incomplete field highlighting**: Fields with missing required configuration (e.g., no label, no options for select fields) are visually highlighted so you can fix them before publishing
@@ -160,6 +169,7 @@ The form builder includes advanced capabilities:
 ### Form Templates
 
 The system includes pre-built templates:
+
 - Incident Report
 - Shift Report
 - Equipment Inspection
@@ -217,6 +227,7 @@ This is useful for feedback surveys, polls, and any form where you want to see a
 ### Integration Health
 
 If your form has cross-module integrations (Membership or Inventory), the submissions view shows integration processing status for each submission:
+
 - **Success** — Integration processed correctly
 - **Failed** — Integration encountered an error (click **Reprocess** to retry)
 - **Pending** — Integration is queued for processing
@@ -231,11 +242,11 @@ Navigate to **Notifications** in the sidebar (`/notifications`) to manage notifi
 
 The Notifications page uses a three-tab layout:
 
-| Tab | Purpose |
-|-----|---------|
+| Tab                    | Purpose                                                                 |
+| ---------------------- | ----------------------------------------------------------------------- |
 | **Notification Rules** | Create and manage rules that define when and how notifications are sent |
-| **Email Templates** | Link to email template management for customizing notification formats |
-| **Send Log** | View delivery history with channel filtering (All / Email / In-App) |
+| **Email Templates**    | Link to email template management for customizing notification formats  |
+| **Send Log**           | View delivery history with channel filtering (All / Email / In-App)     |
 
 ![Notification rules and logs page with summary cards and the rules list](./images/07-08-notification-rules.png)
 
@@ -243,14 +254,14 @@ The Notifications page uses a three-tab layout:
 
 Notification rules define when and how you are alerted. Rules can be set for:
 
-| Trigger | Description | Default Category | Default Channel |
-|---------|-------------|-----------------|----------------|
-| **event_reminder** | Alerts before upcoming events | Events | In-App |
-| **training_expiry** | Warnings when certifications are expiring | Training | Email |
-| **schedule_change** | Alerts for shift changes or new assignments | Scheduling | In-App |
-| **new_member** | Notification when a new member is added | Members | In-App |
-| **maintenance_due** | Alerts for upcoming equipment or facility maintenance | Maintenance | Email |
-| **form_submitted** | Alerts when a form receives a new submission | General | In-App |
+| Trigger             | Description                                           | Default Category | Default Channel |
+| ------------------- | ----------------------------------------------------- | ---------------- | --------------- |
+| **event_reminder**  | Alerts before upcoming events                         | Events           | In-App          |
+| **training_expiry** | Warnings when certifications are expiring             | Training         | Email           |
+| **schedule_change** | Alerts for shift changes or new assignments           | Scheduling       | In-App          |
+| **new_member**      | Notification when a new member is added               | Members          | In-App          |
+| **maintenance_due** | Alerts for upcoming equipment or facility maintenance | Maintenance      | Email           |
+| **form_submitted**  | Alerts when a form receives a new submission          | General          | In-App          |
 
 ### Creating a Rule
 
@@ -268,6 +279,7 @@ Rules can be enabled/disabled individually with toggle switches. The summary car
 ### Send Log
 
 The **Send Log** tab shows notification delivery history with:
+
 - Date and time
 - Recipient
 - Subject and message content
@@ -281,18 +293,19 @@ The **Send Log** tab shows notification delivery history with:
 ### Dashboard Notification Dismiss
 
 On the dashboard, notifications now have dismiss controls:
+
 - **Clear All** button in the notification section header — marks all unread notifications as read
 - **Individual dismiss (X)** buttons on each unread notification card
 - Persistent department messages (see below) cannot be dismissed by regular members
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Channel filter defaults | Defaults to "All" — shows both email and in-app logs |
-| Bulk mark-as-read | Only marks currently unread notifications; already-read are not modified |
+| Scenario                       | Behavior                                                                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Channel filter defaults        | Defaults to "All" — shows both email and in-app logs                                            |
+| Bulk mark-as-read              | Only marks currently unread notifications; already-read are not modified                        |
 | Rule with trigger already used | Multiple rules can use the same trigger (e.g., two event_reminder rules for different channels) |
-| Disabled rule | Stops sending but retains configuration and history |
+| Disabled rule                  | Stops sending but retains configuration and history                                             |
 
 ---
 
@@ -333,20 +346,20 @@ Every targeted member gets the message in the app (the dashboard card, the
 `/messages` inbox, and a bell notification). Higher priorities are **escalated**
 to the channels members actually watch when they're not in the app:
 
-| Priority / flag | In-app (bell, inbox, dashboard) | Email | SMS |
-|-----------------|:---:|:---:|:---:|
-| Normal | ✅ | — | — |
-| Important | ✅ | — | — |
-| Requires acknowledgment | ✅ | ✅ | — |
-| Urgent | ✅ | ✅ | ✅ |
+| Priority / flag         | In-app (bell, inbox, dashboard) | Email | SMS |
+| ----------------------- | :-----------------------------: | :---: | :-: |
+| Normal                  |               ✅                |   —   |  —  |
+| Important               |               ✅                |   —   |  —  |
+| Requires acknowledgment |               ✅                |  ✅   |  —  |
+| Urgent                  |               ✅                |  ✅   | ✅  |
 
 When a message escalates, **email is always sent** to targeted members — it is
-the department's record that they were notified, so it is *not* suppressed by a
+the department's record that they were notified, so it is _not_ suppressed by a
 member's email preference or by consent (a member can never opt out of being
 informed of an important/urgent notice). **SMS** is different: it is only sent
 when the department has SMS (Twilio) configured, the member has a mobile number
 on file, the member has granted **express SMS consent** (US TCPA rules — a member
-who was never asked counts as *not* consented), **and** their text-message
+who was never asked counts as _not_ consented), **and** their text-message
 preference is on. A member who turns off or never grants SMS still receives the
 email. The author of a message is not notified about their own post.
 
@@ -377,7 +390,7 @@ escalated just like an immediate post. Leave the field blank to publish now.
 
 > A message that has **already been published cannot be moved back to a future
 > time** — that would re-send it. You can still reschedule a message that is
-> *pending* (has not gone out yet).
+> _pending_ (has not gone out yet).
 
 ### Editing and managing messages
 
@@ -392,6 +405,7 @@ escalated just like an immediate post. Leave the field blank to publish now.
 ### Persistent messages
 
 When the **Persistent** toggle is enabled:
+
 - The message shows a **"Persistent"** badge on the dashboard.
 - It stays on the dashboard/inbox for targeted members regardless of read state
   — it does not drop off once read.
@@ -404,6 +418,7 @@ Lt. Smith to schedule").
 ### Member notification controls
 
 Members manage how they're reached under **Settings → Notifications**:
+
 - **Email Notifications** — governs the department's **reminder and alert**
   emails (event reminders, low-stock alerts, etc.). Note that important/urgent
   **department-message escalations are always emailed** regardless of this toggle,
@@ -419,15 +434,15 @@ in-app notification is always delivered regardless of these settings.
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Message targeting specific roles | Only members holding one of those roles see it. Targeting follows the role even if it is later renamed. |
-| Renaming a targeted role | Existing role-targeted messages keep reaching the same role (targeting is by role identity, not name). |
-| Member marks all notifications as read | Persistent messages are unaffected — only an admin can clear them. |
-| Deleting an acknowledgment-required message | The message is hidden from members but its read/acknowledgment records are kept for compliance. |
-| Editing an already-sent message | Saves changes in place; it is **not** re-sent or re-escalated. |
-| Urgent message when Twilio isn't configured | Still delivered in-app and by email; SMS is skipped. |
-| Very high volume of urgent/ack messages | Email/SMS escalation is rate-limited per department to prevent runaway sends; the in-app notification is always delivered. |
+| Scenario                                    | Behavior                                                                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Message targeting specific roles            | Only members holding one of those roles see it. Targeting follows the role even if it is later renamed.                    |
+| Renaming a targeted role                    | Existing role-targeted messages keep reaching the same role (targeting is by role identity, not name).                     |
+| Member marks all notifications as read      | Persistent messages are unaffected — only an admin can clear them.                                                         |
+| Deleting an acknowledgment-required message | The message is hidden from members but its read/acknowledgment records are kept for compliance.                            |
+| Editing an already-sent message             | Saves changes in place; it is **not** re-sent or re-escalated.                                                             |
+| Urgent message when Twilio isn't configured | Still delivered in-app and by email; SMS is skipped.                                                                       |
+| Very high volume of urgent/ack messages     | Email/SMS escalation is rate-limited per department to prevent runaway sends; the in-app notification is always delivered. |
 
 ---
 
@@ -437,14 +452,14 @@ Navigate to **Integrations** in the sidebar to configure connections with extern
 
 ### Available Integrations
 
-| Integration | Description |
-|------------|-------------|
-| **Google Calendar** | Sync events to Google Calendar |
-| **Outlook** | Sync events to Outlook Calendar |
-| **Slack** | Post notifications to Slack channels |
-| **Discord** | Post notifications to Discord channels |
-| **CSV Export** | Scheduled data exports |
-| **iCal Feed** | Subscribe to events in any calendar app |
+| Integration         | Description                             |
+| ------------------- | --------------------------------------- |
+| **Google Calendar** | Sync events to Google Calendar          |
+| **Outlook**         | Sync events to Outlook Calendar         |
+| **Slack**           | Post notifications to Slack channels    |
+| **Discord**         | Post notifications to Discord channels  |
+| **CSV Export**      | Scheduled data exports                  |
+| **iCal Feed**       | Subscribe to events in any calendar app |
 
 ### Setting Up an Integration
 
@@ -469,6 +484,7 @@ This walkthrough demonstrates building a custom form from scratch using the form
 **Safety Officer Capt. Linda Zhao** at **Brookfield Fire Department** wants to digitize their daily apparatus pre-trip inspection checklist. Currently, drivers fill out a paper form clipped to a clipboard in each bay. She wants to replace it with a form members can complete on their phone or tablet.
 
 The paper form has:
+
 - Date and apparatus selection
 - Driver name
 - Checkbox list for each inspection point (lights, tires, fluids, etc.)
@@ -483,11 +499,11 @@ The paper form has:
 
 Capt. Zhao navigates to **Administration > Forms** and clicks **Create Form**.
 
-| Field | Value |
-|-------|-------|
-| **Title** | Daily Apparatus Pre-Trip Inspection |
+| Field           | Value                                                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Title**       | Daily Apparatus Pre-Trip Inspection                                                                             |
 | **Description** | Complete this form before taking any apparatus out of quarters. Report all deficiencies to the on-duty officer. |
-| **Category** | Operations |
+| **Category**    | Operations                                                                                                      |
 
 ---
 
@@ -497,56 +513,56 @@ She uses the form builder to add fields by clicking **Add Field** for each one. 
 
 **Section 1 — Header fields:**
 
-| # | Field Type | Label | Required | Configuration |
-|---|-----------|-------|----------|---------------|
-| 1 | **Section Header** | Inspection Details | — | Heading text for the top of the form |
-| 2 | **Date** | Inspection Date | Yes | Default: today's date |
-| 3 | **Select** | Apparatus | Yes | Options: Engine 1, Engine 2, Ladder 1, Rescue 1, Squad 3, Chief 1, Utility 1 |
-| 4 | **Hidden** | Inspector | — | Auto-filled with logged-in user's name |
+| #   | Field Type         | Label              | Required | Configuration                                                                |
+| --- | ------------------ | ------------------ | -------- | ---------------------------------------------------------------------------- |
+| 1   | **Section Header** | Inspection Details | —        | Heading text for the top of the form                                         |
+| 2   | **Date**           | Inspection Date    | Yes      | Default: today's date                                                        |
+| 3   | **Select**         | Apparatus          | Yes      | Options: Engine 1, Engine 2, Ladder 1, Rescue 1, Squad 3, Chief 1, Utility 1 |
+| 4   | **Hidden**         | Inspector          | —        | Auto-filled with logged-in user's name                                       |
 
 **Section 2 — Exterior checks:**
 
-| # | Field Type | Label | Required | Configuration |
-|---|-----------|-------|----------|---------------|
-| 5 | **Section Header** | Exterior Inspection | — | — |
-| 6 | **Checkbox** | Headlights / taillights / turn signals functional | Yes | — |
-| 7 | **Checkbox** | Emergency lights and siren tested | Yes | — |
-| 8 | **Checkbox** | Tires — adequate tread, proper inflation, no damage | Yes | — |
-| 9 | **Checkbox** | Body — no visible damage, compartment doors secure | Yes | — |
-| 10 | **Checkbox** | Mirrors clean and properly adjusted | Yes | — |
-| 11 | **Checkbox** | Fuel level above 3/4 tank | Yes | — |
+| #   | Field Type         | Label                                               | Required | Configuration |
+| --- | ------------------ | --------------------------------------------------- | -------- | ------------- |
+| 5   | **Section Header** | Exterior Inspection                                 | —        | —             |
+| 6   | **Checkbox**       | Headlights / taillights / turn signals functional   | Yes      | —             |
+| 7   | **Checkbox**       | Emergency lights and siren tested                   | Yes      | —             |
+| 8   | **Checkbox**       | Tires — adequate tread, proper inflation, no damage | Yes      | —             |
+| 9   | **Checkbox**       | Body — no visible damage, compartment doors secure  | Yes      | —             |
+| 10  | **Checkbox**       | Mirrors clean and properly adjusted                 | Yes      | —             |
+| 11  | **Checkbox**       | Fuel level above 3/4 tank                           | Yes      | —             |
 
 **Section 3 — Engine and fluids:**
 
-| # | Field Type | Label | Required | Configuration |
-|---|-----------|-------|----------|---------------|
-| 12 | **Section Header** | Engine & Fluids | — | — |
-| 13 | **Checkbox** | Engine oil level normal | Yes | — |
-| 14 | **Checkbox** | Coolant level normal | Yes | — |
-| 15 | **Checkbox** | Transmission fluid level normal | Yes | — |
-| 16 | **Checkbox** | Power steering fluid level normal | Yes | — |
-| 17 | **Checkbox** | Battery connections clean and tight | Yes | — |
-| 18 | **Number** | Current Mileage | Yes | Validation: min 0 |
+| #   | Field Type         | Label                               | Required | Configuration     |
+| --- | ------------------ | ----------------------------------- | -------- | ----------------- |
+| 12  | **Section Header** | Engine & Fluids                     | —        | —                 |
+| 13  | **Checkbox**       | Engine oil level normal             | Yes      | —                 |
+| 14  | **Checkbox**       | Coolant level normal                | Yes      | —                 |
+| 15  | **Checkbox**       | Transmission fluid level normal     | Yes      | —                 |
+| 16  | **Checkbox**       | Power steering fluid level normal   | Yes      | —                 |
+| 17  | **Checkbox**       | Battery connections clean and tight | Yes      | —                 |
+| 18  | **Number**         | Current Mileage                     | Yes      | Validation: min 0 |
 
 **Section 4 — Equipment checks:**
 
-| # | Field Type | Label | Required | Configuration |
-|---|-----------|-------|----------|---------------|
-| 19 | **Section Header** | Equipment & Cab | — | — |
-| 20 | **Checkbox** | SCBA bottles — full and secured | Yes | — |
-| 21 | **Checkbox** | Portable radio — charged and functional | Yes | — |
-| 22 | **Checkbox** | First aid kit — stocked | Yes | — |
-| 23 | **Checkbox** | Hand tools — present and secured | Yes | — |
-| 24 | **Checkbox** | Cab — clean, no loose items | Yes | — |
+| #   | Field Type         | Label                                   | Required | Configuration |
+| --- | ------------------ | --------------------------------------- | -------- | ------------- |
+| 19  | **Section Header** | Equipment & Cab                         | —        | —             |
+| 20  | **Checkbox**       | SCBA bottles — full and secured         | Yes      | —             |
+| 21  | **Checkbox**       | Portable radio — charged and functional | Yes      | —             |
+| 22  | **Checkbox**       | First aid kit — stocked                 | Yes      | —             |
+| 23  | **Checkbox**       | Hand tools — present and secured        | Yes      | —             |
+| 24  | **Checkbox**       | Cab — clean, no loose items             | Yes      | —             |
 
 **Section 5 — Summary:**
 
-| # | Field Type | Label | Required | Configuration |
-|---|-----------|-------|----------|---------------|
-| 25 | **Section Header** | Overall Assessment | — | — |
-| 26 | **Radio** | Overall Condition | Yes | Options: Ready for Service, Minor Issues (note below), Out of Service (notify officer immediately) |
-| 27 | **Textarea** | Deficiencies / Notes | No | Help text: "Describe any issues found during inspection. Include location and severity." Conditional visibility: shown when Overall Condition is NOT "Ready for Service" |
-| 28 | **Signature** | Driver Signature | Yes | — |
+| #   | Field Type         | Label                | Required | Configuration                                                                                                                                                            |
+| --- | ------------------ | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 25  | **Section Header** | Overall Assessment   | —        | —                                                                                                                                                                        |
+| 26  | **Radio**          | Overall Condition    | Yes      | Options: Ready for Service, Minor Issues (note below), Out of Service (notify officer immediately)                                                                       |
+| 27  | **Textarea**       | Deficiencies / Notes | No       | Help text: "Describe any issues found during inspection. Include location and severity." Conditional visibility: shown when Overall Condition is NOT "Ready for Service" |
+| 28  | **Signature**      | Driver Signature     | Yes      | —                                                                                                                                                                        |
 
 > **Hint:** The **conditional visibility** on the Deficiencies field (item 27) is a key usability feature. By setting it to show only when the condition is NOT "Ready for Service," the form stays clean for routine inspections where everything passes. Drivers only see the notes field when they actually need it.
 
@@ -556,12 +572,12 @@ She uses the form builder to add fields by clicking **Add Field** for each one. 
 
 Capt. Zhao configures the form settings:
 
-| Setting | Value |
-|---------|-------|
-| **Status** | Active |
-| **Public Access** | Off (internal only — requires login) |
-| **Allow Multiple Submissions** | Yes (one per day per apparatus) |
-| **Submission Notification** | On — notify Safety Officer when a submission includes "Minor Issues" or "Out of Service" |
+| Setting                        | Value                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------- |
+| **Status**                     | Active                                                                                   |
+| **Public Access**              | Off (internal only — requires login)                                                     |
+| **Allow Multiple Submissions** | Yes (one per day per apparatus)                                                          |
+| **Submission Notification**    | On — notify Safety Officer when a submission includes "Minor Issues" or "Out of Service" |
 
 She clicks **Save**. The form is now live and accessible to all logged-in members.
 
@@ -572,12 +588,13 @@ She clicks **Save**. The form is now live and accessible to all logged-in member
 The next morning, **D/O Mike Torres** opens The Logbook on the station tablet, navigates to **Forms**, and opens the pre-trip inspection form.
 
 He fills it out for Engine 1:
+
 - Checks off all exterior items
 - Checks off all engine/fluids items
 - Mileage: 28,523
 - Checks off all equipment items
 - Overall Condition: **Minor Issues**
-- The deficiency notes field appears. He types: *"Rear passenger-side turn signal bulb is out. Replacement bulb needed — have one in station supply. Will replace after shift."*
+- The deficiency notes field appears. He types: _"Rear passenger-side turn signal bulb is out. Replacement bulb needed — have one in station supply. Will replace after shift."_
 - Signs with his finger on the tablet
 - Clicks **Submit**
 
@@ -591,15 +608,15 @@ After two weeks of use, Capt. Zhao navigates to **Forms > Daily Apparatus Pre-Tr
 
 The submissions table shows:
 
-| Date | Apparatus | Inspector | Condition | Deficiencies |
-|------|-----------|-----------|-----------|-------------|
-| Mar 14 | Engine 1 | Torres | Ready for Service | — |
-| Mar 14 | Ladder 1 | Chen | Ready for Service | — |
-| Mar 14 | Rescue 1 | Brooks | Minor Issues | Low windshield washer fluid |
-| Mar 13 | Engine 1 | Garcia | Ready for Service | — |
-| Mar 13 | Engine 2 | Torres | Ready for Service | — |
-| Mar 13 | Ladder 1 | Walsh | Minor Issues | Bay door sensor slow to respond |
-| ... | ... | ... | ... | ... |
+| Date   | Apparatus | Inspector | Condition         | Deficiencies                    |
+| ------ | --------- | --------- | ----------------- | ------------------------------- |
+| Mar 14 | Engine 1  | Torres    | Ready for Service | —                               |
+| Mar 14 | Ladder 1  | Chen      | Ready for Service | —                               |
+| Mar 14 | Rescue 1  | Brooks    | Minor Issues      | Low windshield washer fluid     |
+| Mar 13 | Engine 1  | Garcia    | Ready for Service | —                               |
+| Mar 13 | Engine 2  | Torres    | Ready for Service | —                               |
+| Mar 13 | Ladder 1  | Walsh     | Minor Issues      | Bay door sensor slow to respond |
+| ...    | ...       | ...       | ...               | ...                             |
 
 She clicks **Export CSV** to download the data for the monthly operations report. The CSV includes all field values from every submission — ready for spreadsheet analysis.
 
@@ -609,27 +626,27 @@ She clicks **Export CSV** to download the data for the monthly operations report
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| Cannot upload a document | Check file size limits (configured by your department). Verify you have permission to upload to the selected folder. |
-| Form not accepting submissions | Ensure the form status is **Active**. Draft forms cannot receive submissions. |
-| Public form URL not working | Verify that Public Access is enabled on the form. The form must be in Active status. Ensure the URL uses the correct format: `/f/{slug}`. |
-| Form builder drag-and-drop not working | The builder uses `@dnd-kit` for reordering. Clear browser cache and reload. If the issue persists, run `cd frontend && npm install` to ensure dependencies are installed. |
-| Public form shows 404 error | Fixed in March 2026 — a doubled `/v1` in the API URL path has been corrected. Pull latest code and rebuild. |
-| Forms page not visible in navigation | The Forms page now requires `forms.view` permission (changed from `settings.manage` in March 2026). Ask your administrator to grant `forms.view` to your role. |
-| Integration reprocessing fails | Check that the target module (Membership or Inventory) is enabled and the field mapping is correct. Review the error details on the failed submission. |
-| Not receiving email notifications | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. If using Cloudflare Email Service, verify the API token is valid in Administration > Organization Settings > Email tab. |
-| Slack integration not posting | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors. |
-| Calendar events not syncing | Ensure the calendar integration is connected. Some calendar apps cache iCal feeds and may take up to 24 hours to refresh. |
-| Form submissions not appearing in pipeline | Fixed in March 2026 — multiple field mapping issues resolved. Pull latest backend code. Check backend logs for "Field mapping" warnings if issues persist. |
-| Cannot delete a form linked to a pipeline | As of 2026-03-04, forms linked to active pipelines are protected from deletion. Remove the pipeline integration first (Pipeline Settings → edit stage → remove form link), then delete the form. |
-| Reprocessing submission doesn't update prospect | Fixed in March 2026 — reprocessing now re-evaluates pipeline stage assignment. Pull latest backend code. |
-| Duplicate prospect not detected on form submission | As of 2026-03-04, duplicate detection by email is active. The pipeline coordinator receives a notification with a link to the existing prospect. |
-| Form field compatibility warning on save | This is a new validation (2026-03-04) that checks if form fields match expected pipeline field mappings. Review the warning and update field names to match. |
-| Modal dialog buttons unresponsive (delete, confirm) | Fixed in March 2026 — backdrop overlay no longer intercepts button clicks. Pull latest and rebuild. |
-| Form submission does not auto-advance prospect | As of 2026-03-14, auto-advance must be explicitly enabled in the pipeline stage configuration. Open Pipeline Settings, edit the form_submission stage, and check "Auto-advance when form is submitted". |
-| Automated pipeline email not sent on form submission | The email is triggered when advancing to an `automated_email` stage, not when submitting a form. Verify the pipeline has an `automated_email` stage after the `form_submission` stage and that SMTP is configured. *(added 2026-03-14)* |
-| Public form submission by bot | The system uses a hidden honeypot field for bot detection. If filled, the submission returns HTTP 200 with no body (fake success) — no record is created. Legitimate users never see this field. |
+| Issue                                                | Solution                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cannot upload a document                             | Check file size limits (configured by your department). Verify you have permission to upload to the selected folder.                                                                                                                                     |
+| Form not accepting submissions                       | Ensure the form status is **Active**. Draft forms cannot receive submissions.                                                                                                                                                                            |
+| Public form URL not working                          | Verify that Public Access is enabled on the form. The form must be in Active status. Ensure the URL uses the correct format: `/f/{slug}`.                                                                                                                |
+| Form builder drag-and-drop not working               | The builder uses `@dnd-kit` for reordering. Clear browser cache and reload. If the issue persists, run `cd frontend && npm install` to ensure dependencies are installed.                                                                                |
+| Public form shows 404 error                          | Fixed in March 2026 — a doubled `/v1` in the API URL path has been corrected. Pull latest code and rebuild.                                                                                                                                              |
+| Forms page not visible in navigation                 | The Forms page now requires `forms.view` permission (changed from `settings.manage` in March 2026). Ask your administrator to grant `forms.view` to your role.                                                                                           |
+| Integration reprocessing fails                       | Check that the target module (Membership or Inventory) is enabled and the field mapping is correct. Review the error details on the failed submission.                                                                                                   |
+| Not receiving email notifications                    | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. If using Cloudflare Email Service, verify the API token is valid in Administration > Organization Settings > Email tab. |
+| Slack integration not posting                        | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors.                                                                                                                                                   |
+| Calendar events not syncing                          | Ensure the calendar integration is connected. Some calendar apps cache iCal feeds and may take up to 24 hours to refresh.                                                                                                                                |
+| Form submissions not appearing in pipeline           | Fixed in March 2026 — multiple field mapping issues resolved. Pull latest backend code. Check backend logs for "Field mapping" warnings if issues persist.                                                                                               |
+| Cannot delete a form linked to a pipeline            | As of 2026-03-04, forms linked to active pipelines are protected from deletion. Remove the pipeline integration first (Pipeline Settings → edit stage → remove form link), then delete the form.                                                         |
+| Reprocessing submission doesn't update prospect      | Fixed in March 2026 — reprocessing now re-evaluates pipeline stage assignment. Pull latest backend code.                                                                                                                                                 |
+| Duplicate prospect not detected on form submission   | As of 2026-03-04, duplicate detection by email is active. The pipeline coordinator receives a notification with a link to the existing prospect.                                                                                                         |
+| Form field compatibility warning on save             | This is a new validation (2026-03-04) that checks if form fields match expected pipeline field mappings. Review the warning and update field names to match.                                                                                             |
+| Modal dialog buttons unresponsive (delete, confirm)  | Fixed in March 2026 — backdrop overlay no longer intercepts button clicks. Pull latest and rebuild.                                                                                                                                                      |
+| Form submission does not auto-advance prospect       | As of 2026-03-14, auto-advance must be explicitly enabled in the pipeline stage configuration. Open Pipeline Settings, edit the form_submission stage, and check "Auto-advance when form is submitted".                                                  |
+| Automated pipeline email not sent on form submission | The email is triggered when advancing to an `automated_email` stage, not when submitting a form. Verify the pipeline has an `automated_email` stage after the `form_submission` stage and that SMTP is configured. _(added 2026-03-14)_                  |
+| Public form submission by bot                        | The system uses a hidden honeypot field for bot detection. If filled, the submission returns HTTP 200 with no body (fake success) — no record is created. Legitimate users never see this field.                                                         |
 
 ---
 

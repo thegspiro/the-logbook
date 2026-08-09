@@ -36,7 +36,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
       try {
         const [cfg, apparatus] = await Promise.all([
           trainingModuleConfigService.getConfig(),
-          schedulingService.getApparatusOptions().then(r => r.options.filter(o => o.source !== 'default')),
+          schedulingService.getApparatusOptions().then((r) => r.options.filter((o) => o.source !== 'default')),
         ]);
         setConfig(cfg);
         setAllApparatus(apparatus);
@@ -70,9 +70,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
       if (typeof defaultDuration === 'number' && defaultDuration > 0) {
         updates.manual_entry_default_duration_hours = defaultDuration;
       }
-      const result = await trainingModuleConfigService.updateConfig(
-        updates,
-      );
+      const result = await trainingModuleConfigService.updateConfig(updates);
       setConfig(result);
       toast.success('Settings saved');
     } catch (err: unknown) {
@@ -83,7 +81,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
   }, [enabled, requireApparatus, selectedApparatusIds, defaultStartTime, defaultDuration]);
 
   const toggleApparatus = (id: string) => {
-    setSelectedApparatusIds(prev => {
+    setSelectedApparatusIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -94,7 +92,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+        <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
       </div>
     );
   }
@@ -103,33 +101,35 @@ export const ManualEntrySettingsPanel: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-theme-text-primary">Manual Shift Entry</h3>
-          <p className="text-sm text-theme-text-muted mt-1">
+          <h3 className="text-theme-text-primary text-lg font-semibold">Manual Shift Entry</h3>
+          <p className="text-theme-text-muted mt-1 text-sm">
             Configure the manual shift report form for departments without the scheduling module.
           </p>
         </div>
         <button
-          onClick={() => { void handleSave(); }}
+          onClick={() => {
+            void handleSave();
+          }}
           disabled={saving}
-          className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save Settings
         </button>
       </div>
 
       {/* Enable toggle */}
-      <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-4">
-        <label className="flex items-center gap-3 cursor-pointer">
+      <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <label className="flex cursor-pointer items-center gap-3">
           <input
             type="checkbox"
             checked={enabled}
-            onChange={e => setEnabled(e.target.checked)}
-            className="rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+            onChange={(e) => setEnabled(e.target.checked)}
+            className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
           />
           <div>
-            <span className="text-sm font-medium text-theme-text-primary">Enable Manual Shift Entry</span>
-            <p className="text-xs text-theme-text-muted">
+            <span className="text-theme-text-primary text-sm font-medium">Enable Manual Shift Entry</span>
+            <p className="text-theme-text-muted text-xs">
               Allow officers to log shift hours without linking to a shift record.
             </p>
           </div>
@@ -139,37 +139,37 @@ export const ManualEntrySettingsPanel: React.FC = () => {
       {enabled && (
         <>
           {/* Apparatus configuration */}
-          <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-4 space-y-4">
+          <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-lg border p-4">
             <div className="flex items-center gap-2">
-              <Truck className="w-4 h-4 text-theme-text-muted" />
-              <h4 className="text-sm font-medium text-theme-text-primary">Apparatus</h4>
+              <Truck className="text-theme-text-muted h-4 w-4" />
+              <h4 className="text-theme-text-primary text-sm font-medium">Apparatus</h4>
             </div>
 
-            <label className="flex items-center gap-3 cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={requireApparatus}
-                onChange={e => setRequireApparatus(e.target.checked)}
-                className="rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                onChange={(e) => setRequireApparatus(e.target.checked)}
+                className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
               />
-              <span className="text-sm text-theme-text-secondary">Require apparatus selection on the form</span>
+              <span className="text-theme-text-secondary text-sm">Require apparatus selection on the form</span>
             </label>
 
             <div>
-              <p className="text-sm text-theme-text-secondary mb-2">
-                Select which apparatus are available for manual entry.
-                Leave all unchecked to allow any active apparatus.
+              <p className="text-theme-text-secondary mb-2 text-sm">
+                Select which apparatus are available for manual entry. Leave all unchecked to allow any active
+                apparatus.
               </p>
               {allApparatus.length === 0 ? (
-                <p className="text-sm text-theme-text-muted py-2">
+                <p className="text-theme-text-muted py-2 text-sm">
                   No apparatus configured. Add apparatus in the scheduling settings.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                  {allApparatus.map(a => (
+                <div className="grid max-h-60 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                  {allApparatus.map((a) => (
                     <label
                       key={a.id || a.name}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
                         selectedApparatusIds.has(a.id || '')
                           ? 'border-violet-500/40 bg-violet-500/5'
                           : 'border-theme-surface-border hover:bg-theme-surface-hover'
@@ -179,18 +179,16 @@ export const ManualEntrySettingsPanel: React.FC = () => {
                         type="checkbox"
                         checked={selectedApparatusIds.has(a.id || '')}
                         onChange={() => toggleApparatus(a.id || '')}
-                        className="rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                        className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
                       />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm text-theme-text-primary">{a.name}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-theme-text-primary text-sm">{a.name}</span>
                         {a.unit_number && (
-                          <span className="ml-1.5 text-xs text-theme-text-muted">({a.unit_number})</span>
+                          <span className="text-theme-text-muted ml-1.5 text-xs">({a.unit_number})</span>
                         )}
-                        <span className="block text-xs text-theme-text-muted capitalize">{a.apparatus_type}</span>
+                        <span className="text-theme-text-muted block text-xs capitalize">{a.apparatus_type}</span>
                       </div>
-                      {selectedApparatusIds.has(a.id || '') && (
-                        <Check className="w-4 h-4 text-violet-500 shrink-0" />
-                      )}
+                      {selectedApparatusIds.has(a.id || '') && <Check className="h-4 w-4 shrink-0 text-violet-500" />}
                     </label>
                   ))}
                 </div>
@@ -199,35 +197,37 @@ export const ManualEntrySettingsPanel: React.FC = () => {
           </div>
 
           {/* Default times */}
-          <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-4 space-y-4">
+          <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-lg border p-4">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-theme-text-muted" />
-              <h4 className="text-sm font-medium text-theme-text-primary">Default Shift Times</h4>
+              <Clock className="text-theme-text-muted h-4 w-4" />
+              <h4 className="text-theme-text-primary text-sm font-medium">Default Shift Times</h4>
             </div>
-            <p className="text-sm text-theme-text-muted">
+            <p className="text-theme-text-muted text-sm">
               Pre-fill the start time and shift duration to speed up data entry. Officers can always override these.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Default Start Time</label>
+                <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Default Start Time</label>
                 <input
                   type="time"
                   value={defaultStartTime}
-                  onChange={e => setDefaultStartTime(e.target.value)}
-                  className="form-input focus:ring-violet-500 text-sm"
+                  onChange={(e) => setDefaultStartTime(e.target.value)}
+                  className="form-input text-sm focus:ring-violet-500"
                   placeholder="e.g. 08:00"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Default Shift Duration (hours)</label>
+                <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                  Default Shift Duration (hours)
+                </label>
                 <input
                   type="number"
                   min="0.5"
                   max="48"
                   step="0.5"
                   value={defaultDuration}
-                  onChange={e => setDefaultDuration(parseFloat(e.target.value) || '')}
-                  className="form-input focus:ring-violet-500 text-sm"
+                  onChange={(e) => setDefaultDuration(parseFloat(e.target.value) || '')}
+                  className="form-input text-sm focus:ring-violet-500"
                   placeholder="e.g. 24"
                 />
               </div>

@@ -61,6 +61,8 @@ async def list_meetings(
         skip=skip,
         limit=limit,
     )
+    # Fill in creator_name the response declares (else "Created by …" never shows).
+    await service.attach_creator_names(current_user.organization_id, list(meetings))
 
     return {
         "meetings": meetings,
@@ -102,6 +104,7 @@ async def get_meeting(
     meeting = await service.get_meeting_by_id(meeting_id, current_user.organization_id)
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
+    await service.attach_creator_names(current_user.organization_id, [meeting])
     return meeting
 
 

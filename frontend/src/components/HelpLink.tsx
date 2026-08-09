@@ -39,13 +39,13 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
 
     const baseUrl = 'https://github.com/thegspiro/the-logbook/wiki';
     const topicUrls: Record<string, string> = {
-      'dashboard': `${baseUrl}/Quick-Reference`,
+      dashboard: `${baseUrl}/Quick-Reference`,
       'organization-setup': `${baseUrl}/Onboarding`,
-      'members': `${baseUrl}/Module-Training#membership`,
-      'events': `${baseUrl}/Quick-Reference`,
-      'reports': `${baseUrl}/Module-Compliance`,
-      'training': `${baseUrl}/Module-Training`,
-      'settings': `${baseUrl}/Quick-Reference`,
+      members: `${baseUrl}/Module-Training#membership`,
+      events: `${baseUrl}/Quick-Reference`,
+      reports: `${baseUrl}/Module-Compliance`,
+      training: `${baseUrl}/Module-Training`,
+      settings: `${baseUrl}/Quick-Reference`,
     };
 
     return topicUrls[topic] || `${baseUrl}`;
@@ -89,36 +89,36 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
       >
         <button
           onClick={handleClick}
-          className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-1 max-md:mobile-touch-target rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+          className="text-theme-text-muted hover:text-theme-text-primary max-md:mobile-touch-target focus:ring-theme-focus-ring rounded-sm p-1 transition-colors focus:ring-2 focus:outline-hidden"
           aria-label={`Help: ${topic}`}
           aria-expanded={tooltip ? showTooltip : undefined}
           type="button"
         >
-          <HelpCircle className="w-5 h-5" aria-hidden="true" />
+          <HelpCircle className="h-5 w-5" aria-hidden="true" />
         </button>
 
         {/* Tooltip */}
         {showTooltip && tooltip && (
           <div className={`absolute z-50 ${getTooltipPositionClasses()}`}>
-            <div className="bg-theme-surface text-theme-text-primary text-sm rounded-lg p-3 shadow-xl border border-theme-surface-border max-w-xs">
-              <div className="flex items-start justify-between space-x-2 mb-2">
+            <div className="bg-theme-surface text-theme-text-primary border-theme-surface-border max-w-xs rounded-lg border p-3 text-sm shadow-xl">
+              <div className="mb-2 flex items-start justify-between space-x-2">
                 <p>{tooltip}</p>
                 <button
                   onClick={() => setShowTooltip(false)}
                   className="text-theme-text-muted hover:text-theme-text-primary shrink-0"
                   aria-label="Close help"
                 >
-                  <X className="w-4 h-4" aria-hidden="true" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
               <a
                 href={getDocUrl()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 flex items-center space-x-1"
+                className="flex items-center space-x-1 text-xs text-cyan-700 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300"
               >
                 <span>View full documentation</span>
-                <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                <ExternalLink className="h-3 w-3" aria-hidden="true" />
               </a>
             </div>
           </div>
@@ -134,11 +134,11 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         href={getDocUrl()}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center space-x-2 px-3 py-1.5 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary text-sm rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+        className="bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-md px-3 py-1.5 text-sm transition-colors focus:ring-2 focus:outline-hidden"
       >
-        <HelpCircle className="w-4 h-4" aria-hidden="true" />
+        <HelpCircle className="h-4 w-4" aria-hidden="true" />
         <span>{label}</span>
-        <ExternalLink className="w-3 h-3" aria-hidden="true" />
+        <ExternalLink className="h-3 w-3" aria-hidden="true" />
       </a>
     );
   }
@@ -150,11 +150,11 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         href={getDocUrl()}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center space-x-1 text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm"
+        className="focus:ring-theme-focus-ring inline-flex items-center space-x-1 rounded-sm text-sm text-cyan-700 transition-colors hover:text-cyan-700 focus:ring-2 focus:outline-hidden dark:text-cyan-400 dark:hover:text-cyan-300"
       >
-        <HelpCircle className="w-4 h-4" aria-hidden="true" />
+        <HelpCircle className="h-4 w-4" aria-hidden="true" />
         <span>{label}</span>
-        <ExternalLink className="w-3 h-3" aria-hidden="true" />
+        <ExternalLink className="h-3 w-3" aria-hidden="true" />
       </a>
     );
   }

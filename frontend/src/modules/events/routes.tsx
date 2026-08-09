@@ -12,39 +12,31 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 // Lazy-loaded pages
-const EventsPage = lazyWithRetry(() =>
-  import('../../pages/EventsPage').then((m) => ({ default: m.EventsPage })),
-);
+const EventsPage = lazyWithRetry(() => import('../../pages/EventsPage').then((m) => ({ default: m.EventsPage })));
 const EventDetailPage = lazyWithRetry(() =>
   import('../../pages/EventDetailPage').then((m) => ({
     default: m.EventDetailPage,
-  })),
+  }))
 );
 const EventQRCodePage = lazyWithRetry(() => import('../../pages/EventQRCodePage'));
-const EventSelfCheckInPage = lazyWithRetry(
-  () => import('../../pages/EventSelfCheckInPage'),
-);
+const EventSelfCheckInPage = lazyWithRetry(() => import('../../pages/EventSelfCheckInPage'));
 const EventsAdminHub = lazyWithRetry(() =>
-  import('../../pages/EventsAdminHub').then((m) => ({ default: m.EventsAdminHub })),
+  import('../../pages/EventsAdminHub').then((m) => ({ default: m.EventsAdminHub }))
 );
 const EventEditPage = lazyWithRetry(() =>
-  import('../../pages/EventEditPage').then((m) => ({ default: m.EventEditPage })),
+  import('../../pages/EventEditPage').then((m) => ({ default: m.EventEditPage }))
 );
-const EventCheckInMonitoringPage = lazyWithRetry(
-  () => import('../../pages/EventCheckInMonitoringPage'),
-);
-const AnalyticsDashboardPage = lazyWithRetry(
-  () => import('../../pages/AnalyticsDashboardPage'),
-);
+const EventCheckInMonitoringPage = lazyWithRetry(() => import('../../pages/EventCheckInMonitoringPage'));
+const AnalyticsDashboardPage = lazyWithRetry(() => import('../../pages/AnalyticsDashboardPage'));
 const EventAnalyticsPage = lazyWithRetry(() =>
   import('../../pages/EventAnalyticsPage').then((m) => ({
     default: m.EventAnalyticsPage,
-  })),
+  }))
 );
 const EventTemplatesPage = lazyWithRetry(() =>
   import('../../pages/EventTemplatesPage').then((m) => ({
     default: m.EventTemplatesPage,
-  })),
+  }))
 );
 
 export const getEventsRoutes = () => {
@@ -153,17 +145,12 @@ export const getEventsRoutes = () => {
       />
 
       {/* Events Module - Legacy redirect */}
-      <Route
-        path="/events/new"
-        element={<Navigate to="/events/admin?tab=create" replace />}
-      />
+      <Route path="/events/new" element={<Navigate to="/events/admin?tab=create" replace />} />
     </React.Fragment>
   );
 };
 
-const EventRequestStatusPage = lazyWithRetry(
-  () => import('../../pages/EventRequestStatusPage'),
-);
+const EventRequestStatusPage = lazyWithRetry(() => import('../../pages/EventRequestStatusPage'));
 
 /** Public routes for the events module (no auth required). */
 export const getEventsPublicRoutes = () => {

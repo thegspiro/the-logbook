@@ -50,7 +50,13 @@ const mockAnnualReport = {
     total_pending_hours: 25,
     total_entries: 120,
     by_category: [
-      { category_id: 'cat-1', category_name: 'Board Meetings', approved_hours: 200, pending_hours: 10, total_entries: 60 },
+      {
+        category_id: 'cat-1',
+        category_name: 'Board Meetings',
+        approved_hours: 200,
+        pending_hours: 10,
+        total_entries: 60,
+      },
       { category_id: 'cat-2', category_name: 'Fundraising', approved_hours: 150, pending_hours: 15, total_entries: 60 },
     ],
   },
@@ -152,9 +158,7 @@ describe('ComplianceOfficerDashboard', () => {
   });
 
   it('renders the Record Quality section when activeTab is record-completeness', async () => {
-    renderWithRouter(
-      <ComplianceOfficerDashboard activeTab="record-completeness" />,
-    );
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="record-completeness" />);
 
     await waitFor(() => {
       expect(screen.getByText(/Training Record Quality/)).toBeInTheDocument();

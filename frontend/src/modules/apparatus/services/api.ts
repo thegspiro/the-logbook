@@ -224,7 +224,10 @@ export const apparatusCustomFieldService = {
 // =============================================================================
 
 export const apparatusMaintenanceTypeService = {
-  async getMaintenanceTypes(params?: { isActive?: boolean; includeSystem?: boolean }): Promise<ApparatusMaintenanceType[]> {
+  async getMaintenanceTypes(params?: {
+    isActive?: boolean;
+    includeSystem?: boolean;
+  }): Promise<ApparatusMaintenanceType[]> {
     const response = await api.get<ApparatusMaintenanceType[]>('/apparatus/maintenance-types', {
       params: {
         is_active: params?.isActive ?? true,
@@ -239,7 +242,10 @@ export const apparatusMaintenanceTypeService = {
     return response.data;
   },
 
-  async updateMaintenanceType(typeId: string, typeData: ApparatusMaintenanceTypeUpdate): Promise<ApparatusMaintenanceType> {
+  async updateMaintenanceType(
+    typeId: string,
+    typeData: ApparatusMaintenanceTypeUpdate
+  ): Promise<ApparatusMaintenanceType> {
     const response = await api.patch<ApparatusMaintenanceType>(`/apparatus/maintenance-types/${typeId}`, typeData);
     return response.data;
   },
@@ -275,7 +281,10 @@ export const apparatusMaintenanceService = {
     return asArray(response.data);
   },
 
-  async getMaintenanceDue(params?: { daysAhead?: number; includeOverdue?: boolean }): Promise<ApparatusMaintenanceDue[]> {
+  async getMaintenanceDue(params?: {
+    daysAhead?: number;
+    includeOverdue?: boolean;
+  }): Promise<ApparatusMaintenanceDue[]> {
     const response = await api.get<ApparatusMaintenanceDue[]>('/apparatus/maintenance/due', {
       params: {
         days_ahead: params?.daysAhead ?? 30,
@@ -295,7 +304,10 @@ export const apparatusMaintenanceService = {
     return response.data;
   },
 
-  async updateMaintenanceRecord(recordId: string, maintenanceData: ApparatusMaintenanceUpdate): Promise<ApparatusMaintenance> {
+  async updateMaintenanceRecord(
+    recordId: string,
+    maintenanceData: ApparatusMaintenanceUpdate
+  ): Promise<ApparatusMaintenance> {
     const response = await api.patch<ApparatusMaintenance>(`/apparatus/maintenance/${recordId}`, maintenanceData);
     return response.data;
   },
@@ -375,10 +387,7 @@ export const apparatusOperatorService = {
 // =============================================================================
 
 export const apparatusEquipmentService = {
-  async getEquipment(params?: {
-    apparatusId?: string;
-    isPresent?: boolean;
-  }): Promise<ApparatusEquipment[]> {
+  async getEquipment(params?: { apparatusId?: string; isPresent?: boolean }): Promise<ApparatusEquipment[]> {
     const response = await api.get<ApparatusEquipment[]>('/apparatus/equipment', {
       params: {
         apparatus_id: params?.apparatusId,
@@ -477,9 +486,7 @@ export const evocLevelService = {
   },
 
   async checkEligibility(apparatusId: string, userId: string): Promise<EvocEligibilityCheck> {
-    const response = await api.get<EvocEligibilityCheck>(
-      `/apparatus/evoc-check/${apparatusId}/${userId}`
-    );
+    const response = await api.get<EvocEligibilityCheck>(`/apparatus/evoc-check/${apparatusId}/${userId}`);
     return response.data;
   },
 };

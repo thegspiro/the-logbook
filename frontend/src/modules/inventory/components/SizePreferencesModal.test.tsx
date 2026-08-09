@@ -50,7 +50,7 @@ describe('SizePreferencesModal', () => {
     expect(mockGetMy).not.toHaveBeenCalled();
   });
 
-  it('self-service mode: loads the signed-in user\'s sizes', async () => {
+  it("self-service mode: loads the signed-in user's sizes", async () => {
     mockGetMy.mockResolvedValue({ pant_waist: '34', shirt_size: 'l' });
     render(<SizePreferencesModal isOpen onClose={onClose} />);
 
@@ -60,10 +60,8 @@ describe('SizePreferencesModal', () => {
     expect(mockGetMember).not.toHaveBeenCalled();
   });
 
-  it('admin mode: loads a specific member\'s sizes and titles with their name', async () => {
-    render(
-      <SizePreferencesModal isOpen onClose={onClose} userId="u-1" memberName="Jane Doe" />,
-    );
+  it("admin mode: loads a specific member's sizes and titles with their name", async () => {
+    render(<SizePreferencesModal isOpen onClose={onClose} userId="u-1" memberName="Jane Doe" />);
 
     expect(await screen.findByText('Sizes — Jane Doe')).toBeInTheDocument();
     expect(mockGetMember).toHaveBeenCalledWith('u-1');
@@ -116,9 +114,7 @@ describe('SizePreferencesModal', () => {
 
   it('admin save targets the member upsert endpoint', async () => {
     const user = userEvent.setup();
-    render(
-      <SizePreferencesModal isOpen onClose={onClose} userId="u-1" memberName="Jane Doe" />,
-    );
+    render(<SizePreferencesModal isOpen onClose={onClose} userId="u-1" memberName="Jane Doe" />);
     await pantWaist();
 
     await user.click(screen.getByRole('button', { name: 'Save Sizes' }));

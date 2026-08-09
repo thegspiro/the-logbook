@@ -29,7 +29,8 @@ const ShiftReportPrintPage: React.FC = () => {
       setLoading(false);
       return;
     }
-    shiftCompletionService.getReport(reportId)
+    shiftCompletionService
+      .getReport(reportId)
       .then(setReport)
       .catch(() => setError('Failed to load report'))
       .finally(() => setLoading(false));
@@ -43,7 +44,7 @@ const ShiftReportPrintPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <p className="text-gray-500">Loading report...</p>
       </div>
     );
@@ -51,7 +52,7 @@ const ShiftReportPrintPage: React.FC = () => {
 
   if (error || !report) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <p className="text-red-600">{error || 'Report not found'}</p>
       </div>
     );
@@ -60,13 +61,14 @@ const ShiftReportPrintPage: React.FC = () => {
   const dateStr = formatDateCustom(
     report.shift_date + 'T12:00:00',
     { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' },
-    tz,
+    tz
   );
 
-  const hasEvaluation = report.performance_rating
-    || report.areas_of_strength
-    || report.areas_for_improvement
-    || (report.skills_observed && report.skills_observed.length > 0);
+  const hasEvaluation =
+    report.performance_rating ||
+    report.areas_of_strength ||
+    report.areas_for_improvement ||
+    (report.skills_observed && report.skills_observed.length > 0);
 
   return (
     <>
@@ -76,9 +78,16 @@ const ShiftReportPrintPage: React.FC = () => {
         @media screen { body { background: #f3f4f6; } }
       `}</style>
 
-      <div className="max-w-[8.5in] mx-auto bg-white print:shadow-none shadow-lg my-8 print:my-0">
-        <div className="p-8 print:p-0" style={{ fontFamily: 'Georgia, "Times New Roman", serif', color: '#111', fontSize: '11pt', lineHeight: '1.6' }}>
-
+      <div className="mx-auto my-8 max-w-[8.5in] bg-white shadow-lg print:my-0 print:shadow-none">
+        <div
+          className="p-8 print:p-0"
+          style={{
+            fontFamily: 'Georgia, "Times New Roman", serif',
+            color: '#111',
+            fontSize: '11pt',
+            lineHeight: '1.6',
+          }}
+        >
           {/* Header */}
           <div style={{ borderBottom: '3px solid #111', paddingBottom: '12pt', marginBottom: '16pt' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -86,13 +95,13 @@ const ShiftReportPrintPage: React.FC = () => {
                 <h1 style={{ fontSize: '18pt', fontWeight: 'bold', margin: '0 0 2pt 0', letterSpacing: '-0.01em' }}>
                   Shift Completion Report
                 </h1>
-                <p style={{ fontSize: '10pt', color: '#555', margin: 0 }}>
-                  End-of-Shift Documentation
-                </p>
+                <p style={{ fontSize: '10pt', color: '#555', margin: 0 }}>End-of-Shift Documentation</p>
               </div>
               <div style={{ textAlign: 'right', fontSize: '9pt', color: '#666' }}>
                 <p style={{ margin: 0 }}>Report ID: {report.id.slice(0, 8).toUpperCase()}</p>
-                <p style={{ margin: 0 }}>Filed: {formatDateCustom(report.created_at, { month: 'short', day: 'numeric', year: 'numeric' }, tz)}</p>
+                <p style={{ margin: 0 }}>
+                  Filed: {formatDateCustom(report.created_at, { month: 'short', day: 'numeric', year: 'numeric' }, tz)}
+                </p>
                 {report.review_status === 'approved' && (
                   <p style={{ margin: 0, color: '#166534', fontWeight: 600 }}>APPROVED</p>
                 )}
@@ -108,28 +117,83 @@ const ShiftReportPrintPage: React.FC = () => {
             <tbody>
               <tr>
                 <td style={{ border: '1px solid #ccc', padding: '6pt 8pt', width: '50%', verticalAlign: 'top' }}>
-                  <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt', letterSpacing: '0.05em', color: '#555', display: 'block' }}>Member</span>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      fontSize: '8pt',
+                      letterSpacing: '0.05em',
+                      color: '#555',
+                      display: 'block',
+                    }}
+                  >
+                    Member
+                  </span>
                   {report.trainee_name || 'Unknown'}
                 </td>
                 <td style={{ border: '1px solid #ccc', padding: '6pt 8pt', width: '50%', verticalAlign: 'top' }}>
-                  <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt', letterSpacing: '0.05em', color: '#555', display: 'block' }}>Shift Date</span>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      fontSize: '8pt',
+                      letterSpacing: '0.05em',
+                      color: '#555',
+                      display: 'block',
+                    }}
+                  >
+                    Shift Date
+                  </span>
                   {dateStr}
                 </td>
               </tr>
               <tr>
                 <td style={{ border: '1px solid #ccc', padding: '6pt 8pt', verticalAlign: 'top' }}>
-                  <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt', letterSpacing: '0.05em', color: '#555', display: 'block' }}>Hours on Shift</span>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      fontSize: '8pt',
+                      letterSpacing: '0.05em',
+                      color: '#555',
+                      display: 'block',
+                    }}
+                  >
+                    Hours on Shift
+                  </span>
                   {report.hours_on_shift}
                 </td>
                 <td style={{ border: '1px solid #ccc', padding: '6pt 8pt', verticalAlign: 'top' }}>
-                  <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt', letterSpacing: '0.05em', color: '#555', display: 'block' }}>Calls Responded</span>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      fontSize: '8pt',
+                      letterSpacing: '0.05em',
+                      color: '#555',
+                      display: 'block',
+                    }}
+                  >
+                    Calls Responded
+                  </span>
                   {report.calls_responded}
                 </td>
               </tr>
               {report.call_types && report.call_types.length > 0 && (
                 <tr>
                   <td colSpan={2} style={{ border: '1px solid #ccc', padding: '6pt 8pt', verticalAlign: 'top' }}>
-                    <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt', letterSpacing: '0.05em', color: '#555', display: 'block' }}>Call Types</span>
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        fontSize: '8pt',
+                        letterSpacing: '0.05em',
+                        color: '#555',
+                        display: 'block',
+                      }}
+                    >
+                      Call Types
+                    </span>
                     {report.call_types.join(', ')}
                   </td>
                 </tr>
@@ -140,7 +204,17 @@ const ShiftReportPrintPage: React.FC = () => {
           {/* Performance Rating */}
           {report.performance_rating && (
             <div style={{ marginBottom: '14pt' }}>
-              <h2 style={{ fontSize: '11pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #ddd', paddingBottom: '3pt', marginBottom: '6pt' }}>
+              <h2
+                style={{
+                  fontSize: '11pt',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: '1px solid #ddd',
+                  paddingBottom: '3pt',
+                  marginBottom: '6pt',
+                }}
+              >
                 Performance Rating
               </h2>
               <p style={{ margin: 0, fontSize: '12pt' }}>
@@ -152,7 +226,17 @@ const ShiftReportPrintPage: React.FC = () => {
           {/* Narrative Sections */}
           {report.areas_of_strength && (
             <div style={{ marginBottom: '14pt' }}>
-              <h2 style={{ fontSize: '11pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #ddd', paddingBottom: '3pt', marginBottom: '6pt' }}>
+              <h2
+                style={{
+                  fontSize: '11pt',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: '1px solid #ddd',
+                  paddingBottom: '3pt',
+                  marginBottom: '6pt',
+                }}
+              >
                 Areas of Strength
               </h2>
               <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{report.areas_of_strength}</p>
@@ -161,7 +245,17 @@ const ShiftReportPrintPage: React.FC = () => {
 
           {report.areas_for_improvement && (
             <div style={{ marginBottom: '14pt' }}>
-              <h2 style={{ fontSize: '11pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #ddd', paddingBottom: '3pt', marginBottom: '6pt' }}>
+              <h2
+                style={{
+                  fontSize: '11pt',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: '1px solid #ddd',
+                  paddingBottom: '3pt',
+                  marginBottom: '6pt',
+                }}
+              >
                 Areas for Improvement
               </h2>
               <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{report.areas_for_improvement}</p>
@@ -170,7 +264,17 @@ const ShiftReportPrintPage: React.FC = () => {
 
           {report.officer_narrative && (
             <div style={{ marginBottom: '14pt' }}>
-              <h2 style={{ fontSize: '11pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #ddd', paddingBottom: '3pt', marginBottom: '6pt' }}>
+              <h2
+                style={{
+                  fontSize: '11pt',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: '1px solid #ddd',
+                  paddingBottom: '3pt',
+                  marginBottom: '6pt',
+                }}
+              >
                 Officer Narrative
               </h2>
               <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{report.officer_narrative}</p>
@@ -180,15 +284,39 @@ const ShiftReportPrintPage: React.FC = () => {
           {/* Skills Observed Table */}
           {report.skills_observed && report.skills_observed.length > 0 && (
             <div style={{ marginBottom: '14pt' }}>
-              <h2 style={{ fontSize: '11pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #ddd', paddingBottom: '3pt', marginBottom: '6pt' }}>
+              <h2
+                style={{
+                  fontSize: '11pt',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: '1px solid #ddd',
+                  paddingBottom: '3pt',
+                  marginBottom: '6pt',
+                }}
+              >
                 Skills Observed
               </h2>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f5f5f5' }}>
-                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>Skill</th>
-                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'center', fontWeight: 600, width: '80pt' }}>Score</th>
-                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>Comments</th>
+                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>
+                      Skill
+                    </th>
+                    <th
+                      style={{
+                        border: '1px solid #ccc',
+                        padding: '4pt 8pt',
+                        textAlign: 'center',
+                        fontWeight: 600,
+                        width: '80pt',
+                      }}
+                    >
+                      Score
+                    </th>
+                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>
+                      Comments
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -211,14 +339,28 @@ const ShiftReportPrintPage: React.FC = () => {
           {/* Tasks Performed Table */}
           {report.tasks_performed && report.tasks_performed.length > 0 && (
             <div style={{ marginBottom: '14pt' }}>
-              <h2 style={{ fontSize: '11pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #ddd', paddingBottom: '3pt', marginBottom: '6pt' }}>
+              <h2
+                style={{
+                  fontSize: '11pt',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: '1px solid #ddd',
+                  paddingBottom: '3pt',
+                  marginBottom: '6pt',
+                }}
+              >
                 Tasks Performed
               </h2>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f5f5f5' }}>
-                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>Task</th>
-                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>Description</th>
+                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>
+                      Task
+                    </th>
+                    <th style={{ border: '1px solid #ccc', padding: '4pt 8pt', textAlign: 'left', fontWeight: 600 }}>
+                      Description
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -242,7 +384,18 @@ const ShiftReportPrintPage: React.FC = () => {
                 <tbody>
                   <tr>
                     <td style={{ width: '50%', paddingRight: '20pt', verticalAlign: 'bottom' }}>
-                      <p style={{ margin: '0 0 4pt 0', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt', letterSpacing: '0.05em', color: '#555' }}>Filing Officer</p>
+                      <p
+                        style={{
+                          margin: '0 0 4pt 0',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          fontSize: '8pt',
+                          letterSpacing: '0.05em',
+                          color: '#555',
+                        }}
+                      >
+                        Filing Officer
+                      </p>
                       <p style={{ margin: '0 0 24pt 0' }}>{report.officer_name || '—'}</p>
                       <div style={{ borderBottom: '1px solid #999', marginBottom: '4pt' }} />
                       <p style={{ margin: 0, fontSize: '8pt', color: '#999' }}>Signature / Date</p>
@@ -250,7 +403,16 @@ const ShiftReportPrintPage: React.FC = () => {
                     <td style={{ width: '50%', paddingLeft: '20pt', verticalAlign: 'bottom' }}>
                       {hasEvaluation && (
                         <>
-                          <p style={{ margin: '0 0 4pt 0', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt', letterSpacing: '0.05em', color: '#555' }}>
+                          <p
+                            style={{
+                              margin: '0 0 4pt 0',
+                              fontWeight: 600,
+                              textTransform: 'uppercase',
+                              fontSize: '8pt',
+                              letterSpacing: '0.05em',
+                              color: '#555',
+                            }}
+                          >
                             {report.trainee_acknowledged ? 'Member Acknowledgment' : 'Member Acknowledgment (Pending)'}
                           </p>
                           <p style={{ margin: '0 0 24pt 0' }}>
@@ -271,7 +433,8 @@ const ShiftReportPrintPage: React.FC = () => {
                 <div style={{ marginTop: '16pt' }}>
                   <p style={{ margin: 0, fontSize: '9pt', color: '#666' }}>
                     <strong>Reviewed by:</strong> {report.reviewer_name}
-                    {report.reviewed_at && ` on ${formatDateCustom(report.reviewed_at, { month: 'short', day: 'numeric', year: 'numeric' }, tz)}`}
+                    {report.reviewed_at &&
+                      ` on ${formatDateCustom(report.reviewed_at, { month: 'short', day: 'numeric', year: 'numeric' }, tz)}`}
                   </p>
                 </div>
               )}
@@ -279,11 +442,20 @@ const ShiftReportPrintPage: React.FC = () => {
           </div>
 
           {/* Footer */}
-          <div style={{ marginTop: '24pt', borderTop: '1px solid #ddd', paddingTop: '6pt', display: 'flex', justifyContent: 'space-between', fontSize: '8pt', color: '#aaa' }}>
+          <div
+            style={{
+              marginTop: '24pt',
+              borderTop: '1px solid #ddd',
+              paddingTop: '6pt',
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '8pt',
+              color: '#aaa',
+            }}
+          >
             <span>The Logbook — Shift Completion Report</span>
             <span>Generated {formatDate(new Date(), tz)}</span>
           </div>
-
         </div>
       </div>
     </>

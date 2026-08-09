@@ -40,7 +40,12 @@ interface ValidationErrorEntry {
  */
 interface HttpErrorResponse {
   response: {
-    data?: { detail?: string | ValidationErrorEntry[] | Record<string, unknown>; message?: string; code?: string; details?: Record<string, unknown> };
+    data?: {
+      detail?: string | ValidationErrorEntry[] | Record<string, unknown>;
+      message?: string;
+      code?: string;
+      details?: Record<string, unknown>;
+    };
     status?: number;
     statusText?: string;
   };
@@ -70,10 +75,7 @@ function describeValidationError(entry: ValidationErrorEntry): string {
  */
 export function isAppError(error: unknown): error is AppError {
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof (error as AppError).message === 'string'
+    typeof error === 'object' && error !== null && 'message' in error && typeof (error as AppError).message === 'string'
   );
 }
 
@@ -99,15 +101,10 @@ export function toAppError(error: unknown): AppError {
       // (e.g. a 409 { message, ... }). Surface its `message` rather than
       // letting the object stringify to "[object Object]" in a toast.
       const objDetail = data.detail as { message?: unknown };
-      const detailMessage =
-        typeof objDetail.message === 'string' ? objDetail.message : undefined;
+      const detailMessage = typeof objDetail.message === 'string' ? objDetail.message : undefined;
       message = detailMessage || data?.message || response.statusText || 'Request failed';
     } else {
-      message =
-        (data?.detail as string | undefined) ||
-        data?.message ||
-        response.statusText ||
-        'Request failed';
+      message = (data?.detail as string | undefined) || data?.message || response.statusText || 'Request failed';
     }
     return {
       message,
@@ -166,12 +163,7 @@ export function getPhaseGateWarning(error: unknown): string | null {
     }
   )?.response;
   const body = detail?.data?.detail;
-  if (
-    detail?.status === 409 &&
-    body &&
-    typeof body === 'object' &&
-    body.warning_type === 'phase_gate'
-  ) {
+  if (detail?.status === 409 && body && typeof body === 'object' && body.warning_type === 'phase_gate') {
     return body.message ?? 'This session is ahead of your current phase.';
   }
   return null;

@@ -28,26 +28,26 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-theme-text-primary">Event Type Visibility</h3>
-        <p className="text-sm text-theme-text-muted mt-1">
+        <h3 className="text-theme-text-primary text-lg font-semibold">Event Type Visibility</h3>
+        <p className="text-theme-text-muted mt-1 text-sm">
           Choose which event types appear as primary filter categories.
         </p>
       </div>
 
       <div>
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+        <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
           Visible Categories
         </h4>
         <div className="space-y-2">
           {visibleTypes.map((eventType) => (
             <div
               key={eventType}
-              className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
+              className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
             >
               <div className="flex items-center gap-3">
-                <Eye className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <Eye className="h-4 w-4 text-green-600 dark:text-green-400" />
                 <span
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEventTypeBadgeColor(eventType)}`}
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getEventTypeBadgeColor(eventType)}`}
                 >
                   {getEventTypeLabel(eventType)}
                 </span>
@@ -57,10 +57,10 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
                   type="button"
                   onClick={() => onToggleVisibility(eventType)}
                   disabled={saving}
-                  className="text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-50 transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary text-sm transition-colors disabled:opacity-50"
                   title={`Move "${getEventTypeLabel(eventType)}" to Other`}
                 >
-                  <EyeOff className="w-4 h-4" />
+                  <EyeOff className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -70,19 +70,19 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
 
       {hiddenTypes.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+          <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
             Grouped Under &ldquo;Other&rdquo;
           </h4>
           <div className="space-y-2">
             {hiddenTypes.map((eventType) => (
               <div
                 key={eventType}
-                className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border bg-theme-surface-secondary/30"
+                className="border-theme-surface-border bg-theme-surface-secondary/30 flex items-center justify-between rounded-lg border p-3"
               >
                 <div className="flex items-center gap-3">
-                  <EyeOff className="w-4 h-4 text-theme-text-muted" />
+                  <EyeOff className="text-theme-text-muted h-4 w-4" />
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEventTypeBadgeColor(eventType)} opacity-60`}
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getEventTypeBadgeColor(eventType)} opacity-60`}
                   >
                     {getEventTypeLabel(eventType)}
                   </span>
@@ -91,10 +91,10 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
                   type="button"
                   onClick={() => onToggleVisibility(eventType)}
                   disabled={saving}
-                  className="text-sm text-theme-text-muted hover:text-green-600 dark:hover:text-green-400 disabled:opacity-50 transition-colors"
+                  className="text-theme-text-muted text-sm transition-colors hover:text-green-600 disabled:opacity-50 dark:hover:text-green-400"
                   title={`Show "${getEventTypeLabel(eventType)}" as primary category`}
                 >
-                  <Eye className="w-4 h-4" />
+                  <Eye className="h-4 w-4" />
                 </button>
               </div>
             ))}
@@ -104,11 +104,11 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
 
       {/* Custom Categories visibility */}
       {customCategories.length > 0 && (
-        <div className="border-t border-theme-surface-border pt-4">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+        <div className="border-theme-surface-border border-t pt-4">
+          <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
             Custom Categories
           </h4>
-          <p className="text-xs text-theme-text-muted mb-3">
+          <p className="text-theme-text-muted mb-3 text-xs">
             Toggle visibility of organization-defined categories as primary filter tabs.
           </p>
           <div className="space-y-2">
@@ -117,7 +117,7 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
               return (
                 <div
                   key={cat.value}
-                  className={`flex items-center justify-between p-3 rounded-lg border ${
+                  className={`flex items-center justify-between rounded-lg border p-3 ${
                     isVisible
                       ? 'border-theme-surface-border'
                       : 'border-theme-surface-border bg-theme-surface-secondary/30'
@@ -125,12 +125,12 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
                 >
                   <div className="flex items-center gap-3">
                     {isVisible ? (
-                      <Eye className="w-4 h-4 text-green-600 dark:text-green-400" />
+                      <Eye className="h-4 w-4 text-green-600 dark:text-green-400" />
                     ) : (
-                      <EyeOff className="w-4 h-4 text-theme-text-muted" />
+                      <EyeOff className="text-theme-text-muted h-4 w-4" />
                     )}
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cat.color} ${
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cat.color} ${
                         isVisible ? '' : 'opacity-60'
                       }`}
                     >
@@ -141,14 +141,14 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
                     type="button"
                     onClick={() => onToggleCategoryVisibility(cat.value)}
                     disabled={saving}
-                    className={`text-sm disabled:opacity-50 transition-colors ${
+                    className={`text-sm transition-colors disabled:opacity-50 ${
                       isVisible
                         ? 'text-theme-text-muted hover:text-theme-text-primary'
                         : 'text-theme-text-muted hover:text-green-600 dark:hover:text-green-400'
                     }`}
                     title={isVisible ? `Hide "${cat.label}"` : `Show "${cat.label}" as primary filter`}
                   >
-                    {isVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               );

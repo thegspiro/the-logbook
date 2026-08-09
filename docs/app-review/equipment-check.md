@@ -1,4 +1,71 @@
-# Application Review — Equipment Check / Shift Completion (Tier B, 2nd pass)
+# Application Review — Equipment Check / Shift Completion (Tier B)
+
+**Prefix:** `EC2` · **Iteration:** B7 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06)
+
+Re-verified pass 1 (EC-8 by-id reads, EC-1…EC-10 all intact; EC-11 still a
+flagged feature). Then applied the B2/B4 update-bypass lens to the template CRUD
+— the create/clone paths validate their apparatus in-org, so the question was
+whether the **update** paths, which share one generic `setattr` loop, do too.
+They did not, in two different ways.
+
+### EC2-1 — MED — `update_template` re-parents to a foreign apparatus → apparatus-name leak — ✅ FIXED
+
+`create_template`/`clone_template` validate the apparatus is in-org, but
+`update_template` applied `EquipmentCheckTemplateUpdate` (which **exposes
+`apparatus_id`**) through a `setattr` loop guarded only by `PROTECTED_FIELDS`
+(`{id, organization_id, created_at, updated_at, created_by}` — **not**
+`apparatus_id`). So `PUT /templates/{id}` with a foreign `apparatus_id` stored it,
+and the checklist/supply listings (`get_my_checklists`, `get_supply_overview`)
+resolve `apparatus_id` to an apparatus **name** via a lookup that had **no org
+filter** — so the foreign org's apparatus name read back. The AP2-1 shape.
+
+**Fixed both layers:** `update_template` validates a reassigned `apparatus_id`
+via the shared `is_in_org` (None clears it — a generic template); and both
+`apparatus_name` lookups now filter `Apparatus.organization_id == organization_id`
+(defense-in-depth, so no stray foreign id ever resolves a name). The
+`update_template` **endpoint had no `ValueError` handling** — the guard would have
+surfaced as a 500 — so it (and `update_item`) gained the module's standard
+`except ValueError → 400 + safe_error_detail`, matching `create_template`/
+`clone_template`. (Same latent-500 class pass 1 found on MM-1.)
+
+### EC2-2 — MED — `update_item` re-parents an item into another org's checklist (cross-org write) — ✅ FIXED
+
+`CheckTemplateItemUpdate` exposes `compartment_id`, and `update_item` ran it
+through the same unguarded `setattr` loop. A check item has **no
+`organization_id` of its own** — it is org-scoped only via
+`compartment → template`. So setting `compartment_id` to a **foreign** org's
+compartment doesn't dangle: it **transfers the item out of the caller's org and
+into the target org's checklist**, carrying the caller's `name`/`description`/
+`serial_number`. That is a cross-tenant *write* (checklist tampering), a step
+beyond EC2-1's read leak. **Fixed:** `update_item` validates a reassigned
+`compartment_id` via the org-scoped `_get_compartment` before re-parenting.
+
+### EC2-3 — LOW — Remaining dangling FKs on the same setattr loop — 🚩 OPEN
+
+The other client FKs reachable through the item/compartment update loops —
+`inventory_item_id` and `equipment_id` on items, `parent_compartment_id` on
+compartments — are **not** validated either, but they are integrity-only: none
+moves the row's org membership (unlike `compartment_id`) and none is projected by
+name into a response (the responses carry scalar ids). Same dangling-FK class as
+AP2-2 / INV-4-remainder; recommend a defense-in-depth sweep validating them via
+the org-scoped getters. No disclosure or cross-org write in the interim.
+
+### EC-7 residual (submit endpoints on bare auth) — unchanged
+
+`submit_check` / `submit_standalone_check` / `complete_incomplete_check` still
+gate on `get_current_user` (any member), not `equipment_check.submit`. Re-confirmed
+each org-scopes its target (shift/template/apparatus), so this is an **intra-org
+permission-granularity** decision, not a cross-tenant hole — left as the owner call
+pass 1 recorded, deliberately not reopened.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `EC2` · **Iteration:** B7 · **Reviewed:** 2026-08-06
 

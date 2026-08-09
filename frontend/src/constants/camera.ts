@@ -18,18 +18,9 @@ export const INVENTORY_BARCODE_FORMATS = [
 ];
 
 /** Native BarcodeDetector format strings (mirrors INVENTORY_BARCODE_FORMATS). */
-export const NATIVE_BARCODE_FORMATS = [
-  'code_128',
-  'code_39',
-  'ean_13',
-  'ean_8',
-  'upc_a',
-  'upc_e',
-  'qr_code',
-] as const;
+export const NATIVE_BARCODE_FORMATS = ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] as const;
 
-export const HAS_BARCODE_DETECTOR =
-  typeof window !== 'undefined' && 'BarcodeDetector' in window;
+export const HAS_BARCODE_DETECTOR = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
 /**
  * Returns a user-facing reason string when the camera cannot be used, or null

@@ -21,11 +21,7 @@ interface MeetingAttendanceProps {
   onUpdate: (updatedElection: Election) => void;
 }
 
-export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
-  electionId,
-  election,
-  onUpdate,
-}) => {
+export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId, election, onUpdate }) => {
   const tz = useTimezone();
   const [attendees, setAttendees] = useState<Attendee[]>(election.attendees || []);
   const [members, setMembers] = useState<User[]>([]);
@@ -45,7 +41,9 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
         userService.getUsers(),
       ]);
       setAttendees(attendeeData.attendees);
-      setMembers(memberData.filter((m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY));
+      setMembers(
+        memberData.filter((m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY)
+      );
     } catch (_err) {
       toast.error('Failed to load attendance data');
     } finally {
@@ -53,10 +51,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
     }
   };
 
-  const attendeeIds = useMemo(
-    () => new Set(attendees.map((a) => a.user_id)),
-    [attendees]
-  );
+  const attendeeIds = useMemo(() => new Set(attendees.map((a) => a.user_id)), [attendees]);
 
   const filteredMembers = useMemo(() => {
     if (!searchQuery.trim()) return members;
@@ -115,20 +110,18 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
-        <div className="text-theme-text-muted text-center py-4">Loading attendance...</div>
+      <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+        <div className="text-theme-text-muted py-4 text-center">Loading attendance...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-theme-text-primary">
-          Meeting Attendance ({attendees.length})
-        </h3>
+    <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-theme-text-primary text-lg font-medium">Meeting Attendance ({attendees.length})</h3>
         {attendees.length > 0 && members.length > 0 && (
-          <span className="text-sm text-theme-text-muted">
+          <span className="text-theme-text-muted text-sm">
             {Math.round((attendees.length / members.length) * 100)}% of members present
           </span>
         )}
@@ -137,24 +130,26 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
       {/* Checked-in Attendees */}
       {attendees.length > 0 && (
         <div className="mb-6">
-          <h4 className="text-sm font-semibold text-green-700 dark:text-green-400 mb-2">
+          <h4 className="mb-2 text-sm font-semibold text-green-700 dark:text-green-400">
             Present ({attendees.length})
           </h4>
           <div className="flex flex-wrap gap-2">
             {attendees.map((attendee) => (
               <div
                 key={attendee.user_id}
-                className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full text-sm"
+                className="flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-sm"
               >
-                <span className="text-green-700 dark:text-green-300 font-medium">{attendee.name}</span>
-                <span className="text-green-700 dark:text-green-500 text-xs">
+                <span className="font-medium text-green-700 dark:text-green-300">{attendee.name}</span>
+                <span className="text-xs text-green-700 dark:text-green-500">
                   {formatTime(attendee.checked_in_at, tz)}
                 </span>
                 {!isClosed && (
                   <button
                     type="button"
-                    onClick={() => { void handleRemove(attendee.user_id, attendee.name); }}
-                    className="ml-1 p-1 min-w-[28px] min-h-[28px] flex items-center justify-center text-green-700 dark:text-green-500 hover:text-red-700 dark:hover:text-red-400 text-xs rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    onClick={() => {
+                      void handleRemove(attendee.user_id, attendee.name);
+                    }}
+                    className="focus:ring-theme-focus-ring ml-1 flex min-h-[28px] min-w-[28px] items-center justify-center rounded-sm p-1 text-xs text-green-700 hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-green-500 dark:hover:text-red-400"
                     title="Remove from attendance"
                     aria-label={`Remove ${attendee.name} from attendance`}
                   >
@@ -170,7 +165,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
       {/* Check-in Section */}
       {!isClosed && (
         <div>
-          <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">
+          <h4 className="text-theme-text-secondary mb-2 text-sm font-semibold">
             Check In Members ({notCheckedIn.length} remaining)
           </h4>
 
@@ -180,36 +175,34 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
               placeholder="Search by name or membership number..."
             />
           </div>
 
           {/* Members list */}
           {notCheckedIn.length === 0 ? (
-            <div className="text-center py-4 text-theme-text-muted text-sm">
+            <div className="text-theme-text-muted py-4 text-center text-sm">
               {searchQuery ? 'No matching members found' : 'All members are checked in'}
             </div>
           ) : (
-            <div className="max-h-64 overflow-y-auto border border-theme-surface-border rounded-lg divide-y divide-theme-surface-border">
+            <div className="border-theme-surface-border divide-theme-surface-border max-h-64 divide-y overflow-y-auto rounded-lg border">
               {notCheckedIn.map((member) => (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between px-4 py-2 hover:bg-theme-surface-secondary"
+                  className="hover:bg-theme-surface-secondary flex items-center justify-between px-4 py-2"
                 >
                   <div className="flex items-center gap-3">
                     <div>
-                      <span className="text-sm font-medium text-theme-text-primary">
+                      <span className="text-theme-text-primary text-sm font-medium">
                         {member.first_name} {member.last_name}
                       </span>
                       {member.membership_number && (
-                        <span className="ml-2 text-xs text-theme-text-muted">
-                          #{member.membership_number}
-                        </span>
+                        <span className="text-theme-text-muted ml-2 text-xs">#{member.membership_number}</span>
                       )}
                     </div>
                     <span
-                      className={`px-1.5 py-0.5 text-xs rounded ${
+                      className={`rounded px-1.5 py-0.5 text-xs ${
                         member.status === UserStatus.PROBATIONARY
                           ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300'
                           : 'bg-green-500/20 text-green-700 dark:text-green-300'
@@ -220,7 +213,9 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => { void handleCheckIn(member.id); }}
+                    onClick={() => {
+                      void handleCheckIn(member.id);
+                    }}
                     disabled={checking === member.id}
                     className="btn-info rounded-sm px-3 py-1 text-xs"
                   >

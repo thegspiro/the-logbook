@@ -11,51 +11,50 @@
  * Extracted from the SchedulingPage monolith for maintainability.
  */
 
-import React, { useState, useEffect, useCallback } from "react";
-import { Bell, Clock, Loader2, Mail, AlertTriangle, UserPlus } from "lucide-react";
-import toast from "react-hot-toast";
-import { notificationsService, organizationService } from "../../../services/api";
-import type { NotificationRuleRecord } from "../../../services/api";
-import { getErrorMessage } from "../../../utils/errorHandling";
-import { useEmailListInput } from "../../../hooks/useEmailListInput";
+import React, { useState, useEffect, useCallback } from 'react';
+import { Bell, Clock, Loader2, Mail, AlertTriangle, UserPlus } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { notificationsService, organizationService } from '../../../services/api';
+import type { NotificationRuleRecord } from '../../../services/api';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { useEmailListInput } from '../../../hooks/useEmailListInput';
 
 const SCHEDULING_NOTIFICATION_PRESETS = [
   {
-    name: "New Assignment",
-    description: "Notify members when they are assigned to a shift",
-    trigger: "schedule_change" as const,
-    config: { event: "assignment_created" },
+    name: 'New Assignment',
+    description: 'Notify members when they are assigned to a shift',
+    trigger: 'schedule_change' as const,
+    config: { event: 'assignment_created' },
   },
   {
-    name: "Assignment Confirmed",
-    description:
-      "Notify shift officers when a member confirms their assignment",
-    trigger: "schedule_change" as const,
-    config: { event: "assignment_confirmed" },
+    name: 'Assignment Confirmed',
+    description: 'Notify shift officers when a member confirms their assignment',
+    trigger: 'schedule_change' as const,
+    config: { event: 'assignment_confirmed' },
   },
   {
-    name: "Assignment Declined",
-    description: "Alert when a member declines their shift assignment",
-    trigger: "schedule_change" as const,
-    config: { event: "assignment_declined" },
+    name: 'Assignment Declined',
+    description: 'Alert when a member declines their shift assignment',
+    trigger: 'schedule_change' as const,
+    config: { event: 'assignment_declined' },
   },
   {
-    name: "Time-Off Approved",
-    description: "Notify members when their time-off request is approved",
-    trigger: "schedule_change" as const,
-    config: { event: "timeoff_approved" },
+    name: 'Time-Off Approved',
+    description: 'Notify members when their time-off request is approved',
+    trigger: 'schedule_change' as const,
+    config: { event: 'timeoff_approved' },
   },
   {
-    name: "Swap Request",
-    description: "Notify affected members about shift swap requests",
-    trigger: "schedule_change" as const,
-    config: { event: "swap_requested" },
+    name: 'Swap Request',
+    description: 'Notify affected members about shift swap requests',
+    trigger: 'schedule_change' as const,
+    config: { event: 'swap_requested' },
   },
   {
-    name: "Understaffed Shift",
-    description: "Alert when a shift falls below minimum staffing",
-    trigger: "schedule_change" as const,
-    config: { event: "understaffed" },
+    name: 'Understaffed Shift',
+    description: 'Alert when a shift falls below minimum staffing',
+    trigger: 'schedule_change' as const,
+    config: { event: 'understaffed' },
   },
 ];
 
@@ -90,7 +89,7 @@ interface EquipmentCheckAlertSettings {
 
 const DEFAULT_DECLINE_SETTINGS: DeclineSettings = {
   notify_on_decline: true,
-  notify_roles: ["chief", "deputy_chief", "captain"],
+  notify_roles: ['chief', 'deputy_chief', 'captain'],
   notify_shift_officer: true,
   send_email: false,
   cc_emails: [],
@@ -111,19 +110,19 @@ const DEFAULT_REMINDER_SETTINGS: ShiftReminderSettings = {
 
 const DEFAULT_EQUIPMENT_ALERT_SETTINGS: EquipmentCheckAlertSettings = {
   notify_on_failure: true,
-  notify_roles: ["chief", "captain"],
+  notify_roles: ['chief', 'captain'],
   notify_shift_officer: true,
   send_email: false,
   cc_emails: [],
 };
 
 const AVAILABLE_ROLES = [
-  { value: "chief", label: "Chief" },
-  { value: "deputy_chief", label: "Deputy Chief" },
-  { value: "assistant_chief", label: "Assistant Chief" },
-  { value: "captain", label: "Captain" },
-  { value: "lieutenant", label: "Lieutenant" },
-  { value: "sergeant", label: "Sergeant" },
+  { value: 'chief', label: 'Chief' },
+  { value: 'deputy_chief', label: 'Deputy Chief' },
+  { value: 'assistant_chief', label: 'Assistant Chief' },
+  { value: 'captain', label: 'Captain' },
+  { value: 'lieutenant', label: 'Lieutenant' },
+  { value: 'sergeant', label: 'Sergeant' },
 ];
 
 export const SchedulingNotificationsPanel: React.FC = () => {
@@ -136,20 +135,16 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   const [loadingDecline, setLoadingDecline] = useState(true);
   const [savingDecline, setSavingDecline] = useState(false);
 
-  const [assignmentSettings, setAssignmentSettings] = useState<AssignmentSettings>(
-    DEFAULT_ASSIGNMENT_SETTINGS,
-  );
+  const [assignmentSettings, setAssignmentSettings] = useState<AssignmentSettings>(DEFAULT_ASSIGNMENT_SETTINGS);
   const [loadingAssignment, setLoadingAssignment] = useState(true);
   const [savingAssignment, setSavingAssignment] = useState(false);
 
-  const [reminderSettings, setReminderSettings] = useState<ShiftReminderSettings>(
-    DEFAULT_REMINDER_SETTINGS,
-  );
+  const [reminderSettings, setReminderSettings] = useState<ShiftReminderSettings>(DEFAULT_REMINDER_SETTINGS);
   const [loadingReminder, setLoadingReminder] = useState(true);
   const [savingReminder, setSavingReminder] = useState(false);
 
   const [equipAlertSettings, setEquipAlertSettings] = useState<EquipmentCheckAlertSettings>(
-    DEFAULT_EQUIPMENT_ALERT_SETTINGS,
+    DEFAULT_EQUIPMENT_ALERT_SETTINGS
   );
   const [loadingEquipAlerts, setLoadingEquipAlerts] = useState(true);
   const [savingEquipAlerts, setSavingEquipAlerts] = useState(false);
@@ -158,11 +153,11 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     const load = async () => {
       try {
         const { rules: data } = await notificationsService.getRules({
-          category: "scheduling",
+          category: 'scheduling',
         });
         setRules(data);
       } catch (err) {
-        console.warn("Failed to load notification rules:", err);
+        console.warn('Failed to load notification rules:', err);
       } finally {
         setLoadingRules(false);
       }
@@ -180,21 +175,15 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         if (sched) {
           setDeclineSettings({ ...DEFAULT_DECLINE_SETTINGS, ...sched });
         }
-        const assignCfg = settingsObj.scheduling_assignment as
-          | Partial<AssignmentSettings>
-          | undefined;
+        const assignCfg = settingsObj.scheduling_assignment as Partial<AssignmentSettings> | undefined;
         if (assignCfg) {
           setAssignmentSettings({ ...DEFAULT_ASSIGNMENT_SETTINGS, ...assignCfg });
         }
-        const reminderCfg = settingsObj.shift_reminders as
-          | Partial<ShiftReminderSettings>
-          | undefined;
+        const reminderCfg = settingsObj.shift_reminders as Partial<ShiftReminderSettings> | undefined;
         if (reminderCfg) {
           setReminderSettings({ ...DEFAULT_REMINDER_SETTINGS, ...reminderCfg });
         }
-        const equipAlerts = settingsObj.equipment_check_alerts as
-          | Partial<EquipmentCheckAlertSettings>
-          | undefined;
+        const equipAlerts = settingsObj.equipment_check_alerts as Partial<EquipmentCheckAlertSettings> | undefined;
         if (equipAlerts) {
           setEquipAlertSettings({ ...DEFAULT_EQUIPMENT_ALERT_SETTINGS, ...equipAlerts });
         }
@@ -215,9 +204,9 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     try {
       await organizationService.updateSettings({ scheduling: updated });
       setDeclineSettings(updated);
-      toast.success("Decline notification settings saved");
+      toast.success('Decline notification settings saved');
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to save settings"));
+      toast.error(getErrorMessage(err, 'Failed to save settings'));
     } finally {
       setSavingDecline(false);
     }
@@ -228,17 +217,19 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     try {
       await organizationService.updateSettings({ scheduling_assignment: updated });
       setAssignmentSettings(updated);
-      toast.success("Assignment notification settings saved");
+      toast.success('Assignment notification settings saved');
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to save settings"));
+      toast.error(getErrorMessage(err, 'Failed to save settings'));
     } finally {
       setSavingAssignment(false);
     }
   };
 
   const onAssignCcChange = useCallback(
-    (emails: string[]) => { void saveAssignmentSettings({ ...assignmentSettings, cc_emails: emails }); },
-    [assignmentSettings],
+    (emails: string[]) => {
+      void saveAssignmentSettings({ ...assignmentSettings, cc_emails: emails });
+    },
+    [assignmentSettings]
   );
   const assignCc = useEmailListInput(assignmentSettings.cc_emails, onAssignCcChange);
 
@@ -247,17 +238,19 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     try {
       await organizationService.updateSettings({ shift_reminders: updated });
       setReminderSettings(updated);
-      toast.success("Shift reminder settings saved");
+      toast.success('Shift reminder settings saved');
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to save settings"));
+      toast.error(getErrorMessage(err, 'Failed to save settings'));
     } finally {
       setSavingReminder(false);
     }
   };
 
   const onReminderCcChange = useCallback(
-    (emails: string[]) => { void saveReminderSettings({ ...reminderSettings, cc_emails: emails }); },
-    [reminderSettings],
+    (emails: string[]) => {
+      void saveReminderSettings({ ...reminderSettings, cc_emails: emails });
+    },
+    [reminderSettings]
   );
   const reminderCc = useEmailListInput(reminderSettings.cc_emails, onReminderCcChange);
 
@@ -266,9 +259,9 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     try {
       await organizationService.updateSettings({ equipment_check_alerts: updated });
       setEquipAlertSettings(updated);
-      toast.success("Equipment check alert settings saved");
+      toast.success('Equipment check alert settings saved');
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to save settings"));
+      toast.error(getErrorMessage(err, 'Failed to save settings'));
     } finally {
       setSavingEquipAlerts(false);
     }
@@ -277,7 +270,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   const toggleRole = (role: string) => {
     const updated = { ...declineSettings };
     if (updated.notify_roles.includes(role)) {
-      updated.notify_roles = updated.notify_roles.filter(r => r !== role);
+      updated.notify_roles = updated.notify_roles.filter((r) => r !== role);
     } else {
       updated.notify_roles = [...updated.notify_roles, role];
     }
@@ -287,7 +280,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   const toggleEquipRole = (role: string) => {
     const updated = { ...equipAlertSettings };
     if (updated.notify_roles.includes(role)) {
-      updated.notify_roles = updated.notify_roles.filter(r => r !== role);
+      updated.notify_roles = updated.notify_roles.filter((r) => r !== role);
     } else {
       updated.notify_roles = [...updated.notify_roles, role];
     }
@@ -295,14 +288,18 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   };
 
   const onDeclineCcChange = useCallback(
-    (emails: string[]) => { void saveDeclineSettings({ ...declineSettings, cc_emails: emails }); },
-    [declineSettings],
+    (emails: string[]) => {
+      void saveDeclineSettings({ ...declineSettings, cc_emails: emails });
+    },
+    [declineSettings]
   );
   const declineCc = useEmailListInput(declineSettings.cc_emails, onDeclineCcChange);
 
   const onEquipCcChange = useCallback(
-    (emails: string[]) => { void saveEquipAlertSettings({ ...equipAlertSettings, cc_emails: emails }); },
-    [equipAlertSettings],
+    (emails: string[]) => {
+      void saveEquipAlertSettings({ ...equipAlertSettings, cc_emails: emails });
+    },
+    [equipAlertSettings]
   );
   const equipCc = useEmailListInput(equipAlertSettings.cc_emails, onEquipCcChange);
 
@@ -314,21 +311,14 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     return rules.find((r) => r.name === presetName);
   };
 
-  const handleToggle = async (
-    preset: (typeof SCHEDULING_NOTIFICATION_PRESETS)[number],
-  ) => {
+  const handleToggle = async (preset: (typeof SCHEDULING_NOTIFICATION_PRESETS)[number]) => {
     const existing = getRuleForPreset(preset.name);
     if (existing) {
       try {
-        const updated = await notificationsService.toggleRule(
-          existing.id,
-          !existing.enabled,
-        );
-        setRules((prev) =>
-          prev.map((r) => (r.id === existing.id ? updated : r)),
-        );
+        const updated = await notificationsService.toggleRule(existing.id, !existing.enabled);
+        setRules((prev) => prev.map((r) => (r.id === existing.id ? updated : r)));
       } catch (err) {
-        console.warn("Failed to toggle notification rule:", err);
+        console.warn('Failed to toggle notification rule:', err);
       }
     } else {
       setCreating(preset.name);
@@ -337,14 +327,14 @@ export const SchedulingNotificationsPanel: React.FC = () => {
           name: preset.name,
           description: preset.description,
           trigger: preset.trigger,
-          category: "scheduling",
-          channel: "in_app",
+          category: 'scheduling',
+          channel: 'in_app',
           enabled: true,
           config: preset.config,
         });
         setRules((prev) => [...prev, newRule]);
       } catch (err) {
-        console.warn("Failed to create notification rule:", err);
+        console.warn('Failed to create notification rule:', err);
       } finally {
         setCreating(null);
       }
@@ -352,22 +342,18 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   };
 
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-      <div className="flex items-center gap-2 mb-1">
-        <Bell className="w-4 h-4 text-violet-500" />
-        <h3 className="text-base font-semibold text-theme-text-primary">
-          Scheduling Notifications
-        </h3>
+    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+      <div className="mb-1 flex items-center gap-2">
+        <Bell className="h-4 w-4 text-violet-500" />
+        <h3 className="text-theme-text-primary text-base font-semibold">Scheduling Notifications</h3>
       </div>
-      <p className="text-xs text-theme-text-muted mb-4">
-        Configure which scheduling events trigger in-app notifications for your
-        department members.
+      <p className="text-theme-text-muted mb-4 text-xs">
+        Configure which scheduling events trigger in-app notifications for your department members.
       </p>
 
       {loadingRules ? (
-        <div className="flex items-center gap-2 text-sm text-theme-text-muted py-4" role="status" aria-live="polite">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading notification
-          rules...
+        <div className="text-theme-text-muted flex items-center gap-2 py-4 text-sm" role="status" aria-live="polite">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading notification rules...
         </div>
       ) : (
         <div className="space-y-2">
@@ -378,30 +364,22 @@ export const SchedulingNotificationsPanel: React.FC = () => {
             return (
               <div
                 key={preset.name}
-                className="flex items-center justify-between p-3 bg-theme-surface-hover/50 rounded-lg"
+                className="bg-theme-surface-hover/50 flex items-center justify-between rounded-lg p-3"
               >
-                <div className="min-w-0 mr-3">
-                  <p className="text-sm font-medium text-theme-text-primary">
-                    {preset.name}
-                  </p>
-                  <p className="text-xs text-theme-text-muted mt-0.5">
-                    {preset.description}
-                  </p>
+                <div className="mr-3 min-w-0">
+                  <p className="text-theme-text-primary text-sm font-medium">{preset.name}</p>
+                  <p className="text-theme-text-muted mt-0.5 text-xs">{preset.description}</p>
                 </div>
                 <button
                   onClick={() => {
                     void handleToggle(preset);
                   }}
                   disabled={isCreating}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
-                    enabled ? "bg-violet-600" : "bg-theme-surface-border"
-                  } ${isCreating ? "opacity-50" : ""}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                    enabled ? 'bg-violet-600' : 'bg-theme-surface-border'
+                  } ${isCreating ? 'opacity-50' : ''}`}
                 >
-                  <span
-                    className={`toggle-knob-sm ${
-                      enabled ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
+                  <span className={`toggle-knob-sm ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>
             );
@@ -410,70 +388,62 @@ export const SchedulingNotificationsPanel: React.FC = () => {
       )}
 
       {/* Shift Decline/Drop Notification Settings */}
-      <div className="mt-5 pt-5 border-t border-theme-surface-border">
-        <div className="flex items-center gap-2 mb-1">
-          <Mail className="w-4 h-4 text-amber-500" />
-          <h4 className="text-sm font-semibold text-theme-text-primary">
-            Shift Decline / Drop Alerts
-          </h4>
-          {savingDecline && <Loader2 className="w-3 h-3 animate-spin text-theme-text-muted" />}
+      <div className="border-theme-surface-border mt-5 border-t pt-5">
+        <div className="mb-1 flex items-center gap-2">
+          <Mail className="h-4 w-4 text-amber-500" />
+          <h4 className="text-theme-text-primary text-sm font-semibold">Shift Decline / Drop Alerts</h4>
+          {savingDecline && <Loader2 className="text-theme-text-muted h-3 w-3 animate-spin" />}
         </div>
-        <p className="text-xs text-theme-text-muted mb-3">
+        <p className="text-theme-text-muted mb-3 text-xs">
           Alert specific roles when a member declines or drops a shift assignment.
         </p>
 
         {loadingDecline ? (
-          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2" role="status" aria-live="polite">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading settings...
+          <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm" role="status" aria-live="polite">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading settings...
           </div>
         ) : (
           <div className="space-y-3">
             {/* Master toggle */}
-            <label className="flex items-center gap-3 cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={declineSettings.notify_on_decline}
                 onChange={(e) => {
                   void saveDeclineSettings({ ...declineSettings, notify_on_decline: e.target.checked });
                 }}
-                className="w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                className="border-theme-surface-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
               />
-              <span className="text-sm text-theme-text-primary">
-                Enable decline/drop notifications
-              </span>
+              <span className="text-theme-text-primary text-sm">Enable decline/drop notifications</span>
             </label>
 
             {declineSettings.notify_on_decline && (
               <>
                 {/* Notify shift officer */}
-                <label className="flex items-center gap-3 cursor-pointer ml-4">
+                <label className="ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={declineSettings.notify_shift_officer}
                     onChange={(e) => {
                       void saveDeclineSettings({ ...declineSettings, notify_shift_officer: e.target.checked });
                     }}
-                    className="w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                    className="border-theme-surface-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
                   />
-                  <span className="text-sm text-theme-text-secondary">
-                    Notify the shift officer
-                  </span>
+                  <span className="text-theme-text-secondary text-sm">Notify the shift officer</span>
                 </label>
 
                 {/* Notify roles */}
                 <div className="ml-4">
-                  <p className="text-xs font-medium text-theme-text-secondary mb-1.5">
-                    Notify these roles:
-                  </p>
+                  <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">Notify these roles:</p>
                   <div className="flex flex-wrap gap-2">
-                    {AVAILABLE_ROLES.map(role => (
+                    {AVAILABLE_ROLES.map((role) => (
                       <button
                         key={role.value}
                         onClick={() => toggleRole(role.value)}
-                        className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                        className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
                           declineSettings.notify_roles.includes(role.value)
-                            ? "bg-violet-500/10 border-violet-500/30 text-violet-700 dark:text-violet-400"
-                            : "bg-theme-surface-hover border-theme-surface-border text-theme-text-muted hover:text-theme-text-secondary"
+                            ? 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                            : 'bg-theme-surface-hover border-theme-surface-border text-theme-text-muted hover:text-theme-text-secondary'
                         }`}
                       >
                         {role.label}
@@ -483,48 +453,51 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 </div>
 
                 {/* Send email toggle */}
-                <label className="flex items-center gap-3 cursor-pointer ml-4">
+                <label className="ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={declineSettings.send_email}
                     onChange={(e) => {
                       void saveDeclineSettings({ ...declineSettings, send_email: e.target.checked });
                     }}
-                    className="w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                    className="border-theme-surface-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
                   />
-                  <span className="text-sm text-theme-text-secondary">
-                    Also send email notification
-                  </span>
+                  <span className="text-theme-text-secondary text-sm">Also send email notification</span>
                 </label>
 
                 {/* CC emails */}
                 {declineSettings.send_email && (
                   <div className="ml-4">
-                    <p className="text-xs font-medium text-theme-text-secondary mb-1.5">
+                    <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">
                       CC additional email addresses:
                     </p>
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="mb-2 flex items-center gap-2">
                       <input
                         type="email"
                         value={declineCc.inputValue}
                         onChange={(e) => declineCc.setInputValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); declineCc.add(); } }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            declineCc.add();
+                          }
+                        }}
                         placeholder="email@example.com"
-                        className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
+                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
                       />
                       <button
                         onClick={declineCc.add}
-                        className="px-3 py-1 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700"
+                        className="rounded-lg bg-violet-600 px-3 py-1 text-xs text-white hover:bg-violet-700"
                       >
                         Add
                       </button>
                     </div>
                     {declineSettings.cc_emails.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        {declineSettings.cc_emails.map(email => (
+                        {declineSettings.cc_emails.map((email) => (
                           <span
                             key={email}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-theme-surface-hover rounded-full text-theme-text-secondary"
+                            className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
                           >
                             {email}
                             <button
@@ -546,84 +519,81 @@ export const SchedulingNotificationsPanel: React.FC = () => {
       </div>
 
       {/* Shift Assignment Notification Settings */}
-      <div className="mt-5 pt-5 border-t border-theme-surface-border">
-        <div className="flex items-center gap-2 mb-1">
-          <UserPlus className="w-4 h-4 text-blue-500" />
-          <h4 className="text-sm font-semibold text-theme-text-primary">
-            Shift Assignment Alerts
-          </h4>
-          {savingAssignment && <Loader2 className="w-3 h-3 animate-spin text-theme-text-muted" />}
+      <div className="border-theme-surface-border mt-5 border-t pt-5">
+        <div className="mb-1 flex items-center gap-2">
+          <UserPlus className="h-4 w-4 text-blue-500" />
+          <h4 className="text-theme-text-primary text-sm font-semibold">Shift Assignment Alerts</h4>
+          {savingAssignment && <Loader2 className="text-theme-text-muted h-3 w-3 animate-spin" />}
         </div>
-        <p className="text-xs text-theme-text-muted mb-3">
-          Notify members when they are assigned to a shift.
-        </p>
+        <p className="text-theme-text-muted mb-3 text-xs">Notify members when they are assigned to a shift.</p>
 
         {loadingAssignment ? (
-          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading settings...
+          <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading settings...
           </div>
         ) : (
           <div className="space-y-3">
             {/* Master toggle */}
-            <label className="flex items-center gap-3 cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={assignmentSettings.notify_on_assignment}
                 onChange={(e) => {
                   void saveAssignmentSettings({ ...assignmentSettings, notify_on_assignment: e.target.checked });
                 }}
-                className="w-4 h-4 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500"
+                className="border-theme-surface-border h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-sm text-theme-text-primary">
-                Enable assignment notifications
-              </span>
+              <span className="text-theme-text-primary text-sm">Enable assignment notifications</span>
             </label>
 
             {assignmentSettings.notify_on_assignment && (
               <>
                 {/* Send email toggle */}
-                <label className="flex items-center gap-3 cursor-pointer ml-4">
+                <label className="ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={assignmentSettings.send_email}
                     onChange={(e) => {
                       void saveAssignmentSettings({ ...assignmentSettings, send_email: e.target.checked });
                     }}
-                    className="w-4 h-4 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500"
+                    className="border-theme-surface-border h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-sm text-theme-text-secondary">
-                    Also send email notification
-                  </span>
+                  <span className="text-theme-text-secondary text-sm">Also send email notification</span>
                 </label>
 
                 {/* CC emails */}
                 {assignmentSettings.send_email && (
                   <div className="ml-4">
-                    <p className="text-xs font-medium text-theme-text-secondary mb-1.5">
+                    <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">
                       CC additional email addresses:
                     </p>
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="mb-2 flex items-center gap-2">
                       <input
                         type="email"
                         value={assignCc.inputValue}
                         onChange={(e) => assignCc.setInputValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); assignCc.add(); } }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            assignCc.add();
+                          }
+                        }}
                         placeholder="email@example.com"
-                        className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                       />
                       <button
                         onClick={assignCc.add}
-                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        className="rounded-lg bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
                       >
                         Add
                       </button>
                     </div>
                     {assignmentSettings.cc_emails.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        {assignmentSettings.cc_emails.map(email => (
+                        {assignmentSettings.cc_emails.map((email) => (
                           <span
                             key={email}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-theme-surface-hover rounded-full text-theme-text-secondary"
+                            className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
                           >
                             {email}
                             <button
@@ -645,45 +615,41 @@ export const SchedulingNotificationsPanel: React.FC = () => {
       </div>
 
       {/* Start-of-Shift Reminder Settings */}
-      <div className="mt-5 pt-5 border-t border-theme-surface-border">
-        <div className="flex items-center gap-2 mb-1">
-          <Clock className="w-4 h-4 text-green-500" />
-          <h4 className="text-sm font-semibold text-theme-text-primary">
-            Start-of-Shift Reminders
-          </h4>
-          {savingReminder && <Loader2 className="w-3 h-3 animate-spin text-theme-text-muted" />}
+      <div className="border-theme-surface-border mt-5 border-t pt-5">
+        <div className="mb-1 flex items-center gap-2">
+          <Clock className="h-4 w-4 text-green-500" />
+          <h4 className="text-theme-text-primary text-sm font-semibold">Start-of-Shift Reminders</h4>
+          {savingReminder && <Loader2 className="text-theme-text-muted h-3 w-3 animate-spin" />}
         </div>
-        <p className="text-xs text-theme-text-muted mb-3">
-          Remind assigned members before their shift starts. Includes the list of
-          equipment checklists they need to complete.
+        <p className="text-theme-text-muted mb-3 text-xs">
+          Remind assigned members before their shift starts. Includes the list of equipment checklists they need to
+          complete.
         </p>
 
         {loadingReminder ? (
-          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading settings...
+          <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading settings...
           </div>
         ) : (
           <div className="space-y-3">
             {/* Master toggle */}
-            <label className="flex items-center gap-3 cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={reminderSettings.enabled}
                 onChange={(e) => {
                   void saveReminderSettings({ ...reminderSettings, enabled: e.target.checked });
                 }}
-                className="w-4 h-4 rounded border-theme-surface-border text-green-600 focus:ring-green-500"
+                className="border-theme-surface-border h-4 w-4 rounded text-green-600 focus:ring-green-500"
               />
-              <span className="text-sm text-theme-text-primary">
-                Enable start-of-shift reminders
-              </span>
+              <span className="text-theme-text-primary text-sm">Enable start-of-shift reminders</span>
             </label>
 
             {reminderSettings.enabled && (
               <>
                 {/* Lookahead hours */}
                 <div className="ml-4">
-                  <label className="text-xs font-medium text-theme-text-secondary mb-1 block">
+                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
                     Send reminder this many hours before shift starts:
                   </label>
                   <select
@@ -694,7 +660,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                         lookahead_hours: Number(e.target.value),
                       });
                     }}
-                    className="px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-green-500"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-green-500 focus:outline-hidden"
                   >
                     <option value={1}>1 hour</option>
                     <option value={2}>2 hours</option>
@@ -707,48 +673,51 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 </div>
 
                 {/* Send email toggle */}
-                <label className="flex items-center gap-3 cursor-pointer ml-4">
+                <label className="ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={reminderSettings.send_email}
                     onChange={(e) => {
                       void saveReminderSettings({ ...reminderSettings, send_email: e.target.checked });
                     }}
-                    className="w-4 h-4 rounded border-theme-surface-border text-green-600 focus:ring-green-500"
+                    className="border-theme-surface-border h-4 w-4 rounded text-green-600 focus:ring-green-500"
                   />
-                  <span className="text-sm text-theme-text-secondary">
-                    Also send email notification
-                  </span>
+                  <span className="text-theme-text-secondary text-sm">Also send email notification</span>
                 </label>
 
                 {/* CC emails */}
                 {reminderSettings.send_email && (
                   <div className="ml-4">
-                    <p className="text-xs font-medium text-theme-text-secondary mb-1.5">
+                    <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">
                       CC additional email addresses:
                     </p>
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="mb-2 flex items-center gap-2">
                       <input
                         type="email"
                         value={reminderCc.inputValue}
                         onChange={(e) => reminderCc.setInputValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); reminderCc.add(); } }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            reminderCc.add();
+                          }
+                        }}
                         placeholder="email@example.com"
-                        className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-green-500"
+                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-green-500 focus:outline-hidden"
                       />
                       <button
                         onClick={reminderCc.add}
-                        className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
+                        className="rounded-lg bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-700"
                       >
                         Add
                       </button>
                     </div>
                     {reminderSettings.cc_emails.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        {reminderSettings.cc_emails.map(email => (
+                        {reminderSettings.cc_emails.map((email) => (
                           <span
                             key={email}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-theme-surface-hover rounded-full text-theme-text-secondary"
+                            className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
                           >
                             {email}
                             <button
@@ -770,27 +739,25 @@ export const SchedulingNotificationsPanel: React.FC = () => {
       </div>
 
       {/* Equipment Check Failure Alerts */}
-      <div className="mt-5 pt-5 border-t border-theme-surface-border">
-        <div className="flex items-center gap-2 mb-1">
-          <AlertTriangle className="w-4 h-4 text-red-500" />
-          <h4 className="text-sm font-semibold text-theme-text-primary">
-            Equipment Check Alerts
-          </h4>
-          {savingEquipAlerts && <Loader2 className="w-3 h-3 animate-spin text-theme-text-muted" />}
+      <div className="border-theme-surface-border mt-5 border-t pt-5">
+        <div className="mb-1 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-red-500" />
+          <h4 className="text-theme-text-primary text-sm font-semibold">Equipment Check Alerts</h4>
+          {savingEquipAlerts && <Loader2 className="text-theme-text-muted h-3 w-3 animate-spin" />}
         </div>
-        <p className="text-xs text-theme-text-muted mb-3">
-          Alert specific roles when an equipment check fails. Failed checks also
-          flag the apparatus with a deficiency indicator.
+        <p className="text-theme-text-muted mb-3 text-xs">
+          Alert specific roles when an equipment check fails. Failed checks also flag the apparatus with a deficiency
+          indicator.
         </p>
 
         {loadingEquipAlerts ? (
-          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2" role="status" aria-live="polite">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading settings...
+          <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm" role="status" aria-live="polite">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading settings...
           </div>
         ) : (
           <div className="space-y-3">
             {/* Master toggle */}
-            <label className="flex items-center gap-3 cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={equipAlertSettings.notify_on_failure}
@@ -800,17 +767,15 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                     notify_on_failure: e.target.checked,
                   });
                 }}
-                className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
               />
-              <span className="text-sm text-theme-text-primary">
-                Notify on equipment check failure
-              </span>
+              <span className="text-theme-text-primary text-sm">Notify on equipment check failure</span>
             </label>
 
             {equipAlertSettings.notify_on_failure && (
               <>
                 {/* Notify shift officer */}
-                <label className="flex items-center gap-3 cursor-pointer ml-4">
+                <label className="ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={equipAlertSettings.notify_shift_officer}
@@ -820,27 +785,23 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                         notify_shift_officer: e.target.checked,
                       });
                     }}
-                    className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                    className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
                   />
-                  <span className="text-sm text-theme-text-secondary">
-                    Notify the shift officer
-                  </span>
+                  <span className="text-theme-text-secondary text-sm">Notify the shift officer</span>
                 </label>
 
                 {/* Notify roles */}
                 <div className="ml-4">
-                  <p className="text-xs font-medium text-theme-text-secondary mb-1.5">
-                    Notify these roles:
-                  </p>
+                  <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">Notify these roles:</p>
                   <div className="flex flex-wrap gap-2">
-                    {AVAILABLE_ROLES.map(role => (
+                    {AVAILABLE_ROLES.map((role) => (
                       <button
                         key={role.value}
                         onClick={() => toggleEquipRole(role.value)}
-                        className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                        className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
                           equipAlertSettings.notify_roles.includes(role.value)
-                            ? "bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400"
-                            : "bg-theme-surface-hover border-theme-surface-border text-theme-text-muted hover:text-theme-text-secondary"
+                            ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400'
+                            : 'bg-theme-surface-hover border-theme-surface-border text-theme-text-muted hover:text-theme-text-secondary'
                         }`}
                       >
                         {role.label}
@@ -850,7 +811,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 </div>
 
                 {/* Send email toggle */}
-                <label className="flex items-center gap-3 cursor-pointer ml-4">
+                <label className="ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={equipAlertSettings.send_email}
@@ -860,43 +821,44 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                         send_email: e.target.checked,
                       });
                     }}
-                    className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                    className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
                   />
-                  <span className="text-sm text-theme-text-secondary">
-                    Also send email notification
-                  </span>
+                  <span className="text-theme-text-secondary text-sm">Also send email notification</span>
                 </label>
 
                 {/* CC emails */}
                 {equipAlertSettings.send_email && (
                   <div className="ml-4">
-                    <p className="text-xs font-medium text-theme-text-secondary mb-1.5">
+                    <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">
                       CC additional email addresses:
                     </p>
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="mb-2 flex items-center gap-2">
                       <input
                         type="email"
                         value={equipCc.inputValue}
                         onChange={(e) => equipCc.setInputValue(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); equipCc.add(); }
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            equipCc.add();
+                          }
                         }}
                         placeholder="email@example.com"
-                        className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-red-500"
+                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-red-500 focus:outline-hidden"
                       />
                       <button
                         onClick={equipCc.add}
-                        className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        className="rounded-lg bg-red-600 px-3 py-1 text-xs text-white hover:bg-red-700"
                       >
                         Add
                       </button>
                     </div>
                     {equipAlertSettings.cc_emails.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        {equipAlertSettings.cc_emails.map(email => (
+                        {equipAlertSettings.cc_emails.map((email) => (
                           <span
                             key={email}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-theme-surface-hover rounded-full text-theme-text-secondary"
+                            className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
                           >
                             {email}
                             <button

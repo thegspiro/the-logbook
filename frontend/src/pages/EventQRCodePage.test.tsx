@@ -63,9 +63,7 @@ describe('EventQRCodePage', () => {
 
   describe('Error State', () => {
     it('should display error message when API call fails', async () => {
-      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
-        createMockApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(createMockApiError('Event not found', 404));
 
       renderWithRouter(<EventQRCodePage />);
 
@@ -75,9 +73,7 @@ describe('EventQRCodePage', () => {
     });
 
     it('should display error message from plain Error object', async () => {
-      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
-        new Error('Network error')
-      );
+      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(new Error('Network error'));
 
       renderWithRouter(<EventQRCodePage />);
 
@@ -87,9 +83,7 @@ describe('EventQRCodePage', () => {
     });
 
     it('should show back link when error occurs', async () => {
-      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
-        createMockApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(createMockApiError('Event not found', 404));
 
       renderWithRouter(<EventQRCodePage />);
 
@@ -102,9 +96,7 @@ describe('EventQRCodePage', () => {
     });
 
     it('should have correct href on back link for navigation', async () => {
-      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
-        createMockApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(createMockApiError('Event not found', 404));
 
       renderWithRouter(<EventQRCodePage />);
 
@@ -147,9 +139,7 @@ describe('EventQRCodePage', () => {
 
       await waitFor(() => {
         const qrCode = screen.getByTestId('qr-code');
-        expect(qrCode.getAttribute('data-value')).toBe(
-          `${window.location.origin}/events/1/check-in`
-        );
+        expect(qrCode.getAttribute('data-value')).toBe(`${window.location.origin}/events/1/check-in`);
       });
     });
 

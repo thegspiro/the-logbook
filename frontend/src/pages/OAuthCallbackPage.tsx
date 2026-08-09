@@ -42,26 +42,21 @@ export const OAuthCallbackPage: React.FC = () => {
   }, [loadUser, navigate]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to p-4">
+    <main className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
       <div className="card w-full max-w-md p-8 text-center">
         {failed ? (
           <>
-            <h1 className="mb-3 text-2xl font-bold text-theme-text-primary">
-              Sign-in could not be completed
-            </h1>
-            <p className="mb-6 text-theme-text-secondary">
+            <h1 className="text-theme-text-primary mb-3 text-2xl font-bold">Sign-in could not be completed</h1>
+            <p className="text-theme-text-secondary mb-6">
               We couldn&apos;t finish signing you in with Google. Please try again.
             </p>
-            <button
-              onClick={() => void navigate('/login', { replace: true })}
-              className="btn-primary"
-            >
+            <button onClick={() => void navigate('/login', { replace: true })} className="btn-primary">
               Back to sign in
             </button>
           </>
         ) : (
           <>
-            <div className="mx-auto mb-4 inline-block h-8 w-8 animate-spin rounded-full border-2 border-theme-surface-border border-t-transparent" />
+            <div className="border-theme-surface-border mx-auto mb-4 inline-block h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" />
             <p className="text-theme-text-secondary">Completing sign-in&hellip;</p>
           </>
         )}

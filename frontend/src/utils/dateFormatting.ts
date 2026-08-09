@@ -112,7 +112,7 @@ export const formatForDateTimeInput = (dateString?: string | Date | null, timezo
   if (timezone) formatOpts.timeZone = timezone;
   // Use Intl to format in the target timezone (or browser local when omitted)
   const parts = new Intl.DateTimeFormat('en-CA', formatOpts).formatToParts(date);
-  const get = (type: string) => parts.find(p => p.type === type)?.value || '';
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
   return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
 };
 
@@ -157,7 +157,7 @@ export const localToUTC = (localDateTimeStr?: string | null, timezone?: string):
     hour12: false,
   });
   const dtParts = fmt.formatToParts(new Date(refUtcMs));
-  const get = (type: string) => dtParts.find(p => p.type === type)?.value ?? '';
+  const get = (type: string) => dtParts.find((p) => p.type === type)?.value ?? '';
   const localAtRefMs = Date.UTC(+get('year'), +get('month') - 1, +get('day'), +get('hour'), +get('minute'));
 
   // Offset = how far ahead the timezone is from UTC at this instant
@@ -169,7 +169,7 @@ export const localToUTC = (localDateTimeStr?: string | null, timezone?: string):
   // Verify the result handles DST transitions correctly: format the computed
   // UTC time back in the target timezone and confirm it matches the input.
   const checkParts = fmt.formatToParts(new Date(utcMs));
-  const cGet = (type: string) => checkParts.find(p => p.type === type)?.value ?? '';
+  const cGet = (type: string) => checkParts.find((p) => p.type === type)?.value ?? '';
   const checkStr = `${cGet('year')}-${cGet('month')}-${cGet('day')}T${cGet('hour')}:${cGet('minute')}`;
 
   if (checkStr !== localDateTimeStr) {
@@ -235,10 +235,7 @@ export const daysUntil = (dateString: string | Date): number => {
  * @param endDate - End date
  * @returns Duration in minutes, or NaN if either date is invalid
  */
-export const calculateDurationMinutes = (
-  startDate: string | Date,
-  endDate: string | Date
-): number => {
+export const calculateDurationMinutes = (startDate: string | Date, endDate: string | Date): number => {
   const start = parseDate(startDate);
   const end = parseDate(endDate);
   if (!start || !end) return NaN;
@@ -299,7 +296,7 @@ export const toLocalISODate = (dateString?: string | Date | null, timezone?: str
 export const formatDateCustom = (
   dateString: string | Date | null | undefined,
   options: Intl.DateTimeFormatOptions,
-  timezone?: string,
+  timezone?: string
 ): string => {
   const date = parseDate(dateString);
   if (!date) return 'N/A';
@@ -316,10 +313,7 @@ export const formatDateCustom = (
  * @param options - Optional Intl.NumberFormatOptions
  * @returns Formatted number string
  */
-export const formatNumber = (
-  value: number | null | undefined,
-  options?: Intl.NumberFormatOptions,
-): string => {
+export const formatNumber = (value: number | null | undefined, options?: Intl.NumberFormatOptions): string => {
   if (value == null) return '0';
   return new Intl.NumberFormat('en-US', options).format(value);
 };
@@ -330,10 +324,7 @@ export const formatNumber = (
  * @param includeSymbol - Whether to include the $ symbol (default true)
  * @returns Formatted currency string (e.g., "$1,234.56")
  */
-export const formatCurrency = (
-  value: number | null | undefined,
-  includeSymbol = true,
-): string => {
+export const formatCurrency = (value: number | null | undefined, includeSymbol = true): string => {
   if (value == null) return includeSymbol ? '$0.00' : '0.00';
   if (includeSymbol) {
     return new Intl.NumberFormat('en-US', {
@@ -354,10 +345,7 @@ export const formatCurrency = (
  * @param timezone - Optional IANA timezone
  * @returns Number of full days between today and the target date (negative if past)
  */
-export const daysBetween = (
-  dateString: string | Date,
-  timezone?: string,
-): number => {
+export const daysBetween = (dateString: string | Date, timezone?: string): number => {
   const targetDate = parseDate(dateString);
   if (!targetDate) return NaN;
   // Get today's date string and target date string in the timezone

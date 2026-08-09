@@ -54,21 +54,24 @@ export const useEventNotifications = (eventId: string | undefined) => {
     }
   }, [eventId, notificationType, notificationTarget, notificationMessage]);
 
-  const handleSendReminders = useCallback(async (reminderType: 'non_respondents' | 'all') => {
-    if (!eventId) return;
+  const handleSendReminders = useCallback(
+    async (reminderType: 'non_respondents' | 'all') => {
+      if (!eventId) return;
 
-    try {
-      setSendingReminders(true);
-      setShowReminderMenu(false);
-      const result = await eventService.sendReminders(eventId, reminderType);
-      toast.success(`${result.sent_count} reminder(s) queued`);
-    } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>;
-      toast.error(axiosErr.response?.data?.detail || 'Failed to send reminders');
-    } finally {
-      setSendingReminders(false);
-    }
-  }, [eventId]);
+      try {
+        setSendingReminders(true);
+        setShowReminderMenu(false);
+        const result = await eventService.sendReminders(eventId, reminderType);
+        toast.success(`${result.sent_count} reminder(s) queued`);
+      } catch (err) {
+        const axiosErr = err as AxiosError<{ detail?: string }>;
+        toast.error(axiosErr.response?.data?.detail || 'Failed to send reminders');
+      } finally {
+        setSendingReminders(false);
+      }
+    },
+    [eventId]
+  );
 
   return {
     notificationType,

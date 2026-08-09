@@ -5,14 +5,34 @@ import type { CategoriesSectionProps } from './types';
 
 const CATEGORY_COLOR_OPTIONS = [
   { value: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400', label: 'Blue', preview: 'bg-blue-500' },
-  { value: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400', label: 'Green', preview: 'bg-green-500' },
-  { value: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400', label: 'Purple', preview: 'bg-purple-500' },
+  {
+    value: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+    label: 'Green',
+    preview: 'bg-green-500',
+  },
+  {
+    value: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
+    label: 'Purple',
+    preview: 'bg-purple-500',
+  },
   { value: 'bg-pink-100 text-pink-800 dark:bg-pink-500/20 dark:text-pink-400', label: 'Pink', preview: 'bg-pink-500' },
-  { value: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400', label: 'Yellow', preview: 'bg-yellow-500' },
-  { value: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400', label: 'Indigo', preview: 'bg-indigo-500' },
+  {
+    value: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+    label: 'Yellow',
+    preview: 'bg-yellow-500',
+  },
+  {
+    value: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
+    label: 'Indigo',
+    preview: 'bg-indigo-500',
+  },
   { value: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400', label: 'Red', preview: 'bg-red-500' },
   { value: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400', label: 'Teal', preview: 'bg-teal-500' },
-  { value: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400', label: 'Orange', preview: 'bg-orange-500' },
+  {
+    value: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
+    label: 'Orange',
+    preview: 'bg-orange-500',
+  },
 ] as const;
 
 const CategoriesSection: React.FC<CategoriesSectionProps> = ({
@@ -30,8 +50,8 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-theme-text-primary">Custom Event Categories</h3>
-        <p className="text-sm text-theme-text-muted mt-1">
+        <h3 className="text-theme-text-primary text-lg font-semibold">Custom Event Categories</h3>
+        <p className="text-theme-text-muted mt-1 text-sm">
           Create organization-specific event categories beyond the built-in types.
         </p>
       </div>
@@ -41,37 +61,37 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
           {customCategories.map((cat: EventCategoryConfig) => (
             <div
               key={cat.value}
-              className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
+              className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
             >
               <div className="flex items-center gap-3">
                 <span
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cat.color}`}
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cat.color}`}
                 >
                   {cat.label}
                 </span>
-                <span className="text-xs text-theme-text-muted font-mono">{cat.value}</span>
+                <span className="text-theme-text-muted font-mono text-xs">{cat.value}</span>
               </div>
               <button
                 type="button"
                 onClick={() => onRemoveCategory(cat.value)}
                 disabled={saving}
-                className="text-sm text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50 transition-colors"
+                className="text-theme-text-muted text-sm transition-colors hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
                 title={`Remove "${cat.label}"`}
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="h-4 w-4" />
               </button>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-sm text-theme-text-muted italic py-2 text-center">
+        <p className="text-theme-text-muted py-2 text-center text-sm italic">
           No custom categories yet. Add one below.
         </p>
       )}
 
       <div className="flex items-end gap-3">
         <div className="flex-1">
-          <label htmlFor="new-category-label" className="block text-xs font-medium text-theme-text-muted mb-1">
+          <label htmlFor="new-category-label" className="text-theme-text-muted mb-1 block text-xs font-medium">
             Category Name
           </label>
           <input
@@ -84,19 +104,19 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
           />
         </div>
         <div className="w-36">
-          <label htmlFor="new-category-color" className="block text-xs font-medium text-theme-text-muted mb-1">
-            <Palette className="w-3 h-3 inline mr-1" />
+          <label htmlFor="new-category-color" className="text-theme-text-muted mb-1 block text-xs font-medium">
+            <Palette className="mr-1 inline h-3 w-3" />
             Color
           </label>
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex flex-wrap items-center gap-1.5">
             {CATEGORY_COLOR_OPTIONS.map((opt) => (
               <button
                 key={opt.label}
                 type="button"
                 onClick={() => onNewCategoryColorChange(opt.value)}
-                className={`w-5 h-5 rounded-full ${opt.preview} transition-all ${
+                className={`h-5 w-5 rounded-full ${opt.preview} transition-all ${
                   newCategoryColor === opt.value
-                    ? 'ring-2 ring-offset-2 ring-theme-focus-ring dark:ring-offset-gray-800'
+                    ? 'ring-theme-focus-ring ring-2 ring-offset-2 dark:ring-offset-gray-800'
                     : 'opacity-60 hover:opacity-100'
                 }`}
                 title={opt.label}
@@ -109,9 +129,9 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
           type="button"
           onClick={onAddCategory}
           disabled={saving || !newCategoryLabel.trim()}
-          className="btn-primary flex font-medium gap-1.5 items-center text-sm"
+          className="btn-primary flex items-center gap-1.5 text-sm font-medium"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="h-4 w-4" />
           Add
         </button>
       </div>

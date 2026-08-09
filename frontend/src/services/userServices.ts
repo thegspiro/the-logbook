@@ -4,7 +4,15 @@
 
 import api from './apiClient';
 import type { Permission, PermissionCategory, Role, UserRoleResponse, UserWithRoles } from '../types/role';
-import type { AuthSettings, ContactInfoSettings, ContactInfoUpdate, EmailServiceSettings, FileStorageSettings, User, UserProfileUpdate } from '../types/user';
+import type {
+  AuthSettings,
+  ContactInfoSettings,
+  ContactInfoUpdate,
+  EmailServiceSettings,
+  FileStorageSettings,
+  User,
+  UserProfileUpdate,
+} from '../types/user';
 import { asArray } from '../utils/asArray';
 
 export const userService = {
@@ -119,13 +127,15 @@ export const userService = {
     address_state?: string | undefined;
     address_zip?: string | undefined;
     address_country?: string | undefined;
-    emergency_contacts?: Array<{
-      name: string;
-      relationship: string;
-      phone: string;
-      email?: string | undefined;
-      is_primary: boolean;
-    }> | undefined;
+    emergency_contacts?:
+      | Array<{
+          name: string;
+          relationship: string;
+          phone: string;
+          email?: string | undefined;
+          is_primary: boolean;
+        }>
+      | undefined;
     password?: string | undefined;
     role_ids?: string[] | undefined;
     send_welcome_email?: boolean | undefined;
@@ -137,7 +147,11 @@ export const userService = {
   /**
    * Reset a user's password (admin only)
    */
-  async adminResetPassword(userId: string, newPassword: string, forceChange: boolean = true): Promise<{ message: string }> {
+  async adminResetPassword(
+    userId: string,
+    newPassword: string,
+    forceChange: boolean = true
+  ): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/users/${userId}/reset-password`, {
       new_password: newPassword,
       force_change: forceChange,
@@ -159,19 +173,26 @@ export const userService = {
    * Get notification preferences for the current user
    */
   async getNotificationPreferences(userId: string): Promise<import('../types/user').NotificationPreferences> {
-    const response = await api.get<{ notification_preferences: import('../types/user').NotificationPreferences }>(`/users/${userId}/with-roles`);
-    return response.data.notification_preferences || {
-      email: true,
-      email_notifications: true,
-      event_reminders: true,
-      training_reminders: true,
-    };
+    const response = await api.get<{ notification_preferences: import('../types/user').NotificationPreferences }>(
+      `/users/${userId}/with-roles`
+    );
+    return (
+      response.data.notification_preferences || {
+        email: true,
+        email_notifications: true,
+        event_reminders: true,
+        training_reminders: true,
+      }
+    );
   },
 
   /**
    * Update notification preferences for a user
    */
-  async updateNotificationPreferences(userId: string, preferences: Partial<import('../types/user').NotificationPreferences>): Promise<void> {
+  async updateNotificationPreferences(
+    userId: string,
+    preferences: Partial<import('../types/user').NotificationPreferences>
+  ): Promise<void> {
     await api.patch(`/users/${userId}/contact-info`, {
       notification_preferences: preferences,
     });
@@ -201,16 +222,12 @@ export const userService = {
    * member was never asked — the backend treats that as "no consent".
    */
   async getMyConsents(): Promise<import('../types/user').ConsentItem[]> {
-    const response = await api.get<import('../types/user').ConsentItem[]>(
-      '/users/me/consents'
-    );
+    const response = await api.get<import('../types/user').ConsentItem[]>('/users/me/consents');
     return response.data;
   },
 
   async setMyConsent(consentType: string, granted: boolean): Promise<void> {
-    await api.put(
-      `/users/me/consents/${consentType}?granted=${granted ? 'true' : 'false'}`
-    );
+    await api.put(`/users/me/consents/${consentType}?granted=${granted ? 'true' : 'false'}`);
   },
 
   /**
@@ -242,7 +259,11 @@ export const userService = {
   /**
    * Change a member's membership type
    */
-  async changeMembershipType(userId: string, membershipType: string, reason?: string): Promise<Record<string, unknown>> {
+  async changeMembershipType(
+    userId: string,
+    membershipType: string,
+    reason?: string
+  ): Promise<Record<string, unknown>> {
     const response = await api.patch<Record<string, unknown>>(`/users/${userId}/membership-type`, {
       membership_type: membershipType,
       reason,
@@ -264,7 +285,11 @@ export const userService = {
   /**
    * Get audit history for a member
    */
-  async getMemberAuditHistory(userId: string, page: number = 1, eventType?: string): Promise<import('../types/user').MemberAuditLogEntry[]> {
+  async getMemberAuditHistory(
+    userId: string,
+    page: number = 1,
+    eventType?: string
+  ): Promise<import('../types/user').MemberAuditLogEntry[]> {
     const response = await api.get<import('../types/user').MemberAuditLogEntry[]>(`/users/${userId}/audit-history`, {
       params: { page, page_size: 50, event_type: eventType || undefined },
     });
@@ -383,8 +408,13 @@ export const organizationService = {
   /**
    * Update membership ID settings
    */
-  async updateMembershipIdSettings(settings: import('../types/user').MembershipIdSettings): Promise<import('../types/user').MembershipIdSettings> {
-    const response = await api.patch<import('../types/user').MembershipIdSettings>('/organization/settings/membership-id', settings);
+  async updateMembershipIdSettings(
+    settings: import('../types/user').MembershipIdSettings
+  ): Promise<import('../types/user').MembershipIdSettings> {
+    const response = await api.patch<import('../types/user').MembershipIdSettings>(
+      '/organization/settings/membership-id',
+      settings
+    );
     return response.data;
   },
 
@@ -413,7 +443,9 @@ export const organizationService = {
   },
 
   async previewNextMembershipId(): Promise<{ enabled: boolean; next_id?: string }> {
-    const response = await api.get<{ enabled: boolean; next_id?: string }>('/organization/settings/membership-id/preview');
+    const response = await api.get<{ enabled: boolean; next_id?: string }>(
+      '/organization/settings/membership-id/preview'
+    );
     return response.data;
   },
 
@@ -445,7 +477,9 @@ export const organizationService = {
   },
 
   async getAddress(): Promise<{ address: string; city: string; state: string; zip: string }> {
-    const response = await api.get<{ address: string; city: string; state: string; zip: string }>('/organization/address');
+    const response = await api.get<{ address: string; city: string; state: string; zip: string }>(
+      '/organization/address'
+    );
     return response.data;
   },
 
@@ -562,7 +596,9 @@ export const roleService = {
   },
 
   async getUserPermissions(userId: string): Promise<{ user_id: string; permissions: string[]; roles: string[] }> {
-    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>(`/roles/user/${userId}/permissions`);
+    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>(
+      `/roles/user/${userId}/permissions`
+    );
     return response.data;
   },
 
@@ -572,12 +608,24 @@ export const roleService = {
   },
 
   async getMyPermissions(): Promise<{ user_id: string; permissions: string[]; roles: string[] }> {
-    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>('/roles/my/permissions');
+    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>(
+      '/roles/my/permissions'
+    );
     return response.data;
   },
 
-  async checkAdminAccess(): Promise<{ has_access: boolean; admin_roles: string[]; user_roles: string[]; admin_permissions: string[] }> {
-    const response = await api.get<{ has_access: boolean; admin_roles: string[]; user_roles: string[]; admin_permissions: string[] }>('/roles/admin-access/check');
+  async checkAdminAccess(): Promise<{
+    has_access: boolean;
+    admin_roles: string[];
+    user_roles: string[];
+    admin_permissions: string[];
+  }> {
+    const response = await api.get<{
+      has_access: boolean;
+      admin_roles: string[];
+      user_roles: string[];
+      admin_permissions: string[];
+    }>('/roles/admin-access/check');
     return response.data;
   },
 };

@@ -15,20 +15,12 @@ const sizeClasses = {
   md: 'w-5 h-5',
 } as const;
 
-export const StarRating: React.FC<StarRatingProps> = ({
-  value,
-  onChange,
-  max = 5,
-  size = 'md',
-  label,
-}) => {
+export const StarRating: React.FC<StarRatingProps> = ({ value, onChange, max = 5, size = 'md', label }) => {
   const starClass = sizeClasses[size];
   const interactive = !!onChange;
 
   const filledClass =
-    size === 'sm'
-      ? 'fill-amber-400 text-amber-700 dark:text-amber-400'
-      : 'fill-amber-400 text-amber-400';
+    size === 'sm' ? 'fill-amber-400 text-amber-700 dark:text-amber-400' : 'fill-amber-400 text-amber-400';
 
   const emptyClass = interactive
     ? 'text-theme-text-muted hover:text-amber-500 dark:hover:text-amber-300'
@@ -40,11 +32,9 @@ export const StarRating: React.FC<StarRatingProps> = ({
       role={interactive ? 'radiogroup' : 'img'}
       aria-label={label || `Rating: ${value} out of ${max}`}
     >
-      {Array.from({ length: max }, (_, i) => i + 1).map(i => {
+      {Array.from({ length: max }, (_, i) => i + 1).map((i) => {
         const filled = i <= value;
-        const starEl = (
-          <Star className={`${starClass} ${filled ? filledClass : emptyClass}`} />
-        );
+        const starEl = <Star className={`${starClass} ${filled ? filledClass : emptyClass}`} />;
 
         if (interactive) {
           return (
@@ -52,7 +42,7 @@ export const StarRating: React.FC<StarRatingProps> = ({
               key={i}
               type="button"
               onClick={() => onChange(i)}
-              className="p-0.5 focus:outline-2 focus:outline-offset-1 focus:outline-violet-500 rounded"
+              className="rounded p-0.5 focus:outline-2 focus:outline-offset-1 focus:outline-violet-500"
               aria-label={`${i} star${i !== 1 ? 's' : ''}`}
               aria-pressed={filled}
             >

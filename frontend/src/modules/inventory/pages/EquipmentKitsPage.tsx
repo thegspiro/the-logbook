@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
 import {
-  ArrowLeft, BoxSelect, Plus, Pencil, RefreshCw, Package,
-  Eye, EyeOff, GripVertical, Trash2, Ruler, UserPlus,
+  ArrowLeft,
+  BoxSelect,
+  Plus,
+  Pencil,
+  RefreshCw,
+  Package,
+  Eye,
+  EyeOff,
+  GripVertical,
+  Trash2,
+  Ruler,
+  UserPlus,
 } from 'lucide-react';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { inventoryService } from '../../../services/api';
-import type {
-  EquipmentKit,
-  EquipmentKitCreate,
-  EquipmentKitItem,
-  InventoryItem,
-  InventoryCategory,
-} from '../types';
+import type { EquipmentKit, EquipmentKitCreate, EquipmentKitItem, InventoryItem, InventoryCategory } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
@@ -27,7 +31,11 @@ interface LineItemFormData {
 }
 
 const EMPTY_LINE_ITEM: LineItemFormData = {
-  item_id: '', category_id: '', item_name: '', quantity: '1', size_selectable: false,
+  item_id: '',
+  category_id: '',
+  item_name: '',
+  quantity: '1',
+  size_selectable: false,
 };
 
 interface KitFormData {
@@ -37,7 +45,9 @@ interface KitFormData {
 }
 
 const EMPTY_FORM: KitFormData = {
-  name: '', description: '', line_items: [{ ...EMPTY_LINE_ITEM }],
+  name: '',
+  description: '',
+  line_items: [{ ...EMPTY_LINE_ITEM }],
 };
 
 const inputClass = 'form-input w-full';
@@ -84,8 +94,12 @@ const EquipmentKitsPage: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { void loadKits(); }, [loadKits]);
-  useEffect(() => { void loadReferenceData(); }, [loadReferenceData]);
+  useEffect(() => {
+    void loadKits();
+  }, [loadKits]);
+  useEffect(() => {
+    void loadReferenceData();
+  }, [loadReferenceData]);
 
   const openCreateModal = () => {
     setEditingKit(null);
@@ -100,15 +114,16 @@ const EquipmentKitsPage: React.FC = () => {
       setFormData({
         name: full.name,
         description: full.description ?? '',
-        line_items: full.line_items && full.line_items.length > 0
-          ? full.line_items.map((li: EquipmentKitItem) => ({
-            item_id: li.item_id ?? '',
-            category_id: li.category_id ?? '',
-            item_name: li.item_name,
-            quantity: String(li.quantity),
-            size_selectable: li.size_selectable,
-          }))
-          : [{ ...EMPTY_LINE_ITEM }],
+        line_items:
+          full.line_items && full.line_items.length > 0
+            ? full.line_items.map((li: EquipmentKitItem) => ({
+                item_id: li.item_id ?? '',
+                category_id: li.category_id ?? '',
+                item_name: li.item_name,
+                quantity: String(li.quantity),
+                size_selectable: li.size_selectable,
+              }))
+            : [{ ...EMPTY_LINE_ITEM }],
       });
       setShowModal(true);
     } catch (err: unknown) {
@@ -166,9 +181,15 @@ const EquipmentKitsPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) { toast.error('Kit name is required'); return; }
+    if (!formData.name.trim()) {
+      toast.error('Kit name is required');
+      return;
+    }
     const validItems = formData.line_items.filter((li) => li.item_name.trim());
-    if (validItems.length === 0) { toast.error('At least one line item is required'); return; }
+    if (validItems.length === 0) {
+      toast.error('At least one line item is required');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -224,15 +245,18 @@ const EquipmentKitsPage: React.FC = () => {
   const modalFooter = (
     <>
       <button
-        type="submit" form="kit-form" disabled={isSaving}
+        type="submit"
+        form="kit-form"
+        disabled={isSaving}
         className="btn-info btn-md inline-flex items-center gap-2 disabled:opacity-50"
       >
-        {isSaving && <RefreshCw className="w-4 h-4 animate-spin" />}
+        {isSaving && <RefreshCw className="h-4 w-4 animate-spin" />}
         {editingKit ? 'Update Kit' : 'Create Kit'}
       </button>
       <button
-        type="button" onClick={closeModal}
-        className="mr-2 sm:mr-3 inline-flex items-center px-4 py-2 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary"
+        type="button"
+        onClick={closeModal}
+        className="text-theme-text-secondary hover:text-theme-text-primary mr-2 inline-flex items-center px-4 py-2 text-sm font-medium sm:mr-3"
       >
         Cancel
       </button>
@@ -240,32 +264,36 @@ const EquipmentKitsPage: React.FC = () => {
   );
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+      <Link
+        to="/inventory/admin"
+        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+      >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
       </Link>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">Equipment Kits</h1>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Equipment Kits</h1>
           <p className="text-theme-text-secondary mt-1">
             Create kit templates to issue multiple items to members at once.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+          <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
             <input
-              type="checkbox" checked={showInactive}
+              type="checkbox"
+              checked={showInactive}
               onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded border-theme-surface-border"
+              className="border-theme-surface-border rounded"
             />
             Show inactive
           </label>
           {canManage && (
-            <button onClick={openCreateModal} className="btn-info btn-md flex gap-2 items-center">
-              <Plus className="w-4 h-4" /> Add Kit
+            <button onClick={openCreateModal} className="btn-info btn-md flex items-center gap-2">
+              <Plus className="h-4 w-4" /> Add Kit
             </button>
           )}
         </div>
@@ -274,43 +302,41 @@ const EquipmentKitsPage: React.FC = () => {
       {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-          <RefreshCw className="w-8 h-8 animate-spin text-theme-text-muted" />
+          <RefreshCw className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       ) : kits.length === 0 ? (
-        <div className="text-center py-16 card-secondary">
-          <BoxSelect className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+        <div className="card-secondary py-16 text-center">
+          <BoxSelect className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted mb-4">
             {showInactive ? 'No equipment kits found.' : 'No active kits yet. Create one to get started.'}
           </p>
           {canManage && (
-            <button onClick={openCreateModal} className="btn-info btn-md inline-flex gap-2 items-center">
-              <Plus className="w-4 h-4" /> Add Kit
+            <button onClick={openCreateModal} className="btn-info btn-md inline-flex items-center gap-2">
+              <Plus className="h-4 w-4" /> Add Kit
             </button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {kits.map((kit) => (
-            <div key={kit.id} className={`card-secondary p-5 flex flex-col ${!kit.active ? 'opacity-60' : ''}`}>
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                    <BoxSelect className="w-4 h-4 text-purple-500" />
+            <div key={kit.id} className={`card-secondary flex flex-col p-5 ${!kit.active ? 'opacity-60' : ''}`}>
+              <div className="mb-3 flex items-start justify-between">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-500/10">
+                    <BoxSelect className="h-4 w-4 text-purple-500" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-semibold text-theme-text-primary truncate">{kit.name}</h3>
-                    {!kit.active && (
-                      <span className="text-xs text-theme-text-muted">Inactive</span>
-                    )}
+                    <h3 className="text-theme-text-primary truncate font-semibold">{kit.name}</h3>
+                    {!kit.active && <span className="text-theme-text-muted text-xs">Inactive</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex shrink-0 items-center gap-1">
                   <button
                     onClick={() => void openDetailModal(kit)}
                     aria-label={`View ${kit.name}`}
-                    className="p-1.5 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
                   >
-                    <Eye className="w-4 h-4" />
+                    <Eye className="h-4 w-4" />
                   </button>
                   {canManage && (
                     <>
@@ -318,34 +344,34 @@ const EquipmentKitsPage: React.FC = () => {
                         <button
                           onClick={() => setIssueKit(kit)}
                           aria-label={`Issue ${kit.name} to a member`}
-                          className="p-1.5 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                          className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
                         >
-                          <UserPlus className="w-4 h-4" />
+                          <UserPlus className="h-4 w-4" />
                         </button>
                       )}
                       <button
                         onClick={() => void openEditModal(kit)}
                         aria-label={`Edit ${kit.name}`}
-                        className="p-1.5 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => void toggleActive(kit)}
                         aria-label={kit.active ? `Deactivate ${kit.name}` : `Activate ${kit.name}`}
-                        className="p-1.5 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-1.5 transition-colors"
                       >
-                        {kit.active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        {kit.active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </>
                   )}
                 </div>
               </div>
               {kit.description && (
-                <p className="text-sm text-theme-text-secondary mb-3 line-clamp-2">{kit.description}</p>
+                <p className="text-theme-text-secondary mb-3 line-clamp-2 text-sm">{kit.description}</p>
               )}
-              <div className="flex items-center gap-2 text-xs text-theme-text-muted mt-auto pt-2 border-t border-theme-surface-border">
-                <Package className="w-3.5 h-3.5" />
+              <div className="text-theme-text-muted border-theme-surface-border mt-auto flex items-center gap-2 border-t pt-2 text-xs">
+                <Package className="h-3.5 w-3.5" />
                 {kit.line_items?.length ?? 0} item{(kit.line_items?.length ?? 0) !== 1 ? 's' : ''}
               </div>
             </div>
@@ -354,40 +380,66 @@ const EquipmentKitsPage: React.FC = () => {
       )}
 
       {/* Create/Edit Modal */}
-      <Modal isOpen={showModal} onClose={closeModal}
-        title={editingKit ? 'Edit Kit' : 'Add Equipment Kit'} footer={modalFooter} size="lg">
+      <Modal
+        isOpen={showModal}
+        onClose={closeModal}
+        title={editingKit ? 'Edit Kit' : 'Add Equipment Kit'}
+        footer={modalFooter}
+        size="lg"
+      >
         <form id="kit-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
           <div>
-            <label htmlFor="kit-name" className={labelClass}>Name <span className="text-red-500">*</span></label>
-            <input id="kit-name" type="text" required value={formData.name}
+            <label htmlFor="kit-name" className={labelClass}>
+              Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="kit-name"
+              type="text"
+              required
+              value={formData.name}
               onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className={inputClass} placeholder="e.g. New Recruit Kit" />
+              className={inputClass}
+              placeholder="e.g. New Recruit Kit"
+            />
           </div>
           <div>
-            <label htmlFor="kit-desc" className={labelClass}>Description</label>
-            <textarea id="kit-desc" rows={2} value={formData.description}
+            <label htmlFor="kit-desc" className={labelClass}>
+              Description
+            </label>
+            <textarea
+              id="kit-desc"
+              rows={2}
+              value={formData.description}
               onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className={inputClass} placeholder="Optional description for this kit" />
+              className={inputClass}
+              placeholder="Optional description for this kit"
+            />
           </div>
 
           {/* Line Items */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-theme-text-secondary">
+              <p className="text-theme-text-secondary text-sm font-medium">
                 Line Items <span className="text-red-500">*</span>
               </p>
-              <button type="button" onClick={addLineItem}
-                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1">
-                <Plus className="w-3.5 h-3.5" /> Add Item
+              <button
+                type="button"
+                onClick={addLineItem}
+                className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Item
               </button>
             </div>
 
             {formData.line_items.map((li, idx) => (
-              <div key={idx} className="flex items-start gap-2 p-3 rounded-lg bg-theme-surface-secondary/50 border border-theme-surface-border">
-                <GripVertical className="w-4 h-4 text-theme-text-muted mt-2.5 shrink-0" />
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-12 gap-2">
+              <div
+                key={idx}
+                className="bg-theme-surface-secondary/50 border-theme-surface-border flex items-start gap-2 rounded-lg border p-3"
+              >
+                <GripVertical className="text-theme-text-muted mt-2.5 h-4 w-4 shrink-0" />
+                <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-12">
                   <div className="sm:col-span-5">
-                    <label className="text-xs text-theme-text-muted mb-0.5 block">Item</label>
+                    <label className="text-theme-text-muted mb-0.5 block text-xs">Item</label>
                     <select
                       value={li.item_id}
                       onChange={(e) => updateLineItem(idx, 'item_id', e.target.value)}
@@ -395,20 +447,23 @@ const EquipmentKitsPage: React.FC = () => {
                     >
                       <option value="">Select or type custom...</option>
                       {items.map((item) => (
-                        <option key={item.id} value={item.id}>{item.name}</option>
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
                       ))}
                     </select>
                     {!li.item_id && (
                       <input
-                        type="text" value={li.item_name}
+                        type="text"
+                        value={li.item_name}
                         onChange={(e) => updateLineItem(idx, 'item_name', e.target.value)}
-                        className={inputClass + ' text-sm mt-1'}
+                        className={inputClass + ' mt-1 text-sm'}
                         placeholder="Custom item name"
                       />
                     )}
                   </div>
                   <div className="sm:col-span-3">
-                    <label className="text-xs text-theme-text-muted mb-0.5 block">Category</label>
+                    <label className="text-theme-text-muted mb-0.5 block text-xs">Category</label>
                     <select
                       value={li.category_id}
                       onChange={(e) => updateLineItem(idx, 'category_id', e.target.value)}
@@ -416,35 +471,43 @@ const EquipmentKitsPage: React.FC = () => {
                     >
                       <option value="">None</option>
                       {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
                       ))}
                     </select>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="text-xs text-theme-text-muted mb-0.5 block">Qty</label>
+                    <label className="text-theme-text-muted mb-0.5 block text-xs">Qty</label>
                     <input
-                      type="number" min="1" value={li.quantity}
+                      type="number"
+                      min="1"
+                      value={li.quantity}
                       onChange={(e) => updateLineItem(idx, 'quantity', e.target.value)}
                       className={inputClass + ' text-sm'}
                     />
                   </div>
-                  <div className="sm:col-span-2 flex items-end pb-1">
-                    <label className="flex items-center gap-1.5 text-xs text-theme-text-secondary cursor-pointer">
+                  <div className="flex items-end pb-1 sm:col-span-2">
+                    <label className="text-theme-text-secondary flex cursor-pointer items-center gap-1.5 text-xs">
                       <input
-                        type="checkbox" checked={li.size_selectable}
+                        type="checkbox"
+                        checked={li.size_selectable}
                         onChange={(e) => updateLineItem(idx, 'size_selectable', e.target.checked)}
-                        className="rounded border-theme-surface-border"
+                        className="border-theme-surface-border rounded"
                       />
-                      <Ruler className="w-3.5 h-3.5" />
+                      <Ruler className="h-3.5 w-3.5" />
                       Size
                     </label>
                   </div>
                 </div>
                 {formData.line_items.length > 1 && (
-                  <button type="button" onClick={() => removeLineItem(idx)}
-                    className="p-1.5 rounded-md text-theme-text-muted hover:text-red-500 transition-colors mt-2 shrink-0"
-                    aria-label="Remove line item">
-                    <Trash2 className="w-4 h-4" />
+                  <button
+                    type="button"
+                    onClick={() => removeLineItem(idx)}
+                    className="text-theme-text-muted mt-2 shrink-0 rounded-md p-1.5 transition-colors hover:text-red-500"
+                    aria-label="Remove line item"
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 )}
               </div>
@@ -454,40 +517,50 @@ const EquipmentKitsPage: React.FC = () => {
       </Modal>
 
       {/* Detail View Modal */}
-      <Modal isOpen={showDetail} onClose={() => { setShowDetail(false); setDetailKit(null); }}
-        title={detailKit?.name ?? 'Kit Details'} size="md">
+      <Modal
+        isOpen={showDetail}
+        onClose={() => {
+          setShowDetail(false);
+          setDetailKit(null);
+        }}
+        title={detailKit?.name ?? 'Kit Details'}
+        size="md"
+      >
         {detailKit && (
           <div className="space-y-4">
-            {detailKit.description && (
-              <p className="text-sm text-theme-text-secondary">{detailKit.description}</p>
-            )}
+            {detailKit.description && <p className="text-theme-text-secondary text-sm">{detailKit.description}</p>}
             <div className="flex items-center gap-2">
-              <span className={`inline-flex text-xs font-medium px-2.5 py-1 rounded-full border ${
-                detailKit.active
-                  ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'
-                  : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
-              }`}>
+              <span
+                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
+                  detailKit.active
+                    ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                    : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
+                }`}
+              >
                 {detailKit.active ? 'Active' : 'Inactive'}
               </span>
             </div>
 
             <div>
-              <h4 className="text-sm font-medium text-theme-text-primary mb-2">
+              <h4 className="text-theme-text-primary mb-2 text-sm font-medium">
                 Items ({detailKit.line_items?.length ?? 0})
               </h4>
               {detailKit.line_items && detailKit.line_items.length > 0 ? (
                 <div className="space-y-2">
                   {detailKit.line_items.map((li, idx) => (
-                    <div key={li.id ?? idx} className="flex items-center justify-between p-2.5 rounded-lg bg-theme-surface-secondary/50 border border-theme-surface-border">
+                    <div
+                      key={li.id ?? idx}
+                      className="bg-theme-surface-secondary/50 border-theme-surface-border flex items-center justify-between rounded-lg border p-2.5"
+                    >
                       <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-theme-text-muted" />
-                        <span className="text-sm text-theme-text-primary">{li.item_name}</span>
+                        <Package className="text-theme-text-muted h-4 w-4" />
+                        <span className="text-theme-text-primary text-sm">{li.item_name}</span>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-theme-text-muted">
+                      <div className="text-theme-text-muted flex items-center gap-3 text-xs">
                         <span>Qty: {li.quantity}</span>
                         {li.size_selectable && (
                           <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                            <Ruler className="w-3 h-3" /> Size select
+                            <Ruler className="h-3 w-3" /> Size select
                           </span>
                         )}
                       </div>
@@ -495,7 +568,7 @@ const EquipmentKitsPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-theme-text-muted">No items in this kit.</p>
+                <p className="text-theme-text-muted text-sm">No items in this kit.</p>
               )}
             </div>
           </div>
@@ -507,7 +580,9 @@ const EquipmentKitsPage: React.FC = () => {
         isOpen={issueKit !== null}
         onClose={() => setIssueKit(null)}
         title={issueKit ? `Issue "${issueKit.name}" — Select a Member` : 'Issue Kit'}
-        onSelect={(member) => { void handleIssueKit(member.userId); }}
+        onSelect={(member) => {
+          void handleIssueKit(member.userId);
+        }}
       />
     </div>
   );

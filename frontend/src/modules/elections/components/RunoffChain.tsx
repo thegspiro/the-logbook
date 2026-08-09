@@ -8,15 +8,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import {
-  ArrowRight,
-  CheckCircle2,
-  Circle,
-  Loader2,
-  RotateCcw,
-  Vote,
-  XCircle,
-} from 'lucide-react';
+import { ArrowRight, CheckCircle2, Circle, Loader2, RotateCcw, Vote, XCircle } from 'lucide-react';
 import { electionService } from '../../../services/api';
 import type { Election } from '../../../types/election';
 import { ElectionStatus } from '../../../constants/enums';
@@ -135,16 +127,14 @@ export const RunoffChain: React.FC<RunoffChainProps> = ({ election }) => {
   if (!loading && chain.length <= 1) return null;
 
   return (
-    <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 mb-6">
-      <div className="flex items-center gap-2 mb-3">
+    <div className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs">
+      <div className="mb-3 flex items-center gap-2">
         <RotateCcw className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-        <h3 className="text-sm font-semibold text-theme-text-primary">
-          Multi-Stage Election Chain
-        </h3>
+        <h3 className="text-theme-text-primary text-sm font-semibold">Multi-Stage Election Chain</h3>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
+        <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading election chain...
         </div>
@@ -154,13 +144,11 @@ export const RunoffChain: React.FC<RunoffChainProps> = ({ election }) => {
             const isCurrent = node.id === election.id;
             return (
               <React.Fragment key={node.id}>
-                {idx > 0 && (
-                  <ArrowRight className="h-4 w-4 text-theme-text-muted shrink-0 mx-1" />
-                )}
+                {idx > 0 && <ArrowRight className="text-theme-text-muted mx-1 h-4 w-4 shrink-0" />}
                 <Link
                   to={`/elections/${node.id}`}
                   aria-current={isCurrent ? 'page' : undefined}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 shrink-0 transition-colors ${
+                  className={`flex shrink-0 items-center gap-2 rounded-lg border-2 px-3 py-2 transition-colors ${
                     isCurrent
                       ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/20'
                       : 'border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover'
@@ -170,14 +158,12 @@ export const RunoffChain: React.FC<RunoffChainProps> = ({ election }) => {
                     <StatusIcon status={node.status} />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-medium text-theme-text-primary truncate max-w-[140px]">
+                    <div className="text-theme-text-primary max-w-[140px] truncate text-xs font-medium">
                       {node.runoff_round === 0 ? 'Original' : `Runoff ${node.runoff_round}`}
                     </div>
-                    <div className="text-xs text-theme-text-muted">
+                    <div className="text-theme-text-muted text-xs">
                       {node.status}
-                      {node.total_votes != null && node.total_votes > 0
-                        ? ` · ${node.total_votes} votes`
-                        : ''}
+                      {node.total_votes != null && node.total_votes > 0 ? ` · ${node.total_votes} votes` : ''}
                     </div>
                   </div>
                 </Link>

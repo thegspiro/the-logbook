@@ -21,7 +21,7 @@ function chunkError(msg = 'Failed to fetch dynamically imported module /assets/P
 
 // Helper: extract the factory function that lazyWithRetry passes to React.lazy
 function captureFactory<T extends ComponentType<unknown>>(
-  importFn: () => Promise<{ default: T }>,
+  importFn: () => Promise<{ default: T }>
 ): () => Promise<{ default: T }> {
   lazyWithRetry(importFn);
   // mockLazy is called with the factory as first argument
@@ -65,7 +65,8 @@ describe('lazyWithRetry', () => {
 
   it('retries once on transient failure and resolves on second attempt', async () => {
     const FakeComponent = (() => null) as unknown as ComponentType<unknown>;
-    const importFn = vi.fn()
+    const importFn = vi
+      .fn()
       .mockRejectedValueOnce(new Error('Network error'))
       .mockResolvedValueOnce({ default: FakeComponent });
 
@@ -148,9 +149,7 @@ describe('lazyWithRetry', () => {
   it('throws the retry error for non-chunk-load errors after both attempts fail', async () => {
     const originalError = new Error('Syntax error');
     const retryError = new Error('Syntax error again');
-    const importFn = vi.fn()
-      .mockRejectedValueOnce(originalError)
-      .mockRejectedValueOnce(retryError);
+    const importFn = vi.fn().mockRejectedValueOnce(originalError).mockRejectedValueOnce(retryError);
 
     const factory = captureFactory(importFn);
     await expect(factory()).rejects.toThrow('Syntax error again');
@@ -159,9 +158,10 @@ describe('lazyWithRetry', () => {
 
   it('throws original error if retry error is falsy', async () => {
     const originalError = new Error('Original failure');
-    const importFn = vi.fn()
+    const importFn = vi
+      .fn()
       .mockRejectedValueOnce(originalError)
-       
+
       .mockRejectedValueOnce(undefined);
 
     const factory = captureFactory(importFn);
@@ -191,10 +191,11 @@ describe('lazyWithRetry', () => {
   });
 
   it('does not treat non-Error values as chunk-load errors', async () => {
-    const importFn = vi.fn()
-       
+    const importFn = vi
+      .fn()
+
       .mockRejectedValueOnce('string error')
-       
+
       .mockRejectedValueOnce('string error again');
 
     const factory = captureFactory(importFn);

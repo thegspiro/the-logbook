@@ -45,14 +45,12 @@ export const ReportStageGroupsEditor: React.FC<Props> = ({ pipeline, onSaved }) 
   }, []);
 
   const addStageToGroup = useCallback((groupIndex: number, stageId: string) => {
-    setGroups((prev) =>
-      prev.map((g, i) => (i === groupIndex ? { ...g, step_ids: [...g.step_ids, stageId] } : g)),
-    );
+    setGroups((prev) => prev.map((g, i) => (i === groupIndex ? { ...g, step_ids: [...g.step_ids, stageId] } : g)));
   }, []);
 
   const removeStageFromGroup = useCallback((groupIndex: number, stageId: string) => {
     setGroups((prev) =>
-      prev.map((g, i) => (i === groupIndex ? { ...g, step_ids: g.step_ids.filter((id) => id !== stageId) } : g)),
+      prev.map((g, i) => (i === groupIndex ? { ...g, step_ids: g.step_ids.filter((id) => id !== stageId) } : g))
     );
   }, []);
 
@@ -147,7 +145,7 @@ export const ReportStageGroupsEditor: React.FC<Props> = ({ pipeline, onSaved }) 
             <button
               type="button"
               onClick={() => removeGroup(groupIndex)}
-              className="text-theme-text-muted hover:text-red-500 shrink-0 transition-colors"
+              className="text-theme-text-muted shrink-0 transition-colors hover:text-red-500"
               title="Remove group"
             >
               <Trash2 className="h-4 w-4" />
@@ -167,7 +165,7 @@ export const ReportStageGroupsEditor: React.FC<Props> = ({ pipeline, onSaved }) 
                   <button
                     type="button"
                     onClick={() => removeStageFromGroup(groupIndex, stepId)}
-                    className="text-theme-text-muted hover:text-red-500 text-xs transition-colors"
+                    className="text-theme-text-muted text-xs transition-colors hover:text-red-500"
                   >
                     Remove
                   </button>

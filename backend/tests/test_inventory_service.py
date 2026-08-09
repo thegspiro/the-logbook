@@ -1157,3 +1157,99 @@ class TestStatusTransitionMatrix:
                 ItemStatus.ASSIGNED, cond, assigned_to_user_id=str(uuid4())
             )
             assert err is None
+
+
+# ============================================
+# Member Org-Validation Tests (INV2-1)
+# ============================================
+
+
+def _scalar(value) -> MagicMock:
+    r = MagicMock()
+    r.scalar_one_or_none.return_value = value
+    return r
+
+
+class TestMemberOrgValidation:
+    """assign / checkout / issue must reject a client user_id that isn't in-org.
+
+    A foreign user_id is surfaced by name through the assignment / checkout /
+    issuance / charge listings (which format the record's eager-loaded `user`),
+    so storing one is a cross-tenant PII leak, not just a dangling reference.
+    The member lookup (is_in_org) runs after the item is confirmed and returns
+    nothing for an out-of-org id -> "Member not found".
+    """
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_assign_rejects_foreign_user(self, service, mock_db, org_id):
+        item = _make_item()
+        # execute #1: item lock -> found. #2: is_in_org member lookup -> none.
+        mock_db.execute = AsyncMock(side_effect=[_scalar(item), _scalar(None)])
+        assignment, err = await service.assign_item_to_user(
+            item_id=uuid4(),
+            user_id=uuid4(),
+            organization_id=org_id,
+            assigned_by=uuid4(),
+        )
+        assert assignment is None
+        assert err == "Member not found"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_checkout_rejects_foreign_user(self, service, mock_db, org_id):
+        item = _make_item(status=ItemStatus.AVAILABLE)
+        mock_db.execute = AsyncMock(side_effect=[_scalar(item), _scalar(None)])
+        checkout, err = await service.checkout_item(
+            item_id=uuid4(),
+            user_id=uuid4(),
+            organization_id=org_id,
+            checked_out_by=uuid4(),
+        )
+        assert checkout is None
+        assert err == "Member not found"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_issue_from_pool_rejects_foreign_user(self, service, mock_db, org_id):
+        item = _make_item(tracking_type=TrackingType.POOL)
+        mock_db.execute = AsyncMock(side_effect=[_scalar(item), _scalar(None)])
+        result, err = await service.issue_from_pool(
+            item_id=uuid4(), user_id=uuid4(), organization_id=org_id, issued_by=uuid4()
+        )
+        assert result is None
+        assert err == "Member not found"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_issue_kit_rejects_foreign_user(self, service, mock_db, org_id):
+        # Kit resolved via a patched helper, so the only execute is is_in_org.
+        mock_db.execute = AsyncMock(side_effect=[_scalar(None)])
+        with patch.object(
+            service, "get_equipment_kit_by_id", new_callable=AsyncMock
+        ) as mock_kit:
+            mock_kit.return_value = MagicMock()
+            result, err = await service.issue_kit_to_member(
+                kit_id=uuid4(),
+                user_id=uuid4(),
+                organization_id=org_id,
+                issued_by=uuid4(),
+            )
+        assert result is None
+        assert err == "Member not found"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_item_check_precedes_member_check(self, service, mock_db, org_id):
+        # A missing item short-circuits before the member lookup — only the item
+        # lock executes, so is_in_org is never reached.
+        mock_db.execute = AsyncMock(side_effect=[_scalar(None)])
+        assignment, err = await service.assign_item_to_user(
+            item_id=uuid4(),
+            user_id=uuid4(),
+            organization_id=org_id,
+            assigned_by=uuid4(),
+        )
+        assert assignment is None
+        assert err == "Item not found"
+        assert mock_db.execute.await_count == 1

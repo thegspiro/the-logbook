@@ -71,6 +71,7 @@ Search for "The Logbook" in Community Applications.
 ### 3. Configure
 
 **Required Settings:**
+
 - WebUI Port: `7880` (or any available)
 - API Port: `7881` (or any available)
 - Database Host: Your Unraid IP
@@ -91,12 +92,12 @@ Start managing your organization! 🎉
 
 ## System Requirements
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **Unraid Version** | 6.9.0+ | 6.12.0+ |
-| **RAM** | 8 GB | 16 GB |
-| **Storage** | 20 GB | 50 GB+ |
-| **CPU Cores** | 2 | 4+ |
+| Component          | Minimum | Recommended |
+| ------------------ | ------- | ----------- |
+| **Unraid Version** | 6.9.0+  | 6.12.0+     |
+| **RAM**            | 8 GB    | 16 GB       |
+| **Storage**        | 20 GB   | 50 GB+      |
+| **CPU Cores**      | 2       | 4+          |
 
 ### Required Services
 
@@ -109,10 +110,10 @@ Start managing your organization! 🎉
 
 Conflict-free default ports:
 
-| Service | Port | Purpose |
-|---------|------|---------|
+| Service          | Port | Purpose       |
+| ---------------- | ---- | ------------- |
 | Frontend (WebUI) | 7880 | Web interface |
-| Backend API | 7881 | API endpoint |
+| Backend API      | 7881 | API endpoint  |
 
 **Need different ports?** No problem! Change them in the template.
 
@@ -142,6 +143,7 @@ Conflict-free default ports:
 All configuration via Unraid Docker template or `.env` file.
 
 **Essential:**
+
 ```bash
 DB_HOST=192.168.1.10       # Your Unraid IP
 DB_NAME=the_logbook
@@ -152,6 +154,7 @@ ENCRYPTION_KEY=generate_with_openssl
 ```
 
 **Optional:**
+
 ```bash
 REDIS_HOST=192.168.1.10
 EMAIL_ENABLED=true
@@ -186,7 +189,7 @@ FLUSH PRIVILEGES;
 
 The `docker-compose-unraid.yml` includes MySQL 8.0 and Redis.
 
-📖 **[Database Setup Guide →](./UNRAID-INSTALLATION.md#database-setup)**
+📖 **[Database Setup Guide →](./UNRAID-INSTALLATION.md#database-setup-mysql)**
 
 ---
 
@@ -407,6 +410,7 @@ Want to improve The Logbook for Unraid?
 4. Submit pull request
 
 **Areas needing help:**
+
 - Documentation improvements
 - Bug fixes
 - Feature requests
@@ -431,6 +435,7 @@ The Logbook is open source software. See [LICENSE](../LICENSE) for details.
 ## Resources
 
 ### Documentation
+
 - [Installation Guide](./UNRAID-INSTALLATION.md)
 - [Quick Start](./QUICK-START.md)
 - [Build from Source](./BUILD-FROM-SOURCE-ON-UNRAID.md)
@@ -438,12 +443,14 @@ The Logbook is open source software. See [LICENSE](../LICENSE) for details.
 - [Main Documentation](../docs/)
 
 ### External Links
+
 - [Official Website](#)
 - [GitHub Repository](https://github.com/thegspiro/the-logbook)
 - [Docker Hub](https://hub.docker.com/r/thegspiro/the-logbook)
 - [Unraid Forums](https://forums.unraid.net/)
 
 ### Quick Reference
+
 - [Docker Compose File](./docker-compose-unraid.yml)
 - [XML Template](./the-logbook.xml)
 - [Changelog](../CHANGELOG.md)

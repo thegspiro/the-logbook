@@ -10,10 +10,28 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import {
-  FileText, Plus, Loader2, Clock, Phone, ChevronDown,
-  ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,
-  Shield, Eye, EyeOff, ClipboardCheck, Pencil, Printer,
-  BarChart3, TrendingUp, Users, Save,
+  FileText,
+  Plus,
+  Loader2,
+  Clock,
+  Phone,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  X,
+  Search,
+  User as UserIcon,
+  AlertCircle,
+  Shield,
+  Eye,
+  EyeOff,
+  ClipboardCheck,
+  Pencil,
+  Printer,
+  BarChart3,
+  TrendingUp,
+  Users,
+  Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
@@ -45,7 +63,12 @@ import {
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
-import { enqueueShiftReport, listPendingReports, dequeueShiftReport, pendingReportCount } from '../../utils/shiftReportOfflineQueue';
+import {
+  enqueueShiftReport,
+  listPendingReports,
+  dequeueShiftReport,
+  pendingReportCount,
+} from '../../utils/shiftReportOfflineQueue';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
@@ -135,16 +158,20 @@ export const ShiftReportsTab: React.FC = () => {
   // Load draft count badge for managers
   useEffect(() => {
     if (!canManage) return;
-    shiftCompletionService.getDraftReports()
+    shiftCompletionService
+      .getDraftReports()
       .then((drafts) => setDraftBadgeCount(drafts.length))
       .catch(() => {});
   }, [canManage, viewMode]);
 
   // Load config for visibility and rating settings
   useEffect(() => {
-    trainingModuleConfigService.getConfig()
+    trainingModuleConfigService
+      .getConfig()
       .then(setConfig)
-      .catch(() => { /* non-officer: config not available */ });
+      .catch(() => {
+        /* non-officer: config not available */
+      });
   }, []);
 
   // Rating display helpers using config
@@ -157,19 +184,15 @@ export const ShiftReportsTab: React.FC = () => {
 
   const skillOptions = useMemo(() => {
     if (shiftApparatusType && config?.apparatus_type_skills) {
-      const typeSkills =
-        config.apparatus_type_skills[shiftApparatusType];
+      const typeSkills = config.apparatus_type_skills[shiftApparatusType];
       if (typeSkills?.length) return typeSkills;
     }
-    return config?.shift_review_default_skills?.length
-      ? config.shift_review_default_skills
-      : DEFAULT_SKILLS;
+    return config?.shift_review_default_skills?.length ? config.shift_review_default_skills : DEFAULT_SKILLS;
   }, [config, shiftApparatusType]);
 
   const taskDefaults = useMemo(() => {
     if (shiftApparatusType && config?.apparatus_type_tasks) {
-      const typeTasks =
-        config.apparatus_type_tasks[shiftApparatusType];
+      const typeTasks = config.apparatus_type_tasks[shiftApparatusType];
       if (typeTasks?.length) return typeTasks;
     }
     return config?.shift_review_default_tasks ?? [];
@@ -182,8 +205,8 @@ export const ShiftReportsTab: React.FC = () => {
     try {
       const crew = await shiftCompletionService.getShiftCrewStatus(shiftId);
       setCrewMembers(crew);
-      const eligible = crew.filter(m => !m.has_existing_report);
-      setSelectedCrewIds(new Set(eligible.map(m => m.user_id)));
+      const eligible = crew.filter((m) => !m.has_existing_report);
+      setSelectedCrewIds(new Set(eligible.map((m) => m.user_id)));
       setTraineeEvals({});
       setCrewRemarks({});
       setExpandedTraineeId(null);
@@ -204,9 +227,7 @@ export const ShiftReportsTab: React.FC = () => {
         const shift = await schedulingService.getShift(linkedShiftId);
         if (cancelled) return;
         const shiftDate = shift.shift_date ?? getTodayLocalDate(tz);
-        setLinkedShiftLabel(
-          `${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`,
-        );
+        setLinkedShiftLabel(`${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`);
         setShiftApparatusType(shift.apparatus_type ?? null);
         let hours = 0;
         if (shift.total_hours && shift.total_hours > 0) {
@@ -215,12 +236,10 @@ export const ShiftReportsTab: React.FC = () => {
           const start = new Date(shift.start_time).getTime();
           const end = new Date(shift.end_time).getTime();
           if (end > start) {
-            hours = Math.round(
-              ((end - start) / 3600000) * 100,
-            ) / 100;
+            hours = Math.round(((end - start) / 3600000) * 100) / 100;
           }
         }
-        setForm(prev => ({
+        setForm((prev) => ({
           ...prev,
           shift_id: linkedShiftId,
           shift_date: shiftDate,
@@ -233,7 +252,9 @@ export const ShiftReportsTab: React.FC = () => {
       }
     };
     void prefill();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [linkedShiftId, viewMode, tz, loadCrewForShift]);
 
   const loadReports = useCallback(async () => {
@@ -270,22 +291,31 @@ export const ShiftReportsTab: React.FC = () => {
   // Load analytics data for dashboard views
   useEffect(() => {
     if (viewMode === 'my-reports') {
-      shiftCompletionService.getMyStats()
+      shiftCompletionService
+        .getMyStats()
         .then(setTraineeStats)
-        .catch(() => { /* stats not critical */ });
+        .catch(() => {
+          /* stats not critical */
+        });
     } else if (viewMode === 'filed-by-me' && canManage) {
-      shiftCompletionService.getOfficerAnalytics()
+      shiftCompletionService
+        .getOfficerAnalytics()
         .then(setOfficerAnalytics)
-        .catch(() => { /* analytics not critical */ });
+        .catch(() => {
+          /* analytics not critical */
+        });
     }
   }, [viewMode, canManage]);
 
   // Load members for draft edit forms
   useEffect(() => {
     if (viewMode === 'create' && members.length === 0) {
-      userService.getUsers()
+      userService
+        .getUsers()
         .then(setMembers)
-        .catch(() => { /* members needed for draft edit */ });
+        .catch(() => {
+          /* members needed for draft edit */
+        });
     }
   }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps -- only load once when entering create mode
 
@@ -296,13 +326,16 @@ export const ShiftReportsTab: React.FC = () => {
     const now = new Date();
     const twoWeeksAgo = new Date(now);
     twoWeeksAgo.setDate(now.getDate() - 14);
-    schedulingService.getShifts({
-      start_date: toLocalDateString(twoWeeksAgo, tz),
-      end_date: getTodayLocalDate(tz),
-      limit: 50,
-    })
-      .then(res => setShiftList(res.shifts))
-      .catch(() => { /* shifts not critical */ })
+    schedulingService
+      .getShifts({
+        start_date: toLocalDateString(twoWeeksAgo, tz),
+        end_date: getTodayLocalDate(tz),
+        limit: 50,
+      })
+      .then((res) => setShiftList(res.shifts))
+      .catch(() => {
+        /* shifts not critical */
+      })
       .finally(() => setLoadingShifts(false));
   }, [viewMode, linkedShiftId, tz]);
 
@@ -340,7 +373,7 @@ export const ShiftReportsTab: React.FC = () => {
       setCrewRemarks(draft.crewRemarks);
     }
     if (draft.formData.officer_narrative) {
-      setForm(prev => ({ ...prev, officer_narrative: draft.formData.officer_narrative as string }));
+      setForm((prev) => ({ ...prev, officer_narrative: draft.formData.officer_narrative as string }));
     }
   }, [form.shift_id, crewMembers.length]);
 
@@ -376,26 +409,26 @@ export const ShiftReportsTab: React.FC = () => {
 
   const toggleCallType = (
     setter: React.Dispatch<React.SetStateAction<Partial<ShiftCompletionReportCreate>>>,
-    type: string,
+    type: string
   ) => {
-    setter(prev => {
+    setter((prev) => {
       const types = prev.call_types || [];
       return {
         ...prev,
-        call_types: types.includes(type) ? types.filter(t => t !== type) : [...types, type],
+        call_types: types.includes(type) ? types.filter((t) => t !== type) : [...types, type],
       };
     });
   };
 
   const toggleSkill = (
     setter: React.Dispatch<React.SetStateAction<Partial<ShiftCompletionReportCreate>>>,
-    skillName: string,
+    skillName: string
   ) => {
-    setter(prev => {
+    setter((prev) => {
       const skills = prev.skills_observed || [];
-      const existing = skills.find(s => s.skill_name === skillName);
+      const existing = skills.find((s) => s.skill_name === skillName);
       if (existing) {
-        return { ...prev, skills_observed: skills.filter(s => s.skill_name !== skillName) };
+        return { ...prev, skills_observed: skills.filter((s) => s.skill_name !== skillName) };
       }
       return { ...prev, skills_observed: [...skills, { skill_name: skillName, demonstrated: true }] };
     });
@@ -423,22 +456,20 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Batch workflow handlers
   const handleSelectShift = async (shift: ShiftRecord) => {
-    setForm(prev => ({
+    setForm((prev) => ({
       ...prev,
       shift_id: shift.id,
       shift_date: shift.shift_date,
       hours_on_shift: shift.total_hours || 0,
       calls_responded: shift.call_count || 0,
     }));
-    setLinkedShiftLabel(
-      `${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shift.shift_date}`,
-    );
+    setLinkedShiftLabel(`${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shift.shift_date}`);
     setShiftApparatusType(shift.apparatus_type ?? null);
     await loadCrewForShift(shift.id);
   };
 
   const toggleCrewMember = (userId: string) => {
-    setSelectedCrewIds(prev => {
+    setSelectedCrewIds((prev) => {
       const next = new Set(prev);
       if (next.has(userId)) next.delete(userId);
       else next.add(userId);
@@ -447,7 +478,7 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   const updateTraineeEval = (userId: string, field: keyof CrewMemberEvaluation, value: unknown) => {
-    setTraineeEvals(prev => ({
+    setTraineeEvals((prev) => ({
       ...prev,
       [userId]: { ...prev[userId], user_id: userId, [field]: value },
     }));
@@ -469,13 +500,11 @@ export const ShiftReportsTab: React.FC = () => {
 
     const includeTraining = config?.shift_reports_include_training ?? true;
     const traineeIds = includeTraining
-      ? crewMembers
-          .filter(m => m.has_active_enrollment && selectedCrewIds.has(m.user_id))
-          .map(m => m.user_id)
+      ? crewMembers.filter((m) => m.has_active_enrollment && selectedCrewIds.has(m.user_id)).map((m) => m.user_id)
       : [];
 
     const evaluations: CrewMemberEvaluation[] = traineeIds
-      .map(id => {
+      .map((id) => {
         const ev = traineeEvals[id];
         const entry: CrewMemberEvaluation = { user_id: id };
         if (ev?.performance_rating) entry.performance_rating = ev.performance_rating;
@@ -484,28 +513,39 @@ export const ShiftReportsTab: React.FC = () => {
         const remark = crewRemarks[id] || ev?.remarks;
         if (remark) entry.remarks = remark;
         if (ev?.skills_observed?.length) entry.skills_observed = ev.skills_observed;
-        const filteredTasks = ev?.tasks_performed?.filter(t => t.task.trim());
+        const filteredTasks = ev?.tasks_performed?.filter((t) => t.task.trim());
         if (filteredTasks?.length) entry.tasks_performed = filteredTasks;
-        const enrollId = crewMembers.find(m => m.user_id === id)?.enrollment_id;
+        const enrollId = crewMembers.find((m) => m.user_id === id)?.enrollment_id;
         if (enrollId) entry.enrollment_id = enrollId;
         return entry;
       })
-      .filter(ev =>
-        ev.performance_rating || ev.areas_of_strength || ev.areas_for_improvement ||
-        ev.remarks || ev.skills_observed || ev.tasks_performed
+      .filter(
+        (ev) =>
+          ev.performance_rating ||
+          ev.areas_of_strength ||
+          ev.areas_for_improvement ||
+          ev.remarks ||
+          ev.skills_observed ||
+          ev.tasks_performed
       );
 
     const nonTraineeRemarks = Array.from(selectedCrewIds)
-      .filter(id => !traineeIds.includes(id) && crewRemarks[id])
-      .map(id => ({
+      .filter((id) => !traineeIds.includes(id) && crewRemarks[id])
+      .map((id) => ({
         user_id: id,
         remarks: crewRemarks[id],
       }));
 
-    const allEvaluations = [...evaluations, ...nonTraineeRemarks.map(r => ({
-      user_id: r.user_id,
-      remarks: r.remarks,
-    } as CrewMemberEvaluation))];
+    const allEvaluations = [
+      ...evaluations,
+      ...nonTraineeRemarks.map(
+        (r) =>
+          ({
+            user_id: r.user_id,
+            remarks: r.remarks,
+          }) as CrewMemberEvaluation
+      ),
+    ];
 
     const payload: BatchShiftReportCreate = {
       shift_id: form.shift_id || '',
@@ -526,7 +566,7 @@ export const ShiftReportsTab: React.FC = () => {
       if (!isOnline && !asDraft) {
         await enqueueShiftReport(payload);
         setPendingOfflineCount(await pendingReportCount());
-        toast.success('You\'re offline — report queued and will submit automatically when connectivity returns');
+        toast.success("You're offline — report queued and will submit automatically when connectivity returns");
         if (form.shift_id) deleteDraft(form.shift_id);
       } else {
         const result = await shiftCompletionService.batchCreateReports(payload);
@@ -607,7 +647,9 @@ export const ShiftReportsTab: React.FC = () => {
       };
       if (batchReviewNotes.trim()) batchPayload.reviewer_notes = batchReviewNotes.trim();
       const result = await shiftCompletionService.batchReviewReports(batchPayload);
-      toast.success(`${result.reviewed} report${result.reviewed !== 1 ? 's' : ''} ${action === SubmissionStatus.APPROVED ? 'approved' : 'flagged'}`);
+      toast.success(
+        `${result.reviewed} report${result.reviewed !== 1 ? 's' : ''} ${action === SubmissionStatus.APPROVED ? 'approved' : 'flagged'}`
+      );
       setSelectedReportIds(new Set());
       setBatchReviewNotes('');
       void loadReports();
@@ -619,7 +661,7 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   const toggleReportSelection = (reportId: string) => {
-    setSelectedReportIds(prev => {
+    setSelectedReportIds((prev) => {
       const next = new Set(prev);
       if (next.has(reportId)) {
         next.delete(reportId);
@@ -631,9 +673,7 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   const toggleRedactField = (field: string) => {
-    setRedactFields(prev =>
-      prev.includes(field) ? prev.filter(f => f !== field) : [...prev, field]
-    );
+    setRedactFields((prev) => (prev.includes(field) ? prev.filter((f) => f !== field) : [...prev, field]));
   };
 
   const handleEditDraft = (report: ShiftCompletionReport) => {
@@ -665,7 +705,7 @@ export const ShiftReportsTab: React.FC = () => {
         areas_for_improvement: draftForm.areas_for_improvement || undefined,
         officer_narrative: draftForm.officer_narrative || undefined,
         skills_observed: draftForm.skills_observed?.length ? draftForm.skills_observed : undefined,
-        tasks_performed: draftForm.tasks_performed?.filter(t => t.task.trim()) || undefined,
+        tasks_performed: draftForm.tasks_performed?.filter((t) => t.task.trim()) || undefined,
       };
       if (submit) {
         payload.review_status = config?.report_review_required ? 'pending_review' : 'approved';
@@ -700,7 +740,7 @@ export const ShiftReportsTab: React.FC = () => {
     };
 
     return (
-      <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${colorMap[rating] || colorMap[3]}`}>
+      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${colorMap[rating] || colorMap[3]}`}>
         {label}
       </span>
     );
@@ -713,47 +753,49 @@ export const ShiftReportsTab: React.FC = () => {
 
   const renderTraineeDashboard = () => {
     if (!traineeStats || traineeStats.total_reports === 0) return null;
-    const maxHours = Math.max(...traineeStats.monthly.map(m => m.hours), 1);
+    const maxHours = Math.max(...traineeStats.monthly.map((m) => m.hours), 1);
     return (
-      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-violet-500" /> My Shift Progress
+      <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-xl border p-4 sm:p-5">
+        <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+          <TrendingUp className="h-4 w-4 text-violet-500" /> My Shift Progress
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3 bg-violet-500/5 border border-violet-500/15 rounded-lg text-center">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{traineeStats.total_reports}</p>
-            <p className="text-xs text-theme-text-muted mt-0.5">Reports</p>
+            <p className="text-theme-text-muted mt-0.5 text-xs">Reports</p>
           </div>
           {traineeStats.total_hours != null && (
-            <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-lg text-center">
-              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{traineeStats.total_hours.toFixed(1)}</p>
-              <p className="text-xs text-theme-text-muted mt-0.5">Hours</p>
+            <div className="rounded-lg border border-blue-500/15 bg-blue-500/5 p-3 text-center">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {traineeStats.total_hours.toFixed(1)}
+              </p>
+              <p className="text-theme-text-muted mt-0.5 text-xs">Hours</p>
             </div>
           )}
           {traineeStats.total_calls != null && (
-            <div className="p-3 bg-green-500/5 border border-green-500/15 rounded-lg text-center">
+            <div className="rounded-lg border border-green-500/15 bg-green-500/5 p-3 text-center">
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">{traineeStats.total_calls}</p>
-              <p className="text-xs text-theme-text-muted mt-0.5">Calls</p>
+              <p className="text-theme-text-muted mt-0.5 text-xs">Calls</p>
             </div>
           )}
           {traineeStats.avg_rating != null && (
-            <div className="p-3 bg-amber-500/5 border border-amber-500/15 rounded-lg text-center">
+            <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-center">
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{traineeStats.avg_rating}</p>
-              <p className="text-xs text-theme-text-muted mt-0.5">Avg Rating</p>
+              <p className="text-theme-text-muted mt-0.5 text-xs">Avg Rating</p>
             </div>
           )}
         </div>
         {traineeStats.monthly.length > 1 && (
           <div>
-            <p className="text-xs font-medium text-theme-text-secondary mb-2">Monthly Hours</p>
-            <div className="flex items-end gap-1 h-20">
-              {traineeStats.monthly.map(m => (
-                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
+            <p className="text-theme-text-secondary mb-2 text-xs font-medium">Monthly Hours</p>
+            <div className="flex h-20 items-end gap-1">
+              {traineeStats.monthly.map((m) => (
+                <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
                   <div
-                    className="w-full bg-violet-500/20 rounded-t"
+                    className="w-full rounded-t bg-violet-500/20"
                     style={{ height: `${Math.max((m.hours / maxHours) * 100, 4)}%` }}
                   />
-                  <span className="text-[9px] text-theme-text-muted">{m.month.split('-')[1] ?? ''}</span>
+                  <span className="text-theme-text-muted text-[9px]">{m.month.split('-')[1] ?? ''}</span>
                 </div>
               ))}
             </div>
@@ -765,42 +807,46 @@ export const ShiftReportsTab: React.FC = () => {
 
   const renderOfficerDashboard = () => {
     if (!officerAnalytics || officerAnalytics.total_reports === 0) return null;
-    const maxHours = Math.max(...officerAnalytics.monthly.map(m => m.hours), 1);
+    const maxHours = Math.max(...officerAnalytics.monthly.map((m) => m.hours), 1);
     const draftCount = officerAnalytics?.status_counts?.['draft'] ?? 0;
     const pendingCount = officerAnalytics?.status_counts?.['pending_review'] ?? 0;
     return (
-      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-violet-500" /> Shift Report Analytics
+      <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-xl border p-4 sm:p-5">
+        <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+          <BarChart3 className="h-4 w-4 text-violet-500" /> Shift Report Analytics
         </h3>
         {/* Stat cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <div className="p-3 bg-violet-500/5 border border-violet-500/15 rounded-lg text-center">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{officerAnalytics.total_reports}</p>
-            <p className="text-xs text-theme-text-muted mt-0.5">Reports</p>
+            <p className="text-theme-text-muted mt-0.5 text-xs">Reports</p>
           </div>
-          <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-lg text-center">
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{officerAnalytics.total_hours.toFixed(1)}</p>
-            <p className="text-xs text-theme-text-muted mt-0.5">Total Hours</p>
+          <div className="rounded-lg border border-blue-500/15 bg-blue-500/5 p-3 text-center">
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              {officerAnalytics.total_hours.toFixed(1)}
+            </p>
+            <p className="text-theme-text-muted mt-0.5 text-xs">Total Hours</p>
           </div>
-          <div className="p-3 bg-green-500/5 border border-green-500/15 rounded-lg text-center">
+          <div className="rounded-lg border border-green-500/15 bg-green-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-green-600 dark:text-green-400">{officerAnalytics.total_calls}</p>
-            <p className="text-xs text-theme-text-muted mt-0.5">Total Calls</p>
+            <p className="text-theme-text-muted mt-0.5 text-xs">Total Calls</p>
           </div>
           {draftCount > 0 && (
-            <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-lg text-center cursor-pointer hover:bg-blue-500/10 transition-colors"
+            <div
+              className="cursor-pointer rounded-lg border border-blue-500/15 bg-blue-500/5 p-3 text-center transition-colors hover:bg-blue-500/10"
               onClick={() => setViewMode('drafts')}
             >
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{draftCount}</p>
-              <p className="text-xs text-theme-text-muted mt-0.5">Drafts</p>
+              <p className="text-theme-text-muted mt-0.5 text-xs">Drafts</p>
             </div>
           )}
           {pendingCount > 0 && (
-            <div className="p-3 bg-amber-500/5 border border-amber-500/15 rounded-lg text-center cursor-pointer hover:bg-amber-500/10 transition-colors"
+            <div
+              className="cursor-pointer rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-center transition-colors hover:bg-amber-500/10"
               onClick={() => setViewMode('pending-review')}
             >
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingCount}</p>
-              <p className="text-xs text-theme-text-muted mt-0.5">Pending Review</p>
+              <p className="text-theme-text-muted mt-0.5 text-xs">Pending Review</p>
             </div>
           )}
         </div>
@@ -808,24 +854,24 @@ export const ShiftReportsTab: React.FC = () => {
         {/* Per-trainee table */}
         {officerAnalytics.trainees.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-theme-text-secondary mb-2 flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" /> Trainee Summary
+            <p className="text-theme-text-secondary mb-2 flex items-center gap-1 text-xs font-medium">
+              <Users className="h-3.5 w-3.5" /> Trainee Summary
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-xs text-theme-text-muted border-b border-theme-surface-border">
-                    <th className="pb-2 font-medium text-left">Trainee</th>
-                    <th className="pb-2 pl-4 font-medium text-center">Reports</th>
-                    <th className="pb-2 pl-4 font-medium text-center">Hours</th>
-                    <th className="pb-2 pl-4 font-medium text-center">Calls</th>
-                    <th className="pb-2 pl-4 font-medium text-center">Avg Rating</th>
+                  <tr className="text-theme-text-muted border-theme-surface-border border-b text-xs">
+                    <th className="pb-2 text-left font-medium">Trainee</th>
+                    <th className="pb-2 pl-4 text-center font-medium">Reports</th>
+                    <th className="pb-2 pl-4 text-center font-medium">Hours</th>
+                    <th className="pb-2 pl-4 text-center font-medium">Calls</th>
+                    <th className="pb-2 pl-4 text-center font-medium">Avg Rating</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-theme-surface-border">
-                  {officerAnalytics.trainees.map(t => (
+                <tbody className="divide-theme-surface-border divide-y">
+                  {officerAnalytics.trainees.map((t) => (
                     <tr key={t.trainee_id} className="text-theme-text-primary">
-                      <td className="py-2 font-medium text-left">{t.name}</td>
+                      <td className="py-2 text-left font-medium">{t.name}</td>
                       <td className="py-2 pl-4 text-center">{t.reports}</td>
                       <td className="py-2 pl-4 text-center">{t.hours.toFixed(1)}</td>
                       <td className="py-2 pl-4 text-center">{t.calls}</td>
@@ -841,16 +887,16 @@ export const ShiftReportsTab: React.FC = () => {
         {/* Monthly trend */}
         {officerAnalytics.monthly.length > 1 && (
           <div>
-            <p className="text-xs font-medium text-theme-text-secondary mb-2">Monthly Trend</p>
-            <div className="flex items-end gap-1.5 h-24">
-              {officerAnalytics.monthly.map(m => (
-                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[9px] font-medium text-theme-text-muted">{m.reports}</span>
+            <p className="text-theme-text-secondary mb-2 text-xs font-medium">Monthly Trend</p>
+            <div className="flex h-24 items-end gap-1.5">
+              {officerAnalytics.monthly.map((m) => (
+                <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
+                  <span className="text-theme-text-muted text-[9px] font-medium">{m.reports}</span>
                   <div
-                    className="w-full bg-violet-500/20 rounded-t"
+                    className="w-full rounded-t bg-violet-500/20"
                     style={{ height: `${Math.max((m.hours / maxHours) * 100, 4)}%` }}
                   />
-                  <span className="text-[9px] text-theme-text-muted">{m.month.split('-')[1] ?? ''}</span>
+                  <span className="text-theme-text-muted text-[9px]">{m.month.split('-')[1] ?? ''}</span>
                 </div>
               ))}
             </div>
@@ -864,93 +910,119 @@ export const ShiftReportsTab: React.FC = () => {
     const isExpanded = expandedId === report.id;
     const isMyReport = report.trainee_id === user?.id;
     const isReviewMode = viewMode === 'pending-review';
-    const dateStr = formatDateCustom(report.shift_date + 'T12:00:00', {
-      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-    }, tz);
+    const dateStr = formatDateCustom(
+      report.shift_date + 'T12:00:00',
+      {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      },
+      tz
+    );
 
-    const statusStyle = REVIEW_STATUS_STYLES[report.review_status] ?? { bg: 'bg-green-500/10', text: 'text-green-700 dark:text-green-400', label: 'Approved' };
+    const statusStyle = REVIEW_STATUS_STYLES[report.review_status] ?? {
+      bg: 'bg-green-500/10',
+      text: 'text-green-700 dark:text-green-400',
+      label: 'Approved',
+    };
 
     return (
-      <div key={report.id} className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-hidden">
+      <div key={report.id} className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
         <button
           onClick={() => setExpandedId(isExpanded ? null : report.id)}
-          className="w-full flex items-center justify-between p-4 sm:p-5 text-left hover:bg-theme-surface-hover transition-colors"
+          className="hover:bg-theme-surface-hover flex w-full items-center justify-between p-4 text-left transition-colors sm:p-5"
         >
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
             {(isReviewMode || viewMode === 'flagged') && (
               <input
                 type="checkbox"
                 checked={selectedReportIds.has(report.id)}
-                onChange={(e) => { e.stopPropagation(); toggleReportSelection(report.id); }}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  toggleReportSelection(report.id);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="form-checkbox shrink-0"
               />
             )}
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
+              <FileText className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm sm:text-base font-semibold text-theme-text-primary truncate">
-                {report.trainee_name ? `${report.trainee_name} — ` : ''}{dateStr}
+              <p className="text-theme-text-primary truncate text-sm font-semibold sm:text-base">
+                {report.trainee_name ? `${report.trainee_name} — ` : ''}
+                {dateStr}
               </p>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-                <span className="flex items-center gap-1 text-xs text-theme-text-muted">
-                  <Clock className="w-3 h-3" /> {report.hours_on_shift}h
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                  <Clock className="h-3 w-3" /> {report.hours_on_shift}h
                 </span>
-                <span className="flex items-center gap-1 text-xs text-theme-text-muted">
-                  <Phone className="w-3 h-3" /> {report.calls_responded} calls
+                <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                  <Phone className="h-3 w-3" /> {report.calls_responded} calls
                 </span>
                 {report.performance_rating && renderRating(report.performance_rating)}
                 {report.officer_name && (
-                  <span className="flex items-center gap-1 text-xs text-theme-text-muted">
-                    <UserIcon className="w-3 h-3" /> {report.officer_name}
+                  <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                    <UserIcon className="h-3 w-3" /> {report.officer_name}
                   </span>
                 )}
                 {report.reviewer_name && (
-                  <span className="flex items-center gap-1 text-xs text-theme-text-muted">
-                    <Shield className="w-3 h-3" /> Reviewed by {report.reviewer_name}
+                  <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                    <Shield className="h-3 w-3" /> Reviewed by {report.reviewer_name}
                   </span>
                 )}
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
             {/* Aging indicator for pending/flagged */}
-            {(report.review_status === 'pending_review' || report.review_status === 'flagged') && (() => {
-              const days = Math.floor((Date.now() - new Date(report.created_at).getTime()) / 86400000);
-              if (days < 1) return null;
-              return (
-                <span className={`text-xs font-medium ${
-                  days >= 7 ? 'text-red-600 dark:text-red-400'
-                    : days >= 3 ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-theme-text-muted'
-                }`}>
-                  {days}d
-                </span>
-              );
-            })()}
+            {(report.review_status === 'pending_review' || report.review_status === 'flagged') &&
+              (() => {
+                const days = Math.floor((Date.now() - new Date(report.created_at).getTime()) / 86400000);
+                if (days < 1) return null;
+                return (
+                  <span
+                    className={`text-xs font-medium ${
+                      days >= 7
+                        ? 'text-red-600 dark:text-red-400'
+                        : days >= 3
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-theme-text-muted'
+                    }`}
+                  >
+                    {days}d
+                  </span>
+                );
+              })()}
             {/* Review status badge */}
             {report.review_status !== SubmissionStatus.APPROVED && (
-              <span className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} border border-current/20 rounded-full`}>
+              <span
+                className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} rounded-full border border-current/20`}
+              >
                 {statusStyle.label}
               </span>
             )}
             {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 rounded-full">
+              <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
                 Needs Acknowledgment
               </span>
             )}
             {report.trainee_acknowledged && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 rounded-full">
+              <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
                 Acknowledged
               </span>
             )}
-            {isExpanded ? <ChevronUp className="w-4 h-4 text-theme-text-muted" /> : <ChevronDown className="w-4 h-4 text-theme-text-muted" />}
+            {isExpanded ? (
+              <ChevronUp className="text-theme-text-muted h-4 w-4" />
+            ) : (
+              <ChevronDown className="text-theme-text-muted h-4 w-4" />
+            )}
           </div>
         </button>
 
         {isExpanded && (
-          <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-theme-surface-border space-y-4">
+          <div className="border-theme-surface-border space-y-4 border-t px-4 pb-4 sm:px-5 sm:pb-5">
             <div className="pt-3">
               <ReportContentDisplay report={report} />
             </div>
@@ -962,60 +1034,70 @@ export const ShiftReportsTab: React.FC = () => {
                   e.stopPropagation();
                   window.print();
                 }}
-                className="text-xs text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1 transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1 text-xs transition-colors"
               >
-                <Printer className="w-3.5 h-3.5" /> Print Report
+                <Printer className="h-3.5 w-3.5" /> Print Report
               </button>
             </div>
 
             {/* Reviewer comment (visible to officers, not trainees) */}
             {canManage && report.reviewer_notes && (
-              <div className={`p-3 rounded-lg ${
-                report.review_status === 'flagged'
-                  ? 'bg-red-500/5 border border-red-500/20'
-                  : 'bg-amber-500/5 border border-amber-500/20'
-              }`}>
-                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 flex items-center gap-1 ${
+              <div
+                className={`rounded-lg p-3 ${
                   report.review_status === 'flagged'
-                    ? 'text-red-700 dark:text-red-400'
-                    : 'text-amber-700 dark:text-amber-400'
-                }`}>
-                  <Shield className="w-3 h-3" />
+                    ? 'border border-red-500/20 bg-red-500/5'
+                    : 'border border-amber-500/20 bg-amber-500/5'
+                }`}
+              >
+                <p
+                  className={`mb-1 flex items-center gap-1 text-xs font-semibold tracking-wider uppercase ${
+                    report.review_status === 'flagged'
+                      ? 'text-red-700 dark:text-red-400'
+                      : 'text-amber-700 dark:text-amber-400'
+                  }`}
+                >
+                  <Shield className="h-3 w-3" />
                   {report.review_status === 'flagged' ? 'Reviewer Comment — Flagged' : 'Reviewer Comment'}
                   {report.reviewer_name && (
-                    <span className="normal-case font-normal ml-1">by {report.reviewer_name}</span>
+                    <span className="ml-1 font-normal normal-case">by {report.reviewer_name}</span>
                   )}
                 </p>
-                <p className="text-sm text-theme-text-primary">{report.reviewer_notes}</p>
+                <p className="text-theme-text-primary text-sm">{report.reviewer_notes}</p>
               </div>
             )}
 
             {/* Review history timeline */}
             {canManage && report.review_history && report.review_history.length > 1 && (
               <div className="space-y-1">
-                <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Review History
+                <p className="text-theme-text-secondary flex items-center gap-1 text-xs font-semibold tracking-wider uppercase">
+                  <Clock className="h-3 w-3" /> Review History
                 </p>
-                <div className="space-y-1 pl-2 border-l-2 border-theme-surface-border">
+                <div className="border-theme-surface-border space-y-1 border-l-2 pl-2">
                   {report.review_history.map((entry, i) => (
-                    <div key={i} className="pl-3 py-1">
+                    <div key={i} className="py-1 pl-3">
                       <div className="flex items-center gap-2 text-xs">
-                        <span className={`font-medium capitalize ${
-                          entry.status === 'approved' ? 'text-green-700 dark:text-green-400'
-                            : entry.status === 'flagged' ? 'text-red-700 dark:text-red-400'
-                            : 'text-theme-text-secondary'
-                        }`}>
+                        <span
+                          className={`font-medium capitalize ${
+                            entry.status === 'approved'
+                              ? 'text-green-700 dark:text-green-400'
+                              : entry.status === 'flagged'
+                                ? 'text-red-700 dark:text-red-400'
+                                : 'text-theme-text-secondary'
+                          }`}
+                        >
                           {entry.status === 'pending_review' ? 'Submitted' : entry.status}
                         </span>
-                        {entry.reviewer_name && (
-                          <span className="text-theme-text-muted">by {entry.reviewer_name}</span>
-                        )}
+                        {entry.reviewer_name && <span className="text-theme-text-muted">by {entry.reviewer_name}</span>}
                         <span className="text-theme-text-muted">
-                          {formatDateCustom(entry.timestamp, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }, tz)}
+                          {formatDateCustom(
+                            entry.timestamp,
+                            { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' },
+                            tz
+                          )}
                         </span>
                       </div>
                       {entry.notes && (
-                        <p className="text-xs text-theme-text-muted mt-0.5 italic">&quot;{entry.notes}&quot;</p>
+                        <p className="text-theme-text-muted mt-0.5 text-xs italic">&quot;{entry.notes}&quot;</p>
                       )}
                     </div>
                   ))}
@@ -1024,32 +1106,38 @@ export const ShiftReportsTab: React.FC = () => {
             )}
 
             {/* Review actions for pending-review and flagged modes */}
-            {(isReviewMode && report.review_status === SubmissionStatus.PENDING_REVIEW) && (
-              <div className="pt-2 flex items-center gap-2">
+            {isReviewMode && report.review_status === SubmissionStatus.PENDING_REVIEW && (
+              <div className="flex items-center gap-2 pt-2">
                 <button
-                  onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
-                  className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setReviewReportId(report.id);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
                 >
-                  <ClipboardCheck className="w-4 h-4" /> Review Report
+                  <ClipboardCheck className="h-4 w-4" /> Review Report
                 </button>
               </div>
             )}
             {canManage && report.review_status === 'flagged' && !isReviewMode && (
-              <div className="pt-2 space-y-3">
-                <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
-                  <p className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" /> Flagged for Review
+              <div className="space-y-3 pt-2">
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                  <p className="mb-1 flex items-center gap-1 text-xs font-semibold tracking-wider text-red-700 uppercase dark:text-red-400">
+                    <AlertCircle className="h-3 w-3" /> Flagged for Review
                   </p>
-                  <p className="text-sm text-theme-text-secondary">
+                  <p className="text-theme-text-secondary text-sm">
                     This report has been flagged and requires attention. You can re-review it to approve or add notes.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
-                    className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReviewReportId(report.id);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
                   >
-                    <ClipboardCheck className="w-4 h-4" /> Re-Review Report
+                    <ClipboardCheck className="h-4 w-4" /> Re-Review Report
                   </button>
                 </div>
               </div>
@@ -1059,10 +1147,13 @@ export const ShiftReportsTab: React.FC = () => {
             {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
               <div className="pt-2">
                 <button
-                  onClick={(e) => { e.stopPropagation(); setAckReportId(report.id); }}
-                  className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAckReportId(report.id);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
                 >
-                  <Check className="w-4 h-4" /> Acknowledge Report
+                  <Check className="h-4 w-4" /> Acknowledge Report
                 </button>
               </div>
             )}
@@ -1071,46 +1162,59 @@ export const ShiftReportsTab: React.FC = () => {
             {viewMode === 'drafts' && report.review_status === 'draft' && canManage && editingDraftId !== report.id && (
               <div className="pt-2">
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleEditDraft(report); }}
-                  className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEditDraft(report);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
                 >
-                  <Pencil className="w-4 h-4" /> Complete Draft
+                  <Pencil className="h-4 w-4" /> Complete Draft
                 </button>
               </div>
             )}
 
             {/* Inline draft edit form */}
             {editingDraftId === report.id && (
-              <div className="pt-3 space-y-4 border-t border-theme-surface-border" onClick={e => e.stopPropagation()}>
-                <h4 className="text-sm font-semibold text-theme-text-primary">Complete Draft Report</h4>
+              <div className="border-theme-surface-border space-y-4 border-t pt-3" onClick={(e) => e.stopPropagation()}>
+                <h4 className="text-theme-text-primary text-sm font-semibold">Complete Draft Report</h4>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Hours on Shift</label>
-                    <input type="number" step="0.25" min="0" value={draftForm.hours_on_shift ?? 0}
-                      onChange={e => setDraftForm(p => ({ ...p, hours_on_shift: parseFloat(e.target.value) || 0 }))}
-                      className="form-input focus:ring-violet-500 text-sm"
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Hours on Shift</label>
+                    <input
+                      type="number"
+                      step="0.25"
+                      min="0"
+                      value={draftForm.hours_on_shift ?? 0}
+                      onChange={(e) => setDraftForm((p) => ({ ...p, hours_on_shift: parseFloat(e.target.value) || 0 }))}
+                      className="form-input text-sm focus:ring-violet-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Calls Responded</label>
-                    <input type="number" min="0" value={draftForm.calls_responded ?? 0}
-                      onChange={e => setDraftForm(p => ({ ...p, calls_responded: parseInt(e.target.value) || 0 }))}
-                      className="form-input focus:ring-violet-500 text-sm"
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Calls Responded</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={draftForm.calls_responded ?? 0}
+                      onChange={(e) => setDraftForm((p) => ({ ...p, calls_responded: parseInt(e.target.value) || 0 }))}
+                      className="form-input text-sm focus:ring-violet-500"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Call Types</label>
+                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Call Types</label>
                   <div className="flex flex-wrap gap-1.5">
-                    {callTypeOptions.map(type => {
+                    {callTypeOptions.map((type) => {
                       const isSelected = (draftForm.call_types || []).includes(type);
                       return (
-                        <button key={type} type="button" onClick={() => toggleCallType(setDraftForm, type)}
-                          className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => toggleCallType(setDraftForm, type)}
+                          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
                             isSelected
-                              ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30'
+                              ? 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400'
                               : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
                           }`}
                         >
@@ -1122,15 +1226,15 @@ export const ShiftReportsTab: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">{ratingLabel}</label>
+                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">{ratingLabel}</label>
                   <div className="flex items-center gap-1">
                     <StarRating
                       value={draftForm.performance_rating ?? 0}
-                      onChange={(val) => setDraftForm(p => ({ ...p, performance_rating: val }))}
+                      onChange={(val) => setDraftForm((p) => ({ ...p, performance_rating: val }))}
                       label={ratingLabel}
                     />
                     {draftForm.performance_rating && ratingScaleType === 'competency' && (
-                      <span className="ml-2 text-xs text-theme-text-muted">
+                      <span className="text-theme-text-muted ml-2 text-xs">
                         {ratingScaleLabels[String(draftForm.performance_rating)] ?? ''}
                       </span>
                     )}
@@ -1138,15 +1242,18 @@ export const ShiftReportsTab: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Skills Observed</label>
+                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Skills Observed</label>
                   <div className="flex flex-wrap gap-1.5">
-                    {skillOptions.map(skill => {
-                      const isSelected = (draftForm.skills_observed || []).some(s => s.skill_name === skill);
+                    {skillOptions.map((skill) => {
+                      const isSelected = (draftForm.skills_observed || []).some((s) => s.skill_name === skill);
                       return (
-                        <button key={skill} type="button" onClick={() => toggleSkill(setDraftForm, skill)}
-                          className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                        <button
+                          key={skill}
+                          type="button"
+                          onClick={() => toggleSkill(setDraftForm, skill)}
+                          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
                             isSelected
-                              ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'
+                              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
                               : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
                           }`}
                         >
@@ -1158,46 +1265,65 @@ export const ShiftReportsTab: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Officer Narrative</label>
-                  <textarea rows={3} value={draftForm.officer_narrative || ''}
-                    onChange={e => setDraftForm(p => ({ ...p, officer_narrative: e.target.value }))}
+                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Officer Narrative</label>
+                  <textarea
+                    rows={3}
+                    value={draftForm.officer_narrative || ''}
+                    onChange={(e) => setDraftForm((p) => ({ ...p, officer_narrative: e.target.value }))}
                     placeholder="Summary of trainee performance during this shift..."
-                    className="form-input focus:ring-violet-500 resize-none text-sm"
+                    className="form-input resize-none text-sm focus:ring-violet-500"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
-                    <textarea rows={2} value={draftForm.areas_of_strength || ''}
-                      onChange={e => setDraftForm(p => ({ ...p, areas_of_strength: e.target.value }))}
-                      className="form-input focus:ring-violet-500 resize-none text-sm"
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                      Areas of Strength
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={draftForm.areas_of_strength || ''}
+                      onChange={(e) => setDraftForm((p) => ({ ...p, areas_of_strength: e.target.value }))}
+                      className="form-input resize-none text-sm focus:ring-violet-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
-                    <textarea rows={2} value={draftForm.areas_for_improvement || ''}
-                      onChange={e => setDraftForm(p => ({ ...p, areas_for_improvement: e.target.value }))}
-                      className="form-input focus:ring-violet-500 resize-none text-sm"
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                      Areas for Improvement
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={draftForm.areas_for_improvement || ''}
+                      onChange={(e) => setDraftForm((p) => ({ ...p, areas_for_improvement: e.target.value }))}
+                      className="form-input resize-none text-sm focus:ring-violet-500"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 justify-end pt-1">
-                  <button onClick={() => setEditingDraftId(null)}
-                    className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    onClick={() => setEditingDraftId(null)}
+                    className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
                   >
                     Cancel
                   </button>
-                  <button onClick={() => { void handleSaveDraft(false); }} disabled={savingDraft}
-                    className="px-3 py-1.5 text-sm border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+                  <button
+                    onClick={() => {
+                      void handleSaveDraft(false);
+                    }}
+                    disabled={savingDraft}
+                    className="border-theme-surface-border hover:bg-theme-surface-hover rounded-lg border px-3 py-1.5 text-sm transition-colors"
                   >
                     Save Draft
                   </button>
-                  <button onClick={() => { void handleSaveDraft(true); }} disabled={savingDraft}
-                    className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium inline-flex items-center gap-1.5 transition-colors"
+                  <button
+                    onClick={() => {
+                      void handleSaveDraft(true);
+                    }}
+                    disabled={savingDraft}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
                   >
-                    {savingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    {savingDraft ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                     Submit Report
                   </button>
                 </div>
@@ -1212,12 +1338,14 @@ export const ShiftReportsTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* View Toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex items-center gap-1 bg-theme-surface border border-theme-surface-border rounded-lg p-1 flex-1 sm:flex-none">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="bg-theme-surface border-theme-surface-border flex flex-1 items-center gap-1 rounded-lg border p-1 sm:flex-none">
           <button
             onClick={() => setViewMode('my-reports')}
-            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'my-reports' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+              viewMode === 'my-reports'
+                ? 'bg-violet-600 text-white'
+                : 'text-theme-text-secondary hover:text-theme-text-primary'
             }`}
           >
             My Reports
@@ -1225,8 +1353,10 @@ export const ShiftReportsTab: React.FC = () => {
           {canManage && (
             <button
               onClick={() => setViewMode('filed-by-me')}
-              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'filed-by-me' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                viewMode === 'filed-by-me'
+                  ? 'bg-violet-600 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
               Filed by Me
@@ -1235,33 +1365,39 @@ export const ShiftReportsTab: React.FC = () => {
           {canManage && config?.report_review_required && (
             <button
               onClick={() => setViewMode('pending-review')}
-              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${
-                viewMode === 'pending-review' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
+              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                viewMode === 'pending-review'
+                  ? 'bg-violet-600 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
-              <ClipboardCheck className="w-3.5 h-3.5" /> Review Queue
+              <ClipboardCheck className="h-3.5 w-3.5" /> Review Queue
             </button>
           )}
           {canManage && config?.report_review_required && (
             <button
               onClick={() => setViewMode('flagged')}
-              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${
-                viewMode === 'flagged' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
+              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                viewMode === 'flagged'
+                  ? 'bg-violet-600 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
-              <AlertCircle className="w-3.5 h-3.5" /> Flagged
+              <AlertCircle className="h-3.5 w-3.5" /> Flagged
             </button>
           )}
           {canManage && (
             <button
               onClick={() => setViewMode('drafts')}
-              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${
-                viewMode === 'drafts' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
+              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                viewMode === 'drafts'
+                  ? 'bg-violet-600 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
-              <FileText className="w-3.5 h-3.5" /> Drafts
+              <FileText className="h-3.5 w-3.5" /> Drafts
               {draftBadgeCount > 0 && viewMode !== 'drafts' && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs font-bold rounded-full bg-blue-500 text-white leading-none">
+                <span className="ml-1 rounded-full bg-blue-500 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
                   {draftBadgeCount}
                 </span>
               )}
@@ -1270,11 +1406,13 @@ export const ShiftReportsTab: React.FC = () => {
           {canManage && (
             <button
               onClick={() => setViewMode('create')}
-              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${
-                viewMode === 'create' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
+              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
+                viewMode === 'create'
+                  ? 'bg-violet-600 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
-              <Plus className="w-4 h-4" /> New
+              <Plus className="h-4 w-4" /> New
             </button>
           )}
         </div>
@@ -1286,40 +1424,38 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Encryption notice for officers */}
       {canManage && viewMode === 'create' && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-green-500/5 border border-green-500/20 rounded-lg text-xs text-green-700 dark:text-green-400">
-          <Shield className="w-3.5 h-3.5 shrink-0" />
+        <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-xs text-green-700 dark:text-green-400">
+          <Shield className="h-3.5 w-3.5 shrink-0" />
           Narratives and evaluations are encrypted at rest (AES-256) to protect against data exfiltration.
         </div>
       )}
 
       {/* Offline indicator */}
       {!isOnline && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/20 rounded-lg text-xs text-amber-700 dark:text-amber-400">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           You&apos;re offline. Reports will be saved locally and submitted automatically when connectivity returns.
-          {pendingOfflineCount > 0 && (
-            <span className="font-medium ml-1">({pendingOfflineCount} pending)</span>
-          )}
+          {pendingOfflineCount > 0 && <span className="ml-1 font-medium">({pendingOfflineCount} pending)</span>}
         </div>
       )}
       {isOnline && pendingOfflineCount > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/5 border border-blue-500/20 rounded-lg text-xs text-blue-700 dark:text-blue-400">
-          <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+        <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-xs text-blue-700 dark:text-blue-400">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
           Syncing {pendingOfflineCount} queued report{pendingOfflineCount !== 1 ? 's' : ''}...
         </div>
       )}
 
       {/* Create Form — Shift-first batch workflow */}
       {viewMode === 'create' && (
-        <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-6 space-y-5">
-          <h3 className="text-lg font-semibold text-theme-text-primary">New Shift Completion Report</h3>
+        <div className="bg-theme-surface border-theme-surface-border space-y-5 rounded-xl border p-4 sm:p-6">
+          <h3 className="text-theme-text-primary text-lg font-semibold">New Shift Completion Report</h3>
 
           {/* Step 1: Shift Selection */}
           {!form.shift_id ? (
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Select a Shift *</label>
+              <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Select a Shift *</label>
               <div className="relative mb-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+                <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <input
                   autoCapitalize="none"
                   autoCorrect="off"
@@ -1327,57 +1463,64 @@ export const ShiftReportsTab: React.FC = () => {
                   type="text"
                   placeholder="Search shifts by apparatus or date..."
                   value={shiftSearchQuery}
-                  onChange={e => setShiftSearchQuery(e.target.value)}
-                  className="form-input focus:ring-violet-500 pl-9 pr-3 text-sm"
+                  onChange={(e) => setShiftSearchQuery(e.target.value)}
+                  className="form-input pr-3 pl-9 text-sm focus:ring-violet-500"
                 />
               </div>
               {loadingShifts ? (
-                <div className="flex items-center gap-2 text-sm text-theme-text-muted py-4" role="status">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Loading recent shifts...
+                <div className="text-theme-text-muted flex items-center gap-2 py-4 text-sm" role="status">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading recent shifts...
                 </div>
               ) : (
-                <div className="max-h-60 overflow-y-auto space-y-1">
+                <div className="max-h-60 space-y-1 overflow-y-auto">
                   {shiftList
-                    .filter(s => {
+                    .filter((s) => {
                       if (!shiftSearchQuery) return true;
                       const q = shiftSearchQuery.toLowerCase();
-                      return (s.apparatus_name ?? '').toLowerCase().includes(q)
-                        || (s.shift_date ?? '').includes(q)
-                        || (s.shift_officer_name ?? '').toLowerCase().includes(q);
+                      return (
+                        (s.apparatus_name ?? '').toLowerCase().includes(q) ||
+                        (s.shift_date ?? '').includes(q) ||
+                        (s.shift_officer_name ?? '').toLowerCase().includes(q)
+                      );
                     })
-                    .map(shift => (
-                    <button
-                      key={shift.id}
-                      type="button"
-                      onClick={() => { void handleSelectShift(shift); }}
-                      className="w-full text-left px-4 py-3 rounded-lg text-sm hover:bg-theme-surface-hover transition-colors flex items-center justify-between border border-transparent hover:border-violet-500/20"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
-                          <FileText className="w-4 h-4 text-violet-500" />
+                    .map((shift) => (
+                      <button
+                        key={shift.id}
+                        type="button"
+                        onClick={() => {
+                          void handleSelectShift(shift);
+                        }}
+                        className="hover:bg-theme-surface-hover flex w-full items-center justify-between rounded-lg border border-transparent px-4 py-3 text-left text-sm transition-colors hover:border-violet-500/20"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
+                            <FileText className="h-4 w-4 text-violet-500" />
+                          </div>
+                          <div>
+                            <p className="text-theme-text-primary font-medium">
+                              {shift.apparatus_name || 'Shift'} — {shift.shift_date}
+                            </p>
+                            <p className="text-theme-text-muted text-xs">
+                              {shift.attendee_count} member{shift.attendee_count !== 1 ? 's' : ''}
+                              {shift.call_count > 0
+                                ? ` · ${shift.call_count} call${shift.call_count !== 1 ? 's' : ''}`
+                                : ''}
+                              {shift.total_hours ? ` · ${shift.total_hours}h` : ''}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-theme-text-primary">
-                            {shift.apparatus_name || 'Shift'} — {shift.shift_date}
-                          </p>
-                          <p className="text-xs text-theme-text-muted">
-                            {shift.attendee_count} member{shift.attendee_count !== 1 ? 's' : ''}
-                            {shift.call_count > 0 ? ` · ${shift.call_count} call${shift.call_count !== 1 ? 's' : ''}` : ''}
-                            {shift.total_hours ? ` · ${shift.total_hours}h` : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronDown className="w-4 h-4 text-theme-text-muted -rotate-90" />
-                    </button>
-                  ))}
+                        <ChevronDown className="text-theme-text-muted h-4 w-4 -rotate-90" />
+                      </button>
+                    ))}
                   {shiftList.length === 0 && (
-                    <p className="text-sm text-theme-text-muted text-center py-6">No recent shifts found.</p>
+                    <p className="text-theme-text-muted py-6 text-center text-sm">No recent shifts found.</p>
                   )}
                 </div>
               )}
               <div className="flex items-center gap-3 pt-4">
-                <button onClick={() => setViewMode(canManage ? 'filed-by-me' : 'my-reports')}
-                  className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors"
+                <button
+                  onClick={() => setViewMode(canManage ? 'filed-by-me' : 'my-reports')}
+                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border rounded-lg border px-4 py-2 text-sm transition-colors"
                 >
                   Cancel
                 </button>
@@ -1386,22 +1529,22 @@ export const ShiftReportsTab: React.FC = () => {
           ) : (
             <>
               {/* Selected shift banner */}
-              <div className="flex items-center justify-between px-3 py-2 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+              <div className="flex items-center justify-between rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
                 <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-400">
-                  <FileText className="w-4 h-4 shrink-0" />
+                  <FileText className="h-4 w-4 shrink-0" />
                   Shift: <span className="font-medium">{linkedShiftLabel}</span>
                 </div>
                 {!linkedShiftId && (
                   <button
                     type="button"
                     onClick={() => {
-                      setForm(prev => ({ ...prev, shift_id: undefined }));
+                      setForm((prev) => ({ ...prev, shift_id: undefined }));
                       setLinkedShiftLabel(null);
                       setCrewMembers([]);
                       setSelectedCrewIds(new Set());
                       setCrewLoadError(false);
                     }}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    className="text-xs text-blue-600 hover:underline dark:text-blue-400"
                   >
                     Change shift
                   </button>
@@ -1411,23 +1554,34 @@ export const ShiftReportsTab: React.FC = () => {
               {/* Step 2: Shift-Level Data */}
               <div className="form-grid-3">
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Date</label>
-                  <input type="date" value={form.shift_date || ''} readOnly
-                    className="form-input text-sm bg-theme-surface-hover cursor-not-allowed"
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Shift Date</label>
+                  <input
+                    type="date"
+                    value={form.shift_date || ''}
+                    readOnly
+                    className="form-input bg-theme-surface-hover cursor-not-allowed text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Hours on Shift *</label>
-                  <input type="number" min="0.5" max="48" step="0.5" value={form.hours_on_shift || ''}
-                    onChange={e => setForm(prev => ({ ...prev, hours_on_shift: parseFloat(e.target.value) || 0 }))}
-                    className="form-input focus:ring-violet-500 text-sm"
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Hours on Shift *</label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    max="48"
+                    step="0.5"
+                    value={form.hours_on_shift || ''}
+                    onChange={(e) => setForm((prev) => ({ ...prev, hours_on_shift: parseFloat(e.target.value) || 0 }))}
+                    className="form-input text-sm focus:ring-violet-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Calls Responded</label>
-                  <input type="number" min="0" value={form.calls_responded || 0}
-                    onChange={e => setForm(prev => ({ ...prev, calls_responded: parseInt(e.target.value) || 0 }))}
-                    className="form-input focus:ring-violet-500 text-sm"
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Calls Responded</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.calls_responded || 0}
+                    onChange={(e) => setForm((prev) => ({ ...prev, calls_responded: parseInt(e.target.value) || 0 }))}
+                    className="form-input text-sm focus:ring-violet-500"
                   />
                 </div>
               </div>
@@ -1435,13 +1589,16 @@ export const ShiftReportsTab: React.FC = () => {
               {/* Call Types */}
               {(config?.form_show_call_types ?? true) && (form.calls_responded || 0) > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Call Types</label>
+                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Call Types</label>
                   <div className="flex flex-wrap gap-2">
-                    {callTypeOptions.map(type => (
-                      <button key={type} type="button" onClick={() => handleToggleCallType(type)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    {callTypeOptions.map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => handleToggleCallType(type)}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                           form.call_types?.includes(type)
-                            ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30'
+                            ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
                             : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-blue-500/30'
                         }`}
                       >
@@ -1454,55 +1611,64 @@ export const ShiftReportsTab: React.FC = () => {
 
               {/* Officer Narrative (shift-level) */}
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Overall Shift Narrative</label>
-                <textarea rows={3} value={form.officer_narrative || ''}
-                  onChange={e => setForm(prev => ({ ...prev, officer_narrative: e.target.value }))}
+                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Overall Shift Narrative
+                </label>
+                <textarea
+                  rows={3}
+                  value={form.officer_narrative || ''}
+                  onChange={(e) => setForm((prev) => ({ ...prev, officer_narrative: e.target.value }))}
                   placeholder="General observations about the shift for leadership review..."
-                  className="form-input focus:ring-violet-500 resize-none text-sm"
+                  className="form-input resize-none text-sm focus:ring-violet-500"
                 />
               </div>
 
               {/* Step 3: Crew Members */}
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
                   Crew Members
                   {crewMembers.length > 0 && (
-                    <span className="ml-2 text-xs font-normal text-theme-text-muted">
-                      ({selectedCrewIds.size} of {crewMembers.filter(m => !m.has_existing_report).length} selected)
+                    <span className="text-theme-text-muted ml-2 text-xs font-normal">
+                      ({selectedCrewIds.size} of {crewMembers.filter((m) => !m.has_existing_report).length} selected)
                     </span>
                   )}
                 </label>
                 {loadingCrew ? (
-                  <div className="flex items-center gap-2 text-sm text-theme-text-muted py-4" role="status">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Loading crew...
+                  <div className="text-theme-text-muted flex items-center gap-2 py-4 text-sm" role="status">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading crew...
                   </div>
                 ) : crewLoadError ? (
-                  <div className="flex items-center gap-3 text-sm py-4">
-                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                  <div className="flex items-center gap-3 py-4 text-sm">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
                     <span className="text-theme-text-muted">Failed to load crew members.</span>
                     <button
                       type="button"
-                      onClick={() => { if (form.shift_id) void loadCrewForShift(form.shift_id); }}
-                      className="text-violet-600 dark:text-violet-400 hover:underline text-sm font-medium"
+                      onClick={() => {
+                        if (form.shift_id) void loadCrewForShift(form.shift_id);
+                      }}
+                      className="text-sm font-medium text-violet-600 hover:underline dark:text-violet-400"
                     >
                       Retry
                     </button>
                   </div>
                 ) : crewMembers.length === 0 ? (
-                  <div className="flex items-center gap-3 text-sm py-4">
+                  <div className="flex items-center gap-3 py-4 text-sm">
                     <span className="text-theme-text-muted">No active crew members found for this shift.</span>
                     <button
                       type="button"
-                      onClick={() => { if (form.shift_id) void loadCrewForShift(form.shift_id); }}
-                      className="text-violet-600 dark:text-violet-400 hover:underline text-sm font-medium"
+                      onClick={() => {
+                        if (form.shift_id) void loadCrewForShift(form.shift_id);
+                      }}
+                      className="text-sm font-medium text-violet-600 hover:underline dark:text-violet-400"
                     >
                       Refresh
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {crewMembers.map(member => {
-                      const isTrainee = member.has_active_enrollment && (config?.shift_reports_include_training ?? true);
+                    {crewMembers.map((member) => {
+                      const isTrainee =
+                        member.has_active_enrollment && (config?.shift_reports_include_training ?? true);
                       const isReported = member.has_existing_report;
                       const isSelected = selectedCrewIds.has(member.user_id);
                       const isExpanded = expandedTraineeId === member.user_id;
@@ -1510,22 +1676,30 @@ export const ShiftReportsTab: React.FC = () => {
 
                       if (isReported) {
                         return (
-                          <div key={member.user_id} className="flex items-center gap-3 px-4 py-3 rounded-lg bg-theme-surface-hover opacity-60">
-                            <Check className="w-4 h-4 text-green-600 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm text-theme-text-muted line-through">{member.user_name}</span>
-                              <span className="text-xs text-theme-text-muted ml-2">Already reported</span>
+                          <div
+                            key={member.user_id}
+                            className="bg-theme-surface-hover flex items-center gap-3 rounded-lg px-4 py-3 opacity-60"
+                          >
+                            <Check className="h-4 w-4 shrink-0 text-green-600" />
+                            <div className="min-w-0 flex-1">
+                              <span className="text-theme-text-muted text-sm line-through">{member.user_name}</span>
+                              <span className="text-theme-text-muted ml-2 text-xs">Already reported</span>
                             </div>
                           </div>
                         );
                       }
 
                       return (
-                        <div key={member.user_id} className={`border rounded-lg transition-colors ${
-                          isSelected
-                            ? isTrainee ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface'
-                            : 'border-theme-surface-border bg-theme-surface opacity-60'
-                        }`}>
+                        <div
+                          key={member.user_id}
+                          className={`rounded-lg border transition-colors ${
+                            isSelected
+                              ? isTrainee
+                                ? 'border-violet-500/30 bg-violet-500/5'
+                                : 'border-theme-surface-border bg-theme-surface'
+                              : 'border-theme-surface-border bg-theme-surface opacity-60'
+                          }`}
+                        >
                           {/* Member header row */}
                           <div className="flex items-center gap-3 px-4 py-3">
                             <input
@@ -1534,12 +1708,12 @@ export const ShiftReportsTab: React.FC = () => {
                               onChange={() => toggleCrewMember(member.user_id)}
                               className="form-checkbox shrink-0"
                             />
-                            <div className="flex-1 min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-theme-text-primary">{member.user_name}</span>
-                                <span className="text-xs text-theme-text-muted capitalize">{member.position}</span>
+                                <span className="text-theme-text-primary text-sm font-medium">{member.user_name}</span>
+                                <span className="text-theme-text-muted text-xs capitalize">{member.position}</span>
                                 {isTrainee && (
-                                  <span className="px-2 py-0.5 text-xs font-medium bg-violet-500/10 text-violet-700 dark:text-violet-400 border border-violet-500/20 rounded-full">
+                                  <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-400">
                                     Trainee — {member.program_name}
                                   </span>
                                 )}
@@ -1551,8 +1725,10 @@ export const ShiftReportsTab: React.FC = () => {
                                 type="text"
                                 placeholder="Remarks (optional)"
                                 value={crewRemarks[member.user_id] || ''}
-                                onChange={e => setCrewRemarks(prev => ({ ...prev, [member.user_id]: e.target.value }))}
-                                className="form-input focus:ring-violet-500 text-xs py-1.5 max-w-xs"
+                                onChange={(e) =>
+                                  setCrewRemarks((prev) => ({ ...prev, [member.user_id]: e.target.value }))
+                                }
+                                className="form-input max-w-xs py-1.5 text-xs focus:ring-violet-500"
                               />
                             )}
                             {/* Expand/collapse for trainees */}
@@ -1560,9 +1736,9 @@ export const ShiftReportsTab: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => setExpandedTraineeId(isExpanded ? null : member.user_id)}
-                                className="text-xs text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1"
+                                className="inline-flex items-center gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
                               >
-                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                                 Evaluate
                               </button>
                             )}
@@ -1570,23 +1746,29 @@ export const ShiftReportsTab: React.FC = () => {
 
                           {/* Trainee evaluation panel */}
                           {isTrainee && isSelected && isExpanded && (
-                            <div className="px-4 pb-4 border-t border-theme-surface-border space-y-4 pt-3">
+                            <div className="border-theme-surface-border space-y-4 border-t px-4 pt-3 pb-4">
                               {/* Per-trainee remarks */}
                               <div>
-                                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Remarks for {member.user_name}</label>
+                                <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                                  Remarks for {member.user_name}
+                                </label>
                                 <input
                                   type="text"
                                   placeholder="Individual remarks for this trainee..."
                                   value={crewRemarks[member.user_id] || ''}
-                                  onChange={e => setCrewRemarks(prev => ({ ...prev, [member.user_id]: e.target.value }))}
-                                  className="form-input focus:ring-violet-500 text-sm"
+                                  onChange={(e) =>
+                                    setCrewRemarks((prev) => ({ ...prev, [member.user_id]: e.target.value }))
+                                  }
+                                  className="form-input text-sm focus:ring-violet-500"
                                 />
                               </div>
 
                               {/* Performance Rating */}
                               {(config?.form_show_performance_rating ?? true) && (
                                 <div>
-                                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">{ratingLabel}</label>
+                                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                                    {ratingLabel}
+                                  </label>
                                   <div className="flex items-center gap-1">
                                     {ratingScaleType === 'stars' ? (
                                       <StarRating
@@ -1596,14 +1778,22 @@ export const ShiftReportsTab: React.FC = () => {
                                         label={ratingLabel}
                                       />
                                     ) : (
-                                      Array.from({ length: ratingLevelCount }, (_, i) => i + 1).map(val => {
+                                      Array.from({ length: ratingLevelCount }, (_, i) => i + 1).map((val) => {
                                         const label = ratingScaleLabels[String(val)] || `Level ${val}`;
                                         return (
-                                          <button key={val} type="button"
-                                            onClick={() => updateTraineeEval(member.user_id, 'performance_rating', eval_?.performance_rating === val ? undefined : val)}
-                                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                                          <button
+                                            key={val}
+                                            type="button"
+                                            onClick={() =>
+                                              updateTraineeEval(
+                                                member.user_id,
+                                                'performance_rating',
+                                                eval_?.performance_rating === val ? undefined : val
+                                              )
+                                            }
+                                            className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
                                               eval_?.performance_rating === val
-                                                ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30'
+                                                ? 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400'
                                                 : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
                                             }`}
                                           >
@@ -1613,8 +1803,9 @@ export const ShiftReportsTab: React.FC = () => {
                                       })
                                     )}
                                     {eval_?.performance_rating && ratingScaleType === 'stars' && (
-                                      <span className="text-xs text-theme-text-muted ml-1">
-                                        {ratingScaleLabels[String(eval_.performance_rating)] || `Level ${eval_.performance_rating}`}
+                                      <span className="text-theme-text-muted ml-1 text-xs">
+                                        {ratingScaleLabels[String(eval_.performance_rating)] ||
+                                          `Level ${eval_.performance_rating}`}
                                       </span>
                                     )}
                                   </div>
@@ -1622,25 +1813,38 @@ export const ShiftReportsTab: React.FC = () => {
                               )}
 
                               {/* Narrative Fields */}
-                              {((config?.form_show_areas_of_strength ?? true) || (config?.form_show_areas_for_improvement ?? true)) && (
+                              {((config?.form_show_areas_of_strength ?? true) ||
+                                (config?.form_show_areas_for_improvement ?? true)) && (
                                 <div className="form-grid-2">
                                   {(config?.form_show_areas_of_strength ?? true) && (
                                     <div>
-                                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
-                                      <textarea rows={2} value={eval_?.areas_of_strength || ''}
-                                        onChange={e => updateTraineeEval(member.user_id, 'areas_of_strength', e.target.value)}
+                                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                                        Areas of Strength
+                                      </label>
+                                      <textarea
+                                        rows={2}
+                                        value={eval_?.areas_of_strength || ''}
+                                        onChange={(e) =>
+                                          updateTraineeEval(member.user_id, 'areas_of_strength', e.target.value)
+                                        }
                                         placeholder="What did they do well?"
-                                        className="form-input focus:ring-violet-500 resize-none text-sm"
+                                        className="form-input resize-none text-sm focus:ring-violet-500"
                                       />
                                     </div>
                                   )}
                                   {(config?.form_show_areas_for_improvement ?? true) && (
                                     <div>
-                                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
-                                      <textarea rows={2} value={eval_?.areas_for_improvement || ''}
-                                        onChange={e => updateTraineeEval(member.user_id, 'areas_for_improvement', e.target.value)}
+                                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                                        Areas for Improvement
+                                      </label>
+                                      <textarea
+                                        rows={2}
+                                        value={eval_?.areas_for_improvement || ''}
+                                        onChange={(e) =>
+                                          updateTraineeEval(member.user_id, 'areas_for_improvement', e.target.value)
+                                        }
                                         placeholder="What should they work on?"
-                                        className="form-input focus:ring-violet-500 resize-none text-sm"
+                                        className="form-input resize-none text-sm focus:ring-violet-500"
                                       />
                                     </div>
                                   )}
@@ -1650,45 +1854,58 @@ export const ShiftReportsTab: React.FC = () => {
                               {/* Skills Observed */}
                               {(config?.form_show_skills_observed ?? true) && (
                                 <div>
-                                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Skills Observed</label>
+                                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                                    Skills Observed
+                                  </label>
                                   <div className="space-y-2">
-                                    {skillOptions.map(skill => {
+                                    {skillOptions.map((skill) => {
                                       const skills = eval_?.skills_observed || [];
-                                      const selected = skills.find(s => s.skill_name === skill);
+                                      const selected = skills.find((s) => s.skill_name === skill);
                                       return (
                                         <div key={skill}>
-                                          <button type="button" onClick={() => {
-                                            const current = eval_?.skills_observed || [];
-                                            const exists = current.find(s => s.skill_name === skill);
-                                            updateTraineeEval(member.user_id, 'skills_observed',
-                                              exists ? current.filter(s => s.skill_name !== skill)
-                                                : [...current, { skill_name: skill, demonstrated: true }]
-                                            );
-                                          }}
-                                            className={`px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const current = eval_?.skills_observed || [];
+                                              const exists = current.find((s) => s.skill_name === skill);
+                                              updateTraineeEval(
+                                                member.user_id,
+                                                'skills_observed',
+                                                exists
+                                                  ? current.filter((s) => s.skill_name !== skill)
+                                                  : [...current, { skill_name: skill, demonstrated: true }]
+                                              );
+                                            }}
+                                            className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
                                               selected
-                                                ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'
+                                                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
                                                 : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
                                             }`}
                                           >
-                                            {selected ? '\u2713 ' : ''}{skill}
+                                            {selected ? '\u2713 ' : ''}
+                                            {skill}
                                           </button>
                                           {selected && (
                                             <div className="mt-1 ml-4 flex items-center gap-1.5">
-                                              <span className="text-xs text-theme-text-muted">Score:</span>
-                                              {([1, 2, 3, 4, 5] as const).map(n => {
+                                              <span className="text-theme-text-muted text-xs">Score:</span>
+                                              {([1, 2, 3, 4, 5] as const).map((n) => {
                                                 const tip = ratingScaleLabels[String(n)] || `Level ${n}`;
                                                 return (
-                                                  <button key={n} type="button" title={tip}
+                                                  <button
+                                                    key={n}
+                                                    type="button"
+                                                    title={tip}
                                                     onClick={() => {
-                                                      const updated = (eval_?.skills_observed || []).map(s =>
-                                                        s.skill_name === skill ? { ...s, score: s.score === n ? undefined : n } : s
+                                                      const updated = (eval_?.skills_observed || []).map((s) =>
+                                                        s.skill_name === skill
+                                                          ? { ...s, score: s.score === n ? undefined : n }
+                                                          : s
                                                       );
                                                       updateTraineeEval(member.user_id, 'skills_observed', updated);
                                                     }}
-                                                    className={`w-5 h-5 rounded text-xs font-medium border transition-colors ${
+                                                    className={`h-5 w-5 rounded border text-xs font-medium transition-colors ${
                                                       selected.score === n
-                                                        ? 'bg-violet-500 text-white border-violet-600'
+                                                        ? 'border-violet-600 bg-violet-500 text-white'
                                                         : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
                                                     }`}
                                                   >
@@ -1697,8 +1914,9 @@ export const ShiftReportsTab: React.FC = () => {
                                                 );
                                               })}
                                               {selected.score && (
-                                                <span className="text-xs text-violet-600 dark:text-violet-400 font-medium">
-                                                  {ratingScaleLabels[String(selected.score)] || `Level ${selected.score}`}
+                                                <span className="text-xs font-medium text-violet-600 dark:text-violet-400">
+                                                  {ratingScaleLabels[String(selected.score)] ||
+                                                    `Level ${selected.score}`}
                                                 </span>
                                               )}
                                             </div>
@@ -1713,34 +1931,51 @@ export const ShiftReportsTab: React.FC = () => {
                               {/* Tasks Performed */}
                               {(config?.form_show_tasks_performed ?? true) && (
                                 <div>
-                                  <div className="flex items-center justify-between mb-1">
-                                    <label className="text-xs font-medium text-theme-text-secondary">Tasks Performed</label>
-                                    <button type="button" onClick={() => {
-                                      const current = eval_?.tasks_performed || [];
-                                      const addedNames = new Set(current.map(t => t.task.toLowerCase()));
-                                      const nextDefault = taskDefaults.find(t => !addedNames.has(t.toLowerCase()));
-                                      updateTraineeEval(member.user_id, 'tasks_performed', [...current, { task: nextDefault || '', description: '' }]);
-                                    }}
-                                      className="text-xs text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-0.5"
+                                  <div className="mb-1 flex items-center justify-between">
+                                    <label className="text-theme-text-secondary text-xs font-medium">
+                                      Tasks Performed
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const current = eval_?.tasks_performed || [];
+                                        const addedNames = new Set(current.map((t) => t.task.toLowerCase()));
+                                        const nextDefault = taskDefaults.find((t) => !addedNames.has(t.toLowerCase()));
+                                        updateTraineeEval(member.user_id, 'tasks_performed', [
+                                          ...current,
+                                          { task: nextDefault || '', description: '' },
+                                        ]);
+                                      }}
+                                      className="inline-flex items-center gap-0.5 text-xs text-violet-600 hover:underline dark:text-violet-400"
                                     >
-                                      <Plus className="w-3 h-3" /> Add
+                                      <Plus className="h-3 w-3" /> Add
                                     </button>
                                   </div>
                                   {(eval_?.tasks_performed || []).map((task, i) => (
-                                    <div key={i} className="flex items-center gap-2 mb-1">
-                                      <input type="text" placeholder="Task name" value={task.task}
-                                        onChange={e => {
+                                    <div key={i} className="mb-1 flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        placeholder="Task name"
+                                        value={task.task}
+                                        onChange={(e) => {
                                           const updated = [...(eval_?.tasks_performed || [])];
                                           updated[i] = { ...updated[i], task: e.target.value };
                                           updateTraineeEval(member.user_id, 'tasks_performed', updated);
                                         }}
-                                        className="form-input focus:ring-violet-500 text-xs flex-1 py-1.5"
+                                        className="form-input flex-1 py-1.5 text-xs focus:ring-violet-500"
                                       />
-                                      <button type="button" onClick={() => {
-                                        updateTraineeEval(member.user_id, 'tasks_performed',
-                                          (eval_?.tasks_performed || []).filter((_, j) => j !== i));
-                                      }} className="p-1 text-theme-text-muted hover:text-red-500">
-                                        <X className="w-3 h-3" />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          updateTraineeEval(
+                                            member.user_id,
+                                            'tasks_performed',
+                                            (eval_?.tasks_performed || []).filter((_, j) => j !== i)
+                                          );
+                                        }}
+                                        className="text-theme-text-muted p-1 hover:text-red-500"
+                                      >
+                                        <X className="h-3 w-3" />
                                       </button>
                                     </div>
                                   ))}
@@ -1756,21 +1991,30 @@ export const ShiftReportsTab: React.FC = () => {
               </div>
 
               {/* Submit */}
-              <div className="flex items-center gap-3 pt-2 border-t border-theme-surface-border">
-                <button onClick={() => { void handleBatchSubmit(true); }} disabled={savingDraft || submitting}
-                  className="px-5 py-2.5 text-sm font-medium border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+              <div className="border-theme-surface-border flex items-center gap-3 border-t pt-2">
+                <button
+                  onClick={() => {
+                    void handleBatchSubmit(true);
+                  }}
+                  disabled={savingDraft || submitting}
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
                 >
-                  {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Save as Draft
                 </button>
-                <button onClick={() => { void handleBatchSubmit(false); }} disabled={submitting || savingDraft}
-                  className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+                <button
+                  onClick={() => {
+                    void handleBatchSubmit(false);
+                  }}
+                  disabled={submitting || savingDraft}
+                  className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
                 >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                   Submit Report{selectedCrewIds.size > 1 ? `s (${selectedCrewIds.size})` : ''}
                 </button>
-                <button onClick={() => setViewMode(canManage ? 'filed-by-me' : 'my-reports')}
-                  className="px-4 py-2.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors"
+                <button
+                  onClick={() => setViewMode(canManage ? 'filed-by-me' : 'my-reports')}
+                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border rounded-lg border px-4 py-2.5 text-sm transition-colors"
                 >
                   Cancel
                 </button>
@@ -1784,8 +2028,8 @@ export const ShiftReportsTab: React.FC = () => {
       {viewMode !== 'create' && (
         <>
           {viewMode === 'drafts' && !loading && reports.length > 0 && (
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-theme-text-muted">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-theme-text-muted text-sm">
                 {reports.length} draft{reports.length !== 1 ? 's' : ''} pending
               </p>
               <button
@@ -1793,9 +2037,7 @@ export const ShiftReportsTab: React.FC = () => {
                   void (async () => {
                     try {
                       const result = await shiftCompletionService.submitAllDrafts();
-                      toast.success(
-                        `Submitted ${result.submitted} of ${result.total} drafts`,
-                      );
+                      toast.success(`Submitted ${result.submitted} of ${result.total} drafts`);
                       void loadReports();
                       setDraftBadgeCount(0);
                     } catch (err: unknown) {
@@ -1803,86 +2045,99 @@ export const ShiftReportsTab: React.FC = () => {
                     }
                   })();
                 }}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-2 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
               >
-                <Check className="w-4 h-4" />
+                <Check className="h-4 w-4" />
                 Submit All Drafts
               </button>
             </div>
           )}
           {loading ? (
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+              <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
             </div>
           ) : reports.length === 0 ? (
-            <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
-              <FileText className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-              <h3 className="text-lg font-medium text-theme-text-primary mb-1">
-                {viewMode === 'my-reports' ? 'No reports for you yet' :
-                 viewMode === 'pending-review' ? 'No reports pending review' :
-                 viewMode === 'flagged' ? 'No flagged reports' :
-                 viewMode === 'drafts' ? 'No draft reports' :
-                 'No reports filed yet'}
+            <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
+              <FileText className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+              <h3 className="text-theme-text-primary mb-1 text-lg font-medium">
+                {viewMode === 'my-reports'
+                  ? 'No reports for you yet'
+                  : viewMode === 'pending-review'
+                    ? 'No reports pending review'
+                    : viewMode === 'flagged'
+                      ? 'No flagged reports'
+                      : viewMode === 'drafts'
+                        ? 'No draft reports'
+                        : 'No reports filed yet'}
               </h3>
               <p className="text-theme-text-muted text-sm">
                 {viewMode === 'my-reports'
                   ? 'Shift completion reports from your officers will appear here.'
                   : viewMode === 'pending-review'
-                  ? 'All reports have been reviewed.'
-                  : viewMode === 'flagged'
-                  ? 'No reports have been flagged for follow-up.'
-                  : viewMode === 'drafts'
-                  ? 'Draft reports are auto-created when shifts are finalized. Complete them to track trainee progress.'
-                  : 'Submit a shift report to track trainee progress.'
-                }
+                    ? 'All reports have been reviewed.'
+                    : viewMode === 'flagged'
+                      ? 'No reports have been flagged for follow-up.'
+                      : viewMode === 'drafts'
+                        ? 'Draft reports are auto-created when shifts are finalized. Complete them to track trainee progress.'
+                        : 'Submit a shift report to track trainee progress.'}
               </p>
             </div>
           ) : (
             <>
               {/* Review summary dashboard */}
-              {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 0 && (() => {
-                const byOfficer = new Map<string, number>();
-                let oldestDays = 0;
-                const now = Date.now();
-                for (const r of reports) {
-                  const name = r.officer_name || 'Unknown';
-                  byOfficer.set(name, (byOfficer.get(name) ?? 0) + 1);
-                  const age = Math.floor((now - new Date(r.created_at).getTime()) / 86400000);
-                  if (age > oldestDays) oldestDays = age;
-                }
-                return (
-                  <div className="p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-theme-text-primary flex items-center gap-1.5">
-                        <BarChart3 className="w-4 h-4 text-violet-500" />
-                        {viewMode === 'pending-review' ? 'Pending Review' : 'Flagged Reports'} — {reports.length} report{reports.length !== 1 ? 's' : ''}
-                      </h4>
-                      {oldestDays > 0 && (
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          oldestDays >= 7 ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-                            : oldestDays >= 3 ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                            : 'bg-theme-surface-hover text-theme-text-muted'
-                        }`}>
-                          Oldest: {oldestDays}d ago
-                        </span>
-                      )}
+              {(viewMode === 'pending-review' || viewMode === 'flagged') &&
+                reports.length > 0 &&
+                (() => {
+                  const byOfficer = new Map<string, number>();
+                  let oldestDays = 0;
+                  const now = Date.now();
+                  for (const r of reports) {
+                    const name = r.officer_name || 'Unknown';
+                    byOfficer.set(name, (byOfficer.get(name) ?? 0) + 1);
+                    const age = Math.floor((now - new Date(r.created_at).getTime()) / 86400000);
+                    if (age > oldestDays) oldestDays = age;
+                  }
+                  return (
+                    <div className="bg-theme-surface border-theme-surface-border mb-3 space-y-2 rounded-lg border p-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
+                          <BarChart3 className="h-4 w-4 text-violet-500" />
+                          {viewMode === 'pending-review' ? 'Pending Review' : 'Flagged Reports'} — {reports.length}{' '}
+                          report{reports.length !== 1 ? 's' : ''}
+                        </h4>
+                        {oldestDays > 0 && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                              oldestDays >= 7
+                                ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                                : oldestDays >= 3
+                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                  : 'bg-theme-surface-hover text-theme-text-muted'
+                            }`}
+                          >
+                            Oldest: {oldestDays}d ago
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {Array.from(byOfficer.entries()).map(([name, count]) => (
+                          <span
+                            key={name}
+                            className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-2 py-1 text-xs"
+                          >
+                            {name}: {count}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {Array.from(byOfficer.entries()).map(([name, count]) => (
-                        <span key={name} className="text-xs bg-theme-surface-hover px-2 py-1 rounded-full text-theme-text-secondary">
-                          {name}: {count}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
 
               {/* Batch review toolbar */}
               {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
-                <div className="p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3 space-y-2">
+                <div className="bg-theme-surface border-theme-surface-border mb-3 space-y-2 rounded-lg border p-3">
                   <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+                    <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
                       <input
                         type="checkbox"
                         checked={selectedReportIds.size === reports.length && reports.length > 0}
@@ -1890,7 +2145,7 @@ export const ShiftReportsTab: React.FC = () => {
                           if (selectedReportIds.size === reports.length) {
                             setSelectedReportIds(new Set());
                           } else {
-                            setSelectedReportIds(new Set(reports.map(r => r.id)));
+                            setSelectedReportIds(new Set(reports.map((r) => r.id)));
                           }
                         }}
                         className="form-checkbox"
@@ -1899,32 +2154,46 @@ export const ShiftReportsTab: React.FC = () => {
                     </label>
                     {selectedReportIds.size > 0 && (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-theme-text-muted">{selectedReportIds.size} selected</span>
+                        <span className="text-theme-text-muted text-xs">{selectedReportIds.size} selected</span>
                         {viewMode === 'flagged' && (
                           <button
-                            onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
+                            onClick={() => {
+                              void handleBatchReview(SubmissionStatus.APPROVED);
+                            }}
                             disabled={batchReviewing}
-                            className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                            className="btn-success inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium"
                           >
-                            {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                            {batchReviewing ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Check className="h-3 w-3" />
+                            )}
                             Approve Selected
                           </button>
                         )}
                         {viewMode === 'pending-review' && (
                           <>
                             <button
-                              onClick={() => { void handleBatchReview('flagged'); }}
+                              onClick={() => {
+                                void handleBatchReview('flagged');
+                              }}
                               disabled={batchReviewing}
-                              className="btn-primary text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                              className="btn-primary inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium"
                             >
-                              <AlertCircle className="w-3 h-3" /> Flag Selected
+                              <AlertCircle className="h-3 w-3" /> Flag Selected
                             </button>
                             <button
-                              onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
+                              onClick={() => {
+                                void handleBatchReview(SubmissionStatus.APPROVED);
+                              }}
                               disabled={batchReviewing}
-                              className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                              className="btn-success inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium"
                             >
-                              {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                              {batchReviewing ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
                               Approve Selected
                             </button>
                           </>
@@ -1935,17 +2204,19 @@ export const ShiftReportsTab: React.FC = () => {
                   {selectedReportIds.size > 0 && (
                     <input
                       type="text"
-                      placeholder={viewMode === 'pending-review' ? 'Add a comment for all selected reports (required for flagging)...' : 'Add a comment (optional)...'}
+                      placeholder={
+                        viewMode === 'pending-review'
+                          ? 'Add a comment for all selected reports (required for flagging)...'
+                          : 'Add a comment (optional)...'
+                      }
                       value={batchReviewNotes}
-                      onChange={e => setBatchReviewNotes(e.target.value)}
-                      className="form-input focus:ring-violet-500 text-xs py-1.5"
+                      onChange={(e) => setBatchReviewNotes(e.target.value)}
+                      className="form-input py-1.5 text-xs focus:ring-violet-500"
                     />
                   )}
                 </div>
               )}
-              <div className="space-y-3">
-                {reports.map(renderReportCard)}
-              </div>
+              <div className="space-y-3">{reports.map(renderReportCard)}</div>
             </>
           )}
         </>
@@ -1953,30 +2224,45 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Acknowledge Modal */}
       {ackReportId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Acknowledge Report">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-md space-y-4">
-            <h3 className="text-lg font-semibold text-theme-text-primary">Acknowledge Report</h3>
-            <p className="text-sm text-theme-text-secondary">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Acknowledge Report"
+        >
+          <div className="bg-theme-surface border-theme-surface-border w-full max-w-md space-y-4 rounded-xl border p-5 sm:p-6">
+            <h3 className="text-theme-text-primary text-lg font-semibold">Acknowledge Report</h3>
+            <p className="text-theme-text-secondary text-sm">
               Acknowledging confirms you have reviewed this shift completion report.
             </p>
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Comments (optional)</label>
-              <textarea rows={3} value={ackComments}
-                onChange={e => setAckComments(e.target.value)}
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Comments (optional)</label>
+              <textarea
+                rows={3}
+                value={ackComments}
+                onChange={(e) => setAckComments(e.target.value)}
                 placeholder="Any feedback or comments..."
-                className="form-input focus:ring-violet-500 resize-none text-sm"
+                className="form-input resize-none text-sm focus:ring-violet-500"
               />
             </div>
-            <div className="flex items-center gap-2 justify-end">
-              <button onClick={() => { setAckReportId(null); setAckComments(''); }}
-                className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors"
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  setAckReportId(null);
+                  setAckComments('');
+                }}
+                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border rounded-lg border px-4 py-2 text-sm transition-colors"
               >
                 Cancel
               </button>
-              <button onClick={() => { void handleAcknowledge(); }} disabled={acknowledging}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5 transition-colors"
+              <button
+                onClick={() => {
+                  void handleAcknowledge();
+                }}
+                disabled={acknowledging}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
               >
-                {acknowledging ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                {acknowledging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                 Acknowledge
               </button>
             </div>
@@ -1985,124 +2271,152 @@ export const ShiftReportsTab: React.FC = () => {
       )}
 
       {/* Review Modal */}
-      {reviewReportId && (() => {
-        const reviewReport = reports.find(r => r.id === reviewReportId);
-        return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Review Report">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-2xl max-h-[90dvh] overflow-y-auto space-y-4">
-            <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
-              <ClipboardCheck className="w-5 h-5 text-violet-500" /> Review Report
-            </h3>
-            <p className="text-sm text-theme-text-secondary">
-              Review this report before it becomes visible to the trainee.
-              You can redact specific fields if they contain improper content.
-            </p>
+      {reviewReportId &&
+        (() => {
+          const reviewReport = reports.find((r) => r.id === reviewReportId);
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Review Report"
+            >
+              <div className="bg-theme-surface border-theme-surface-border max-h-[90dvh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-xl border p-5 sm:p-6">
+                <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+                  <ClipboardCheck className="h-5 w-5 text-violet-500" /> Review Report
+                </h3>
+                <p className="text-theme-text-secondary text-sm">
+                  Review this report before it becomes visible to the trainee. You can redact specific fields if they
+                  contain improper content.
+                </p>
 
-            {/* Report content preview */}
-            {reviewReport && (
-              <div className="border border-theme-surface-border rounded-lg p-4 bg-theme-surface-hover space-y-3">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                  {reviewReport.trainee_name && (
-                    <span className="flex items-center gap-1 font-medium text-theme-text-primary">
-                      <UserIcon className="w-3.5 h-3.5" /> {reviewReport.trainee_name}
-                    </span>
-                  )}
-                  <span className="text-theme-text-muted">
-                    {formatDateCustom(reviewReport.shift_date + 'T12:00:00', {
-                      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-                    }, tz)}
-                  </span>
-                  {reviewReport.officer_name && (
-                    <span className="flex items-center gap-1 text-theme-text-muted">
-                      Filed by {reviewReport.officer_name}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                  <span className="flex items-center gap-1 text-theme-text-muted">
-                    <Clock className="w-3.5 h-3.5" /> {reviewReport.hours_on_shift}h
-                  </span>
-                  <span className="flex items-center gap-1 text-theme-text-muted">
-                    <Phone className="w-3.5 h-3.5" /> {reviewReport.calls_responded} calls
-                  </span>
-                  {reviewReport.performance_rating && renderRating(reviewReport.performance_rating)}
-                </div>
-                <ReportContentDisplay report={reviewReport} />
-              </div>
-            )}
+                {/* Report content preview */}
+                {reviewReport && (
+                  <div className="border-theme-surface-border bg-theme-surface-hover space-y-3 rounded-lg border p-4">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                      {reviewReport.trainee_name && (
+                        <span className="text-theme-text-primary flex items-center gap-1 font-medium">
+                          <UserIcon className="h-3.5 w-3.5" /> {reviewReport.trainee_name}
+                        </span>
+                      )}
+                      <span className="text-theme-text-muted">
+                        {formatDateCustom(
+                          reviewReport.shift_date + 'T12:00:00',
+                          {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          },
+                          tz
+                        )}
+                      </span>
+                      {reviewReport.officer_name && (
+                        <span className="text-theme-text-muted flex items-center gap-1">
+                          Filed by {reviewReport.officer_name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                      <span className="text-theme-text-muted flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" /> {reviewReport.hours_on_shift}h
+                      </span>
+                      <span className="text-theme-text-muted flex items-center gap-1">
+                        <Phone className="h-3.5 w-3.5" /> {reviewReport.calls_responded} calls
+                      </span>
+                      {reviewReport.performance_rating && renderRating(reviewReport.performance_rating)}
+                    </div>
+                    <ReportContentDisplay report={reviewReport} />
+                  </div>
+                )}
 
-            {/* Redaction checkboxes */}
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                Redact Fields (clear before approving)
-              </label>
-              <div className="space-y-2">
-                {[
-                  { field: 'performance_rating', label: ratingLabel },
-                  { field: 'areas_of_strength', label: 'Areas of Strength' },
-                  { field: 'areas_for_improvement', label: 'Areas for Improvement' },
-                  { field: 'officer_narrative', label: 'Officer Narrative' },
-                  { field: 'skills_observed', label: 'Skills Observed' },
-                ].map(({ field, label }) => (
-                  <label key={field} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={redactFields.includes(field)}
-                      onChange={() => toggleRedactField(field)}
-                      className="form-checkbox"
-                    />
-                    <span className="text-sm text-theme-text-primary flex items-center gap-1">
-                      {redactFields.includes(field) ? <EyeOff className="w-3.5 h-3.5 text-red-500" /> : <Eye className="w-3.5 h-3.5 text-theme-text-muted" />}
-                      {label}
-                    </span>
+                {/* Redaction checkboxes */}
+                <div>
+                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                    Redact Fields (clear before approving)
                   </label>
-                ))}
+                  <div className="space-y-2">
+                    {[
+                      { field: 'performance_rating', label: ratingLabel },
+                      { field: 'areas_of_strength', label: 'Areas of Strength' },
+                      { field: 'areas_for_improvement', label: 'Areas for Improvement' },
+                      { field: 'officer_narrative', label: 'Officer Narrative' },
+                      { field: 'skills_observed', label: 'Skills Observed' },
+                    ].map(({ field, label }) => (
+                      <label key={field} className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={redactFields.includes(field)}
+                          onChange={() => toggleRedactField(field)}
+                          className="form-checkbox"
+                        />
+                        <span className="text-theme-text-primary flex items-center gap-1 text-sm">
+                          {redactFields.includes(field) ? (
+                            <EyeOff className="h-3.5 w-3.5 text-red-500" />
+                          ) : (
+                            <Eye className="text-theme-text-muted h-3.5 w-3.5" />
+                          )}
+                          {label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Reviewer notes */}
+                <div>
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Reviewer Comment</label>
+                  <textarea
+                    rows={3}
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                    placeholder="Add a comment about this report (visible to the filing officer)..."
+                    className="form-input resize-none text-sm focus:ring-violet-500"
+                  />
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    Visible to the officer who filed the report. Not shown to the trainee.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => {
+                      setReviewReportId(null);
+                      setReviewNotes('');
+                      setRedactFields([]);
+                    }}
+                    className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border rounded-lg border px-4 py-2 text-sm transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!reviewNotes.trim()) {
+                        toast.error('Please add a comment explaining why this report is being flagged');
+                        return;
+                      }
+                      void handleReview('flagged');
+                    }}
+                    disabled={reviewing}
+                    className="btn-primary inline-flex items-center gap-1.5 text-sm font-medium"
+                  >
+                    <AlertCircle className="h-3.5 w-3.5" /> Flag for Revision
+                  </button>
+                  <button
+                    onClick={() => {
+                      void handleReview(SubmissionStatus.APPROVED);
+                    }}
+                    disabled={reviewing}
+                    className="btn-success inline-flex items-center gap-1.5 text-sm font-medium"
+                  >
+                    {reviewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    Approve
+                  </button>
+                </div>
               </div>
             </div>
-
-            {/* Reviewer notes */}
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Reviewer Comment
-              </label>
-              <textarea rows={3} value={reviewNotes}
-                onChange={e => setReviewNotes(e.target.value)}
-                placeholder="Add a comment about this report (visible to the filing officer)..."
-                className="form-input focus:ring-violet-500 resize-none text-sm"
-              />
-              <p className="text-xs text-theme-text-muted mt-1">
-                Visible to the officer who filed the report. Not shown to the trainee.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 justify-end pt-2">
-              <button onClick={() => { setReviewReportId(null); setReviewNotes(''); setRedactFields([]); }}
-                className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button onClick={() => {
-                if (!reviewNotes.trim()) {
-                  toast.error('Please add a comment explaining why this report is being flagged');
-                  return;
-                }
-                void handleReview('flagged');
-              }} disabled={reviewing}
-                className="btn-primary font-medium gap-1.5 inline-flex items-center text-sm"
-              >
-                <AlertCircle className="w-3.5 h-3.5" /> Flag for Revision
-              </button>
-              <button onClick={() => { void handleReview(SubmissionStatus.APPROVED); }} disabled={reviewing}
-                className="btn-success font-medium gap-1.5 inline-flex items-center text-sm"
-              >
-                {reviewing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                Approve
-              </button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+          );
+        })()}
     </div>
   );
 };

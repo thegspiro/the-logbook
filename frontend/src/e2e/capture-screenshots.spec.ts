@@ -33,7 +33,6 @@ async function settle(page: import('@playwright/test').Page) {
 }
 
 test.describe('@screenshots manifest capture', () => {
-
   test('narrow — dashboard', async ({ page }) => {
     await page.setViewportSize(NARROW);
     await gotoDashboard(page);

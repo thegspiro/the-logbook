@@ -22,7 +22,7 @@ The Training module tracks courses, certifications, training requirements, progr
 14. [Waiver Management](#waiver-management)
 15. [Compliance Summary](#compliance-summary)
 16. [Shift Completion Reports](#shift-completion-reports)
-17. [Manual Shift Report Entry](#manual-shift-report-entry)
+17. [Manual Shift Report Entry](#manual-shift-report-entry-2026-04-11)
 18. [Officer Training Record Exports](#officer-training-record-exports)
 19. [External Training Integrations](#external-training-integrations)
 20. [Historical Import](#historical-import)
@@ -340,7 +340,7 @@ Several actions credit pipeline progress without anyone editing the enrollment d
 
 - **Completing a shift report** — a filed and approved shift completion report credits matching hours, shifts, calls, and skills (see [Shift Completion Reports](#shift-completion-reports)).
 - **Approving a linked training session** — approving a training session that is **linked to the program** credits progress, matched either by a specific **requirement** or by training **category**.
-- **Passing a linked skills test** — passing a skills test that is **linked to a requirement** completes that requirement (see the [Skills Testing](./09-skills-testing.md) guide).
+- **Passing a linked skills test** — passing a skills test that is **linked to a requirement** completes that requirement (see the [Skills Testing](./09-skills-testing.md) guide). _(2026-08-08)_ Any member may now run an official skills test, so the credit lands when a **training officer validates** the result, not when the examiner submits it — an unvalidated pass sits in the officer's review queue and credits nothing yet. An officer running the test themselves validates it in the same step, so their results credit immediately as before.
 - **An approved external/synced course** — an imported course (e.g. from Vector Solutions) credits any requirement it matches by category, if the requirement opts into external credit.
 
 > **No double-counting.** Each of these feeds records its credit against the specific source (the shift report, the session, the imported record, the submission). If the same source is processed again — a re-synced course, a re-filed report, a re-approved submission — it is recognized and **not** credited a second time, so one real training never inflates a member's progress twice.
@@ -1537,6 +1537,10 @@ With Skills Testing, examiners can:
 - Score each step as the candidate performs the procedure
 - Track critical (required) criteria that trigger automatic failure
 - Automatically calculate pass/fail results based on scoring thresholds
+
+> **Any member can be the examiner** _(2026-08-08)_ — departments routinely use
+> senior members as evaluators. Building templates stays officer-only, and an
+> official result only counts once a training officer **validates** it.
 
 For a comprehensive guide with a realistic NREMT example walkthrough, see the dedicated **[Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)** training guide.
 

@@ -33,7 +33,7 @@ const renderPage = () =>
       <Routes>
         <Route path="/status/:token" element={<ApplicationStatusPage />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 
 describe('ApplicationStatusPage current-stage action', () => {

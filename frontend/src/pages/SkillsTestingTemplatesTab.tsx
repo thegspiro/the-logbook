@@ -20,6 +20,7 @@ import {
   Trash2,
   Eye,
   Send,
+  CheckCircle2,
 } from 'lucide-react';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type { SkillTemplateListItem } from '../types/skillsTesting';
@@ -35,7 +36,9 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] ?? styles['draft']}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status] ?? styles['draft']}`}
+    >
       {status.replace('_', ' ')}
     </span>
   );
@@ -47,15 +50,13 @@ const SummaryCard: React.FC<{
   icon: React.ReactNode;
   color: string;
 }> = ({ label, value, icon, color }) => (
-  <div className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border">
+  <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-sm text-theme-text-muted">{label}</p>
-        <p className="text-2xl font-bold text-theme-text-primary mt-1">{value}</p>
+        <p className="text-theme-text-muted text-sm">{label}</p>
+        <p className="text-theme-text-primary mt-1 text-2xl font-bold">{value}</p>
       </div>
-      <div className={`p-3 rounded-lg ${color}`}>
-        {icon}
-      </div>
+      <div className={`rounded-lg p-3 ${color}`}>{icon}</div>
     </div>
   </div>
 );
@@ -71,49 +72,67 @@ const TemplateRow: React.FC<{
   <tr className="hover:bg-theme-surface-hover transition-colors">
     <td className="px-4 py-3">
       <div>
-        <p className="font-medium text-theme-text-primary">{template.name}</p>
-        {template.description && (
-          <p className="text-sm text-theme-text-muted line-clamp-1">{template.description}</p>
-        )}
+        <p className="text-theme-text-primary font-medium">{template.name}</p>
+        {template.description && <p className="text-theme-text-muted line-clamp-1 text-sm">{template.description}</p>}
       </div>
     </td>
-    <td className="px-4 py-3 hidden md:table-cell">
-      <span className="text-sm text-theme-text-muted">{template.category ?? '—'}</span>
+    <td className="hidden px-4 py-3 md:table-cell">
+      <span className="text-theme-text-muted text-sm">{template.category ?? '—'}</span>
     </td>
     <td className="px-4 py-3">
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex flex-wrap items-center gap-1.5">
         <StatusBadge status={template.status} />
         {template.visibility && template.visibility !== 'all_members' && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
             {template.visibility === 'officers_only' ? 'Officers' : 'Assigned'}
           </span>
         )}
       </div>
     </td>
-    <td className="px-4 py-3 text-center hidden lg:table-cell">
-      <span className="text-sm text-theme-text-muted">{template.section_count}</span>
+    <td className="hidden px-4 py-3 text-center lg:table-cell">
+      <span className="text-theme-text-muted text-sm">{template.section_count}</span>
     </td>
-    <td className="px-4 py-3 text-center hidden lg:table-cell">
-      <span className="text-sm text-theme-text-muted">{template.criteria_count}</span>
+    <td className="hidden px-4 py-3 text-center lg:table-cell">
+      <span className="text-theme-text-muted text-sm">{template.criteria_count}</span>
     </td>
     <td className="px-4 py-3">
       <div className="flex items-center justify-end gap-1">
-        <button onClick={onView} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="View">
-          <Eye className="w-4 h-4 text-theme-text-muted" />
+        <button
+          onClick={onView}
+          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          title="View"
+        >
+          <Eye className="text-theme-text-muted h-4 w-4" />
         </button>
-        <button onClick={onEdit} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Edit">
-          <Pencil className="w-4 h-4 text-theme-text-muted" />
+        <button
+          onClick={onEdit}
+          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          title="Edit"
+        >
+          <Pencil className="text-theme-text-muted h-4 w-4" />
         </button>
         {template.status === FormStatus.DRAFT && (
-          <button onClick={onPublish} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Publish">
-            <Send className="w-4 h-4 text-green-600" />
+          <button
+            onClick={onPublish}
+            className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+            title="Publish"
+          >
+            <Send className="h-4 w-4 text-green-600" />
           </button>
         )}
-        <button onClick={onDuplicate} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Duplicate">
-          <Copy className="w-4 h-4 text-theme-text-muted" />
+        <button
+          onClick={onDuplicate}
+          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          title="Duplicate"
+        >
+          <Copy className="text-theme-text-muted h-4 w-4" />
         </button>
-        <button onClick={onDelete} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Archive">
-          <Trash2 className="w-4 h-4 text-red-500" />
+        <button
+          onClick={onDelete}
+          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          title="Archive"
+        >
+          <Trash2 className="h-4 w-4 text-red-500" />
         </button>
       </div>
     </td>
@@ -143,81 +162,104 @@ const SkillsTestingTemplatesTab: React.FC = () => {
     void loadSummary();
   }, [loadTemplates, loadSummary, statusFilter]);
 
-  const filteredTemplates = templates.filter((t) =>
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (t.category ?? '').toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredTemplates = templates.filter(
+    (t) =>
+      t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.category ?? '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handlePublish = useCallback(async (id: string) => {
-    if (window.confirm('Publish this template? It will be available for use in tests.')) {
-      await publishTemplate(id);
-      void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
-    }
-  }, [publishTemplate, loadTemplates, statusFilter]);
+  const handlePublish = useCallback(
+    async (id: string) => {
+      if (window.confirm('Publish this template? It will be available for use in tests.')) {
+        await publishTemplate(id);
+        void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
+      }
+    },
+    [publishTemplate, loadTemplates, statusFilter]
+  );
 
-  const handleDuplicate = useCallback(async (id: string) => {
-    const newTemplate = await duplicateTemplate(id);
-    void navigate(`/training/skills-testing/templates/${newTemplate.id}/edit`);
-  }, [duplicateTemplate, navigate]);
+  const handleDuplicate = useCallback(
+    async (id: string) => {
+      const newTemplate = await duplicateTemplate(id);
+      void navigate(`/training/skills-testing/templates/${newTemplate.id}/edit`);
+    },
+    [duplicateTemplate, navigate]
+  );
 
-  const handleDelete = useCallback(async (id: string) => {
-    if (window.confirm('Are you sure you want to archive this template?')) {
-      await deleteTemplate(id);
-    }
-  }, [deleteTemplate]);
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (window.confirm('Are you sure you want to archive this template?')) {
+        await deleteTemplate(id);
+      }
+    },
+    [deleteTemplate]
+  );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Summary Cards */}
       {!summaryLoading && summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
           <SummaryCard
             label="Templates"
             value={summary.total_templates}
-            icon={<FileText className="w-5 h-5 text-blue-600" />}
+            icon={<FileText className="h-5 w-5 text-blue-600" />}
             color="bg-blue-100 dark:bg-blue-900/30"
           />
           <SummaryCard
             label="Tests This Month"
             value={summary.tests_this_month}
-            icon={<Users className="w-5 h-5 text-purple-600" />}
+            icon={<Users className="h-5 w-5 text-purple-600" />}
             color="bg-purple-100 dark:bg-purple-900/30"
           />
-          <SummaryCard
-            label="Pass Rate"
-            value={`${Math.round(summary.pass_rate ?? 0)}%`}
-            icon={<TrendingUp className="w-5 h-5 text-green-600" />}
-            color="bg-green-100 dark:bg-green-900/30"
-          />
+          {/* Swapped in when member-run results are waiting: a queue nobody
+              clears blocks candidates from getting credit, so it outranks the
+              pass rate for attention while it is non-zero. */}
+          {summary.pending_validation ? (
+            <SummaryCard
+              label="Needs Validation"
+              value={summary.pending_validation}
+              icon={<CheckCircle2 className="h-5 w-5 text-purple-600" />}
+              color="bg-purple-100 dark:bg-purple-900/30"
+            />
+          ) : (
+            <SummaryCard
+              label="Pass Rate"
+              value={`${Math.round(summary.pass_rate ?? 0)}%`}
+              icon={<TrendingUp className="h-5 w-5 text-green-600" />}
+              color="bg-green-100 dark:bg-green-900/30"
+            />
+          )}
           <SummaryCard
             label="Avg Score"
             value={`${Math.round(summary.average_score ?? 0)}%`}
-            icon={<BarChart3 className="w-5 h-5 text-orange-600" />}
+            icon={<BarChart3 className="h-5 w-5 text-orange-600" />}
             color="bg-orange-100 dark:bg-orange-900/30"
           />
         </div>
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+          <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search templates..." placeholder="Search templates..."
+            aria-label="Search templates..."
+            placeholder="Search templates..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-2 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
           />
         </div>
         <div className="flex gap-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
             aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
@@ -227,9 +269,9 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           </select>
           <button
             onClick={() => void navigate('/training/skills-testing/templates/new')}
-            className="btn-primary flex font-medium gap-2 items-center"
+            className="btn-primary flex items-center gap-2 font-medium"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Template</span>
           </button>
         </div>
@@ -238,11 +280,11 @@ const SkillsTestingTemplatesTab: React.FC = () => {
       {/* Templates Table */}
       {templatesLoading ? (
         <div className="flex justify-center py-12" role="status" aria-live="polite">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
+          <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
         </div>
       ) : filteredTemplates.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
-          <ClipboardCheck className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
+          <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted">No templates found</p>
           <button
             onClick={() => void navigate('/training/skills-testing/templates/new')}
@@ -252,20 +294,50 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+        <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-theme-surface-border">
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Template</th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden md:table-cell">Category</th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
-                  <th scope="col" className="text-center px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden lg:table-cell">Sections</th>
-                  <th scope="col" className="text-center px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden lg:table-cell">Criteria</th>
-                  <th scope="col" className="text-right px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
+                <tr className="border-theme-surface-border border-b">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Template
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted hidden px-4 py-3 text-left text-xs font-medium tracking-wider uppercase md:table-cell"
+                  >
+                    Category
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
+                    Status
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted hidden px-4 py-3 text-center text-xs font-medium tracking-wider uppercase lg:table-cell"
+                  >
+                    Sections
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted hidden px-4 py-3 text-center text-xs font-medium tracking-wider uppercase lg:table-cell"
+                  >
+                    Criteria
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-theme-surface-border">
+              <tbody className="divide-theme-surface-border divide-y">
                 {filteredTemplates.map((template) => (
                   <TemplateRow
                     key={template.id}

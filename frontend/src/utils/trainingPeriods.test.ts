@@ -4,11 +4,7 @@ vi.mock('./dateFormatting', () => ({
   getTodayLocalDate: () => '2026-05-15',
 }));
 
-import {
-  getTrainingPeriodWindow,
-  TrainingExportPeriod,
-  TRAINING_PERIOD_LABELS,
-} from './trainingPeriods';
+import { getTrainingPeriodWindow, TrainingExportPeriod, TRAINING_PERIOD_LABELS } from './trainingPeriods';
 
 describe('getTrainingPeriodWindow', () => {
   it('returns the current calendar month to date', () => {

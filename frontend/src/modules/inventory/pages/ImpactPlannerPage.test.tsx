@@ -73,16 +73,36 @@ const RESULT = {
   allowance_aware: false,
   members: [
     {
-      user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
-      rank: 'firefighter', station: 'Station 1', status: 'active',
-      needed_size: 'M', has_size_on_file: true, has_related_item: false,
-      needs_replacement: false, over_allowance: false, related_item_names: [], email: 'amy@x.org', phone: '555-1',
+      user_id: 'u1',
+      full_name: 'Amy Adams',
+      membership_number: '001',
+      rank: 'firefighter',
+      station: 'Station 1',
+      status: 'active',
+      needed_size: 'M',
+      has_size_on_file: true,
+      has_related_item: false,
+      needs_replacement: false,
+      over_allowance: false,
+      related_item_names: [],
+      email: 'amy@x.org',
+      phone: '555-1',
     },
     {
-      user_id: 'u2', full_name: 'Bob Baker', membership_number: '002',
-      rank: 'firefighter', station: 'Station 1', status: 'active',
-      needed_size: 'L', has_size_on_file: true, has_related_item: true,
-      needs_replacement: false, over_allowance: false, related_item_names: ['Old Jacket'], email: 'bob@x.org', phone: '555-2',
+      user_id: 'u2',
+      full_name: 'Bob Baker',
+      membership_number: '002',
+      rank: 'firefighter',
+      station: 'Station 1',
+      status: 'active',
+      needed_size: 'L',
+      has_size_on_file: true,
+      has_related_item: true,
+      needs_replacement: false,
+      over_allowance: false,
+      related_item_names: ['Old Jacket'],
+      email: 'bob@x.org',
+      phone: '555-2',
     },
   ],
 };
@@ -107,9 +127,7 @@ describe('ImpactPlannerPage', () => {
 
     expect(await screen.findByText('Firefighter')).toBeInTheDocument();
 
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Related category' }), 'cat-jacket',
-    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Related category' }), 'cat-jacket');
 
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
 
@@ -117,7 +135,7 @@ describe('ImpactPlannerPage', () => {
 
     // Default request sends the active status preselected, plus the chosen category.
     expect(mockAnalyzeImpact).toHaveBeenCalledWith(
-      expect.objectContaining({ statuses: ['active'], related_category_id: 'cat-jacket' }),
+      expect.objectContaining({ statuses: ['active'], related_category_id: 'cat-jacket' })
     );
 
     expect(screen.getByText('Need the item')).toBeInTheDocument();
@@ -149,27 +167,21 @@ describe('ImpactPlannerPage', () => {
       ...RESULT,
       stock_checked: true,
       total_to_purchase: 5,
-      size_breakdown: [
-        { size: 'M', total: 1, needing: 8, on_hand: 3, shortfall: 5 },
-      ],
+      size_breakdown: [{ size: 'M', total: 1, needing: 8, on_hand: 3, shortfall: 5 }],
     });
     renderWithRouter(<ImpactPlannerPage />);
     expect(await screen.findByText('Firefighter')).toBeInTheDocument();
 
     // Choose a size field so the stock-source select appears, then a category.
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Size needed' }), 'jacket',
-    );
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket',
-    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Size needed' }), 'jacket');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket');
 
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
 
     expect(await screen.findByText('5 to buy')).toBeInTheDocument();
     expect(screen.getByText(/3 on hand/)).toBeInTheDocument();
     expect(mockAnalyzeImpact).toHaveBeenCalledWith(
-      expect.objectContaining({ size_field: 'jacket', stock_category_id: 'cat-jacket' }),
+      expect.objectContaining({ size_field: 'jacket', stock_category_id: 'cat-jacket' })
     );
   });
 
@@ -188,12 +200,8 @@ describe('ImpactPlannerPage', () => {
     renderWithRouter(<ImpactPlannerPage />);
     expect(await screen.findByText('Firefighter')).toBeInTheDocument();
 
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Size needed' }), 'jacket',
-    );
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket',
-    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Size needed' }), 'jacket');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket');
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
 
     expect(await screen.findByText('~$360.00 est.')).toBeInTheDocument();
@@ -205,9 +213,7 @@ describe('ImpactPlannerPage', () => {
       ...RESULT,
       stock_checked: true,
       total_to_purchase: 5,
-      size_breakdown: [
-        { size: 'M', total: 1, needing: 8, on_hand: 3, shortfall: 5 },
-      ],
+      size_breakdown: [{ size: 'M', total: 1, needing: 8, on_hand: 3, shortfall: 5 }],
     });
     mockCreateReorderFromPlan.mockResolvedValue({
       created_count: 1,
@@ -218,12 +224,8 @@ describe('ImpactPlannerPage', () => {
     renderWithRouter(<ImpactPlannerPage />);
     expect(await screen.findByText('Firefighter')).toBeInTheDocument();
 
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Size needed' }), 'jacket',
-    );
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket',
-    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Size needed' }), 'jacket');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket');
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
 
     await user.click(await screen.findByRole('button', { name: /Create reorder request/i }));
@@ -234,7 +236,7 @@ describe('ImpactPlannerPage', () => {
           size_field: 'jacket',
           stock_category_id: 'cat-jacket',
           urgency: 'normal',
-        }),
+        })
       );
     });
     expect(await screen.findByText(/Created 1 reorder request/)).toBeInTheDocument();
@@ -248,10 +250,18 @@ describe('ImpactPlannerPage', () => {
       members_needing_replacement: 1,
       members: [
         {
-          user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
-          rank: 'firefighter', station: 'Station 1', status: 'active',
-          needed_size: 'M', has_size_on_file: true, has_related_item: false,
-          needs_replacement: true, over_allowance: false, related_item_names: ['Worn Jacket'],
+          user_id: 'u1',
+          full_name: 'Amy Adams',
+          membership_number: '001',
+          rank: 'firefighter',
+          station: 'Station 1',
+          status: 'active',
+          needed_size: 'M',
+          has_size_on_file: true,
+          has_related_item: false,
+          needs_replacement: true,
+          over_allowance: false,
+          related_item_names: ['Worn Jacket'],
         },
       ],
     });
@@ -259,16 +269,14 @@ describe('ImpactPlannerPage', () => {
     expect(await screen.findByText('Quartermaster')).toBeInTheDocument();
 
     // Selecting a related category reveals the replacement-aware checkbox.
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Related category' }), 'cat-jacket',
-    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Related category' }), 'cat-jacket');
     await user.click(screen.getByRole('checkbox', { name: /needing replacement/i }));
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
 
     expect(await screen.findByText('1 to replace')).toBeInTheDocument();
     expect(screen.getByText('Replace')).toBeInTheDocument();
     expect(mockAnalyzeImpact).toHaveBeenCalledWith(
-      expect.objectContaining({ related_category_id: 'cat-jacket', replacement_aware: true }),
+      expect.objectContaining({ related_category_id: 'cat-jacket', replacement_aware: true })
     );
   });
 
@@ -278,9 +286,7 @@ describe('ImpactPlannerPage', () => {
       ...RESULT,
       stock_checked: true,
       total_to_purchase: 1,
-      size_breakdown: [
-        { size: 'M', total: 3, needing: 3, on_hand: 2, shortfall: 1 },
-      ],
+      size_breakdown: [{ size: 'M', total: 3, needing: 3, on_hand: 2, shortfall: 1 }],
     });
     mockBulkIssueFromPlan.mockResolvedValue({
       issued_count: 2,
@@ -291,12 +297,8 @@ describe('ImpactPlannerPage', () => {
     renderWithRouter(<ImpactPlannerPage />);
     expect(await screen.findByText('Firefighter')).toBeInTheDocument();
 
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Size needed' }), 'jacket',
-    );
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket',
-    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Size needed' }), 'jacket');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket');
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
 
     await user.click(await screen.findByRole('button', { name: /Issue on-hand stock/i }));
@@ -305,7 +307,7 @@ describe('ImpactPlannerPage', () => {
 
     await waitFor(() => {
       expect(mockBulkIssueFromPlan).toHaveBeenCalledWith(
-        expect.objectContaining({ size_field: 'jacket', stock_category_id: 'cat-jacket' }),
+        expect.objectContaining({ size_field: 'jacket', stock_category_id: 'cat-jacket' })
       );
     });
     expect(await screen.findByText(/Issued to 2 members/)).toBeInTheDocument();
@@ -319,9 +321,7 @@ describe('ImpactPlannerPage', () => {
     const revokeUrl = vi.fn();
     vi.stubGlobal('URL', { createObjectURL: createUrl, revokeObjectURL: revokeUrl });
     // jsdom doesn't implement anchor click navigation; stub it.
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
     renderWithRouter(<ImpactPlannerPage />);
     expect(await screen.findByText('Firefighter')).toBeInTheDocument();
@@ -331,9 +331,7 @@ describe('ImpactPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: /^PDF$/i }));
 
     await waitFor(() => {
-      expect(mockExportPlanPdf).toHaveBeenCalledWith(
-        expect.objectContaining({ statuses: ['active'] }),
-      );
+      expect(mockExportPlanPdf).toHaveBeenCalledWith(expect.objectContaining({ statuses: ['active'] }));
     });
     expect(clickSpy).toHaveBeenCalledTimes(1);
     clickSpy.mockRestore();
@@ -343,8 +341,12 @@ describe('ImpactPlannerPage', () => {
   it('saves the current filters as a named plan', async () => {
     const user = userEvent.setup();
     mockCreateImpactPlan.mockResolvedValue({
-      id: 'plan-1', organization_id: 'o1', name: 'Annual refresh',
-      filters: { statuses: ['active'] }, created_at: '', updated_at: '',
+      id: 'plan-1',
+      organization_id: 'o1',
+      name: 'Annual refresh',
+      filters: { statuses: ['active'] },
+      created_at: '',
+      updated_at: '',
     });
     renderWithRouter(<ImpactPlannerPage />);
     expect(await screen.findByText('Quartermaster')).toBeInTheDocument();
@@ -354,9 +356,7 @@ describe('ImpactPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: /Save plan/i }));
 
     await waitFor(() => {
-      expect(mockCreateImpactPlan).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Annual refresh' }),
-      );
+      expect(mockCreateImpactPlan).toHaveBeenCalledWith(expect.objectContaining({ name: 'Annual refresh' }));
     });
     const [arg] = mockCreateImpactPlan.mock.calls[0] as [{ filters: { statuses?: string[] } }];
     expect(arg.filters.statuses).toEqual(['active']);
@@ -368,22 +368,23 @@ describe('ImpactPlannerPage', () => {
     const user = userEvent.setup();
     mockGetImpactPlans.mockResolvedValue([
       {
-        id: 'plan-1', organization_id: 'o1', name: 'Boots plan',
+        id: 'plan-1',
+        organization_id: 'o1',
+        name: 'Boots plan',
         filters: { size_field: 'boot', ranks: ['firefighter'] },
-        created_at: '', updated_at: '',
+        created_at: '',
+        updated_at: '',
       },
     ]);
     renderWithRouter(<ImpactPlannerPage />);
     expect(await screen.findByText('Quartermaster')).toBeInTheDocument();
 
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Saved plans' }), 'plan-1',
-    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Saved plans' }), 'plan-1');
 
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
     await waitFor(() => {
       expect(mockAnalyzeImpact).toHaveBeenCalledWith(
-        expect.objectContaining({ size_field: 'boot', ranks: ['firefighter'] }),
+        expect.objectContaining({ size_field: 'boot', ranks: ['firefighter'] })
       );
     });
   });
@@ -398,30 +399,32 @@ describe('ImpactPlannerPage', () => {
       size_breakdown: [{ size: 'M', total: 1, needing: 1, on_hand: 0, shortfall: 1 }],
       members: [
         {
-          user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
-          rank: 'firefighter', station: 'Station 1', status: 'active',
-          needed_size: 'M', has_size_on_file: true, has_related_item: false,
-          needs_replacement: false, over_allowance: true, related_item_names: [],
+          user_id: 'u1',
+          full_name: 'Amy Adams',
+          membership_number: '001',
+          rank: 'firefighter',
+          station: 'Station 1',
+          status: 'active',
+          needed_size: 'M',
+          has_size_on_file: true,
+          has_related_item: false,
+          needs_replacement: false,
+          over_allowance: true,
+          related_item_names: [],
         },
       ],
     });
     renderWithRouter(<ImpactPlannerPage />);
     expect(await screen.findByText('Firefighter')).toBeInTheDocument();
 
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Size needed' }), 'jacket',
-    );
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket',
-    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Size needed' }), 'jacket');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket');
     await user.click(screen.getByRole('checkbox', { name: /over their issuance allowance/i }));
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
 
     expect(await screen.findByText('1 over allowance')).toBeInTheDocument();
     expect(screen.getByText('over allowance')).toBeInTheDocument();
-    expect(mockAnalyzeImpact).toHaveBeenCalledWith(
-      expect.objectContaining({ allowance_aware: true }),
-    );
+    expect(mockAnalyzeImpact).toHaveBeenCalledWith(expect.objectContaining({ allowance_aware: true }));
   });
 
   it('requests sizes from members with no size on file', async () => {
@@ -438,9 +441,7 @@ describe('ImpactPlannerPage', () => {
     await user.click(await screen.findByRole('button', { name: /Request sizes/i }));
 
     await waitFor(() => {
-      expect(mockRequestMemberSizes).toHaveBeenCalledWith(
-        expect.objectContaining({ statuses: ['active'] }),
-      );
+      expect(mockRequestMemberSizes).toHaveBeenCalledWith(expect.objectContaining({ statuses: ['active'] }));
     });
     expect(await screen.findByText(/Requested from 1/)).toBeInTheDocument();
   });
@@ -453,9 +454,7 @@ describe('ImpactPlannerPage', () => {
     await screen.findByText('Amy Adams');
 
     const memberLinks = () =>
-      screen
-        .getAllByRole('link')
-        .filter((l) => l.getAttribute('href')?.startsWith('/members/'));
+      screen.getAllByRole('link').filter((l) => l.getAttribute('href')?.startsWith('/members/'));
 
     // Default order from the API response: Amy, then Bob.
     expect(memberLinks()[0]).toHaveTextContent('Amy Adams');
@@ -476,9 +475,7 @@ describe('ImpactPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
 
     await waitFor(() => {
-      expect(mockAnalyzeImpact).toHaveBeenCalledWith(
-        expect.objectContaining({ ranks: ['firefighter'] }),
-      );
+      expect(mockAnalyzeImpact).toHaveBeenCalledWith(expect.objectContaining({ ranks: ['firefighter'] }));
     });
   });
 
@@ -486,9 +483,7 @@ describe('ImpactPlannerPage', () => {
     const user = userEvent.setup();
     const createUrl = vi.fn(() => 'blob:csv');
     vi.stubGlobal('URL', { createObjectURL: createUrl, revokeObjectURL: vi.fn() });
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     renderWithRouter(<ImpactPlannerPage />);
     expect(await screen.findByText('Firefighter')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));

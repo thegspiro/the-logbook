@@ -67,12 +67,46 @@ describe('MyProgramProgressPage', () => {
       is_behind_schedule: false,
     });
     mockGetProgramPhases.mockResolvedValue([
-      { id: 'ph-1', program_id: 'prog-1', phase_number: 1, name: 'Basics', requires_manual_advancement: false, created_at: '', updated_at: '' },
-      { id: 'ph-2', program_id: 'prog-1', phase_number: 2, name: 'Advanced', requires_manual_advancement: false, created_at: '', updated_at: '' },
+      {
+        id: 'ph-1',
+        program_id: 'prog-1',
+        phase_number: 1,
+        name: 'Basics',
+        requires_manual_advancement: false,
+        created_at: '',
+        updated_at: '',
+      },
+      {
+        id: 'ph-2',
+        program_id: 'prog-1',
+        phase_number: 2,
+        name: 'Advanced',
+        requires_manual_advancement: false,
+        created_at: '',
+        updated_at: '',
+      },
     ]);
     mockGetProgramRequirements.mockResolvedValue([
-      { id: 'pr-1', program_id: 'prog-1', phase_id: 'ph-1', requirement_id: 'req-1', is_required: true, is_prerequisite: false, sort_order: 0, created_at: '' },
-      { id: 'pr-2', program_id: 'prog-1', phase_id: 'ph-2', requirement_id: 'req-2', is_required: true, is_prerequisite: false, sort_order: 0, created_at: '' },
+      {
+        id: 'pr-1',
+        program_id: 'prog-1',
+        phase_id: 'ph-1',
+        requirement_id: 'req-1',
+        is_required: true,
+        is_prerequisite: false,
+        sort_order: 0,
+        created_at: '',
+      },
+      {
+        id: 'pr-2',
+        program_id: 'prog-1',
+        phase_id: 'ph-2',
+        requirement_id: 'req-2',
+        is_required: true,
+        is_prerequisite: false,
+        sort_order: 0,
+        created_at: '',
+      },
     ]);
     mockWithdrawEnrollment.mockResolvedValue({ id: 'enr-1', status: 'withdrawn' });
   });
@@ -122,8 +156,11 @@ describe('MyProgramProgressPage', () => {
   it('hides the Leave button when the enrollment is not active', async () => {
     mockGetEnrollmentProgress.mockResolvedValue({
       enrollment: {
-        id: 'enr-1', current_phase_id: 'ph-1', progress_percentage: 100,
-        enrolled_at: '2026-02-01T00:00:00Z', status: 'completed',
+        id: 'enr-1',
+        current_phase_id: 'ph-1',
+        progress_percentage: 100,
+        enrolled_at: '2026-02-01T00:00:00Z',
+        status: 'completed',
       },
       program: { id: 'prog-1', name: 'Recruit School' },
       current_phase: { id: 'ph-1', phase_number: 1, name: 'Basics' },

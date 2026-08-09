@@ -269,14 +269,7 @@ export interface RSVPHistory {
 
 // Event Templates
 export type RecurrencePattern =
-  | 'daily'
-  | 'weekly'
-  | 'biweekly'
-  | 'monthly'
-  | 'monthly_weekday'
-  | 'annually'
-  | 'annually_weekday'
-  | 'custom';
+  'daily' | 'weekly' | 'biweekly' | 'monthly' | 'monthly_weekday' | 'annually' | 'annually_weekday' | 'custom';
 
 export interface EventTemplate {
   id: string;
@@ -480,13 +473,7 @@ export interface RequestPipelineSettings {
 }
 
 export type EventRequestStatus =
-  | 'submitted'
-  | 'in_progress'
-  | 'scheduled'
-  | 'postponed'
-  | 'completed'
-  | 'declined'
-  | 'cancelled';
+  'submitted' | 'in_progress' | 'scheduled' | 'postponed' | 'completed' | 'declined' | 'cancelled';
 
 export type DateFlexibility = 'specific_dates' | 'general_timeframe' | 'flexible';
 export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'flexible';

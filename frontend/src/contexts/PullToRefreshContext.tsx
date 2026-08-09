@@ -7,15 +7,7 @@
  * disabled on pages that don't register, so no dangling spinner appears.
  */
 
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-  ReactNode,
-} from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState, ReactNode } from 'react';
 
 type RefreshHandler = () => Promise<void>;
 
@@ -51,16 +43,9 @@ export const PullToRefreshProvider: React.FC<{ children: ReactNode }> = ({ child
     if (handlerRef.current) await handlerRef.current();
   }, []);
 
-  const value = useMemo(
-    () => ({ register, runRefresh, hasHandler }),
-    [register, runRefresh, hasHandler]
-  );
+  const value = useMemo(() => ({ register, runRefresh, hasHandler }), [register, runRefresh, hasHandler]);
 
-  return (
-    <PullToRefreshContext.Provider value={value}>
-      {children}
-    </PullToRefreshContext.Provider>
-  );
+  return <PullToRefreshContext.Provider value={value}>{children}</PullToRefreshContext.Provider>;
 };
 
 // eslint-disable-next-line react-refresh/only-export-components

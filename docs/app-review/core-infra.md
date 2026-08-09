@@ -1,6 +1,45 @@
-# Application Review — Core Infrastructure (Tier B, 2nd pass)
+# Application Review — Core Infrastructure (Tier B)
 
-**Prefix:** `CI2` · **Iteration:** B24 · **Reviewed:** 2026-08-06
+**Prefix:** `CI2` · **Iteration:** B24 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep — no code change
+
+Re-verified this hardened foundation against the infra lenses. **All clean, no
+code change:**
+
+- **Middleware** — all five classes are pure ASGI (`__call__(scope, receive,
+  send)`); `BaseHTTPMiddleware` is not imported (Pitfall #4); wrapped `receive`
+  callables (`limited_receive`, `_replay_receive`) are `async`; header extension on
+  `http.response.start` preserves `Set-Cookie`.
+- **Bounded caches (Pitfall #9)** — `RateLimiter` (`_MAX_KEYS` + eviction),
+  public-portal caches, GeoIP `_ip_cache`, and the IP allowlist TTL cache all have a
+  size cap + eviction. Crypto cipher caches are keyed on operator-set legacy keys
+  (not attacker-controllable).
+- **Crypto fail-closed** — field encryption is AES-256-GCM AEAD (`$gcm2$`, 600k
+  PBKDF2; `$gcm1$` 100k read-only); `decrypt_data` re-raises `InvalidTag`/
+  `InvalidToken` when no key verifies; `EncryptedText` lets `InvalidTag` propagate
+  (only legacy-plaintext `InvalidToken` is swallowed). The CI-10 `clear_pattern`
+  wildcard-delete footgun is confirmed **removed**.
+- **JWT / secrets** — HS256 allowlist + `require:["exp"]`; secrets masked in
+  `Settings.__repr__`; DB password scrubbed from connect-error logs;
+  `safe_error_detail` blocks SQL/paths/tracebacks/mem-addrs and caps length.
+
+### Flagged (LOW, defense-in-depth) — CI-11
+
+The auth rate-limit's "fall back to in-memory on Redis error" path
+(`check_rate_limit` → `redis_rate_limited(fail_closed=False)`) is effectively
+**unreachable**: the redis helper catches its own exceptions and returns `False`
+(not-limited) rather than raising, so the outer `except → in-memory` fallback never
+runs. Net effect: in the narrow window where Redis is *connected* but a command
+transiently errors, that one auth request is limited by neither backend (fail-open).
+A full Redis outage is unaffected (in-memory applies). Not attacker-triggerable and
+one of several brute-force controls, so **flagged, not fixed** — honoring the
+comment's intent is a behavior change (have the helper distinguish "error" from
+"not limited" for callers wanting the fallback). CI-9 and the other pass-1 residuals
+stand unchanged.
+
+**No code changed.** The verifications and the one new DiD flag are the deliverable.
 
 **Backend:** `core/config.py`, `core/database.py`, `core/cache.py`,
 `core/websocket_manager.py`, `core/security.py` (crypto), `core/encrypted_types.py`,

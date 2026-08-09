@@ -122,7 +122,7 @@ describe('MessageComposeForm', () => {
         }}
         onSaved={onSaved}
         onCancel={vi.fn()}
-      />,
+      />
     );
 
     // Pre-filled from the message being edited.

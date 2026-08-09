@@ -98,6 +98,18 @@ class TestComplianceTaskGeneration:
         notes = [t for t in added if getattr(t, "note_type", None) is not None]
         assert len(notes) == 1
 
+    async def test_plain_string_frequency_renders_without_crash(self):
+        # After a PUT sets reporting_frequency, the attribute is a plain str
+        # (Literal schema field) until the row is refreshed from the DB —
+        # reading `.value` off it used to raise AttributeError -> 500. The
+        # report description must render the frequency via _status_value.
+        app = _application(freq="quarterly")
+        app.reporting_frequency = "quarterly"  # plain str, not enum-like
+        added = await _generate(app)
+        reports = _by_type(added, "performance_report")
+        assert len(reports) == 3
+        assert "quarterly" in reports[0].description
+
 
 class TestUpdateBudgetItemSpent:
     async def test_sets_spent_and_remaining(self):
@@ -200,6 +212,52 @@ class TestApplicationFkValidation:
             await GrantService(db).create_application(
                 "org-1", {"linked_campaign_id": "cFOREIGN"}, "u1"
             )
+
+
+class TestUpdateComplianceTaskHardening:
+    """B14 pass-2: update_compliance_task must validate a client-supplied
+    assigned_to in-org (XC-1 — the create schema can't set it, but the update
+    schema can), and must read task_type via _status_value so a plain-str
+    Literal value doesn't 500 when a task is completed."""
+
+    @staticmethod
+    def _task():
+        return SimpleNamespace(
+            id="t1",
+            application_id="app-1",
+            title="Audit",
+            task_type="audit",  # plain str (Literal schema field), not enum
+            status="pending",
+            completed_date=None,
+        )
+
+    async def test_rejects_foreign_assigned_to(self):
+        task = self._task()
+        db = MagicMock()
+        # 1st execute: in-org task fetch. 2nd: assert_in_org lookup -> None.
+        db.execute = AsyncMock(side_effect=[_one(task), _one(None)])
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        with pytest.raises(ValueError, match="Invalid Assigned user"):
+            await GrantService(db).update_compliance_task(
+                "t1", {"assigned_to": "uFOREIGN"}, "u1", "org-A"
+            )
+
+    async def test_complete_with_plain_str_task_type_does_not_crash(self):
+        task = self._task()
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(task)])  # assigned_to omitted
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        out = await GrantService(db).update_compliance_task(
+            "t1", {"status": "completed"}, "u1", "org-A"
+        )
+        assert out is task
+        assert task.status == "completed"
+        # Completion note added, task_type read safely off the plain str.
+        notes = [c.args[0] for c in db.add.call_args_list]
+        assert len(notes) == 1
+        assert notes[0].note_metadata["task_type"] == "audit"
 
 
 if __name__ == "__main__":  # pragma: no cover

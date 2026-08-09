@@ -6,15 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import {
-  Megaphone,
-  Plus,
-  Search,
-  X,
-  DollarSign,
-  Calendar,
-  Loader2,
-} from 'lucide-react';
+import { Megaphone, Plus, Search, X, DollarSign, Calendar, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fundraisingService } from '../services/api';
 import type { FundraisingCampaign } from '../types';
@@ -134,9 +126,7 @@ const CampaignsPage: React.FC = () => {
 
   // ---- Form handlers ----
 
-  const handleFormChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
-  ) => {
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -187,16 +177,14 @@ const CampaignsPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Fundraising Campaigns
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
+          <h1 className="text-theme-text-primary text-2xl font-bold">Fundraising Campaigns</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">
             Manage fundraising campaigns and track progress toward goals
           </p>
         </div>
         <button
           onClick={() => setShowCreateForm((prev) => !prev)}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
         >
           {showCreateForm ? (
             <>
@@ -216,11 +204,9 @@ const CampaignsPage: React.FC = () => {
       {showCreateForm && (
         <form
           onSubmit={(e) => void handleCreateSubmit(e)}
-          className="rounded-lg border border-theme-surface-border bg-theme-surface p-5 space-y-4"
+          className="border-theme-surface-border bg-theme-surface space-y-4 rounded-lg border p-5"
         >
-          <h2 className="text-lg font-semibold text-theme-text-primary">
-            Create New Campaign
-          </h2>
+          <h2 className="text-theme-text-primary text-lg font-semibold">Create New Campaign</h2>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {/* Name */}
@@ -265,7 +251,7 @@ const CampaignsPage: React.FC = () => {
                 Goal Amount <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
+                <DollarSign className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <input
                   id="create-goal"
                   name="goal_amount"
@@ -339,14 +325,14 @@ const CampaignsPage: React.FC = () => {
                 setShowCreateForm(false);
                 setFormData(INITIAL_FORM);
               }}
-              className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
             >
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               Create Campaign
@@ -358,14 +344,15 @@ const CampaignsPage: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
+        <div className="relative min-w-[200px] flex-1">
+          <Search className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search campaigns by name..." placeholder="Search campaigns by name..."
+            aria-label="Search campaigns by name..."
+            placeholder="Search campaigns by name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={`${inputClass} pl-10`}
@@ -373,7 +360,7 @@ const CampaignsPage: React.FC = () => {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-secondary hover:text-theme-text-primary"
+              className="text-theme-text-secondary hover:text-theme-text-primary absolute top-1/2 right-3 -translate-y-1/2"
             >
               <X className="h-4 w-4" />
             </button>
@@ -395,11 +382,7 @@ const CampaignsPage: React.FC = () => {
         </select>
 
         {/* Type filter */}
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className={selectClass + ' w-auto'}
-        >
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectClass + ' w-auto'}>
           <option value="">All Types</option>
           {TYPE_OPTIONS.map((t) => (
             <option key={t} value={t}>
@@ -416,7 +399,7 @@ const CampaignsPage: React.FC = () => {
         </div>
       ) : filteredCampaigns.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12">
-          <Megaphone className="mb-3 h-12 w-12 text-theme-text-secondary opacity-40" />
+          <Megaphone className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
           <p className="text-theme-text-secondary">
             {searchQuery || statusFilter || typeFilter
               ? 'No campaigns match your filters'
@@ -428,30 +411,22 @@ const CampaignsPage: React.FC = () => {
           {filteredCampaigns.map((campaign) => {
             const progress =
               campaign.goalAmount > 0
-                ? Math.min(
-                    100,
-                    Math.round(
-                      (campaign.currentAmount / campaign.goalAmount) * 100,
-                    ),
-                  )
+                ? Math.min(100, Math.round((campaign.currentAmount / campaign.goalAmount) * 100))
                 : 0;
 
             return (
               <div
                 key={campaign.id}
-                className="rounded-lg border border-theme-surface-border bg-theme-surface p-5 space-y-3"
+                className="border-theme-surface-border bg-theme-surface space-y-3 rounded-lg border p-5"
               >
                 {/* Campaign Name & Badges */}
                 <div>
-                  <h3 className="text-lg font-bold text-theme-text-primary">
-                    {campaign.name}
-                  </h3>
+                  <h3 className="text-theme-text-primary text-lg font-bold">{campaign.name}</h3>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CAMPAIGN_TYPE_COLORS[campaign.campaignType] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                     >
-                      {CAMPAIGN_TYPE_LABELS[campaign.campaignType] ??
-                        campaign.campaignType}
+                      {CAMPAIGN_TYPE_LABELS[campaign.campaignType] ?? campaign.campaignType}
                     </span>
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CAMPAIGN_STATUS_COLORS[campaign.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
@@ -464,14 +439,14 @@ const CampaignsPage: React.FC = () => {
                 {/* Progress Bar */}
                 <div>
                   <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="font-medium text-theme-text-primary">
+                    <span className="text-theme-text-primary font-medium">
                       {formatCurrencyWhole(campaign.currentAmount)}
                     </span>
                     <span className="text-theme-text-secondary">
                       of {formatCurrencyWhole(campaign.goalAmount)} ({progress}%)
                     </span>
                   </div>
-                  <div className="h-3 w-full overflow-hidden rounded-full bg-theme-surface-hover">
+                  <div className="bg-theme-surface-hover h-3 w-full overflow-hidden rounded-full">
                     <div
                       className={`h-full rounded-full transition-all ${
                         progress >= 100
@@ -488,13 +463,11 @@ const CampaignsPage: React.FC = () => {
                 </div>
 
                 {/* Date Range */}
-                <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 shrink-0" />
                   <span>
                     {formatDate(campaign.startDate, tz)}
-                    {campaign.endDate
-                      ? ` - ${formatDate(campaign.endDate, tz)}`
-                      : ' - Ongoing'}
+                    {campaign.endDate ? ` - ${formatDate(campaign.endDate, tz)}` : ' - Ongoing'}
                   </span>
                 </div>
               </div>

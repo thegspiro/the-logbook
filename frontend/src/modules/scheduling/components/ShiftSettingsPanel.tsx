@@ -8,55 +8,43 @@
  * delegates rendering to focused card components.
  */
 
-import React, { useState, useMemo, useEffect } from "react";
-import { Link } from "react-router";
-import toast from "react-hot-toast";
-import {
-  Settings,
-  Truck,
-  ClipboardCheck,
-  Bell,
-  LayoutTemplate,
-  Shield,
-  FileBarChart,
-  Users,
-} from "lucide-react";
-import type { ShiftTemplateRecord, SchedulingFeatureSettings } from "../services/api";
-import { schedulingService } from "../services/api";
-import { useSchedulingStore } from "../store/schedulingStore";
-import type { ShiftSettings } from "../types/shiftSettings";
-import {
-  BUILTIN_POSITIONS,
-  DEFAULT_SETTINGS,
-  SETTINGS_KEY,
-} from "../types/shiftSettings";
-import { SchedulingNotificationsPanel } from "./SchedulingNotificationsPanel";
-import { TemplatesOverviewCard } from "./TemplatesOverviewCard";
-import { ApparatusTypeDefaultsCard } from "./ApparatusTypeDefaultsCard";
-import { ResourceTypeDefaultsCard } from "./ResourceTypeDefaultsCard";
-import { DepartmentDefaultsCard } from "./DepartmentDefaultsCard";
-import { PositionNamesCard } from "./PositionNamesCard";
-import { EquipmentCheckTemplateList } from "./EquipmentCheckTemplateList";
-import { EligibilitySettingsCard } from "./EligibilitySettingsCard";
-import { ShiftReportsSettingsPanel } from "./ShiftReportsSettingsPanel";
-import { PlatoonRosterPanel } from "./PlatoonRosterPanel";
+import React, { useState, useMemo, useEffect } from 'react';
+import { Link } from 'react-router';
+import toast from 'react-hot-toast';
+import { Settings, Truck, ClipboardCheck, Bell, LayoutTemplate, Shield, FileBarChart, Users } from 'lucide-react';
+import type { ShiftTemplateRecord, SchedulingFeatureSettings } from '../services/api';
+import { schedulingService } from '../services/api';
+import { useSchedulingStore } from '../store/schedulingStore';
+import type { ShiftSettings } from '../types/shiftSettings';
+import { BUILTIN_POSITIONS, DEFAULT_SETTINGS, SETTINGS_KEY } from '../types/shiftSettings';
+import { SchedulingNotificationsPanel } from './SchedulingNotificationsPanel';
+import { TemplatesOverviewCard } from './TemplatesOverviewCard';
+import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
+import { ResourceTypeDefaultsCard } from './ResourceTypeDefaultsCard';
+import { DepartmentDefaultsCard } from './DepartmentDefaultsCard';
+import { PositionNamesCard } from './PositionNamesCard';
+import { EquipmentCheckTemplateList } from './EquipmentCheckTemplateList';
+import { EligibilitySettingsCard } from './EligibilitySettingsCard';
+import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
+import { PlatoonRosterPanel } from './PlatoonRosterPanel';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type SettingsTab = "general" | "apparatus" | "platoons" | "notifications" | "equipment" | "eligibility" | "shift-reports";
+export type SettingsTab =
+  'general' | 'apparatus' | 'platoons' | 'notifications' | 'equipment' | 'eligibility' | 'shift-reports';
 
 const SETTINGS_TABS: {
   id: SettingsTab;
   label: string;
   icon: React.ElementType;
 }[] = [
-  { id: "general", label: "General", icon: LayoutTemplate },
-  { id: "apparatus", label: "Apparatus", icon: Truck },
-  { id: "platoons", label: "Platoons", icon: Users },
-  { id: "eligibility", label: "Eligibility", icon: Shield },
-  { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "equipment", label: "Equipment", icon: ClipboardCheck },
-  { id: "shift-reports", label: "Shift Reports", icon: FileBarChart },
+  { id: 'general', label: 'General', icon: LayoutTemplate },
+  { id: 'apparatus', label: 'Apparatus', icon: Truck },
+  { id: 'platoons', label: 'Platoons', icon: Users },
+  { id: 'eligibility', label: 'Eligibility', icon: Shield },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'equipment', label: 'Equipment', icon: ClipboardCheck },
+  { id: 'shift-reports', label: 'Shift Reports', icon: FileBarChart },
 ];
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -68,9 +56,7 @@ interface ShiftSettingsPanelProps {
     name: string;
     unit_number: string;
     apparatus_type: string;
-    positions?:
-      | Array<string | { position: string; required?: boolean }>
-      | undefined;
+    positions?: Array<string | { position: string; required?: boolean }> | undefined;
   }>;
   onNavigateToTemplates: () => void;
   defaultTab?: SettingsTab | undefined;
@@ -82,7 +68,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   onNavigateToTemplates,
   defaultTab,
 }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab || "general");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab || 'general');
   const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
   const loadSettings = useSchedulingStore((s) => s.loadSettings);
   const setPlatoonsEnabled = useSchedulingStore((s) => s.setPlatoonsEnabled);
@@ -93,19 +79,17 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   }, [loadSettings]);
 
   // Hide the Platoons tab unless the department has enabled platoon scheduling.
-  const visibleTabs = SETTINGS_TABS.filter(
-    (t) => t.id !== "platoons" || platoonsEnabled,
-  );
+  const visibleTabs = SETTINGS_TABS.filter((t) => t.id !== 'platoons' || platoonsEnabled);
 
   const handleTogglePlatoons = async (enabled: boolean) => {
     setSavingPlatoonToggle(true);
     try {
       await schedulingService.updateFeatureSettings({ platoons_enabled: enabled });
       setPlatoonsEnabled(enabled);
-      toast.success(`Platoon scheduling ${enabled ? "enabled" : "disabled"}`);
-      if (!enabled && activeTab === "platoons") setActiveTab("general");
+      toast.success(`Platoon scheduling ${enabled ? 'enabled' : 'disabled'}`);
+      if (!enabled && activeTab === 'platoons') setActiveTab('general');
     } catch {
-      toast.error("Failed to update platoon setting");
+      toast.error('Failed to update platoon setting');
     } finally {
       setSavingPlatoonToggle(false);
     }
@@ -124,7 +108,9 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         // Non-critical — the panel still renders the local template settings.
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const saveFeature = async (patch: Partial<SchedulingFeatureSettings>) => {
@@ -132,9 +118,9 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     try {
       const updated = await schedulingService.updateFeatureSettings(patch);
       setFeature(updated);
-      toast.success("Settings saved");
+      toast.success('Settings saved');
     } catch {
-      toast.error("Failed to save settings");
+      toast.error('Failed to save settings');
     } finally {
       setSavingFeature(false);
     }
@@ -160,19 +146,15 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     () =>
       apparatusList.map((a) => ({
         ...a,
-        positions: a.positions?.map((p) =>
-          typeof p === "string" ? p : p.position,
-        ),
+        positions: a.positions?.map((p) => (typeof p === 'string' ? p : p.position)),
       })),
-    [apparatusList],
+    [apparatusList]
   );
 
   // All position options (built-in + custom)
   const allPositionOptions = useMemo(() => {
     const builtIn = BUILTIN_POSITIONS.map((p) => ({ ...p }));
-    const custom = settings.customPositions.filter(
-      (cp) => !builtIn.some((bp) => bp.value === cp.value),
-    );
+    const custom = settings.customPositions.filter((cp) => !builtIn.some((bp) => bp.value === cp.value));
     return [...builtIn, ...custom];
   }, [settings.customPositions]);
 
@@ -188,18 +170,16 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="max-w-3xl space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-theme-text-primary flex items-center gap-2">
-          <Settings className="w-5 h-5" /> Shift Settings
+        <h2 className="text-theme-text-primary flex items-center gap-2 text-xl font-bold">
+          <Settings className="h-5 w-5" /> Shift Settings
         </h2>
-        <p className="text-sm text-theme-text-muted mt-1">
-          Configure department-wide defaults for shift scheduling.
-        </p>
+        <p className="text-theme-text-muted mt-1 text-sm">Configure department-wide defaults for shift scheduling.</p>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 p-1 bg-theme-surface-hover/50 rounded-lg overflow-x-auto">
+      <div className="bg-theme-surface-hover/50 flex gap-1 overflow-x-auto rounded-lg p-1">
         {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -207,13 +187,13 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors ${
+              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                 isActive
-                  ? "bg-theme-surface text-theme-text-primary shadow-sm"
-                  : "text-theme-text-muted hover:text-theme-text-secondary"
+                  ? 'bg-theme-surface text-theme-text-primary shadow-sm'
+                  : 'text-theme-text-muted hover:text-theme-text-secondary'
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="h-4 w-4" />
               {tab.label}
             </button>
           );
@@ -221,17 +201,17 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       </div>
 
       {/* ─── General Tab ─── */}
-      {activeTab === "general" && (
+      {activeTab === 'general' && (
         <div className="space-y-6">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+          <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-base font-semibold text-theme-text-primary flex items-center gap-2">
-                  <Users className="w-4 h-4" /> Platoon Scheduling
+                <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
+                  <Users className="h-4 w-4" /> Platoon Scheduling
                 </h3>
-                <p className="text-sm text-theme-text-muted mt-1">
-                  Enable platoon (A/B/C) rotations: assign members to platoons,
-                  build shifts per platoon, and show platoon rosters on shifts.
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  Enable platoon (A/B/C) rotations: assign members to platoons, build shifts per platoon, and show
+                  platoon rosters on shifts.
                 </p>
               </div>
               <button
@@ -239,14 +219,16 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 role="switch"
                 aria-checked={platoonsEnabled}
                 disabled={savingPlatoonToggle}
-                onClick={() => { void handleTogglePlatoons(!platoonsEnabled); }}
+                onClick={() => {
+                  void handleTogglePlatoons(!platoonsEnabled);
+                }}
                 className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                  platoonsEnabled ? "bg-violet-600" : "bg-theme-surface-border"
+                  platoonsEnabled ? 'bg-violet-600' : 'bg-theme-surface-border'
                 }`}
               >
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    platoonsEnabled ? "translate-x-6" : "translate-x-1"
+                    platoonsEnabled ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
               </button>
@@ -254,29 +236,32 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           </div>
 
           {feature && (
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-              <h3 className="text-base font-semibold text-theme-text-primary">
-                Overtime advisory
-              </h3>
-              <p className="text-sm text-theme-text-muted mt-1">
-                Warn (without blocking) when assigning a member whose scheduled
-                hours in a trailing window exceed a limit. Set the limit to 0 to
-                turn this off.
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+              <h3 className="text-theme-text-primary text-base font-semibold">Overtime advisory</h3>
+              <p className="text-theme-text-muted mt-1 text-sm">
+                Warn (without blocking) when assigning a member whose scheduled hours in a trailing window exceed a
+                limit. Set the limit to 0 to turn this off.
               </p>
               <div className="mt-3 flex flex-wrap items-end gap-4">
                 <label className="text-sm">
-                  <span className="block text-xs font-medium text-theme-text-secondary mb-1">Hours limit</span>
+                  <span className="text-theme-text-secondary mb-1 block text-xs font-medium">Hours limit</span>
                   <input
-                    type="number" min="0" max="336" step="1"
+                    type="number"
+                    min="0"
+                    max="336"
+                    step="1"
                     value={feature.max_hours_per_window ?? 0}
                     onChange={(e) => setFeature({ ...feature, max_hours_per_window: Number(e.target.value) })}
                     className="form-input w-28"
                   />
                 </label>
                 <label className="text-sm">
-                  <span className="block text-xs font-medium text-theme-text-secondary mb-1">Window (days)</span>
+                  <span className="text-theme-text-secondary mb-1 block text-xs font-medium">Window (days)</span>
                   <input
-                    type="number" min="1" max="31" step="1"
+                    type="number"
+                    min="1"
+                    max="31"
+                    step="1"
                     value={feature.hours_window_days}
                     onChange={(e) => setFeature({ ...feature, hours_window_days: Number(e.target.value) })}
                     className="form-input w-28"
@@ -285,7 +270,12 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 <button
                   type="button"
                   disabled={savingFeature}
-                  onClick={() => { void saveFeature({ max_hours_per_window: feature.max_hours_per_window ?? 0, hours_window_days: feature.hours_window_days }); }}
+                  onClick={() => {
+                    void saveFeature({
+                      max_hours_per_window: feature.max_hours_per_window ?? 0,
+                      hours_window_days: feature.hours_window_days,
+                    });
+                  }}
                   className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
                 >
                   Save
@@ -295,15 +285,13 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           )}
 
           {feature && (
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-semibold text-theme-text-primary">
-                    Automatic shift generation
-                  </h3>
-                  <p className="text-sm text-theme-text-muted mt-1">
-                    Keep active patterns generating shifts ahead automatically,
-                    so upcoming shifts appear without pressing “generate”.
+                  <h3 className="text-theme-text-primary text-base font-semibold">Automatic shift generation</h3>
+                  <p className="text-theme-text-muted mt-1 text-sm">
+                    Keep active patterns generating shifts ahead automatically, so upcoming shifts appear without
+                    pressing “generate”.
                   </p>
                 </div>
                 <button
@@ -311,14 +299,16 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   role="switch"
                   aria-checked={feature.auto_generate_enabled}
                   disabled={savingFeature}
-                  onClick={() => { void saveFeature({ auto_generate_enabled: !feature.auto_generate_enabled }); }}
+                  onClick={() => {
+                    void saveFeature({ auto_generate_enabled: !feature.auto_generate_enabled });
+                  }}
                   className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                    feature.auto_generate_enabled ? "bg-violet-600" : "bg-theme-surface-border"
+                    feature.auto_generate_enabled ? 'bg-violet-600' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      feature.auto_generate_enabled ? "translate-x-6" : "translate-x-1"
+                      feature.auto_generate_enabled ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>
@@ -326,9 +316,12 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               {feature.auto_generate_enabled && (
                 <div className="mt-3 flex flex-wrap items-end gap-4">
                   <label className="text-sm">
-                    <span className="block text-xs font-medium text-theme-text-secondary mb-1">Weeks ahead</span>
+                    <span className="text-theme-text-secondary mb-1 block text-xs font-medium">Weeks ahead</span>
                     <input
-                      type="number" min="1" max="52" step="1"
+                      type="number"
+                      min="1"
+                      max="52"
+                      step="1"
                       value={feature.auto_generate_weeks}
                       onChange={(e) => setFeature({ ...feature, auto_generate_weeks: Number(e.target.value) })}
                       className="form-input w-28"
@@ -337,7 +330,9 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   <button
                     type="button"
                     disabled={savingFeature}
-                    onClick={() => { void saveFeature({ auto_generate_weeks: feature.auto_generate_weeks }); }}
+                    onClick={() => {
+                      void saveFeature({ auto_generate_weeks: feature.auto_generate_weeks });
+                    }}
                     className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
                   >
                     Save
@@ -348,32 +343,31 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           )}
 
           {feature && (
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 space-y-4">
-              <h3 className="text-base font-semibold text-theme-text-primary">
-                Shift close-out rules
-              </h3>
+            <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-xl border p-5">
+              <h3 className="text-theme-text-primary text-base font-semibold">Shift close-out rules</h3>
               {!feature.require_end_of_shift_checks && (
-                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-sm text-theme-text-secondary">
-                  <p className="font-medium text-sky-700 dark:text-sky-300">Tip: require end-of-shift checks before finalizing</p>
+                <div className="text-theme-text-secondary rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-sm">
+                  <p className="font-medium text-sky-700 dark:text-sky-300">
+                    Tip: require end-of-shift checks before finalizing
+                  </p>
                   <p className="mt-0.5">
-                    It&apos;s off by default. Turning it on makes sure every apparatus is
-                    verified ready at the end of each shift, documents accountability, and
-                    keeps equipment-compliance records complete — officers can still override
-                    with a logged reason when needed.
+                    It&apos;s off by default. Turning it on makes sure every apparatus is verified ready at the end of
+                    each shift, documents accountability, and keeps equipment-compliance records complete — officers can
+                    still override with a logged reason when needed.
                   </p>
                 </div>
               )}
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-theme-text-primary flex items-center gap-2">
+                  <p className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
                     Require end-of-shift equipment checks
-                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                    <span className="rounded-full bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-sky-700 uppercase dark:text-sky-300">
                       Recommended
                     </span>
                   </p>
-                  <p className="text-sm text-theme-text-muted mt-0.5">
-                    Block finalizing a shift while any end-of-shift check is
-                    outstanding. Officers can still override with a logged reason.
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    Block finalizing a shift while any end-of-shift check is outstanding. Officers can still override
+                    with a logged reason.
                   </p>
                 </div>
                 <button
@@ -381,26 +375,26 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   role="switch"
                   aria-checked={feature.require_end_of_shift_checks}
                   disabled={savingFeature}
-                  onClick={() => { void saveFeature({ require_end_of_shift_checks: !feature.require_end_of_shift_checks }); }}
+                  onClick={() => {
+                    void saveFeature({ require_end_of_shift_checks: !feature.require_end_of_shift_checks });
+                  }}
                   className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                    feature.require_end_of_shift_checks ? "bg-violet-600" : "bg-theme-surface-border"
+                    feature.require_end_of_shift_checks ? 'bg-violet-600' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      feature.require_end_of_shift_checks ? "translate-x-6" : "translate-x-1"
+                      feature.require_end_of_shift_checks ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>
               </div>
-              <div className="flex items-center justify-between gap-4 border-t border-theme-surface-border/60 pt-4">
+              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
                 <div>
-                  <p className="text-sm font-medium text-theme-text-primary">
-                    Restrict check-in to assigned members
-                  </p>
-                  <p className="text-sm text-theme-text-muted mt-0.5">
-                    Only members rostered on a shift can check in (open shifts
-                    are exempt), so attendance matches the crew.
+                  <p className="text-theme-text-primary text-sm font-medium">Restrict check-in to assigned members</p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    Only members rostered on a shift can check in (open shifts are exempt), so attendance matches the
+                    crew.
                   </p>
                 </div>
                 <button
@@ -408,28 +402,24 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   role="switch"
                   aria-checked={feature.restrict_checkin_to_assigned}
                   disabled={savingFeature}
-                  onClick={() => { void saveFeature({ restrict_checkin_to_assigned: !feature.restrict_checkin_to_assigned }); }}
+                  onClick={() => {
+                    void saveFeature({ restrict_checkin_to_assigned: !feature.restrict_checkin_to_assigned });
+                  }}
                   className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                    feature.restrict_checkin_to_assigned ? "bg-violet-600" : "bg-theme-surface-border"
+                    feature.restrict_checkin_to_assigned ? 'bg-violet-600' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      feature.restrict_checkin_to_assigned ? "translate-x-6" : "translate-x-1"
+                      feature.restrict_checkin_to_assigned ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>
               </div>
             </div>
           )}
-          <TemplatesOverviewCard
-            templates={templates}
-            onNavigateToTemplates={onNavigateToTemplates}
-          />
-          <DepartmentDefaultsCard
-            settings={settings}
-            onSettingsChange={setSettings}
-          />
+          <TemplatesOverviewCard templates={templates} onNavigateToTemplates={onNavigateToTemplates} />
+          <DepartmentDefaultsCard settings={settings} onSettingsChange={setSettings} />
           <PositionNamesCard
             settings={settings}
             onSettingsChange={setSettings}
@@ -439,7 +429,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       )}
 
       {/* ─── Apparatus Tab ─── */}
-      {activeTab === "apparatus" && (
+      {activeTab === 'apparatus' && (
         <div className="space-y-6">
           <ApparatusTypeDefaultsCard
             settings={settings}
@@ -454,36 +444,28 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           />
 
           {/* Apparatus Inventory */}
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-            <h3 className="text-base font-semibold text-theme-text-primary mb-3">
-              Apparatus Inventory
-            </h3>
+          <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+            <h3 className="text-theme-text-primary mb-3 text-base font-semibold">Apparatus Inventory</h3>
             {normalizedApparatusList.length === 0 ? (
-              <p className="text-sm text-theme-text-muted">
-                No apparatus configured. Shifts can be created without apparatus
-                assignment.
+              <p className="text-theme-text-muted text-sm">
+                No apparatus configured. Shifts can be created without apparatus assignment.
               </p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {normalizedApparatusList.map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-center gap-3 p-3 bg-theme-surface-hover/50 rounded-lg"
-                  >
-                    <Truck className="w-4 h-4 text-red-500 shrink-0" />
+                  <div key={a.id} className="bg-theme-surface-hover/50 flex items-center gap-3 rounded-lg p-3">
+                    <Truck className="h-4 w-4 shrink-0 text-red-500" />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-theme-text-primary truncate">
+                      <p className="text-theme-text-primary truncate text-sm font-medium">
                         {a.unit_number} — {a.name}
                       </p>
-                      <p className="text-xs text-theme-text-muted capitalize">
-                        {a.apparatus_type}
-                      </p>
+                      <p className="text-theme-text-muted text-xs capitalize">{a.apparatus_type}</p>
                       {a.positions && a.positions.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
+                        <div className="mt-1 flex flex-wrap gap-1">
                           {a.positions.map((pos, i) => (
                             <span
                               key={i}
-                              className="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-700 dark:text-red-400 rounded-sm capitalize"
+                              className="rounded-sm bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-700 capitalize dark:text-red-400"
                             >
                               {pos}
                             </span>
@@ -500,14 +482,14 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       )}
 
       {/* ─── Platoons Tab ─── */}
-      {activeTab === "platoons" && (
+      {activeTab === 'platoons' && (
         <div className="space-y-6">
           <div className="flex justify-end">
             <Link
               to="/scheduling/platoons"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm"
             >
-              <Users className="w-4 h-4" /> Department platoon overview
+              <Users className="h-4 w-4" /> Department platoon overview
             </Link>
           </div>
           <PlatoonRosterPanel />
@@ -515,31 +497,31 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       )}
 
       {/* ─── Eligibility Tab ─── */}
-      {activeTab === "eligibility" && (
+      {activeTab === 'eligibility' && (
         <div className="space-y-6">
           <EligibilitySettingsCard />
         </div>
       )}
 
       {/* ─── Notifications Tab ─── */}
-      {activeTab === "notifications" && (
+      {activeTab === 'notifications' && (
         <div className="space-y-6">
           <SchedulingNotificationsPanel />
         </div>
       )}
 
       {/* ─── Equipment Tab ─── */}
-      {activeTab === "equipment" && (
+      {activeTab === 'equipment' && (
         <div className="space-y-6">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-            <h3 className="text-base font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
-              <ClipboardCheck className="w-4 h-4" /> Equipment Checks
+          <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+            <h3 className="text-theme-text-primary mb-3 flex items-center gap-2 text-base font-semibold">
+              <ClipboardCheck className="h-4 w-4" /> Equipment Checks
             </h3>
-            <p className="text-sm text-theme-text-muted mb-4">
+            <p className="text-theme-text-muted mb-4 text-sm">
               Configure equipment check requirements for shift start and end.
             </p>
             <div className="space-y-4">
-              <label className="flex items-center gap-3 cursor-pointer">
+              <label className="flex cursor-pointer items-center gap-3">
                 <input
                   type="checkbox"
                   checked={settings.equipmentCheckSettings?.enabled ?? false}
@@ -552,22 +534,17 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                       },
                     }))
                   }
-                  className="w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                  className="border-theme-surface-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
                 />
-                <span className="text-sm text-theme-text-primary">
-                  Enable equipment checks for shifts
-                </span>
+                <span className="text-theme-text-primary text-sm">Enable equipment checks for shifts</span>
               </label>
 
               {settings.equipmentCheckSettings?.enabled && (
                 <>
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className="flex cursor-pointer items-center gap-3">
                     <input
                       type="checkbox"
-                      checked={
-                        settings.equipmentCheckSettings?.requireSignature ??
-                        false
-                      }
+                      checked={settings.equipmentCheckSettings?.requireSignature ?? false}
                       onChange={(e) =>
                         setSettings((s) => ({
                           ...s,
@@ -577,20 +554,15 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                           },
                         }))
                       }
-                      className="w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                      className="border-theme-surface-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
                     />
-                    <span className="text-sm text-theme-text-primary">
-                      Require signature on completion
-                    </span>
+                    <span className="text-theme-text-primary text-sm">Require signature on completion</span>
                   </label>
 
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className="flex cursor-pointer items-center gap-3">
                     <input
                       type="checkbox"
-                      checked={
-                        settings.equipmentCheckSettings
-                          ?.blockShiftStartOnFail ?? false
-                      }
+                      checked={settings.equipmentCheckSettings?.blockShiftStartOnFail ?? false}
                       onChange={(e) =>
                         setSettings((s) => ({
                           ...s,
@@ -600,39 +572,32 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                           },
                         }))
                       }
-                      className="w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                      className="border-theme-surface-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
                     />
-                    <span className="text-sm text-theme-text-primary">
-                      Block shift start when required items fail
-                    </span>
+                    <span className="text-theme-text-primary text-sm">Block shift start when required items fail</span>
                   </label>
 
                   <div>
-                    <label className="block text-sm text-theme-text-primary mb-1">
+                    <label className="text-theme-text-primary mb-1 block text-sm">
                       Default expiration warning (days)
                     </label>
                     <input
                       type="number"
                       min={1}
                       max={365}
-                      value={
-                        settings.equipmentCheckSettings
-                          ?.defaultExpirationWarningDays ?? 30
-                      }
+                      value={settings.equipmentCheckSettings?.defaultExpirationWarningDays ?? 30}
                       onChange={(e) =>
                         setSettings((s) => ({
                           ...s,
                           equipmentCheckSettings: {
                             ...s.equipmentCheckSettings,
-                            defaultExpirationWarningDays:
-                              parseInt(e.target.value, 10) || 30,
+                            defaultExpirationWarningDays: parseInt(e.target.value, 10) || 30,
                           },
                         }))
                       }
-                      className="w-24 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
+                      className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-24 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
                     />
                   </div>
-
                 </>
               )}
             </div>
@@ -643,7 +608,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       )}
 
       {/* ─── Shift Reports Tab ─── */}
-      {activeTab === "shift-reports" && (
+      {activeTab === 'shift-reports' && (
         <div className="space-y-6">
           <ShiftReportsSettingsPanel />
         </div>
@@ -653,19 +618,15 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       <div className="flex items-center justify-between pt-2">
         <button
           onClick={handleReset}
-          className="text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+          className="text-theme-text-muted hover:text-theme-text-primary text-sm transition-colors"
         >
           Reset to defaults
         </button>
         <div className="flex items-center gap-3">
-          {saved && (
-            <span className="text-sm text-green-600 dark:text-green-400">
-              Settings saved
-            </span>
-          )}
+          {saved && <span className="text-sm text-green-600 dark:text-green-400">Settings saved</span>}
           <button
             onClick={handleSave}
-            className="px-6 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors"
+            className="rounded-lg bg-violet-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
           >
             Save Settings
           </button>

@@ -49,21 +49,21 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
   return (
     <>
       {/* Attendance List */}
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-medium text-theme-text-primary">Attendance ({rsvps.length})</h2>
+      <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-theme-text-primary text-lg font-medium">Attendance ({rsvps.length})</h2>
           {rsvps.length > 0 && (
             <div className="flex items-center gap-2">
               <button
                 onClick={onPrintRoster}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface rounded-md transition-colors"
+                className="text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
               >
                 <Printer className="h-4 w-4" />
                 Print Roster
               </button>
               <button
                 onClick={onExportCSV}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface rounded-md transition-colors"
+                className="text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
               >
                 <Download className="h-4 w-4" />
                 Export CSV
@@ -72,11 +72,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
           )}
         </div>
         {rsvps.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title="No RSVPs yet"
-            description="No one has responded to this event yet."
-          />
+          <EmptyState icon={Users} title="No RSVPs yet" description="No one has responded to this event yet." />
         ) : (
           <>
             <div className="space-y-3">
@@ -87,29 +83,35 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                 const isRemoving = removeConfirmUserId === rsvp.user_id;
 
                 return (
-                  <div key={rsvp.id} className="p-3 bg-theme-surface-secondary rounded-lg">
+                  <div key={rsvp.id} className="bg-theme-surface-secondary rounded-lg p-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-theme-text-primary">{rsvp.user_name}</p>
-                        <p className="text-xs text-theme-text-muted">{rsvp.user_email}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-theme-text-primary text-sm font-medium">{rsvp.user_name}</p>
+                        <p className="text-theme-text-muted text-xs">{rsvp.user_email}</p>
                         {rsvp.guest_count > 0 && (
-                          <p className="text-xs text-theme-text-muted mt-0.5">+{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}</p>
+                          <p className="text-theme-text-muted mt-0.5 text-xs">
+                            +{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}
+                          </p>
                         )}
                       </div>
                       <div className="flex items-center space-x-2">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}
+                        >
                           {getRSVPStatusLabel(rsvp.status)}
                         </span>
                         {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && (
                           <button
-                            onClick={() => { onCheckIn(rsvp.user_id); }}
-                            className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                            onClick={() => {
+                              onCheckIn(rsvp.user_id);
+                            }}
+                            className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                           >
                             Check In
                           </button>
                         )}
                         {rsvp.checked_in && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             Checked In
                           </span>
                         )}
@@ -118,18 +120,12 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
 
                     {/* Attendance times */}
                     {rsvp.checked_in && (
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted">
-                        {effectiveCheckIn && (
-                          <span>In: {formatTime(effectiveCheckIn, timezone)}</span>
-                        )}
-                        {effectiveCheckOut && (
-                          <span>Out: {formatTime(effectiveCheckOut, timezone)}</span>
-                        )}
-                        {effectiveDuration != null && (
-                          <span>Duration: {effectiveDuration} min</span>
-                        )}
+                      <div className="text-theme-text-muted mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                        {effectiveCheckIn && <span>In: {formatTime(effectiveCheckIn, timezone)}</span>}
+                        {effectiveCheckOut && <span>Out: {formatTime(effectiveCheckOut, timezone)}</span>}
+                        {effectiveDuration != null && <span>Duration: {effectiveDuration} min</span>}
                         {rsvp.override_check_in_at && (
-                          <span className="text-amber-500 text-[10px]">(times overridden)</span>
+                          <span className="text-[10px] text-amber-500">(times overridden)</span>
                         )}
                       </div>
                     )}
@@ -138,29 +134,31 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                     <div className="mt-2 flex items-center gap-3">
                       <button
                         onClick={() => onOpenOverrideModal(rsvp)}
-                        className="text-xs text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                        className="text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Edit Times
                       </button>
                       {!isRemoving ? (
                         <button
                           onClick={() => onSetRemoveConfirmUserId(rsvp.user_id)}
-                          className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                          className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                         >
                           Remove
                         </button>
                       ) : (
                         <span className="flex items-center gap-2">
-                          <span className="text-xs text-theme-text-muted">Remove?</span>
+                          <span className="text-theme-text-muted text-xs">Remove?</span>
                           <button
-                            onClick={() => { onRemoveAttendee(rsvp.user_id); }}
-                            className="text-xs font-medium text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                            onClick={() => {
+                              onRemoveAttendee(rsvp.user_id);
+                            }}
+                            className="text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                           >
                             Yes
                           </button>
                           <button
                             onClick={() => onSetRemoveConfirmUserId(null)}
-                            className="text-xs text-theme-text-muted hover:text-theme-text-secondary"
+                            className="text-theme-text-muted hover:text-theme-text-secondary text-xs"
                           >
                             No
                           </button>
@@ -174,7 +172,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
             {hasMore && (
               <button
                 onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                className="mt-3 w-full text-center text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 py-2"
+                className="mt-3 w-full py-2 text-center text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
               >
                 Show more ({rsvps.length - visibleCount} remaining)
               </button>
@@ -192,39 +190,40 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
               RSVP Activity ({rsvpHistory.length})
             </span>
           }
-          className="bg-theme-surface backdrop-blur-xs shadow-sm"
+          className="bg-theme-surface shadow-sm backdrop-blur-xs"
         >
-          <div className="space-y-2 max-h-80 overflow-y-auto">
+          <div className="max-h-80 space-y-2 overflow-y-auto">
             {rsvpHistory.map((entry) => {
               const userName = entry.user_name || 'Unknown';
               const isInitial = !entry.old_status;
-              const changerLabel = entry.changer_name
-                ? `by ${entry.changer_name}`
-                : '';
+              const changerLabel = entry.changer_name ? `by ${entry.changer_name}` : '';
 
               return (
                 <div
                   key={entry.id}
-                  className="flex items-start gap-3 py-2 border-b border-theme-surface-border last:border-0"
+                  className="border-theme-surface-border flex items-start gap-3 border-b py-2 last:border-0"
                 >
-                  <div className="flex-shrink-0 mt-0.5">
+                  <div className="mt-0.5 flex-shrink-0">
                     <div className="h-2 w-2 rounded-full bg-indigo-400" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-theme-text-primary">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-theme-text-primary text-sm">
                       <span className="font-medium">{userName}</span>
                       {isInitial ? (
-                        <> RSVP&apos;d as <span className="font-medium">{entry.new_status}</span></>
+                        <>
+                          {' '}
+                          RSVP&apos;d as <span className="font-medium">{entry.new_status}</span>
+                        </>
                       ) : (
-                        <> changed from <span className="font-medium">{entry.old_status}</span> to <span className="font-medium">{entry.new_status}</span></>
+                        <>
+                          {' '}
+                          changed from <span className="font-medium">{entry.old_status}</span> to{' '}
+                          <span className="font-medium">{entry.new_status}</span>
+                        </>
                       )}
-                      {changerLabel && (
-                        <span className="text-theme-text-muted"> ({changerLabel})</span>
-                      )}
+                      {changerLabel && <span className="text-theme-text-muted"> ({changerLabel})</span>}
                     </p>
-                    <p className="text-xs text-theme-text-muted mt-0.5">
-                      {formatDateTime(entry.changed_at, timezone)}
-                    </p>
+                    <p className="text-theme-text-muted mt-0.5 text-xs">{formatDateTime(entry.changed_at, timezone)}</p>
                   </div>
                 </div>
               );

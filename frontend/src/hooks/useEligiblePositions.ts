@@ -33,8 +33,7 @@ export function useEligiblePositions(shiftId?: string): UseEligiblePositionsResu
         setIsExcluded(data.is_excluded);
       })
       .catch((err: unknown) => {
-        const message =
-          err instanceof Error ? err.message : 'Failed to load eligible positions';
+        const message = err instanceof Error ? err.message : 'Failed to load eligible positions';
         setError(message);
         setPositions([]);
       })

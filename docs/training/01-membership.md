@@ -386,11 +386,18 @@ The pipeline offers two views:
 
 ![Prospective members kanban board with pipeline stages as columns](./images/01-10-prospective-pipeline.png)
 
+> **The board shows the whole pipeline** _(2026-08-08)_. It previously drew from
+> one page of applicants (25), so a department with a larger intake saw a board
+> silently assembled from a fraction of them. It now loads up to 200 and states
+> plainly what it is not showing beyond that. Full detail, including what changed
+> about bulk actions and the "Advance" button, is in
+> [Prospective Members Pipeline](./15-prospective-members.md#the-kanban-board).
+
 ### Working with Prospects
 
 1. **Add a Prospect** - Click **Add Prospect** and fill in their basic information (name, email, phone, interest reason, and **desired membership type** — regular or administrative).
 2. **Complete Steps** - Each pipeline stage has steps (action items, checkboxes, notes). Mark steps as completed as the prospect progresses.
-3. **Advance** - Move the prospect to the next stage when all required steps are complete. If the next stage is an automated email stage, the configured email is sent automatically.
+3. **Advance** - Move the prospect to the next stage when all required steps are complete. If the next stage is an automated email stage, the configured email is sent automatically. If the prospect is already at the final stage, **Advance** now reports that there is nowhere to move them _(2026-08-08)_; it used to say "Advanced" and change nothing, while still writing an entry into the audit log.
 4. **Move Back** - If a prospect needs to return to a previous stage (e.g., missing documents discovered after advancing), click **Move Back** in the prospect's detail drawer. The previous stage's progress is reset to allow re-completion.
 5. **Upload Documents** - Attach application documents, ID copies, or other requirements to the prospect's record. Uploaded files are now stored on the prospect's record and can be downloaded later. Each file may be up to **50 MB**; allowed types are PDF, Word (DOC/DOCX), JPEG, PNG, and GIF.
 

@@ -12,71 +12,31 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 // Lazy-loaded pages
-const InventoryItemsPage = lazyWithRetry(
-  () => import('./pages/InventoryItemsPage'),
-);
-const MyEquipmentPage = lazyWithRetry(
-  () => import('./pages/MyEquipmentPage'),
-);
+const InventoryItemsPage = lazyWithRetry(() => import('./pages/InventoryItemsPage'));
+const MyEquipmentPage = lazyWithRetry(() => import('./pages/MyEquipmentPage'));
 const InventoryAdminHub = lazyWithRetry(() =>
   import('./pages/InventoryAdminHub').then((m) => ({
     default: m.InventoryAdminHub,
-  })),
+  }))
 );
-const InventoryCheckoutsPage = lazyWithRetry(
-  () => import('../../pages/InventoryCheckoutsPage'),
-);
-const StorageAreasPage = lazyWithRetry(
-  () => import('./pages/StorageAreasPage'),
-);
-const ImportInventoryPage = lazyWithRetry(
-  () => import('../../pages/ImportInventory'),
-);
-const InventoryBarcodePrintPage = lazyWithRetry(
-  () => import('./pages/InventoryBarcodePrintPage'),
-);
-const ItemDetailPage = lazyWithRetry(
-  () => import('./pages/ItemDetailPage'),
-);
-const PoolItemsPage = lazyWithRetry(
-  () => import('./pages/PoolItemsPage'),
-);
-const InventoryCategoriesPage = lazyWithRetry(
-  () => import('./pages/InventoryCategoriesPage'),
-);
-const InventoryMaintenancePage = lazyWithRetry(
-  () => import('./pages/InventoryMaintenancePage'),
-);
-const InventoryMembersPage = lazyWithRetry(
-  () => import('./pages/InventoryMembersPage'),
-);
-const ChargesPage = lazyWithRetry(
-  () => import('./pages/ChargesPage'),
-);
-const ReturnRequestsPage = lazyWithRetry(
-  () => import('./pages/ReturnRequestsPage'),
-);
-const EquipmentRequestsPage = lazyWithRetry(
-  () => import('./pages/EquipmentRequestsPage'),
-);
-const WriteOffsPage = lazyWithRetry(
-  () => import('./pages/WriteOffsPage'),
-);
-const ReorderRequestsPage = lazyWithRetry(
-  () => import('./pages/ReorderRequestsPage'),
-);
-const EquipmentKitsPage = lazyWithRetry(
-  () => import('./pages/EquipmentKitsPage'),
-);
-const VariantGroupsPage = lazyWithRetry(
-  () => import('./pages/VariantGroupsPage'),
-);
-const AllowancesPage = lazyWithRetry(
-  () => import('./pages/AllowancesPage'),
-);
-const ImpactPlannerPage = lazyWithRetry(
-  () => import('./pages/ImpactPlannerPage'),
-);
+const InventoryCheckoutsPage = lazyWithRetry(() => import('../../pages/InventoryCheckoutsPage'));
+const StorageAreasPage = lazyWithRetry(() => import('./pages/StorageAreasPage'));
+const ImportInventoryPage = lazyWithRetry(() => import('../../pages/ImportInventory'));
+const InventoryBarcodePrintPage = lazyWithRetry(() => import('./pages/InventoryBarcodePrintPage'));
+const ItemDetailPage = lazyWithRetry(() => import('./pages/ItemDetailPage'));
+const PoolItemsPage = lazyWithRetry(() => import('./pages/PoolItemsPage'));
+const InventoryCategoriesPage = lazyWithRetry(() => import('./pages/InventoryCategoriesPage'));
+const InventoryMaintenancePage = lazyWithRetry(() => import('./pages/InventoryMaintenancePage'));
+const InventoryMembersPage = lazyWithRetry(() => import('./pages/InventoryMembersPage'));
+const ChargesPage = lazyWithRetry(() => import('./pages/ChargesPage'));
+const ReturnRequestsPage = lazyWithRetry(() => import('./pages/ReturnRequestsPage'));
+const EquipmentRequestsPage = lazyWithRetry(() => import('./pages/EquipmentRequestsPage'));
+const WriteOffsPage = lazyWithRetry(() => import('./pages/WriteOffsPage'));
+const ReorderRequestsPage = lazyWithRetry(() => import('./pages/ReorderRequestsPage'));
+const EquipmentKitsPage = lazyWithRetry(() => import('./pages/EquipmentKitsPage'));
+const VariantGroupsPage = lazyWithRetry(() => import('./pages/VariantGroupsPage'));
+const AllowancesPage = lazyWithRetry(() => import('./pages/AllowancesPage'));
+const ImpactPlannerPage = lazyWithRetry(() => import('./pages/ImpactPlannerPage'));
 
 export const getInventoryRoutes = () => {
   return (

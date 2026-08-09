@@ -13,7 +13,7 @@ pure-scoring path stays import-light.
 from __future__ import annotations
 
 import copy
-from datetime import datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -242,6 +242,33 @@ def calculate_test_result(
     return overall_score, test_result
 
 
+# A view tier that is not a disclosure setting: the reader may see that the
+# test exists and is awaiting an officer's sign-off, but none of its marks. It
+# sits outside ResultDisclosure deliberately — disclosure is what the
+# department configured, this is a transient state of one test.
+RESULT_VIEW_PENDING = "pending"
+
+
+def is_pending_validation(test: SkillTest) -> bool:
+    """Whether ``test`` is a completed official result no officer has signed off.
+
+    Practice attempts are never validated (there is nothing to credit), and a
+    test that is still in progress, cancelled, or voided is not waiting on
+    anyone.
+
+    Read through ``getattr`` like the rest of this module's pure helpers, so it
+    accepts any object shaped like a test — the disclosure rules are unit-tested
+    against lightweight stand-ins rather than ORM rows.
+    """
+    from app.models.skills_testing import SkillTestStatus
+
+    if getattr(test, "is_practice", False):
+        return False
+    if getattr(test, "status", None) != SkillTestStatus.COMPLETED.value:
+        return False
+    return getattr(test, "validated_at", None) is None
+
+
 class AttemptLimitReached(Exception):
     """Raised when a candidate has used every attempt a requirement allows."""
 
@@ -261,11 +288,16 @@ async def assert_attempts_remaining(
     thing. This mirrors that check: attempts already spent, the cap, and an
     exemption once the requirement is satisfied.
 
-    An attempt is a *completed*, official, non-voided test against this
+    An attempt is a *validated*, official, non-voided test against this
     requirement — pass or fail, because a failure is an attempt. Voided results
     are excluded: the department withdrew them, so they should not consume a
     candidate's remaining chances. Tests still in progress do not count, which
     means the test currently being completed is not counted against itself.
+
+    Validation, not completion, is what spends the attempt. A peer-run test an
+    officer has not signed off is not yet a result, and one the officer
+    ultimately rejects must cost the candidate nothing — the same reasoning that
+    excludes voided tests.
 
     Callers must skip practice attempts before calling — they are never
     recorded or credited, so they never consume an attempt.
@@ -333,6 +365,7 @@ async def assert_attempts_remaining(
                 SkillTest.requirement_id == str(requirement_id),
                 SkillTest.is_practice == False,  # noqa: E712
                 SkillTest.status == SkillTestStatus.COMPLETED.value,
+                SkillTest.validated_at.isnot(None),
             )
         )
     ).scalar() or 0
@@ -553,7 +586,7 @@ def resolve_result_view(
     named_viewer_ids: set[str] | None = None,
     user_position_slugs: set[str] | None = None,
 ) -> str:
-    """How much of ``test`` this user may see: "none", "scores" or "full".
+    """How much of ``test`` this user may see: "none", "pending", "scores" or "full".
 
     Officers and the examiner who ran the test always get the full scorecard —
     the policy exists to govern what the person *being evaluated* sees, not to
@@ -563,6 +596,12 @@ def resolve_result_view(
     the resolved policy, and by release: under ``on_release`` a completed
     result stays invisible until an officer releases it. A viewer never sees
     more than the candidate does.
+
+    "pending" is returned for an official result still awaiting an officer's
+    validation: the reader is told the test exists and is under review, but no
+    marks are shown. It is resolved *after* the disclosure and release gates, so
+    a test those gates hide stays hidden rather than surfacing as a pending row
+    that would vanish again the moment it was validated.
     """
     from app.models.skills_testing import ResultDisclosure, ResultRelease
 
@@ -597,23 +636,40 @@ def resolve_result_view(
         if not getattr(test, "released_at", None):
             return ResultDisclosure.NONE.value
 
+    if is_pending_validation(test):
+        return RESULT_VIEW_PENDING
+
     return disclosure
 
 
 def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
     """Strip from a test response whatever ``view`` does not permit.
 
-    Only ``scores`` redacts: it removes every piece of written commentary while
-    leaving the marks and points intact. That covers the test's own notes, each
-    criterion's note, and the synthetic per-section review-notes entries the
-    examiner writes on the review screen — which live inside criteria_results
-    rather than in a field of their own, so dropping the obvious `notes` keys
-    alone would leak them.
+    ``scores`` removes every piece of written commentary while leaving the marks
+    and points intact. That covers the test's own notes, each criterion's note,
+    and the synthetic per-section review-notes entries the examiner writes on
+    the review screen — which live inside criteria_results rather than in a
+    field of their own, so dropping the obvious `notes` keys alone would leak
+    them.
+
+    ``pending`` removes the outcome entirely. The reader may know an official
+    test was taken and is awaiting an officer's sign-off; they may not know how
+    it went, because until it is validated nobody has decided that it stands.
+    The result reads as ``incomplete`` — the same value an unfinished test
+    carries — rather than a pass/fail the officer may yet reject.
 
     Mutates nothing the caller passed in: section results are rebuilt rather
     than edited, so the ORM's loaded JSON is never touched (Pitfall #12).
     """
-    from app.models.skills_testing import ResultDisclosure
+    from app.models.skills_testing import ResultDisclosure, SkillTestResult
+
+    if view == RESULT_VIEW_PENDING:
+        withheld = dict(payload)
+        withheld["result"] = SkillTestResult.INCOMPLETE.value
+        withheld["overall_score"] = None
+        withheld["section_results"] = []
+        withheld["notes"] = None
+        return withheld
 
     if view != ResultDisclosure.SCORES.value:
         return payload
@@ -646,3 +702,173 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
 
     redacted["section_results"] = clean_sections
     return redacted
+
+
+# ===========================================================================
+# Candidate notification — telling the member a result is theirs to read
+# ===========================================================================
+
+
+def candidate_result_view(
+    test: SkillTest,
+    template: SkillTemplate | None,
+    org_config: Any | None,
+) -> str:
+    """How much of ``test`` its own candidate may currently see.
+
+    A thin wrapper over :func:`resolve_result_view` that fixes the reader as the
+    person tested. Used by the officer-facing UI to state, before an officer
+    acts, exactly what the member will end up seeing — and by the notification
+    path below to decide whether there is anything to tell them about at all.
+    """
+    return resolve_result_view(
+        test,
+        template,
+        org_config,
+        is_officer=False,
+        user_id=str(test.candidate_id),
+    )
+
+
+def _result_headline(test: SkillTest) -> str:
+    """ "Passed (86%)" / "Failed" — the outcome in the form a member reads it."""
+    from app.models.skills_testing import SkillTestResult
+
+    outcome = {
+        SkillTestResult.PASS.value: "Passed",
+        SkillTestResult.FAIL.value: "Failed",
+    }.get(getattr(test, "result", None) or "", "Recorded")
+
+    score = getattr(test, "overall_score", None)
+    if score is None:
+        return outcome
+    return f"{outcome} ({round(score)}%)"
+
+
+async def notify_candidate_result_available(
+    db: AsyncSession,
+    *,
+    test: SkillTest,
+    template: SkillTemplate | None,
+    org_config: Any | None,
+    organization_id: Any,
+) -> bool:
+    """Tell the candidate their result is now theirs to read. Returns whether it sent.
+
+    Gated on :func:`candidate_result_view` rather than on the officer's action,
+    because the two are not the same event. Validating a result under the
+    ``on_release`` mode makes it count without making it visible; releasing one
+    that is still awaiting validation reveals nothing. A notification is only
+    honest when the member can actually open what it points at, so the same
+    resolver the read endpoints use decides whether this fires.
+
+    Best-effort: a notification failure must not fail the validation or release
+    that produced it, so everything here is caught and logged. The result stands
+    either way; the member would simply find it in their history unprompted.
+    """
+    if getattr(test, "is_practice", False):
+        return False
+
+    view = candidate_result_view(test, template, org_config)
+    from app.models.skills_testing import ResultDisclosure
+
+    if view not in (ResultDisclosure.SCORES.value, ResultDisclosure.FULL.value):
+        return False
+
+    template_name = getattr(template, "name", None) or "Skills test"
+    # SCORES strips every note before the member ever sees the scorecard, so
+    # promising notes at that tier would send them looking for something that
+    # was deliberately withheld.
+    notes_line = (
+        " The scorecard includes the examiner's notes."
+        if view == ResultDisclosure.FULL.value
+        else " Per-criterion scoring is shown; examiner notes are not."
+    )
+
+    return await _log_candidate_notification(
+        db,
+        organization_id=organization_id,
+        candidate_id=str(test.candidate_id),
+        test_id=str(test.id),
+        subject=f"Skills test result: {template_name}",
+        message=(
+            f"Your {template_name} skills test has been reviewed and recorded: "
+            f"{_result_headline(test)}.{notes_line}"
+        ),
+    )
+
+
+async def notify_candidate_result_voided(
+    db: AsyncSession,
+    *,
+    test: SkillTest,
+    template: SkillTemplate | None,
+    org_config: Any | None,
+    organization_id: Any,
+) -> bool:
+    """Tell the candidate a result of theirs was withdrawn. Returns whether it sent.
+
+    Same visibility gate as the release notification: a member who was never
+    shown the result has nothing to reconcile, and telling them one was voided
+    would disclose by implication the evaluation the policy withheld.
+    """
+    if getattr(test, "is_practice", False):
+        return False
+
+    view = candidate_result_view(test, template, org_config)
+    from app.models.skills_testing import ResultDisclosure
+
+    if view not in (ResultDisclosure.SCORES.value, ResultDisclosure.FULL.value):
+        return False
+
+    template_name = getattr(template, "name", None) or "Skills test"
+    reason = (getattr(test, "void_reason", None) or "").strip()
+
+    return await _log_candidate_notification(
+        db,
+        organization_id=organization_id,
+        candidate_id=str(test.candidate_id),
+        test_id=str(test.id),
+        subject=f"Skills test result withdrawn: {template_name}",
+        message=(
+            f"Your {template_name} skills test result has been voided and no "
+            "longer counts toward your record."
+            + (f" Reason: {reason}" if reason else "")
+        ),
+    )
+
+
+async def _log_candidate_notification(
+    db: AsyncSession,
+    *,
+    organization_id: Any,
+    candidate_id: str,
+    test_id: str,
+    subject: str,
+    message: str,
+) -> bool:
+    """Write one in-app notification to the candidate, swallowing any failure."""
+    try:
+        from app.models.notification import NotificationCategory, NotificationChannel
+        from app.services.notifications_service import NotificationsService
+
+        _, error = await NotificationsService(db).log_notification(
+            organization_id=organization_id,
+            log_data={
+                "recipient_id": candidate_id,
+                "channel": NotificationChannel.IN_APP,
+                "subject": subject,
+                "message": message,
+                "category": NotificationCategory.TRAINING,
+                "action_url": f"/training/my-skill-tests/{test_id}",
+                "delivered": True,
+                "sent_at": datetime.now(timezone.utc),
+            },
+        )
+        if error:
+            logger.error(f"Skills-test candidate notification failed: {error}")
+            return False
+        return True
+    except Exception as e:  # pragma: no cover - defensive
+        logger.error(f"Skills-test candidate notification failed: {e}")
+        return False

@@ -1,6 +1,7 @@
-# Application Review — Reports & Analytics (Tier B, 2nd pass)
+# Application Review — Reports & Analytics (Tier B)
 
-**Prefix:** `RPT2` · **Iteration:** B16 · **Reviewed:** 2026-08-06
+**Prefix:** `RPT2` · **Iteration:** B16 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** `endpoints/reports.py` (7), `analytics.py` (3), `platform_analytics.py`
 (1), `services/reports_service.py` (1,952 L)
@@ -8,6 +9,56 @@
 **Prior audit:** `docs/module-audit/reports-analytics.md` (iteration 16) — RPT-1
 (HIGH cross-org leak) and RPT-2 (500 on bad filter) fixed; RPT-3 (PII at
 `reports.view`), RPT-4 (org-id typing), RPT-5 (aggregate correctness) left open.
+
+---
+
+## Pass 2 (2026-08-08) — six-lens sweep — no code change
+
+Re-verified all four pass-1 fixes hold: RPT-1 (every query in
+`platform_analytics.py`/`analytics.py` filters `organization_id ==
+current_user.organization_id`; platform analytics is per-org, not global; no raw
+SQL beyond a literal `timestampdiff` unit), RPT-4 (`str()`-consistent org compare),
+RPT-5a (completion divides by `counted_records`), RPT-5b (`total_checkins`
+period-bounded). The six-lens sweep confirmed the module is **clean of any
+cross-tenant leak, IDOR, update-bypass, or cross-org write** — the dominant risk in
+a reporting module:
+
+- **Read-leak lens (the big one):** every by-id / `IN (...)` read resolves through
+  an org-scoped anchor — event-attendance aggregates use org-scoped `event_ids`,
+  apparatus maintenance uses org-scoped `apparatus_ids`, admin-hours/user/category
+  joins hang off org-filtered entries, pipeline steps/progress hang off org-scoped
+  pipeline/prospect ids, and a client-supplied `pipeline_id` is itself org-filtered.
+  No client-supplied member/category id is read without an org anchor.
+- **Update-bypass:** `SavedReportUpdate` exposes no org/`created_by`/`report_type`
+  field, so the mass `setattr` on the org-scoped fetch can't reassign tenancy.
+- **`*_name`:** all have fallbacks (member→username, course→id, type/station→
+  "unknown"); none are unpopulated.
+
+### Flagged (no drive-by fix)
+
+- **RPT-3 (unchanged)** — `/available` + `/generate` gate only on `reports.view`,
+  but `member_roster` returns email + membership_number and `pipeline_overview`
+  returns applicant name/email/PII, so a `reports.view` holder without
+  `members.view`/`pipeline.view` reads PII they couldn't fetch directly. A
+  permission-granularity **product decision** (KNOWN_LIMITATIONS), not mechanical.
+- **RPT-6 (new, LOW) — `requirement_breakdown` completion % can exceed 100%.** The
+  numerator counts `RequirementProgress` rows while the denominator counts
+  `distinct(ProgramEnrollment.user_id)`; with no unique `(user_id, program_id)`
+  enrollment constraint, a member double-enrolled in two programs that share a
+  requirement contributes 2 to the numerator but 1 to the denominator. The
+  mechanical fix (`count(distinct(user_id))` in the numerator) only matters in that
+  shared-requirement + double-enrollment case; **flagged rather than auto-applied**
+  because changing a multi-join aggregate's numerator risks skewing the common-case
+  metric and the misfire is a cosmetic >100% display, not an integrity bug.
+- **RPT-7 (new, LOW) — `POST /generate` and `/run` lack the `except ValueError→400`
+  wrapper.** No generator raises `ValueError` deterministically today, so there's no
+  single-line mechanical fix; the endpoints should adopt the standard try/except
+  pattern in a robustness sweep. Also noted: `department_overview.total_checkins`
+  counts check-ins on cancelled events (the paired `total_events` filters
+  `is_cancelled`) — a defensible metric choice, left as-is.
+
+**No code changed.** The reporting surface is tenant-safe; the verifications and the
+three recorded flags are the deliverable.
 
 ---
 

@@ -8,16 +8,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import {
-  FileText,
-  Plus,
-  Pencil,
-  Trash2,
-  ToggleLeft,
-  ToggleRight,
-  ArrowLeft,
-  Clock,
-} from 'lucide-react';
+import { FileText, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, ArrowLeft, Clock } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventTemplate, EventTemplateCreate } from '../types/event';
 import { getEventTypeLabel } from '../utils/eventHelpers';
@@ -96,14 +87,8 @@ export const EventTemplatesPage: React.FC = () => {
         name: template.name,
         is_active: !template.is_active,
       } as EventTemplateCreate & { is_active: boolean });
-      setTemplates((prev) =>
-        prev.map((t) =>
-          t.id === template.id ? { ...t, is_active: !t.is_active } : t,
-        ),
-      );
-      toast.success(
-        template.is_active ? 'Template deactivated' : 'Template activated',
-      );
+      setTemplates((prev) => prev.map((t) => (t.id === template.id ? { ...t, is_active: !t.is_active } : t)));
+      toast.success(template.is_active ? 'Template deactivated' : 'Template activated');
     } catch {
       toast.error('Failed to update template status');
     }
@@ -126,17 +111,17 @@ export const EventTemplatesPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs />
         <div className="mb-6">
-          <div className="h-8 w-48 bg-theme-surface-hover rounded-sm animate-pulse mb-2" />
-          <div className="h-4 w-80 bg-theme-surface-hover rounded-sm animate-pulse" />
+          <div className="bg-theme-surface-hover mb-2 h-8 w-48 animate-pulse rounded-sm" />
+          <div className="bg-theme-surface-hover h-4 w-80 animate-pulse rounded-sm" />
         </div>
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="card p-6">
-              <div className="h-5 w-40 bg-theme-surface-hover rounded-sm animate-pulse mb-3" />
-              <div className="h-4 w-64 bg-theme-surface-hover rounded-sm animate-pulse" />
+              <div className="bg-theme-surface-hover mb-3 h-5 w-40 animate-pulse rounded-sm" />
+              <div className="bg-theme-surface-hover h-4 w-64 animate-pulse rounded-sm" />
             </div>
           ))}
         </div>
@@ -146,12 +131,14 @@ export const EventTemplatesPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
-            onClick={() => { void fetchTemplates(); }}
-            className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
+            onClick={() => {
+              void fetchTemplates();
+            }}
+            className="mt-2 text-sm text-red-700 underline hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
           >
             Try again
           </button>
@@ -162,32 +149,29 @@ export const EventTemplatesPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs />
 
         {/* Header */}
         <div className="mb-6">
           <Link
             to="/events"
-            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
+            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 mr-2" aria-hidden="true" />
+            <ArrowLeft className="mr-2 h-5 w-5" aria-hidden="true" />
             Back to Events
           </Link>
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-theme-text-primary flex items-center gap-3">
-                <FileText className="w-7 h-7 text-red-700" aria-hidden="true" />
+              <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold sm:text-3xl">
+                <FileText className="h-7 w-7 text-red-700" aria-hidden="true" />
                 Event Templates
               </h1>
-              <p className="mt-1 text-sm text-theme-text-secondary">
+              <p className="text-theme-text-secondary mt-1 text-sm">
                 Create and manage reusable event templates to streamline event creation.
               </p>
             </div>
-            <button
-              onClick={handleCreate}
-              className="btn-primary inline-flex items-center gap-2"
-            >
+            <button onClick={handleCreate} className="btn-primary inline-flex items-center gap-2">
               <Plus className="h-5 w-5" aria-hidden="true" />
               New Template
             </button>
@@ -212,21 +196,14 @@ export const EventTemplatesPage: React.FC = () => {
         ) : (
           <div className="space-y-4">
             {templates.map((template) => (
-              <div
-                key={template.id}
-                className={`card p-5 transition-all ${
-                  !template.is_active ? 'opacity-60' : ''
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div key={template.id} className={`card p-5 transition-all ${!template.is_active ? 'opacity-60' : ''}`}>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   {/* Template Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-lg font-medium text-theme-text-primary truncate">
-                        {template.name}
-                      </h3>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <h3 className="text-theme-text-primary truncate text-lg font-medium">{template.name}</h3>
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                           template.is_active
                             ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
                             : 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400'
@@ -236,11 +213,9 @@ export const EventTemplatesPage: React.FC = () => {
                       </span>
                     </div>
                     {template.description && (
-                      <p className="text-sm text-theme-text-secondary mb-2 line-clamp-2">
-                        {template.description}
-                      </p>
+                      <p className="text-theme-text-secondary mb-2 line-clamp-2 text-sm">{template.description}</p>
                     )}
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-theme-text-muted">
+                    <div className="text-theme-text-muted flex flex-wrap items-center gap-3 text-sm">
                       <span className="inline-flex items-center gap-1">
                         <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                         {getEventTypeLabel(template.event_type)}
@@ -252,12 +227,12 @@ export const EventTemplatesPage: React.FC = () => {
                         </span>
                       )}
                       {template.requires_rsvp && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
                           RSVP Required
                         </span>
                       )}
                       {template.is_mandatory && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
+                        <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                           Mandatory
                         </span>
                       )}
@@ -265,16 +240,14 @@ export const EventTemplatesPage: React.FC = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex shrink-0 items-center gap-2">
                     <button
-                      onClick={() => { void handleToggleActive(template); }}
-                      className="p-2 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                      onClick={() => {
+                        void handleToggleActive(template);
+                      }}
+                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-md p-2 transition-colors"
                       title={template.is_active ? 'Deactivate template' : 'Activate template'}
-                      aria-label={
-                        template.is_active
-                          ? `Deactivate ${template.name}`
-                          : `Activate ${template.name}`
-                      }
+                      aria-label={template.is_active ? `Deactivate ${template.name}` : `Activate ${template.name}`}
                     >
                       {template.is_active ? (
                         <ToggleRight className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -284,7 +257,7 @@ export const EventTemplatesPage: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleEdit(template)}
-                      className="p-2 rounded-md text-theme-text-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-theme-surface-hover transition-colors"
+                      className="text-theme-text-muted hover:bg-theme-surface-hover rounded-md p-2 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                       title="Edit template"
                       aria-label={`Edit ${template.name}`}
                     >
@@ -292,7 +265,7 @@ export const EventTemplatesPage: React.FC = () => {
                     </button>
                     <button
                       onClick={() => setDeleteTarget(template)}
-                      className="p-2 rounded-md text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-theme-surface-hover transition-colors"
+                      className="text-theme-text-muted hover:bg-theme-surface-hover rounded-md p-2 transition-colors hover:text-red-600 dark:hover:text-red-400"
                       title="Delete template"
                       aria-label={`Delete ${template.name}`}
                     >
@@ -308,15 +281,19 @@ export const EventTemplatesPage: React.FC = () => {
 
       {/* Template Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto pt-8 pb-8" role="dialog" aria-modal="true">
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto pt-8 pb-8"
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="fixed inset-0 bg-black/50" onClick={handleFormCancel} aria-hidden="true" />
-          <div className="relative bg-theme-surface-modal rounded-lg shadow-xl w-full max-w-3xl mx-4">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h2 className="text-lg font-semibold text-theme-text-primary">
+          <div className="bg-theme-surface-modal relative mx-4 w-full max-w-3xl rounded-lg shadow-xl">
+            <div className="border-theme-surface-border border-b px-6 py-4">
+              <h2 className="text-theme-text-primary text-lg font-semibold">
                 {editingTemplate ? 'Edit Template' : 'Create Template'}
               </h2>
             </div>
-            <div className="p-6 max-h-[calc(100dvh-12rem)] overflow-y-auto">
+            <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto p-6">
               <EventTemplateForm
                 initialData={editingTemplate ?? undefined}
                 onSubmit={handleFormSubmit}
@@ -337,7 +314,9 @@ export const EventTemplatesPage: React.FC = () => {
         confirmLabel="Delete"
         variant="danger"
         loading={isDeleting}
-        onConfirm={() => { void handleDeleteConfirm(); }}
+        onConfirm={() => {
+          void handleDeleteConfirm();
+        }}
         onClose={() => setDeleteTarget(null)}
       />
     </div>

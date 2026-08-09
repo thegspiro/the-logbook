@@ -1,12 +1,12 @@
 # Script 15: Skills Testing — Running an Evaluation the Member Can Actually See
 
 **Video Type:** Focused Tutorial (Medium-Form)
-**Estimated Length:** 18–22 minutes
-**Target Audience:** Training Officers, evaluators, FTOs/preceptors, EMS officers
-**Roles Covered:** training_officer, safety_officer, examiner
-**Chapters:** 8 (each designed as a standalone clip)
-**Requires permission:** `training.manage` for official tests — **practice tests
-need no permission at all**
+**Estimated Length:** 21–25 minutes
+**Target Audience:** Training Officers, evaluators, FTOs/preceptors, EMS officers, **and senior members who evaluate**
+**Roles Covered:** training_officer, safety_officer, examiner, member
+**Chapters:** 9 (each designed as a standalone clip)
+**Requires permission:** **None to run a test — official or practice.**
+`training.manage` is needed to build templates and to **validate** a result
 
 > **Companion videos:** Scripts 5 and 16 are the broad Training Officer guide;
 > Script 16, Chapter 2 summarises skills testing in four minutes. This is the deep
@@ -15,6 +15,15 @@ need no permission at all**
 
 > **What changed on 2026-08-08:** most of chapters 4 through 7 is new. If you have
 > the older skills-testing footage, chapters 1–3 still hold; the rest does not.
+
+> **⚠ Re-shoot notice, later on 2026-08-08.** The permission model changed again
+> after this script was first written, and it changes the **premise**, not a
+> detail: **any member can now run an official skills test.** The officer's
+> authority moved to a new second step — **validating** the result. Chapter 3's
+> opening and the whole of the **new Chapter 3.5** must be shot fresh, and the
+> permission line in any lower-third or description must be corrected. Old
+> footage saying "you need to be a training officer to run a test" is now
+> **wrong**, not merely dated.
 
 ---
 
@@ -109,29 +118,70 @@ value is still there.]**
 
 ---
 
-## CHAPTER 3: Running an Evaluation (5:00 – 8:30)
+## CHAPTER 3: Running an Evaluation (5:00 – 9:00)
 
-### STARTING A TEST (5:00 – 5:45)
+### WHO CAN RUN ONE (5:00 – 5:30) — **NEW 2026-08-08**
 
-**[SCREEN: Tests tab > New Test. Pick template, pick candidate, leave Practice
-Mode off.]**
+**[B-ROLL: A senior member in a job shirt, no bugles on the collar, holding a
+tablet and watching a probationary firefighter pull a line.]**
 
-> "Pick the sheet, pick the candidate, and go. Leave Practice Mode off for an
+> "Before we start one — who's allowed to? Until recently, the answer was: a
+> training officer, and nobody else. Which doesn't describe a single department
+> I've ever been in. The person holding the clipboard is very often a senior
+> member. Somebody with fifteen years on the nozzle who isn't an officer and
+> doesn't want to be."
+
+**[SCREEN: An ordinary member's account — no training.manage — opening Skills
+Testing and tapping New Test.]**
+
+> "So that's changed. **Any member can run an official skills test now.** Not
+> just practice. The real thing."
+
+> "What a member _can't_ do is decide the result stands. That's a separate step,
+> it belongs to an officer, and it's Chapter 3.5 — right after this one. Hold
+> that thought, because it's the piece that makes the rest of this safe."
+
+**[CALLOUT: "Anyone can examine. Only an officer can validate."]**
+
+### STARTING A TEST (5:30 – 6:15)
+
+**[SCREEN: Tests tab > New Test. Pick template, search for candidate, leave
+Practice Mode off.]**
+
+> "Pick the sheet, find the candidate, and go. Leave Practice Mode off for an
 > official evaluation — we'll come back to practice, because practice works
 > differently now."
+
+**[SCREEN: Type "smi" into the candidate field; three matches appear.]**
+
+> "Notice the candidate field is a **search**, not a list of everybody. Type two
+> letters of their name and pick them. There is deliberately no way to just
+> browse the whole roster from here — you can confirm a name you already know,
+> which is all this screen needs, and you can't pull the department's member
+> list out of it."
+
+> "First name, last name, or both — 'john s' finds John Smith. And it shows you
+> the first fifteen matches, without telling you it stopped at fifteen. So if
+> you're not seeing who you want, **type more of the name.** Don't scroll."
+
+**[CALLOUT: "Candidate lookup: 2 characters minimum, 15 results, no roster
+browsing"]**
+
+**[SCREEN: A member starting a practice test — their own name pre-filled.]**
+
+> "One nice touch: if you're setting up a practice run for yourself, your own
+> name's already in there. Drilling alone is one tap."
 
 **[SCREEN: If the candidate has used their attempts, the refusal appears.]**
 
 > "If the requirement this sheet is linked to caps attempts, and the candidate's
 > used them, **you get told right here** — before you take them out to the bay,
-> not after you've run a twenty-minute evaluation that can't count. That check
-> runs again on submit, because you can start several tests before submitting
-> any."
+> not after you've run a twenty-minute evaluation that can't count."
 
-**[CALLOUT: "Attempts checked before AND after — you can't run a test that can't
+**[CALLOUT: "Attempts checked before you start — you can't run a test that can't
 count"]**
 
-### SCORING ON A PHONE (5:45 – 7:15)
+### SCORING ON A PHONE (6:15 – 7:45)
 
 **[B-ROLL: Phone in one hand, propped against a rail, examiner watching a
 candidate in turnouts.]**
@@ -150,7 +200,7 @@ candidate in turnouts.]**
 
 > "Save still works. You just don't have to remember it anymore."
 
-### THE TIMER (7:15 – 8:30)
+### THE TIMER (7:45 – 9:00)
 
 **[SCREEN: The timer at the top of the active test.]**
 
@@ -169,11 +219,112 @@ candidate in turnouts.]**
 > "And if you close it and come back, the timer picks up where it was instead of
 > restarting at zero."
 
+**[TRANSITION: Back at the desk]**
+
+---
+
+## CHAPTER 3.5: The Officer's Signature (9:00 – 12:00) — **NEW 2026-08-08**
+
+### A SUBMISSION IS NOT A RECORD (9:00 – 10:00)
+
+**[SCREEN: A completed test, run by a member, showing "Awaiting validation".]**
+
+> "Okay. Our senior member just ran a real evaluation and submitted it. Here's
+> what did **not** happen."
+
+**[SCREEN: The candidate's pipeline requirement — still incomplete. Then the
+department summary — pass rate unchanged.]**
+
+> "The requirement it's linked to? Not credited. The candidate's attempt count?
+> Untouched. The department's pass rate and average score? Didn't move. And the
+> candidate, looking at their own My Training page, sees the test listed —"
+
+**[SCREEN: The member's My Training > Skills Tests, one row reading "Awaiting
+validation", score and result columns blank.]**
+
+> "— and sees **no score and no outcome.** Just: awaiting validation."
+
+> "That's not the system being coy. Nobody has decided yet that this result
+> stands. Showing them a PASS would be asserting something no officer has agreed
+> to. So it says the honest thing instead."
+
+**[CALLOUT: "Until an officer validates it, it's a submission — not a record"]**
+
+### VALIDATING ONE (10:00 – 11:00)
+
+**[SCREEN: Officer account. Tests tab, filtered to results awaiting validation.
+A count badge on the summary dashboard.]**
+
+> "Officer side. There's a filter for results waiting on you, and a count on the
+> dashboard so you're not hunting for it."
+
+**[SCREEN: Open a pending result. The full scorecard — every criterion, the
+notes, the elapsed time.]**
+
+> "Open one, and you get the whole thing. Every criterion, the examiner's notes,
+> the measured time. You're not rubber-stamping a number — you're reading the
+> evaluation."
+
+**[SCREEN: Click Validate. The row updates; the requirement is credited.]**
+
+> "**Validate.** That's the signature. Now the requirement's credited, the
+> attempt's spent, the statistics move, and the candidate can see the result
+> under whatever disclosure rule the template carries. Chapter 5."
+
+> "And if you're a training officer running the test yourself? **Nothing changes
+> for you.** Your completion validates in the same step. You're the authority
+> this second step exists to get — you don't need to go approve your own work
+> afterward. There's no queue of your own tests waiting on you."
+
+**[CALLOUT: "Officer runs it → validated on submit. Member runs it → officer
+signs off."]**
+
+### REJECTING ONE (11:00 – 12:00)
+
+**[SCREEN: The same pending result. The officer clicks Void instead, types a
+reason.]**
+
+> "What if you read it and you don't agree? There's no 'reject' button, and
+> that's on purpose. You **void** it — same tool we'll cover properly in Chapter
+> 6 — and you type why."
+
+> "Because somebody actually sat for this. They pulled a line, or they ran an
+> assessment, in front of a person with a clipboard. Deleting that and pretending
+> it never happened is the wrong answer. Voiding keeps the evaluation, keeps your
+> reason on it, and the candidate sees the reason."
+
+**[SCREEN: Attempt to validate a test where the officer is the candidate.
+Refusal appears.]**
+
+> "One more. Say you were the one being evaluated, and a peer ran the sheet on
+> you. You **cannot** validate that. The system refuses it."
+
+> "Think about why. Without that rule, an officer gets a buddy to 'examine' them,
+> and then signs off their own pass. That's the exact same certification fraud
+> the examiner rule prevents — just one hop further out. Both ends are closed:
+> a member can't examine themselves, and an officer can't validate themselves."
+
+**[CALLOUT: "Separation of duties at both ends"]**
+
+**[SCREEN: Quick montage of the four refusals — practice, voided, in-progress,
+already-validated.]**
+
+> "Quick housekeeping, so you're not confused by a refusal: you can't validate a
+> practice attempt — there's nothing to record. You can't validate something
+> already voided, or a test still in progress. And validating twice does nothing
+> the second time, which matters if you've got two officers working the same
+> queue."
+
+> "And nothing historical landed in your queue when this shipped. Every result
+> from before this change was already officer-run — that was the old rule — so
+> they were all marked validated by whoever examined them. You did not wake up
+> to four years of backlog."
+
 **[TRANSITION: Two examiners]**
 
 ---
 
-## CHAPTER 4: Two People, One Test (8:30 – 9:45)
+## CHAPTER 4: Two People, One Test (12:00 – 13:15)
 
 **[SCREEN: Split screen — a phone with unsaved criteria, and a desktop with the
 same test open in the officer's records tab.]**
@@ -200,9 +351,9 @@ appears and the autosave indicator goes to "paused".]**
 
 ---
 
-## CHAPTER 5: Who Sees the Result (9:45 – 14:00)
+## CHAPTER 5: Who Sees the Result (13:15 – 17:30)
 
-### THE DECISION (9:45 – 10:45)
+### THE DECISION (13:15 – 14:15)
 
 **[B-ROLL: A training file open on a desk, handwritten notes in the margin.]**
 
@@ -217,7 +368,7 @@ appears and the autosave indicator goes to "paused".]**
 > training file — 'hesitant, needed two prompts' — not feedback you drafted for
 > the member to read."
 
-### THREE QUESTIONS (10:45 – 12:30)
+### THREE QUESTIONS (14:15 – 16:00)
 
 **[SCREEN: Training Admin > Configuration > the Skills-Test Results group.]**
 
@@ -245,27 +396,63 @@ options.]**
 > "Set it to nothing and the 'when' question goes away, because there's nothing
 > left to time."
 
-**[SCREEN: A template's own settings, overriding the department default.]**
+**[SCREEN: The template builder's Result Disclosure group. Open the "What the
+member sees" dropdown — the first option reads "Inherit — Scores only (pass/fail
+and points, no written notes)".]**
 
-> "Set the department norm here, then override it on a single skill — or on a
-> single test — where the norm doesn't fit. A promotional sheet can be
-> 'scores only, on release' while everything else stays open."
+> "Set the department norm here, then override it on a single skill — or a single
+> test — where the norm doesn't fit. A promotional sheet can be 'scores only, on
+> release' while everything else stays open."
 
-### WHO ELSE (12:30 – 13:15)
+> "That override lives on the template now, and look at what the Inherit option
+> says. It doesn't just say 'Inherit'. It **tells you what inheriting actually
+> resolves to** — right there, read out of your department's configuration. So
+> you can tell what leaving this template alone does without opening another page
+> and holding two things in your head."
 
-**[SCREEN: A test's Viewers panel; add a preceptor.]**
+**[SCREEN: Change a field back to Inherit; save; reopen — it is still Inherit.]**
+
+> "And setting it back to Inherit genuinely clears it. It doesn't quietly leave
+> the last value sitting underneath."
+
+**[SCREEN: The positions picker on the same panel.]**
+
+> "Positions go here too. If your department hasn't defined any positions, this
+> picker just isn't there — rather than showing you an empty box and letting you
+> wonder."
+
+### WHO ELSE (16:00 – 16:45)
+
+**[SCREEN: A test's Viewers panel; search for a preceptor and add them.]**
 
 > "**Who else.** Name people on a specific test — a preceptor, an FTO. Or list
 > corporate positions whose holders can read results generally."
+
+**[CALLOUT: "Per test, not per template"]**
+
+> "Notice this is on **the test**, not on the template — and that is a deliberate
+> choice, not a limitation. The relationship is to the person being tested, not
+> to the skill. A trainee's FTO changes. If you'd granted it on the template, that
+> FTO would quietly follow the skill onto **every other candidate's** results
+> too."
+
+**[SCREEN: Open the picker — the candidate and the examiner are absent from the
+list.]**
+
+> "You'll notice the candidate and the examiner aren't in the list. The candidate
+> already sees their result however policy allows, and the examiner always sees
+> what they themselves wrote down — so adding either would be a button that
+> looked like it did something and didn't."
 
 **[CALLOUT: "A viewer never sees more than the candidate does"]**
 
 > "One rule that's worth stating out loud: **a named viewer never sees more of a
 > result than the candidate does.** If the department shows the candidate scores
 > only, the preceptor gets scores only. There's no version of 'sharing a result'
-> where the observer sees more of it than the person it's about."
+> where the observer sees more of it than the person it's about. The panel says
+> so on screen, so nobody grants access thinking it hands out more than it does."
 
-### RELEASING ONE (13:15 – 14:00)
+### RELEASING ONE (16:45 – 17:30)
 
 **[SCREEN: Records tab; a completed unreleased result with a Release action.]**
 
@@ -280,9 +467,9 @@ options.]**
 
 ---
 
-## CHAPTER 6: When a Result Shouldn't Stand (14:00 – 16:30)
+## CHAPTER 6: When a Result Shouldn't Stand (17:30 – 20:00)
 
-### THREE DIFFERENT THINGS (14:00 – 15:15)
+### THREE DIFFERENT THINGS (17:30 – 18:45)
 
 **[SCREEN: The records tab; hover three different rows showing three different
 actions.]**
@@ -311,7 +498,7 @@ requirement returning to incomplete on the member's pipeline.]**
 > closed out. No reason required, and nothing to release, because nothing was
 > credited."
 
-### PRACTICE (15:15 – 16:30)
+### PRACTICE (18:45 – 20:00)
 
 **[SCREEN: New Test with Practice Mode on. Note: no permission gate.]**
 
@@ -341,7 +528,7 @@ regular member; it isn't offered.]**
 
 ---
 
-## CHAPTER 7: What the Member Sees (16:30 – 18:30)
+## CHAPTER 7: What the Member Sees (20:00 – 22:00)
 
 **[SCREEN: Log in as the candidate. Training > My Training. Scroll to the
 Skills Tests section.]**
@@ -360,6 +547,18 @@ breakdown.]**
 
 > "If you voided a result, they see the reason. Not just that it's gone."
 
+**[SCREEN: A row reading "Awaiting validation", score and result columns
+blank.]**
+
+> "And this is the one from Chapter 3.5 — a test a fellow member ran on them,
+> waiting on an officer. It's listed, so they know it happened and they know it's
+> in the system. But there's no score and no pass or fail, because nobody has
+> signed it yet."
+
+> "That's the honest answer, and it's better than either alternative. Hiding the
+> test entirely makes them wonder if it got lost. Showing them a PASS before an
+> officer has agreed to it is telling them something that isn't true yet."
+
 **[SCREEN: The empty state on an account with a withheld result.]**
 
 > "And if your department withholds results, a withheld one simply isn't in the
@@ -377,9 +576,9 @@ breakdown.]**
 
 ---
 
-## CHAPTER 8: The Bug Worth Knowing About (18:30 – 21:00)
+## CHAPTER 8: The Bug Worth Knowing About (22:00 – 24:30)
 
-### WHAT USED TO HAPPEN (18:30 – 20:00)
+### WHAT USED TO HAPPEN (22:00 – 23:30)
 
 **[SCREEN: A completed scorecard from March. Then the template editor, inserting
 a criterion into the middle of a section. Then the same scorecard, marks visibly
@@ -402,7 +601,7 @@ shifted.]**
 > "None of that announced itself. The scorecard just quietly said something
 > different than it had."
 
-### WHAT HAPPENS NOW (20:00 – 21:00)
+### WHAT HAPPENS NOW (23:30 – 24:30)
 
 **[SCREEN: Edit a published template again; the old scorecard is unchanged.]**
 
@@ -424,7 +623,7 @@ scorecards"]**
 > that matter — promotional, certification — it's worth spot-checking a few
 > against whatever paper or memory you have. Going forward it can't happen."
 
-### OUTRO (21:00 – 21:30)
+### OUTRO (24:30 – 25:00)
 
 > "That's skills testing. Build the sheet once. Score it one-handed in the bay.
 > Decide deliberately how much the candidate sees. And when something has to come
@@ -434,7 +633,7 @@ scorecards"]**
 
 ---
 
-## Shorts Pack (15a – 15h)
+## Shorts Pack (15a – 15j)
 
 Extracted from this script. Same format as Script 8: **Problem → Solution → Demo
 → Done.** No intros, no outros.
@@ -669,7 +868,70 @@ deleting it]**
 
 **[CALLOUT: "Practice = the member's notes. Official = the department's record."]**
 
-> "Official tests still need training permission. This is just practice."
+> "And as of August 2026 you don't need officer permission for an **official**
+> one either — see Short 15I. But an officer still has to sign that one off."
+
+---
+
+### SHORT 15I: You Don't Have to Be an Officer to Run a Skills Test — **NEW 2026-08-08**
+
+**Length:** 50 seconds
+**Extracted From:** Script 15, Chapters 3 and 3.5
+**Audience:** All members, training officers
+
+**[SCREEN: A regular member's account — no training permissions — opening Skills
+Testing and tapping New Test, Practice Mode **off**]**
+
+> "This is a regular member. No officer permissions. And they're about to run a
+> real skills test on somebody — not a practice one."
+
+**[CALLOUT: "Any member can examine"]**
+
+> "Because the person holding the clipboard is usually a senior member, not an
+> officer. That's how departments actually work."
+
+**[SCREEN: The completed test showing "Awaiting validation"; the candidate's
+requirement still incomplete]**
+
+> "Here's the part that makes it safe. Until a training officer **validates** it,
+> that result credits nothing. No requirement completed, no attempt used, and the
+> candidate sees 'awaiting validation' — not a pass, not a fail."
+
+**[SCREEN: Officer opens the pending queue, reads the scorecard, clicks
+Validate]**
+
+> "The officer reads the whole scorecard and signs it. **Now** it counts."
+
+**[SCREEN: The officer's own completed test — validated instantly, no queue]**
+
+> "And if you're the officer running it yourself? Nothing changes. Yours validates
+> when you submit it."
+
+**[CALLOUT: "Anyone can examine. Only an officer can validate."]**
+
+---
+
+### SHORT 15J: You Can't Sign Off Your Own Skills Test — **NEW 2026-08-08**
+
+**Length:** 35 seconds
+**Extracted From:** Script 15, Chapter 3.5
+**Audience:** Training officers, chiefs
+
+**[SCREEN: A training officer as the candidate on a peer-run test, clicking
+Validate — the refusal appears]**
+
+> "You're a training officer. Somebody evaluated **you**. Can you validate it?
+> No."
+
+**[CALLOUT: "Separation of duties — both ends"]**
+
+> "Think about why. Without that rule, you get a buddy to 'examine' you, then
+> sign off your own pass. That's certification fraud with an extra step."
+
+**[SCREEN: A second officer validating it instead]**
+
+> "Another officer signs it. Same as a member can't examine themselves. Both ends
+> of this are closed."
 
 ---
 
@@ -677,9 +939,21 @@ deleting it]**
 
 - Chapter 8 is the one to lead with if you're cutting a single clip for existing
   users — it describes a data-integrity problem they may have lived through.
+- **Chapter 3.5 is the other lead candidate**, and the more urgent of the two for
+  a re-shoot: it changes who can do the core job of this module.
 - Chapter 5 needs two accounts on screen (officer and candidate) to land. Record
   the member's side on a phone.
+- **Chapters 3, 3.5 and 7 need three accounts:** an ordinary member with no
+  training permissions (the examiner), a second member (the candidate), and a
+  training officer. Set these up before the shoot — the whole point of 3.5 does
+  not read if the "member" account visibly has officer tools.
 - Shorts 15F and 15G both describe **historical** data that was not
   retroactively corrected. Do not cut the caveat.
+- **Short 15H's closing line was re-recorded** on 2026-08-08. The original ended
+  with "Official tests still need training permission," which is no longer true.
+  Pull that take.
 - The 390px captures in Chapter 3 should be real device footage, not a browser
   resize — the point is that it is usable outdoors one-handed.
+- When capturing the candidate search, use a demo org with enough members that
+  the 15-result cap is visible — the cap silently truncating is the part viewers
+  need to see, not be told.

@@ -12,24 +12,16 @@
  * Accessible at /members/scan.
  */
 
-import React, { useRef, useState, useCallback } from "react";
-import { useNavigate, Link } from "react-router";
-import {
-  ScanLine,
-  ArrowLeft,
-  Camera,
-  CameraOff,
-  AlertCircle,
-  Flashlight,
-  FlashlightOff,
-} from "lucide-react";
-import { userService } from "../services/api";
-import { getErrorMessage } from "../utils/errorHandling";
-import { useHtml5Scanner } from "../hooks/useHtml5Scanner";
-import { useScanFeedback } from "../hooks/useScanFeedback";
-import { ScanSuccessFlash } from "../components/ux/ScanSuccessFlash";
-import { isMemberIdPayload } from "../types/scanner";
-import { QR_SCAN_CONFIG } from "../constants/camera";
+import React, { useRef, useState, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router';
+import { ScanLine, ArrowLeft, Camera, CameraOff, AlertCircle, Flashlight, FlashlightOff } from 'lucide-react';
+import { userService } from '../services/api';
+import { getErrorMessage } from '../utils/errorHandling';
+import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
+import { useScanFeedback } from '../hooks/useScanFeedback';
+import { ScanSuccessFlash } from '../components/ux/ScanSuccessFlash';
+import { isMemberIdPayload } from '../types/scanner';
+import { QR_SCAN_CONFIG } from '../constants/camera';
 
 export const MemberScanPage: React.FC = () => {
   const navigate = useNavigate();
@@ -70,10 +62,7 @@ export const MemberScanPage: React.FC = () => {
         if (!usersRef.current) {
           usersRef.current = await userService.getUsers();
         }
-        const match = usersRef.current.find(
-          (u) =>
-            u.membership_number?.toLowerCase() === decoded.trim().toLowerCase(),
-        );
+        const match = usersRef.current.find((u) => u.membership_number?.toLowerCase() === decoded.trim().toLowerCase());
 
         if (match) {
           void navigate(`/members/${match.id}`);
@@ -82,31 +71,24 @@ export const MemberScanPage: React.FC = () => {
           handledRef.current = false;
         }
       } catch (err: unknown) {
-        setError(getErrorMessage(err, "Lookup failed"));
+        setError(getErrorMessage(err, 'Lookup failed'));
         handledRef.current = false;
       } finally {
         setLookingUp(false);
       }
     },
-    [navigate, signalScanSuccess],
+    [navigate, signalScanSuccess]
   );
 
   const onScan = useCallback(
     (decodedText: string) => {
       void handleScanResult(decodedText);
     },
-    [handleScanResult],
+    [handleScanResult]
   );
 
-  const {
-    scanning,
-    startScanner,
-    stopScanner,
-    flashlightSupported,
-    flashlightOn,
-    toggleFlashlight,
-  } = useHtml5Scanner({
-    viewportId: "scanner-viewport",
+  const { scanning, startScanner, stopScanner, flashlightSupported, flashlightOn, toggleFlashlight } = useHtml5Scanner({
+    viewportId: 'scanner-viewport',
     scanConfig: QR_SCAN_CONFIG,
     onScan,
   });
@@ -116,52 +98,47 @@ export const MemberScanPage: React.FC = () => {
       setError(null);
       await startScanner();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Camera access denied. Please allow camera permissions in your browser settings."));
+      setError(getErrorMessage(err, 'Camera access denied. Please allow camera permissions in your browser settings.'));
     }
   }, [startScanner]);
 
   return (
-    <div className="min-h-screen max-w-lg mx-auto px-4 py-8">
+    <div className="mx-auto min-h-screen max-w-lg px-4 py-8">
       {/* Header */}
       <div className="mb-6">
         <Link
           to="/members"
-          className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-4"
+          className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Members
         </Link>
-        <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-2">
+        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
           <ScanLine className="h-6 w-6" />
           Scan Member ID
         </h1>
-        <p className="text-sm text-theme-text-muted mt-1">
-          Point your camera at a member&apos;s QR code or barcode to look them
-          up.
+        <p className="text-theme-text-muted mt-1 text-sm">
+          Point your camera at a member&apos;s QR code or barcode to look them up.
         </p>
       </div>
 
       {/* Scanner Viewport */}
-      <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden mb-6">
+      <div className="bg-theme-surface border-theme-surface-border mb-6 overflow-hidden rounded-lg border">
         <div className="relative">
-          <div
-            id="scanner-viewport"
-            data-testid="scanner-viewport"
-            className="w-full aspect-square bg-black/90"
-          />
+          <div id="scanner-viewport" data-testid="scanner-viewport" className="aspect-square w-full bg-black/90" />
           <ScanSuccessFlash active={flashing} />
         </div>
       </div>
 
       {/* Controls */}
-      <div className="flex justify-center gap-3 mb-6">
+      <div className="mb-6 flex justify-center gap-3">
         {!scanning ? (
           <button
             onClick={() => {
               void tryStartScanner();
             }}
             disabled={lookingUp}
-            className="btn-info font-medium gap-2 inline-flex items-center px-5 py-2.5 text-sm transition"
+            className="btn-info inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium transition"
           >
             <Camera className="h-4 w-4" />
             Start Scanning
@@ -172,16 +149,18 @@ export const MemberScanPage: React.FC = () => {
               onClick={() => {
                 void stopScanner();
               }}
-              className="btn-primary font-medium gap-2 inline-flex items-center px-5 py-2.5 text-sm transition"
+              className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium transition"
             >
               <CameraOff className="h-4 w-4" />
               Stop Scanning
             </button>
             {flashlightSupported && (
               <button
-                onClick={() => { void toggleFlashlight(); }}
+                onClick={() => {
+                  void toggleFlashlight();
+                }}
                 aria-pressed={flashlightOn}
-                className={`font-medium gap-2 inline-flex items-center rounded-lg border px-5 py-2.5 text-sm transition ${
+                className={`inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium transition ${
                   flashlightOn
                     ? 'border-amber-400 bg-amber-100 text-amber-900 dark:border-amber-500 dark:bg-amber-500/20 dark:text-amber-300'
                     : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary'
@@ -197,39 +176,28 @@ export const MemberScanPage: React.FC = () => {
 
       {/* Status Messages */}
       {lookingUp && (
-        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-center mb-4">
-          <p className="text-blue-700 dark:text-blue-400 text-sm">Looking up member...</p>
+        <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 text-center">
+          <p className="text-sm text-blue-700 dark:text-blue-400">Looking up member...</p>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start gap-3 mb-4">
-          <AlertCircle className="h-5 w-5 text-red-700 dark:text-red-400 shrink-0 mt-0.5" />
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
           <div>
-            <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
-            {lastScan && (
-              <p className="text-red-700 dark:text-red-400/70 text-xs mt-1">
-                Scanned: {lastScan}
-              </p>
-            )}
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+            {lastScan && <p className="mt-1 text-xs text-red-700 dark:text-red-400/70">Scanned: {lastScan}</p>}
           </div>
         </div>
       )}
 
       {/* Instructions */}
-      <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-        <h3 className="text-sm font-semibold text-theme-text-primary mb-2">
-          How to use
-        </h3>
-        <ol className="list-decimal list-inside space-y-1 text-sm text-theme-text-secondary">
+      <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+        <h3 className="text-theme-text-primary mb-2 text-sm font-semibold">How to use</h3>
+        <ol className="text-theme-text-secondary list-inside list-decimal space-y-1 text-sm">
           <li>Tap &ldquo;Start Scanning&rdquo; and allow camera access</li>
-          <li>
-            Point the camera at a member&apos;s QR code or barcode on their ID
-            card
-          </li>
-          <li>
-            The member&apos;s profile will open automatically once recognized
-          </li>
+          <li>Point the camera at a member&apos;s QR code or barcode on their ID card</li>
+          <li>The member&apos;s profile will open automatically once recognized</li>
         </ol>
       </div>
     </div>

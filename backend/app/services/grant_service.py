@@ -387,7 +387,7 @@ class GrantService:
                             task_type="performance_report",
                             title=f"Performance Report #{report_num}",
                             description=(
-                                f"Submit {application.reporting_frequency.value} "
+                                f"Submit {_status_value(application.reporting_frequency)} "
                                 f"performance report to grantor."
                             ),
                             due_date=report_date,
@@ -780,6 +780,18 @@ class GrantService:
         if not task:
             return None
 
+        # XC-1: a client-supplied assignee must belong to the caller's org
+        # before it is persisted (the create schema can't set it, but the
+        # update schema can — validate the update path too).
+        await assert_in_org(
+            self.db,
+            User,
+            data.get("assigned_to"),
+            organization_id,
+            allow_none=True,
+            label="Assigned user",
+        )
+
         old_status = task.status
         for key, value in data.items():
             setattr(task, key, value)
@@ -801,7 +813,10 @@ class GrantService:
                 application_id=task.application_id,
                 note_type=GrantNoteType.COMPLIANCE,
                 content=f"Compliance task completed: {task.title}",
-                note_metadata={"task_id": task.id, "task_type": task.task_type.value},
+                note_metadata={
+                    "task_id": task.id,
+                    "task_type": _status_value(task.task_type),
+                },
                 created_by=user_id,
             )
             self.db.add(note)

@@ -42,21 +42,18 @@ export const usePortalConfig = () => {
     }
   }, []);
 
-  const updateConfig = useCallback(
-    async (updates: UpdateConfigRequest) => {
-      try {
-        const data = await api.updateConfig(updates);
-        setConfig(data);
-        toast.success('Configuration updated successfully');
-        return data;
-      } catch (err: unknown) {
-        const message = getErrorMessage(err, 'Failed to update configuration');
-        toast.error(message);
-        throw err;
-      }
-    },
-    []
-  );
+  const updateConfig = useCallback(async (updates: UpdateConfigRequest) => {
+    try {
+      const data = await api.updateConfig(updates);
+      setConfig(data);
+      toast.success('Configuration updated successfully');
+      return data;
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to update configuration');
+      toast.error(message);
+      throw err;
+    }
+  }, []);
 
   const toggleEnabled = useCallback(
     async (enabled: boolean) => {
@@ -271,9 +268,7 @@ export const useDataWhitelist = (category?: string) => {
   );
 
   const bulkUpdate = useCallback(
-    async (
-      updates: Array<{ category: string; field: string; enabled: boolean }>
-    ) => {
+    async (updates: Array<{ category: string; field: string; enabled: boolean }>) => {
       try {
         const result = await api.bulkUpdateWhitelist(updates);
         await fetchWhitelist(); // Refresh list

@@ -3,7 +3,18 @@
  */
 
 import api from './apiClient';
-import type { CheckInMonitoringStats, CheckInRequest, Event, EventCancel, EventCreate, EventListItem, EventStats, EventUpdate, RSVP, RSVPCreate } from '../types/event';
+import type {
+  CheckInMonitoringStats,
+  CheckInRequest,
+  Event,
+  EventCancel,
+  EventCreate,
+  EventListItem,
+  EventStats,
+  EventUpdate,
+  RSVP,
+  RSVPCreate,
+} from '../types/event';
 import type { DocumentFolder } from './formsServices';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
@@ -111,7 +122,11 @@ export const eventService = {
   /**
    * Cancel all events in a recurring series
    */
-  async cancelEventSeries(parentEventId: string, cancelData: EventCancel, cancelFutureOnly = false): Promise<{ message: string; cancelled_count: number }> {
+  async cancelEventSeries(
+    parentEventId: string,
+    cancelData: EventCancel,
+    cancelFutureOnly = false
+  ): Promise<{ message: string; cancelled_count: number }> {
     const response = await api.post<{ message: string; cancelled_count: number }>(
       `/events/${parentEventId}/cancel-series?cancel_future_only=${cancelFutureOnly}`,
       cancelData
@@ -126,12 +141,7 @@ export const eventService = {
    */
   async createOrUpdateRSVP(eventId: string, rsvpData: RSVPCreate, override = false): Promise<RSVP> {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      await enqueueGeneric(
-        'event-rsvp',
-        `/events/${eventId}/rsvp`,
-        rsvpData,
-        `RSVP: ${rsvpData.status}`,
-      );
+      await enqueueGeneric('event-rsvp', `/events/${eventId}/rsvp`, rsvpData, `RSVP: ${rsvpData.status}`);
       void usePendingSyncStore.getState().refresh();
       return {
         id: 'pending-sync',
@@ -147,7 +157,7 @@ export const eventService = {
     const response = await api.post<RSVP>(
       `/events/${eventId}/rsvp`,
       rsvpData,
-      override ? { params: { override: true } } : undefined,
+      override ? { params: { override: true } } : undefined
     );
     return response.data;
   },
@@ -180,15 +190,22 @@ export const eventService = {
   /**
    * Get eligible members for check-in
    */
-  async getEligibleMembers(eventId: string): Promise<Array<{ id: string; first_name: string; last_name: string; email: string }>> {
-    const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string }>>(`/events/${eventId}/eligible-members`);
+  async getEligibleMembers(
+    eventId: string
+  ): Promise<Array<{ id: string; first_name: string; last_name: string; email: string }>> {
+    const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string }>>(
+      `/events/${eventId}/eligible-members`
+    );
     return response.data;
   },
 
   /**
    * Record actual start and end times for an event
    */
-  async recordActualTimes(eventId: string, times: import('../types/event').RecordActualTimes): Promise<import('../types/event').Event> {
+  async recordActualTimes(
+    eventId: string,
+    times: import('../types/event').RecordActualTimes
+  ): Promise<import('../types/event').Event> {
     const response = await api.post<import('../types/event').Event>(`/events/${eventId}/record-times`, times);
     return response.data;
   },
@@ -203,7 +220,9 @@ export const eventService = {
   },
 
   async endEvent(eventId: string): Promise<{ checked_out_count: number; actual_end_time: string }> {
-    const response = await api.post<{ checked_out_count: number; actual_end_time: string }>(`/events/${eventId}/end-event`);
+    const response = await api.post<{ checked_out_count: number; actual_end_time: string }>(
+      `/events/${eventId}/end-event`
+    );
     return response.data;
   },
 
@@ -218,11 +237,15 @@ export const eventService = {
   /**
    * Check in to or out of an event (self-check-in/out via QR code)
    */
-  async selfCheckIn(eventId: string, isCheckout: boolean = false, override = false): Promise<import('../types/event').RSVP> {
+  async selfCheckIn(
+    eventId: string,
+    isCheckout: boolean = false,
+    override = false
+  ): Promise<import('../types/event').RSVP> {
     const response = await api.post<import('../types/event').RSVP>(
       `/events/${eventId}/self-check-in`,
       { is_checkout: isCheckout },
-      override ? { params: { override: true } } : undefined,
+      override ? { params: { override: true } } : undefined
     );
     return response.data;
   },
@@ -238,7 +261,10 @@ export const eventService = {
   /**
    * Add an attendee to an event (manager action)
    */
-  async addAttendee(eventId: string, data: import('../types/event').ManagerAddAttendee): Promise<import('../types/event').RSVP> {
+  async addAttendee(
+    eventId: string,
+    data: import('../types/event').ManagerAddAttendee
+  ): Promise<import('../types/event').RSVP> {
     const response = await api.post<import('../types/event').RSVP>(`/events/${eventId}/add-attendee`, data);
     return response.data;
   },
@@ -246,7 +272,11 @@ export const eventService = {
   /**
    * Bulk-add multiple attendees to an event (manager action)
    */
-  async bulkAddAttendees(eventId: string, userIds: string[], status?: string): Promise<{ created_count: number; errors: Array<{ user_id: string; error: string }> }> {
+  async bulkAddAttendees(
+    eventId: string,
+    userIds: string[],
+    status?: string
+  ): Promise<{ created_count: number; errors: Array<{ user_id: string; error: string }> }> {
     const response = await api.post<{ created_count: number; errors: Array<{ user_id: string; error: string }> }>(
       `/events/${eventId}/bulk-add-attendees`,
       { user_ids: userIds, status: status || 'going' }
@@ -257,8 +287,15 @@ export const eventService = {
   /**
    * Override attendance details for an RSVP (manager action)
    */
-  async overrideAttendance(eventId: string, userId: string, data: import('../types/event').RSVPOverride): Promise<import('../types/event').RSVP> {
-    const response = await api.patch<import('../types/event').RSVP>(`/events/${eventId}/rsvps/${userId}/override`, data);
+  async overrideAttendance(
+    eventId: string,
+    userId: string,
+    data: import('../types/event').RSVPOverride
+  ): Promise<import('../types/event').RSVP> {
+    const response = await api.patch<import('../types/event').RSVP>(
+      `/events/${eventId}/rsvps/${userId}/override`,
+      data
+    );
     return response.data;
   },
 
@@ -275,13 +312,21 @@ export const eventService = {
     return response.data;
   },
 
-  async uploadAttachment(eventId: string, file: File, description?: string): Promise<import('../types/event').EventAttachmentUploadResponse> {
+  async uploadAttachment(
+    eventId: string,
+    file: File,
+    description?: string
+  ): Promise<import('../types/event').EventAttachmentUploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
     if (description) formData.append('description', description);
-    const response = await api.post<import('../types/event').EventAttachmentUploadResponse>(`/events/${eventId}/attachments`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await api.post<import('../types/event').EventAttachmentUploadResponse>(
+      `/events/${eventId}/attachments`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
     return response.data;
   },
 
@@ -300,7 +345,9 @@ export const eventService = {
     return response.data;
   },
 
-  async createTemplate(data: import('../types/event').EventTemplateCreate): Promise<import('../types/event').EventTemplate> {
+  async createTemplate(
+    data: import('../types/event').EventTemplateCreate
+  ): Promise<import('../types/event').EventTemplate> {
     const response = await api.post<import('../types/event').EventTemplate>('/events/templates', data);
     return response.data;
   },
@@ -310,7 +357,10 @@ export const eventService = {
     return response.data;
   },
 
-  async updateTemplate(templateId: string, data: Partial<import('../types/event').EventTemplateCreate>): Promise<import('../types/event').EventTemplate> {
+  async updateTemplate(
+    templateId: string,
+    data: Partial<import('../types/event').EventTemplateCreate>
+  ): Promise<import('../types/event').EventTemplate> {
     const response = await api.patch<import('../types/event').EventTemplate>(`/events/templates/${templateId}`, data);
     return response.data;
   },
@@ -323,12 +373,17 @@ export const eventService = {
    * RSVP to all future events in a recurring series
    */
   async rsvpToSeries(parentEventId: string, rsvpData: RSVPCreate): Promise<{ message: string; rsvp_count: number }> {
-    const response = await api.post<{ message: string; rsvp_count: number }>(`/events/${parentEventId}/rsvp-series`, rsvpData);
+    const response = await api.post<{ message: string; rsvp_count: number }>(
+      `/events/${parentEventId}/rsvp-series`,
+      rsvpData
+    );
     return response.data;
   },
 
   // Recurring Events
-  async createRecurringEvent(data: import('../types/event').RecurringEventCreate): Promise<import('../types/event').Event[]> {
+  async createRecurringEvent(
+    data: import('../types/event').RecurringEventCreate
+  ): Promise<import('../types/event').Event[]> {
     const response = await api.post<import('../types/event').Event[]>('/events/recurring', data);
     return response.data;
   },
@@ -338,12 +393,16 @@ export const eventService = {
     const response = await api.get<import('../types/event').EventModuleSettings>('/events/settings');
     return response.data;
   },
-  async updateModuleSettings(data: Partial<import('../types/event').EventModuleSettings>): Promise<import('../types/event').EventModuleSettings> {
+  async updateModuleSettings(
+    data: Partial<import('../types/event').EventModuleSettings>
+  ): Promise<import('../types/event').EventModuleSettings> {
     const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
     return response.data;
   },
   async getVisibleEventTypes(): Promise<import('../types/event').EventType[]> {
-    const response = await api.get<{ visible_event_types: import('../types/event').EventType[] }>('/events/visible-event-types');
+    const response = await api.get<{ visible_event_types: import('../types/event').EventType[] }>(
+      '/events/visible-event-types'
+    );
     return response.data.visible_event_types;
   },
   async getVisibleEventTypesWithCategories(): Promise<{
@@ -373,12 +432,21 @@ export const eventService = {
     const response = await api.post<Record<string, unknown>>(`/events/${eventId}/external-attendees`, data);
     return response.data;
   },
-  async updateExternalAttendee(eventId: string, attendeeId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch<Record<string, unknown>>(`/events/${eventId}/external-attendees/${attendeeId}`, data);
+  async updateExternalAttendee(
+    eventId: string,
+    attendeeId: string,
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const response = await api.patch<Record<string, unknown>>(
+      `/events/${eventId}/external-attendees/${attendeeId}`,
+      data
+    );
     return response.data;
   },
   async checkInExternalAttendee(eventId: string, attendeeId: string): Promise<Record<string, unknown>> {
-    const response = await api.patch<Record<string, unknown>>(`/events/${eventId}/external-attendees/${attendeeId}/check-in`);
+    const response = await api.patch<Record<string, unknown>>(
+      `/events/${eventId}/external-attendees/${attendeeId}/check-in`
+    );
     return response.data;
   },
   async removeExternalAttendee(eventId: string, attendeeId: string): Promise<void> {
@@ -390,12 +458,11 @@ export const eventService = {
    */
   async sendReminders(
     eventId: string,
-    reminderType: 'non_respondents' | 'all',
+    reminderType: 'non_respondents' | 'all'
   ): Promise<{ message: string; sent_count: number }> {
-    const response = await api.post<{ message: string; sent_count: number }>(
-      `/events/${eventId}/send-reminders`,
-      { reminder_type: reminderType },
-    );
+    const response = await api.post<{ message: string; sent_count: number }>(`/events/${eventId}/send-reminders`, {
+      reminder_type: reminderType,
+    });
     return response.data;
   },
 
@@ -408,12 +475,9 @@ export const eventService = {
       notification_type: 'announcement' | 'reminder' | 'follow_up' | 'missed_event' | 'check_in_confirmation';
       message?: string | undefined;
       target?: 'all' | 'going' | 'not_responded' | 'checked_in' | 'not_checked_in' | undefined;
-    },
+    }
   ): Promise<{ message: string; recipients_count: number }> {
-    const response = await api.post<{ message: string; recipients_count: number }>(
-      `/events/${eventId}/notify`,
-      data,
-    );
+    const response = await api.post<{ message: string; recipients_count: number }>(`/events/${eventId}/notify`, data);
     return response.data;
   },
 
@@ -422,7 +486,9 @@ export const eventService = {
    */
   async getRSVPHistory(eventId: string, limit?: number): Promise<import('../types/event').RSVPHistory[]> {
     const params = limit ? { limit } : undefined;
-    const response = await api.get<import('../types/event').RSVPHistory[]>(`/events/${eventId}/rsvp-history`, { params });
+    const response = await api.get<import('../types/event').RSVPHistory[]>(`/events/${eventId}/rsvp-history`, {
+      params,
+    });
     return response.data;
   },
 
@@ -452,7 +518,10 @@ export const eventService = {
 // ============================================
 
 export const eventRequestService = {
-  async listRequests(params?: { status?: string; outreach_type?: string }): Promise<import('../types/event').EventRequestListItem[]> {
+  async listRequests(params?: {
+    status?: string;
+    outreach_type?: string;
+  }): Promise<import('../types/event').EventRequestListItem[]> {
     const response = await api.get<import('../types/event').EventRequestListItem[]>('/event-requests', { params });
     return response.data;
   },
@@ -460,12 +529,23 @@ export const eventRequestService = {
     const response = await api.get<import('../types/event').EventRequest>(`/event-requests/${requestId}`);
     return response.data;
   },
-  async updateRequestStatus(requestId: string, data: { status: string; notes?: string | undefined; decline_reason?: string | undefined; assigned_to?: string | undefined; event_id?: string | undefined }): Promise<{ message: string; status: string }> {
+  async updateRequestStatus(
+    requestId: string,
+    data: {
+      status: string;
+      notes?: string | undefined;
+      decline_reason?: string | undefined;
+      assigned_to?: string | undefined;
+      event_id?: string | undefined;
+    }
+  ): Promise<{ message: string; status: string }> {
     const response = await api.patch<{ message: string; status: string }>(`/event-requests/${requestId}/status`, data);
     return response.data;
   },
   async checkPublicStatus(token: string): Promise<import('../types/event').EventRequestPublicStatus> {
-    const response = await api.get<import('../types/event').EventRequestPublicStatus>(`/event-requests/status/${token}`);
+    const response = await api.get<import('../types/event').EventRequestPublicStatus>(
+      `/event-requests/status/${token}`
+    );
     return response.data;
   },
   async getOutreachTypeLabels(organizationId?: string): Promise<Record<string, string>> {
@@ -473,31 +553,76 @@ export const eventRequestService = {
     const response = await api.get<Record<string, string>>('/event-requests/types/labels', { params });
     return response.data;
   },
-  async updateTaskCompletion(requestId: string, data: { task_id: string; completed: boolean; notes?: string }): Promise<{ message: string; task_completions: Record<string, unknown>; status: string }> {
-    const response = await api.patch<{ message: string; task_completions: Record<string, unknown>; status: string }>(`/event-requests/${requestId}/tasks`, data);
+  async updateTaskCompletion(
+    requestId: string,
+    data: { task_id: string; completed: boolean; notes?: string }
+  ): Promise<{ message: string; task_completions: Record<string, unknown>; status: string }> {
+    const response = await api.patch<{ message: string; task_completions: Record<string, unknown>; status: string }>(
+      `/event-requests/${requestId}/tasks`,
+      data
+    );
     return response.data;
   },
-  async assignRequest(requestId: string, data: { assigned_to: string; notes?: string }): Promise<{ message: string; assigned_to: string; assignee_name: string }> {
-    const response = await api.patch<{ message: string; assigned_to: string; assignee_name: string }>(`/event-requests/${requestId}/assign`, data);
+  async assignRequest(
+    requestId: string,
+    data: { assigned_to: string; notes?: string }
+  ): Promise<{ message: string; assigned_to: string; assignee_name: string }> {
+    const response = await api.patch<{ message: string; assigned_to: string; assignee_name: string }>(
+      `/event-requests/${requestId}/assign`,
+      data
+    );
     return response.data;
   },
-  async addComment(requestId: string, data: { message: string }): Promise<import('../types/event').EventRequestActivity> {
-    const response = await api.post<import('../types/event').EventRequestActivity>(`/event-requests/${requestId}/comments`, data);
+  async addComment(
+    requestId: string,
+    data: { message: string }
+  ): Promise<import('../types/event').EventRequestActivity> {
+    const response = await api.post<import('../types/event').EventRequestActivity>(
+      `/event-requests/${requestId}/comments`,
+      data
+    );
     return response.data;
   },
-  async scheduleRequest(requestId: string, data: { event_date: string; event_end_date?: string | undefined; location_id?: string | undefined; notes?: string | undefined; create_calendar_event?: boolean | undefined }): Promise<{ message: string; status: string; event_date: string; event_id?: string }> {
-    const response = await api.patch<{ message: string; status: string; event_date: string; event_id?: string }>(`/event-requests/${requestId}/schedule`, data);
+  async scheduleRequest(
+    requestId: string,
+    data: {
+      event_date: string;
+      event_end_date?: string | undefined;
+      location_id?: string | undefined;
+      notes?: string | undefined;
+      create_calendar_event?: boolean | undefined;
+    }
+  ): Promise<{ message: string; status: string; event_date: string; event_id?: string }> {
+    const response = await api.patch<{ message: string; status: string; event_date: string; event_id?: string }>(
+      `/event-requests/${requestId}/schedule`,
+      data
+    );
     return response.data;
   },
-  async postponeRequest(requestId: string, data: { reason?: string | undefined; new_event_date?: string | undefined; new_event_end_date?: string | undefined }): Promise<{ message: string; status: string }> {
-    const response = await api.patch<{ message: string; status: string }>(`/event-requests/${requestId}/postpone`, data);
+  async postponeRequest(
+    requestId: string,
+    data: { reason?: string | undefined; new_event_date?: string | undefined; new_event_end_date?: string | undefined }
+  ): Promise<{ message: string; status: string }> {
+    const response = await api.patch<{ message: string; status: string }>(
+      `/event-requests/${requestId}/postpone`,
+      data
+    );
     return response.data;
   },
-  async publicCancelRequest(token: string, data: { reason?: string | undefined }): Promise<{ message: string; status: string }> {
-    const response = await api.post<{ message: string; status: string }>(`/event-requests/status/${token}/cancel`, data);
+  async publicCancelRequest(
+    token: string,
+    data: { reason?: string | undefined }
+  ): Promise<{ message: string; status: string }> {
+    const response = await api.post<{ message: string; status: string }>(
+      `/event-requests/status/${token}/cancel`,
+      data
+    );
     return response.data;
   },
-  async sendTemplateEmail(requestId: string, data: { template_id: string; additional_context?: Record<string, string> }): Promise<{ message: string }> {
+  async sendTemplateEmail(
+    requestId: string,
+    data: { template_id: string; additional_context?: Record<string, string> }
+  ): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/event-requests/${requestId}/send-email`, data);
     return response.data;
   },
@@ -505,12 +630,33 @@ export const eventRequestService = {
     const response = await api.get<import('../types/event').EmailTemplate[]>('/event-requests/email-templates');
     return response.data;
   },
-  async createEmailTemplate(data: { name: string; subject: string; body_html: string; body_text?: string | undefined; trigger?: string | undefined; trigger_days_before?: number | undefined }): Promise<import('../types/event').EmailTemplate> {
+  async createEmailTemplate(data: {
+    name: string;
+    subject: string;
+    body_html: string;
+    body_text?: string | undefined;
+    trigger?: string | undefined;
+    trigger_days_before?: number | undefined;
+  }): Promise<import('../types/event').EmailTemplate> {
     const response = await api.post<import('../types/event').EmailTemplate>('/event-requests/email-templates', data);
     return response.data;
   },
-  async updateEmailTemplate(templateId: string, data: Partial<{ name: string; subject: string; body_html: string; body_text: string; trigger: string; trigger_days_before: number; is_active: number }>): Promise<import('../types/event').EmailTemplate> {
-    const response = await api.patch<import('../types/event').EmailTemplate>(`/event-requests/email-templates/${templateId}`, data);
+  async updateEmailTemplate(
+    templateId: string,
+    data: Partial<{
+      name: string;
+      subject: string;
+      body_html: string;
+      body_text: string;
+      trigger: string;
+      trigger_days_before: number;
+      is_active: number;
+    }>
+  ): Promise<import('../types/event').EmailTemplate> {
+    const response = await api.patch<import('../types/event').EmailTemplate>(
+      `/event-requests/email-templates/${templateId}`,
+      data
+    );
     return response.data;
   },
   async deleteEmailTemplate(templateId: string): Promise<{ message: string }> {
@@ -518,7 +664,9 @@ export const eventRequestService = {
     return response.data;
   },
   async generateForm(): Promise<{ message: string; form_id: string; public_slug: string; public_url: string }> {
-    const response = await api.post<{ message: string; form_id: string; public_slug: string; public_url: string }>('/event-requests/generate-form');
+    const response = await api.post<{ message: string; form_id: string; public_slug: string; public_url: string }>(
+      '/event-requests/generate-form'
+    );
     return response.data;
   },
 };
@@ -607,7 +755,7 @@ export interface InventoryItem {
   condition: string;
   status: string;
   status_notes?: string;
-  tracking_type: string;  // "individual" or "pool"
+  tracking_type: string; // "individual" or "pool"
   quantity: number;
   quantity_issued: number;
   unit_of_measure?: string;
@@ -906,7 +1054,7 @@ export interface ItemIssuance {
   return_notes?: string;
   is_returned: boolean;
   unit_cost_at_issuance?: number;
-  charge_status?: string;  // "none", "pending", "charged", "waived"
+  charge_status?: string; // "none", "pending", "charged", "waived"
   charge_amount?: number;
   created_at: string;
   updated_at: string;

@@ -1,13 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  Upload,
-  Download,
-  FileText,
-  CheckCircle,
-  AlertTriangle,
-  ArrowRight,
-} from 'lucide-react';
+import { Upload, Download, FileText, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
 import { userService, roleService } from '../services/api';
@@ -177,10 +170,7 @@ const OPTIONAL_HEADERS = TEMPLATE_HEADERS.filter(
  * exported from another system routinely carries columns (`status`,
  * `certifications`, `notes`) that look imported because the upload succeeds.
  */
-const RECOGNIZED_HEADERS: readonly string[] = [
-  ...TEMPLATE_HEADERS.map(normalizeHeader),
-  ...MEMBERSHIP_NUMBER_HEADERS,
-];
+const RECOGNIZED_HEADERS: readonly string[] = [...TEMPLATE_HEADERS.map(normalizeHeader), ...MEMBERSHIP_NUMBER_HEADERS];
 
 /**
  * `status` earns a specific note instead of the generic one: unlike a stray
@@ -230,8 +220,7 @@ const EMAIL_COLUMNS = ['email', 'emergencyEmail1', 'emergencyEmail2'] as const;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Seven or more digits and no `@`: the tell of a phone number in a shifted row. */
-const looksLikePhone = (value: string): boolean =>
-  !value.includes('@') && (value.match(/\d/g) ?? []).length >= 7;
+const looksLikePhone = (value: string): boolean => !value.includes('@') && (value.match(/\d/g) ?? []).length >= 7;
 
 /**
  * Excel rewrites an ISO date cell into the workstation's locale format the
@@ -275,11 +264,7 @@ const toIsoDate = (value: string): string | null => {
 
   // Rejects overflow dates (2025-02-30) that would otherwise roll forward.
   const parsed = new Date(Date.UTC(year, month - 1, day));
-  if (
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
-  ) {
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
     return null;
   }
 
@@ -369,8 +354,7 @@ const buildRow = (row: string[], headers: string[]): CSVMemberRow => ({
   firstName: cell(row, headers, 'firstname') || '',
   lastName: cell(row, headers, 'lastname') || '',
   middleName: cell(row, headers, 'middlename'),
-  membershipNumber:
-    MEMBERSHIP_NUMBER_HEADERS.map((h) => cell(row, headers, h)).find((v) => v) || '',
+  membershipNumber: MEMBERSHIP_NUMBER_HEADERS.map((h) => cell(row, headers, h)).find((v) => v) || '',
   username: cell(row, headers, 'username'),
   dateOfBirth: cell(row, headers, 'dateofbirth'),
   street: cell(row, headers, 'street') || '',
@@ -420,9 +404,7 @@ const validateRow = (data: CSVMemberRow): string[] => {
     .filter(([, value]) => !value)
     .map(([column]) => column);
   if (missing.length > 0) {
-    problems.push(
-      `Missing required ${missing.length === 1 ? 'field' : 'fields'}: ${missing.join(', ')}`
-    );
+    problems.push(`Missing required ${missing.length === 1 ? 'field' : 'fields'}: ${missing.join(', ')}`);
   }
 
   for (const column of EMAIL_COLUMNS) {
@@ -430,9 +412,7 @@ const validateRow = (data: CSVMemberRow): string[] => {
     if (!value || EMAIL_PATTERN.test(value)) continue;
     problems.push(
       `${column} "${value}" is not an email address` +
-        (looksLikePhone(value)
-          ? " — that looks like a phone number, so this row's columns are probably shifted"
-          : '')
+        (looksLikePhone(value) ? " — that looks like a phone number, so this row's columns are probably shifted" : '')
     );
   }
 
@@ -478,9 +458,7 @@ const validateRow = (data: CSVMemberRow): string[] => {
     ['joinDate', data.joinDate],
   ] as const) {
     if (value && toIsoDate(value) === null) {
-      problems.push(
-        `${column} "${value}" is not a recognized date — use YYYY-MM-DD or MM/DD/YYYY`
-      );
+      problems.push(`${column} "${value}" is not a recognized date — use YYYY-MM-DD or MM/DD/YYYY`);
     }
   }
 
@@ -503,10 +481,7 @@ const describeMember = (member: {
   first_name?: string | undefined;
   last_name?: string | undefined;
   username: string;
-}): string =>
-  member.full_name ||
-  [member.first_name, member.last_name].filter(Boolean).join(' ') ||
-  member.username;
+}): string => member.full_name || [member.first_name, member.last_name].filter(Boolean).join(' ') || member.username;
 
 /**
  * Indexes the roster so a row that collides with an existing member is caught
@@ -594,9 +569,7 @@ const runPreflight = (
     if (isTemplateExampleRow(data)) {
       invalid.push({
         line: record.line,
-        reasons: [
-          "This is the template's example row, not a member — delete it from the file before importing.",
-        ],
+        reasons: ["This is the template's example row, not a member — delete it from the file before importing."],
         cells: record.cells,
       });
       continue;
@@ -649,8 +622,7 @@ const runPreflight = (
   return { headerRow, total: dataRecords.length, valid, invalid };
 };
 
-const escapeCell = (value: string): string =>
-  /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+const escapeCell = (value: string): string => (/[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
 
 /**
  * The rejected rows, verbatim, with the reasons in a leading column.
@@ -663,9 +635,7 @@ const escapeCell = (value: string): string =>
  */
 const buildErrorReport = (headerRow: string[], issues: RowIssue[]): string => {
   const header = ['errorReason', ...headerRow].map(escapeCell).join(',');
-  const rows = issues.map((issue) =>
-    [issue.reasons.join(' | '), ...issue.cells].map(escapeCell).join(',')
-  );
+  const rows = issues.map((issue) => [issue.reasons.join(' | '), ...issue.cells].map(escapeCell).join(','));
   return [header, ...rows].join('\r\n');
 };
 
@@ -778,17 +748,13 @@ const ImportMembers: React.FC = () => {
 
       const ignoredHeaders = headerRow
         .map((raw, index) => ({ raw: raw.trim(), key: headers[index] ?? '' }))
-        .filter(
-          ({ raw, key }) =>
-            raw !== '' && key !== STATUS_HEADER && !RECOGNIZED_HEADERS.includes(key)
-        )
+        .filter(({ raw, key }) => raw !== '' && key !== STATUS_HEADER && !RECOGNIZED_HEADERS.includes(key))
         .map(({ raw }) => raw);
       if (ignoredHeaders.length > 0) {
         const shown = ignoredHeaders.slice(0, 4).join(', ');
         const rest = ignoredHeaders.length - 4;
         toast(
-          `Ignoring ${ignoredHeaders.length} unrecognized column(s): ${shown}` +
-            (rest > 0 ? ` and ${rest} more` : ''),
+          `Ignoring ${ignoredHeaders.length} unrecognized column(s): ${shown}` + (rest > 0 ? ` and ${rest} more` : ''),
           { icon: '⚠️' }
         );
       }
@@ -872,9 +838,7 @@ const ImportMembers: React.FC = () => {
       const rowData = row.data;
       try {
         const username = rowData.username || usernameFromEmail(rowData.email);
-        const roleId = rowData.role
-          ? roleIdsByName.get(rowData.role.trim().toLowerCase())
-          : undefined;
+        const roleId = rowData.role ? roleIdsByName.get(rowData.role.trim().toLowerCase()) : undefined;
 
         // Pre-flight has already rejected anything toIsoDate cannot parse.
         const dateOfBirth = rowData.dateOfBirth ? toIsoDate(rowData.dateOfBirth) : null;
@@ -966,10 +930,7 @@ const ImportMembers: React.FC = () => {
   const downloadTemplate = () => {
     const exampleRow = TEMPLATE_HEADERS.map((h) => escapeCell(TEMPLATE_EXAMPLE[h]));
 
-    downloadCsv(
-      [TEMPLATE_HEADERS.join(','), exampleRow.join(',')].join('\n'),
-      'member-import-template.csv'
-    );
+    downloadCsv([TEMPLATE_HEADERS.join(','), exampleRow.join(',')].join('\n'), 'member-import-template.csv');
 
     toast.success('Template downloaded!');
   };
@@ -979,7 +940,7 @@ const ImportMembers: React.FC = () => {
       {issues.map((issue) => (
         <div key={issue.line}>
           <p className="text-theme-alert-danger-title font-medium">Line {issue.line}</p>
-          <ul className="ml-4 list-disc text-theme-alert-danger-text">
+          <ul className="text-theme-alert-danger-text ml-4 list-disc">
             {issue.reasons.map((reason, index) => (
               <li key={index}>{reason}</li>
             ))}
@@ -992,12 +953,12 @@ const ImportMembers: React.FC = () => {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-theme-input-bg backdrop-blur-xs border-b border-theme-surface-border px-6 py-4">
-        <div className="max-w-4xl mx-auto">
+      <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
+        <div className="mx-auto max-w-4xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="bg-purple-600 rounded-lg p-2">
-                <Upload className="w-6 h-6 text-white" />
+              <div className="rounded-lg bg-purple-600 p-2">
+                <Upload className="h-6 w-6 text-white" />
               </div>
               <div>
                 <h1 className="text-theme-text-primary text-xl font-bold">Import Members from CSV</h1>
@@ -1006,7 +967,7 @@ const ImportMembers: React.FC = () => {
             </div>
             <button
               onClick={() => void navigate('/members')}
-              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm"
+              className="text-theme-text-secondary hover:text-theme-text-primary text-sm transition-colors"
             >
               ← Back to Members
             </button>
@@ -1014,14 +975,14 @@ const ImportMembers: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Instructions */}
-        <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-6 mb-8">
-          <h2 className="text-theme-text-primary font-bold mb-3 flex items-center space-x-2">
-            <FileText className="w-5 h-5 text-theme-alert-info-icon" />
+        <div className="bg-theme-alert-info-bg border-theme-alert-info-border mb-8 rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-3 flex items-center space-x-2 font-bold">
+            <FileText className="text-theme-alert-info-icon h-5 w-5" />
             <span>How to Import Members</span>
           </h2>
-          <ol className="text-theme-alert-info-text text-sm space-y-2 ml-6 list-decimal">
+          <ol className="text-theme-alert-info-text ml-6 list-decimal space-y-2 text-sm">
             <li>Download the CSV template below</li>
             <li>
               Fill in member information — <strong>firstName</strong>, <strong>lastName</strong> and{' '}
@@ -1036,12 +997,9 @@ const ImportMembers: React.FC = () => {
             <li>Rows that pass are imported; any that fail come back as a downloadable report</li>
           </ol>
 
-          <div className="mt-4 pt-4 border-t border-theme-alert-info-border">
-            <button
-              onClick={downloadTemplate}
-              className="btn-info flex items-center space-x-2"
-            >
-              <Download className="w-4 h-4" />
+          <div className="border-theme-alert-info-border mt-4 border-t pt-4">
+            <button onClick={downloadTemplate} className="btn-info flex items-center space-x-2">
+              <Download className="h-4 w-4" />
               <span>Download CSV Template</span>
             </button>
           </div>
@@ -1049,33 +1007,31 @@ const ImportMembers: React.FC = () => {
 
         {/* File Upload */}
         <div className="card mb-8 p-8">
-          <h2 className="text-theme-text-primary font-bold mb-4">Step 1: Upload CSV File</h2>
+          <h2 className="text-theme-text-primary mb-4 font-bold">Step 1: Upload CSV File</h2>
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-theme-input-border hover:border-blue-500 rounded-lg p-12 text-center cursor-pointer transition-colors"
+            className="border-theme-input-border cursor-pointer rounded-lg border-2 border-dashed p-12 text-center transition-colors hover:border-blue-500"
           >
-            <Upload className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+            <Upload className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
             {file ? (
               <>
-                <p className="text-theme-text-primary font-medium mb-1">{file.name}</p>
-                <p className="text-theme-text-muted text-sm">
-                  {(file.size / 1024).toFixed(2)} KB
-                </p>
+                <p className="text-theme-text-primary mb-1 font-medium">{file.name}</p>
+                <p className="text-theme-text-muted text-sm">{(file.size / 1024).toFixed(2)} KB</p>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setFile(null);
                     resetFileState();
                   }}
-                  className="mt-3 text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 text-sm"
+                  className="mt-3 text-sm text-red-700 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                 >
                   Remove file
                 </button>
               </>
             ) : (
               <>
-                <p className="text-theme-text-primary font-medium mb-1">Click to upload CSV file</p>
+                <p className="text-theme-text-primary mb-1 font-medium">Click to upload CSV file</p>
                 <p className="text-theme-text-muted text-sm">or drag and drop</p>
               </>
             )}
@@ -1092,7 +1048,7 @@ const ImportMembers: React.FC = () => {
 
           {validating && (
             <div className="mt-4 flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-400">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-700 dark:border-blue-400"></div>
+              <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-blue-700 dark:border-blue-400"></div>
               <span>Validating file...</span>
             </div>
           )}
@@ -1101,35 +1057,45 @@ const ImportMembers: React.FC = () => {
         {/* Pre-flight review */}
         {preflight && !importResult && (
           <div className="card mb-8 p-8">
-            <h2 className="text-theme-text-primary font-bold mb-4">Step 2: Preview Data</h2>
+            <h2 className="text-theme-text-primary mb-4 font-bold">Step 2: Preview Data</h2>
             {preflight.valid.length > 0 && (
               <>
-                <p className="text-theme-text-secondary text-sm mb-4">
-                  Showing the first {Math.min(5, preflight.valid.length)} of{' '}
-                  {preflight.valid.length} members that will be imported
+                <p className="text-theme-text-secondary mb-4 text-sm">
+                  Showing the first {Math.min(5, preflight.valid.length)} of {preflight.valid.length} members that will
+                  be imported
                 </p>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-theme-input-bg border-b border-theme-surface-border">
+                    <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                       <tr>
-                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
-                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Member #</th>
-                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Email</th>
-                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Phone</th>
-                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
+                        <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left">
+                          Name
+                        </th>
+                        <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left">
+                          Member #
+                        </th>
+                        <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left">
+                          Email
+                        </th>
+                        <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left">
+                          Phone
+                        </th>
+                        <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left">
+                          Emergency Contact
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-theme-surface-border">
+                    <tbody className="divide-theme-surface-border divide-y">
                       {preflight.valid.slice(0, 5).map(({ line, data }) => (
                         <tr key={line} className="hover:bg-theme-surface-secondary">
-                          <td className="px-4 py-2 text-theme-text-primary">
+                          <td className="text-theme-text-primary px-4 py-2">
                             {data.firstName} {data.lastName}
                           </td>
-                          <td className="px-4 py-2 text-theme-text-secondary font-mono">{data.membershipNumber}</td>
-                          <td className="px-4 py-2 text-theme-text-secondary">{data.email}</td>
-                          <td className="px-4 py-2 text-theme-text-secondary">{data.primaryPhone}</td>
-                          <td className="px-4 py-2 text-theme-text-secondary">
+                          <td className="text-theme-text-secondary px-4 py-2 font-mono">{data.membershipNumber}</td>
+                          <td className="text-theme-text-secondary px-4 py-2">{data.email}</td>
+                          <td className="text-theme-text-secondary px-4 py-2">{data.primaryPhone}</td>
+                          <td className="text-theme-text-secondary px-4 py-2">
                             {data.emergencyName1
                               ? `${data.emergencyName1}${data.emergencyRelationship1 ? ` (${data.emergencyRelationship1})` : ''}`
                               : '—'}
@@ -1143,43 +1109,41 @@ const ImportMembers: React.FC = () => {
             )}
 
             {preflight.invalid.length > 0 && (
-              <div className="bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 mt-6">
-                <h3 className="text-theme-alert-danger-title font-bold mb-1 flex items-center space-x-2">
-                  <AlertTriangle className="w-5 h-5" />
+              <div className="bg-theme-alert-danger-bg border-theme-alert-danger-border mt-6 rounded-lg border p-4">
+                <h3 className="text-theme-alert-danger-title mb-1 flex items-center space-x-2 font-bold">
+                  <AlertTriangle className="h-5 w-5" />
                   <span>{preflight.invalid.length} row(s) will not be imported</span>
                 </h3>
-                <p className="text-theme-alert-danger-text text-sm mb-3">
-                  Download the report to get these rows back with the reason in the first
-                  column. Fix them, delete that column, and upload the file again.
+                <p className="text-theme-alert-danger-text mb-3 text-sm">
+                  Download the report to get these rows back with the reason in the first column. Fix them, delete that
+                  column, and upload the file again.
                 </p>
                 {renderIssues(preflight.invalid)}
                 <button
                   onClick={() => downloadErrorReport(preflight.invalid)}
                   className="btn-info mt-4 flex items-center space-x-2"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="h-4 w-4" />
                   <span>Download Error Report</span>
                 </button>
               </div>
             )}
 
             {preflight.valid.length > 0 && (
-              <label className="mt-6 flex items-start space-x-3 cursor-pointer">
+              <label className="mt-6 flex cursor-pointer items-start space-x-3">
                 <input
                   type="checkbox"
                   checked={sendWelcomeEmails}
                   onChange={(e) => setSendWelcomeEmails(e.target.checked)}
                   disabled={importing}
-                  className="mt-1 h-4 w-4 rounded border-theme-input-border"
+                  className="border-theme-input-border mt-1 h-4 w-4 rounded"
                 />
                 <span className="text-sm">
-                  <span className="text-theme-text-primary font-medium">
-                    Send welcome emails now
-                  </span>
-                  <span className="block text-theme-text-muted">
-                    Each member is emailed a password-setup link the moment their record is
-                    created, and it cannot be recalled. Left off, the roster imports quietly
-                    and you issue credentials later from Member Management.
+                  <span className="text-theme-text-primary font-medium">Send welcome emails now</span>
+                  <span className="text-theme-text-muted block">
+                    Each member is emailed a password-setup link the moment their record is created, and it cannot be
+                    recalled. Left off, the roster imports quietly and you issue credentials later from Member
+                    Management.
                   </span>
                 </span>
               </label>
@@ -1187,13 +1151,13 @@ const ImportMembers: React.FC = () => {
 
             {progress && (
               <div className="mt-6">
-                <div className="flex justify-between text-sm text-theme-text-secondary mb-1">
+                <div className="text-theme-text-secondary mb-1 flex justify-between text-sm">
                   <span>
                     Importing {progress.done} of {progress.total}
                   </span>
                   <span>{Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%</span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-theme-input-bg overflow-hidden">
+                <div className="bg-theme-input-bg h-2 w-full overflow-hidden rounded-full">
                   <div
                     className="h-full bg-green-600 transition-all"
                     style={{ width: `${(progress.done / Math.max(progress.total, 1)) * 100}%` }}
@@ -1213,24 +1177,26 @@ const ImportMembers: React.FC = () => {
                   onClick={() => {
                     cancelRequested.current = true;
                   }}
-                  className="px-6 py-3 rounded-lg border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                  className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg border px-6 py-3 transition-colors"
                 >
                   Stop importing
                 </button>
               )}
               <button
-                onClick={() => { void handleImport(); }}
+                onClick={() => {
+                  void handleImport();
+                }}
                 disabled={importing || preflight.valid.length === 0}
-                className="flex items-center space-x-2 px-6 py-3 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center space-x-2 rounded-lg bg-linear-to-r from-green-600 to-emerald-600 px-6 py-3 text-white shadow-lg transition-all hover:from-green-700 hover:to-emerald-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {importing ? (
                   <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-white"></div>
                     <span>Importing...</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle className="w-5 h-5" />
+                    <CheckCircle className="h-5 w-5" />
                     <span>Import {preflight.valid.length} Members</span>
                   </>
                 )}
@@ -1242,34 +1208,32 @@ const ImportMembers: React.FC = () => {
         {/* Import Results */}
         {importResult && (
           <div className="card p-8">
-            <div className="text-center mb-6">
-              <CheckCircle className="w-16 h-16 text-theme-alert-success-icon mx-auto mb-4" />
-              <h2 className="text-theme-text-primary text-2xl font-bold mb-2">Import Complete!</h2>
-              <p className="text-theme-text-secondary">
-                Successfully imported {importResult.success} members
-              </p>
+            <div className="mb-6 text-center">
+              <CheckCircle className="text-theme-alert-success-icon mx-auto mb-4 h-16 w-16" />
+              <h2 className="text-theme-text-primary mb-2 text-2xl font-bold">Import Complete!</h2>
+              <p className="text-theme-text-secondary">Successfully imported {importResult.success} members</p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <div className="bg-theme-alert-success-bg border border-theme-alert-success-border rounded-lg p-4 text-center">
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="bg-theme-alert-success-bg border-theme-alert-success-border rounded-lg border p-4 text-center">
                 <p className="text-theme-alert-success-title text-2xl font-bold">{importResult.success}</p>
                 <p className="text-theme-alert-success-text text-sm">Successful</p>
               </div>
-              <div className="bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 text-center">
+              <div className="bg-theme-alert-danger-bg border-theme-alert-danger-border rounded-lg border p-4 text-center">
                 <p className="text-theme-alert-danger-title text-2xl font-bold">{importResult.issues.length}</p>
                 <p className="text-theme-alert-danger-text text-sm">Failed</p>
               </div>
             </div>
 
             {importResult.issues.length > 0 && (
-              <div className="bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 mb-6">
-                <h3 className="text-theme-alert-danger-title font-bold mb-2">Errors:</h3>
+              <div className="bg-theme-alert-danger-bg border-theme-alert-danger-border mb-6 rounded-lg border p-4">
+                <h3 className="text-theme-alert-danger-title mb-2 font-bold">Errors:</h3>
                 {renderIssues(importResult.issues)}
                 <button
                   onClick={() => downloadErrorReport(importResult.issues)}
                   className="btn-info mt-4 flex items-center space-x-2"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="h-4 w-4" />
                   <span>Download Error Report</span>
                 </button>
               </div>
@@ -1278,10 +1242,10 @@ const ImportMembers: React.FC = () => {
             <div className="flex items-center justify-center space-x-3">
               <button
                 onClick={() => void navigate('/members')}
-                className="btn-info flex items-center px-6 py-3 space-x-2"
+                className="btn-info flex items-center space-x-2 px-6 py-3"
               >
                 <span>View Members</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           </div>

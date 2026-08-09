@@ -104,7 +104,6 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
     // As above.
   }
 
-  result.unsyncedDiscarded =
-    result.queuedChecks + result.queuedReports + result.queuedGeneric;
+  result.unsyncedDiscarded = result.queuedChecks + result.queuedReports + result.queuedGeneric;
   return result;
 }

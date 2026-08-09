@@ -1,18 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import {
-  ArrowLeft,
-  Send,
-  FileText,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  RotateCcw,
-  Trash2,
-  Edit2,
-  Info,
-} from 'lucide-react';
+import { ArrowLeft, Send, FileText, Clock, CheckCircle2, XCircle, RotateCcw, Trash2, Edit2, Info } from 'lucide-react';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { trainingSubmissionService, trainingService } from '../services/api';
 import type {
@@ -28,10 +17,18 @@ import type {
 
 const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; icon: React.ElementType }> = {
   draft: { label: 'Draft', color: 'bg-theme-surface-secondary text-theme-text-muted', icon: FileText },
-  pending_review: { label: 'Pending Review', color: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400', icon: Clock },
+  pending_review: {
+    label: 'Pending Review',
+    color: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
+    icon: Clock,
+  },
   approved: { label: 'Approved', color: 'bg-green-500/20 text-green-700 dark:text-green-400', icon: CheckCircle2 },
   rejected: { label: 'Rejected', color: 'bg-red-500/20 text-red-700 dark:text-red-400', icon: XCircle },
-  revision_requested: { label: 'Revision Requested', color: 'bg-orange-500/20 text-orange-700 dark:text-orange-400', icon: RotateCcw },
+  revision_requested: {
+    label: 'Revision Requested',
+    color: 'bg-orange-500/20 text-orange-700 dark:text-orange-400',
+    icon: RotateCcw,
+  },
 };
 
 const TRAINING_TYPES: { value: TrainingType; label: string }[] = [
@@ -47,8 +44,8 @@ const StatusBadge: React.FC<{ status: SubmissionStatus }> = ({ status }) => {
   const config = STATUS_CONFIG[status];
   const Icon = config.icon;
   return (
-    <span className={`inline-flex items-center space-x-1 px-2 py-0.5 text-xs rounded-sm ${config.color}`}>
-      <Icon className="w-3 h-3" />
+    <span className={`inline-flex items-center space-x-1 rounded-sm px-2 py-0.5 text-xs ${config.color}`}>
+      <Icon className="h-3 w-3" />
       <span>{config.label}</span>
     </span>
   );
@@ -182,8 +179,7 @@ const SubmissionForm: React.FC<{
       }
     } catch (err: unknown) {
       const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to submit training';
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to submit training';
       setError(msg);
     } finally {
       setIsSubmitting(false);
@@ -198,28 +194,34 @@ const SubmissionForm: React.FC<{
   const parentCategories = categories.filter((c) => !c.parent_category_id);
 
   return (
-    <form onSubmit={(e) => { void handleSubmit(e); }} className="card-secondary p-6 space-y-4">
-      <h2 className="text-lg font-semibold text-theme-text-primary mb-2">
+    <form
+      onSubmit={(e) => {
+        void handleSubmit(e);
+      }}
+      className="card-secondary space-y-4 p-6"
+    >
+      <h2 className="text-theme-text-primary mb-2 text-lg font-semibold">
         {isEdit ? 'Edit Submission' : 'Report External Training'}
       </h2>
 
       {config.member_instructions && (
-        <div className="flex items-start space-x-2 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-          <Info className="w-4 h-4 text-blue-700 dark:text-blue-400 mt-0.5 shrink-0" />
-          <p className="text-blue-700 dark:text-blue-300 text-sm">{config.member_instructions}</p>
+        <div className="flex items-start space-x-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-400" />
+          <p className="text-sm text-blue-700 dark:text-blue-300">{config.member_instructions}</p>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded-sm text-sm">
+        <div className="rounded-sm border border-red-500 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
           {error}
         </div>
       )}
 
       {/* Course name - always visible */}
       <div>
-        <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-          {fieldLabel('course_name', 'Course / Class Name')} {isFieldRequired('course_name') && <span className="text-red-700 dark:text-red-400">*</span>}
+        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+          {fieldLabel('course_name', 'Course / Class Name')}{' '}
+          {isFieldRequired('course_name') && <span className="text-red-700 dark:text-red-400">*</span>}
         </label>
         <input
           type="text"
@@ -234,8 +236,9 @@ const SubmissionForm: React.FC<{
       {/* Training type */}
       {isFieldVisible('training_type') && (
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-            {fieldLabel('training_type', 'Training Type')} {isFieldRequired('training_type') && <span className="text-red-700 dark:text-red-400">*</span>}
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            {fieldLabel('training_type', 'Training Type')}{' '}
+            {isFieldRequired('training_type') && <span className="text-red-700 dark:text-red-400">*</span>}
           </label>
           <select
             value={formData.training_type}
@@ -244,16 +247,18 @@ const SubmissionForm: React.FC<{
             required={isFieldRequired('training_type')}
           >
             {allowedTypes.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
             ))}
           </select>
         </div>
       )}
 
       {/* Start / End datetime pickers + calculated hours */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
             Start Date & Time <span className="text-red-700 dark:text-red-400">*</span>
           </label>
           <DateTimeQuarterHour
@@ -277,7 +282,7 @@ const SubmissionForm: React.FC<{
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
             End Date & Time <span className="text-red-700 dark:text-red-400">*</span>
           </label>
           <DateTimeQuarterHour
@@ -290,30 +295,35 @@ const SubmissionForm: React.FC<{
       </div>
 
       {/* Calculated hours display */}
-      {(startDatetime && endDatetime) && (
-        <div className={`flex items-center space-x-2 rounded-lg p-3 text-sm ${
-          calculatedHours > 0
-            ? 'bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-400'
-            : 'bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400'
-        }`}>
-          <Clock className="w-4 h-4 shrink-0" />
+      {startDatetime && endDatetime && (
+        <div
+          className={`flex items-center space-x-2 rounded-lg p-3 text-sm ${
+            calculatedHours > 0
+              ? 'border border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+              : 'border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400'
+          }`}
+        >
+          <Clock className="h-4 w-4 shrink-0" />
           <span>
             {calculatedHours > 0
               ? `Training Hours: ${formatHours(calculatedHours)} (${calculatedHours} hours)`
               : 'End time must be after start time'}
           </span>
           {config.max_hours_per_submission && calculatedHours > config.max_hours_per_submission && (
-            <span className="text-red-700 dark:text-red-400 ml-2">(exceeds max of {config.max_hours_per_submission}h)</span>
+            <span className="ml-2 text-red-700 dark:text-red-400">
+              (exceeds max of {config.max_hours_per_submission}h)
+            </span>
           )}
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* Instructor */}
         {isFieldVisible('instructor') && (
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              {fieldLabel('instructor', 'Instructor Name')} {isFieldRequired('instructor') && <span className="text-red-700 dark:text-red-400">*</span>}
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              {fieldLabel('instructor', 'Instructor Name')}{' '}
+              {isFieldRequired('instructor') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="text"
@@ -328,8 +338,9 @@ const SubmissionForm: React.FC<{
         {/* Location */}
         {isFieldVisible('location') && (
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              {fieldLabel('location', 'Location / Facility')} {isFieldRequired('location') && <span className="text-red-700 dark:text-red-400">*</span>}
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              {fieldLabel('location', 'Location / Facility')}{' '}
+              {isFieldRequired('location') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="text"
@@ -345,8 +356,9 @@ const SubmissionForm: React.FC<{
       {/* Category */}
       {isFieldVisible('category_id') && parentCategories.length > 0 && (
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-            {fieldLabel('category_id', 'Training Category')} {isFieldRequired('category_id') && <span className="text-red-700 dark:text-red-400">*</span>}
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            {fieldLabel('category_id', 'Training Category')}{' '}
+            {isFieldRequired('category_id') && <span className="text-red-700 dark:text-red-400">*</span>}
           </label>
           <select
             value={formData.category_id || ''}
@@ -356,7 +368,9 @@ const SubmissionForm: React.FC<{
           >
             <option value="">Select a category...</option>
             {parentCategories.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
             ))}
           </select>
         </div>
@@ -365,8 +379,9 @@ const SubmissionForm: React.FC<{
       {/* Description */}
       {isFieldVisible('description') && (
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-            {fieldLabel('description', 'Description / Notes')} {isFieldRequired('description') && <span className="text-red-700 dark:text-red-400">*</span>}
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            {fieldLabel('description', 'Description / Notes')}{' '}
+            {isFieldRequired('description') && <span className="text-red-700 dark:text-red-400">*</span>}
           </label>
           <textarea
             value={formData.description || ''}
@@ -379,12 +394,13 @@ const SubmissionForm: React.FC<{
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* Certification Number */}
         {isFieldVisible('certification_number') && (
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              {fieldLabel('certification_number', 'Certificate / ID Number')} {isFieldRequired('certification_number') && <span className="text-red-700 dark:text-red-400">*</span>}
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              {fieldLabel('certification_number', 'Certificate / ID Number')}{' '}
+              {isFieldRequired('certification_number') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="text"
@@ -399,8 +415,9 @@ const SubmissionForm: React.FC<{
         {/* Issuing Agency */}
         {isFieldVisible('issuing_agency') && (
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              {fieldLabel('issuing_agency', 'Issuing Agency')} {isFieldRequired('issuing_agency') && <span className="text-red-700 dark:text-red-400">*</span>}
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              {fieldLabel('issuing_agency', 'Issuing Agency')}{' '}
+              {isFieldRequired('issuing_agency') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="text"
@@ -415,8 +432,9 @@ const SubmissionForm: React.FC<{
         {/* Expiration Date */}
         {isFieldVisible('expiration_date') && (
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              {fieldLabel('expiration_date', 'Expiration Date')} {isFieldRequired('expiration_date') && <span className="text-red-700 dark:text-red-400">*</span>}
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              {fieldLabel('expiration_date', 'Expiration Date')}{' '}
+              {isFieldRequired('expiration_date') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="date"
@@ -430,8 +448,8 @@ const SubmissionForm: React.FC<{
       </div>
 
       {/* Buttons */}
-      <div className="flex items-center justify-between pt-4 border-t border-theme-surface-border">
-        <div className="text-xs text-theme-text-muted">
+      <div className="border-theme-surface-border flex items-center justify-between border-t pt-4">
+        <div className="text-theme-text-muted text-xs">
           {config.require_approval
             ? 'Your submission will be reviewed by a training officer.'
             : 'Training will be recorded immediately.'}
@@ -441,17 +459,13 @@ const SubmissionForm: React.FC<{
             <button
               type="button"
               onClick={onCancelEdit}
-              className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
+              className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover rounded-lg px-4 py-2 text-sm"
             >
               Cancel
             </button>
           )}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="btn-primary flex items-center space-x-2 text-sm"
-          >
-            <Send className="w-4 h-4" />
+          <button type="submit" disabled={isSubmitting} className="btn-primary flex items-center space-x-2 text-sm">
+            <Send className="h-4 w-4" />
             <span>{isSubmitting ? 'Submitting...' : isEdit ? 'Update' : 'Submit Training'}</span>
           </button>
         </div>
@@ -491,7 +505,9 @@ const SubmitTrainingPage: React.FC = () => {
     }
   };
 
-  useEffect(() => { void loadData(); }, []);
+  useEffect(() => {
+    void loadData();
+  }, []);
 
   const handleDelete = async (submissionId: string) => {
     if (!confirm('Are you sure you want to delete this submission?')) return;
@@ -506,9 +522,9 @@ const SubmitTrainingPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
+          <div className="inline-block h-10 w-10 animate-spin rounded-full border-b-2 border-red-500" />
           <p className="text-theme-text-muted mt-4">Loading...</p>
         </div>
       </div>
@@ -517,10 +533,15 @@ const SubmitTrainingPage: React.FC = () => {
 
   if (loadError || !config) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <p className="text-red-500 mb-4">{loadError || 'Unable to load configuration.'}</p>
-          <button onClick={() => { void loadData(); }} className="btn-primary">
+          <p className="mb-4 text-red-500">{loadError || 'Unable to load configuration.'}</p>
+          <button
+            onClick={() => {
+              void loadData();
+            }}
+            className="btn-primary"
+          >
             Try Again
           </button>
         </div>
@@ -530,18 +551,18 @@ const SubmitTrainingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex items-center space-x-4 mb-8">
+        <div className="mb-8 flex items-center space-x-4">
           <button
             onClick={() => void navigate('/training')}
-            className="p-2 max-md:mobile-touch-target text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-secondary"
+            className="max-md:mobile-touch-target text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg p-2"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-theme-text-primary flex items-center space-x-2">
-              <FileText className="w-7 h-7 text-red-700 dark:text-red-500" />
+            <h1 className="text-theme-text-primary flex items-center space-x-2 text-2xl font-bold">
+              <FileText className="h-7 w-7 text-red-700 dark:text-red-500" />
               <span>Submit External Training</span>
             </h1>
             <p className="text-theme-text-muted text-sm">
@@ -554,7 +575,10 @@ const SubmitTrainingPage: React.FC = () => {
         <SubmissionForm
           config={config}
           categories={categories}
-          onSuccess={() => { setEditingSubmission(null); void loadData(); }}
+          onSuccess={() => {
+            setEditingSubmission(null);
+            void loadData();
+          }}
           editSubmission={editingSubmission}
           onCancelEdit={() => setEditingSubmission(null)}
         />
@@ -562,7 +586,9 @@ const SubmitTrainingPage: React.FC = () => {
         {/* My Submissions History */}
         {submissions.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">My Submissions ({submissions.length})</h2>
+            <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">
+              My Submissions ({submissions.length})
+            </h2>
             <div className="space-y-3">
               {submissions.map((sub) => {
                 const canEdit = ['draft', 'pending_review', 'revision_requested'].includes(sub.status);
@@ -570,38 +596,40 @@ const SubmitTrainingPage: React.FC = () => {
                   <div key={sub.id} className="card-secondary p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
+                        <div className="mb-1 flex items-center space-x-2">
                           <h3 className="text-theme-text-primary font-medium">{sub.course_name}</h3>
                           <StatusBadge status={sub.status} />
                         </div>
-                        <div className="flex items-center space-x-4 text-xs text-theme-text-muted">
+                        <div className="text-theme-text-muted flex items-center space-x-4 text-xs">
                           <span>{sub.hours_completed}h</span>
                           <span>{sub.completion_date}</span>
                           {sub.instructor && <span>Instructor: {sub.instructor}</span>}
                           {sub.location && <span>at {sub.location}</span>}
                         </div>
                         {sub.reviewer_notes && (
-                          <div className="mt-2 bg-theme-surface rounded-sm p-2 text-sm">
+                          <div className="bg-theme-surface mt-2 rounded-sm p-2 text-sm">
                             <span className="text-theme-text-muted text-xs">Officer notes: </span>
                             <span className="text-theme-text-secondary">{sub.reviewer_notes}</span>
                           </div>
                         )}
                       </div>
                       {canEdit && (
-                        <div className="flex items-center space-x-1 ml-4">
+                        <div className="ml-4 flex items-center space-x-1">
                           <button
                             onClick={() => setEditingSubmission(sub)}
-                            className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded-sm"
+                            className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
                             aria-label="Edit submission"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => { void handleDelete(sub.id); }}
-                            className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 rounded-sm"
+                            onClick={() => {
+                              void handleDelete(sub.id);
+                            }}
+                            className="text-theme-text-muted rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
                             aria-label="Delete submission"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
                       )}

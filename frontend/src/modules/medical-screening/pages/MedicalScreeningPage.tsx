@@ -6,16 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  Stethoscope,
-  Plus,
-  Loader2,
-  AlertTriangle,
-  CheckCircle,
-  Shield,
-  Trash2,
-  Edit2,
-} from 'lucide-react';
+import { Stethoscope, Plus, Loader2, AlertTriangle, CheckCircle, Shield, Trash2, Edit2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
 import { ScreeningRequirementForm } from '../components/ScreeningRequirementForm';
@@ -23,11 +14,7 @@ import { ScreeningRecordForm } from '../components/ScreeningRecordForm';
 import { ComplianceDashboard } from '../components/ComplianceDashboard';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import {
-  SCREENING_TYPE_LABELS,
-  SCREENING_STATUS_LABELS,
-  SCREENING_STATUS_COLORS,
-} from '../types';
+import { SCREENING_TYPE_LABELS, SCREENING_STATUS_LABELS, SCREENING_STATUS_COLORS } from '../types';
 import type {
   ScreeningRequirement,
   ScreeningRecord,
@@ -45,7 +32,9 @@ export const MedicalScreeningPage: React.FC = () => {
   const [editingRequirement, setEditingRequirement] = useState<ScreeningRequirement | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ScreeningRecord | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'requirement' | 'record'; id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'requirement' | 'record'; id: string; name: string } | null>(
+    null
+  );
 
   const {
     requirements,
@@ -175,8 +164,8 @@ export const MedicalScreeningPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
-              {expiringScreenings.length} screening{expiringScreenings.length === 1 ? '' : 's'} expiring in
-              the next 30 days
+              {expiringScreenings.length} screening{expiringScreenings.length === 1 ? '' : 's'} expiring in the next 30
+              days
             </span>
           </div>
         </div>
@@ -258,9 +247,7 @@ export const MedicalScreeningPage: React.FC = () => {
                       ? ` — ${req.applies_to_roles.join(', ')}`
                       : ''}
                   </p>
-                  {req.description && (
-                    <p className="text-theme-text-muted mt-1 text-xs">{req.description}</p>
-                  )}
+                  {req.description && <p className="text-theme-text-muted mt-1 text-xs">{req.description}</p>}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -294,9 +281,7 @@ export const MedicalScreeningPage: React.FC = () => {
             <div className="border-theme-surface-border rounded-lg border border-dashed py-12 text-center">
               <Stethoscope className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
               <p className="text-theme-text-muted mb-1">No screening records yet.</p>
-              <p className="text-theme-text-muted text-sm">
-                Add records as members complete their screenings.
-              </p>
+              <p className="text-theme-text-muted text-sm">Add records as members complete their screenings.</p>
             </div>
           ) : (
             records.map((record) => (
@@ -310,9 +295,7 @@ export const MedicalScreeningPage: React.FC = () => {
                       {SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type}
                     </h3>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        SCREENING_STATUS_COLORS[record.status] ?? ''
-                      }`}
+                      className={`rounded-full px-2 py-0.5 text-xs ${SCREENING_STATUS_COLORS[record.status] ?? ''}`}
                     >
                       {SCREENING_STATUS_LABELS[record.status] ?? record.status}
                     </span>

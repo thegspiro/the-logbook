@@ -30,9 +30,7 @@ describe('LegalPage', () => {
 
   it('renders the default privacy policy at /privacy', async () => {
     renderAt('/privacy');
-    expect(
-      await screen.findByRole('heading', { name: 'Privacy Policy' })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Privacy Policy' })).toBeInTheDocument();
     expect(screen.getByText(/Information we collect/)).toBeInTheDocument();
     const orgMentions = await screen.findAllByText(/Falls Church VFD/);
     expect(orgMentions.length).toBeGreaterThan(0);
@@ -40,9 +38,7 @@ describe('LegalPage', () => {
 
   it('renders the default terms at /terms', async () => {
     renderAt('/terms');
-    expect(
-      await screen.findByRole('heading', { name: 'Terms of Service' })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Terms of Service' })).toBeInTheDocument();
     expect(screen.getByText(/Acceptable use/)).toBeInTheDocument();
   });
 
@@ -63,20 +59,13 @@ describe('LegalPage', () => {
   it('falls back to defaults when the endpoint fails', async () => {
     mockGet.mockRejectedValue(new Error('network'));
     renderAt('/privacy');
-    expect(
-      await screen.findByRole('heading', { name: 'Privacy Policy' })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Privacy Policy' })).toBeInTheDocument();
     expect(screen.getByText(/Information we collect/)).toBeInTheDocument();
   });
 
   it('links between privacy and terms', async () => {
     renderAt('/privacy');
-    expect(
-      screen.getByRole('link', { name: 'Terms of Service' })
-    ).toHaveAttribute('href', '/terms');
-    expect(await screen.findByRole('link', { name: /Back to sign in/ })).toHaveAttribute(
-      'href',
-      '/login'
-    );
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/terms');
+    expect(await screen.findByRole('link', { name: /Back to sign in/ })).toHaveAttribute('href', '/login');
   });
 });

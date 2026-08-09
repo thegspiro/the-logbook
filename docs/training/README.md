@@ -6,33 +6,34 @@ Welcome to the training documentation for The Logbook. These guides are designed
 
 ## Guides
 
-| # | Guide | Description |
-|---|-------|-------------|
-| 0 | [Getting Started](./00-getting-started.md) | First login, navigation, dashboard, account settings |
-| 1 | [Membership Management](./01-membership.md) | Member directory, profiles, prospective pipeline, status management, leave of absence, tiers |
-| 2 | [Training & Certification](./02-training.md) | Courses, multi-class course syllabi & cohorts, programs/pipelines, enrollment, progress tracking, phases & advancement, knowledge-test scoring, member progression view, requirements, submissions, compliance, external integrations, manual shift reports, program export/import, NREMT linkage |
-| 3 | [Shifts & Scheduling](./03-scheduling.md) | Calendar, assignments, attendance, call/run logging, time-off, swaps, templates, platoon rotations, compliance, shift settings |
-| 4 | [Events & Meetings](./04-events-meetings.md) | Events, QR check-in, meetings, minutes, action items, elections, public outreach pipeline |
-| 5 | [Inventory Management](./05-inventory.md) | Items (individual & pool), variant groups, equipment kits, member size preferences, issuance allowances, equipment request fulfillment, reorder requests, categories, assignments, checkout, batch operations, scanning, label printing, NFPA 1851 lifecycle, departure clearance |
-| 6 | [Apparatus & Facilities](./06-apparatus-facilities.md) | Vehicles, maintenance, fuel, NFPA compliance, facilities dashboard, facility detail (sidebar nav), rooms, systems, inspections, utilities, capital projects |
-| 7 | [Documents, Forms & Communications](./07-documents-forms.md) | File storage, form builder, notifications, messages, integrations |
-| 8 | [Administration & Reports](./08-admin-reports.md) | Settings, roles, modules, reports, analytics, public portal, security, first-time setup, Salesforce integration |
-| 9 | [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | Skill sheet templates, NREMT-style evaluations, point-based scoring, statement criteria, practice mode, test visibility, post-completion review, test deletion, pass/fail, training-requirement linkage (passing a test completes a pipeline requirement), realistic example |
-| 10 | [Mobile & PWA Usage](./10-mobile-pwa.md) | Installing the app, offline behavior, mobile features, QR scanning, version detection, troubleshooting |
-| 11 | [Finance](./11-finance.md) | Fiscal years, budgets, purchase requests, expense reports, check requests, approval chains, dues & assessments, QuickBooks export |
-| 12 | [Grants & Fundraising](./12-grants-fundraising.md) | Grant opportunities, applications, budget tracking, compliance tasks, campaigns, donor CRM, donations, pledges, fundraising events |
-| 13 | [Medical Screening](./13-medical-screening.md) | Screening requirements, records, compliance dashboard, expiring screenings, prospect screening |
-| 14 | [Elections & Voting](./14-elections.md) | Ballot items, nominations, candidates, anonymous voting, paper ballots & attestation, proxy voting, reminders & lifecycle automation, runoff elections, tie policies, vote integrity, forensics, certified results |
-| 15 | [Prospective Members Pipeline](./15-prospective-members.md) | Pipeline stages, applicant tracking, document collection, interviews, election packages, member conversion |
-| 16 | [Integrations](./16-integrations.md) | Salesforce, calendar sync, Slack/Discord/Teams, PayPal store reconciliation, weather alerts, ePCR import, NEMSIS/NFIRS export, webhooks |
-| 17 | [Privacy & Your Data](./17-privacy-data-rights.md) | Privacy choices/consent, personal-data export, what officers can see, records retention, anonymizing departed members, records requests |
-| 18 | [Department Store](./18-storefront.md) | Store settings, catalog & options, personalization, product photos, order windows, member ordering, payment buttons (Venmo/PayPal/Cash App/Zelle), payment rules for unpaid orders, recording payment, PayPal reconciliation, vendor order & embroidery tallies, notification switches, previews & test sends, rewording the store's emails |
+| #   | Guide                                                              | Description                                                                                                                                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | [Getting Started](./00-getting-started.md)                         | First login, navigation, dashboard, account settings                                                                                                                                                                                                                                                                                        |
+| 1   | [Membership Management](./01-membership.md)                        | Member directory, profiles, prospective pipeline, status management, leave of absence, tiers                                                                                                                                                                                                                                                |
+| 2   | [Training & Certification](./02-training.md)                       | Courses, multi-class course syllabi & cohorts, programs/pipelines, enrollment, progress tracking, phases & advancement, knowledge-test scoring, member progression view, requirements, submissions, compliance, external integrations, manual shift reports, program export/import, NREMT linkage                                           |
+| 3   | [Shifts & Scheduling](./03-scheduling.md)                          | Calendar, assignments, attendance, call/run logging, time-off, swaps, templates, platoon rotations, compliance, shift settings                                                                                                                                                                                                              |
+| 4   | [Events & Meetings](./04-events-meetings.md)                       | Events, QR check-in, meetings, minutes, action items, elections, public outreach pipeline                                                                                                                                                                                                                                                   |
+| 5   | [Inventory Management](./05-inventory.md)                          | Items (individual & pool), variant groups, equipment kits, member size preferences, issuance allowances, equipment request fulfillment, reorder requests, categories, assignments, checkout, batch operations, scanning, label printing, NFPA 1851 lifecycle, departure clearance                                                           |
+| 6   | [Apparatus & Facilities](./06-apparatus-facilities.md)             | Vehicles, maintenance, fuel, NFPA compliance, facilities dashboard, facility detail (sidebar nav), rooms, systems, inspections, utilities, capital projects                                                                                                                                                                                 |
+| 7   | [Documents, Forms & Communications](./07-documents-forms.md)       | File storage, form builder, notifications, messages, integrations                                                                                                                                                                                                                                                                           |
+| 8   | [Administration & Reports](./08-admin-reports.md)                  | Settings, roles, modules, reports, analytics, public portal, security, first-time setup, Salesforce integration                                                                                                                                                                                                                             |
+| 9   | [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | Skill sheet templates, NREMT-style evaluations, point-based scoring, statement criteria, practice mode, test visibility, post-completion review, test deletion, pass/fail, training-requirement linkage (passing a test completes a pipeline requirement), realistic example                                                                |
+| 10  | [Mobile & PWA Usage](./10-mobile-pwa.md)                           | Installing the app, offline behavior, mobile features, QR scanning, version detection, troubleshooting                                                                                                                                                                                                                                      |
+| 11  | [Finance](./11-finance.md)                                         | Fiscal years, budgets, purchase requests, expense reports, check requests, approval chains, dues & assessments, QuickBooks export                                                                                                                                                                                                           |
+| 12  | [Grants & Fundraising](./12-grants-fundraising.md)                 | Grant opportunities, applications, budget tracking, compliance tasks, campaigns, donor CRM, donations, pledges, fundraising events                                                                                                                                                                                                          |
+| 13  | [Medical Screening](./13-medical-screening.md)                     | Screening requirements, records, compliance dashboard, expiring screenings, prospect screening                                                                                                                                                                                                                                              |
+| 14  | [Elections & Voting](./14-elections.md)                            | Ballot items, nominations, candidates, anonymous voting, paper ballots & attestation, proxy voting, reminders & lifecycle automation, runoff elections, tie policies, vote integrity, forensics, certified results                                                                                                                          |
+| 15  | [Prospective Members Pipeline](./15-prospective-members.md)        | Pipeline stages, applicant tracking, document collection, interviews, election packages, member conversion                                                                                                                                                                                                                                  |
+| 16  | [Integrations](./16-integrations.md)                               | Salesforce, calendar sync, Slack/Discord/Teams, PayPal store reconciliation, weather alerts, ePCR import, NEMSIS/NFIRS export, webhooks                                                                                                                                                                                                     |
+| 17  | [Privacy & Your Data](./17-privacy-data-rights.md)                 | Privacy choices/consent, personal-data export, what officers can see, records retention, anonymizing departed members, records requests                                                                                                                                                                                                     |
+| 18  | [Department Store](./18-storefront.md)                             | Store settings, catalog & options, personalization, product photos, order windows, member ordering, payment buttons (Venmo/PayPal/Cash App/Zelle), payment rules for unpaid orders, recording payment, PayPal reconciliation, vendor order & embroidery tallies, notification switches, previews & test sends, rewording the store's emails |
 
 ---
 
 ## Quick Reference: Who Should Read What
 
 ### All Members
+
 - [Getting Started](./00-getting-started.md) - Essential for everyone
 - [Privacy & Your Data](./17-privacy-data-rights.md) - Sections 1-4 (your privacy choices, downloading your data, what officers can see)
 - [Mobile & PWA Usage](./10-mobile-pwa.md) - Installing the app on your phone, QR scanning, mobile tips
@@ -44,7 +45,9 @@ Welcome to the training documentation for The Logbook. These guides are designed
 - [Department Store](./18-storefront.md) - Sections 9-10 (placing an order, paying) — if your department runs a store
 
 ### Officers and Line Officers
+
 All of the above, plus:
+
 - [Training & Certification](./02-training.md) - Sections 4, 6-13 (multi-class courses & cohorts, officer dashboard, reviews, compliance, integrations)
 - [Skills Testing](./09-skills-testing.md) - Template creation, test administration, scoring, results
 - [Shifts & Scheduling](./03-scheduling.md) - All sections including templates, platoon rotations, and reports
@@ -58,13 +61,17 @@ All of the above, plus:
 - [Department Store](./18-storefront.md) - All sections (quartermaster responsibilities: catalog, windows, orders, payments)
 
 ### Treasurer / Finance Officer
+
 All of the above, plus:
+
 - [Finance](./11-finance.md) - All sections including budgets, purchase requests, expense reports, approval chains, dues
 - [Grants & Fundraising](./12-grants-fundraising.md) - All sections including applications, compliance, campaigns, donor management
 - [Department Store](./18-storefront.md) - Sections 12-14 (recording payment, PayPal reconciliation, closing a window)
 
 ### IT Manager / System Administrator
+
 All guides in their entirety, with special attention to:
+
 - [Administration & Reports](./08-admin-reports.md) - All sections, especially the first-time setup walkthrough
 - [Documents, Forms & Communications](./07-documents-forms.md) - Sections 8-10 (integrations)
 - [Integrations](./16-integrations.md) - All sections including Salesforce, PayPal, webhooks, and reporting exports
@@ -99,7 +106,7 @@ If you are adding one by hand instead:
 - **Hint:** provides helpful tips and best practices
 - **Troubleshooting** sections at the end of each guide address common issues
 - **Edge Cases** call out non-obvious behavior to watch for
-- Cross-references like [Module > Section](./file.md#section) link to related content
+- Cross-references like `[Module > Section](./file.md#section)` link to related content
 
 ---
 
@@ -111,14 +118,14 @@ Not all modules are enabled by default. Your department administrator controls w
 2. They can enable it in **Settings > Organization > Modules**.
 3. Enabling a module does not require any data migration -- it simply makes the module visible.
 
-| Module | Default State |
-|--------|--------------|
-| Dashboard, Membership, Scheduling, Settings, Documents, Forms | **Always On** (Core, enabled by default) |
-| Apparatus, Inventory, Communications, Elections | **On** (Recommended, enabled by default) |
-| Training, Facilities, Prospective Pipeline, Admin Hours | **Off** (Optional, enable in Settings > Modules) |
+| Module                                                         | Default State                                    |
+| -------------------------------------------------------------- | ------------------------------------------------ |
+| Dashboard, Membership, Scheduling, Settings, Documents, Forms  | **Always On** (Core, enabled by default)         |
+| Apparatus, Inventory, Communications, Elections                | **On** (Recommended, enabled by default)         |
+| Training, Facilities, Prospective Pipeline, Admin Hours        | **Off** (Optional, enable in Settings > Modules) |
 | Finance, Grants, Medical Screening, Incidents, HR, Public Info | **Off** (Optional, enable in Settings > Modules) |
 
-> **Note (2026-08-05):** **[Training & Certification](./02-training.md)** gains a new section, *Multi-Class Courses & Cohorts*, covering the workflow for a course made up of many classes — a recruit school, a multi-night refresher. An officer describes the course once as an ordered syllabus, timing each class relative to the course start ("class B the day after A, class C two days later") rather than on a calendar date, then generates a **cohort** for each intake: every class becomes a real training event with a linked session, the roster is enrolled in the pipeline and RSVP'd to each class, and attendance flows through the existing QR check-in and credit machinery. An editable preview shows every computed date — and flags anything moved off a weekend or holiday, an archived course, or a double-booked room — before a single event is created. The section closes with an Edge Cases table covering the distinctions that trip people up: reordering classes changes the order but not the dates, editing a syllabus deliberately does not re-schedule a cohort already in progress, and a cohort differs from a recurring session in that it runs an ordered series of *different* classes rather than repeating the same one.
+> **Note (2026-08-05):** **[Training & Certification](./02-training.md)** gains a new section, _Multi-Class Courses & Cohorts_, covering the workflow for a course made up of many classes — a recruit school, a multi-night refresher. An officer describes the course once as an ordered syllabus, timing each class relative to the course start ("class B the day after A, class C two days later") rather than on a calendar date, then generates a **cohort** for each intake: every class becomes a real training event with a linked session, the roster is enrolled in the pipeline and RSVP'd to each class, and attendance flows through the existing QR check-in and credit machinery. An editable preview shows every computed date — and flags anything moved off a weekend or holiday, an archived course, or a double-booked room — before a single event is created. The section closes with an Edge Cases table covering the distinctions that trip people up: reordering classes changes the order but not the dates, editing a syllabus deliberately does not re-schedule a cohort already in progress, and a cohort differs from a recurring session in that it runs an ordered series of _different_ classes rather than repeating the same one.
 
 > **Note (2026-07-31):** New lesson — **[Privacy & Your Data](./17-privacy-data-rights.md)**.
 > Members can now manage **privacy choices** (photo use, public roster listing,
@@ -132,7 +139,7 @@ Not all modules are enabled by default. Your department administrator controls w
 > [Getting Started](./00-getting-started.md) and
 > [Administration & Reports](./08-admin-reports.md).
 >
-> **Note (2026-07-28, follow-up):** Elections practical-workflow fixes and the **Pre-Meeting Package**. Runoff elections now inherit the parent's full rule set (quorum, position eligibility, meeting/event link, attendees, voter overrides) and generate their own anonymity salt — previously anonymous runoffs had none, and quorum/eligibility rules silently vanished in the deciding round. Same-meeting runoffs work in one click: opening an election clamps a future start date to "now" (opening *is* the start of voting), an election whose end date passed can't be opened until rescheduled, and draft elections gained an **Edit Dates** modal (Start Now + 15-min/30-min/1-hour/1-day quick durations). New **Pre-Meeting Package**: a print-ready PDF (meeting agenda, election configuration, ballot preview with candidates, voter-eligibility roster) in two privacy variants — member (names + counts) and full (adds ineligibility reasons; leadership only) — emailed via a fully editable BCC recipient list (prefill from leadership or eligible voters, add outside addresses) or downloaded directly to distribute yourself. Also fixed: the Eligibility Roster reported zero eligible voters for positional elections (no ballot items); election-level rules now apply.
+> **Note (2026-07-28, follow-up):** Elections practical-workflow fixes and the **Pre-Meeting Package**. Runoff elections now inherit the parent's full rule set (quorum, position eligibility, meeting/event link, attendees, voter overrides) and generate their own anonymity salt — previously anonymous runoffs had none, and quorum/eligibility rules silently vanished in the deciding round. Same-meeting runoffs work in one click: opening an election clamps a future start date to "now" (opening _is_ the start of voting), an election whose end date passed can't be opened until rescheduled, and draft elections gained an **Edit Dates** modal (Start Now + 15-min/30-min/1-hour/1-day quick durations). New **Pre-Meeting Package**: a print-ready PDF (meeting agenda, election configuration, ballot preview with candidates, voter-eligibility roster) in two privacy variants — member (names + counts) and full (adds ineligibility reasons; leadership only) — emailed via a fully editable BCC recipient list (prefill from leadership or eligible voters, add outside addresses) or downloaded directly to distribute yourself. Also fixed: the Eligibility Roster reported zero eligible voters for positional elections (no ballot items); election-level rules now apply.
 >
 > **Note (2026-07-28):** Elections module security & correctness review (see `docs/module-audit/elections.md`). Ballot-item eligibility is now enforced when votes are submitted (snapshotted on each voting token), not just when ballots are emailed. The public ballot endpoint returns a minimal view with no member roster data. Test ballots are flagged and excluded from results and never consume the sender's real vote. Runoffs are now created on early closes (previously silently skipped). Approval and ranked-choice voting work end-to-end with atomic bulk submission. Vote receipts are returned to voters, making receipt verification usable. Quorum/turnout denominators exclude non-voting membership tiers. The secretary's ballot preview uses the same eligibility logic as the real ballot. Closed anonymous elections with votes can no longer be reopened via rollback (the anonymity salt is destroyed at close). Non-managers no longer see a blank election detail page; `/elections/settings` is permission-gated.
 >

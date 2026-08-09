@@ -120,10 +120,10 @@ const PLATFORM_FIELDS: Record<string, { title: string; fields: FieldSpec[] }> = 
  */
 const FileStorageConfiguration: React.FC = () => {
   const navigate = useNavigate();
-  const departmentName = useOnboardingStore(state => state.departmentName);
-  const logoPreview = useOnboardingStore(state => state.logoData);
-  const lastSaved = useOnboardingStore(state => state.lastSaved);
-  const storedPlatform = useOnboardingStore(state => state.fileStoragePlatform);
+  const departmentName = useOnboardingStore((state) => state.departmentName);
+  const logoPreview = useOnboardingStore((state) => state.logoData);
+  const lastSaved = useOnboardingStore((state) => state.lastSaved);
+  const storedPlatform = useOnboardingStore((state) => state.fileStoragePlatform);
 
   const [config, setConfig] = useState<FileStorageConfig>({});
   const { execute, isLoading, error, canRetry, clearError } = useApiRequest();
@@ -145,9 +145,9 @@ const FileStorageConfiguration: React.FC = () => {
   }, [departmentName, spec, navigate]);
 
   const missingRequired = (spec?.fields ?? [])
-    .filter(field => field.required)
+    .filter((field) => field.required)
     // `||` not `??`: an untouched field is '', which must count as missing.
-    .filter(field => !(config[field.key] || '').trim());
+    .filter((field) => !(config[field.key] || '').trim());
 
   const save = async (payload: FileStorageConfig) => {
     const { error: apiError } = await execute(
@@ -173,7 +173,7 @@ const FileStorageConfiguration: React.FC = () => {
   const handleContinue = async () => {
     clearError();
     if (missingRequired.length > 0) {
-      toast.error(`Fill in ${missingRequired.map(f => f.label).join(', ')}`);
+      toast.error(`Fill in ${missingRequired.map((f) => f.label).join(', ')}`);
       return;
     }
 
@@ -206,25 +206,22 @@ const FileStorageConfiguration: React.FC = () => {
   if (!spec) return null;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
       <OnboardingHeader
         departmentName={departmentName}
         logoPreview={logoPreview}
-        icon={<HardDrive aria-hidden="true" className="w-6 h-6 text-white" />}
+        icon={<HardDrive aria-hidden="true" className="h-6 w-6 text-white" />}
       />
 
-      <main className="flex-1 flex items-start justify-center p-4 py-8">
-        <div className="max-w-2xl w-full">
-          <div className="text-center mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-3">
-              <HardDrive className="w-7 h-7 text-red-500" aria-hidden="true" />
+      <main className="flex flex-1 items-start justify-center p-4 py-8">
+        <div className="w-full max-w-2xl">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10">
+              <HardDrive className="h-7 w-7 text-red-500" aria-hidden="true" />
             </div>
-            <h2 className="text-2xl font-bold text-theme-text-primary">
-              Configure {spec.title}
-            </h2>
-            <p className="text-theme-text-secondary mt-2 text-sm max-w-lg mx-auto">
-              These credentials let the app store documents, photos, and attachments in
-              your {spec.title} account.
+            <h2 className="text-theme-text-primary text-2xl font-bold">Configure {spec.title}</h2>
+            <p className="text-theme-text-secondary mx-auto mt-2 max-w-lg text-sm">
+              These credentials let the app store documents, photos, and attachments in your {spec.title} account.
             </p>
           </div>
 
@@ -240,8 +237,8 @@ const FileStorageConfiguration: React.FC = () => {
           )}
 
           <div className="card p-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {spec.fields.map(field => (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {spec.fields.map((field) => (
                 <div key={field.key} className={field.fullWidth ? 'sm:col-span-2' : ''}>
                   <label className={labelClass} htmlFor={field.key}>
                     {field.label}
@@ -253,31 +250,24 @@ const FileStorageConfiguration: React.FC = () => {
                     autoComplete={field.secret ? 'new-password' : 'off'}
                     className={inputClass}
                     value={config[field.key] || ''}
-                    onChange={e =>
-                      setConfig(prev => ({ ...prev, [field.key]: e.target.value }))
-                    }
+                    onChange={(e) => setConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
                     {...(field.placeholder ? { placeholder: field.placeholder } : {})}
                   />
-                  {field.help && (
-                    <p className="text-[11px] text-theme-text-muted mt-1">{field.help}</p>
-                  )}
+                  {field.help && <p className="text-theme-text-muted mt-1 text-[11px]">{field.help}</p>}
                 </div>
               ))}
             </div>
 
-            <div className="flex items-start gap-2 mt-5 pt-4 border-t border-theme-surface-border">
-              <ShieldCheck
-                className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5"
-                aria-hidden="true"
-              />
-              <p className="text-xs text-theme-text-muted">
-                Secrets are encrypted with AES-256 before they are stored, and are never
-                sent back to the browser once saved.
+            <div className="border-theme-surface-border mt-5 flex items-start gap-2 border-t pt-4">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+              <p className="text-theme-text-muted text-xs">
+                Secrets are encrypted with AES-256 before they are stored, and are never sent back to the browser once
+                saved.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mt-6">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <button
               onClick={() => void handleContinue()}
               disabled={isLoading}
@@ -288,21 +278,18 @@ const FileStorageConfiguration: React.FC = () => {
             <button
               onClick={() => void handleSkip()}
               disabled={isLoading}
-              className="flex-1 px-4 py-3 rounded-lg border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50 mobile-touch-target"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex-1 rounded-lg border px-4 py-3 transition-colors disabled:opacity-50"
             >
               I&apos;ll add these later
             </button>
           </div>
 
-          <div className="flex items-center justify-between mt-6">
+          <div className="mt-6 flex items-center justify-between">
             <BackButton to="/onboarding/file-storage" />
             <ResetProgressButton />
           </div>
 
-          <ProgressIndicator
-            step="file_storage"
-            className="mt-6 pt-6 border-t border-theme-nav-border"
-          />
+          <ProgressIndicator step="file_storage" className="border-theme-nav-border mt-6 border-t pt-6" />
         </div>
       </main>
 

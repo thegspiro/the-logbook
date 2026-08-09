@@ -26,4 +26,3 @@ export const AUTO_SAVE_INTERVAL_MS = 30_000; // 30 seconds
 // ============================================
 export const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5 MB
 // 10 MB
-

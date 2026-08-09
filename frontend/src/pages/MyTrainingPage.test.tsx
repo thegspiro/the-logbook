@@ -161,9 +161,7 @@ describe('MyTrainingPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
     });
-    expect(
-      screen.queryByRole('button', { name: /export csv/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /export csv/i })).not.toBeInTheDocument();
   });
 
   it('exports the member training record when enabled', async () => {
@@ -182,11 +180,7 @@ describe('MyTrainingPage', () => {
     await user.click(exportBtn);
 
     await waitFor(() => {
-      expect(mockExportMyTraining).toHaveBeenCalledWith(
-        'csv',
-        expect.any(String),
-        expect.any(String),
-      );
+      expect(mockExportMyTraining).toHaveBeenCalledWith('csv', expect.any(String), expect.any(String));
     });
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
 

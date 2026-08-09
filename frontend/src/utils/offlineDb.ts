@@ -44,11 +44,7 @@ export const STORE_PENDING_SHIFT_REPORTS = 'pendingShiftReports';
  *
  * Rejects (rather than hanging) on `blocked`, on `error`, and on timeout.
  */
-export function openIndexedDb(
-  name: string,
-  version: number,
-  upgrade: (db: IDBDatabase) => void,
-): Promise<IDBDatabase> {
+export function openIndexedDb(name: string, version: number, upgrade: (db: IDBDatabase) => void): Promise<IDBDatabase> {
   return new Promise<IDBDatabase>((resolve, reject) => {
     let request: IDBOpenDBRequest;
     try {
@@ -88,19 +84,11 @@ export function openIndexedDb(
     };
 
     request.onerror = () => {
-      settle(() =>
-        reject(request.error ?? new Error(`Failed to open IndexedDB "${name}"`)),
-      );
+      settle(() => reject(request.error ?? new Error(`Failed to open IndexedDB "${name}"`)));
     };
 
     request.onblocked = () => {
-      settle(() =>
-        reject(
-          new Error(
-            `IndexedDB "${name}" upgrade blocked by another open tab`,
-          ),
-        ),
-      );
+      settle(() => reject(new Error(`IndexedDB "${name}" upgrade blocked by another open tab`)));
     };
   });
 }

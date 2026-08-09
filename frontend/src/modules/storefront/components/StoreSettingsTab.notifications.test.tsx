@@ -109,9 +109,7 @@ describe('StoreSettingsTab notification switches', () => {
       name: /Ordering is open/,
     });
     expect(opened).not.toBeChecked();
-    expect(
-      screen.getByRole('checkbox', { name: /Ordering has closed/ }),
-    ).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Ordering has closed/ })).toBeChecked();
   });
 
   it('offers a preview of every notice, keyed to the right one', async () => {
@@ -135,9 +133,7 @@ describe('StoreSettingsTab notification switches', () => {
     await screen.findByText('Notifications');
 
     await user.click(screen.getByRole('button', { name: /Preview the Order placed with the vendor email/ }));
-    expect(
-      screen.getByRole('checkbox', { name: /Order placed with the vendor/ }),
-    ).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Order placed with the vendor/ })).toBeChecked();
   });
 
   it('sends the switch it changed to the API', async () => {
@@ -159,8 +155,8 @@ describe('StoreSettingsTab notification switches', () => {
           sendWindowClosed: true,
           sendWindowClosingReminder: true,
           sendPaymentReceipts: true,
-        }),
-      ),
+        })
+      )
     );
   });
 });

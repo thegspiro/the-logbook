@@ -800,7 +800,10 @@ async def get_active_shift_for_apparatus(
             detail="No active shift found for this apparatus",
         )
     shift_dict = {c.name: getattr(shift, c.name) for c in shift.__table__.columns}
-    apparatus_map = await service._get_apparatus_map(current_user.organization_id)
+    apparatus_ids = [shift.apparatus_id] if shift.apparatus_id else []
+    apparatus_map = await service._get_apparatus_map(
+        current_user.organization_id, apparatus_ids
+    )
     service._enrich_shift_dict(shift_dict, apparatus_map)
     return shift_dict
 

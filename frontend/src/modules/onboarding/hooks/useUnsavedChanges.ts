@@ -26,9 +26,8 @@ interface UseUnsavedChangesOptions {
  */
 export function useUnsavedChanges({
   hasUnsavedChanges,
-  message = 'You have unsaved changes. Are you sure you want to leave?'
+  message = 'You have unsaved changes. Are you sure you want to leave?',
 }: UseUnsavedChangesOptions) {
-
   // Warn before browser refresh/close
   // This is the primary protection against data loss
   useBeforeUnload(
@@ -53,7 +52,7 @@ export function useUnsavedChanges({
 
   return {
     isBlocked: false,
-    blocker: null
+    blocker: null,
   };
 }
 

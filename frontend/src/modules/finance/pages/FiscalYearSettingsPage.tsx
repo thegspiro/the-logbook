@@ -6,15 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import {
-  Plus,
-  AlertTriangle,
-  Calendar,
-  Lock,
-  CheckCircle,
-  Trash2,
-  Tag,
-} from 'lucide-react';
+import { Plus, AlertTriangle, Calendar, Lock, CheckCircle, Trash2, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { budgetCategoryService, fiscalYearService } from '../services/api';
@@ -88,10 +80,8 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-md rounded-lg border border-theme-surface-border bg-theme-surface p-6 shadow-xl">
-        <h3 className="mb-4 text-lg font-semibold text-theme-text-primary">
-          Create Fiscal Year
-        </h3>
+      <div className="border-theme-surface-border bg-theme-surface mx-4 w-full max-w-md rounded-lg border p-6 shadow-xl">
+        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Create Fiscal Year</h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
             <label className={labelClass}>Name</label>
@@ -114,18 +104,13 @@ const CreateFYModal: React.FC<CreateFYModalProps> = ({ open, onClose }) => {
           </div>
           <div>
             <label className={labelClass}>End Date</label>
-            <input
-              type="date"
-              className={inputClass}
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
+            <input type="date" className={inputClass} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
             >
               Cancel
             </button>
@@ -153,11 +138,7 @@ interface CreateCategoryModalProps {
   onCreated: () => void;
 }
 
-const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
-  open,
-  onClose,
-  onCreated,
-}) => {
+const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({ open, onClose, onCreated }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -193,10 +174,8 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-md rounded-lg border border-theme-surface-border bg-theme-surface p-6 shadow-xl">
-        <h3 className="mb-4 text-lg font-semibold text-theme-text-primary">
-          Create Budget Category
-        </h3>
+      <div className="border-theme-surface-border bg-theme-surface mx-4 w-full max-w-md rounded-lg border p-6 shadow-xl">
+        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Create Budget Category</h3>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
             <label className={labelClass}>Name</label>
@@ -222,7 +201,7 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
             >
               Cancel
             </button>
@@ -259,9 +238,7 @@ const FiscalYearSettingsPage: React.FC = () => {
   const [showCreateFY, setShowCreateFY] = useState(false);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
   const [lockingId, setLockingId] = useState<string | null>(null);
-  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(
-    null,
-  );
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchFiscalYears();
@@ -305,12 +282,8 @@ const FiscalYearSettingsPage: React.FC = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Finance Settings
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
-            Manage fiscal years and budget categories
-          </p>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Finance Settings</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">Manage fiscal years and budget categories</p>
         </div>
         <SkeletonPage rows={4} showStats={false} />
       </div>
@@ -321,17 +294,13 @@ const FiscalYearSettingsPage: React.FC = () => {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-theme-text-primary">
-          Finance Settings
-        </h1>
-        <p className="mt-1 text-sm text-theme-text-secondary">
-          Manage fiscal years and budget categories
-        </p>
+        <h1 className="text-theme-text-primary text-2xl font-bold">Finance Settings</h1>
+        <p className="text-theme-text-secondary mt-1 text-sm">Manage fiscal years and budget categories</p>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -340,13 +309,11 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* ================================================================== */}
       {/* Fiscal Years Section                                               */}
       {/* ================================================================== */}
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-theme-text-secondary" />
-            <h2 className="text-lg font-semibold text-theme-text-primary">
-              Fiscal Years
-            </h2>
+            <Calendar className="text-theme-text-secondary h-5 w-5" />
+            <h2 className="text-theme-text-primary text-lg font-semibold">Fiscal Years</h2>
           </div>
           <button
             type="button"
@@ -372,27 +339,20 @@ const FiscalYearSettingsPage: React.FC = () => {
             ]}
           />
         ) : (
-          <div className="divide-y divide-theme-surface-border">
+          <div className="divide-theme-surface-border divide-y">
             {fiscalYears.map((fy) => (
-              <div
-                key={fy.id}
-                className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
-              >
+              <div key={fy.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-theme-text-primary">
-                      {fy.name}
-                    </span>
+                    <span className="text-theme-text-primary text-sm font-medium">{fy.name}</span>
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[fy.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                     >
                       {STATUS_LABELS[fy.status] ?? fy.status}
                     </span>
-                    {fy.isLocked && (
-                      <Lock className="h-3.5 w-3.5 text-theme-text-secondary" />
-                    )}
+                    {fy.isLocked && <Lock className="text-theme-text-secondary h-3.5 w-3.5" />}
                   </div>
-                  <p className="mt-0.5 text-xs text-theme-text-secondary">
+                  <p className="text-theme-text-secondary mt-0.5 text-xs">
                     {formatDate(fy.startDate, tz)} - {formatDate(fy.endDate, tz)}
                   </p>
                 </div>
@@ -401,7 +361,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => void handleActivate(fy.id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
                     >
                       <CheckCircle className="h-3.5 w-3.5" />
                       Activate
@@ -411,7 +371,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setLockingId(fy.id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
+                      className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
                     >
                       <Lock className="h-3.5 w-3.5" />
                       Lock
@@ -427,13 +387,11 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* ================================================================== */}
       {/* Budget Categories Section                                          */}
       {/* ================================================================== */}
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Tag className="h-5 w-5 text-theme-text-secondary" />
-            <h2 className="text-lg font-semibold text-theme-text-primary">
-              Budget Categories
-            </h2>
+            <Tag className="text-theme-text-secondary h-5 w-5" />
+            <h2 className="text-theme-text-primary text-lg font-semibold">Budget Categories</h2>
           </div>
           <button
             type="button"
@@ -459,26 +417,17 @@ const FiscalYearSettingsPage: React.FC = () => {
             ]}
           />
         ) : (
-          <div className="divide-y divide-theme-surface-border">
+          <div className="divide-theme-surface-border divide-y">
             {budgetCategories.map((cat) => (
-              <div
-                key={cat.id}
-                className="flex items-center justify-between py-3"
-              >
+              <div key={cat.id} className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-sm font-medium text-theme-text-primary">
-                    {cat.name}
-                  </p>
-                  {cat.description && (
-                    <p className="text-xs text-theme-text-secondary">
-                      {cat.description}
-                    </p>
-                  )}
+                  <p className="text-theme-text-primary text-sm font-medium">{cat.name}</p>
+                  {cat.description && <p className="text-theme-text-secondary text-xs">{cat.description}</p>}
                 </div>
                 <button
                   type="button"
                   onClick={() => setDeletingCategoryId(cat.id)}
-                  className="rounded-lg p-1.5 text-theme-text-secondary hover:bg-red-50 hover:text-red-600"
+                  className="text-theme-text-secondary rounded-lg p-1.5 hover:bg-red-50 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -489,10 +438,7 @@ const FiscalYearSettingsPage: React.FC = () => {
       </div>
 
       {/* Modals */}
-      <CreateFYModal
-        open={showCreateFY}
-        onClose={() => setShowCreateFY(false)}
-      />
+      <CreateFYModal open={showCreateFY} onClose={() => setShowCreateFY(false)} />
       <CreateCategoryModal
         open={showCreateCategory}
         onClose={() => setShowCreateCategory(false)}

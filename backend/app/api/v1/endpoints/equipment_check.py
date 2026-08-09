@@ -150,11 +150,14 @@ async def update_template(
     """Update template metadata."""
     service = EquipmentCheckService(db)
     changes = data.model_dump(exclude_unset=True)
-    template = await service.update_template(
-        template_id,
-        current_user.organization_id,
-        changes,
-    )
+    try:
+        template = await service.update_template(
+            template_id,
+            current_user.organization_id,
+            changes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     await service.log_template_change(
@@ -414,11 +417,14 @@ async def update_item(
 
     service = EquipmentCheckService(db)
     changes = data.model_dump(exclude_unset=True)
-    item = await service.update_item(
-        item_id,
-        current_user.organization_id,
-        changes,
-    )
+    try:
+        item = await service.update_item(
+            item_id,
+            current_user.organization_id,
+            changes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     tmpl_result = await db.execute(

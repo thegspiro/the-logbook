@@ -59,7 +59,9 @@ const PlatformAnalyticsPage: React.FC = () => {
     };
 
     void load();
-    const interval = setInterval(() => { void load(); }, 60000);
+    const interval = setInterval(() => {
+      void load();
+    }, 60000);
 
     return () => {
       cancelled = true;
@@ -80,7 +82,7 @@ const PlatformAnalyticsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="mx-auto max-w-7xl p-6">
         <div className="text-theme-text-secondary">Loading platform analytics...</div>
       </div>
     );
@@ -88,12 +90,15 @@ const PlatformAnalyticsPage: React.FC = () => {
 
   if (error || !data) {
     return (
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="text-center py-12">
-          <p className="text-red-700 dark:text-red-400 mb-4">{error ?? 'No analytics data available'}</p>
+      <div className="mx-auto max-w-7xl p-6">
+        <div className="py-12 text-center">
+          <p className="mb-4 text-red-700 dark:text-red-400">{error ?? 'No analytics data available'}</p>
           <button
-            onClick={() => { setLoading(true); void loadData(); }}
-            className="btn-primary font-medium rounded-md text-sm"
+            onClick={() => {
+              setLoading(true);
+              void loadData();
+            }}
+            className="btn-primary rounded-md text-sm font-medium"
           >
             Retry
           </button>
@@ -103,33 +108,33 @@ const PlatformAnalyticsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen max-w-7xl mx-auto p-6">
+    <div className="mx-auto min-h-screen max-w-7xl p-6">
       {/* Header */}
-      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div>
-          <h1 className="text-3xl font-bold text-theme-text-primary">Platform Analytics</h1>
-          <p className="text-theme-text-secondary mt-1">
-            Platform-wide usage and health metrics for IT administrators
-          </p>
+          <h1 className="text-theme-text-primary text-3xl font-bold">Platform Analytics</h1>
+          <p className="text-theme-text-secondary mt-1">Platform-wide usage and health metrics for IT administrators</p>
           {lastRefreshed && (
-            <p className="text-xs text-theme-text-muted mt-1">
-              Last refreshed: {formatTime(lastRefreshed, tz)}
-            </p>
+            <p className="text-theme-text-muted mt-1 text-xs">Last refreshed: {formatTime(lastRefreshed, tz)}</p>
           )}
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => { void loadData(); }}
-            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover flex items-center gap-2"
+            onClick={() => {
+              void loadData();
+            }}
+            className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="h-4 w-4" />
             Refresh
           </button>
           <button
-            onClick={() => { void exportData(); }}
-            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-700 dark:text-blue-400 bg-theme-surface hover:bg-theme-surface-hover flex items-center gap-2"
+            onClick={() => {
+              void exportData();
+            }}
+            className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-400"
           >
-            <Download className="w-4 h-4" />
+            <Download className="h-4 w-4" />
             Export
           </button>
         </div>
@@ -137,24 +142,41 @@ const PlatformAnalyticsPage: React.FC = () => {
 
       {/* ── Section 1: User Adoption ── */}
       <SectionTitle>User Adoption</SectionTitle>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={Users} label="Total Users" value={data.totalUsers} />
-        <StatCard icon={UserCheck} label="Active Users" sublabel="Last 30 days" value={data.activeUsers} color="green" />
-        <StatCard icon={TrendingUp} label="Adoption Rate" value={`${data.adoptionRate}%`} color={data.adoptionRate >= 75 ? 'green' : data.adoptionRate >= 50 ? 'yellow' : 'red'} />
-        <StatCard icon={UserPlus} label="New Users" sublabel="Last 30 days" value={data.newUsersLast30Days} color="blue" />
+        <StatCard
+          icon={UserCheck}
+          label="Active Users"
+          sublabel="Last 30 days"
+          value={data.activeUsers}
+          color="green"
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="Adoption Rate"
+          value={`${data.adoptionRate}%`}
+          color={data.adoptionRate >= 75 ? 'green' : data.adoptionRate >= 50 ? 'yellow' : 'red'}
+        />
+        <StatCard
+          icon={UserPlus}
+          label="New Users"
+          sublabel="Last 30 days"
+          value={data.newUsersLast30Days}
+          color="blue"
+        />
       </div>
 
       {/* Login Trend Chart */}
       {(data.loginTrend?.length ?? 0) > 0 && (
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Daily Login Activity (30 Days)</h3>
+        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Daily Login Activity (30 Days)</h3>
           <BarChart data={data.loginTrend} color="blue" />
         </div>
       )}
 
       {/* ── Section 2: Module Usage ── */}
       <SectionTitle>Module Usage</SectionTitle>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {data.modules.map((mod) => (
           <ModuleCard key={mod.name} module={mod} />
         ))}
@@ -162,17 +184,28 @@ const PlatformAnalyticsPage: React.FC = () => {
 
       {/* ── Section 3: Operational Activity ── */}
       <SectionTitle>Operational Activity</SectionTitle>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard icon={Calendar} label="Total Events" value={data.totalEvents} />
         <StatCard icon={Calendar} label="Events" sublabel="Last 30 days" value={data.eventsLast30Days} color="blue" />
         <StatCard icon={CheckSquare} label="Total Check-Ins" value={data.totalCheckIns} color="green" />
-        <StatCard icon={Clock} label="Training Hours" sublabel="Last 30 days" value={data.trainingHoursLast30Days} color="purple" />
-        <StatCard icon={FileText} label="Forms Submitted" sublabel="Last 30 days" value={data.formsSubmittedLast30Days} />
+        <StatCard
+          icon={Clock}
+          label="Training Hours"
+          sublabel="Last 30 days"
+          value={data.trainingHoursLast30Days}
+          color="purple"
+        />
+        <StatCard
+          icon={FileText}
+          label="Forms Submitted"
+          sublabel="Last 30 days"
+          value={data.formsSubmittedLast30Days}
+        />
       </div>
 
       {/* ── Section 4: System Health ── */}
       <SectionTitle>System Health</SectionTitle>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <StatCard
           icon={AlertTriangle}
           label="Errors"
@@ -182,8 +215,8 @@ const PlatformAnalyticsPage: React.FC = () => {
         />
 
         {/* Error Trend */}
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 lg:col-span-2">
-          <h3 className="text-sm font-medium text-theme-text-muted mb-3">Error Trend (7 Days)</h3>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs lg:col-span-2">
+          <h3 className="text-theme-text-muted mb-3 text-sm font-medium">Error Trend (7 Days)</h3>
           {(data.errorTrend?.length ?? 0) > 0 ? (
             <BarChart data={data.errorTrend} color="red" />
           ) : (
@@ -194,15 +227,15 @@ const PlatformAnalyticsPage: React.FC = () => {
 
       {/* Top Error Types */}
       {Object.keys(data.topErrorTypes ?? {}).length > 0 && (
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Top Error Types</h3>
+        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Top Error Types</h3>
           <div className="space-y-2">
             {Object.entries(data.topErrorTypes ?? {})
               .sort(([, a], [, b]) => b - a)
               .map(([errorType, count]) => (
-                <div key={errorType} className="flex justify-between items-center">
-                  <span className="text-sm text-theme-text-secondary truncate flex-1">{errorType}</span>
-                  <span className="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 rounded-sm text-xs font-semibold ml-2">
+                <div key={errorType} className="flex items-center justify-between">
+                  <span className="text-theme-text-secondary flex-1 truncate text-sm">{errorType}</span>
+                  <span className="ml-2 rounded-sm bg-red-100 px-2 py-1 text-xs font-semibold text-red-800 dark:bg-red-500/20 dark:text-red-400">
                     {count}
                   </span>
                 </div>
@@ -213,9 +246,15 @@ const PlatformAnalyticsPage: React.FC = () => {
 
       {/* ── Section 5: Content ── */}
       <SectionTitle>Content & Documents</SectionTitle>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard icon={FileText} label="Total Documents" value={data.totalDocuments} />
-        <StatCard icon={FileText} label="Documents Uploaded" sublabel="Last 30 days" value={data.documentsLast30Days} color="blue" />
+        <StatCard
+          icon={FileText}
+          label="Documents Uploaded"
+          sublabel="Last 30 days"
+          value={data.documentsLast30Days}
+          color="blue"
+        />
       </div>
     </div>
   );
@@ -224,7 +263,7 @@ const PlatformAnalyticsPage: React.FC = () => {
 // ── Helper Components ──
 
 const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <h2 className="text-xl font-semibold text-theme-text-primary mb-4 mt-2">{children}</h2>
+  <h2 className="text-theme-text-primary mt-2 mb-4 text-xl font-semibold">{children}</h2>
 );
 
 interface StatCardProps {
@@ -247,13 +286,15 @@ const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, sublabel, value,
   const displayValue = typeof value === 'number' ? formatNumber(value ?? 0) : (value ?? '—');
 
   return (
-    <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className="w-4 h-4 text-theme-text-muted" />
+    <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+      <div className="mb-1 flex items-center gap-2">
+        <Icon className="text-theme-text-muted h-4 w-4" />
         <span className="text-theme-text-muted text-sm font-medium">{label}</span>
       </div>
-      {sublabel && <p className="text-xs text-theme-text-muted mb-1">{sublabel}</p>}
-      <div className={`text-3xl font-bold ${color ? colorMap[color] ?? 'text-theme-text-primary' : 'text-theme-text-primary'}`}>
+      {sublabel && <p className="text-theme-text-muted mb-1 text-xs">{sublabel}</p>}
+      <div
+        className={`text-3xl font-bold ${color ? (colorMap[color] ?? 'text-theme-text-primary') : 'text-theme-text-primary'}`}
+      >
         {displayValue}
       </div>
     </div>
@@ -268,26 +309,26 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
   const tz = useTimezone();
 
   return (
-    <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-5">
-      <div className="flex items-center justify-between mb-2">
+    <div className="bg-theme-surface rounded-lg p-5 shadow-md backdrop-blur-xs">
+      <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Package className="w-4 h-4 text-theme-text-muted" />
-          <span className="text-sm font-semibold text-theme-text-primary">{module.name}</span>
+          <Package className="text-theme-text-muted h-4 w-4" />
+          <span className="text-theme-text-primary text-sm font-semibold">{module.name}</span>
         </div>
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-          module.enabled
-            ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-            : 'bg-theme-surface-secondary text-theme-text-muted'
-        }`}>
+        <span
+          className={`rounded px-2 py-0.5 text-xs font-medium ${
+            module.enabled
+              ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+              : 'bg-theme-surface-secondary text-theme-text-muted'
+          }`}
+        >
           {module.enabled ? 'Enabled' : 'Disabled'}
         </span>
       </div>
-      <div className="text-2xl font-bold text-theme-text-primary mb-1">
-        {formatNumber(module.recordCount ?? 0)}
-      </div>
-      <p className="text-xs text-theme-text-muted">records</p>
-      <div className="flex items-center gap-1 mt-2 text-xs text-theme-text-muted">
-        <Activity className="w-3 h-3" />
+      <div className="text-theme-text-primary mb-1 text-2xl font-bold">{formatNumber(module.recordCount ?? 0)}</div>
+      <p className="text-theme-text-muted text-xs">records</p>
+      <div className="text-theme-text-muted mt-2 flex items-center gap-1 text-xs">
+        <Activity className="h-3 w-3" />
         <span>Last activity: {module.lastActivity ? formatDate(module.lastActivity, tz) : 'Never'}</span>
       </div>
     </div>
@@ -306,31 +347,31 @@ const barColors = {
 } as const;
 
 const BarChart: React.FC<BarChartProps> = ({ data, color }) => {
-  const maxCount = Math.max(...data.map(d => d.count), 1);
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
   const colors = barColors[color];
 
   return (
     <div className="overflow-x-auto">
-    <div className="flex items-end justify-between gap-1 h-32 min-w-full">
-      {data.map(({ date, count }) => {
-        const heightPercent = (count / maxCount) * 100;
-        // Show only day portion of date (DD)
-        const dayLabel = date.split('-')[2] ?? date;
+      <div className="flex h-32 min-w-full items-end justify-between gap-1">
+        {data.map(({ date, count }) => {
+          const heightPercent = (count / maxCount) * 100;
+          // Show only day portion of date (DD)
+          const dayLabel = date.split('-')[2] ?? date;
 
-        return (
-          // Keep bars at a legible minimum width on phones (the row scrolls
-          // horizontally) while still growing to fill wide screens.
-          <div key={date} className="flex-1 min-w-[20px] flex flex-col items-center">
-            <div
-              className={`w-full ${colors.bar} ${colors.hover} rounded-t cursor-pointer transition-all`}
-              style={{ height: `${Math.max(heightPercent, count > 0 ? 2 : 0)}%` }}
-              title={`${date}: ${count}`}
-            />
-            <div className="text-[10px] text-theme-text-muted mt-1 truncate w-full text-center">{dayLabel}</div>
-          </div>
-        );
-      })}
-    </div>
+          return (
+            // Keep bars at a legible minimum width on phones (the row scrolls
+            // horizontally) while still growing to fill wide screens.
+            <div key={date} className="flex min-w-[20px] flex-1 flex-col items-center">
+              <div
+                className={`w-full ${colors.bar} ${colors.hover} cursor-pointer rounded-t transition-all`}
+                style={{ height: `${Math.max(heightPercent, count > 0 ? 2 : 0)}%` }}
+                title={`${date}: ${count}`}
+              />
+              <div className="text-theme-text-muted mt-1 w-full truncate text-center text-[10px]">{dayLabel}</div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

@@ -10,9 +10,7 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const IntegrationsPage = lazyWithRetry(
-  () => import('../../pages/IntegrationsPage'),
-);
+const IntegrationsPage = lazyWithRetry(() => import('../../pages/IntegrationsPage'));
 
 export const getIntegrationsRoutes = () => {
   return (

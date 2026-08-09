@@ -20,9 +20,12 @@ const ModuleConfigTemplate: React.FC = () => {
   // Get module config from the central registry
   // Normalize hyphens to underscores so URL slugs like "prospective-members" match registry IDs like "prospective_members"
   const normalizedModuleId = moduleId?.replace(/-/g, '_');
-  const config = useMemo(() => (normalizedModuleId ? getModuleById(normalizedModuleId) : undefined), [normalizedModuleId]);
+  const config = useMemo(
+    () => (normalizedModuleId ? getModuleById(normalizedModuleId) : undefined),
+    [normalizedModuleId]
+  );
   const moduleName = config?.name || 'Module';
-  const departmentName = useOnboardingStore(state => state.departmentName);
+  const departmentName = useOnboardingStore((state) => state.departmentName);
 
   // Guard: redirect if org setup hasn't been completed or module ID is invalid
   useEffect(() => {
@@ -34,9 +37,9 @@ const ModuleConfigTemplate: React.FC = () => {
   }, [departmentName, config, navigate]);
 
   // Read positions from the onboarding store (set during PositionSetup step)
-  const positionsConfig = useOnboardingStore(state => state.positionsConfig);
-  const modulePermissionConfigs = useOnboardingStore(state => state.modulePermissionConfigs);
-  const setModulePermissionConfig = useOnboardingStore(state => state.setModulePermissionConfig);
+  const positionsConfig = useOnboardingStore((state) => state.positionsConfig);
+  const modulePermissionConfigs = useOnboardingStore((state) => state.modulePermissionConfigs);
+  const setModulePermissionConfig = useOnboardingStore((state) => state.setModulePermissionConfig);
 
   // Build available positions dynamically from what was configured in the Positions step
   const availablePositions = useMemo(() => {
@@ -50,7 +53,7 @@ const ModuleConfigTemplate: React.FC = () => {
 
     return Object.values(positionsConfig)
       .sort((a, b) => b.priority - a.priority)
-      .map(pos => ({
+      .map((pos) => ({
         id: pos.id,
         name: pos.name,
         description: pos.description,
@@ -59,20 +62,18 @@ const ModuleConfigTemplate: React.FC = () => {
 
   // Restore previously saved manage positions for this module, or use defaults.
   // Filter out any positions that were removed since the config was saved.
-  const availablePositionIds = useMemo(() => new Set(availablePositions.map(p => p.id)), [availablePositions]);
+  const availablePositionIds = useMemo(() => new Set(availablePositions.map((p) => p.id)), [availablePositions]);
   const [managePositions, setManagePositions] = useState<string[]>(() => {
     if (normalizedModuleId && modulePermissionConfigs[normalizedModuleId]) {
-      return modulePermissionConfigs[normalizedModuleId].filter(id => availablePositionIds.has(id));
+      return modulePermissionConfigs[normalizedModuleId].filter((id) => availablePositionIds.has(id));
     }
     return config?.permissions.defaultManagePositions || ['it_manager'];
   });
 
   const togglePosition = (positionId: string) => {
     if (positionId === 'it_manager') return; // System Owner always has manage access
-    setManagePositions(prev =>
-      prev.includes(positionId)
-        ? prev.filter(p => p !== positionId)
-        : [...prev, positionId]
+    setManagePositions((prev) =>
+      prev.includes(positionId) ? prev.filter((p) => p !== positionId) : [...prev, positionId]
     );
   };
 
@@ -90,89 +91,85 @@ const ModuleConfigTemplate: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to p-4 safe-pt-8 pb-8 relative">
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-pt-8 relative min-h-screen bg-linear-to-br p-4 pb-8">
       <ThemeToggle className="absolute top-4 right-4" />
-      <div className="max-w-4xl w-full mx-auto">
+      <div className="mx-auto w-full max-w-4xl">
         {/* Header */}
         <div className="mb-6">
           <button
             onClick={handleSkip}
-            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
+            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
           >
-            <ArrowLeft aria-hidden="true" className="w-5 h-5 mr-2" />
+            <ArrowLeft aria-hidden="true" className="mr-2 h-5 w-5" />
             Back to Modules
           </button>
-          <h1 className="text-4xl font-bold text-theme-text-primary mb-2">
-            Configure {moduleName}
-          </h1>
-          <p className="text-theme-text-secondary">
-            Set up who can view and who can manage this module
-          </p>
+          <h1 className="text-theme-text-primary mb-2 text-4xl font-bold">Configure {moduleName}</h1>
+          <p className="text-theme-text-secondary">Set up who can view and who can manage this module</p>
         </div>
 
         {/* Two-Tier Permission Model Explanation */}
         <div className="alert-info mb-6">
           <div className="flex items-start">
-            <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 shrink-0" />
+            <Info aria-hidden="true" className="text-theme-alert-info-icon mt-0.5 mr-3 h-5 w-5 shrink-0" />
             <div>
-              <p className="text-theme-alert-info-title font-semibold mb-1">How Permissions Work</p>
+              <p className="text-theme-alert-info-title mb-1 font-semibold">How Permissions Work</p>
               <p className="text-theme-text-secondary text-sm">
                 <strong>View Access</strong> allows members to see and use basic features.{' '}
-                <strong>Manage Access</strong> allows creating, editing, and administrative actions.
-                All members can view by default; you choose who can manage.
+                <strong>Manage Access</strong> allows creating, editing, and administrative actions. All members can
+                view by default; you choose who can manage.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
+        <div className="mb-6 grid gap-6 md:grid-cols-2">
           {/* View Access Card */}
-          <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6 border border-theme-alert-success-border">
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center mr-4">
-                <Eye aria-hidden="true" className="w-6 h-6 text-white" />
+          <div className="bg-theme-surface border-theme-alert-success-border rounded-lg border p-6 backdrop-blur-xs">
+            <div className="mb-4 flex items-center">
+              <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-lg bg-green-600">
+                <Eye aria-hidden="true" className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h2 className="text-theme-text-primary font-bold text-lg">View Access</h2>
+                <h2 className="text-theme-text-primary text-lg font-bold">View Access</h2>
                 <p className="text-theme-alert-success-icon text-sm">All Members</p>
               </div>
             </div>
-            <p className="text-theme-text-secondary text-sm mb-4">{config?.permissions.viewDescription}</p>
+            <p className="text-theme-text-secondary mb-4 text-sm">{config?.permissions.viewDescription}</p>
             <div className="bg-theme-surface-secondary rounded-lg p-4">
-              <p className="text-theme-text-muted text-xs font-semibold mb-2 uppercase">What members can do:</p>
+              <p className="text-theme-text-muted mb-2 text-xs font-semibold uppercase">What members can do:</p>
               <ul className="space-y-2">
                 {config?.permissions.view.map((perm, idx) => (
-                  <li key={idx} className="flex items-center text-theme-text-secondary text-sm">
-                    <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2 shrink-0" />
+                  <li key={idx} className="text-theme-text-secondary flex items-center text-sm">
+                    <CheckCircle aria-hidden="true" className="text-theme-accent-green mr-2 h-4 w-4 shrink-0" />
                     {perm}
                   </li>
                 ))}
               </ul>
             </div>
-            <div className="mt-4 flex items-center text-theme-text-muted text-xs">
-              <Users aria-hidden="true" className="w-4 h-4 mr-2" />
+            <div className="text-theme-text-muted mt-4 flex items-center text-xs">
+              <Users aria-hidden="true" className="mr-2 h-4 w-4" />
               Applies to all active members automatically
             </div>
           </div>
 
           {/* Manage Access Card */}
-          <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6 border border-theme-alert-warning-border">
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center mr-4">
-                <Edit3 aria-hidden="true" className="w-6 h-6 text-white" />
+          <div className="bg-theme-surface border-theme-alert-warning-border rounded-lg border p-6 backdrop-blur-xs">
+            <div className="mb-4 flex items-center">
+              <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-lg bg-orange-600">
+                <Edit3 aria-hidden="true" className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h2 className="text-theme-text-primary font-bold text-lg">Manage Access</h2>
+                <h2 className="text-theme-text-primary text-lg font-bold">Manage Access</h2>
                 <p className="text-theme-accent-orange text-sm">Selected Positions Only</p>
               </div>
             </div>
-            <p className="text-theme-text-secondary text-sm mb-4">{config?.permissions.manageDescription}</p>
+            <p className="text-theme-text-secondary mb-4 text-sm">{config?.permissions.manageDescription}</p>
             <div className="bg-theme-surface-secondary rounded-lg p-4">
-              <p className="text-theme-text-muted text-xs font-semibold mb-2 uppercase">What managers can do:</p>
+              <p className="text-theme-text-muted mb-2 text-xs font-semibold uppercase">What managers can do:</p>
               <ul className="space-y-2">
                 {config?.permissions.manage.map((perm, idx) => (
-                  <li key={idx} className="flex items-center text-theme-text-secondary text-sm">
-                    <Shield aria-hidden="true" className="w-4 h-4 text-theme-accent-orange mr-2 shrink-0" />
+                  <li key={idx} className="text-theme-text-secondary flex items-center text-sm">
+                    <Shield aria-hidden="true" className="text-theme-accent-orange mr-2 h-4 w-4 shrink-0" />
                     {perm}
                   </li>
                 ))}
@@ -183,13 +180,14 @@ const ModuleConfigTemplate: React.FC = () => {
 
         {/* Position Selection */}
         <div className="card mb-6 p-6">
-          <h3 className="text-theme-text-primary font-bold text-lg mb-2">Who Can Manage {moduleName}?</h3>
-          <p className="text-theme-text-muted text-sm mb-4">
-            Select which positions should have management permissions. The System Owner (IT Manager) always has full access.
+          <h3 className="text-theme-text-primary mb-2 text-lg font-bold">Who Can Manage {moduleName}?</h3>
+          <p className="text-theme-text-muted mb-4 text-sm">
+            Select which positions should have management permissions. The System Owner (IT Manager) always has full
+            access.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {availablePositions.map(pos => {
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {availablePositions.map((pos) => {
               const isSelected = managePositions.includes(pos.id);
               const isSystemOwner = pos.id === 'it_manager';
 
@@ -198,41 +196,42 @@ const ModuleConfigTemplate: React.FC = () => {
                   key={pos.id}
                   onClick={() => togglePosition(pos.id)}
                   disabled={isSystemOwner}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  className={`rounded-lg border-2 p-4 text-left transition-all ${
                     isSelected
                       ? 'border-theme-accent-orange bg-theme-accent-orange-muted'
                       : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-hover'
                   } ${isSystemOwner ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`font-semibold ${isSelected ? 'text-theme-accent-orange' : 'text-theme-text-primary'}`}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span
+                      className={`font-semibold ${isSelected ? 'text-theme-accent-orange' : 'text-theme-text-primary'}`}
+                    >
                       {pos.name}
                     </span>
-                    {isSelected && (
-                      <CheckCircle aria-hidden="true" className="w-5 h-5 text-theme-accent-orange" />
-                    )}
+                    {isSelected && <CheckCircle aria-hidden="true" className="text-theme-accent-orange h-5 w-5" />}
                   </div>
                   <p className="text-theme-text-muted text-xs">{pos.description}</p>
-                  {isSystemOwner && (
-                    <p className="text-theme-accent-orange text-xs mt-1 italic">Always has access</p>
-                  )}
+                  {isSystemOwner && <p className="text-theme-accent-orange mt-1 text-xs italic">Always has access</p>}
                 </button>
               );
             })}
           </div>
 
-          <div className="mt-4 p-3 bg-theme-surface-secondary rounded-lg">
+          <div className="bg-theme-surface-secondary mt-4 rounded-lg p-3">
             <p className="text-theme-text-muted text-sm">
               <strong className="text-theme-text-primary">Selected positions:</strong>{' '}
-              {managePositions.map(p => availablePositions.find(ap => ap.id === p)?.name).filter(Boolean).join(', ')}
+              {managePositions
+                .map((p) => availablePositions.find((ap) => ap.id === p)?.name)
+                .filter(Boolean)
+                .join(', ')}
             </p>
           </div>
         </div>
 
         {/* Quick Tips */}
-        <div className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-input-border mb-6">
-          <h3 className="text-theme-text-primary font-semibold mb-2">Quick Tips</h3>
-          <ul className="text-theme-text-secondary text-sm space-y-2">
+        <div className="bg-theme-surface-secondary border-theme-input-border mb-6 rounded-lg border p-4">
+          <h3 className="text-theme-text-primary mb-2 font-semibold">Quick Tips</h3>
+          <ul className="text-theme-text-secondary space-y-2 text-sm">
             <li className="flex items-start">
               <span className="text-theme-accent-green mr-2">•</span>
               <span>You can change these permissions anytime in Settings → Permissions</span>
@@ -249,17 +248,17 @@ const ModuleConfigTemplate: React.FC = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 px-6 py-3 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 rounded-lg bg-linear-to-r from-red-600 to-orange-600 px-6 py-3 font-semibold text-white transition-all hover:from-red-700 hover:to-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Permissions'}
           </button>
           <button
             onClick={handleSkip}
-            className="sm:w-auto px-6 py-3 bg-transparent border border-theme-surface-border hover:border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all"
+            className="border-theme-surface-border hover:border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg border bg-transparent px-6 py-3 font-semibold transition-all sm:w-auto"
           >
             Use Defaults
           </button>

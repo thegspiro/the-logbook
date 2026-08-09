@@ -33,7 +33,7 @@ export const API_BASE_URL = '/api/v1';
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT_MS,
-  withCredentials: true,  // Send httpOnly auth cookies with every request
+  withCredentials: true, // Send httpOnly auth cookies with every request
   headers: {
     'Content-Type': 'application/json',
   },
@@ -84,9 +84,12 @@ api.interceptors.request.use(
           markRevalidating(key);
           const { adapter: _adapter, ...restConfig } = config;
           const bgConfig = { ...restConfig, _skipCache: true };
-          void api.request(bgConfig)
+          void api
+            .request(bgConfig)
             .then((res) => setCache(key, res.data))
-            .catch(() => { /* background revalidation failure is non-critical */ })
+            .catch(() => {
+              /* background revalidation failure is non-critical */
+            })
             .finally(() => clearRevalidating(key));
         }
       }
@@ -190,11 +193,13 @@ api.interceptors.response.use(
     const method = (response.config.method || '').toUpperCase();
 
     // Cache successful GET responses (skip cache hits and sensitive endpoints)
-    if (method === 'GET' && response.config.url && isCacheable(response.config.url) && !(response.config as unknown as Record<string, unknown>)._fromCache) {
-      const key = getCacheKey(
-        response.config.url,
-        response.config.params as Record<string, unknown> | undefined,
-      );
+    if (
+      method === 'GET' &&
+      response.config.url &&
+      isCacheable(response.config.url) &&
+      !(response.config as unknown as Record<string, unknown>)._fromCache
+    ) {
+      const key = getCacheKey(response.config.url, response.config.params as Record<string, unknown> | undefined);
       setCache(key, response.data);
     }
 
@@ -206,7 +211,11 @@ api.interceptors.response.use(
 
     return response;
   },
-  async (error: AxiosError & { config: AxiosRequestConfig & { _retry?: boolean; _retryCount?: number; _503retries?: number } }) => {
+  async (
+    error: AxiosError & {
+      config: AxiosRequestConfig & { _retry?: boolean; _retryCount?: number; _503retries?: number };
+    }
+  ) => {
     const originalRequest = error.config;
 
     // 503 Service Unavailable — the backend is up but a dependency (MySQL)
@@ -231,7 +240,14 @@ api.interceptors.response.use(
     // credentials, not expired tokens.  Attempting a refresh here would
     // trigger the backend's token replay detection and revoke all sessions.
     const requestUrl = originalRequest.url || '';
-    const isAuthEndpoint = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password', '/auth/refresh', '/auth/validate-reset-token'].some(ep => requestUrl.includes(ep));
+    const isAuthEndpoint = [
+      '/auth/login',
+      '/auth/register',
+      '/auth/forgot-password',
+      '/auth/reset-password',
+      '/auth/refresh',
+      '/auth/validate-reset-token',
+    ].some((ep) => requestUrl.includes(ep));
 
     // If 401 and we haven't retried yet, try to recover
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {

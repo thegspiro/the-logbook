@@ -93,7 +93,7 @@ function renderInlineTokens(tokens: InlineToken[], keyPrefix: string): React.Rea
             rel: 'noopener noreferrer',
             className: 'text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300',
           },
-          token.content,
+          token.content
         );
       default:
         return React.createElement(React.Fragment, { key }, token.content);
@@ -123,8 +123,8 @@ export const SimpleMarkdown: React.FC<SimpleMarkdownProps> = ({ text, className 
         React.createElement(
           'ul',
           { key: `block-${blockIndex}`, className: 'list-disc list-inside my-1' },
-          ...currentListItems,
-        ),
+          ...currentListItems
+        )
       );
       blockIndex++;
       currentListItems = [];
@@ -137,9 +137,7 @@ export const SimpleMarkdown: React.FC<SimpleMarkdownProps> = ({ text, className 
     if (line.startsWith('- ')) {
       const content = line.slice(2);
       const tokens = parseInlineTokens(content);
-      currentListItems.push(
-        React.createElement('li', { key: `li-${i}` }, ...renderInlineTokens(tokens, `li-${i}`)),
-      );
+      currentListItems.push(React.createElement('li', { key: `li-${i}` }, ...renderInlineTokens(tokens, `li-${i}`)));
     } else {
       flushList();
 

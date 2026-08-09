@@ -15,6 +15,7 @@ import type {
   SkillTestListItem,
   SkillTestUpdate,
   SkillTestViewer,
+  SkillTestCandidate,
   SkillTestingSummary,
 } from '../types/skillsTesting';
 import type {
@@ -1235,12 +1236,27 @@ export const skillsTestingService = {
     return response.data;
   },
 
+  /** Look up members by name for the start-test picker.
+   *
+   *  A search, not a listing: `q` is required server-side and results are
+   *  capped, so there is no call that returns the roster. Open to every member,
+   *  unlike `GET /users` which needs `users.view`.
+   */
+  async searchCandidates(query: string): Promise<SkillTestCandidate[]> {
+    const response = await api.get<SkillTestCandidate[]>('/training/skills-testing/candidates', {
+      params: { q: query },
+    });
+    return asArray(response.data);
+  },
+
   // Tests
   async getTests(params?: {
     status?: string;
     candidate_id?: string;
     template_id?: string;
     include_practice?: boolean;
+    /** Officer review queue: official results nobody has signed off yet. */
+    pending_validation?: boolean;
   }): Promise<SkillTestListItem[]> {
     const response = await api.get<SkillTestListItem[]>('/training/skills-testing/tests', { params });
     return asArray(response.data);
@@ -1272,6 +1288,11 @@ export const skillsTestingService = {
 
   async discardPracticeTest(testId: string): Promise<void> {
     await api.delete(`/training/skills-testing/tests/${testId}/discard`);
+  },
+
+  async validateTest(testId: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/validate`);
+    return response.data;
   },
 
   async releaseTest(testId: string): Promise<SkillTest> {

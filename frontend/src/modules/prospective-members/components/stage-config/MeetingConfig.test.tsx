@@ -7,11 +7,7 @@ const baseConfig: MeetingStageConfig = {
   meeting_type: 'chief_meeting',
 };
 
-const renderConfig = (
-  overrides: Partial<MeetingStageConfig>,
-  calcomConnected: boolean,
-  integrationsReady = true,
-) => {
+const renderConfig = (overrides: Partial<MeetingStageConfig>, calcomConnected: boolean, integrationsReady = true) => {
   const setConfig = vi.fn();
   render(
     <MeetingConfig
@@ -22,7 +18,7 @@ const renderConfig = (
       renderEventPreview={() => null}
       calcomConnected={calcomConnected}
       integrationsReady={integrationsReady}
-    />,
+    />
   );
   return { setConfig };
 };
@@ -64,7 +60,7 @@ describe('MeetingConfig Cal.com scheduling', () => {
     });
 
     expect(setConfig).toHaveBeenLastCalledWith(
-      expect.objectContaining({ calcom_booking_url: 'https://cal.com/dept/x' }),
+      expect.objectContaining({ calcom_booking_url: 'https://cal.com/dept/x' })
     );
   });
 });

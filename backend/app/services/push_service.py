@@ -8,9 +8,11 @@ surface as an error on the action that triggered it.
 
 import asyncio
 import hashlib
+import ipaddress
 import json
 import logging
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 from uuid import UUID
 
 import requests
@@ -44,6 +46,42 @@ def hash_endpoint(endpoint: str) -> str:
     return hashlib.sha256(endpoint.encode("utf-8")).hexdigest()
 
 
+# Hostnames that are never a real browser push service and, if a stored
+# endpoint pointed at one, would turn every push into a request to an internal
+# target.
+_BLOCKED_HOST_SUFFIXES = (".localhost", ".local", ".internal")
+
+
+def validate_push_endpoint(endpoint: str) -> None:
+    """Reject a push endpoint that could aim the server at an internal host.
+
+    The endpoint is a client-supplied URL that `webpush` later POSTs to, so an
+    authenticated member registering an internal URL (cloud metadata,
+    localhost, an intranet service) would turn each push to themselves into a
+    blind SSRF. Real browser push endpoints are always HTTPS on a public DNS
+    hostname, so require exactly that: HTTPS scheme, and a hostname that is
+    neither an IP literal nor a loopback/internal name. Raises ValueError
+    (→ 400 at the endpoint) on anything else.
+
+    (Residual: a public hostname that resolves to a private IP — DNS
+    rebinding — is not caught here; that needs a resolve-time IP check and is
+    recorded as a hardening follow-up.)
+    """
+    parsed = urlparse(endpoint)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("Invalid push endpoint")
+    host = parsed.hostname.lower()
+    if host == "localhost" or host.endswith(_BLOCKED_HOST_SUFFIXES):
+        raise ValueError("Invalid push endpoint")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return  # a normal DNS hostname — allowed
+    # A bare IP literal (169.254.x metadata, 127.x, 10.x, ::1, and even public
+    # IPs) is never a legitimate push endpoint — reject it.
+    raise ValueError("Invalid push endpoint")
+
+
 class PushService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -72,6 +110,10 @@ class PushService:
         Browsers re-issue the same endpoint when a subscription is refreshed,
         and the same physical device can change hands between members, so an
         existing row is re-pointed at the current user rather than duplicated.
+
+        The endpoint is validated (SSRF guard) at the API boundary
+        (``subscribe_to_push``) before this is called, since that is where the
+        untrusted client value enters.
         """
         endpoint_hash = hash_endpoint(endpoint)
         result = await self.db.execute(

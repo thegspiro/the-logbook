@@ -41,10 +41,15 @@ export default function ComplianceSection({ facilityId }: Props) {
     }
   }, [facilityId]);
 
-  useEffect(() => { void loadChecklists(); }, [loadChecklists]);
+  useEffect(() => {
+    void loadChecklists();
+  }, [loadChecklists]);
 
   const handleCreate = async () => {
-    if (!formData.title.trim()) { toast.error('Title is required'); return; }
+    if (!formData.title.trim()) {
+      toast.error('Title is required');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload: ComplianceChecklistCreate = {
@@ -79,74 +84,120 @@ export default function ComplianceSection({ facilityId }: Props) {
   };
 
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-xl">
-      <div className="flex items-center justify-between p-5 border-b border-theme-surface-border">
-        <h2 className="text-sm font-semibold text-theme-text-primary">
+    <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
+      <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
+        <h2 className="text-theme-text-primary text-sm font-semibold">
           Compliance Checklists {!isLoading && `(${checklists.length})`}
         </h2>
-        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
-          <Plus className="w-3.5 h-3.5" /> Add Checklist
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Checklist
         </button>
       </div>
 
       <div className="p-5">
         {showForm && (
-          <div className="mb-5 p-4 bg-theme-surface-hover/50 rounded-lg space-y-3">
-            <h3 className="text-sm font-medium text-theme-text-primary">New Compliance Checklist</h3>
+          <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
+            <h3 className="text-theme-text-primary text-sm font-medium">New Compliance Checklist</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Title *</label>
-                <input type="text" value={formData.title} onChange={e => setFormData(p => ({...p, title: e.target.value}))} placeholder="e.g., NFPA 1500 Annual Review" className={inputCls} autoFocus />
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
+                  placeholder="e.g., NFPA 1500 Annual Review"
+                  className={inputCls}
+                  autoFocus
+                />
               </div>
               <div>
                 <label className={labelCls}>Type</label>
-                <select value={formData.compliance_type} onChange={e => setFormData(p => ({...p, compliance_type: e.target.value}))} className={inputCls}>
-                  {COMPLIANCE_TYPE_OPTIONS.map(ct => <option key={ct} value={ct}>{enumLabel(ct)}</option>)}
+                <select
+                  value={formData.compliance_type}
+                  onChange={(e) => setFormData((p) => ({ ...p, compliance_type: e.target.value }))}
+                  className={inputCls}
+                >
+                  {COMPLIANCE_TYPE_OPTIONS.map((ct) => (
+                    <option key={ct} value={ct}>
+                      {enumLabel(ct)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className={labelCls}>Due Date</label>
-                <input type="date" value={formData.due_date} onChange={e => setFormData(p => ({...p, due_date: e.target.value}))} className={inputCls} />
+                <input
+                  type="date"
+                  value={formData.due_date}
+                  onChange={(e) => setFormData((p) => ({ ...p, due_date: e.target.value }))}
+                  className={inputCls}
+                />
               </div>
               <div>
                 <label className={labelCls}>Description</label>
-                <input type="text" value={formData.description} onChange={e => setFormData(p => ({...p, description: e.target.value}))} className={inputCls} />
+                <input
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
+                  className={inputCls}
+                />
               </div>
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => { void handleCreate(); }} disabled={isSaving} className="btn-primary flex gap-1.5 items-center px-3 py-1.5 text-xs">
-                {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <button
+                onClick={() => {
+                  void handleCreate();
+                }}
+                disabled={isSaving}
+                className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+              >
+                {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Create
               </button>
-              <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors">Cancel</button>
+              <button
+                onClick={() => setShowForm(false)}
+                className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}
 
         {isLoading ? (
-          <div className="flex justify-center py-8" role="status" aria-live="polite"><Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" /></div>
+          <div className="flex justify-center py-8" role="status" aria-live="polite">
+            <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
+          </div>
         ) : checklists.length === 0 ? (
-          <div className="text-center py-8">
-            <ShieldCheck className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
-            <p className="text-sm text-theme-text-muted">No compliance checklists yet.</p>
+          <div className="py-8 text-center">
+            <ShieldCheck className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
+            <p className="text-theme-text-muted text-sm">No compliance checklists yet.</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {checklists.map(checklist => (
-              <div key={checklist.id} className="flex items-center justify-between p-3 bg-theme-surface-hover/30 rounded-lg group">
+            {checklists.map((checklist) => (
+              <div
+                key={checklist.id}
+                className="bg-theme-surface-hover/30 group flex items-center justify-between rounded-lg p-3"
+              >
                 <div className="flex items-center gap-3">
                   {checklist.isCompleted ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                   ) : (
-                    <Circle className="w-4 h-4 text-theme-text-muted" />
+                    <Circle className="text-theme-text-muted h-4 w-4" />
                   )}
                   <div>
-                    <p className="text-sm font-medium text-theme-text-primary">{checklist.title}</p>
-                    <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+                    <p className="text-theme-text-primary text-sm font-medium">{checklist.title}</p>
+                    <div className="text-theme-text-muted flex items-center gap-2 text-xs">
                       <span>{enumLabel(checklist.complianceType)}</span>
                       {checklist.dueDate && (
-                        <span className={`flex items-center gap-1 ${isPastDate(checklist.dueDate) && !checklist.isCompleted ? 'text-red-500 font-medium' : ''}`}>
-                          <Calendar className="w-3 h-3" />
+                        <span
+                          className={`flex items-center gap-1 ${isPastDate(checklist.dueDate) && !checklist.isCompleted ? 'font-medium text-red-500' : ''}`}
+                        >
+                          <Calendar className="h-3 w-3" />
                           Due: {formatDate(checklist.dueDate, tz)}
                         </span>
                       )}
@@ -158,8 +209,14 @@ export default function ComplianceSection({ facilityId }: Props) {
                     </div>
                   </div>
                 </div>
-                <button onClick={() => { void handleDelete(checklist); }} className="sm:opacity-0 sm:group-hover:opacity-100 p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all" aria-label={`Delete ${checklist.title}`}>
-                  <Trash2 className="w-3.5 h-3.5" />
+                <button
+                  onClick={() => {
+                    void handleDelete(checklist);
+                  }}
+                  className="text-theme-text-muted rounded-lg p-1.5 transition-all hover:bg-red-500/10 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100"
+                  aria-label={`Delete ${checklist.title}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}

@@ -20,7 +20,7 @@ const mockAuthState: Record<string, unknown> = {
 };
 vi.mock('../stores/authStore', () => ({
   useAuthStore: vi.fn((selector?: (state: Record<string, unknown>) => unknown) =>
-    selector ? selector(mockAuthState) : mockAuthState,
+    selector ? selector(mockAuthState) : mockAuthState
   ),
 }));
 
@@ -71,9 +71,7 @@ describe('ErrorMonitoringPage', () => {
     renderWithRouter(<ErrorMonitoringPage />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText('The server could not complete this request.'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('The server could not complete this request.')).toBeInTheDocument();
     });
     expect(screen.getByText('HTTP 500: Internal server error')).toBeInTheDocument();
   });
@@ -97,9 +95,7 @@ describe('ErrorMonitoringPage', () => {
   });
 
   it('shows how many times a collapsed error occurred', async () => {
-    mockGetErrors.mockResolvedValue([
-      makeError({ context: { source: 'frontend', occurrences: 47 } }),
-    ]);
+    mockGetErrors.mockResolvedValue([makeError({ context: { source: 'frontend', occurrences: 47 } })]);
 
     renderWithRouter(<ErrorMonitoringPage />);
 
@@ -109,9 +105,7 @@ describe('ErrorMonitoringPage', () => {
   });
 
   it('does not clutter a single occurrence with a count', async () => {
-    mockGetErrors.mockResolvedValue([
-      makeError({ context: { source: 'frontend', occurrences: 1 } }),
-    ]);
+    mockGetErrors.mockResolvedValue([makeError({ context: { source: 'frontend', occurrences: 1 } })]);
 
     renderWithRouter(<ErrorMonitoringPage />);
 

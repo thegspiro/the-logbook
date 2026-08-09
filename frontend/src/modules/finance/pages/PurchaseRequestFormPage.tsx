@@ -28,9 +28,7 @@ const purchaseRequestSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(2000).optional(),
   vendor: z.string().max(200).optional(),
-  estimatedAmount: z
-    .number({ message: 'Amount is required' })
-    .positive('Amount must be positive'),
+  estimatedAmount: z.number({ message: 'Amount is required' }).positive('Amount must be positive'),
   priority: z.string().min(1, 'Priority is required'),
   budgetId: z.string().optional(),
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
@@ -63,13 +61,9 @@ const PRIORITY_OPTIONS = [
 // =============================================================================
 
 const FormSkeleton: React.FC = () => (
-  <div
-    className="space-y-6"
-    aria-label="Loading purchase request form"
-    role="status" aria-live="polite"
-  >
+  <div className="space-y-6" aria-label="Loading purchase request form" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={`field-${String(i)}`} className="mb-4 space-y-2">
           <Skeleton className="h-4 w-24" />
@@ -211,7 +205,7 @@ const PurchaseRequestFormPage: React.FC = () => {
         <button
           type="button"
           onClick={() => void navigate('/finance/purchase-requests')}
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Purchase Requests
@@ -228,7 +222,7 @@ const PurchaseRequestFormPage: React.FC = () => {
       <button
         type="button"
         onClick={() => void navigate('/finance/purchase-requests')}
-        className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Purchase Requests
@@ -236,10 +230,10 @@ const PurchaseRequestFormPage: React.FC = () => {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-theme-text-primary">
+        <h1 className="text-theme-text-primary text-2xl font-bold">
           {isEdit ? 'Edit Purchase Request' : 'New Purchase Request'}
         </h1>
-        <p className="mt-1 text-sm text-theme-text-secondary">
+        <p className="text-theme-text-secondary mt-1 text-sm">
           {isEdit
             ? 'Update the details for this purchase request.'
             : 'Fill in the details to create a new purchase request.'}
@@ -249,7 +243,7 @@ const PurchaseRequestFormPage: React.FC = () => {
       {/* Form */}
       <form
         onSubmit={(e) => void handleSubmit(onSubmit)(e)}
-        className="rounded-lg border border-theme-surface-border bg-theme-surface p-6"
+        className="border-theme-surface-border bg-theme-surface rounded-lg border p-6"
       >
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           {/* Title */}
@@ -261,9 +255,7 @@ const PurchaseRequestFormPage: React.FC = () => {
               placeholder="Brief title for the purchase"
               {...register('title')}
             />
-            {errors.title && (
-              <p className={errorClass}>{errors.title.message}</p>
-            )}
+            {errors.title && <p className={errorClass}>{errors.title.message}</p>}
           </div>
 
           {/* Description */}
@@ -275,23 +267,14 @@ const PurchaseRequestFormPage: React.FC = () => {
               placeholder="Detailed description of what is being purchased and why"
               {...register('description')}
             />
-            {errors.description && (
-              <p className={errorClass}>{errors.description.message}</p>
-            )}
+            {errors.description && <p className={errorClass}>{errors.description.message}</p>}
           </div>
 
           {/* Vendor */}
           <div>
             <label className={labelClass}>Vendor</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="Vendor or supplier name"
-              {...register('vendor')}
-            />
-            {errors.vendor && (
-              <p className={errorClass}>{errors.vendor.message}</p>
-            )}
+            <input type="text" className={inputClass} placeholder="Vendor or supplier name" {...register('vendor')} />
+            {errors.vendor && <p className={errorClass}>{errors.vendor.message}</p>}
           </div>
 
           {/* Estimated Amount */}
@@ -305,9 +288,7 @@ const PurchaseRequestFormPage: React.FC = () => {
               placeholder="0.00"
               {...register('estimatedAmount', { valueAsNumber: true })}
             />
-            {errors.estimatedAmount && (
-              <p className={errorClass}>{errors.estimatedAmount.message}</p>
-            )}
+            {errors.estimatedAmount && <p className={errorClass}>{errors.estimatedAmount.message}</p>}
           </div>
 
           {/* Priority */}
@@ -320,9 +301,7 @@ const PurchaseRequestFormPage: React.FC = () => {
                 </option>
               ))}
             </select>
-            {errors.priority && (
-              <p className={errorClass}>{errors.priority.message}</p>
-            )}
+            {errors.priority && <p className={errorClass}>{errors.priority.message}</p>}
           </div>
 
           {/* Fiscal Year */}
@@ -336,9 +315,7 @@ const PurchaseRequestFormPage: React.FC = () => {
                 </option>
               ))}
             </select>
-            {errors.fiscalYearId && (
-              <p className={errorClass}>{errors.fiscalYearId.message}</p>
-            )}
+            {errors.fiscalYearId && <p className={errorClass}>{errors.fiscalYearId.message}</p>}
           </div>
 
           {/* Budget Category */}
@@ -349,10 +326,7 @@ const PurchaseRequestFormPage: React.FC = () => {
               {budgets.map((b) => (
                 <option key={b.id} value={b.id}>
                   {categoryMap.get(b.categoryId) ?? 'Unknown'} -{' '}
-                  {formatCurrencyWhole(
-                    b.amountBudgeted - b.amountSpent - b.amountEncumbered,
-                  )}{' '}
-                  remaining
+                  {formatCurrencyWhole(b.amountBudgeted - b.amountSpent - b.amountEncumbered)} remaining
                 </option>
               ))}
             </select>
@@ -360,11 +334,11 @@ const PurchaseRequestFormPage: React.FC = () => {
         </div>
 
         {/* Actions */}
-        <div className="mt-6 flex items-center justify-end gap-3 border-t border-theme-surface-border pt-6">
+        <div className="border-theme-surface-border mt-6 flex items-center justify-end gap-3 border-t pt-6">
           <button
             type="button"
             onClick={() => void navigate('/finance/purchase-requests')}
-            className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
           >
             Cancel
           </button>
@@ -374,11 +348,7 @@ const PurchaseRequestFormPage: React.FC = () => {
             className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
-            {isSubmitting
-              ? 'Saving...'
-              : isEdit
-                ? 'Update Request'
-                : 'Create Request'}
+            {isSubmitting ? 'Saving...' : isEdit ? 'Update Request' : 'Create Request'}
           </button>
         </div>
       </form>

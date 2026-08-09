@@ -426,9 +426,11 @@ docker-compose logs -f
 
 ### Documentation
 
-- [Full Unraid Guide](/mnt/user/appdata/the-logbook/docs/deployment/unraid.md)
-- [Troubleshooting Guide](/mnt/user/appdata/the-logbook/docs/TROUBLESHOOTING.md)
-- [Main README](/mnt/user/appdata/the-logbook/README.md)
+These live inside your appdata share on the server, not on this site:
+
+- Full Unraid Guide — `/mnt/user/appdata/the-logbook/docs/deployment/unraid.md`
+- Troubleshooting Guide — `/mnt/user/appdata/the-logbook/docs/TROUBLESHOOTING.md`
+- Main README — `/mnt/user/appdata/the-logbook/README.md`
 
 ### Support
 

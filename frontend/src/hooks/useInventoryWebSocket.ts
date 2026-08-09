@@ -32,8 +32,12 @@ export function useInventoryWebSocket({ onEvent, enabled = true }: UseInventoryW
   const onEventRef = useRef(onEvent);
 
   // Keep refs in sync without re-triggering the effect
-  useEffect(() => { enabledRef.current = enabled; }, [enabled]);
-  useEffect(() => { onEventRef.current = onEvent; }, [onEvent]);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   const connect = useCallback(() => {
     if (!enabledRef.current) return;
@@ -78,7 +82,7 @@ export function useInventoryWebSocket({ onEvent, enabled = true }: UseInventoryW
     } catch {
       scheduleReconnect();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const scheduleReconnect = useCallback(() => {

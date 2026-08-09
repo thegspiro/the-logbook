@@ -34,7 +34,9 @@ vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: {
     getMyShifts: mockGetMyShifts,
     getOpenShifts: mockGetOpenShifts,
-    getSummary: vi.fn().mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
+    getSummary: vi
+      .fn()
+      .mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
     signupForShift: mockSignupForShift,
     getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'] }),
   },
@@ -57,7 +59,13 @@ vi.mock('../services/api', () => ({
     getSetupChecklist: vi.fn().mockResolvedValue({ completed_count: 0, total_count: 0 }),
   },
   inventoryService: {
-    getSummary: vi.fn().mockResolvedValue({ total_items: 0, total_value: 0, active_checkouts: 0, overdue_checkouts: 0, maintenance_due_count: 0 }),
+    getSummary: vi.fn().mockResolvedValue({
+      total_items: 0,
+      total_value: 0,
+      active_checkouts: 0,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+    }),
     getLowStockItems: vi.fn().mockResolvedValue([]),
   },
   dashboardService: {
@@ -137,10 +145,16 @@ describe('Dashboard', () => {
       });
     });
 
-    it('should render user\'s assigned shifts', async () => {
+    it("should render user's assigned shifts", async () => {
       mockGetMyShifts.mockResolvedValue({
         shifts: [
-          makeShift({ id: 'my-1', shift_date: '2026-03-15', start_time: '08:00', end_time: '16:00', shift_officer_name: 'Capt. Smith' }),
+          makeShift({
+            id: 'my-1',
+            shift_date: '2026-03-15',
+            start_time: '08:00',
+            end_time: '16:00',
+            shift_officer_name: 'Capt. Smith',
+          }),
         ],
         total: 1,
       });
@@ -194,9 +208,7 @@ describe('Dashboard', () => {
     });
 
     it('should call signupForShift when sign up button is clicked', async () => {
-      mockGetOpenShifts.mockResolvedValue([
-        makeShift({ id: 'open-1', shift_date: '2026-03-20' }),
-      ]);
+      mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1', shift_date: '2026-03-20' })]);
       mockSignupForShift.mockResolvedValue(undefined);
 
       const user = userEvent.setup();
@@ -220,9 +232,7 @@ describe('Dashboard', () => {
     });
 
     it('should refresh both lists after successful signup', async () => {
-      mockGetOpenShifts.mockResolvedValue([
-        makeShift({ id: 'open-1', shift_date: '2026-03-20' }),
-      ]);
+      mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'open-1', shift_date: '2026-03-20' })]);
       mockSignupForShift.mockResolvedValue(undefined);
 
       const user = userEvent.setup();
@@ -245,9 +255,7 @@ describe('Dashboard', () => {
       await user.click(screen.getByRole('button', { name: /confirm/i }));
 
       await waitFor(() => {
-        expect(mockGetMyShifts).toHaveBeenCalledWith(
-          expect.objectContaining({ limit: 5 })
-        );
+        expect(mockGetMyShifts).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
         expect(mockGetOpenShifts).toHaveBeenCalledWith(
           expect.objectContaining({
             start_date: expect.any(String) as string,

@@ -33,6 +33,7 @@ from app.models.apparatus import (
     ApparatusType,
     EvocLevel,
 )
+from app.models.location import Location
 from app.models.user import User
 from app.schemas.apparatus import (
     ApparatusArchive,
@@ -403,6 +404,18 @@ class ApparatusService:
         if not status:
             raise ValueError("Invalid apparatus status")
 
+        # The station is eager-loaded into the apparatus response (primary_station),
+        # so a foreign primary_station_id would leak another org's location. Type
+        # and status above are already validated; validate the station too (XC-1).
+        await assert_in_org(
+            self.db,
+            Location,
+            apparatus_data.primary_station_id,
+            organization_id,
+            allow_none=True,
+            label="station",
+        )
+
         apparatus = Apparatus(
             organization_id=organization_id,
             created_by=created_by,
@@ -553,6 +566,30 @@ class ApparatusService:
         )
         if not apparatus:
             return None
+
+        # XC-1: validate every client-supplied FK is in-org before it is written
+        # anywhere. create_apparatus / change_apparatus_status already do this;
+        # update did not, so a foreign type/status/station could be stored on the
+        # org-stamped row and then leaked back through the eager-loaded
+        # apparatus_type / status_record / primary_station relationships (and a
+        # foreign status_id would also be copied into ApparatusStatusHistory
+        # below). Only validate ids that were actually supplied.
+        if apparatus_data.apparatus_type_id and not await self.get_apparatus_type(
+            apparatus_data.apparatus_type_id, organization_id
+        ):
+            raise ValueError("Invalid apparatus type")
+        if apparatus_data.status_id and not await self.get_apparatus_status(
+            apparatus_data.status_id, organization_id
+        ):
+            raise ValueError("Invalid apparatus status")
+        await assert_in_org(
+            self.db,
+            Location,
+            apparatus_data.primary_station_id,
+            organization_id,
+            allow_none=True,
+            label="station",
+        )
 
         # Check unit number uniqueness if changing
         if (
@@ -1180,6 +1217,17 @@ class ApparatusService:
         if not maintenance:
             return None
 
+        # XC-1: maintenance_type is eager-loaded into the maintenance response,
+        # so a foreign maintenance_type_id would leak another org's type.
+        # create_maintenance_record validates it; update must too.
+        if (
+            maintenance_data.maintenance_type_id
+            and not await self.get_maintenance_type(
+                maintenance_data.maintenance_type_id, organization_id
+            )
+        ):
+            raise ValueError("Invalid maintenance type")
+
         update_data = maintenance_data.model_dump(exclude_unset=True)
 
         # Convert attachment models to dicts for JSON storage
@@ -1460,6 +1508,18 @@ class ApparatusService:
         operator = result.scalar_one_or_none()
         if not operator:
             return None
+
+        # XC-1: evoc_level is eager-loaded into the operator response, so a
+        # foreign evoc_level_id would leak another org's EVOC level. create_operator
+        # validates it; update must too (user_id/apparatus_id are not updatable).
+        await assert_in_org(
+            self.db,
+            EvocLevel,
+            operator_data.evoc_level_id,
+            organization_id,
+            allow_none=True,
+            label="EVOC level",
+        )
 
         update_data = operator_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():

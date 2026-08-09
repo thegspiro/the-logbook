@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, CircleSlash, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { Ban, CheckCircle2, CircleSlash, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
@@ -16,11 +16,12 @@ import type { SkillTestListItem } from '../types/skillsTesting';
 import { EmptyState } from '../components/ux';
 import { Modal } from '../components/Modal';
 import { getErrorMessage } from '../utils/errorHandling';
+import { MIN_VOID_REASON_LENGTH } from '../components/training/SkillTestOfficerActions';
 import { ClipboardList } from 'lucide-react';
 
-/** Matches the backend's SkillTestVoidRequest minimum — a void stays visible in
- *  the member's history, so the record has to say why it was withdrawn. */
-const MIN_VOID_REASON_LENGTH = 10;
+/** Sentinel for the status dropdown. Not a SkillTestStatus — pending validation
+ *  is a property of a *completed* test, so it maps to its own query param. */
+const PENDING_FILTER = 'pending_validation';
 
 // ── Sub-components ─────────────────────────────────────────────
 
@@ -51,7 +52,8 @@ const TestCard: React.FC<{
   onVoid: () => void;
   onCancel: () => void;
   onRelease: () => void;
-}> = ({ test, onClick, onDelete, onVoid, onCancel, onRelease }) => {
+  onValidate: () => void;
+}> = ({ test, onClick, onDelete, onVoid, onCancel, onRelease, onValidate }) => {
   const tz = useTimezone();
   return (
     <div
@@ -72,6 +74,11 @@ const TestCard: React.FC<{
             {test.is_practice && (
               <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
                 Practice
+              </span>
+            )}
+            {test.pending_validation && (
+              <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                Needs validation
               </span>
             )}
           </div>
@@ -110,6 +117,21 @@ const TestCard: React.FC<{
             </button>
           ) : test.status === 'completed' ? (
             <>
+              {/* A member ran this evaluation; nothing counts until an officer
+                  accepts it. Offered before release because releasing a result
+                  the department has not yet accepted puts the cart first. */}
+              {test.pending_validation && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onValidate();
+                  }}
+                  className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-purple-50 hover:text-purple-600 dark:hover:bg-purple-900/20"
+                  aria-label={`Validate result for ${test.candidate_name}`}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                </button>
+              )}
               {/* Only meaningful under the on_release mode; the endpoint is
                   idempotent and refuses tests whose results are never shown,
                   so offering it on any unreleased result is safe and saves the
@@ -159,18 +181,36 @@ const TestCard: React.FC<{
 
 const SkillsTestingTestRecordsTab: React.FC = () => {
   const navigate = useNavigate();
-  const { tests, testsLoading, loadTests, deleteTest, voidTest, cancelTest, releaseTest, templates, loadTemplates } =
-    useSkillsTestingStore();
+  const {
+    tests,
+    testsLoading,
+    loadTests,
+    deleteTest,
+    voidTest,
+    cancelTest,
+    releaseTest,
+    validateTest,
+    templates,
+    loadTemplates,
+  } = useSkillsTestingStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [voidTarget, setVoidTarget] = useState<SkillTestListItem | null>(null);
   const [voidReason, setVoidReason] = useState('');
   const [voiding, setVoiding] = useState(false);
 
+  // "Needs validation" is a filter over completed tests rather than another
+  // status value, so it lives in the same dropdown but maps to its own param.
+  const pendingOnly = statusFilter === PENDING_FILTER;
+
   useEffect(() => {
-    void loadTests(statusFilter ? { status: statusFilter } : undefined);
+    if (pendingOnly) {
+      void loadTests({ pending_validation: true });
+    } else {
+      void loadTests(statusFilter ? { status: statusFilter } : undefined);
+    }
     void loadTemplates({ status: 'published' });
-  }, [loadTests, loadTemplates, statusFilter]);
+  }, [loadTests, loadTemplates, statusFilter, pendingOnly]);
 
   const filteredTests = tests.filter(
     (t) =>
@@ -209,6 +249,23 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
       toast.success('Test cancelled');
     } catch {
       toast.error('Failed to cancel test');
+    }
+  };
+
+  const handleValidate = async (test: SkillTestListItem) => {
+    const confirmed = window.confirm(
+      `Validate ${test.examiner_name}'s evaluation of ${test.candidate_name} (${test.template_name})?\n\n` +
+        'The result will count against the candidate’s record: it credits any linked program ' +
+        'requirement, uses one of their attempts, and becomes visible to them. ' +
+        'To reject it instead, void it with a reason.'
+    );
+    if (!confirmed) return;
+
+    try {
+      await validateTest(test.id);
+      toast.success('Result validated');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to validate result'));
     }
   };
 
@@ -267,6 +324,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
+            <option value={PENDING_FILTER}>Needs Validation</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
@@ -291,14 +349,16 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
         <div className="bg-theme-surface border-theme-surface-border rounded-lg border">
           <EmptyState
             icon={ClipboardList}
-            title="No test records found"
+            title={pendingOnly ? 'Nothing waiting on you' : 'No test records found'}
             description={
-              templates.length > 0
-                ? 'No skills tests have been recorded yet. Start one to track member progress.'
-                : 'Add a test template before recording skills tests.'
+              pendingOnly
+                ? 'Every official result has been validated. Member-run evaluations show up here when they need your sign-off.'
+                : templates.length > 0
+                  ? 'No skills tests have been recorded yet. Start one to track member progress.'
+                  : 'Add a test template before recording skills tests.'
             }
             actions={
-              templates.length > 0
+              templates.length > 0 && !pendingOnly
                 ? [{ label: 'Start a new test', onClick: () => void navigate('/training/skills-testing/test/new') }]
                 : undefined
             }
@@ -315,6 +375,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               onVoid={() => setVoidTarget(test)}
               onCancel={() => void handleCancel(test)}
               onRelease={() => void handleRelease(test)}
+              onValidate={() => void handleValidate(test)}
             />
           ))}
         </div>

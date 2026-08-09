@@ -1086,8 +1086,15 @@ class ReportExportService:
         if not end_date:
             end_date = date.today()
 
-        # Get user info
-        user_result = await self.db.execute(select(User).where(User.id == user_id))
+        # Get user info — org-scope the lookup so a cross-org user_id can't
+        # leak another org's member name into the exported PDF title (the
+        # records below are already org-scoped).
+        user_result = await self.db.execute(
+            select(User).where(
+                User.id == user_id,
+                User.organization_id == organization_id,
+            )
+        )
         user = user_result.scalar_one_or_none()
         user_name = f"{user.first_name} {user.last_name}" if user else "Unknown"
 

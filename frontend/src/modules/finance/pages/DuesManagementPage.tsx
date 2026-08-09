@@ -12,11 +12,7 @@ import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
-import {
-  DuesStatus,
-  DUES_STATUS_COLORS,
-  DuesFrequency,
-} from '../types';
+import { DuesStatus, DUES_STATUS_COLORS, DuesFrequency } from '../types';
 import type { DuesSummary } from '../types';
 
 // =============================================================================
@@ -53,41 +49,33 @@ for (const tab of STATUS_TABS) {
 
 const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
   <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
-      <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+      <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <DollarSign className="h-4 w-4" />
         Expected
       </div>
-      <p className="mt-1 text-xl font-bold text-theme-text-primary">
-        {formatCurrency(summary.totalExpected)}
-      </p>
+      <p className="text-theme-text-primary mt-1 text-xl font-bold">{formatCurrency(summary.totalExpected)}</p>
     </div>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
-      <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+      <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <DollarSign className="h-4 w-4 text-green-600" />
         Collected
       </div>
-      <p className="mt-1 text-xl font-bold text-green-600">
-        {formatCurrency(summary.totalCollected)}
-      </p>
+      <p className="mt-1 text-xl font-bold text-green-600">{formatCurrency(summary.totalCollected)}</p>
     </div>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
-      <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+      <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <DollarSign className="h-4 w-4 text-red-600" />
         Outstanding
       </div>
-      <p className="mt-1 text-xl font-bold text-red-600">
-        {formatCurrency(summary.totalOutstanding)}
-      </p>
+      <p className="mt-1 text-xl font-bold text-red-600">{formatCurrency(summary.totalOutstanding)}</p>
     </div>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
-      <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+      <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
         <Users className="h-4 w-4" />
         Collection Rate
       </div>
-      <p className="mt-1 text-xl font-bold text-theme-text-primary">
-        {summary.collectionRate.toFixed(1)}%
-      </p>
+      <p className="text-theme-text-primary mt-1 text-xl font-bold">{summary.collectionRate.toFixed(1)}%</p>
     </div>
   </div>
 );
@@ -131,21 +119,14 @@ const DuesManagementPage: React.FC = () => {
     void fetchDuesSummary(selectedScheduleId || undefined);
   }, [fetchDuesSummary, selectedScheduleId]);
 
-  const activeSchedules = useMemo(
-    () => duesSchedules.filter((s) => s.isActive),
-    [duesSchedules],
-  );
+  const activeSchedules = useMemo(() => duesSchedules.filter((s) => s.isActive), [duesSchedules]);
 
   if (isLoading && duesSchedules.length === 0) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Dues Management
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
-            Manage member dues schedules and payments
-          </p>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Dues Management</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">Manage member dues schedules and payments</p>
         </div>
         <SkeletonPage rows={6} showStats />
       </div>
@@ -156,17 +137,13 @@ const DuesManagementPage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-theme-text-primary">
-          Dues Management
-        </h1>
-        <p className="mt-1 text-sm text-theme-text-secondary">
-          Manage member dues schedules and payments
-        </p>
+        <h1 className="text-theme-text-primary text-2xl font-bold">Dues Management</h1>
+        <p className="text-theme-text-secondary mt-1 text-sm">Manage member dues schedules and payments</p>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -177,10 +154,8 @@ const DuesManagementPage: React.FC = () => {
 
       {/* Schedule Selector */}
       {activeSchedules.length > 0 && (
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
-          <h2 className="mb-3 text-sm font-medium text-theme-text-secondary">
-            Dues Schedule
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+          <h2 className="text-theme-text-secondary mb-3 text-sm font-medium">Dues Schedule</h2>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -188,7 +163,7 @@ const DuesManagementPage: React.FC = () => {
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 !selectedScheduleId
                   ? 'bg-red-600 text-white'
-                  : 'border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
+                  : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
               }`}
             >
               All Schedules
@@ -201,7 +176,7 @@ const DuesManagementPage: React.FC = () => {
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   selectedScheduleId === schedule.id
                     ? 'bg-red-600 text-white'
-                    : 'border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
+                    : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
                 }`}
               >
                 <span>{schedule.name}</span>
@@ -215,7 +190,7 @@ const DuesManagementPage: React.FC = () => {
       )}
 
       {/* Status Tabs */}
-      <div className="flex flex-wrap gap-1 rounded-lg border border-theme-surface-border bg-theme-surface p-1">
+      <div className="border-theme-surface-border bg-theme-surface flex flex-wrap gap-1 rounded-lg border p-1">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
@@ -244,57 +219,72 @@ const DuesManagementPage: React.FC = () => {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-theme-surface-border bg-theme-surface">
+        <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-theme-surface-border">
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                <tr className="border-theme-surface-border border-b">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Member
                   </th>
-                  <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                  >
                     Amount Due
                   </th>
-                  <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                  >
                     Amount Paid
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Due Date
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Status
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Paid Date
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-theme-surface-border">
+              <tbody className="divide-theme-surface-border divide-y">
                 {memberDues.map((md) => (
-                  <tr
-                    key={md.id}
-                    className="transition-colors hover:bg-theme-surface-hover"
-                  >
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-theme-text-primary">
+                  <tr key={md.id} className="hover:bg-theme-surface-hover transition-colors">
+                    <td className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap">
                       {md.userId}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
+                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
                       {formatCurrency(md.amountDue)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">
+                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
                       {formatCurrency(md.amountPaid)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {formatDate(md.dueDate, tz)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DUES_STATUS_COLORS[md.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
                         {STATUS_LABEL_MAP[md.status] ?? md.status}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {md.paidDate ? formatDate(md.paidDate, tz) : '--'}
                     </td>
                   </tr>

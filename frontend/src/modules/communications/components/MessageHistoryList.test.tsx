@@ -156,9 +156,7 @@ describe('MessageHistoryList', () => {
     await user.type(searchInput, 'welcome');
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalledWith(
-        expect.objectContaining({ search: 'welcome' }),
-      );
+      expect(mockList).toHaveBeenCalledWith(expect.objectContaining({ search: 'welcome' }));
     });
   });
 });

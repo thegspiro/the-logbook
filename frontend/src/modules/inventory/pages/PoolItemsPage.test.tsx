@@ -35,8 +35,12 @@ const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: (...a: unknown[]): void => { mockToastSuccess(...a); },
-    error: (...a: unknown[]): void => { mockToastError(...a); },
+    success: (...a: unknown[]): void => {
+      mockToastSuccess(...a);
+    },
+    error: (...a: unknown[]): void => {
+      mockToastError(...a);
+    },
   },
 }));
 

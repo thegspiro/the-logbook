@@ -15,12 +15,7 @@ interface ExportControlsProps {
   disabled?: boolean;
 }
 
-export const ExportControls: React.FC<ExportControlsProps> = ({
-  reportTitle,
-  rows,
-  columns,
-  disabled = false,
-}) => {
+export const ExportControls: React.FC<ExportControlsProps> = ({ reportTitle, rows, columns, disabled = false }) => {
   return (
     <div className="flex items-center gap-2">
       <button

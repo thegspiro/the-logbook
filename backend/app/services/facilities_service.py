@@ -147,6 +147,24 @@ class FacilitiesService:
         await self.db.commit()
         await self.db.refresh(instance)
 
+    async def _assert_facility_in_org(
+        self, facility_id: Optional[str], organization_id: str
+    ) -> None:
+        """Validate a client-supplied facility_id belongs to the caller's org.
+
+        FAC2-1: the sub-entity create paths validate their parent facility via
+        get_facility, but the update paths reassign facility_id through
+        _apply_updates' blind setattr with no check — letting a row be
+        re-parented onto another org's facility (and update_room even silently
+        drops its linked-Location sync when the new parent resolves to None).
+        Mirror the create validation on update. Only checked when the field is
+        actually supplied; None means the parent is left unchanged.
+        """
+        if facility_id and not await self.get_facility(
+            facility_id, organization_id, include_relations=False
+        ):
+            raise ValueError("Invalid facility")
+
     async def _ensure_system_defaults(self) -> None:
         """Create system-level facility types and statuses if missing.
 
@@ -1679,6 +1697,7 @@ class FacilitiesService:
         if not account:
             return None
 
+        await self._assert_facility_in_org(account_data.facility_id, organization_id)
         await self._apply_updates(account, account_data)
 
         return account
@@ -1780,6 +1799,8 @@ class FacilitiesService:
         if not reading:
             return None
 
+        # (FacilityUtilityReadingUpdate exposes no utility_account_id, so a
+        # reading cannot be re-parented — no FK to re-validate here.)
         await self._apply_updates(reading, reading_data)
 
         return reading
@@ -1907,6 +1928,7 @@ class FacilitiesService:
                 label="member",
             )
 
+        await self._assert_facility_in_org(key_data.facility_id, organization_id)
         await self._apply_updates(key, key_data)
 
         return key
@@ -2012,6 +2034,8 @@ class FacilitiesService:
         room = await self.get_room(room_id, organization_id)
         if not room:
             return None
+
+        await self._assert_facility_in_org(room_data.facility_id, organization_id)
 
         update_data = room_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -2195,6 +2219,7 @@ class FacilitiesService:
         if not contact:
             return None
 
+        await self._assert_facility_in_org(contact_data.facility_id, organization_id)
         await self._apply_updates(contact, contact_data)
 
         return contact
@@ -2291,6 +2316,7 @@ class FacilitiesService:
         if not location:
             return None
 
+        await self._assert_facility_in_org(location_data.facility_id, organization_id)
         await self._apply_updates(location, location_data)
 
         return location
@@ -2391,6 +2417,8 @@ class FacilitiesService:
         project = await self.get_capital_project(project_id, organization_id)
         if not project:
             return None
+
+        await self._assert_facility_in_org(project_data.facility_id, organization_id)
 
         update_data = project_data.model_dump(exclude_unset=True)
 
@@ -2499,6 +2527,8 @@ class FacilitiesService:
         if not policy:
             return None
 
+        await self._assert_facility_in_org(policy_data.facility_id, organization_id)
+
         update_data = policy_data.model_dump(exclude_unset=True)
 
         for field, value in update_data.items():
@@ -2601,6 +2631,7 @@ class FacilitiesService:
         if not occupant:
             return None
 
+        await self._assert_facility_in_org(occupant_data.facility_id, organization_id)
         await self._apply_updates(occupant, occupant_data)
 
         return occupant
@@ -2701,6 +2732,7 @@ class FacilitiesService:
         if not checklist:
             return None
 
+        await self._assert_facility_in_org(checklist_data.facility_id, organization_id)
         await self._apply_updates(checklist, checklist_data)
 
         return checklist
@@ -2793,6 +2825,12 @@ class FacilitiesService:
         item = await self.get_compliance_item(item_id, organization_id)
         if not item:
             return None
+
+        # Mirror create_compliance_item: a reassigned checklist_id must be in-org.
+        if item_data.checklist_id and not await self.get_compliance_checklist(
+            item_data.checklist_id, organization_id
+        ):
+            raise ValueError("Invalid compliance checklist")
 
         await self._apply_updates(item, item_data)
 

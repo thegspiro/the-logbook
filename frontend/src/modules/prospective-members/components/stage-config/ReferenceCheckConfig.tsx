@@ -8,11 +8,7 @@ interface ReferenceCheckConfigProps {
   errors: Record<string, string>;
 }
 
-const ReferenceCheckConfig: React.FC<ReferenceCheckConfigProps> = ({
-  config,
-  setConfig,
-  errors,
-}) => {
+const ReferenceCheckConfig: React.FC<ReferenceCheckConfigProps> = ({ config, setConfig, errors }) => {
   const referenceCheckConfig = config as ReferenceCheckConfigType;
 
   return (
@@ -27,9 +23,7 @@ const ReferenceCheckConfig: React.FC<ReferenceCheckConfigProps> = ({
           min={1}
           max={10}
           value={referenceCheckConfig.required_count}
-          onChange={(e) =>
-            setConfig({ ...referenceCheckConfig, required_count: Number(e.target.value) })
-          }
+          onChange={(e) => setConfig({ ...referenceCheckConfig, required_count: Number(e.target.value) })}
           className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-32 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
         />
         {errors.required_count && (
@@ -106,9 +100,7 @@ const ReferenceCheckConfig: React.FC<ReferenceCheckConfigProps> = ({
         <input
           type="checkbox"
           checked={referenceCheckConfig.require_all_before_advance}
-          onChange={(e) =>
-            setConfig({ ...referenceCheckConfig, require_all_before_advance: e.target.checked })
-          }
+          onChange={(e) => setConfig({ ...referenceCheckConfig, require_all_before_advance: e.target.checked })}
           className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
         />
         Require all references verified before advancing
@@ -122,7 +114,7 @@ const ReferenceCheckConfig: React.FC<ReferenceCheckConfigProps> = ({
         />
         Auto-advance when all references are verified
       </label>
-      <p className="text-theme-text-muted text-xs ml-6">
+      <p className="text-theme-text-muted ml-6 text-xs">
         Automatically complete this step and advance the prospect when the required number of references are verified.
       </p>
     </div>

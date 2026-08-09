@@ -207,6 +207,18 @@ class SkillTestUpdate(BaseModel):
     expected_version: Optional[int] = None
 
 
+class SkillTestCandidateResponse(BaseModel):
+    """One selectable candidate for the start-test picker.
+
+    Deliberately just an id and a display name. Every member can call the
+    endpoint that returns these, so it carries none of the contact information
+    the member admin payload governs behind organization visibility settings.
+    """
+
+    id: UUID
+    name: str
+
+
 class SkillTestViewerCreate(BaseModel):
     """Grant one member sight of a single test's result."""
 
@@ -271,24 +283,43 @@ class SkillTestResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
 
-    # Resolved disclosure policy in force for this test, so the UI can explain
-    # what the candidate will see without recomputing the inheritance chain.
+    # Overrides set on this test itself. Usually null — the setting normally
+    # lives on the template or the department default — so a UI that wants to
+    # tell an officer what the candidate will see must read the effective_*
+    # fields below, not these.
     result_disclosure: Optional[str] = None
     result_release: Optional[str] = None
     result_viewer_positions: Optional[list] = None
     released_at: Optional[datetime] = None
     released_by: Optional[UUID] = None
 
+    # The policy actually in force, resolved down the test → template →
+    # department chain. Sent so the officer-facing UI can state, before they
+    # accept or void a result, exactly what the member will end up seeing —
+    # without reimplementing the inheritance rules in TypeScript.
+    effective_result_disclosure: Optional[str] = None
+    effective_result_release: Optional[str] = None
+
     # Void trail — populated only when an official result has been withdrawn.
     voided_at: Optional[datetime] = None
     voided_by: Optional[UUID] = None
     void_reason: Optional[str] = None
+
+    # Validation trail — an official result counts only once a training officer
+    # signs it off. Unset while a member-run test awaits review; set in the same
+    # step when an officer completes the test themselves.
+    validated_at: Optional[datetime] = None
+    validated_by: Optional[UUID] = None
+    # Derived: a completed official test with no sign-off yet. Sent so the UI
+    # does not have to re-derive the rule from three separate fields.
+    pending_validation: bool = False
 
     # Denormalized display names (populated in endpoint)
     template_name: Optional[str] = None
     candidate_name: Optional[str] = None
     examiner_name: Optional[str] = None
     voided_by_name: Optional[str] = None
+    validated_by_name: Optional[str] = None
 
     # Template structure for active test rendering
     template_sections: Optional[list] = None
@@ -315,6 +346,8 @@ class SkillTestListResponse(UTCResponseBase):
     completed_at: Optional[datetime] = None
     created_at: datetime
     voided_at: Optional[datetime] = None
+    validated_at: Optional[datetime] = None
+    pending_validation: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -333,3 +366,6 @@ class SkillTestingSummaryResponse(BaseModel):
     tests_this_month: int = 0
     pass_rate: Optional[float] = None
     average_score: Optional[float] = None
+    # Member-run official results waiting on an officer's sign-off. Drives the
+    # review queue badge; 0 for readers who cannot validate.
+    pending_validation: int = 0

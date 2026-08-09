@@ -127,41 +127,35 @@ export const Modal: React.FC<ModalProps> = ({
       aria-describedby={ariaDescribedBy}
     >
       <div
-        className="flex items-center justify-center min-h-screen px-4 py-4 text-center sm:block sm:p-0"
+        className="flex min-h-screen items-center justify-center px-4 py-4 text-center sm:block sm:p-0"
         data-testid="modal-backdrop"
         onClick={handleBackdropClick}
       >
         {/* Background overlay */}
-        <div
-          className="fixed inset-0 transition-opacity bg-black/50 pointer-events-none"
-          aria-hidden="true"
-        />
+        <div className="pointer-events-none fixed inset-0 bg-black/50 transition-opacity" aria-hidden="true" />
 
         {/* Center modal vertically */}
-        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
+        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">
           &#8203;
         </span>
 
         {/* Modal panel */}
         <div
           ref={modalRef}
-          className={`relative z-10 inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto`}
+          className={`bg-theme-surface-modal relative z-10 inline-block transform overflow-hidden rounded-lg text-left align-bottom shadow-xl transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} max-h-[calc(100dvh-2rem)] w-full overflow-y-auto sm:max-h-[calc(100dvh-4rem)]`}
           data-testid="modal-panel"
           tabIndex={-1}
         >
           {/* Header */}
           <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="flex items-start justify-between mb-4">
-              <h3
-                className="text-lg font-medium text-theme-text-primary"
-                id="modal-title"
-              >
+            <div className="mb-4 flex items-start justify-between">
+              <h3 className="text-theme-text-primary text-lg font-medium" id="modal-title">
                 {title}
               </h3>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                className="bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:ring-theme-focus-ring flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-1 focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden"
                 aria-label="Close modal"
               >
                 <X className="h-6 w-6" aria-hidden="true" />
@@ -174,7 +168,10 @@ export const Modal: React.FC<ModalProps> = ({
 
           {/* Footer */}
           {footer && (
-            <div data-testid="modal-footer" className="bg-theme-surface-secondary px-4 py-3 sm:px-6 flex flex-col-reverse gap-2 sm:flex-row-reverse sm:gap-0">
+            <div
+              data-testid="modal-footer"
+              className="bg-theme-surface-secondary flex flex-col-reverse gap-2 px-4 py-3 sm:flex-row-reverse sm:gap-0 sm:px-6"
+            >
               {footer}
             </div>
           )}

@@ -31,8 +31,12 @@ const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: (...a: unknown[]): void => { mockToastSuccess(...a); },
-    error: (...a: unknown[]): void => { mockToastError(...a); },
+    success: (...a: unknown[]): void => {
+      mockToastSuccess(...a);
+    },
+    error: (...a: unknown[]): void => {
+      mockToastError(...a);
+    },
   },
 }));
 
@@ -108,10 +112,7 @@ describe('InventoryMaintenancePage', () => {
     await screen.findAllByText('Helmet');
 
     await user.click(firstButton('Log Maintenance'));
-    await user.type(
-      await screen.findByPlaceholderText('Describe the maintenance performed...'),
-      'Replaced shell',
-    );
+    await user.type(await screen.findByPlaceholderText('Describe the maintenance performed...'), 'Replaced shell');
     await user.click(screen.getByRole('button', { name: 'Save Record' }));
 
     await waitFor(() => expect(mockCreateMaintenanceRecord).toHaveBeenCalledTimes(1));
@@ -141,8 +142,6 @@ describe('InventoryMaintenancePage', () => {
     await screen.findByText('No items due for maintenance.');
 
     await user.click(screen.getByRole('button', { name: /Maintenance History/ }));
-    expect(
-      await screen.findByText(/Select an item from the Due Items tab/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Select an item from the Due Items tab/)).toBeInTheDocument();
   });
 });

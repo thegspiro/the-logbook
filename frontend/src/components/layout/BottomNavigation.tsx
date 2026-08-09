@@ -61,7 +61,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
     <nav
       // md:hidden — above that the side/top navigation is always visible and a
       // bottom bar would be redundant.
-      className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-theme-surface-border bg-theme-nav-bg pb-[env(safe-area-inset-bottom)]"
+      className="border-theme-surface-border bg-theme-nav-bg fixed inset-x-0 bottom-0 z-50 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Primary"
     >
       <ul className="flex items-stretch">
@@ -74,10 +74,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
                 onClick={() => void navigate(tab.path)}
                 onTouchStart={() => prefetchRoute(tab.path)}
                 aria-current={active ? 'page' : undefined}
-                className={`flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 transition-colors focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-theme-focus-ring ${
-                  active
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-theme-text-muted hover:text-theme-text-primary'
+                className={`focus:ring-theme-focus-ring flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
+                  active ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
                 <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -90,7 +88,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ hidden = fal
           <button
             onClick={() => window.dispatchEvent(new CustomEvent(OPEN_MOBILE_NAV_EVENT))}
             aria-label="Open full navigation menu"
-            className="text-theme-text-muted hover:text-theme-text-primary flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 transition-colors focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-theme-focus-ring"
+            className="text-theme-text-muted hover:text-theme-text-primary focus:ring-theme-focus-ring flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset"
           >
             <Menu className="h-5 w-5 shrink-0" aria-hidden="true" />
             <span className="text-[11px] leading-none font-medium">More</span>

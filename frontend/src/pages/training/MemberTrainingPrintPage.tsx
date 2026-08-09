@@ -13,12 +13,7 @@ import { useSearchParams } from 'react-router';
 import { trainingService, trainingProgramService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
-import type {
-  TrainingRecord,
-  ComplianceSummary,
-  UserTrainingStats,
-  ProgramEnrollment,
-} from '../../types/training';
+import type { TrainingRecord, ComplianceSummary, UserTrainingStats, ProgramEnrollment } from '../../types/training';
 
 const STATUS_LABELS: Record<string, string> = {
   completed: 'Completed',
@@ -71,23 +66,49 @@ const MemberTrainingPrintPage: React.FC = () => {
   }, [loading, error]);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-500">Loading training records...</p></div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-gray-500">Loading training records...</p>
+      </div>
+    );
   }
   if (error) {
-    return <div className="min-h-screen flex items-center justify-center"><p className="text-red-600">{error}</p></div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-red-600">{error}</p>
+      </div>
+    );
   }
 
-  const certifications = records.filter(r => r.certification_number || r.training_type === 'certification');
-  const courseRecords = records.filter(r => r.training_type !== 'certification' || !r.certification_number);
-  const fmtDate = (d?: string) => d ? formatDateCustom(d, { month: 'short', day: 'numeric', year: 'numeric' }, tz) : '—';
+  const certifications = records.filter((r) => r.certification_number || r.training_type === 'certification');
+  const courseRecords = records.filter((r) => r.training_type !== 'certification' || !r.certification_number);
+  const fmtDate = (d?: string) =>
+    d ? formatDateCustom(d, { month: 'short', day: 'numeric', year: 'numeric' }, tz) : '—';
 
   const sectionHeading: React.CSSProperties = {
-    fontSize: '11pt', fontWeight: 600, textTransform: 'uppercase',
-    letterSpacing: '0.05em', borderBottom: '1px solid #ddd',
-    paddingBottom: '3pt', marginBottom: '6pt', marginTop: '16pt',
+    fontSize: '11pt',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    borderBottom: '1px solid #ddd',
+    paddingBottom: '3pt',
+    marginBottom: '6pt',
+    marginTop: '16pt',
   };
-  const cellStyle: React.CSSProperties = { border: '1px solid #ccc', padding: '3pt 6pt', fontSize: '9pt', verticalAlign: 'top' };
-  const headerCell: React.CSSProperties = { ...cellStyle, fontWeight: 600, backgroundColor: '#f5f5f5', fontSize: '8pt', textTransform: 'uppercase', letterSpacing: '0.03em' };
+  const cellStyle: React.CSSProperties = {
+    border: '1px solid #ccc',
+    padding: '3pt 6pt',
+    fontSize: '9pt',
+    verticalAlign: 'top',
+  };
+  const headerCell: React.CSSProperties = {
+    ...cellStyle,
+    fontWeight: 600,
+    backgroundColor: '#f5f5f5',
+    fontSize: '8pt',
+    textTransform: 'uppercase',
+    letterSpacing: '0.03em',
+  };
 
   return (
     <>
@@ -97,9 +118,16 @@ const MemberTrainingPrintPage: React.FC = () => {
         @media screen { body { background: #f3f4f6; } }
       `}</style>
 
-      <div className="max-w-[8.5in] mx-auto bg-white print:shadow-none shadow-lg my-8 print:my-0">
-        <div className="p-8 print:p-0" style={{ fontFamily: 'Georgia, "Times New Roman", serif', color: '#111', fontSize: '10pt', lineHeight: '1.5' }}>
-
+      <div className="mx-auto my-8 max-w-[8.5in] bg-white shadow-lg print:my-0 print:shadow-none">
+        <div
+          className="p-8 print:p-0"
+          style={{
+            fontFamily: 'Georgia, "Times New Roman", serif',
+            color: '#111',
+            fontSize: '10pt',
+            lineHeight: '1.5',
+          }}
+        >
           {/* Header */}
           <div style={{ borderBottom: '3px solid #111', paddingBottom: '10pt', marginBottom: '14pt' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -110,7 +138,18 @@ const MemberTrainingPrintPage: React.FC = () => {
               <div style={{ textAlign: 'right', fontSize: '9pt', color: '#666' }}>
                 <p style={{ margin: 0 }}>Generated: {formatDate(new Date(), tz)}</p>
                 {compliance && (
-                  <p style={{ margin: 0, fontWeight: 600, color: compliance.compliance_status === 'green' ? '#166534' : compliance.compliance_status === 'red' ? '#991b1b' : '#92400e' }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontWeight: 600,
+                      color:
+                        compliance.compliance_status === 'green'
+                          ? '#166534'
+                          : compliance.compliance_status === 'red'
+                            ? '#991b1b'
+                            : '#92400e',
+                    }}
+                  >
                     Compliance: {compliance.compliance_label || compliance.compliance_status.toUpperCase()}
                   </p>
                 )}
@@ -129,9 +168,16 @@ const MemberTrainingPrintPage: React.FC = () => {
                     { label: 'Active Certifications', value: stats.active_certifications },
                     { label: 'Completed Courses', value: stats.completed_courses },
                   ].map(({ label, value }) => (
-                    <td key={label} style={{ border: '1px solid #ccc', padding: '6pt 8pt', width: '25%', textAlign: 'center' }}>
+                    <td
+                      key={label}
+                      style={{ border: '1px solid #ccc', padding: '6pt 8pt', width: '25%', textAlign: 'center' }}
+                    >
                       <div style={{ fontSize: '16pt', fontWeight: 'bold' }}>{value}</div>
-                      <div style={{ fontSize: '8pt', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#555' }}>{label}</div>
+                      <div
+                        style={{ fontSize: '8pt', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#555' }}
+                      >
+                        {label}
+                      </div>
                     </td>
                   ))}
                 </tr>
@@ -144,9 +190,15 @@ const MemberTrainingPrintPage: React.FC = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '14pt' }}>
               <tbody>
                 <tr>
-                  <td style={cellStyle}><strong>Requirements Met:</strong> {compliance.requirements_met} / {compliance.requirements_total}</td>
-                  <td style={cellStyle}><strong>Expiring Soon:</strong> {compliance.certs_expiring_soon}</td>
-                  <td style={cellStyle}><strong>Expired:</strong> {compliance.certs_expired}</td>
+                  <td style={cellStyle}>
+                    <strong>Requirements Met:</strong> {compliance.requirements_met} / {compliance.requirements_total}
+                  </td>
+                  <td style={cellStyle}>
+                    <strong>Expiring Soon:</strong> {compliance.certs_expiring_soon}
+                  </td>
+                  <td style={cellStyle}>
+                    <strong>Expired:</strong> {compliance.certs_expired}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -167,7 +219,7 @@ const MemberTrainingPrintPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {enrollments.map(e => (
+                  {enrollments.map((e) => (
                     <tr key={e.id}>
                       <td style={cellStyle}>{e.program?.name || '—'}</td>
                       <td style={cellStyle}>{e.status}</td>
@@ -197,13 +249,20 @@ const MemberTrainingPrintPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {certifications.map(r => (
+                  {certifications.map((r) => (
                     <tr key={r.id}>
                       <td style={cellStyle}>{r.course_name}</td>
                       <td style={cellStyle}>{r.certification_number || '—'}</td>
                       <td style={cellStyle}>{r.issuing_agency || '—'}</td>
                       <td style={cellStyle}>{fmtDate(r.completion_date)}</td>
-                      <td style={{ ...cellStyle, ...(r.expiration_date && new Date(r.expiration_date) < new Date() ? { color: '#991b1b', fontWeight: 600 } : {}) }}>
+                      <td
+                        style={{
+                          ...cellStyle,
+                          ...(r.expiration_date && new Date(r.expiration_date) < new Date()
+                            ? { color: '#991b1b', fontWeight: 600 }
+                            : {}),
+                        }}
+                      >
                         {fmtDate(r.expiration_date)}
                       </td>
                       <td style={cellStyle}>{STATUS_LABELS[r.status] || r.status}</td>
@@ -231,24 +290,38 @@ const MemberTrainingPrintPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {courseRecords
-                    .sort((a, b) => (b.completion_date || b.scheduled_date || '').localeCompare(a.completion_date || a.scheduled_date || ''))
-                    .map(r => (
-                    <tr key={r.id}>
-                      <td style={cellStyle}>{r.course_name}</td>
-                      <td style={cellStyle}>{r.training_type?.replace(/_/g, ' ') || '—'}</td>
-                      <td style={cellStyle}>{fmtDate(r.completion_date || r.scheduled_date)}</td>
-                      <td style={{ ...cellStyle, textAlign: 'center' }}>{r.hours_completed}</td>
-                      <td style={cellStyle}>{r.instructor || '—'}</td>
-                      <td style={cellStyle}>{STATUS_LABELS[r.status] || r.status}</td>
-                    </tr>
-                  ))}
+                    .sort((a, b) =>
+                      (b.completion_date || b.scheduled_date || '').localeCompare(
+                        a.completion_date || a.scheduled_date || ''
+                      )
+                    )
+                    .map((r) => (
+                      <tr key={r.id}>
+                        <td style={cellStyle}>{r.course_name}</td>
+                        <td style={cellStyle}>{r.training_type?.replace(/_/g, ' ') || '—'}</td>
+                        <td style={cellStyle}>{fmtDate(r.completion_date || r.scheduled_date)}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>{r.hours_completed}</td>
+                        <td style={cellStyle}>{r.instructor || '—'}</td>
+                        <td style={cellStyle}>{STATUS_LABELS[r.status] || r.status}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
           )}
 
           {/* Footer */}
-          <div style={{ marginTop: '24pt', borderTop: '1px solid #ddd', paddingTop: '6pt', display: 'flex', justifyContent: 'space-between', fontSize: '8pt', color: '#aaa' }}>
+          <div
+            style={{
+              marginTop: '24pt',
+              borderTop: '1px solid #ddd',
+              paddingTop: '6pt',
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '8pt',
+              color: '#aaa',
+            }}
+          >
             <span>The Logbook — Member Training Record</span>
             <span>Generated {formatDate(new Date(), tz)}</span>
           </div>

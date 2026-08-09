@@ -152,11 +152,20 @@ The system automatically checks for existing members or applicants with the same
 
 ### Edge Cases
 
-| Scenario                          | Behavior                                                   |
-| --------------------------------- | ---------------------------------------------------------- |
-| Duplicate email (active member)   | 409 error; must use different email or reactivate existing |
-| Duplicate email (archived member) | Warning shown; option to reactivate                        |
-| Missing email                     | Required; cannot create without email                      |
+| Scenario                                                      | Behavior                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate email (active member)                               | 409 error; must use different email or reactivate existing                                                                                                                                                                                     |
+| Duplicate email (archived member)                             | Warning shown; option to reactivate                                                                                                                                                                                                            |
+| Missing email                                                 | Required; cannot create without email                                                                                                                                                                                                          |
+| **Referring member is not in your department** _(2026-08-08)_ | Rejected with a clear error rather than an "unexpected error". The message is deliberately generic — it will not tell you whether the person exists in some other department, because that would be a way to probe another department's roster |
+| **An invalid pipeline is selected**                           | Also now a clear validation error. Both of these previously surfaced as a `500 Internal Server Error`                                                                                                                                          |
+
+> **Why "Referred by" is checked at all.** The referring member is copied onto
+> the member's own record when the applicant is elected and converted. An
+> unchecked value would not just sit on the application — it would land in the
+> member directory and outlive it. Applications created before this check
+> existed keep working: if the stored referrer turns out not to be one of your
+> members, conversion drops the referral rather than blocking the election.
 
 ---
 
@@ -216,6 +225,46 @@ The default view shows applicants as **cards on a kanban board** with one column
   john" finds the same person.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the kanban board showing 4-5 columns (pipeline stages) with applicant cards. Show one card being dragged between columns. Include the Active/On Hold/Withdrawn filter tabs at the top._
+
+### The board shows everyone now _(2026-08-08)_
+
+The board used to be built from the **same paginated list the table view uses**,
+25 applicants at a time. If your department had more than 25 active applicants,
+you were looking at a board assembled from a fraction of them — **cards were
+simply missing from columns, the column counts matched the incomplete data, and
+nothing on screen said so**. Switching over from the table view also carried
+whatever page the table had been left on, so the board could change depending on
+where you had been.
+
+Three things changed:
+
+- **The board requests the whole pipeline** (up to 200 applicants), not one
+  page of it.
+- **Switching between board and table refetches**, so neither view inherits the
+  other's page position.
+- **Past 200 applicants, the board tells you.** It states plainly how many it is
+  not showing instead of quietly dropping them, and each column header shows the
+  **true** count for that stage even when not every card is drawn.
+
+> **If you are running a pipeline larger than 200 active applicants**, use the
+> table view with its filters and search for day-to-day work — the board is a
+> visual overview, and beyond that size it is telling you it is one.
+
+> **[SCREENSHOT NEEDED]:** _The kanban board for a pipeline with more than 200
+> active applicants, showing the truncation notice ("Showing 200 of 247
+> applicants") above the columns, with a column header whose count exceeds the
+> number of cards drawn beneath it._
+
+### What a card carries — and what it no longer leaks _(2026-08-08)_
+
+Board cards previously carried **every field on the applicant record** down to
+the browser, whether or not the card drew them. That included the applicant's
+**status token** — the credential behind their public application-status page —
+along with coordinator notes, date of birth and home address, sent to anyone
+with view-only pipeline access.
+
+Cards now carry exactly the same fields as a table row and nothing more. There
+is no change to what you see; the change is to what was being sent behind it.
 
 ---
 
@@ -425,6 +474,66 @@ Select multiple applicants on the pipeline dashboard to perform bulk actions:
 3. Confirm the bulk action
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the pipeline table view with 3 applicants checked, and the bulk action bar at the bottom showing Advance, Hold, Reject, and Delete buttons._
+
+### Bulk actions now tell you who was skipped _(2026-08-08)_
+
+A bulk action used to be a loop in your browser — one request per applicant, one
+after another. Thirty selected applicants meant thirty round trips, each one
+committing, sending stage email and auto-linking events. Worse, **every error
+was discarded**: a partial failure came back as a bare count naming nobody, so
+you could not tell which three of your thirty had not moved.
+
+A bulk action is now **one request**, and the result is **itemized**. You get a
+count of how many succeeded, how many did not, and for each failure the
+applicant's name and the reason.
+
+**One failure never stops the rest.** If applicant #7 is already at the final
+stage, the other twenty-nine still advance.
+
+> **[SCREENSHOT NEEDED]:** _The bulk-action result summary after advancing 12
+> applicants where 2 failed — showing "10 advanced, 2 skipped" with the two
+> named applicants listed beneath and the reason next to each ("Already at the
+> final stage")._
+
+#### A rejection reason no longer overwrites your notes
+
+When you bulk-reject or bulk-hold applicants, the **reason you type is recorded
+in each applicant's activity log**. It does **not** go into the coordinator
+notes field.
+
+This matters because it used to. The old browser-side path sent your reason
+through the update endpoint as `notes`, so **a bulk rejection silently
+overwrote the coordinator notes on every applicant you had selected**. If you
+performed bulk rejections before 2026-08-08 and your notes look wrong, check the
+activity log — the original edit history is there.
+
+#### Edge cases
+
+| Situation                                         | What happens                                                                                                                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| An applicant is **already at the final stage**    | Reported as skipped with that reason. The rest still advance                                                                                                       |
+| An applicant has **no current stage**             | Same — skipped and named, not silently counted as moved                                                                                                            |
+| **Your own applicant record** is in the selection | Reported as "not found". Coordinators who are themselves in a pipeline cannot act on their own file through a bulk action, exactly as they cannot open it directly |
+| You select more than **200** applicants           | The request is refused. Work in batches — 200 is a guardrail on request size, not a page size                                                                      |
+| A stage triggers an **automated email**           | It still sends, once per successfully advanced applicant                                                                                                           |
+
+### "Advance" no longer claims success when nothing moved _(2026-08-08)_
+
+Advancing an applicant who had nowhere to go — already at the final stage, or
+with no current stage set — used to report **"Advanced"** and close the drawer,
+with nothing actually changed. It also wrote an entry into the **audit log**
+saying that applicant had been advanced.
+
+That last part was the serious half. The audit log exists so a department can
+reconstruct who moved whom through membership, and an entry describing a
+movement that never happened undermines exactly that.
+
+Both cases now return a clear error explaining the applicant has nowhere to
+advance to, and **the audit entry is only written after a real advance**.
+
+> If you are auditing membership decisions made before 2026-08-08, be aware that
+> `prospect_advanced` entries may include no-op advances. Cross-check against the
+> applicant's stage history rather than the audit entry alone.
 
 ---
 

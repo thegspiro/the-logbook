@@ -227,6 +227,11 @@ export interface SkillTest {
   /** Disclosure overrides set on this test; null inherits the template's. */
   result_disclosure?: ResultDisclosure | undefined;
   result_release?: ResultRelease | undefined;
+  /** The policy actually in force, resolved test → template → department by the
+   *  backend. These are what the UI must read to tell an officer what the
+   *  candidate will see; the raw overrides above are usually null. */
+  effective_result_disclosure?: ResultDisclosure | undefined;
+  effective_result_release?: ResultRelease | undefined;
   result_viewer_positions?: string[] | undefined;
   /** Release trail — set once an officer releases the result. */
   released_at?: string | undefined;
@@ -236,6 +241,13 @@ export interface SkillTest {
   voided_by?: string | undefined;
   voided_by_name?: string | undefined;
   void_reason?: string | undefined;
+  /** Validation trail — an official result counts only once a training officer
+   *  signs it off. Unset while a member-run test awaits review. */
+  validated_at?: string | undefined;
+  validated_by?: string | undefined;
+  validated_by_name?: string | undefined;
+  /** Backend-derived: a completed official test with no sign-off yet. */
+  pending_validation?: boolean | undefined;
   /** Template sections for active test rendering (from API response) */
   template_sections?: SkillTemplateSection[] | undefined;
   /** Template global time limit in seconds */
@@ -293,7 +305,10 @@ export interface SkillTestListItem {
   status: SkillTestStatus;
   result: TestResult;
   is_practice: boolean;
-  overall_score?: number;
+  /** Widened to include undefined for the same reason as `voided_at` below —
+   *  validating a test patches this row from a SkillTest response, where the
+   *  score is optional, and exactOptionalPropertyTypes rejects a bare `?:`. */
+  overall_score?: number | undefined;
   started_at?: string;
   completed_at?: string;
   created_at: string;
@@ -303,6 +318,18 @@ export interface SkillTestListItem {
    *  the store patches this field straight from a SkillTest response where it
    *  is optional, and assigning undefined to a bare `?:` property is an error. */
   voided_at?: string | undefined;
+  /** Set once a training officer has accepted the result against the
+   *  candidate's record. Null while a member-run test awaits review. */
+  validated_at?: string | undefined;
+  pending_validation?: boolean | undefined;
+}
+
+/** A selectable candidate for the start-test picker. Id and display name only —
+ *  the endpoint behind it is open to every member, so it carries no contact
+ *  information. */
+export interface SkillTestCandidate {
+  id: string;
+  name: string;
 }
 
 export interface SkillTestingSummary {
@@ -312,4 +339,7 @@ export interface SkillTestingSummary {
   tests_this_month: number;
   pass_rate: number | null;
   average_score: number | null;
+  /** Member-run results awaiting an officer's sign-off. 0 for readers who
+   *  cannot validate — it is an org-wide count of other people's evaluations. */
+  pending_validation?: number | undefined;
 }

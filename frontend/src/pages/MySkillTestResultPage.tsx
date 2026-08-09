@@ -89,7 +89,11 @@ export const MySkillTestResultPage: React.FC = () => {
   );
   const isPractice = currentTest.is_practice;
   const isVoided = currentTest.status === 'voided';
-  const isComplete = currentTest.status === 'completed' || isVoided;
+  const isPending = !!currentTest.pending_validation;
+  // A pending test carries no outcome to render — the API withholds the score
+  // and reports the result as incomplete, so showing the verdict panel would
+  // read as a failure the officer has not actually recorded.
+  const isComplete = (currentTest.status === 'completed' && !isPending) || isVoided;
   // The candidate may clear their own practice attempts. An official result is
   // an evaluation record — withdrawing one is an officer's void, never a delete.
   const canDelete = isPractice && currentTest.candidate_id === user?.id;
@@ -163,6 +167,14 @@ export const MySkillTestResultPage: React.FC = () => {
               </p>
             )}
           </div>
+        </div>
+      ) : isPending ? (
+        <div className="alert-purple">
+          <p className="text-sm font-medium">Awaiting validation</p>
+          <p className="mt-1 text-sm">
+            {currentTest.examiner_name} has finished scoring this evaluation. A training officer reviews it before the
+            result counts — you&apos;ll see the outcome here once they do.
+          </p>
         </div>
       ) : (
         <div className="alert-info">

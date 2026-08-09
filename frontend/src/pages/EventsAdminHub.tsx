@@ -7,51 +7,39 @@
  * Requires: events.manage permission
  */
 
-import React, { Suspense, useState, useEffect } from "react";
-import { useSearchParams } from "react-router";
-import { lazyWithRetry } from "../utils/lazyWithRetry";
+import React, { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 
-const EventCreatePage = lazyWithRetry(() =>
-  import("./EventCreatePage").then((m) => ({ default: m.EventCreatePage })),
-);
-const AnalyticsDashboardPage = lazyWithRetry(
-  () => import("./AnalyticsDashboardPage"),
-);
-const CommunityEngagementTab = lazyWithRetry(
-  () => import("./CommunityEngagementTab"),
-);
-const PastEventsTab = lazyWithRetry(() => import("./PastEventsTab"));
-const EventRequestsTab = lazyWithRetry(() => import("./EventRequestsTab"));
-const EventsSettingsTab = lazyWithRetry(() => import("./EventsSettingsTab"));
+const EventCreatePage = lazyWithRetry(() => import('./EventCreatePage').then((m) => ({ default: m.EventCreatePage })));
+const AnalyticsDashboardPage = lazyWithRetry(() => import('./AnalyticsDashboardPage'));
+const CommunityEngagementTab = lazyWithRetry(() => import('./CommunityEngagementTab'));
+const PastEventsTab = lazyWithRetry(() => import('./PastEventsTab'));
+const EventRequestsTab = lazyWithRetry(() => import('./EventRequestsTab'));
+const EventsSettingsTab = lazyWithRetry(() => import('./EventsSettingsTab'));
 
-type AdminTab =
-  | "create"
-  | "past_events"
-  | "requests"
-  | "analytics"
-  | "community"
-  | "settings";
+type AdminTab = 'create' | 'past_events' | 'requests' | 'analytics' | 'community' | 'settings';
 
 const tabs: { id: AdminTab; label: string }[] = [
-  { id: "create", label: "Create Event" },
-  { id: "past_events", label: "Past Events" },
-  { id: "requests", label: "Requests" },
-  { id: "analytics", label: "QR Code Analytics" },
-  { id: "community", label: "Community Engagement" },
-  { id: "settings", label: "Settings" },
+  { id: 'create', label: 'Create Event' },
+  { id: 'past_events', label: 'Past Events' },
+  { id: 'requests', label: 'Requests' },
+  { id: 'analytics', label: 'QR Code Analytics' },
+  { id: 'community', label: 'Community Engagement' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 const TabLoading = () => (
-  <div className="flex justify-center items-center h-64">
+  <div className="flex h-64 items-center justify-center">
     <div className="text-theme-text-muted">Loading...</div>
   </div>
 );
 
 export const EventsAdminHub: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get("tab") as AdminTab | null;
+  const tabParam = searchParams.get('tab') as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
-    tabParam && tabs.some((t) => t.id === tabParam) ? tabParam : "create",
+    tabParam && tabs.some((t) => t.id === tabParam) ? tabParam : 'create'
   );
 
   useEffect(() => {
@@ -68,31 +56,23 @@ export const EventsAdminHub: React.FC = () => {
   return (
     <div>
       {/* Header + Tab Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Events Administration
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-muted">
-            Create and manage events, view analytics
-          </p>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Events Administration</h1>
+          <p className="text-theme-text-muted mt-1 text-sm">Create and manage events, view analytics</p>
         </div>
 
-        <div className="border-b border-theme-surface-border">
-          <div
-            className="flex space-x-1 overflow-x-auto"
-            role="tablist"
-            aria-label="Events admin tabs"
-          >
+        <div className="border-theme-surface-border border-b">
+          <div className="flex space-x-1 overflow-x-auto" role="tablist" aria-label="Events admin tabs">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 role="tab"
                 onClick={() => handleTabChange(tab.id)}
-                className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                className={`focus:ring-theme-focus-ring border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
                   activeTab === tab.id
-                    ? "border-red-500 text-theme-text-primary"
-                    : "border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border"
+                    ? 'text-theme-text-primary border-red-500'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
                 }`}
                 aria-selected={activeTab === tab.id}
               >
@@ -105,12 +85,12 @@ export const EventsAdminHub: React.FC = () => {
 
       {/* Tab Content - each child handles its own layout */}
       <Suspense fallback={<TabLoading />}>
-        {activeTab === "create" && <EventCreatePage />}
-        {activeTab === "past_events" && <PastEventsTab />}
-        {activeTab === "requests" && <EventRequestsTab />}
-        {activeTab === "analytics" && <AnalyticsDashboardPage />}
-        {activeTab === "community" && <CommunityEngagementTab />}
-        {activeTab === "settings" && <EventsSettingsTab />}
+        {activeTab === 'create' && <EventCreatePage />}
+        {activeTab === 'past_events' && <PastEventsTab />}
+        {activeTab === 'requests' && <EventRequestsTab />}
+        {activeTab === 'analytics' && <AnalyticsDashboardPage />}
+        {activeTab === 'community' && <CommunityEngagementTab />}
+        {activeTab === 'settings' && <EventsSettingsTab />}
       </Suspense>
     </div>
   );

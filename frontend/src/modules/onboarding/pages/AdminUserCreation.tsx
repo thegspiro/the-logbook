@@ -10,9 +10,9 @@ import { isValidEmail } from '../utils/validation';
 
 const SystemOwnerCreation: React.FC = () => {
   const navigate = useNavigate();
-  const departmentName = useOnboardingStore(state => state.departmentName);
-  const logoPreview = useOnboardingStore(state => state.logoData);
-  const lastSaved = useOnboardingStore(state => state.lastSaved);
+  const departmentName = useOnboardingStore((state) => state.departmentName);
+  const logoPreview = useOnboardingStore((state) => state.logoData);
+  const lastSaved = useOnboardingStore((state) => state.lastSaved);
   const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   // Form fields
@@ -66,8 +66,7 @@ const SystemOwnerCreation: React.FC = () => {
 
       case 'email':
         if (!value.trim()) return 'Email is required';
-        if (!isValidEmail(value))
-          return 'Please enter a valid email address';
+        if (!isValidEmail(value)) return 'Please enter a valid email address';
         return '';
 
       case 'firstName':
@@ -81,14 +80,10 @@ const SystemOwnerCreation: React.FC = () => {
       case 'password':
         if (!value) return 'Password is required';
         if (value.length < 12) return 'Password must be at least 12 characters';
-        if (!passwordStrength.checks.uppercase)
-          return 'Password must contain at least one uppercase letter';
-        if (!passwordStrength.checks.lowercase)
-          return 'Password must contain at least one lowercase letter';
-        if (!passwordStrength.checks.number)
-          return 'Password must contain at least one number';
-        if (!passwordStrength.checks.special)
-          return 'Password must contain at least one special character';
+        if (!passwordStrength.checks.uppercase) return 'Password must contain at least one uppercase letter';
+        if (!passwordStrength.checks.lowercase) return 'Password must contain at least one lowercase letter';
+        if (!passwordStrength.checks.number) return 'Password must contain at least one number';
+        if (!passwordStrength.checks.special) return 'Password must contain at least one special character';
         return '';
 
       case 'confirmPassword':
@@ -109,9 +104,7 @@ const SystemOwnerCreation: React.FC = () => {
       // Also revalidate confirm password if password changes
       if (name === 'password' && touched.confirmPassword) {
         // Validate confirmPassword against the NEW password value
-        const confirmError = newData.confirmPassword !== value
-          ? 'Passwords do not match'
-          : '';
+        const confirmError = newData.confirmPassword !== value ? 'Passwords do not match' : '';
         setErrors((prevErrors) => ({ ...prevErrors, confirmPassword: confirmError }));
       }
 
@@ -235,7 +228,7 @@ const SystemOwnerCreation: React.FC = () => {
 
     if (apiError) {
       // SECURITY: Clear passwords on error
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         password: '',
         confirmPassword: '',
@@ -251,30 +244,30 @@ const SystemOwnerCreation: React.FC = () => {
     passwordStrength.passedChecks === 5;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
-      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
+      <OnboardingHeader
+        departmentName={departmentName}
+        logoPreview={logoPreview}
+        icon={<Mail aria-hidden="true" className="h-6 w-6 text-white" />}
+      />
 
       {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center p-4 py-8">
-        <div className="max-w-2xl w-full">
+      <main className="flex flex-1 items-center justify-center p-4 py-8">
+        <div className="w-full max-w-2xl">
           {/* Navigation Buttons */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="mb-6 flex items-center justify-between">
             <BackButton to="/onboarding/authentication" />
             <ResetProgressButton />
           </div>
 
           {/* Page Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
-              <Shield aria-hidden="true" className="w-8 h-8 text-white" />
+          <div className="mb-8 text-center">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-purple-600">
+              <Shield aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
-              Create System Owner Account
-            </h2>
-            <p className="text-xl text-theme-text-secondary mb-2">
-              Set up the IT Manager / System Owner account
-            </p>
-            <p className="text-sm text-theme-text-muted">
+            <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Create System Owner Account</h2>
+            <p className="text-theme-text-secondary mb-2 text-xl">Set up the IT Manager / System Owner account</p>
+            <p className="text-theme-text-muted text-sm">
               This account will have full access to all system settings and configurations
             </p>
           </div>
@@ -282,18 +275,22 @@ const SystemOwnerCreation: React.FC = () => {
           {/* System Owner Clarification */}
           <div className="alert-purple mb-6">
             <div className="flex items-start space-x-3">
-              <Info className="w-5 h-5 text-theme-alert-purple-icon shrink-0 mt-0.5" />
+              <Info className="text-theme-alert-purple-icon mt-0.5 h-5 w-5 shrink-0" />
               <div>
-                <p className="text-theme-alert-purple-title text-sm font-medium mb-1">
-                  System Owner / IT Manager
+                <p className="text-theme-alert-purple-title mb-1 text-sm font-medium">System Owner / IT Manager</p>
+                <p className="text-theme-alert-purple-text mb-2 text-sm">
+                  This creates the <strong>System Owner</strong> account -- the IT Manager responsible for system and
+                  technical administration. This is different from members who hold organizational positions.
                 </p>
-                <p className="text-theme-alert-purple-text text-sm mb-2">
-                  This creates the <strong>System Owner</strong> account -- the IT Manager responsible for system and technical administration.
-                  This is different from members who hold organizational positions.
-                </p>
-                <ul className="text-theme-alert-purple-text text-sm space-y-1 list-disc list-inside ml-2">
-                  <li><strong>System Owner (IT Manager):</strong> Full technical access to all system settings (what you're creating now)</li>
-                  <li><strong>Organizational Positions:</strong> President, Secretary, and other positions are managed separately in the Members module</li>
+                <ul className="text-theme-alert-purple-text ml-2 list-inside list-disc space-y-1 text-sm">
+                  <li>
+                    <strong>System Owner (IT Manager):</strong> Full technical access to all system settings (what
+                    you're creating now)
+                  </li>
+                  <li>
+                    <strong>Organizational Positions:</strong> President, Secretary, and other positions are managed
+                    separately in the Members module
+                  </li>
                 </ul>
               </div>
             </div>
@@ -302,34 +299,31 @@ const SystemOwnerCreation: React.FC = () => {
           {/* Security Notice */}
           <div className="alert-info mb-6">
             <div className="flex items-start space-x-3">
-              <Info className="w-5 h-5 text-theme-alert-info-icon shrink-0 mt-0.5" />
+              <Info className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" />
               <div>
-                <p className="text-theme-alert-info-title text-sm font-medium mb-1">
-                  Security Requirements
-                </p>
+                <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Security Requirements</p>
                 <p className="text-theme-alert-info-text text-sm">
-                  Your password will be encrypted using Argon2id hashing and
-                  stored securely. Choose a strong password that meets all
-                  requirements below.
+                  Your password will be encrypted using Argon2id hashing and stored securely. Choose a strong password
+                  that meets all requirements below.
                 </p>
               </div>
             </div>
           </div>
 
           {/* Form */}
-          <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
+          <form
+            onSubmit={(e) => {
+              void handleSubmit(e);
+            }}
+            className="space-y-6"
+          >
             {/* Personal Information */}
             <div className="card p-6">
-              <h3 className="text-xl font-bold text-theme-text-primary mb-4">
-                System Owner Information
-              </h3>
-              <div className="grid md:grid-cols-2 gap-4">
+              <h3 className="text-theme-text-primary mb-4 text-xl font-bold">System Owner Information</h3>
+              <div className="grid gap-4 md:grid-cols-2">
                 {/* First Name */}
                 <div>
-                  <label
-                    htmlFor="firstName"
-                    className="block text-sm font-medium text-theme-text-secondary mb-2"
-                  >
+                  <label htmlFor="firstName" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                     First Name <span className="text-theme-accent-red">*</span>
                   </label>
                   <input
@@ -340,17 +334,17 @@ const SystemOwnerCreation: React.FC = () => {
                     onChange={handleChange}
                     onBlur={handleBlur}
                     className={`form-input placeholder-theme-text-muted py-3 transition-all ${
- errors.firstName && touched.firstName
- ? 'border-theme-accent-red focus:ring-theme-focus-ring'
- : 'border-theme-input-border focus:ring-theme-focus-ring'
- }`}
+                      errors.firstName && touched.firstName
+                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                        : 'border-theme-input-border focus:ring-theme-focus-ring'
+                    }`}
                     placeholder="John"
                     aria-invalid={errors.firstName && touched.firstName ? 'true' : 'false'}
                     aria-describedby={errors.firstName && touched.firstName ? 'firstName-error' : undefined}
                   />
                   {errors.firstName && touched.firstName && (
-                    <p id="firstName-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
-                      <XCircle className="w-4 h-4 mr-1" />
+                    <p id="firstName-error" className="text-theme-accent-red mt-1 flex items-center text-sm">
+                      <XCircle className="mr-1 h-4 w-4" />
                       {errors.firstName}
                     </p>
                   )}
@@ -358,10 +352,7 @@ const SystemOwnerCreation: React.FC = () => {
 
                 {/* Last Name */}
                 <div>
-                  <label
-                    htmlFor="lastName"
-                    className="block text-sm font-medium text-theme-text-secondary mb-2"
-                  >
+                  <label htmlFor="lastName" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                     Last Name <span className="text-theme-accent-red">*</span>
                   </label>
                   <input
@@ -372,17 +363,17 @@ const SystemOwnerCreation: React.FC = () => {
                     onChange={handleChange}
                     onBlur={handleBlur}
                     className={`form-input placeholder-theme-text-muted py-3 transition-all ${
- errors.lastName && touched.lastName
- ? 'border-theme-accent-red focus:ring-theme-focus-ring'
- : 'border-theme-input-border focus:ring-theme-focus-ring'
- }`}
+                      errors.lastName && touched.lastName
+                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                        : 'border-theme-input-border focus:ring-theme-focus-ring'
+                    }`}
                     placeholder="Doe"
                     aria-invalid={errors.lastName && touched.lastName ? 'true' : 'false'}
                     aria-describedby={errors.lastName && touched.lastName ? 'lastName-error' : undefined}
                   />
                   {errors.lastName && touched.lastName && (
-                    <p id="lastName-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
-                      <XCircle className="w-4 h-4 mr-1" />
+                    <p id="lastName-error" className="text-theme-accent-red mt-1 flex items-center text-sm">
+                      <XCircle className="mr-1 h-4 w-4" />
                       {errors.lastName}
                     </p>
                   )}
@@ -391,10 +382,7 @@ const SystemOwnerCreation: React.FC = () => {
 
               {/* Membership Number (Optional) */}
               <div className="mt-4">
-                <label
-                  htmlFor="membershipNumber"
-                  className="block text-sm font-medium text-theme-text-secondary mb-2"
-                >
+                <label htmlFor="membershipNumber" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                   Membership Number <span className="text-theme-text-muted">(Optional)</span>
                 </label>
                 <input
@@ -414,16 +402,11 @@ const SystemOwnerCreation: React.FC = () => {
 
             {/* Account Credentials */}
             <div className="card p-6">
-              <h3 className="text-xl font-bold text-theme-text-primary mb-4">
-                Account Credentials
-              </h3>
+              <h3 className="text-theme-text-primary mb-4 text-xl font-bold">Account Credentials</h3>
 
               {/* Username */}
               <div className="mb-4">
-                <label
-                  htmlFor="username"
-                  className="block text-sm font-medium text-theme-text-secondary mb-2"
-                >
+                <label htmlFor="username" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                   Username <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
@@ -437,18 +420,18 @@ const SystemOwnerCreation: React.FC = () => {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   className={`form-input placeholder-theme-text-muted py-3 transition-all ${
- errors.username && touched.username
- ? 'border-theme-accent-red focus:ring-theme-focus-ring'
- : 'border-theme-input-border focus:ring-theme-focus-ring'
- }`}
+                    errors.username && touched.username
+                      ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                      : 'border-theme-input-border focus:ring-theme-focus-ring'
+                  }`}
                   placeholder="johndoe"
                   autoComplete="username"
                   aria-invalid={errors.username && touched.username ? 'true' : 'false'}
                   aria-describedby={errors.username && touched.username ? 'username-error' : undefined}
                 />
                 {errors.username && touched.username && (
-                  <p id="username-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
-                    <XCircle className="w-4 h-4 mr-1" />
+                  <p id="username-error" className="text-theme-accent-red mt-1 flex items-center text-sm">
+                    <XCircle className="mr-1 h-4 w-4" />
                     {errors.username}
                   </p>
                 )}
@@ -456,10 +439,7 @@ const SystemOwnerCreation: React.FC = () => {
 
               {/* Email */}
               <div className="mb-4">
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-medium text-theme-text-secondary mb-2"
-                >
+                <label htmlFor="email" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                   Email Address <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
@@ -470,18 +450,18 @@ const SystemOwnerCreation: React.FC = () => {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   className={`form-input placeholder-theme-text-muted py-3 transition-all ${
- errors.email && touched.email
- ? 'border-theme-accent-red focus:ring-theme-focus-ring'
- : 'border-theme-input-border focus:ring-theme-focus-ring'
- }`}
+                    errors.email && touched.email
+                      ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                      : 'border-theme-input-border focus:ring-theme-focus-ring'
+                  }`}
                   placeholder="itmanager@example.com"
                   autoComplete="email"
                   aria-invalid={errors.email && touched.email ? 'true' : 'false'}
                   aria-describedby={errors.email && touched.email ? 'email-error' : undefined}
                 />
                 {errors.email && touched.email && (
-                  <p id="email-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
-                    <XCircle className="w-4 h-4 mr-1" />
+                  <p id="email-error" className="text-theme-accent-red mt-1 flex items-center text-sm">
+                    <XCircle className="mr-1 h-4 w-4" />
                     {errors.email}
                   </p>
                 )}
@@ -489,10 +469,7 @@ const SystemOwnerCreation: React.FC = () => {
 
               {/* Password */}
               <div className="mb-4">
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-theme-text-secondary mb-2"
-                >
+                <label htmlFor="password" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                   Password <span className="text-theme-accent-red">*</span>
                 </label>
                 <div className="relative">
@@ -503,11 +480,11 @@ const SystemOwnerCreation: React.FC = () => {
                     value={formData.password}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`form-input placeholder-theme-text-muted pr-12 py-3 transition-all ${
- errors.password && touched.password
- ? 'border-theme-accent-red focus:ring-theme-focus-ring'
- : 'border-theme-input-border focus:ring-theme-focus-ring'
- }`}
+                    className={`form-input placeholder-theme-text-muted py-3 pr-12 transition-all ${
+                      errors.password && touched.password
+                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                        : 'border-theme-input-border focus:ring-theme-focus-ring'
+                    }`}
                     placeholder="Enter a strong password"
                     autoComplete="new-password"
                     aria-invalid={errors.password && touched.password ? 'true' : 'false'}
@@ -516,114 +493,91 @@ const SystemOwnerCreation: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
                 {errors.password && touched.password && (
-                  <p id="password-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
-                    <XCircle className="w-4 h-4 mr-1" />
+                  <p id="password-error" className="text-theme-accent-red mt-1 flex items-center text-sm">
+                    <XCircle className="mr-1 h-4 w-4" />
                     {errors.password}
                   </p>
                 )}
 
                 {/* Password Strength Indicators */}
                 <div id="password-requirements" className="mt-3 space-y-2">
-                    <div className="flex items-center text-sm">
-                      {passwordStrength.checks.length ? (
-                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
-                      )}
-                      <span
-                        className={
-                          passwordStrength.checks.length
-                            ? 'text-theme-accent-green'
-                            : 'text-theme-text-muted'
-                        }
-                      >
-                        At least 12 characters
-                      </span>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      {passwordStrength.checks.uppercase ? (
-                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
-                      )}
-                      <span
-                        className={
-                          passwordStrength.checks.uppercase
-                            ? 'text-theme-accent-green'
-                            : 'text-theme-text-muted'
-                        }
-                      >
-                        One uppercase letter
-                      </span>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      {passwordStrength.checks.lowercase ? (
-                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
-                      )}
-                      <span
-                        className={
-                          passwordStrength.checks.lowercase
-                            ? 'text-theme-accent-green'
-                            : 'text-theme-text-muted'
-                        }
-                      >
-                        One lowercase letter
-                      </span>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      {passwordStrength.checks.number ? (
-                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
-                      )}
-                      <span
-                        className={
-                          passwordStrength.checks.number
-                            ? 'text-theme-accent-green'
-                            : 'text-theme-text-muted'
-                        }
-                      >
-                        One number
-                      </span>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      {passwordStrength.checks.special ? (
-                        <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
-                      )}
-                      <span
-                        className={
-                          passwordStrength.checks.special
-                            ? 'text-theme-accent-green'
-                            : 'text-theme-text-muted'
-                        }
-                      >
-                        One special character (!@#$%^&*...)
-                      </span>
-                    </div>
+                  <div className="flex items-center text-sm">
+                    {passwordStrength.checks.length ? (
+                      <CheckCircle aria-hidden="true" className="text-theme-accent-green mr-2 h-4 w-4" />
+                    ) : (
+                      <XCircle className="text-theme-text-muted mr-2 h-4 w-4" />
+                    )}
+                    <span
+                      className={passwordStrength.checks.length ? 'text-theme-accent-green' : 'text-theme-text-muted'}
+                    >
+                      At least 12 characters
+                    </span>
                   </div>
+                  <div className="flex items-center text-sm">
+                    {passwordStrength.checks.uppercase ? (
+                      <CheckCircle aria-hidden="true" className="text-theme-accent-green mr-2 h-4 w-4" />
+                    ) : (
+                      <XCircle className="text-theme-text-muted mr-2 h-4 w-4" />
+                    )}
+                    <span
+                      className={
+                        passwordStrength.checks.uppercase ? 'text-theme-accent-green' : 'text-theme-text-muted'
+                      }
+                    >
+                      One uppercase letter
+                    </span>
+                  </div>
+                  <div className="flex items-center text-sm">
+                    {passwordStrength.checks.lowercase ? (
+                      <CheckCircle aria-hidden="true" className="text-theme-accent-green mr-2 h-4 w-4" />
+                    ) : (
+                      <XCircle className="text-theme-text-muted mr-2 h-4 w-4" />
+                    )}
+                    <span
+                      className={
+                        passwordStrength.checks.lowercase ? 'text-theme-accent-green' : 'text-theme-text-muted'
+                      }
+                    >
+                      One lowercase letter
+                    </span>
+                  </div>
+                  <div className="flex items-center text-sm">
+                    {passwordStrength.checks.number ? (
+                      <CheckCircle aria-hidden="true" className="text-theme-accent-green mr-2 h-4 w-4" />
+                    ) : (
+                      <XCircle className="text-theme-text-muted mr-2 h-4 w-4" />
+                    )}
+                    <span
+                      className={passwordStrength.checks.number ? 'text-theme-accent-green' : 'text-theme-text-muted'}
+                    >
+                      One number
+                    </span>
+                  </div>
+                  <div className="flex items-center text-sm">
+                    {passwordStrength.checks.special ? (
+                      <CheckCircle aria-hidden="true" className="text-theme-accent-green mr-2 h-4 w-4" />
+                    ) : (
+                      <XCircle className="text-theme-text-muted mr-2 h-4 w-4" />
+                    )}
+                    <span
+                      className={passwordStrength.checks.special ? 'text-theme-accent-green' : 'text-theme-text-muted'}
+                    >
+                      One special character (!@#$%^&*...)
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Confirm Password */}
               <div>
-                <label
-                  htmlFor="confirmPassword"
-                  className="block text-sm font-medium text-theme-text-secondary mb-2"
-                >
+                <label htmlFor="confirmPassword" className="text-theme-text-secondary mb-2 block text-sm font-medium">
                   Confirm Password <span className="text-theme-accent-red">*</span>
                 </label>
                 <div className="relative">
@@ -634,40 +588,38 @@ const SystemOwnerCreation: React.FC = () => {
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`form-input placeholder-theme-text-muted pr-12 py-3 transition-all ${
- errors.confirmPassword && touched.confirmPassword
- ? 'border-theme-accent-red focus:ring-theme-focus-ring'
- : 'border-theme-input-border focus:ring-theme-focus-ring'
- }`}
+                    className={`form-input placeholder-theme-text-muted py-3 pr-12 transition-all ${
+                      errors.confirmPassword && touched.confirmPassword
+                        ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                        : 'border-theme-input-border focus:ring-theme-focus-ring'
+                    }`}
                     placeholder="Re-enter your password"
                     autoComplete="new-password"
                     aria-invalid={errors.confirmPassword && touched.confirmPassword ? 'true' : 'false'}
-                    aria-describedby={errors.confirmPassword && touched.confirmPassword ? 'confirmPassword-error' : undefined}
+                    aria-describedby={
+                      errors.confirmPassword && touched.confirmPassword ? 'confirmPassword-error' : undefined
+                    }
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showConfirmPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
+                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
                 {errors.confirmPassword && touched.confirmPassword && (
-                  <p id="confirmPassword-error" className="mt-1 text-sm text-theme-accent-red flex items-center">
-                    <XCircle className="w-4 h-4 mr-1" />
+                  <p id="confirmPassword-error" className="text-theme-accent-red mt-1 flex items-center text-sm">
+                    <XCircle className="mr-1 h-4 w-4" />
                     {errors.confirmPassword}
                   </p>
                 )}
                 {!errors.confirmPassword &&
                   formData.confirmPassword &&
                   formData.password === formData.confirmPassword && (
-                    <p className="mt-1 text-sm text-theme-accent-green flex items-center">
-                      <CheckCircle className="w-4 h-4 mr-1" />
+                    <p className="text-theme-accent-green mt-1 flex items-center text-sm">
+                      <CheckCircle className="mr-1 h-4 w-4" />
                       Passwords match
                     </p>
                   )}
@@ -675,19 +627,26 @@ const SystemOwnerCreation: React.FC = () => {
             </div>
 
             {/* Submit Button */}
-            <div className="max-w-md mx-auto">
+            <div className="mx-auto max-w-md">
               {error && (
                 <div className="mb-6">
-                  <ErrorAlert message={error} canRetry={canRetry} onRetry={() => { void handleSubmit({ preventDefault: () => {} } as React.FormEvent); }} onDismiss={clearError} />
+                  <ErrorAlert
+                    message={error}
+                    canRetry={canRetry}
+                    onRetry={() => {
+                      void handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+                    }}
+                    onDismiss={clearError}
+                  />
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={!isFormValid || isSaving}
-                className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
+                className={`w-full rounded-lg px-8 py-4 text-lg font-semibold transition-all duration-300 ${
                   isFormValid && !isSaving
-                    ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                    ? 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
                 aria-label="Create System Owner account and continue setup"
@@ -696,19 +655,19 @@ const SystemOwnerCreation: React.FC = () => {
               </button>
 
               {/* Help Text */}
-              <p className="text-center text-theme-text-muted text-sm mt-4">
+              <p className="text-theme-text-muted mt-4 text-center text-sm">
                 You'll be logged in automatically and continue with IT team setup
               </p>
 
               {/* Progress Indicator */}
-              <div className="mt-6 pt-6 border-t border-theme-nav-border">
-                <div className="flex items-center justify-between text-sm text-theme-text-muted mb-2">
+              <div className="border-theme-nav-border mt-6 border-t pt-6">
+                <div className="text-theme-text-muted mb-2 flex items-center justify-between text-sm">
                   <span>Setup Progress</span>
                   <span>Step 7 of 10</span>
                 </div>
-                <div className="w-full bg-theme-surface rounded-full h-2">
+                <div className="bg-theme-surface h-2 w-full rounded-full">
                   <div
-                    className="bg-linear-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
+                    className="h-2 rounded-full bg-linear-to-r from-red-600 to-orange-600 transition-all duration-500"
                     style={{ width: '70%' }}
                     role="progressbar"
                     aria-valuenow={70}
@@ -725,14 +684,12 @@ const SystemOwnerCreation: React.FC = () => {
       </main>
 
       {/* Footer with Department Name and Copyright */}
-      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
-        <div className="max-w-7xl mx-auto text-center">
+      <footer className="bg-theme-nav-bg border-theme-nav-border border-t px-6 py-4 backdrop-blur-xs">
+        <div className="mx-auto max-w-7xl text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-theme-text-muted text-xs mt-1">
-            Powered by The Logbook
-          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

@@ -89,19 +89,17 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
         const q = state.searchQuery.toLowerCase();
         filtered = filtered.filter(
           (m) =>
-            (m.first_name?.toLowerCase().includes(q)) ||
-            (m.last_name?.toLowerCase().includes(q)) ||
-            (m.full_name?.toLowerCase().includes(q)) ||
-            (m.username?.toLowerCase().includes(q)) ||
-            (m.email?.toLowerCase().includes(q)) ||
-            (m.membership_number?.toLowerCase().includes(q))
+            m.first_name?.toLowerCase().includes(q) ||
+            m.last_name?.toLowerCase().includes(q) ||
+            m.full_name?.toLowerCase().includes(q) ||
+            m.username?.toLowerCase().includes(q) ||
+            m.email?.toLowerCase().includes(q) ||
+            m.membership_number?.toLowerCase().includes(q)
         );
       }
 
       if (state.statusFilter && state.statusFilter !== 'all') {
-        filtered = filtered.filter(
-          (m) => m.status?.toLowerCase() === state.statusFilter.toLowerCase()
-        );
+        filtered = filtered.filter((m) => m.status?.toLowerCase() === state.statusFilter.toLowerCase());
       }
 
       // Calculate stats from all members in a single pass
@@ -114,7 +112,7 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
           else if (m.status === UserStatus.RETIRED) acc.retired++;
           return acc;
         },
-        { total: 0, active: 0, inactive: 0, onLeave: 0, retired: 0, expiringCertifications: 0 },
+        { total: 0, active: 0, inactive: 0, onLeave: 0, retired: 0, expiringCertifications: 0 }
       );
 
       // Client-side pagination

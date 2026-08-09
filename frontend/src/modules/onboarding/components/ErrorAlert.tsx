@@ -50,28 +50,31 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
 
   return (
     <div
-      className={`bg-red-500/10 border border-red-500/50 rounded-lg p-4 ${className}`}
-      role="alert" aria-live="assertive"
+      className={`rounded-lg border border-red-500/50 bg-red-500/10 p-4 ${className}`}
+      role="alert"
+      aria-live="assertive"
     >
       <div className="flex items-start gap-3">
         {/* Error Icon */}
-        <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0 mt-0.5" />
+        <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
 
         {/* Content */}
-        <div className="flex-1 min-w-0">
-          <h4 className="text-red-700 dark:text-red-300 font-semibold mb-1">Error</h4>
-          <p className="text-red-700 dark:text-red-200 text-sm">{message}</p>
+        <div className="min-w-0 flex-1">
+          <h4 className="mb-1 font-semibold text-red-700 dark:text-red-300">Error</h4>
+          <p className="text-sm text-red-700 dark:text-red-200">{message}</p>
 
           {/* Actions */}
           {(canRetry || onDismiss) && (
             <div className="mt-3 flex items-center gap-2">
               {canRetry && onRetry && (
                 <button
-                  onClick={() => { void onRetry?.(); }}
-                  className="inline-flex items-center px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-sm transition-colors"
+                  onClick={() => {
+                    void onRetry?.();
+                  }}
+                  className="inline-flex items-center rounded-sm bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
                   aria-label="Retry action"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                   Retry
                 </button>
               )}
@@ -79,7 +82,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
               {onDismiss && (
                 <button
                   onClick={onDismiss}
-                  className="inline-flex items-center px-3 py-1.5 text-red-700 dark:text-red-300 hover:text-red-800 dark:hover:text-red-100 text-sm font-medium transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:text-red-800 dark:text-red-300 dark:hover:text-red-100"
                   aria-label="Dismiss error"
                 >
                   Dismiss
@@ -99,10 +102,10 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+            className="text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
             aria-label="Close error message"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
         )}
       </div>

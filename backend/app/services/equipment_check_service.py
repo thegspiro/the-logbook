@@ -30,6 +30,7 @@ from app.models.training import (
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
+from app.utils.org_scoping import is_in_org
 
 
 class EquipmentCheckService:
@@ -133,6 +134,16 @@ class EquipmentCheckService:
         template = await self.get_template(template_id, organization_id)
         if not template:
             return None
+
+        # XC-1: create_template/clone_template validate the apparatus is in-org,
+        # but this generic setattr loop did not — and the template's apparatus_id
+        # is resolved to an apparatus *name* in the checklist/supply listings, so
+        # a foreign apparatus_id set here would leak another org's apparatus name.
+        # Validate a reassigned apparatus_id (None clears it — a generic template).
+        if data.get("apparatus_id") and not await is_in_org(
+            self.db, Apparatus, data["apparatus_id"], organization_id
+        ):
+            raise ValueError("Invalid apparatus")
 
         for key, value in data.items():
             if key not in self.PROTECTED_FIELDS and hasattr(template, key):
@@ -332,6 +343,17 @@ class EquipmentCheckService:
         item = await self._get_item(item_id, organization_id)
         if not item:
             return None
+
+        # XC-1 (cross-org write): compartment_id is client-supplied and the
+        # generic setattr loop would move the item under it. A foreign
+        # compartment_id would transfer this item — with the caller's content —
+        # into another org's checklist (the item is org-scoped only via
+        # compartment -> template, so it leaves this org entirely). Validate the
+        # target compartment is in-org before re-parenting.
+        if data.get("compartment_id") and not await self._get_compartment(
+            data["compartment_id"], organization_id
+        ):
+            raise ValueError("Invalid compartment")
 
         for key, value in data.items():
             if key not in self.PROTECTED_FIELDS and hasattr(item, key):
@@ -1270,7 +1292,8 @@ class EquipmentCheckService:
         if apparatus_ids:
             ares = await self.db.execute(
                 select(Apparatus.id, Apparatus.name).where(
-                    Apparatus.id.in_(apparatus_ids)
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
                 )
             )
             apparatus_names = {aid: name for aid, name in ares.all()}

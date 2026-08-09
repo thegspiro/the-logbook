@@ -62,11 +62,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
       setPrefillLoading(mode);
       setPrefillError(null);
       const prefill = await electionService.getPackageRecipients(electionId, mode);
-      setRecipients(
-        prefill
-          .filter((r) => r.email)
-          .map((r) => ({ email: r.email, name: r.name }))
-      );
+      setRecipients(prefill.filter((r) => r.email).map((r) => ({ email: r.email, name: r.name })));
       // Leadership prefills default to the full (ineligibility-detail)
       // variant; anything member-facing defaults to the summary variant.
       // A manual checkbox choice is never overridden.
@@ -93,9 +89,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
     }
     setAddError(null);
     setRecipients((prev) =>
-      prev.some((r) => r.email.toLowerCase() === email.toLowerCase())
-        ? prev
-        : [...prev, { email }]
+      prev.some((r) => r.email.toLowerCase() === email.toLowerCase()) ? prev : [...prev, { email }]
     );
     setNewEmail('');
   };
@@ -120,61 +114,54 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="premeeting-package-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full max-h-[90dvh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-theme-surface-border">
-          <h3
-            id="premeeting-package-modal-title"
-            className="text-lg font-medium text-theme-text-primary"
-          >
+      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg shadow-xl">
+        <div className="border-theme-surface-border border-b px-6 py-4">
+          <h3 id="premeeting-package-modal-title" className="text-theme-text-primary text-lg font-medium">
             Email Pre-Meeting Package
           </h3>
-          <p className="mt-1 text-sm text-theme-text-muted">{electionTitle}</p>
+          <p className="text-theme-text-muted mt-1 text-sm">{electionTitle}</p>
         </div>
 
-        <div className="px-6 py-4 space-y-4">
+        <div className="space-y-4 px-6 py-4">
           {(error || prefillError) && (
-            <div
-              className="bg-red-500/10 border border-red-500/30 rounded-sm p-3"
-              role="alert"
-              aria-live="assertive"
-            >
-              <p className="text-sm text-red-700 dark:text-red-300">
-                {error || prefillError}
-              </p>
+            <div className="rounded-sm border border-red-500/30 bg-red-500/10 p-3" role="alert" aria-live="assertive">
+              <p className="text-sm text-red-700 dark:text-red-300">{error || prefillError}</p>
             </div>
           )}
 
           <div>
-            <span className="block text-sm font-medium text-theme-text-secondary mb-2">
-              Start from
-            </span>
+            <span className="text-theme-text-secondary mb-2 block text-sm font-medium">Start from</span>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => { void loadPrefill('leadership'); }}
+                onClick={() => {
+                  void loadPrefill('leadership');
+                }}
                 disabled={prefillLoading !== null}
-                className="px-3 py-1.5 text-sm bg-theme-surface text-theme-text-secondary rounded-md border border-theme-surface-border hover:bg-theme-surface-hover disabled:opacity-50"
+                className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
               >
                 {prefillLoading === 'leadership' ? 'Loading…' : 'Leadership'}
               </button>
               <button
                 type="button"
-                onClick={() => { void loadPrefill('eligible_voters'); }}
+                onClick={() => {
+                  void loadPrefill('eligible_voters');
+                }}
                 disabled={prefillLoading !== null}
-                className="px-3 py-1.5 text-sm bg-theme-surface text-theme-text-secondary rounded-md border border-theme-surface-border hover:bg-theme-surface-hover disabled:opacity-50"
+                className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
               >
                 {prefillLoading === 'eligible_voters' ? 'Loading…' : 'All eligible voters'}
               </button>
               <button
                 type="button"
                 onClick={() => setRecipients([])}
-                className="px-3 py-1.5 text-sm bg-theme-surface text-theme-text-muted rounded-md border border-theme-surface-border hover:bg-theme-surface-hover"
+                className="bg-theme-surface text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm"
               >
                 Clear list
               </button>
@@ -182,15 +169,15 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
           </div>
 
           <div>
-            <span className="block text-sm font-medium text-theme-text-secondary mb-2">
+            <span className="text-theme-text-secondary mb-2 block text-sm font-medium">
               Recipients ({recipients.length})
             </span>
             {recipients.length > 0 ? (
-              <ul className="max-h-40 overflow-y-auto space-y-1 border border-theme-surface-border rounded-md p-2">
+              <ul className="border-theme-surface-border max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
                 {recipients.map((r) => (
                   <li
                     key={r.email}
-                    className="flex items-center justify-between text-sm bg-theme-surface rounded-sm px-2 py-1"
+                    className="bg-theme-surface flex items-center justify-between rounded-sm px-2 py-1 text-sm"
                   >
                     <span className="text-theme-text-primary truncate">
                       {r.name ? `${r.name} — ` : ''}
@@ -200,7 +187,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
                       type="button"
                       onClick={() => removeRecipient(r.email)}
                       aria-label={`Remove ${r.email}`}
-                      className="ml-2 text-red-700 dark:text-red-400 hover:text-red-800 text-xs shrink-0"
+                      className="ml-2 shrink-0 text-xs text-red-700 hover:text-red-800 dark:text-red-400"
                     >
                       Remove
                     </button>
@@ -208,9 +195,9 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-theme-text-muted">
-                No recipients yet — use a prefill above or add addresses below. Or
-                skip sending and just download the PDF to attach to your own email.
+              <p className="text-theme-text-muted text-sm">
+                No recipients yet — use a prefill above or add addresses below. Or skip sending and just download the
+                PDF to attach to your own email.
               </p>
             )}
             <div className="mt-2 flex gap-2">
@@ -226,23 +213,21 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
                 }}
                 placeholder="Add an email address (members or outside contacts)"
                 aria-label="Add an email address"
-                className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md py-1.5 px-3 text-sm text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring flex-1 rounded-md border px-3 py-1.5 text-sm focus:outline-hidden"
               />
               <button
                 type="button"
                 onClick={addRecipient}
-                className="px-3 py-1.5 text-sm bg-theme-surface text-theme-text-secondary rounded-md border border-theme-surface-border hover:bg-theme-surface-hover"
+                className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm"
               >
                 Add
               </button>
             </div>
-            {addError && (
-              <p className="mt-1 text-xs text-red-700 dark:text-red-300">{addError}</p>
-            )}
+            {addError && <p className="mt-1 text-xs text-red-700 dark:text-red-300">{addError}</p>}
           </div>
 
           <div>
-            <label className="flex items-start gap-2 text-sm text-theme-text-secondary">
+            <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={includeFullRoster}
@@ -254,10 +239,9 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
               />
               <span>
                 Include full roster detail (ineligibility reasons)
-                <span className="block text-xs text-theme-text-muted">
-                  Lists which members are not eligible and why (membership tier,
-                  attendance). Intended for leadership — the member version shows
-                  only counts and the eligible-voter names.
+                <span className="text-theme-text-muted block text-xs">
+                  Lists which members are not eligible and why (membership tier, attendance). Intended for leadership —
+                  the member version shows only counts and the eligible-voter names.
                 </span>
               </span>
             </label>
@@ -266,7 +250,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
           <div>
             <label
               htmlFor="premeeting-package-message"
-              className="block text-sm font-medium text-theme-text-secondary mb-1"
+              className="text-theme-text-secondary mb-1 block text-sm font-medium"
             >
               Message (optional)
             </label>
@@ -276,37 +260,41 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
               onChange={(e) => setMessage(e.target.value)}
               rows={3}
               placeholder="Included at the top of the email"
-              className="w-full bg-theme-input-bg border border-theme-input-border rounded-md py-2 px-3 text-sm text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:outline-hidden"
             />
           </div>
 
-          <div className="text-sm text-theme-text-muted">
+          <div className="text-theme-text-muted text-sm">
             Preview the PDF:{' '}
             <button
               type="button"
-              onClick={() => { void downloadVariant('full'); }}
+              onClick={() => {
+                void downloadVariant('full');
+              }}
               disabled={downloading !== null}
-              className="text-blue-700 dark:text-blue-400 hover:underline disabled:opacity-50"
+              className="text-blue-700 hover:underline disabled:opacity-50 dark:text-blue-400"
             >
               {downloading === 'full' ? 'Downloading…' : 'Full (leadership)'}
             </button>
             {' · '}
             <button
               type="button"
-              onClick={() => { void downloadVariant('member'); }}
+              onClick={() => {
+                void downloadVariant('member');
+              }}
               disabled={downloading !== null}
-              className="text-blue-700 dark:text-blue-400 hover:underline disabled:opacity-50"
+              className="text-blue-700 hover:underline disabled:opacity-50 dark:text-blue-400"
             >
               {downloading === 'member' ? 'Downloading…' : 'Member version'}
             </button>
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end space-x-3">
+        <div className="border-theme-surface-border flex justify-end space-x-3 border-t px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover"
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2"
           >
             Cancel
           </button>
@@ -320,11 +308,9 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
               )
             }
             disabled={sending || recipients.length === 0}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {sending
-              ? 'Sending…'
-              : `Send to ${recipients.length} recipient${recipients.length === 1 ? '' : 's'}`}
+            {sending ? 'Sending…' : `Send to ${recipients.length} recipient${recipients.length === 1 ? '' : 's'}`}
           </button>
         </div>
       </div>

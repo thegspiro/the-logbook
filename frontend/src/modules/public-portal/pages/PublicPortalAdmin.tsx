@@ -6,17 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import {
-  Globe,
-  Key,
-  FileText,
-  BarChart3,
-  Shield,
-  Settings,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-} from 'lucide-react';
+import { Globe, Key, FileText, BarChart3, Shield, Settings, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { usePortalConfig } from '../hooks/usePublicPortal';
 import { ConfigurationTab } from '../components/ConfigurationTab';
 import { APIKeysTab } from '../components/APIKeysTab';
@@ -74,33 +64,29 @@ const PublicPortalAdmin: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-          <p className="mt-4 text-theme-text-secondary">Loading public portal...</p>
+          <p className="text-theme-text-secondary mt-4">Loading public portal...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-theme-surface-secondary">
+    <div className="bg-theme-surface-secondary min-h-screen">
       {/* Header */}
-      <div className="bg-theme-surface border-b border-theme-surface-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="bg-theme-surface border-theme-surface-border border-b">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="py-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 dark:bg-blue-500/20 rounded-lg">
-                  <Globe className="w-6 h-6 text-blue-600" />
+                <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-500/20">
+                  <Globe className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-theme-text-primary">
-                    Public Portal
-                  </h1>
-                  <p className="text-sm text-theme-text-muted">
-                    Manage public API access for external websites
-                  </p>
+                  <h1 className="text-theme-text-primary text-2xl font-bold">Public Portal</h1>
+                  <p className="text-theme-text-muted text-sm">Manage public API access for external websites</p>
                 </div>
               </div>
 
@@ -109,23 +95,21 @@ const PublicPortalAdmin: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   {config?.enabled ? (
                     <>
-                      <CheckCircle className="w-5 h-5 text-green-700 dark:text-green-500" />
-                      <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                        Portal Enabled
-                      </span>
+                      <CheckCircle className="h-5 w-5 text-green-700 dark:text-green-500" />
+                      <span className="text-sm font-medium text-green-700 dark:text-green-400">Portal Enabled</span>
                     </>
                   ) : (
                     <>
-                      <XCircle className="w-5 h-5 text-theme-text-muted" />
-                      <span className="text-sm font-medium text-theme-text-muted">
-                        Portal Disabled
-                      </span>
+                      <XCircle className="text-theme-text-muted h-5 w-5" />
+                      <span className="text-theme-text-muted text-sm font-medium">Portal Disabled</span>
                     </>
                   )}
                 </div>
                 <button
-                  onClick={() => { void handleToggleEnabled(); }}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  onClick={() => {
+                    void handleToggleEnabled();
+                  }}
+                  className={`rounded-lg px-4 py-2 font-medium transition-colors ${
                     config?.enabled
                       ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
                       : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
@@ -138,14 +122,13 @@ const PublicPortalAdmin: React.FC = () => {
 
             {/* Warning Banner */}
             {!config?.enabled && (
-              <div className="mt-4 bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 rounded-lg p-4">
+              <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
                 <div className="flex">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0" />
+                  <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-600" />
                   <div className="ml-3">
                     <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                      The public portal is currently disabled. External websites
-                      will not be able to access your data until you enable it
-                      and configure API keys.
+                      The public portal is currently disabled. External websites will not be able to access your data
+                      until you enable it and configure API keys.
                     </p>
                   </div>
                 </div>
@@ -154,20 +137,20 @@ const PublicPortalAdmin: React.FC = () => {
           </div>
 
           {/* Tabs */}
-          <div className="flex space-x-1 border-b border-theme-surface-border">
+          <div className="border-theme-surface-border flex space-x-1 border-b">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-4 py-3 border-b-2 font-medium text-sm transition-colors ${
+                  className={`flex items-center space-x-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border'
+                      : 'text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border border-transparent'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="h-4 w-4" />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -177,7 +160,7 @@ const PublicPortalAdmin: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {activeTab === 'config' && <ConfigurationTab />}
         {activeTab === 'keys' && <APIKeysTab />}
         {activeTab === 'logs' && <AccessLogsTab />}

@@ -80,7 +80,13 @@ const PendingReviewTab: React.FC = () => {
     }
   };
 
-  const startEditEntry = (entry: { id: string; clockInAt: string; clockOutAt: string | null; description: string | null; categoryId: string }) => {
+  const startEditEntry = (entry: {
+    id: string;
+    clockInAt: string;
+    clockOutAt: string | null;
+    description: string | null;
+    categoryId: string;
+  }) => {
     setEditingEntryId(entry.id);
     setRejectingEntryId(null);
     // Convert ISO dates to datetime-local format in org timezone
@@ -140,109 +146,123 @@ const PendingReviewTab: React.FC = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-theme-text-primary">Pending Review</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-theme-text-primary text-xl font-semibold">Pending Review</h2>
         {allEntries.length > 0 && (
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+            <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={selectedEntryIds.size === allEntries.length && allEntries.length > 0}
                 onChange={toggleSelectAll}
-                className="w-4 h-4 rounded-sm border-theme-input-border"
+                className="border-theme-input-border h-4 w-4 rounded-sm"
               />
               Select All
             </label>
             {selectedEntryIds.size > 0 && (
               <button
-                onClick={() => { void handleBulkApprove(); }}
-                className="btn-success flex gap-1 items-center px-3 py-1.5 text-sm transition"
+                onClick={() => {
+                  void handleBulkApprove();
+                }}
+                className="btn-success flex items-center gap-1 px-3 py-1.5 text-sm transition"
               >
-                <Check className="w-4 h-4" /> Approve {selectedEntryIds.size} Selected
+                <Check className="h-4 w-4" /> Approve {selectedEntryIds.size} Selected
               </button>
             )}
           </div>
         )}
       </div>
       {entriesLoading ? (
-        <div className="text-center py-8 text-theme-text-secondary">Loading...</div>
+        <div className="text-theme-text-secondary py-8 text-center">Loading...</div>
       ) : allEntries.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface rounded-lg">
-          <Check className="w-12 h-12 text-green-500 mx-auto mb-3" />
+        <div className="bg-theme-surface rounded-lg py-12 text-center">
+          <Check className="mx-auto mb-3 h-12 w-12 text-green-500" />
           <p className="text-theme-text-secondary">No entries pending review</p>
         </div>
       ) : (
         <>
           <div className="space-y-3">
             {allEntries.map((entry) => (
-              <div key={entry.id} className="bg-theme-surface rounded-lg shadow-md p-4">
+              <div key={entry.id} className="bg-theme-surface rounded-lg p-4 shadow-md">
                 {editingEntryId === entry.id ? (
                   /* Inline Edit Form */
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="mb-2 flex items-center gap-2">
                       <div
-                        className="w-3 h-3 rounded-full"
+                        className="h-3 w-3 rounded-full"
                         style={{ backgroundColor: entry.categoryColor ?? '#6B7280' }}
                       />
-                      <span className="font-semibold text-theme-text-primary">{entry.userName ?? 'Unknown'}</span>
-                      <span className="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-full">Editing</span>
+                      <span className="text-theme-text-primary font-semibold">{entry.userName ?? 'Unknown'}</span>
+                      <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-700 dark:text-yellow-400">
+                        Editing
+                      </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Category</label>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Category</label>
                         <select
                           value={editData.category_id ?? entry.categoryId}
                           onChange={(e) => setEditData({ ...editData, category_id: e.target.value })}
-                          className="card-secondary focus:ring-2 focus:ring-theme-focus-ring px-2 py-1.5 text-sm text-theme-text-primary w-full"
+                          className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-2 py-1.5 text-sm focus:ring-2"
                         >
                           {categories.map((cat) => (
-                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </option>
                           ))}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Start Time</label>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Start Time</label>
                         <DateTimeQuarterHour
                           value={editData.clock_in_at ?? ''}
                           onChange={(val) => setEditData({ ...editData, clock_in_at: val })}
-                          className="card-secondary focus:ring-2 focus:ring-theme-focus-ring px-2 py-1.5 text-sm text-theme-text-primary w-full"
+                          className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-2 py-1.5 text-sm focus:ring-2"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-muted mb-1">End Time</label>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">End Time</label>
                         <DateTimeQuarterHour
                           value={editData.clock_out_at ?? ''}
                           onChange={(val) => setEditData({ ...editData, clock_out_at: val })}
-                          className="card-secondary focus:ring-2 focus:ring-theme-focus-ring px-2 py-1.5 text-sm text-theme-text-primary w-full"
+                          className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-2 py-1.5 text-sm focus:ring-2"
                         />
                       </div>
                     </div>
                     {editDurationMinutes !== null && (
-                      <p className="text-xs text-theme-text-secondary">
-                        Duration: <span className="font-medium text-theme-text-primary">{formatDuration(editDurationMinutes)}</span>
+                      <p className="text-theme-text-secondary text-xs">
+                        Duration:{' '}
+                        <span className="text-theme-text-primary font-medium">
+                          {formatDuration(editDurationMinutes)}
+                        </span>
                       </p>
                     )}
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-muted mb-1">Description</label>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">Description</label>
                       <input
                         type="text"
                         value={editData.description ?? ''}
                         onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                        className="card-secondary focus:ring-2 focus:ring-theme-focus-ring px-2 py-1.5 text-sm text-theme-text-primary w-full"
+                        className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-2 py-1.5 text-sm focus:ring-2"
                         placeholder="Optional description"
                       />
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => { void handleSaveEdit(); }}
+                        onClick={() => {
+                          void handleSaveEdit();
+                        }}
                         disabled={isSavingEdit}
-                        className="btn-info flex gap-1 items-center px-3 py-1.5 text-sm transition disabled:opacity-50"
+                        className="btn-info flex items-center gap-1 px-3 py-1.5 text-sm transition disabled:opacity-50"
                       >
-                        <Check className="w-4 h-4" /> {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                        <Check className="h-4 w-4" /> {isSavingEdit ? 'Saving...' : 'Save Changes'}
                       </button>
                       <button
-                        onClick={() => { setEditingEntryId(null); setEditData({}); }}
-                        className="px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary transition"
+                        onClick={() => {
+                          setEditingEntryId(null);
+                          setEditData({});
+                        }}
+                        className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-sm transition"
                       >
                         Cancel
                       </button>
@@ -256,28 +276,26 @@ const PendingReviewTab: React.FC = () => {
                         type="checkbox"
                         checked={selectedEntryIds.has(entry.id)}
                         onChange={() => toggleEntrySelection(entry.id)}
-                        className="w-4 h-4 rounded-sm border-theme-input-border mt-1"
+                        className="border-theme-input-border mt-1 h-4 w-4 rounded-sm"
                       />
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="mb-1 flex items-center gap-2">
                           <div
-                            className="w-3 h-3 rounded-full"
+                            className="h-3 w-3 rounded-full"
                             style={{ backgroundColor: entry.categoryColor ?? '#6B7280' }}
                           />
-                          <span className="font-semibold text-theme-text-primary">{entry.userName ?? 'Unknown'}</span>
-                          <span className="text-sm text-theme-text-muted">-</span>
-                          <span className="text-sm text-theme-text-secondary">{entry.categoryName}</span>
+                          <span className="text-theme-text-primary font-semibold">{entry.userName ?? 'Unknown'}</span>
+                          <span className="text-theme-text-muted text-sm">-</span>
+                          <span className="text-theme-text-secondary text-sm">{entry.categoryName}</span>
                         </div>
-                        <div className="text-sm text-theme-text-secondary">
+                        <div className="text-theme-text-secondary text-sm">
                           <span>{formatDate(entry.clockInAt, tz)}</span>
                           <span className="mx-2">|</span>
                           <span>{formatDuration(entry.durationMinutes)}</span>
                           <span className="mx-2">|</span>
                           <span className="capitalize">{entry.entryMethod.replace('_', ' ')}</span>
                         </div>
-                        {entry.description && (
-                          <p className="text-sm text-theme-text-muted mt-1">{entry.description}</p>
-                        )}
+                        {entry.description && <p className="text-theme-text-muted mt-1 text-sm">{entry.description}</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -288,16 +306,21 @@ const PendingReviewTab: React.FC = () => {
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
                             placeholder="Reason..."
-                            className="px-2 py-1 bg-theme-surface-secondary border border-theme-surface-border rounded-sm text-sm text-theme-text-primary"
+                            className="bg-theme-surface-secondary border-theme-surface-border text-theme-text-primary rounded-sm border px-2 py-1 text-sm"
                           />
                           <button
-                            onClick={() => { void handleReject(entry.id); }}
+                            onClick={() => {
+                              void handleReject(entry.id);
+                            }}
                             className="btn-primary rounded-sm px-3 py-1 text-sm"
                           >
                             Confirm
                           </button>
                           <button
-                            onClick={() => { setRejectingEntryId(null); setRejectionReason(''); }}
+                            onClick={() => {
+                              setRejectingEntryId(null);
+                              setRejectionReason('');
+                            }}
                             className="text-theme-text-muted text-sm"
                           >
                             Cancel
@@ -307,21 +330,23 @@ const PendingReviewTab: React.FC = () => {
                         <>
                           <button
                             onClick={() => startEditEntry(entry)}
-                            className="flex gap-1 items-center px-3 py-1.5 text-sm text-theme-text-secondary bg-theme-surface-secondary rounded-lg hover:bg-theme-surface-hover transition border border-theme-surface-border"
+                            className="text-theme-text-secondary bg-theme-surface-secondary hover:bg-theme-surface-hover border-theme-surface-border flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm transition"
                           >
-                            <Pencil className="w-3.5 h-3.5" /> Edit
+                            <Pencil className="h-3.5 w-3.5" /> Edit
                           </button>
                           <button
-                            onClick={() => { void handleApprove(entry.id); }}
-                            className="btn-success flex gap-1 items-center px-3 py-1.5 text-sm transition"
+                            onClick={() => {
+                              void handleApprove(entry.id);
+                            }}
+                            className="btn-success flex items-center gap-1 px-3 py-1.5 text-sm transition"
                           >
-                            <Check className="w-4 h-4" /> Approve
+                            <Check className="h-4 w-4" /> Approve
                           </button>
                           <button
                             onClick={() => setRejectingEntryId(entry.id)}
-                            className="btn-primary flex gap-1 items-center px-3 py-1.5 text-sm transition"
+                            className="btn-primary flex items-center gap-1 px-3 py-1.5 text-sm transition"
                           >
-                            <X className="w-4 h-4" /> Reject
+                            <X className="h-4 w-4" /> Reject
                           </button>
                         </>
                       )}
@@ -334,23 +359,23 @@ const PendingReviewTab: React.FC = () => {
 
           {/* Pending Pagination */}
           {pendingTotalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 mt-4">
+            <div className="mt-4 flex items-center justify-center gap-4">
               <button
                 onClick={() => setPendingPage((p) => Math.max(0, p - 1))}
                 disabled={pendingPage === 0}
-                className="flex items-center gap-1 px-3 py-1 text-sm text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                className="text-theme-text-secondary hover:text-theme-text-primary flex items-center gap-1 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <ChevronLeft className="w-4 h-4" /> Previous
+                <ChevronLeft className="h-4 w-4" /> Previous
               </button>
-              <span className="text-sm text-theme-text-muted">
+              <span className="text-theme-text-muted text-sm">
                 Page {pendingPage + 1} of {pendingTotalPages}
               </span>
               <button
                 onClick={() => setPendingPage((p) => Math.min(pendingTotalPages - 1, p + 1))}
                 disabled={pendingPage >= pendingTotalPages - 1}
-                className="flex items-center gap-1 px-3 py-1 text-sm text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                className="text-theme-text-secondary hover:text-theme-text-primary flex items-center gap-1 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Next <ChevronRight className="w-4 h-4" />
+                Next <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           )}

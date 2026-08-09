@@ -46,3 +46,19 @@ class TestErrorSanitization:
         assert log is None
         assert err == _GENERIC_ERROR
         assert "notification_rules" not in err
+
+
+class TestNotificationLogEagerRelationships:
+    """BXC-2 reliability: NotificationLogResponse serializes the rule_name and
+    recipient_name properties, which read self.rule / self.recipient. Both
+    relationships must be eager (lazy='joined') — otherwise a log whose rule
+    wasn't loaded triggers a lazy load during async serialization and raises
+    MissingGreenlet (a 500 on the logs list). MissingGreenlet needs a real DB to
+    reproduce, so this guards the load strategy directly."""
+
+    def test_rule_and_recipient_are_eager(self):
+        from app.models.notification import NotificationLog
+
+        mapper = NotificationLog.__mapper__
+        assert mapper.relationships["rule"].lazy == "joined"
+        assert mapper.relationships["recipient"].lazy == "joined"

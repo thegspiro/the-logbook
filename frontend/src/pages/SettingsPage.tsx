@@ -42,8 +42,19 @@ import {
 import toast from 'react-hot-toast';
 import { HelpLink } from '../components/HelpLink';
 import { organizationService, ranksService } from '../services/api';
-import type { ModuleSettingsData, OperationalRankResponse, OrganizationProfile, RankValidationIssue } from '../services/api';
-import type { ContactInfoSettings, MembershipIdSettings, EmailServiceSettings, FileStorageSettings, AuthSettings } from '../types/user';
+import type {
+  ModuleSettingsData,
+  OperationalRankResponse,
+  OrganizationProfile,
+  RankValidationIssue,
+} from '../services/api';
+import type {
+  ContactInfoSettings,
+  MembershipIdSettings,
+  EmailServiceSettings,
+  FileStorageSettings,
+  AuthSettings,
+} from '../types/user';
 import { invalidateRanksCache } from '../hooks/useRanks';
 import EmailSettingsSection from '../components/settings/EmailSettingsSection';
 import StorageSettingsSection from '../components/settings/StorageSettingsSection';
@@ -56,7 +67,12 @@ import RanksSettingsSection from '../components/settings/RanksSettingsSection';
 type SectionKey = 'general' | 'modules' | 'members' | 'ranks' | 'email' | 'storage' | 'authentication';
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; description: string }[] = [
-  { key: 'general', label: 'General', icon: Building2, description: 'Department name, logo, timezone, and contact info' },
+  {
+    key: 'general',
+    label: 'General',
+    icon: Building2,
+    description: 'Department name, logo, timezone, and contact info',
+  },
   { key: 'modules', label: 'Modules', icon: Package, description: 'Enable or disable optional features' },
   { key: 'members', label: 'Members', icon: Users, description: 'Contact visibility and membership IDs' },
   { key: 'ranks', label: 'Ranks', icon: Shield, description: 'Operational rank configuration' },
@@ -76,29 +92,125 @@ interface ConfigurableModule {
 
 /** Standard modules — enabled by default for all organizations */
 const STANDARD_MODULES: ConfigurableModule[] = [
-  { key: 'training', name: 'Training & Certification', description: 'Course management, certification tracking, and compliance monitoring', icon: <GraduationCap className="w-5 h-5" /> },
-  { key: 'inventory', name: 'Inventory Management', description: 'Equipment tracking, supply levels, and procurement', icon: <Package className="w-5 h-5" /> },
-  { key: 'scheduling', name: 'Scheduling', description: 'Duty rosters, shift scheduling, and calendar management', icon: <Calendar className="w-5 h-5" /> },
-  { key: 'apparatus', name: 'Apparatus Management', description: 'Vehicle tracking, maintenance schedules, and equipment inventory', icon: <Truck className="w-5 h-5" /> },
-  { key: 'minutes', name: 'Meeting Minutes', description: 'Meeting documentation, attendance tracking, and action items', icon: <FileText className="w-5 h-5" /> },
-  { key: 'reports', name: 'Reports & Analytics', description: 'Custom reports, data export, and analytics dashboards', icon: <BarChart3 className="w-5 h-5" /> },
-  { key: 'notifications', name: 'Email Notifications', description: 'Automated email alerts and notification rules', icon: <Bell className="w-5 h-5" /> },
-  { key: 'forms', name: 'Custom Forms', description: 'Form builder for inspections, surveys, and data collection', icon: <ClipboardList className="w-5 h-5" /> },
-  { key: 'integrations', name: 'External Integrations', description: 'Third-party service connections and API access', icon: <Plug className="w-5 h-5" /> },
-  { key: 'facilities', name: 'Facilities Management', description: 'Building management, maintenance scheduling, and inspections', icon: <Building2 className="w-5 h-5" /> },
-  { key: 'prospective_members', name: 'Prospective Members', description: 'Applicant-to-member pipeline with configurable stages', icon: <UserPlus className="w-5 h-5" /> },
-  { key: 'public_info', name: 'Public Information', description: 'Public-facing pages, community outreach, and fire safety education', icon: <Globe className="w-5 h-5" /> },
+  {
+    key: 'training',
+    name: 'Training & Certification',
+    description: 'Course management, certification tracking, and compliance monitoring',
+    icon: <GraduationCap className="h-5 w-5" />,
+  },
+  {
+    key: 'inventory',
+    name: 'Inventory Management',
+    description: 'Equipment tracking, supply levels, and procurement',
+    icon: <Package className="h-5 w-5" />,
+  },
+  {
+    key: 'scheduling',
+    name: 'Scheduling',
+    description: 'Duty rosters, shift scheduling, and calendar management',
+    icon: <Calendar className="h-5 w-5" />,
+  },
+  {
+    key: 'apparatus',
+    name: 'Apparatus Management',
+    description: 'Vehicle tracking, maintenance schedules, and equipment inventory',
+    icon: <Truck className="h-5 w-5" />,
+  },
+  {
+    key: 'minutes',
+    name: 'Meeting Minutes',
+    description: 'Meeting documentation, attendance tracking, and action items',
+    icon: <FileText className="h-5 w-5" />,
+  },
+  {
+    key: 'reports',
+    name: 'Reports & Analytics',
+    description: 'Custom reports, data export, and analytics dashboards',
+    icon: <BarChart3 className="h-5 w-5" />,
+  },
+  {
+    key: 'notifications',
+    name: 'Email Notifications',
+    description: 'Automated email alerts and notification rules',
+    icon: <Bell className="h-5 w-5" />,
+  },
+  {
+    key: 'forms',
+    name: 'Custom Forms',
+    description: 'Form builder for inspections, surveys, and data collection',
+    icon: <ClipboardList className="h-5 w-5" />,
+  },
+  {
+    key: 'integrations',
+    name: 'External Integrations',
+    description: 'Third-party service connections and API access',
+    icon: <Plug className="h-5 w-5" />,
+  },
+  {
+    key: 'facilities',
+    name: 'Facilities Management',
+    description: 'Building management, maintenance scheduling, and inspections',
+    icon: <Building2 className="h-5 w-5" />,
+  },
+  {
+    key: 'prospective_members',
+    name: 'Prospective Members',
+    description: 'Applicant-to-member pipeline with configurable stages',
+    icon: <UserPlus className="h-5 w-5" />,
+  },
+  {
+    key: 'public_info',
+    name: 'Public Information',
+    description: 'Public-facing pages, community outreach, and fire safety education',
+    icon: <Globe className="h-5 w-5" />,
+  },
 ];
 
 /** Additional modules — disabled by default, opt-in */
 const ADDITIONAL_MODULES: ConfigurableModule[] = [
-  { key: 'communications', name: 'Communications', description: 'Internal messaging, announcements, and notifications', icon: <MessageSquare className="w-5 h-5" /> },
-  { key: 'elections', name: 'Elections & Voting', description: 'Ballot creation, voting management, and election results', icon: <Vote className="w-5 h-5" /> },
-  { key: 'mobile', name: 'Mobile App Access', description: 'Mobile-optimized access with pull-to-refresh and responsive UI', icon: <Smartphone className="w-5 h-5" /> },
-  { key: 'incidents', name: 'Incidents & Reports', description: 'Incident logging, run reports, and analytics', icon: <FileText className="w-5 h-5" /> },
-  { key: 'hr_payroll', name: 'HR & Payroll', description: 'Time tracking, compensation, and benefits management', icon: <Briefcase className="w-5 h-5" /> },
-  { key: 'grants', name: 'Grants & Fundraising', description: 'Grant tracking, fundraising campaigns, and budget management', icon: <DollarSign className="w-5 h-5" /> },
-  { key: 'storefront', name: 'Department Store', description: 'Sell apparel and gear to members with open/close order windows, paid via Venmo, PayPal, cash, or check', icon: <Store className="w-5 h-5" /> },
+  {
+    key: 'communications',
+    name: 'Communications',
+    description: 'Internal messaging, announcements, and notifications',
+    icon: <MessageSquare className="h-5 w-5" />,
+  },
+  {
+    key: 'elections',
+    name: 'Elections & Voting',
+    description: 'Ballot creation, voting management, and election results',
+    icon: <Vote className="h-5 w-5" />,
+  },
+  {
+    key: 'mobile',
+    name: 'Mobile App Access',
+    description: 'Mobile-optimized access with pull-to-refresh and responsive UI',
+    icon: <Smartphone className="h-5 w-5" />,
+  },
+  {
+    key: 'incidents',
+    name: 'Incidents & Reports',
+    description: 'Incident logging, run reports, and analytics',
+    icon: <FileText className="h-5 w-5" />,
+  },
+  {
+    key: 'hr_payroll',
+    name: 'HR & Payroll',
+    description: 'Time tracking, compensation, and benefits management',
+    icon: <Briefcase className="h-5 w-5" />,
+  },
+  {
+    key: 'grants',
+    name: 'Grants & Fundraising',
+    description: 'Grant tracking, fundraising campaigns, and budget management',
+    icon: <DollarSign className="h-5 w-5" />,
+  },
+  {
+    key: 'storefront',
+    name: 'Department Store',
+    description:
+      'Sell apparel and gear to members with open/close order windows, paid via Venmo, PayPal, cash, or check',
+    icon: <Store className="h-5 w-5" />,
+  },
 ];
 
 const CONFIGURABLE_MODULES: ConfigurableModule[] = [...STANDARD_MODULES, ...ADDITIONAL_MODULES];
@@ -106,9 +218,16 @@ const CONFIGURABLE_MODULES: ConfigurableModule[] = [...STANDARD_MODULES, ...ADDI
 // ── Timezone helper ──
 
 const COMMON_TIMEZONES = [
-  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-  'America/Phoenix', 'America/Anchorage', 'Pacific/Honolulu',
-  'America/Indiana/Indianapolis', 'America/Detroit', 'America/Kentucky/Louisville',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/Phoenix',
+  'America/Anchorage',
+  'Pacific/Honolulu',
+  'America/Indiana/Indianapolis',
+  'America/Detroit',
+  'America/Kentucky/Louisville',
 ];
 
 // ── Toggle component ──
@@ -120,39 +239,33 @@ const Toggle: React.FC<{
   label?: string;
   color?: 'red' | 'blue';
 }> = ({ checked, onChange, disabled, label, color = 'blue' }) => {
-  const bg = checked
-    ? color === 'red' ? 'bg-theme-accent-red' : 'bg-theme-accent-blue'
-    : 'bg-theme-surface-hover';
+  const bg = checked ? (color === 'red' ? 'bg-theme-accent-red' : 'bg-theme-accent-blue') : 'bg-theme-surface-hover';
   return (
     <button
       type="button"
       onClick={onChange}
       disabled={disabled}
-      className={`${bg} relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-offset-2 ${
+      className={`${bg} relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden ${
         color === 'red' ? 'focus:ring-theme-focus-ring' : 'focus:ring-theme-focus-ring'
-      } disabled:opacity-50 disabled:cursor-not-allowed`}
+      } disabled:cursor-not-allowed disabled:opacity-50`}
       role="switch"
       aria-checked={checked}
       aria-label={label}
     >
-      <span
-        className={`${
-          checked ? 'translate-x-5' : 'translate-x-0'
-        } toggle-knob-md`}
-      />
+      <span className={`${checked ? 'translate-x-5' : 'translate-x-0'} toggle-knob-md`} />
     </button>
   );
 };
 
 // ── Main component ──
 
-const SECTION_KEYS = new Set<string>(SECTIONS.map(s => s.key));
+const SECTION_KEYS = new Set<string>(SECTIONS.map((s) => s.key));
 
 export const SettingsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get('tab');
   const [activeSection, setActiveSection] = useState<SectionKey>(
-    initialTab && SECTION_KEYS.has(initialTab) ? (initialTab as SectionKey) : 'general',
+    initialTab && SECTION_KEYS.has(initialTab) ? (initialTab as SectionKey) : 'general'
   );
   const [loading, setLoading] = useState(true);
 
@@ -168,19 +281,29 @@ export const SettingsPage: React.FC = () => {
 
   // Contact info state
   const [contactSettings, setContactSettings] = useState<ContactInfoSettings>({
-    enabled: false, show_email: true, show_phone: true, show_mobile: true,
+    enabled: false,
+    show_email: true,
+    show_phone: true,
+    show_mobile: true,
   });
   const [savingContact, setSavingContact] = useState(false);
 
   // Membership ID state
   const [membershipId, setMembershipId] = useState<MembershipIdSettings>({
-    enabled: false, auto_generate: false, prefix: '', next_number: 1,
+    enabled: false,
+    auto_generate: false,
+    prefix: '',
+    next_number: 1,
   });
   const [savingMembershipId, setSavingMembershipId] = useState(false);
 
   // Email settings state
   const [emailSettings, setEmailSettings] = useState<EmailServiceSettings>({
-    enabled: false, platform: 'other', smtp_port: 587, smtp_encryption: 'tls', use_tls: true,
+    enabled: false,
+    platform: 'other',
+    smtp_port: 587,
+    smtp_encryption: 'tls',
+    use_tls: true,
   });
   const [savingEmail, setSavingEmail] = useState(false);
   const [emailPasswordVisible, setEmailPasswordVisible] = useState(false);
@@ -208,10 +331,13 @@ export const SettingsPage: React.FC = () => {
   // Rank validation state
   const [rankValidationIssues, setRankValidationIssues] = useState<RankValidationIssue[]>([]);
 
-  const switchSection = useCallback((key: SectionKey) => {
-    setActiveSection(key);
-    setSearchParams(key === 'general' ? {} : { tab: key }, { replace: true });
-  }, [setSearchParams]);
+  const switchSection = useCallback(
+    (key: SectionKey) => {
+      setActiveSection(key);
+      setSearchParams(key === 'general' ? {} : { tab: key }, { replace: true });
+    },
+    [setSearchParams]
+  );
 
   // ── Data loading ──
 
@@ -230,7 +356,9 @@ export const SettingsPage: React.FC = () => {
       invalidateRanksCache();
       const data = await ranksService.getRanks();
       setRanks(data);
-    } catch { /* empty state shown */ } finally {
+    } catch {
+      /* empty state shown */
+    } finally {
       setRanksLoading(false);
     }
     // Re-run validation whenever the rank list changes
@@ -292,7 +420,10 @@ export const SettingsPage: React.FC = () => {
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2 MB'); return; }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Logo must be under 2 MB');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       updateProfileField('logo', reader.result as string);
@@ -315,9 +446,11 @@ export const SettingsPage: React.FC = () => {
         localStorage.removeItem('logoData');
       }
       // Notify AppLayout to re-render with new branding
-      window.dispatchEvent(new CustomEvent('branding-updated', {
-        detail: { name: updated.name, logo: updated.logo },
-      }));
+      window.dispatchEvent(
+        new CustomEvent('branding-updated', {
+          detail: { name: updated.name, logo: updated.logo },
+        })
+      );
       toast.success('Profile saved');
     } catch {
       toast.error('Failed to save profile');
@@ -335,7 +468,7 @@ export const SettingsPage: React.FC = () => {
     try {
       const result = await organizationService.updateModuleSettings({ [moduleKey]: newValue });
       setModuleSettings(result.module_settings);
-      const name = CONFIGURABLE_MODULES.find(m => m.key === moduleKey)?.name || moduleKey;
+      const name = CONFIGURABLE_MODULES.find((m) => m.key === moduleKey)?.name || moduleKey;
       toast.success(`${name} ${newValue ? 'enabled' : 'disabled'}`);
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
@@ -352,7 +485,11 @@ export const SettingsPage: React.FC = () => {
     try {
       await organizationService.updateContactInfoSettings(contactSettings);
       toast.success('Contact visibility saved');
-    } catch { toast.error('Failed to save'); } finally { setSavingContact(false); }
+    } catch {
+      toast.error('Failed to save');
+    } finally {
+      setSavingContact(false);
+    }
   };
 
   // ── Membership ID handlers ──
@@ -365,7 +502,9 @@ export const SettingsPage: React.FC = () => {
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       toast.error(status === 403 ? 'Permission denied.' : 'Failed to save.');
-    } finally { setSavingMembershipId(false); }
+    } finally {
+      setSavingMembershipId(false);
+    }
   };
 
   // ── Email settings handlers ──
@@ -379,7 +518,9 @@ export const SettingsPage: React.FC = () => {
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       toast.error(status === 403 ? 'Permission denied.' : 'Failed to save email settings.');
-    } finally { setSavingEmail(false); }
+    } finally {
+      setSavingEmail(false);
+    }
   };
 
   // ── File storage handlers ──
@@ -393,7 +534,9 @@ export const SettingsPage: React.FC = () => {
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       toast.error(status === 403 ? 'Permission denied.' : 'Failed to save storage settings.');
-    } finally { setSavingStorage(false); }
+    } finally {
+      setSavingStorage(false);
+    }
   };
 
   // ── Authentication handlers ──
@@ -407,7 +550,9 @@ export const SettingsPage: React.FC = () => {
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       toast.error(status === 403 ? 'Permission denied.' : 'Failed to save authentication settings.');
-    } finally { setSavingAuth(false); }
+    } finally {
+      setSavingAuth(false);
+    }
   };
 
   // ── Rank handlers ──
@@ -428,7 +573,9 @@ export const SettingsPage: React.FC = () => {
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       toast.error(detail || 'Failed to add rank');
-    } finally { setRankSaving(false); }
+    } finally {
+      setRankSaving(false);
+    }
   };
 
   const handleUpdateRank = async () => {
@@ -446,7 +593,9 @@ export const SettingsPage: React.FC = () => {
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       toast.error(detail || 'Failed to update rank');
-    } finally { setRankSaving(false); }
+    } finally {
+      setRankSaving(false);
+    }
   };
 
   const handleDeleteRank = async (rankId: string) => {
@@ -455,7 +604,11 @@ export const SettingsPage: React.FC = () => {
       await ranksService.deleteRank(rankId);
       toast.success('Rank removed');
       await fetchRanks();
-    } catch { toast.error('Failed to remove rank'); } finally { setDeletingRankId(null); }
+    } catch {
+      toast.error('Failed to remove rank');
+    } finally {
+      setDeletingRankId(null);
+    }
   };
 
   const handleMoveRank = async (index: number, direction: 'up' | 'down') => {
@@ -470,19 +623,18 @@ export const SettingsPage: React.FC = () => {
     setRanks(newRanks);
     try {
       await ranksService.reorderRanks(reorderPayload);
-    } catch { toast.error('Failed to reorder'); await fetchRanks(); }
+    } catch {
+      toast.error('Failed to reorder');
+      await fetchRanks();
+    }
   };
 
   const handleToggleEligiblePosition = async (rank: OperationalRankResponse, position: string) => {
     const current = rank.eligible_positions ?? [];
-    const updated = current.includes(position)
-      ? current.filter((p) => p !== position)
-      : [...current, position];
+    const updated = current.includes(position) ? current.filter((p) => p !== position) : [...current, position];
     try {
       await ranksService.updateRank(rank.id, { eligible_positions: updated });
-      setRanks((prev) =>
-        prev.map((r) => (r.id === rank.id ? { ...r, eligible_positions: updated } : r)),
-      );
+      setRanks((prev) => prev.map((r) => (r.id === rank.id ? { ...r, eligible_positions: updated } : r)));
     } catch {
       toast.error('Failed to update eligible positions');
     }
@@ -492,15 +644,13 @@ export const SettingsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
-        <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+      <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
+        <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
       </div>
     );
   }
 
-  const enabledCount = moduleSettings
-    ? CONFIGURABLE_MODULES.filter(m => moduleSettings[m.key]).length
-    : 0;
+  const enabledCount = moduleSettings ? CONFIGURABLE_MODULES.filter((m) => moduleSettings[m.key]).length : 0;
 
   // ── Render section content ──
 
@@ -513,30 +663,32 @@ export const SettingsPage: React.FC = () => {
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold text-theme-text-primary">Department Profile</h3>
-              <p className="text-sm text-theme-text-muted mt-1">
-                Basic information about your department.
-              </p>
+              <h3 className="text-theme-text-primary text-lg font-semibold">Department Profile</h3>
+              <p className="text-theme-text-muted mt-1 text-sm">Basic information about your department.</p>
             </div>
 
             {/* Logo */}
             <div className="flex items-start gap-4">
-              <div className="w-20 h-20 rounded-xl border-2 border-dashed border-theme-surface-border flex items-center justify-center overflow-hidden bg-theme-surface-secondary shrink-0">
+              <div className="border-theme-surface-border bg-theme-surface-secondary flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed">
                 {profile?.logo ? (
-                  <img src={profile.logo} alt={`${profile.name || 'Department'} logo`} className="max-w-full max-h-full object-contain" />
+                  <img
+                    src={profile.logo}
+                    alt={`${profile.name || 'Department'} logo`}
+                    className="max-h-full max-w-full object-contain"
+                  />
                 ) : (
-                  <Building2 className="w-8 h-8 text-theme-text-muted" />
+                  <Building2 className="text-theme-text-muted h-8 w-8" />
                 )}
               </div>
               <div>
-                <p className="text-sm font-medium text-theme-text-primary">Department Logo</p>
-                <p className="text-xs text-theme-text-muted mb-2">PNG, JPG, or SVG. Max 2 MB.</p>
+                <p className="text-theme-text-primary text-sm font-medium">Department Logo</p>
+                <p className="text-theme-text-muted mb-2 text-xs">PNG, JPG, or SVG. Max 2 MB.</p>
                 <button
                   type="button"
                   onClick={() => logoInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 text-sm text-theme-accent-blue hover:opacity-80"
+                  className="text-theme-accent-blue inline-flex items-center gap-1.5 text-sm hover:opacity-80"
                 >
-                  <Upload className="w-3.5 h-3.5" />
+                  <Upload className="h-3.5 w-3.5" />
                   Upload logo
                 </button>
                 <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
@@ -544,25 +696,27 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             {/* Name + Timezone */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-theme-text-primary mb-1">Department Name</label>
+                <label className="text-theme-text-primary mb-1 block text-sm font-medium">Department Name</label>
                 <input
                   type="text"
                   value={profile?.name || ''}
                   onChange={(e) => updateProfileField('name', e.target.value)}
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text-primary mb-1">Timezone</label>
+                <label className="text-theme-text-primary mb-1 block text-sm font-medium">Timezone</label>
                 <select
                   value={profile?.timezone || 'America/New_York'}
                   onChange={(e) => updateProfileField('timezone', e.target.value)}
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 >
-                  {COMMON_TIMEZONES.map(tz => (
-                    <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+                  {COMMON_TIMEZONES.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz.replace(/_/g, ' ')}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -570,47 +724,47 @@ export const SettingsPage: React.FC = () => {
 
             {/* Contact */}
             <div>
-              <p className="text-sm font-medium text-theme-text-primary mb-3 flex items-center gap-2">
-                <Phone className="w-4 h-4 text-theme-text-muted" /> Contact Information
+              <p className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-medium">
+                <Phone className="text-theme-text-muted h-4 w-4" /> Contact Information
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs text-theme-text-muted mb-1">Phone</label>
+                  <label className="text-theme-text-muted mb-1 block text-xs">Phone</label>
                   <input
                     type="text"
                     value={profile?.phone || ''}
                     onChange={(e) => updateProfileField('phone', e.target.value)}
                     placeholder="(555) 123-4567"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-theme-text-muted mb-1">Email</label>
+                  <label className="text-theme-text-muted mb-1 block text-xs">Email</label>
                   <input
                     type="email"
                     value={profile?.email || ''}
                     onChange={(e) => updateProfileField('email', e.target.value)}
                     placeholder="info@firedept.org"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-theme-text-muted mb-1">Website</label>
+                  <label className="text-theme-text-muted mb-1 block text-xs">Website</label>
                   <input
                     type="url"
                     value={profile?.website || ''}
                     onChange={(e) => updateProfileField('website', e.target.value)}
                     placeholder="https://firedept.org"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-theme-text-muted mb-1">County</label>
+                  <label className="text-theme-text-muted mb-1 block text-xs">County</label>
                   <input
                     type="text"
                     value={profile?.county || ''}
                     onChange={(e) => updateProfileField('county', e.target.value)}
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                 </div>
               </div>
@@ -618,8 +772,8 @@ export const SettingsPage: React.FC = () => {
 
             {/* Mailing Address */}
             <div>
-              <p className="text-sm font-medium text-theme-text-primary mb-3 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-theme-text-muted" /> Mailing Address
+              <p className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-medium">
+                <MapPin className="text-theme-text-muted h-4 w-4" /> Mailing Address
               </p>
               <div className="grid grid-cols-1 gap-3">
                 <input
@@ -627,36 +781,36 @@ export const SettingsPage: React.FC = () => {
                   value={profile?.mailing_address?.line1 || ''}
                   onChange={(e) => updateAddressField('line1', e.target.value)}
                   placeholder="Address line 1"
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
                 <input
                   type="text"
                   value={profile?.mailing_address?.line2 || ''}
                   onChange={(e) => updateAddressField('line2', e.target.value)}
                   placeholder="Address line 2 (optional)"
-                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <input
                     type="text"
                     value={profile?.mailing_address?.city || ''}
                     onChange={(e) => updateAddressField('city', e.target.value)}
                     placeholder="City"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                   <input
                     type="text"
                     value={profile?.mailing_address?.state || ''}
                     onChange={(e) => updateAddressField('state', e.target.value)}
                     placeholder="State"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                   <input
                     type="text"
                     value={profile?.mailing_address?.zip || ''}
                     onChange={(e) => updateAddressField('zip', e.target.value)}
                     placeholder="ZIP"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                 </div>
               </div>
@@ -664,15 +818,15 @@ export const SettingsPage: React.FC = () => {
 
             {/* Physical Address */}
             <div>
-              <p className="text-sm font-medium text-theme-text-primary mb-3 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-theme-text-muted" /> Physical Address
+              <p className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-medium">
+                <MapPin className="text-theme-text-muted h-4 w-4" /> Physical Address
               </p>
-              <label className="flex items-center gap-2 mb-3 text-sm text-theme-text-secondary cursor-pointer">
+              <label className="text-theme-text-secondary mb-3 flex cursor-pointer items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={profile?.physical_address_same ?? true}
                   onChange={(e) => updateProfileField('physical_address_same', e.target.checked)}
-                  className="rounded border-theme-input-border text-red-600 focus:ring-red-500"
+                  className="border-theme-input-border rounded text-red-600 focus:ring-red-500"
                 />
                 Same as mailing address
               </label>
@@ -683,36 +837,36 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.physical_address?.line1 || ''}
                     onChange={(e) => updatePhysicalAddressField('line1', e.target.value)}
                     placeholder="Address line 1"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                   <input
                     type="text"
                     value={profile?.physical_address?.line2 || ''}
                     onChange={(e) => updatePhysicalAddressField('line2', e.target.value)}
                     placeholder="Address line 2 (optional)"
-                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <input
                       type="text"
                       value={profile?.physical_address?.city || ''}
                       onChange={(e) => updatePhysicalAddressField('city', e.target.value)}
                       placeholder="City"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                     />
                     <input
                       type="text"
                       value={profile?.physical_address?.state || ''}
                       onChange={(e) => updatePhysicalAddressField('state', e.target.value)}
                       placeholder="State"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                     />
                     <input
                       type="text"
                       value={profile?.physical_address?.zip || ''}
                       onChange={(e) => updatePhysicalAddressField('zip', e.target.value)}
                       placeholder="ZIP"
-                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                     />
                   </div>
                 </div>
@@ -722,11 +876,13 @@ export const SettingsPage: React.FC = () => {
             {/* Save */}
             <div className="flex justify-end pt-2">
               <button
-                onClick={() => { void handleSaveProfile(); }}
+                onClick={() => {
+                  void handleSaveProfile();
+                }}
                 disabled={savingProfile || !profileDirty}
-                className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
+                className="btn-info inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
+                {savingProfile && <Loader2 className="h-4 w-4 animate-spin" />}
                 {savingProfile ? 'Saving...' : 'Save Profile'}
               </button>
             </div>
@@ -743,57 +899,65 @@ export const SettingsPage: React.FC = () => {
           return (
             <div
               key={mod.key}
-              className={`flex items-center justify-between py-3 px-3 rounded-lg border transition-colors ${
+              className={`flex items-center justify-between rounded-lg border px-3 py-3 transition-colors ${
                 isEnabled
                   ? 'border-theme-accent-green/30 bg-theme-accent-green-muted'
                   : 'border-theme-surface-border bg-theme-surface-secondary/30'
               }`}
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${
-                  isEnabled ? 'bg-theme-accent-green-muted text-theme-accent-green' : 'bg-theme-surface-secondary text-theme-text-muted'
-                }`}>
+              <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                    isEnabled
+                      ? 'bg-theme-accent-green-muted text-theme-accent-green'
+                      : 'bg-theme-surface-secondary text-theme-text-muted'
+                  }`}
+                >
                   {mod.icon}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className={`text-sm font-medium ${isEnabled ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
+                    <p
+                      className={`text-sm font-medium ${isEnabled ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
+                    >
                       {mod.name}
                     </p>
-                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded ${
-                      isEnabled
-                        ? 'bg-theme-accent-green-muted text-theme-accent-green'
-                        : 'bg-theme-surface-secondary text-theme-text-muted'
-                    }`}>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${
+                        isEnabled
+                          ? 'bg-theme-accent-green-muted text-theme-accent-green'
+                          : 'bg-theme-surface-secondary text-theme-text-muted'
+                      }`}
+                    >
                       {isEnabled ? (
-                        <><Check className="w-3 h-3" /> Enabled</>
+                        <>
+                          <Check className="h-3 w-3" /> Enabled
+                        </>
                       ) : (
-                        <><X className="w-3 h-3" /> Disabled</>
+                        <>
+                          <X className="h-3 w-3" /> Disabled
+                        </>
                       )}
                     </span>
                   </div>
-                  <p className="text-xs text-theme-text-muted truncate">{mod.description}</p>
+                  <p className="text-theme-text-muted truncate text-xs">{mod.description}</p>
                 </div>
               </div>
-              <div className="shrink-0 ml-4">
+              <div className="ml-4 shrink-0">
                 <button
                   type="button"
-                  onClick={() => { void handleModuleToggle(mod.key); }}
+                  onClick={() => {
+                    void handleModuleToggle(mod.key);
+                  }}
                   disabled={isToggling}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus:ring-2 focus:ring-offset-1 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 ${
                     isEnabled
                       ? 'btn-secondary hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400'
                       : 'btn-success'
                   }`}
                   aria-label={isEnabled ? `Disable ${mod.name}` : `Enable ${mod.name}`}
                 >
-                  {isToggling ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : isEnabled ? (
-                    'Disable'
-                  ) : (
-                    'Enable'
-                  )}
+                  {isToggling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isEnabled ? 'Disable' : 'Enable'}
                 </button>
               </div>
             </div>
@@ -804,34 +968,30 @@ export const SettingsPage: React.FC = () => {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-theme-text-primary">Modules</h3>
-                <p className="text-sm text-theme-text-muted mt-1">
+                <h3 className="text-theme-text-primary text-lg font-semibold">Modules</h3>
+                <p className="text-theme-text-muted mt-1 text-sm">
                   Enable or disable optional modules. Core modules (Members, Events, Documents) are always active.
                 </p>
               </div>
-              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-theme-accent-green-muted text-theme-accent-green">
+              <span className="bg-theme-accent-green-muted text-theme-accent-green rounded-full px-2.5 py-1 text-xs font-medium">
                 {enabledCount} / {CONFIGURABLE_MODULES.length} enabled
               </span>
             </div>
 
             {/* Standard modules */}
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+              <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
                 Standard Modules
               </h4>
-              <div className="space-y-1.5">
-                {STANDARD_MODULES.map(renderModuleRow)}
-              </div>
+              <div className="space-y-1.5">{STANDARD_MODULES.map(renderModuleRow)}</div>
             </div>
 
             {/* Additional modules */}
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+              <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
                 Additional Modules
               </h4>
-              <div className="space-y-1.5">
-                {ADDITIONAL_MODULES.map(renderModuleRow)}
-              </div>
+              <div className="space-y-1.5">{ADDITIONAL_MODULES.map(renderModuleRow)}</div>
             </div>
           </div>
         );
@@ -845,107 +1005,135 @@ export const SettingsPage: React.FC = () => {
           <div className="space-y-8">
             {/* Contact Info Visibility */}
             <div>
-              <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
-                <Mail className="w-5 h-5 text-theme-text-muted" />
+              <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+                <Mail className="text-theme-text-muted h-5 w-5" />
                 Contact Information Visibility
               </h3>
-              <p className="text-sm text-theme-text-muted mt-1 mb-4">
+              <p className="text-theme-text-muted mt-1 mb-4 text-sm">
                 Control whether contact information is displayed on the member list page.
               </p>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between py-3 border-b border-theme-surface-border">
+                <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
                   <div>
-                    <p className="text-sm font-medium text-theme-text-primary">Show Contact Information</p>
-                    <p className="text-xs text-theme-text-muted">Enable display of contact info for all members</p>
+                    <p className="text-theme-text-primary text-sm font-medium">Show Contact Information</p>
+                    <p className="text-theme-text-muted text-xs">Enable display of contact info for all members</p>
                   </div>
-                  <Toggle checked={contactSettings.enabled} onChange={() => setContactSettings(s => ({ ...s, enabled: !s.enabled }))} />
+                  <Toggle
+                    checked={contactSettings.enabled}
+                    onChange={() => setContactSettings((s) => ({ ...s, enabled: !s.enabled }))}
+                  />
                 </div>
 
                 {contactSettings.enabled && (
-                  <div className="pl-4 space-y-3">
+                  <div className="space-y-3 pl-4">
                     <div className="flex items-center justify-between py-2">
-                      <p className="text-sm text-theme-text-primary">Show Email Addresses</p>
-                      <Toggle checked={contactSettings.show_email} onChange={() => setContactSettings(s => ({ ...s, show_email: !s.show_email }))} />
+                      <p className="text-theme-text-primary text-sm">Show Email Addresses</p>
+                      <Toggle
+                        checked={contactSettings.show_email}
+                        onChange={() => setContactSettings((s) => ({ ...s, show_email: !s.show_email }))}
+                      />
                     </div>
                     <div className="flex items-center justify-between py-2">
-                      <p className="text-sm text-theme-text-primary">Show Phone Numbers</p>
-                      <Toggle checked={contactSettings.show_phone} onChange={() => setContactSettings(s => ({ ...s, show_phone: !s.show_phone }))} />
+                      <p className="text-theme-text-primary text-sm">Show Phone Numbers</p>
+                      <Toggle
+                        checked={contactSettings.show_phone}
+                        onChange={() => setContactSettings((s) => ({ ...s, show_phone: !s.show_phone }))}
+                      />
                     </div>
                     <div className="flex items-center justify-between py-2">
-                      <p className="text-sm text-theme-text-primary">Show Mobile Numbers</p>
-                      <Toggle checked={contactSettings.show_mobile} onChange={() => setContactSettings(s => ({ ...s, show_mobile: !s.show_mobile }))} />
+                      <p className="text-theme-text-primary text-sm">Show Mobile Numbers</p>
+                      <Toggle
+                        checked={contactSettings.show_mobile}
+                        onChange={() => setContactSettings((s) => ({ ...s, show_mobile: !s.show_mobile }))}
+                      />
                     </div>
                   </div>
                 )}
               </div>
 
-              <div className="flex justify-end mt-4">
+              <div className="mt-4 flex justify-end">
                 <button
-                  onClick={() => { void handleSaveContact(); }}
+                  onClick={() => {
+                    void handleSaveContact();
+                  }}
                   disabled={savingContact}
-                  className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
+                  className="btn-info inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {savingContact && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {savingContact && <Loader2 className="h-4 w-4 animate-spin" />}
                   {savingContact ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </div>
 
-            <div className="border-t border-theme-surface-border" />
+            <div className="border-theme-surface-border border-t" />
 
             {/* Membership ID */}
             <div>
-              <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
-                <Hash className="w-5 h-5 text-theme-text-muted" />
+              <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+                <Hash className="text-theme-text-muted h-5 w-5" />
                 Membership ID Number
               </h3>
-              <p className="text-sm text-theme-text-muted mt-1 mb-4">
+              <p className="text-theme-text-muted mt-1 mb-4 text-sm">
                 Configure membership ID numbers. Each member can be assigned a unique ID displayed on their profile.
               </p>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between py-3 border-b border-theme-surface-border">
+                <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
                   <div>
-                    <p className="text-sm font-medium text-theme-text-primary">Enable Membership ID Numbers</p>
-                    <p className="text-xs text-theme-text-muted">Display membership IDs on member profiles and lists</p>
+                    <p className="text-theme-text-primary text-sm font-medium">Enable Membership ID Numbers</p>
+                    <p className="text-theme-text-muted text-xs">Display membership IDs on member profiles and lists</p>
                   </div>
-                  <Toggle checked={membershipId.enabled} onChange={() => setMembershipId(s => ({ ...s, enabled: !s.enabled }))} />
+                  <Toggle
+                    checked={membershipId.enabled}
+                    onChange={() => setMembershipId((s) => ({ ...s, enabled: !s.enabled }))}
+                  />
                 </div>
 
                 {membershipId.enabled && (
-                  <div className="pl-4 space-y-4">
+                  <div className="space-y-4 pl-4">
                     <div className="flex items-center justify-between py-2">
                       <div>
-                        <p className="text-sm text-theme-text-primary">Auto-Generate IDs</p>
-                        <p className="text-xs text-theme-text-muted">Automatically assign sequential IDs to new members</p>
+                        <p className="text-theme-text-primary text-sm">Auto-Generate IDs</p>
+                        <p className="text-theme-text-muted text-xs">
+                          Automatically assign sequential IDs to new members
+                        </p>
                       </div>
-                      <Toggle checked={membershipId.auto_generate} onChange={() => setMembershipId(s => ({ ...s, auto_generate: !s.auto_generate }))} />
+                      <Toggle
+                        checked={membershipId.auto_generate}
+                        onChange={() => setMembershipId((s) => ({ ...s, auto_generate: !s.auto_generate }))}
+                      />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-primary mb-1">ID Prefix</label>
-                      <p className="text-xs text-theme-text-muted mb-2">Optional prefix (e.g. &quot;FD-&quot; produces FD-001)</p>
+                      <label className="text-theme-text-primary mb-1 block text-sm font-medium">ID Prefix</label>
+                      <p className="text-theme-text-muted mb-2 text-xs">
+                        Optional prefix (e.g. &quot;FD-&quot; produces FD-001)
+                      </p>
                       <input
                         type="text"
                         maxLength={10}
                         value={membershipId.prefix}
-                        onChange={(e) => setMembershipId(s => ({ ...s, prefix: e.target.value }))}
+                        onChange={(e) => setMembershipId((s) => ({ ...s, prefix: e.target.value }))}
                         placeholder="e.g. FD-"
-                        className="w-40 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-40 rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                       />
                     </div>
 
                     {membershipId.auto_generate && (
                       <div>
-                        <label className="block text-sm font-medium text-theme-text-primary mb-1">Next ID Number</label>
-                        <p className="text-xs text-theme-text-muted mb-2">Next number assigned when a new member is added</p>
+                        <label className="text-theme-text-primary mb-1 block text-sm font-medium">Next ID Number</label>
+                        <p className="text-theme-text-muted mb-2 text-xs">
+                          Next number assigned when a new member is added
+                        </p>
                         <input
                           type="number"
                           min={1}
                           value={membershipId.next_number}
-                          onChange={(e) => setMembershipId(s => ({ ...s, next_number: Math.max(1, parseInt(e.target.value) || 1) }))}
-                          className="w-40 rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                          onChange={(e) =>
+                            setMembershipId((s) => ({ ...s, next_number: Math.max(1, parseInt(e.target.value) || 1) }))
+                          }
+                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-40 rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                         />
                       </div>
                     )}
@@ -953,13 +1141,15 @@ export const SettingsPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex justify-end mt-4">
+              <div className="mt-4 flex justify-end">
                 <button
-                  onClick={() => { void handleSaveMembershipId(); }}
+                  onClick={() => {
+                    void handleSaveMembershipId();
+                  }}
                   disabled={savingMembershipId}
-                  className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
+                  className="btn-info inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {savingMembershipId && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {savingMembershipId && <Loader2 className="h-4 w-4 animate-spin" />}
                   {savingMembershipId ? 'Saving...' : 'Save'}
                 </button>
               </div>
@@ -986,11 +1176,21 @@ export const SettingsPage: React.FC = () => {
             onSetAddingRank={setAddingRank}
             onSetRankForm={setRankForm}
             onSetEditingPositionsRankId={setEditingPositionsRankId}
-            onAddRank={() => { void handleAddRank(); }}
-            onUpdateRank={() => { void handleUpdateRank(); }}
-            onDeleteRank={(id) => { void handleDeleteRank(id); }}
-            onMoveRank={(index, direction) => { void handleMoveRank(index, direction); }}
-            onToggleEligiblePosition={(rank, pos) => { void handleToggleEligiblePosition(rank, pos); }}
+            onAddRank={() => {
+              void handleAddRank();
+            }}
+            onUpdateRank={() => {
+              void handleUpdateRank();
+            }}
+            onDeleteRank={(id) => {
+              void handleDeleteRank(id);
+            }}
+            onMoveRank={(index, direction) => {
+              void handleMoveRank(index, direction);
+            }}
+            onToggleEligiblePosition={(rank, pos) => {
+              void handleToggleEligiblePosition(rank, pos);
+            }}
           />
         );
 
@@ -1005,7 +1205,9 @@ export const SettingsPage: React.FC = () => {
             savingEmail={savingEmail}
             emailPasswordVisible={emailPasswordVisible}
             onTogglePasswordVisible={() => setEmailPasswordVisible(!emailPasswordVisible)}
-            onSave={() => { void handleSaveEmail(); }}
+            onSave={() => {
+              void handleSaveEmail();
+            }}
             profileName={profile?.name}
           />
         );
@@ -1021,7 +1223,9 @@ export const SettingsPage: React.FC = () => {
             savingStorage={savingStorage}
             storageSecretVisible={storageSecretVisible}
             onToggleSecretVisible={() => setStorageSecretVisible(!storageSecretVisible)}
-            onSave={() => { void handleSaveStorage(); }}
+            onSave={() => {
+              void handleSaveStorage();
+            }}
           />
         );
 
@@ -1037,7 +1241,9 @@ export const SettingsPage: React.FC = () => {
               savingAuth={savingAuth}
               authSecretVisible={authSecretVisible}
               onToggleSecretVisible={() => setAuthSecretVisible(!authSecretVisible)}
-              onSave={() => { void handleSaveAuth(); }}
+              onSave={() => {
+                void handleSaveAuth();
+              }}
             />
             <MfaPolicyCard />
           </div>
@@ -1049,12 +1255,12 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8 flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-theme-text-primary">Organization Settings</h2>
-            <p className="mt-1 text-sm text-theme-text-muted">
+            <h2 className="text-theme-text-primary text-2xl font-bold">Organization Settings</h2>
+            <p className="text-theme-text-muted mt-1 text-sm">
               Manage your department profile, modules, and configuration.
             </p>
           </div>
@@ -1064,24 +1270,24 @@ export const SettingsPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex flex-col md:flex-row gap-6">
+        <div className="flex flex-col gap-6 md:flex-row">
           {/* Mobile: horizontal scrollable tabs */}
-          <nav className="md:hidden -mx-4 px-4 border-b border-theme-surface-border" aria-label="Settings sections">
-            <div className="flex overflow-x-auto scrollbar-thin scroll-smooth gap-1 pb-2">
+          <nav className="border-theme-surface-border -mx-4 border-b px-4 md:hidden" aria-label="Settings sections">
+            <div className="flex scrollbar-thin gap-1 overflow-x-auto scroll-smooth pb-2">
               {SECTIONS.map(({ key, label, icon: Icon }) => {
                 const isActive = activeSection === key;
                 return (
                   <button
                     key={key}
                     onClick={() => switchSection(key)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                    className={`focus:ring-theme-focus-ring flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
                       isActive
                         ? 'bg-theme-accent-blue-muted text-theme-accent-blue'
                         : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                     }`}
                     aria-current={isActive ? 'page' : undefined}
                   >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
+                    <Icon className={`h-4 w-4 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
                     {label}
                   </button>
                 );
@@ -1090,22 +1296,22 @@ export const SettingsPage: React.FC = () => {
           </nav>
 
           {/* Desktop: sidebar */}
-          <nav className="hidden md:block md:w-56 shrink-0" aria-label="Settings sections">
-            <div className="md:sticky md:top-24 space-y-1">
+          <nav className="hidden shrink-0 md:block md:w-56" aria-label="Settings sections">
+            <div className="space-y-1 md:sticky md:top-24">
               {SECTIONS.map(({ key, label, icon: Icon, description }) => {
                 const isActive = activeSection === key;
                 return (
                   <button
                     key={key}
                     onClick={() => switchSection(key)}
-                    className={`w-full flex items-start gap-3 px-3 py-3 rounded-lg text-left transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                    className={`focus:ring-theme-focus-ring flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left transition-colors focus:ring-2 focus:outline-hidden ${
                       isActive
                         ? 'bg-theme-accent-blue-muted text-theme-accent-blue'
                         : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                     }`}
                     aria-current={isActive ? 'page' : undefined}
                   >
-                    <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
+                    <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{label}</p>
                       <p className={`text-xs ${isActive ? 'text-theme-accent-blue/70' : 'text-theme-text-muted'}`}>
@@ -1119,10 +1325,8 @@ export const SettingsPage: React.FC = () => {
           </nav>
 
           {/* Content panel */}
-          <main className="flex-1 min-w-0">
-            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 sm:p-6">
-              {renderContent()}
-            </div>
+          <main className="min-w-0 flex-1">
+            <div className="bg-theme-surface rounded-lg p-4 shadow-sm backdrop-blur-xs sm:p-6">{renderContent()}</div>
           </main>
         </div>
       </div>

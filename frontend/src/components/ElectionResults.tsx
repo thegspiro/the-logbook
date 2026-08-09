@@ -27,7 +27,7 @@ const TIE_POLICY_LABELS: Record<string, string> = {
 
 const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candidate }) => (
   <div
-    className={`p-4 rounded-lg border-2 ${
+    className={`rounded-lg border-2 p-4 ${
       candidate.is_winner
         ? 'border-green-500 bg-green-500/10'
         : candidate.is_tied
@@ -36,7 +36,7 @@ const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candida
     }`}
     aria-label={`${candidate.candidate_name}: ${candidate.vote_count} votes, ${candidate.percentage}%${candidate.is_winner ? ', winner' : ''}`}
   >
-    <div className="flex items-center justify-between mb-2">
+    <div className="mb-2 flex items-center justify-between">
       <div className="flex items-center space-x-3">
         {candidate.is_winner && (
           <svg
@@ -53,36 +53,24 @@ const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candida
           </svg>
         )}
         <div>
-          <div className="font-medium text-theme-text-primary">
-            {candidate.candidate_name}
-          </div>
-          {candidate.is_winner && (
-            <div className="text-sm text-green-700 dark:text-green-400 font-medium">Winner</div>
-          )}
-          {candidate.is_tied && (
-            <div className="text-sm text-amber-700 dark:text-amber-400 font-medium">Tied</div>
-          )}
+          <div className="text-theme-text-primary font-medium">{candidate.candidate_name}</div>
+          {candidate.is_winner && <div className="text-sm font-medium text-green-700 dark:text-green-400">Winner</div>}
+          {candidate.is_tied && <div className="text-sm font-medium text-amber-700 dark:text-amber-400">Tied</div>}
         </div>
       </div>
 
       <div className="flex items-center space-x-4">
         <div className="text-right">
-          <span className="text-lg font-semibold text-theme-text-primary">
-            {candidate.vote_count}
-          </span>
-          <span className="text-sm text-theme-text-muted ml-1">
-            {candidate.vote_count === 1 ? 'vote' : 'votes'}
-          </span>
+          <span className="text-theme-text-primary text-lg font-semibold">{candidate.vote_count}</span>
+          <span className="text-theme-text-muted ml-1 text-sm">{candidate.vote_count === 1 ? 'vote' : 'votes'}</span>
         </div>
         <div className="text-right">
-          <span className="text-lg font-bold text-theme-text-primary">
-            {candidate.percentage}%
-          </span>
+          <span className="text-theme-text-primary text-lg font-bold">{candidate.percentage}%</span>
         </div>
       </div>
     </div>
     {/* Vote percentage progress bar */}
-    <div className="w-full bg-theme-surface rounded-full h-2.5 overflow-hidden">
+    <div className="bg-theme-surface h-2.5 w-full overflow-hidden rounded-full">
       <div
         className={`h-2.5 rounded-full transition-all duration-500 ${
           candidate.is_winner ? 'bg-green-500' : 'bg-blue-500'
@@ -121,7 +109,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-8">
+      <div className="flex items-center justify-center py-8">
         <div className="text-theme-text-muted">Loading results...</div>
       </div>
     );
@@ -129,7 +117,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
 
   if (error) {
     return (
-      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+      <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
         <p className="text-sm text-yellow-700 dark:text-yellow-300">{error}</p>
       </div>
     );
@@ -138,7 +126,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
   if (!results) {
     return (
       <div className="card-secondary p-4">
-        <p className="text-sm text-theme-text-secondary">No results available</p>
+        <p className="text-theme-text-secondary text-sm">No results available</p>
       </div>
     );
   }
@@ -146,35 +134,42 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
   return (
     <div className="space-y-6">
       {/* Overall Stats */}
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
-        <h3 className="text-lg font-medium text-theme-text-primary mb-4">Election Summary</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-blue-500/10 rounded-lg p-4">
+      <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+        <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Election Summary</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="rounded-lg bg-blue-500/10 p-4">
             <div className="text-sm font-medium text-blue-700 dark:text-blue-400">Total Votes</div>
-            <div className="mt-1 text-2xl font-semibold text-blue-700 dark:text-blue-200" aria-label={`Total votes: ${results.total_votes}`}>
+            <div
+              className="mt-1 text-2xl font-semibold text-blue-700 dark:text-blue-200"
+              aria-label={`Total votes: ${results.total_votes}`}
+            >
               {results.total_votes}
             </div>
           </div>
 
-          <div className="bg-green-500/10 rounded-lg p-4">
+          <div className="rounded-lg bg-green-500/10 p-4">
             <div className="text-sm font-medium text-green-700 dark:text-green-400">Eligible Voters</div>
-            <div className="mt-1 text-2xl font-semibold text-green-700 dark:text-green-200" aria-label={`Eligible voters: ${results.total_eligible_voters}`}>
+            <div
+              className="mt-1 text-2xl font-semibold text-green-700 dark:text-green-200"
+              aria-label={`Eligible voters: ${results.total_eligible_voters}`}
+            >
               {results.total_eligible_voters}
             </div>
           </div>
 
-          <div className="bg-purple-500/10 rounded-lg p-4">
+          <div className="rounded-lg bg-purple-500/10 p-4">
             <div className="text-sm font-medium text-purple-700 dark:text-purple-400">Turnout</div>
-            <div className="mt-1 text-2xl font-semibold text-purple-700 dark:text-purple-200" aria-label={`Voter turnout: ${results.voter_turnout_percentage}%`}>
+            <div
+              className="mt-1 text-2xl font-semibold text-purple-700 dark:text-purple-200"
+              aria-label={`Voter turnout: ${results.voter_turnout_percentage}%`}
+            >
               {results.voter_turnout_percentage}%
             </div>
           </div>
 
           <div className="bg-theme-surface-secondary rounded-lg p-4">
-            <div className="text-sm font-medium text-theme-text-muted">Victory Condition</div>
-            <div className="mt-1 text-sm font-semibold text-theme-text-primary">
-              {getVictoryDescription(election)}
-            </div>
+            <div className="text-theme-text-muted text-sm font-medium">Victory Condition</div>
+            <div className="text-theme-text-primary mt-1 text-sm font-semibold">{getVictoryDescription(election)}</div>
           </div>
         </div>
       </div>
@@ -182,41 +177,57 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       {/* Quorum Status */}
       {results.quorum_met !== undefined && (
         <div
-          className={`rounded-lg p-4 border ${
-            results.quorum_met
-              ? 'bg-green-500/10 border-green-500/30'
-              : 'bg-red-500/10 border-red-500/30'
+          className={`rounded-lg border p-4 ${
+            results.quorum_met ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'
           }`}
         >
           <div className="flex items-center space-x-2">
             {results.quorum_met ? (
-              <svg className="h-5 w-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              <svg
+                className="h-5 w-5 text-green-600 dark:text-green-400"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
               </svg>
             ) : (
-              <svg className="h-5 w-5 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              <svg
+                className="h-5 w-5 text-red-600 dark:text-red-400"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
               </svg>
             )}
-            <span className={`text-sm font-medium ${
-              results.quorum_met
-                ? 'text-green-700 dark:text-green-300'
-                : 'text-red-700 dark:text-red-300'
-            }`}>
+            <span
+              className={`text-sm font-medium ${
+                results.quorum_met ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+              }`}
+            >
               {results.quorum_met ? 'Quorum Met' : 'Quorum Not Met'}
             </span>
           </div>
           {results.quorum_detail && (
-            <p className={`mt-1 text-sm ${
-              results.quorum_met
-                ? 'text-green-600 dark:text-green-400'
-                : 'text-red-600 dark:text-red-400'
-            }`}>
+            <p
+              className={`mt-1 text-sm ${
+                results.quorum_met ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}
+            >
               {results.quorum_detail}
             </p>
           )}
           {!results.quorum_met && (
-            <p className="mt-2 text-sm text-red-700 dark:text-red-300 font-medium">
+            <p className="mt-2 text-sm font-medium text-red-700 dark:text-red-300">
               Results are not valid until quorum is reached.
             </p>
           )}
@@ -226,24 +237,21 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       {/* Results by Position */}
       {results.results_by_position && results.results_by_position.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-theme-text-primary">Results by Position</h3>
+          <h3 className="text-theme-text-primary text-lg font-medium">Results by Position</h3>
           {results.results_by_position.map((positionResult) => (
-            <div key={positionResult.position} className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-md font-semibold text-theme-text-primary">{positionResult.position}</h4>
-                <span className="text-sm text-theme-text-muted">
+            <div key={positionResult.position} className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+              <div className="mb-4 flex items-center justify-between">
+                <h4 className="text-md text-theme-text-primary font-semibold">{positionResult.position}</h4>
+                <span className="text-theme-text-muted text-sm">
                   {positionResult.total_votes} {positionResult.total_votes === 1 ? 'vote' : 'votes'}
                 </span>
               </div>
 
               {positionResult.is_tie && (
-                <div
-                  className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-md p-3"
-                  role="alert"
-                >
+                <div className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/10 p-3" role="alert">
                   <p className="text-sm text-amber-700 dark:text-amber-300">
-                    Unresolved tie for {positionResult.position} — no winner is
-                    declared. {TIE_POLICY_LABELS[results.tie_policy ?? 'co_winners']}
+                    Unresolved tie for {positionResult.position} — no winner is declared.{' '}
+                    {TIE_POLICY_LABELS[results.tie_policy ?? 'co_winners']}
                   </p>
                 </div>
               )}
@@ -260,9 +268,10 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
 
       {/* Overall Results (if no positions or single election) */}
       {(!results.results_by_position || results.results_by_position.length === 0) &&
-        results.overall_results && results.overall_results.length > 0 && (
-          <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
-            <h3 className="text-lg font-medium text-theme-text-primary mb-4">Results</h3>
+        results.overall_results &&
+        results.overall_results.length > 0 && (
+          <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+            <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Results</h3>
             <div className="space-y-3">
               {results.overall_results.map((candidate) => (
                 <CandidateResultCard key={candidate.candidate_id} candidate={candidate} />

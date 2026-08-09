@@ -57,8 +57,7 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
       }
       return config;
     },
-    (error: unknown) =>
-      Promise.reject(error instanceof Error ? error : new Error(String(error))),
+    (error: unknown) => Promise.reject(error instanceof Error ? error : new Error(String(error)))
   );
 
   // --- Response interceptor: auto-refresh on 401 ---
@@ -70,11 +69,7 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
     (response) => response,
     async (error: AxiosError) => {
       const originalRequest = error.config;
-      if (
-        error.response?.status === 401 &&
-        originalRequest &&
-        !originalRequest._retry
-      ) {
+      if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
         originalRequest._retry = true;
         try {
           await performSharedRefresh();
@@ -90,10 +85,8 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
       // problem than one on the global client.
       reportApiError(error);
 
-      return Promise.reject(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    },
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
   );
 
   return api;

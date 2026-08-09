@@ -7,8 +7,18 @@ import type { MeetingRecord, MeetingAttendee, MeetingActionItem, MeetingsSummary
 import { asArray } from '../utils/asArray';
 
 export const meetingsService = {
-  async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; from_date?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }>('/meetings', { params });
+  async getMeetings(params?: {
+    meeting_type?: string;
+    status?: string;
+    search?: string;
+    from_date?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }>(
+      '/meetings',
+      { params }
+    );
     return response.data;
   },
 
@@ -36,7 +46,10 @@ export const meetingsService = {
     return response.data;
   },
 
-  async addAttendee(meetingId: string, data: { user_id: string; present?: boolean; excused?: boolean }): Promise<MeetingAttendee> {
+  async addAttendee(
+    meetingId: string,
+    data: { user_id: string; present?: boolean; excused?: boolean }
+  ): Promise<MeetingAttendee> {
     const response = await api.post<MeetingAttendee>(`/meetings/${meetingId}/attendees`, data);
     return response.data;
   },
@@ -69,12 +82,18 @@ export const meetingsService = {
     return asArray(response.data);
   },
 
-  async getAttendanceDashboard(params?: { period_months?: number; meeting_type?: string }): Promise<Record<string, unknown>> {
+  async getAttendanceDashboard(params?: {
+    period_months?: number;
+    meeting_type?: string;
+  }): Promise<Record<string, unknown>> {
     const response = await api.get<Record<string, unknown>>('/meetings/attendance/dashboard', { params });
     return response.data;
   },
 
-  async grantAttendanceWaiver(meetingId: string, data: { user_id: string; reason: string }): Promise<Record<string, unknown>> {
+  async grantAttendanceWaiver(
+    meetingId: string,
+    data: { user_id: string; reason: string }
+  ): Promise<Record<string, unknown>> {
     const response = await api.post<Record<string, unknown>>(`/meetings/${meetingId}/attendance-waiver`, data);
     return response.data;
   },
@@ -93,7 +112,6 @@ export const meetingsService = {
 // Minutes service re-exported from the minutes module for backward compatibility.
 // New code should import from '@/modules/minutes/services/api'.
 export { minutesService } from '../modules/minutes/services/api';
-
 
 // Scheduling service moved to modules/scheduling/services/api.ts
 

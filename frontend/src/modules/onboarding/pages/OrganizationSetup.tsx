@@ -6,7 +6,6 @@ import {
   MapPin,
   Phone,
   Mail,
-
   FileText,
   ChevronDown,
   ChevronUp,
@@ -20,13 +19,7 @@ import { isValidImageFile } from '../utils/validation';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useApiRequest, useUnsavedChanges, useFormChanged } from '../hooks';
-import {
-  ProgressIndicator,
-  LoadingOverlay,
-  ErrorAlert,
-  BackButton,
-  ThemeToggle,
-} from '../components';
+import { ProgressIndicator, LoadingOverlay, ErrorAlert, BackButton, ThemeToggle } from '../components';
 import { HelpLink } from '../../../components/HelpLink';
 import { useOnboardingStore } from '../store';
 
@@ -176,18 +169,18 @@ const SectionHeader: React.FC<{
     type="button"
     onClick={onToggle}
     aria-expanded={expanded}
-    className="w-full flex items-center justify-between p-4 bg-theme-surface hover:bg-theme-surface-hover rounded-lg transition-colors"
+    className="bg-theme-surface hover:bg-theme-surface-hover flex w-full items-center justify-between rounded-lg p-4 transition-colors"
   >
     <div className="flex items-center gap-3">
       <span className="text-theme-accent-red">{icon}</span>
       <span className="text-theme-text-primary font-semibold">{title}</span>
       {required && !isComplete && <span className="text-theme-accent-red text-sm">*</span>}
-      {isComplete && <Check aria-hidden="true" className="w-5 h-5 text-theme-accent-green ml-2" />}
+      {isComplete && <Check aria-hidden="true" className="text-theme-accent-green ml-2 h-5 w-5" />}
     </div>
     {expanded ? (
-      <ChevronUp className="w-5 h-5 text-theme-text-muted" />
+      <ChevronUp className="text-theme-text-muted h-5 w-5" />
     ) : (
-      <ChevronDown className="w-5 h-5 text-theme-text-muted" />
+      <ChevronDown className="text-theme-text-muted h-5 w-5" />
     )}
   </button>
 );
@@ -205,21 +198,9 @@ const InputField: React.FC<{
   helpText?: string | undefined;
   error?: string | undefined;
   onBlur?: (() => void) | undefined;
-}> = ({
-  label,
-  id,
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
-  required,
-  maxLength,
-  helpText,
-  error,
-  onBlur,
-}) => (
+}> = ({ label, id, value, onChange, placeholder, type = 'text', required, maxLength, helpText, error, onBlur }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-theme-text-secondary mb-1">
+    <label htmlFor={id} className="text-theme-text-secondary mb-1 block text-sm font-medium">
       {label} {required && <span className="text-theme-accent-red">*</span>}
     </label>
     <input
@@ -230,14 +211,14 @@ const InputField: React.FC<{
       onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
+      className={`bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 focus:outline-hidden ${
         error ? 'border-theme-accent-red' : 'border-theme-surface-border'
       }`}
       aria-required={required}
       aria-invalid={!!error}
     />
-    {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
-    {error && <p className="mt-1 text-xs text-theme-accent-red">{error}</p>}
+    {helpText && <p className="text-theme-text-muted mt-1 text-xs">{helpText}</p>}
+    {error && <p className="text-theme-accent-red mt-1 text-xs">{error}</p>}
   </div>
 );
 
@@ -253,14 +234,14 @@ const SelectField: React.FC<{
   error?: string | undefined;
 }> = ({ label, id, value, onChange, options, required, helpText, error }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-theme-text-secondary mb-1">
+    <label htmlFor={id} className="text-theme-text-secondary mb-1 block text-sm font-medium">
       {label} {required && <span className="text-theme-accent-red">*</span>}
     </label>
     <select
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
+      className={`bg-theme-surface-secondary text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 focus:outline-hidden ${
         error ? 'border-theme-accent-red' : 'border-theme-surface-border'
       }`}
       aria-required={required}
@@ -272,8 +253,8 @@ const SelectField: React.FC<{
         </option>
       ))}
     </select>
-    {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
-    {error && <p className="mt-1 text-xs text-theme-accent-red">{error}</p>}
+    {helpText && <p className="text-theme-text-muted mt-1 text-xs">{helpText}</p>}
+    {error && <p className="text-theme-accent-red mt-1 text-xs">{error}</p>}
   </div>
 );
 
@@ -295,7 +276,7 @@ const AddressForm: React.FC<{
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div className="md:col-span-2">
         <InputField
           label="Street Address"
@@ -376,7 +357,7 @@ const OrganizationSetup: React.FC = () => {
   const hasUnsavedChanges = useFormChanged(formData, initialFormData);
   useUnsavedChanges({
     hasUnsavedChanges,
-    message: 'You have unsaved organization information. Are you sure you want to leave?'
+    message: 'You have unsaved organization information. Are you sure you want to leave?',
   });
 
   // Section expansion state
@@ -426,10 +407,7 @@ const OrganizationSetup: React.FC = () => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const updateFormData = <K extends keyof OrganizationFormData>(
-    field: K,
-    value: OrganizationFormData[K]
-  ) => {
+  const updateFormData = <K extends keyof OrganizationFormData>(field: K, value: OrganizationFormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setValidationErrors((prev) => ({ ...prev, [field]: '' }));
     clearError();
@@ -509,11 +487,7 @@ const OrganizationSetup: React.FC = () => {
     }
     if (!formData.mailingAddress.zipCode.trim()) {
       errors.mailingZip = 'ZIP/Postal code is required';
-    } else if (
-      !/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(
-        formData.mailingAddress.zipCode.trim()
-      )
-    ) {
+    } else if (!/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(formData.mailingAddress.zipCode.trim())) {
       errors.mailingZip = 'Enter a valid ZIP code (e.g., 12345 or 12345-6789)';
     }
 
@@ -530,11 +504,7 @@ const OrganizationSetup: React.FC = () => {
       }
       if (!formData.physicalAddress.zipCode.trim()) {
         errors.physicalZip = 'ZIP code is required';
-      } else if (
-        !/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(
-          formData.physicalAddress.zipCode.trim()
-        )
-      ) {
+      } else if (!/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(formData.physicalAddress.zipCode.trim())) {
         errors.physicalZip = 'Enter a valid ZIP code (e.g., 12345 or 12345-6789)';
       }
     }
@@ -612,7 +582,7 @@ const OrganizationSetup: React.FC = () => {
         toast.error(errorMessages[0] || 'Validation error');
       } else {
         // Show summary with count, filtering out any empty entries
-        const nonEmptyMessages = errorMessages.filter(msg => msg?.trim());
+        const nonEmptyMessages = errorMessages.filter((msg) => msg?.trim());
         toast.error(
           nonEmptyMessages.length > 0
             ? `Please fix ${nonEmptyMessages.length} error${nonEmptyMessages.length === 1 ? '' : 's'}:\n• ${nonEmptyMessages.join('\n• ')}`
@@ -689,32 +659,40 @@ const OrganizationSetup: React.FC = () => {
   const isSectionComplete = {
     basic: formData.name.trim().length >= 2,
     contact: true, // All fields optional
-    mailing: Boolean(formData.mailingAddress.line1.trim() && formData.mailingAddress.city.trim() && formData.mailingAddress.state && formData.mailingAddress.zipCode.trim()),
-    physical: Boolean(formData.physicalAddressSame || (formData.physicalAddress.line1.trim() && formData.physicalAddress.city.trim() && formData.physicalAddress.state)),
-    identifiers: Boolean(!formData.identifierType ||
-                 (formData.identifierType === 'fdid' && formData.fdid.trim()) ||
-                 (formData.identifierType === 'state_id' && formData.stateId.trim()) ||
-                 (formData.identifierType === 'department_id')),
+    mailing: Boolean(
+      formData.mailingAddress.line1.trim() &&
+      formData.mailingAddress.city.trim() &&
+      formData.mailingAddress.state &&
+      formData.mailingAddress.zipCode.trim()
+    ),
+    physical: Boolean(
+      formData.physicalAddressSame ||
+      (formData.physicalAddress.line1.trim() && formData.physicalAddress.city.trim() && formData.physicalAddress.state)
+    ),
+    identifiers: Boolean(
+      !formData.identifierType ||
+      (formData.identifierType === 'fdid' && formData.fdid.trim()) ||
+      (formData.identifierType === 'state_id' && formData.stateId.trim()) ||
+      formData.identifierType === 'department_id'
+    ),
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-pt-8 pb-8 px-4 relative">
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-pt-8 relative min-h-screen bg-linear-to-br px-4 pb-8">
       <ThemeToggle className="absolute top-4 right-4" />
-      <div className="max-w-3xl mx-auto">
+      <div className="mx-auto max-w-3xl">
         {/* Back Button */}
         <div className="mb-4">
           <BackButton to="/" label="Back to Welcome" />
         </div>
 
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-            <Building2 aria-hidden="true" className="w-8 h-8 text-white" />
+        <div className="mb-8 text-center">
+          <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
+            <Building2 aria-hidden="true" className="h-8 w-8 text-white" />
           </div>
-          <div className="flex items-center justify-center space-x-3 mb-3">
-            <h1 className="text-3xl md:text-4xl font-bold text-theme-text-primary">
-              Organization Setup
-            </h1>
+          <div className="mb-3 flex items-center justify-center space-x-3">
+            <h1 className="text-theme-text-primary text-3xl font-bold md:text-4xl">Organization Setup</h1>
             <HelpLink
               topic="organization-setup"
               variant="icon"
@@ -722,25 +700,25 @@ const OrganizationSetup: React.FC = () => {
               tooltipPosition="bottom"
             />
           </div>
-          <p className="text-lg text-theme-text-secondary">
+          <p className="text-theme-text-secondary text-lg">
             Let's set up your fire department or emergency services organization
           </p>
         </div>
 
         {/* Form Card */}
-        <div className="card p-6 space-y-4">
+        <div className="card space-y-4 p-6">
           {/* Basic Information */}
-          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
+          <div className="border-theme-surface-border overflow-hidden rounded-lg border">
             <SectionHeader
               title="Basic Information"
-              icon={<Building2 aria-hidden="true" className="w-5 h-5" />}
+              icon={<Building2 aria-hidden="true" className="h-5 w-5" />}
               expanded={expandedSections.basic}
               onToggle={() => toggleSection('basic')}
               required
               isComplete={isSectionComplete.basic}
             />
             {expandedSections.basic && (
-              <div className="p-4 space-y-4 bg-theme-surface-secondary">
+              <div className="bg-theme-surface-secondary space-y-4 p-4">
                 <InputField
                   label="Organization Name"
                   id="org-name"
@@ -778,16 +756,16 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Contact Information */}
-          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
+          <div className="border-theme-surface-border overflow-hidden rounded-lg border">
             <SectionHeader
               title="Contact Information"
-              icon={<Phone aria-hidden="true" className="w-5 h-5" />}
+              icon={<Phone aria-hidden="true" className="h-5 w-5" />}
               expanded={expandedSections.contact}
               onToggle={() => toggleSection('contact')}
             />
             {expandedSections.contact && (
-              <div className="p-4 space-y-4 bg-theme-surface-secondary">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-theme-surface-secondary space-y-4 p-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <InputField
                     label="Phone Number"
                     id="org-phone"
@@ -839,25 +817,25 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Mailing Address */}
-          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
+          <div className="border-theme-surface-border overflow-hidden rounded-lg border">
             <SectionHeader
               title="Mailing Address"
-              icon={<Mail aria-hidden="true" className="w-5 h-5" />}
+              icon={<Mail aria-hidden="true" className="h-5 w-5" />}
               expanded={expandedSections.mailing}
               onToggle={() => toggleSection('mailing')}
               required
               isComplete={isSectionComplete.mailing}
             />
             {expandedSections.mailing && (
-              <div className="p-4 bg-theme-surface-secondary space-y-4">
+              <div className="bg-theme-surface-secondary space-y-4 p-4">
                 {/* Info banner explaining why mailing address is required */}
-                <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-3">
+                <div className="bg-theme-alert-info-bg border-theme-alert-info-border rounded-lg border p-3">
                   <div className="flex items-start space-x-2">
-                    <AlertCircle aria-hidden="true" className="w-4 h-4 text-theme-alert-info-icon shrink-0 mt-0.5" />
-                    <p className="text-sm text-theme-alert-info-text">
+                    <AlertCircle aria-hidden="true" className="text-theme-alert-info-icon mt-0.5 h-4 w-4 shrink-0" />
+                    <p className="text-theme-alert-info-text text-sm">
                       <strong>Why is this required?</strong> Your mailing address is used for official correspondence,
-                      certifications, and legal documentation. If your physical location differs (e.g., PO Box vs. station address),
-                      you can specify that separately below.
+                      certifications, and legal documentation. If your physical location differs (e.g., PO Box vs.
+                      station address), you can specify that separately below.
                     </p>
                   </div>
                 </div>
@@ -873,21 +851,21 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Physical Address */}
-          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
+          <div className="border-theme-surface-border overflow-hidden rounded-lg border">
             <SectionHeader
               title="Physical Address"
-              icon={<MapPin aria-hidden="true" className="w-5 h-5" />}
+              icon={<MapPin aria-hidden="true" className="h-5 w-5" />}
               expanded={expandedSections.physical}
               onToggle={() => toggleSection('physical')}
             />
             {expandedSections.physical && (
-              <div className="p-4 space-y-4 bg-theme-surface-secondary">
-                <label className="flex items-center gap-3 cursor-pointer">
+              <div className="bg-theme-surface-secondary space-y-4 p-4">
+                <label className="flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={formData.physicalAddressSame}
                     onChange={(e) => updateFormData('physicalAddressSame', e.target.checked)}
-                    className="w-5 h-5 rounded-sm border-theme-surface-border bg-theme-surface-secondary text-theme-accent-red focus:ring-theme-focus-ring focus:ring-offset-0"
+                    className="border-theme-surface-border bg-theme-surface-secondary text-theme-accent-red focus:ring-theme-focus-ring h-5 w-5 rounded-sm focus:ring-offset-0"
                   />
                   <span className="text-theme-text-secondary">Same as mailing address</span>
                 </label>
@@ -906,22 +884,22 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Department Identifiers */}
-          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
+          <div className="border-theme-surface-border overflow-hidden rounded-lg border">
             <SectionHeader
               title="Department Identifiers"
-              icon={<FileText aria-hidden="true" className="w-5 h-5" />}
+              icon={<FileText aria-hidden="true" className="h-5 w-5" />}
               expanded={expandedSections.identifiers}
               onToggle={() => toggleSection('identifiers')}
             />
             {expandedSections.identifiers && (
-              <div className="p-4 space-y-4 bg-theme-surface-secondary">
-                <p className="text-sm text-theme-text-muted mb-4">
+              <div className="bg-theme-surface-secondary space-y-4 p-4">
+                <p className="text-theme-text-muted mb-4 text-sm">
                   Select the primary identifier your department uses for official reporting.
                 </p>
 
                 <div className="space-y-3">
                   {/* Identifier Type Selection */}
-                  <fieldset className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <fieldset className="grid grid-cols-1 gap-3 md:grid-cols-3">
                     <legend className="sr-only">Identifier type</legend>
                     {[
                       {
@@ -942,7 +920,7 @@ const OrganizationSetup: React.FC = () => {
                     ].map((option) => (
                       <label
                         key={option.value}
-                        className={`flex flex-col p-4 rounded-lg border cursor-pointer transition-all ${
+                        className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-all ${
                           formData.identifierType === option.value
                             ? 'border-theme-accent-red bg-theme-accent-orange-muted'
                             : 'border-theme-surface-border hover:border-theme-surface-hover'
@@ -954,16 +932,12 @@ const OrganizationSetup: React.FC = () => {
                             name="identifierType"
                             value={option.value}
                             checked={formData.identifierType === option.value}
-                            onChange={(e) =>
-                              updateFormData('identifierType', e.target.value as IdentifierType)
-                            }
+                            onChange={(e) => updateFormData('identifierType', e.target.value as IdentifierType)}
                             className="text-theme-accent-red focus:ring-theme-focus-ring"
                           />
                           <span className="text-theme-text-primary font-medium">{option.label}</span>
                         </div>
-                        <span className="text-xs text-theme-text-muted mt-1 ml-6">
-                          {option.description}
-                        </span>
+                        <span className="text-theme-text-muted mt-1 ml-6 text-xs">{option.description}</span>
                       </label>
                     ))}
                   </fieldset>
@@ -1014,16 +988,16 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* County & Year Founded */}
-          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
+          <div className="border-theme-surface-border overflow-hidden rounded-lg border">
             <SectionHeader
               title="Additional Information"
-              icon={<MapPin aria-hidden="true" className="w-5 h-5" />}
+              icon={<MapPin aria-hidden="true" className="h-5 w-5" />}
               expanded={expandedSections.identifiers}
               onToggle={() => toggleSection('identifiers')}
             />
             {expandedSections.identifiers && (
-              <div className="p-4 bg-theme-surface-secondary">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-theme-surface-secondary p-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <InputField
                     label="County / Jurisdiction"
                     id="county"
@@ -1048,15 +1022,15 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Logo Upload */}
-          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
+          <div className="border-theme-surface-border overflow-hidden rounded-lg border">
             <SectionHeader
               title="Organization Logo"
-              icon={<ImageIcon aria-hidden="true" className="w-5 h-5" />}
+              icon={<ImageIcon aria-hidden="true" className="h-5 w-5" />}
               expanded={expandedSections.logo}
               onToggle={() => toggleSection('logo')}
             />
             {expandedSections.logo && (
-              <div className="p-4 bg-theme-surface-secondary">
+              <div className="bg-theme-surface-secondary p-4">
                 <div className="relative">
                   <LoadingOverlay isVisible={isProcessingFile} message="Processing image..." />
 
@@ -1066,7 +1040,7 @@ const OrganizationSetup: React.FC = () => {
                       onDragLeave={handleDrag}
                       onDragOver={handleDrag}
                       onDrop={handleDrop}
-                      className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer ${
+                      className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-all ${
                         dragActive
                           ? 'border-theme-accent-red bg-theme-accent-orange-muted'
                           : 'border-theme-surface-border hover:border-theme-accent-red hover:bg-theme-surface-hover'
@@ -1090,34 +1064,32 @@ const OrganizationSetup: React.FC = () => {
                         aria-label="File input for logo"
                       />
                       <div className="flex flex-col items-center space-y-3">
-                        <div className="w-16 h-16 bg-theme-surface rounded-full flex items-center justify-center">
-                          <Upload aria-hidden="true" className="w-8 h-8 text-theme-text-muted" />
+                        <div className="bg-theme-surface flex h-16 w-16 items-center justify-center rounded-full">
+                          <Upload aria-hidden="true" className="text-theme-text-muted h-8 w-8" />
                         </div>
                         <div>
-                          <p className="text-theme-text-primary font-medium mb-1">
+                          <p className="text-theme-text-primary mb-1 font-medium">
                             Drop your logo here, or click to browse
                           </p>
-                          <p className="text-sm text-theme-text-muted">PNG, JPG or WebP (max 5MB)</p>
+                          <p className="text-theme-text-muted text-sm">PNG, JPG or WebP (max 5MB)</p>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="border-2 border-theme-surface-border rounded-lg p-6 bg-theme-surface-secondary">
+                    <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border-2 p-6">
                       <div className="flex items-start space-x-4">
-                        <div className="shrink-0 w-24 h-24 bg-theme-surface rounded-lg flex items-center justify-center overflow-hidden">
+                        <div className="bg-theme-surface flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg">
                           <img
                             src={formData.logo}
                             alt="Organization logo preview"
-                            className="max-w-full max-h-full object-contain"
+                            className="max-h-full max-w-full object-contain"
                           />
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between">
                             <div>
                               <p className="text-theme-text-primary font-medium">Logo uploaded</p>
-                              <p className="text-sm text-theme-text-muted mt-1">
-                                Click to change or drag a new image
-                              </p>
+                              <p className="text-theme-text-muted mt-1 text-sm">Click to change or drag a new image</p>
                             </div>
                             <button
                               type="button"
@@ -1128,16 +1100,16 @@ const OrganizationSetup: React.FC = () => {
                                   fileInputRef.current.value = '';
                                 }
                               }}
-                              className="shrink-0 ml-4 p-2 hover:bg-theme-accent-orange-muted rounded-lg transition-colors"
+                              className="hover:bg-theme-accent-orange-muted ml-4 shrink-0 rounded-lg p-2 transition-colors"
                               aria-label="Remove logo"
                             >
-                              <X aria-hidden="true" className="w-5 h-5 text-theme-accent-red" />
+                              <X aria-hidden="true" className="text-theme-accent-red h-5 w-5" />
                             </button>
                           </div>
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="mt-3 text-sm text-theme-accent-red hover:text-theme-accent-red font-medium transition-colors"
+                            className="text-theme-accent-red hover:text-theme-accent-red mt-3 text-sm font-medium transition-colors"
                           >
                             Change logo
                           </button>
@@ -1146,11 +1118,10 @@ const OrganizationSetup: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <p className="mt-2 text-xs text-theme-text-muted flex items-start">
-                  <ImageIcon aria-hidden="true" className="w-4 h-4 mr-1 shrink-0 mt-0.5" />
+                <p className="text-theme-text-muted mt-2 flex items-start text-xs">
+                  <ImageIcon aria-hidden="true" className="mt-0.5 mr-1 h-4 w-4 shrink-0" />
                   <span>
-                    Your logo will be displayed in the header and on reports. You can change it
-                    later in settings.
+                    Your logo will be displayed in the header and on reports. You can change it later in settings.
                   </span>
                 </p>
               </div>
@@ -1158,23 +1129,16 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Error Alert */}
-          {error && (
-            <ErrorAlert
-              message={error}
-              canRetry={canRetry}
-              onRetry={handleContinue}
-              onDismiss={clearError}
-            />
-          )}
+          {error && <ErrorAlert message={error} canRetry={canRetry} onRetry={handleContinue} onDismiss={clearError} />}
 
           {/* Validation Errors Summary - Only show after first submit attempt */}
           {hasAttemptedSubmit && Object.keys(validationErrors).length > 0 && (
-            <div className="bg-red-900/30 border border-theme-accent-red/50 rounded-lg p-4">
+            <div className="border-theme-accent-red/50 rounded-lg border bg-red-900/30 p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-accent-red shrink-0 mt-0.5" />
+                <AlertCircle aria-hidden="true" className="text-theme-accent-red mt-0.5 h-5 w-5 shrink-0" />
                 <div>
                   <p className="text-theme-accent-red font-medium">Please fix the following errors:</p>
-                  <ul className="mt-2 text-sm text-theme-accent-red list-disc list-inside">
+                  <ul className="text-theme-accent-red mt-2 list-inside list-disc text-sm">
                     {Object.entries(validationErrors).map(([key, msg]) => (
                       <li key={key}>{msg}</li>
                     ))}
@@ -1185,13 +1149,15 @@ const OrganizationSetup: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="pt-4 sticky bottom-0 md:relative bg-linear-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
+          <div className="from-theme-bg-to via-theme-bg-to sticky bottom-0 -mx-6 bg-linear-to-t to-transparent px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:relative md:mx-0 md:bg-none md:px-0 md:pb-0">
             <button
-              onClick={() => { void handleContinue(); }}
+              onClick={() => {
+                void handleContinue();
+              }}
               disabled={isSaving}
-              className={`w-full px-6 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
+              className={`w-full rounded-lg px-6 py-4 text-lg font-semibold transition-all duration-300 ${
                 !isSaving
-                  ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
+                  ? 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-[1.02] hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
@@ -1204,17 +1170,14 @@ const OrganizationSetup: React.FC = () => {
               ) : (
                 <span className="flex items-center justify-center gap-2">
                   Continue
-                  <Check aria-hidden="true" className="w-5 h-5" />
+                  <Check aria-hidden="true" className="h-5 w-5" />
                 </span>
               )}
             </button>
           </div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator
-            step="organization"
-            className="pt-4 border-t border-theme-nav-border"
-          />
+          <ProgressIndicator step="organization" className="border-theme-nav-border border-t pt-4" />
         </div>
 
         {/* Help Text */}

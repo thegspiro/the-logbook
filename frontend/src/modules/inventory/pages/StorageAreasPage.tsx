@@ -6,8 +6,20 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  ArrowLeft, Plus, Pencil, Trash2, ChevronRight, ChevronDown,
-  Package, Loader2, RefreshCw, MapPin, Box, Layers, Search, ExternalLink,
+  ArrowLeft,
+  Plus,
+  Pencil,
+  Trash2,
+  ChevronRight,
+  ChevronDown,
+  Package,
+  Loader2,
+  RefreshCw,
+  MapPin,
+  Box,
+  Layers,
+  Search,
+  ExternalLink,
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { inventoryService, locationsService } from '../../../services/api';
@@ -22,12 +34,24 @@ const selectClass = 'form-input w-full';
 const labelClass = 'form-label';
 
 interface AreaFormData {
-  name: string; label: string; description: string; storage_type: string;
-  parent_id: string; location_id: string; barcode: string; sort_order: string;
+  name: string;
+  label: string;
+  description: string;
+  storage_type: string;
+  parent_id: string;
+  location_id: string;
+  barcode: string;
+  sort_order: string;
 }
 const EMPTY_FORM: AreaFormData = {
-  name: '', label: '', description: '', storage_type: 'rack',
-  parent_id: '', location_id: '', barcode: '', sort_order: '0',
+  name: '',
+  label: '',
+  description: '',
+  storage_type: 'rack',
+  parent_id: '',
+  location_id: '',
+  barcode: '',
+  sort_order: '0',
 };
 
 type TreeNode = StorageAreaResponse & { treeChildren: TreeNode[] };
@@ -45,7 +69,10 @@ function buildTree(flat: StorageAreaResponse[]): TreeNode[] {
     if (parent) parent.treeChildren.push(n);
     else roots.push(n);
   }
-  const sort = (ns: TreeNode[]) => { ns.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)); ns.forEach((n) => sort(n.treeChildren)); };
+  const sort = (ns: TreeNode[]) => {
+    ns.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    ns.forEach((n) => sort(n.treeChildren));
+  };
   sort(roots);
   return roots;
 }
@@ -66,19 +93,28 @@ const ItemsPanel: React.FC<ItemsPanelProps> = ({ areaId, indent }) => {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    inventoryService.getItems({ storage_area_id: areaId, limit: 50 })
-      .then((res) => { if (!cancelled) setItems(res.items); })
-      .catch(() => { if (!cancelled) setItems([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    inventoryService
+      .getItems({ storage_area_id: areaId, limit: 50 })
+      .then((res) => {
+        if (!cancelled) setItems(res.items);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [areaId]);
 
   const panelIndent = indent + 24;
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-2 text-theme-text-muted" style={{ paddingLeft: `${panelIndent}px` }}>
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      <div className="text-theme-text-muted flex items-center gap-2 py-2" style={{ paddingLeft: `${panelIndent}px` }}>
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
         <span className="text-xs">Loading items…</span>
       </div>
     );
@@ -86,36 +122,41 @@ const ItemsPanel: React.FC<ItemsPanelProps> = ({ areaId, indent }) => {
 
   if (items.length === 0) {
     return (
-      <div className="py-2 text-xs text-theme-text-muted" style={{ paddingLeft: `${panelIndent}px` }}>
+      <div className="text-theme-text-muted py-2 text-xs" style={{ paddingLeft: `${panelIndent}px` }}>
         No items found in this area.
       </div>
     );
   }
 
   return (
-    <div className="border-l-2 border-theme-surface-border ml-4" style={{ marginLeft: `${indent + 12}px` }}>
+    <div className="border-theme-surface-border ml-4 border-l-2" style={{ marginLeft: `${indent + 12}px` }}>
       {items.map((item) => {
         const statusStyle = getStatusStyle(item.status);
         const condColor = getConditionColor(item.condition);
         return (
-          <Link key={item.id} to={`/inventory/items/${item.id}`}
-            className="flex items-center gap-2 py-1.5 px-3 hover:bg-theme-surface-hover rounded-r-lg transition-colors group/item">
-            <Package className="w-3.5 h-3.5 text-theme-text-muted shrink-0" />
-            <span className="text-sm text-theme-text-primary truncate flex-1 min-w-0">
+          <Link
+            key={item.id}
+            to={`/inventory/items/${item.id}`}
+            className="hover:bg-theme-surface-hover group/item flex items-center gap-2 rounded-r-lg px-3 py-1.5 transition-colors"
+          >
+            <Package className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+            <span className="text-theme-text-primary min-w-0 flex-1 truncate text-sm">
               {item.name}
-              {item.serial_number && <span className="ml-1.5 text-theme-text-muted font-mono text-xs">#{item.serial_number}</span>}
+              {item.serial_number && (
+                <span className="text-theme-text-muted ml-1.5 font-mono text-xs">#{item.serial_number}</span>
+              )}
             </span>
-            {item.size && <span className="text-xs text-theme-text-muted shrink-0">{item.size}</span>}
-            <span className={`text-xs px-1.5 py-0.5 rounded-full border shrink-0 ${statusStyle}`}>
+            {item.size && <span className="text-theme-text-muted shrink-0 text-xs">{item.size}</span>}
+            <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-xs ${statusStyle}`}>
               {item.status.replace(/_/g, ' ')}
             </span>
-            <span className={`text-xs shrink-0 capitalize ${condColor}`}>
-              {item.condition.replace(/_/g, ' ')}
-            </span>
+            <span className={`shrink-0 text-xs capitalize ${condColor}`}>{item.condition.replace(/_/g, ' ')}</span>
             {item.tracking_type === 'pool' && (
-              <span className="text-xs text-theme-text-muted shrink-0">qty: {item.quantity - item.quantity_issued}</span>
+              <span className="text-theme-text-muted shrink-0 text-xs">
+                qty: {item.quantity - item.quantity_issued}
+              </span>
             )}
-            <ExternalLink className="w-3 h-3 text-theme-text-muted sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity shrink-0" />
+            <ExternalLink className="text-theme-text-muted h-3 w-3 shrink-0 transition-opacity sm:opacity-0 sm:group-hover/item:opacity-100" />
           </Link>
         );
       })}
@@ -125,11 +166,25 @@ const ItemsPanel: React.FC<ItemsPanelProps> = ({ areaId, indent }) => {
 
 /* ---------- Tree row ---------- */
 interface TreeRowProps {
-  node: TreeNode; depth: number; expanded: Set<string>;
-  onToggle: (id: string) => void; onEdit: (a: StorageAreaResponse) => void; onDelete: (a: StorageAreaResponse) => void;
-  itemsVisible: Set<string>; onToggleItems: (id: string) => void;
+  node: TreeNode;
+  depth: number;
+  expanded: Set<string>;
+  onToggle: (id: string) => void;
+  onEdit: (a: StorageAreaResponse) => void;
+  onDelete: (a: StorageAreaResponse) => void;
+  itemsVisible: Set<string>;
+  onToggleItems: (id: string) => void;
 }
-const TreeRow: React.FC<TreeRowProps> = ({ node, depth, expanded, onToggle, onEdit, onDelete, itemsVisible, onToggleItems }) => {
+const TreeRow: React.FC<TreeRowProps> = ({
+  node,
+  depth,
+  expanded,
+  onToggle,
+  onEdit,
+  onDelete,
+  itemsVisible,
+  onToggleItems,
+}) => {
   const has = node.treeChildren.length > 0;
   const open = expanded.has(node.id);
   const showItems = itemsVisible.has(node.id);
@@ -138,53 +193,89 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, depth, expanded, onToggle, onEd
   const indent = cappedDepth * 16 + 12;
   return (
     <>
-      <div className="flex items-center gap-2 py-2.5 px-3 hover:bg-theme-surface-hover active:bg-theme-surface-hover rounded-lg transition-colors group"
-        style={{ paddingLeft: `${indent}px` }}>
-        <button onClick={() => onToggle(node.id)} disabled={!has}
-          className="w-6 h-6 flex items-center justify-center shrink-0 text-theme-text-muted"
-          aria-label={has ? (open ? 'Collapse' : 'Expand') : undefined}>
-          {has ? (open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />) : <span className="w-4 h-4" />}
+      <div
+        className="hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex items-center gap-2 rounded-lg px-3 py-2.5 transition-colors"
+        style={{ paddingLeft: `${indent}px` }}
+      >
+        <button
+          onClick={() => onToggle(node.id)}
+          disabled={!has}
+          className="text-theme-text-muted flex h-6 w-6 shrink-0 items-center justify-center"
+          aria-label={has ? (open ? 'Collapse' : 'Expand') : undefined}
+        >
+          {has ? (
+            open ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )
+          ) : (
+            <span className="h-4 w-4" />
+          )}
         </button>
-        <Box className="w-4 h-4 text-theme-text-muted shrink-0" />
-        <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium text-theme-text-primary truncate block">
-            {node.name}{node.label && <span className="ml-1.5 text-theme-text-muted font-normal">({node.label})</span>}
+        <Box className="text-theme-text-muted h-4 w-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <span className="text-theme-text-primary block truncate text-sm font-medium">
+            {node.name}
+            {node.label && <span className="text-theme-text-muted ml-1.5 font-normal">({node.label})</span>}
           </span>
-          {depth > 3 && <span className="text-[10px] text-theme-text-muted md:hidden">depth {depth + 1}</span>}
+          {depth > 3 && <span className="text-theme-text-muted text-[10px] md:hidden">depth {depth + 1}</span>}
         </div>
-        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 shrink-0 hidden sm:inline">
+        <span className="hidden shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 sm:inline dark:text-blue-400">
           {getTypeLabel(node.storage_type)}
         </span>
         <button
           onClick={() => onToggleItems(node.id)}
-          className={`text-xs shrink-0 w-16 text-right rounded px-1 py-0.5 transition-colors ${
+          className={`w-16 shrink-0 rounded px-1 py-0.5 text-right text-xs transition-colors ${
             node.item_count > 0
-              ? 'hover:bg-theme-surface-hover cursor-pointer text-blue-700 dark:text-blue-400 underline decoration-dotted underline-offset-2'
+              ? 'hover:bg-theme-surface-hover cursor-pointer text-blue-700 underline decoration-dotted underline-offset-2 dark:text-blue-400'
               : 'text-theme-text-muted cursor-default'
           } ${showItems ? 'bg-blue-500/10 font-medium' : ''}`}
           disabled={node.item_count === 0}
-          aria-label={node.item_count > 0 ? `${showItems ? 'Hide' : 'Show'} ${node.item_count} item${node.item_count !== 1 ? 's' : ''} in ${node.name}` : undefined}
+          aria-label={
+            node.item_count > 0
+              ? `${showItems ? 'Hide' : 'Show'} ${node.item_count} item${node.item_count !== 1 ? 's' : ''} in ${node.name}`
+              : undefined
+          }
         >
           {node.item_count} {node.item_count === 1 ? 'item' : 'items'}
         </button>
-        {node.barcode && <span className="text-xs text-theme-text-muted font-mono shrink-0 hidden sm:inline">{node.barcode}</span>}
-        <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onEdit(node)} aria-label={`Edit ${node.name}`}
-            className="p-2 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover">
-            <Pencil className="w-4 h-4" />
+        {node.barcode && (
+          <span className="text-theme-text-muted hidden shrink-0 font-mono text-xs sm:inline">{node.barcode}</span>
+        )}
+        <div className="flex shrink-0 items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+          <button
+            onClick={() => onEdit(node)}
+            aria-label={`Edit ${node.name}`}
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-2"
+          >
+            <Pencil className="h-4 w-4" />
           </button>
-          <button onClick={() => onDelete(node)} aria-label={`Delete ${node.name}`}
-            className="p-2 rounded text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10">
-            <Trash2 className="w-4 h-4" />
+          <button
+            onClick={() => onDelete(node)}
+            aria-label={`Delete ${node.name}`}
+            className="text-theme-text-muted rounded p-2 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+          >
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </div>
       {showItems && node.item_count > 0 && <ItemsPanel areaId={node.id} indent={indent} />}
-      {has && open && node.treeChildren.map((c) => (
-        <TreeRow key={c.id} node={c} depth={depth + 1} expanded={expanded}
-          onToggle={onToggle} onEdit={onEdit} onDelete={onDelete}
-          itemsVisible={itemsVisible} onToggleItems={onToggleItems} />
-      ))}
+      {has &&
+        open &&
+        node.treeChildren.map((c) => (
+          <TreeRow
+            key={c.id}
+            node={c}
+            depth={depth + 1}
+            expanded={expanded}
+            onToggle={onToggle}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            itemsVisible={itemsVisible}
+            onToggleItems={onToggleItems}
+          />
+        ))}
     </>
   );
 };
@@ -210,7 +301,12 @@ const StorageAreasPage: React.FC = () => {
   const [itemsVisible, setItemsVisible] = useState<Set<string>>(new Set());
 
   const toggleItemsPanel = (id: string) => {
-    setItemsVisible((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    setItemsVisible((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   };
 
   const facilities = locations.filter((l) => l.building && !l.facility_room_id);
@@ -227,18 +323,28 @@ const StorageAreasPage: React.FC = () => {
 
   const loadLocations = useCallback(async () => {
     setIsLoading(true);
-    try { setLocations(await locationsService.getLocations({ is_active: true })); }
-    catch (err: unknown) { toast.error(getErrorMessage(err, 'Failed to load locations')); }
-    finally { setIsLoading(false); }
+    try {
+      setLocations(await locationsService.getLocations({ is_active: true }));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load locations'));
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  useEffect(() => { void loadLocations(); }, [loadLocations]);
+  useEffect(() => {
+    void loadLocations();
+  }, [loadLocations]);
 
   const loadStorageAreas = useCallback(async (locationId: string) => {
     setIsLoadingAreas(true);
-    try { setStorageAreas(await inventoryService.getStorageAreas({ location_id: locationId, flat: true })); }
-    catch (err: unknown) { toast.error(getErrorMessage(err, 'Failed to load storage areas')); }
-    finally { setIsLoadingAreas(false); }
+    try {
+      setStorageAreas(await inventoryService.getStorageAreas({ location_id: locationId, flat: true }));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load storage areas'));
+    } finally {
+      setIsLoadingAreas(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -247,57 +353,101 @@ const StorageAreasPage: React.FC = () => {
   }, [selectedRoomId, loadStorageAreas]);
 
   const handleSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setSearchResults([]); return; }
+    if (!q.trim()) {
+      setSearchResults([]);
+      return;
+    }
     setIsSearching(true);
     try {
       const all = await inventoryService.getStorageAreas({ flat: true });
       const lower = q.toLowerCase();
       setSearchResults(all.filter((a) => a.name.toLowerCase().includes(lower)));
-    } catch (err: unknown) { toast.error(getErrorMessage(err, 'Search failed')); }
-    finally { setIsSearching(false); }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Search failed'));
+    } finally {
+      setIsSearching(false);
+    }
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => { void handleSearch(searchQuery); }, 300);
+    const t = setTimeout(() => {
+      void handleSearch(searchQuery);
+    }, 300);
     return () => clearTimeout(t);
   }, [searchQuery, handleSearch]);
 
   const toggleExpand = (id: string) => {
-    setExpanded((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    setExpanded((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   };
-  const handleFacilityChange = (id: string) => { setSelectedFacilityId(id); setSelectedRoomId(''); setStorageAreas([]); };
+  const handleFacilityChange = (id: string) => {
+    setSelectedFacilityId(id);
+    setSelectedRoomId('');
+    setStorageAreas([]);
+  };
 
-  const openCreateModal = () => { setEditingArea(null); setFormData({ ...EMPTY_FORM, location_id: selectedRoomId }); setShowModal(true); };
+  const openCreateModal = () => {
+    setEditingArea(null);
+    setFormData({ ...EMPTY_FORM, location_id: selectedRoomId });
+    setShowModal(true);
+  };
   const openEditModal = (area: StorageAreaResponse) => {
     setEditingArea(area);
     setFormData({
-      name: area.name, label: area.label ?? '', description: area.description ?? '',
-      storage_type: area.storage_type, parent_id: area.parent_id ?? '',
-      location_id: area.location_id ?? selectedRoomId, barcode: area.barcode ?? '',
+      name: area.name,
+      label: area.label ?? '',
+      description: area.description ?? '',
+      storage_type: area.storage_type,
+      parent_id: area.parent_id ?? '',
+      location_id: area.location_id ?? selectedRoomId,
+      barcode: area.barcode ?? '',
       sort_order: String(area.sort_order),
     });
     setShowModal(true);
   };
-  const closeModal = () => { setShowModal(false); setEditingArea(null); setFormData(EMPTY_FORM); };
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingArea(null);
+    setFormData(EMPTY_FORM);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) { toast.error('Storage area name is required'); return; }
+    if (!formData.name.trim()) {
+      toast.error('Storage area name is required');
+      return;
+    }
     setIsSaving(true);
     try {
       const sortNum = parseInt(formData.sort_order, 10);
       const payload: StorageAreaCreate = {
-        name: formData.name.trim(), label: formData.label.trim() || undefined,
-        description: formData.description.trim() || undefined, storage_type: formData.storage_type,
-        parent_id: formData.parent_id || undefined, location_id: formData.location_id || undefined,
-        barcode: formData.barcode.trim() || undefined, sort_order: isNaN(sortNum) ? undefined : sortNum,
+        name: formData.name.trim(),
+        label: formData.label.trim() || undefined,
+        description: formData.description.trim() || undefined,
+        storage_type: formData.storage_type,
+        parent_id: formData.parent_id || undefined,
+        location_id: formData.location_id || undefined,
+        barcode: formData.barcode.trim() || undefined,
+        sort_order: isNaN(sortNum) ? undefined : sortNum,
       };
-      if (editingArea) { await inventoryService.updateStorageArea(editingArea.id, payload); toast.success('Storage area updated'); }
-      else { await inventoryService.createStorageArea(payload); toast.success('Storage area created'); }
+      if (editingArea) {
+        await inventoryService.updateStorageArea(editingArea.id, payload);
+        toast.success('Storage area updated');
+      } else {
+        await inventoryService.createStorageArea(payload);
+        toast.success('Storage area created');
+      }
       closeModal();
       if (selectedRoomId) void loadStorageAreas(selectedRoomId);
-    } catch (err: unknown) { toast.error(getErrorMessage(err, 'Failed to save storage area')); }
-    finally { setIsSaving(false); }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save storage area'));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const confirmDelete = async () => {
@@ -308,53 +458,86 @@ const StorageAreasPage: React.FC = () => {
       toast.success(`"${deleteTarget.name}" deleted`);
       setDeleteTarget(null);
       if (selectedRoomId) void loadStorageAreas(selectedRoomId);
-    } catch (err: unknown) { toast.error(getErrorMessage(err, 'Failed to delete storage area')); }
-    finally { setIsDeleting(false); }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete storage area'));
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const parentOptions = flattenForDropdown(tree).filter((o) => o.id !== editingArea?.id);
   const set = (patch: Partial<AreaFormData>) => setFormData((p) => ({ ...p, ...patch }));
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       {/* Header */}
-      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1">
+      <Link
+        to="/inventory/admin"
+        className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+      >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
       </Link>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">Storage Areas</h1>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Storage Areas</h1>
           <p className="text-theme-text-secondary mt-1">Manage hierarchical storage locations within rooms.</p>
         </div>
-        <button onClick={openCreateModal} className="btn-info btn-md flex gap-2 items-center">
-          <Plus className="w-4 h-4" /> Add Storage Area
+        <button onClick={openCreateModal} className="btn-info btn-md flex items-center gap-2">
+          <Plus className="h-4 w-4" /> Add Storage Area
         </button>
       </div>
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-        <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-          aria-label="Search storage areas by name across all rooms..." placeholder="Search storage areas by name across all rooms..." className={inputClass + ' pl-9'} />
+        <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          aria-label="Search storage areas by name across all rooms..."
+          placeholder="Search storage areas by name across all rooms..."
+          className={inputClass + ' pl-9'}
+        />
       </div>
 
       {/* Facility / Room picker */}
       {!isShowingSearch && (
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex-1">
-            <label htmlFor="facility-select" className={labelClass}><MapPin className="w-3.5 h-3.5 inline mr-1" />Facility</label>
-            <select id="facility-select" value={selectedFacilityId} onChange={(e) => handleFacilityChange(e.target.value)}
-              className={selectClass} disabled={isLoading}>
+            <label htmlFor="facility-select" className={labelClass}>
+              <MapPin className="mr-1 inline h-3.5 w-3.5" />
+              Facility
+            </label>
+            <select
+              id="facility-select"
+              value={selectedFacilityId}
+              onChange={(e) => handleFacilityChange(e.target.value)}
+              className={selectClass}
+              disabled={isLoading}
+            >
               <option value="">All Facilities</option>
-              {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}{f.building ? ` (${f.building})` : ''}</option>)}
+              {facilities.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                  {f.building ? ` (${f.building})` : ''}
+                </option>
+              ))}
             </select>
           </div>
           <div className="flex-1">
-            <label htmlFor="room-select" className={labelClass}><Layers className="w-3.5 h-3.5 inline mr-1" />Room</label>
-            <select id="room-select" value={selectedRoomId} onChange={(e) => setSelectedRoomId(e.target.value)}
-              className={selectClass} disabled={isLoading || filteredRooms.length === 0}>
+            <label htmlFor="room-select" className={labelClass}>
+              <Layers className="mr-1 inline h-3.5 w-3.5" />
+              Room
+            </label>
+            <select
+              id="room-select"
+              value={selectedRoomId}
+              onChange={(e) => setSelectedRoomId(e.target.value)}
+              className={selectClass}
+              disabled={isLoading || filteredRooms.length === 0}
+            >
               <option value="">Select a room...</option>
               {filteredRooms.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -365,9 +548,12 @@ const StorageAreasPage: React.FC = () => {
           </div>
           {selectedRoomId && (
             <div className="flex items-end">
-              <button onClick={() => void loadStorageAreas(selectedRoomId)} aria-label="Refresh storage areas"
-                className="p-2.5 rounded-lg border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors">
-                <RefreshCw className="w-4 h-4" />
+              <button
+                onClick={() => void loadStorageAreas(selectedRoomId)}
+                aria-label="Refresh storage areas"
+                className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border p-2.5 transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
               </button>
             </div>
           )}
@@ -376,126 +562,248 @@ const StorageAreasPage: React.FC = () => {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20" role="status" aria-live="polite"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+          <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
+        </div>
       ) : !isShowingSearch && !selectedRoomId ? (
-        <div className="text-center py-16 card-secondary">
-          <Package className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+        <div className="card-secondary py-16 text-center">
+          <Package className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted">Select a facility and room above to view storage areas.</p>
         </div>
       ) : displayLoading ? (
-        <div className="flex items-center justify-center py-16" role="status" aria-live="polite"><Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" /></div>
+        <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
+          <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+        </div>
       ) : displayTree.length === 0 ? (
-        <div className="text-center py-16 card-secondary">
-          <Box className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+        <div className="card-secondary py-16 text-center">
+          <Box className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted mb-4">
             {isShowingSearch ? 'No storage areas match your search.' : 'No storage areas in this room yet.'}
           </p>
           {!isShowingSearch && (
-            <button onClick={openCreateModal} className="btn-info btn-md inline-flex gap-2 items-center">
-              <Plus className="w-4 h-4" /> Add Storage Area
+            <button onClick={openCreateModal} className="btn-info btn-md inline-flex items-center gap-2">
+              <Plus className="h-4 w-4" /> Add Storage Area
             </button>
           )}
         </div>
       ) : (
         <div className="card-secondary p-2">
           {isShowingSearch && (
-            <p className="text-xs text-theme-text-muted px-3 py-2 border-b border-theme-surface-border mb-1">
+            <p className="text-theme-text-muted border-theme-surface-border mb-1 border-b px-3 py-2 text-xs">
               {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
             </p>
           )}
           {displayTree.map((n) => (
-            <TreeRow key={n.id} node={n} depth={0} expanded={expanded}
-              onToggle={toggleExpand} onEdit={openEditModal} onDelete={setDeleteTarget}
-              itemsVisible={itemsVisible} onToggleItems={toggleItemsPanel} />
+            <TreeRow
+              key={n.id}
+              node={n}
+              depth={0}
+              expanded={expanded}
+              onToggle={toggleExpand}
+              onEdit={openEditModal}
+              onDelete={setDeleteTarget}
+              itemsVisible={itemsVisible}
+              onToggleItems={toggleItemsPanel}
+            />
           ))}
         </div>
       )}
 
       {/* Add / Edit Modal */}
-      <Modal isOpen={showModal} onClose={closeModal}
+      <Modal
+        isOpen={showModal}
+        onClose={closeModal}
         title={editingArea ? 'Edit Storage Area' : 'Add Storage Area'}
-        footer={<>
-          <button type="submit" form="sa-form" disabled={isSaving}
-            className="btn-info btn-md inline-flex items-center gap-2 disabled:opacity-50">
-            {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}{editingArea ? 'Update' : 'Create'}
-          </button>
-          <button type="button" onClick={closeModal}
-            className="mr-2 sm:mr-3 inline-flex items-center px-4 py-2 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-        </>} size="md">
+        footer={
+          <>
+            <button
+              type="submit"
+              form="sa-form"
+              disabled={isSaving}
+              className="btn-info btn-md inline-flex items-center gap-2 disabled:opacity-50"
+            >
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingArea ? 'Update' : 'Create'}
+            </button>
+            <button
+              type="button"
+              onClick={closeModal}
+              className="text-theme-text-secondary hover:text-theme-text-primary mr-2 inline-flex items-center px-4 py-2 text-sm font-medium sm:mr-3"
+            >
+              Cancel
+            </button>
+          </>
+        }
+        size="md"
+      >
         <form id="sa-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
-            <label htmlFor="sa-name" className={labelClass}>Name <span className="text-red-500">*</span></label>
-            <input id="sa-name" type="text" required value={formData.name}
-              onChange={(e) => set({ name: e.target.value })} className={inputClass} placeholder="e.g. Rack A-1" />
+            <label htmlFor="sa-name" className={labelClass}>
+              Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="sa-name"
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => set({ name: e.target.value })}
+              className={inputClass}
+              placeholder="e.g. Rack A-1"
+            />
           </div>
           <div>
-            <label htmlFor="sa-label" className={labelClass}>Label</label>
-            <input id="sa-label" type="text" value={formData.label}
-              onChange={(e) => set({ label: e.target.value })} className={inputClass} placeholder="Optional display label" />
+            <label htmlFor="sa-label" className={labelClass}>
+              Label
+            </label>
+            <input
+              id="sa-label"
+              type="text"
+              value={formData.label}
+              onChange={(e) => set({ label: e.target.value })}
+              className={inputClass}
+              placeholder="Optional display label"
+            />
           </div>
           <div>
-            <label htmlFor="sa-desc" className={labelClass}>Description</label>
-            <textarea id="sa-desc" rows={2} value={formData.description}
-              onChange={(e) => set({ description: e.target.value })} className={inputClass} placeholder="Optional description" />
+            <label htmlFor="sa-desc" className={labelClass}>
+              Description
+            </label>
+            <textarea
+              id="sa-desc"
+              rows={2}
+              value={formData.description}
+              onChange={(e) => set({ description: e.target.value })}
+              className={inputClass}
+              placeholder="Optional description"
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="sa-type" className={labelClass}>Storage Type</label>
-              <select id="sa-type" value={formData.storage_type} onChange={(e) => set({ storage_type: e.target.value })} className={selectClass}>
-                {STORAGE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              <label htmlFor="sa-type" className={labelClass}>
+                Storage Type
+              </label>
+              <select
+                id="sa-type"
+                value={formData.storage_type}
+                onChange={(e) => set({ storage_type: e.target.value })}
+                className={selectClass}
+              >
+                {STORAGE_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label htmlFor="sa-sort" className={labelClass}>Sort Order</label>
-              <input id="sa-sort" type="number" min="0" value={formData.sort_order}
-                onChange={(e) => set({ sort_order: e.target.value })} className={inputClass} />
+              <label htmlFor="sa-sort" className={labelClass}>
+                Sort Order
+              </label>
+              <input
+                id="sa-sort"
+                type="number"
+                min="0"
+                value={formData.sort_order}
+                onChange={(e) => set({ sort_order: e.target.value })}
+                className={inputClass}
+              />
             </div>
           </div>
           <div>
-            <label htmlFor="sa-parent" className={labelClass}>Parent Area</label>
-            <select id="sa-parent" value={formData.parent_id} onChange={(e) => set({ parent_id: e.target.value })} className={selectClass}>
+            <label htmlFor="sa-parent" className={labelClass}>
+              Parent Area
+            </label>
+            <select
+              id="sa-parent"
+              value={formData.parent_id}
+              onChange={(e) => set({ parent_id: e.target.value })}
+              className={selectClass}
+            >
               <option value="">None (top level)</option>
-              {parentOptions.map((o) => <option key={o.id} value={o.id}>{'  '.repeat(o.depth)}{o.name}</option>)}
+              {parentOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {'  '.repeat(o.depth)}
+                  {o.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
-            <label htmlFor="sa-room" className={labelClass}>Room</label>
-            <select id="sa-room" value={formData.location_id} onChange={(e) => set({ location_id: e.target.value })} className={selectClass}>
+            <label htmlFor="sa-room" className={labelClass}>
+              Room
+            </label>
+            <select
+              id="sa-room"
+              value={formData.location_id}
+              onChange={(e) => set({ location_id: e.target.value })}
+              className={selectClass}
+            >
               <option value="">No room assigned</option>
-              {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} &mdash; Room {r.room_number ?? ''}</option>)}
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name} &mdash; Room {r.room_number ?? ''}
+                </option>
+              ))}
             </select>
           </div>
           <div>
-            <label htmlFor="sa-barcode" className={labelClass}>Barcode</label>
+            <label htmlFor="sa-barcode" className={labelClass}>
+              Barcode
+            </label>
             <input
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              id="sa-barcode" type="text" value={formData.barcode}
-              onChange={(e) => set({ barcode: e.target.value })} className={inputClass} placeholder="Optional barcode" />
+              id="sa-barcode"
+              type="text"
+              value={formData.barcode}
+              onChange={(e) => set({ barcode: e.target.value })}
+              className={inputClass}
+              placeholder="Optional barcode"
+            />
           </div>
         </form>
       </Modal>
 
       {/* Delete confirmation */}
-      <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title="Delete Storage Area"
-        footer={<>
-          <button type="button" onClick={() => void confirmDelete()} disabled={isDeleting}
-            className="btn-primary btn-md inline-flex items-center gap-2 disabled:opacity-50">
-            {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}Delete
-          </button>
-          <button type="button" onClick={() => setDeleteTarget(null)}
-            className="mr-2 sm:mr-3 inline-flex items-center px-4 py-2 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-        </>} size="sm">
-        <p className="text-sm text-theme-text-secondary">
-          Are you sure you want to delete <strong className="text-theme-text-primary">{deleteTarget?.name ?? ''}</strong>?
+      <Modal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Storage Area"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => void confirmDelete()}
+              disabled={isDeleting}
+              className="btn-primary btn-md inline-flex items-center gap-2 disabled:opacity-50"
+            >
+              {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}Delete
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              className="text-theme-text-secondary hover:text-theme-text-primary mr-2 inline-flex items-center px-4 py-2 text-sm font-medium sm:mr-3"
+            >
+              Cancel
+            </button>
+          </>
+        }
+        size="sm"
+      >
+        <p className="text-theme-text-secondary text-sm">
+          Are you sure you want to delete{' '}
+          <strong className="text-theme-text-primary">{deleteTarget?.name ?? ''}</strong>?
           {(deleteTarget?.item_count ?? 0) > 0 && (
-            <span className="block mt-2 text-red-600 dark:text-red-400">
-              This area contains {deleteTarget?.item_count ?? 0} item{(deleteTarget?.item_count ?? 0) !== 1 ? 's' : ''}. They will need to be reassigned.
+            <span className="mt-2 block text-red-600 dark:text-red-400">
+              This area contains {deleteTarget?.item_count ?? 0} item{(deleteTarget?.item_count ?? 0) !== 1 ? 's' : ''}.
+              They will need to be reassigned.
             </span>
           )}
           {(deleteTarget?.children?.length ?? 0) > 0 && (
-            <span className="block mt-2 text-amber-600 dark:text-amber-400">This area has nested sub-areas that may also be affected.</span>
+            <span className="mt-2 block text-amber-600 dark:text-amber-400">
+              This area has nested sub-areas that may also be affected.
+            </span>
           )}
         </p>
       </Modal>
