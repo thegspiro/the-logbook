@@ -52,7 +52,12 @@ export function clickByName(name) {
       // Last resort: an <a> with no href, or a div wired up with onClick, has
       // no implicit role at all, so match the visible text directly.
       .or(page.locator("a, [role='tab'], button").filter({ hasText: name }));
-    const control = target.first();
+    // Responsive layouts render the same nav twice — a horizontal strip for
+    // phones and a sidebar for desktop — and the phone copy comes first in the
+    // DOM. It is display:none at this viewport, so clicking it just times out.
+    // Take the first *visible* match instead of the first match.
+    const visible = target.locator("visible=true");
+    const control = (await visible.count()) ? visible.first() : target.first();
     // Settings renders its section tabs below the fold on a 900px viewport, and
     // Playwright's actionability check times out on a control it cannot reach.
     await control.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
@@ -2810,6 +2815,107 @@ export const SHOTS = [
       "Screenshot of the Compliance Forecast view showing a line chart projecting",
     alt: "Compliance forecast projecting each member's compliance over 90 days",
     route: "/training/admin?page=compliance&tab=forecast",
+    fullPage: true,
+  },
+  {
+    id: "03-35-eligibility-matrix",
+    doc: "03-scheduling.md",
+    line: 616,
+    anchor:
+      "Screenshot of the Settings > Operational Ranks page showing the eligible positions matrix",
+    alt: "Position eligibility matrix of ranks against position types",
+    route: "/scheduling/settings?tab=eligibility",
+    fullPage: true,
+    holdBack:
+      "the tab is two chip pickers — membership types excluded from self-signup, " +
+      "and positions open to everyone — not the rank × position-type toggle grid " +
+      "the placeholder describes, and there is no Operational Ranks page",
+  },
+  {
+    id: "03-36-scheduling-general-settings",
+    doc: "03-scheduling.md",
+    line: 1692,
+    anchor: "Scheduling Settings → General showing the Close-out",
+    alt: "Scheduling general settings with close-out rules and overtime cap",
+    route: "/scheduling/settings?tab=general",
+    fullPage: true,
+  },
+  {
+    id: "03-37-scheduling-notifications",
+    doc: "03-scheduling.md",
+    line: 1255,
+    anchor:
+      "Screenshot of the SchedulingNotificationsPanel showing the “Shift Assignment Alerts” section",
+    alt: "Scheduling notification settings for assignment alerts",
+    route: "/scheduling/settings?tab=notifications",
+    // Clipped to its own section: the notifications tab stacks six of these and
+    // a full-page shot would picture all of them for a placeholder that names
+    // one. The panel has no ids, so the section is addressed by its heading.
+    selector: 'div.mt-5:has(> div > h4:text-is("Shift Assignment Alerts"))',
+  },
+  {
+    id: "03-39-start-of-shift-reminders",
+    doc: "03-scheduling.md",
+    line: 1268,
+    anchor:
+      "Screenshot of the SchedulingNotificationsPanel showing the “Start-of-Shift Reminders” section",
+    alt: "Start-of-shift reminder settings with the lookahead dropdown",
+    route: "/scheduling/settings?tab=notifications",
+    selector: 'div.mt-5:has(> div > h4:text-is("Start-of-Shift Reminders"))',
+  },
+  {
+    id: "03-38-shift-report-settings",
+    doc: "03-scheduling.md",
+    line: 784,
+    anchor:
+      "Screenshot of the Shift Reports Settings tab showing three cards",
+    alt: "Shift report settings with checklist timing, validation and form sections",
+    route: "/scheduling/settings?tab=shift-reports",
+    fullPage: true,
+  },
+  {
+    id: "03-40-report-form-sections",
+    doc: "03-scheduling.md",
+    line: 815,
+    anchor: "Screenshot showing the “Report Form Sections” card with 7 toggle switches",
+    alt: "Report form sections with a toggle for each part of the report",
+    route: "/scheduling/settings?tab=shift-reports",
+    prepare: clickByName(/^Form Sections/),
+    fullPage: true,
+  },
+  {
+    id: "03-41-apparatus-skills",
+    doc: "03-scheduling.md",
+    line: 834,
+    anchor: "Screenshot of the per-apparatus skills/tasks accordion",
+    alt: "Per-apparatus skills and tasks with the engine type selected",
+    route: "/scheduling/settings?tab=shift-reports",
+    prepare: async (page) => {
+      await clickByName(/^Apparatus Skills/)(page);
+      await clickByName(/^engine/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-42-rating-scale",
+    doc: "03-scheduling.md",
+    line: 852,
+    anchor: "Screenshot showing the rating scale customization section",
+    alt: "Rating scale settings with the scale type and per-level labels",
+    route: "/scheduling/settings?tab=shift-reports",
+    prepare: async (page) => {
+      await clickByName(/^Rating Scale/)(page);
+      // The per-level label list only renders for the labelled scale; under
+      // Stars the panel is just the style picker and the field label, which is
+      // not what the placeholder asks to see.
+      await clickByName(/^Labeled Bubbles$/)(page);
+      // The switch saves immediately and raises a toast, which would otherwise
+      // sit in the corner of the screenshot. Wait it out.
+      await page
+        .getByText(/display style updated/i)
+        .waitFor({ state: "detached", timeout: 15_000 })
+        .catch(() => {});
+    },
     fullPage: true,
   },
 ];
