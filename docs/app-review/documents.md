@@ -1,7 +1,60 @@
 # Application Review — Documents (Tier B)
 
 **Prefix:** `DOC2` · **Iteration:** B8 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3)
+
+---
+
+## Pass 3 (2026-08-09) — verified clean; latent-500 lens over-flag cleared; 1 E712
+
+Re-verified the landed fixes hold: DOC-6 `assert_in_org` guards intact
+(`create_folder`/`update_folder` `parent_id` + `owner_user_id`; `update_document`
+`folder_id`); DOC2-1 `attach_document_names` present and wired; DOC-2/DOC-3 access
++ upload guards in place. `documents_service.py` (the real service — the endpoint
+imports `DocumentsService`) is E712-free.
+
+### Latent-500 lens (the B1 finding) — over-flagged, then cleared
+
+The automated lens flagged `DocumentFolderCreate.visibility` /
+`DocumentFolderUpdate.visibility` as free-`str` fields mapping to the strict
+`visibility` ENUM — but careful reading cleared both: each carries a
+`Field(pattern="^(organization|leadership|owner)$")`, so Pydantic already rejects an
+out-of-set value with 422 at the boundary. Combined with DOC-6's
+`DocumentUpdate.status: Optional[DocumentStatus]`, **every** enum-mapped request
+field in this module is validated — no free-string→ENUM 500 path. (A good example of
+the lens producing a false positive that a read, not a "fix," resolves — no change
+made.)
+
+### DOC2-2 — NIT — 1 `is_system == True  # noqa: E712` in `document_service.py` swept — ✅ FIXED
+
+The sibling `document_service.py` (the minutes-publish/rendering service, MM2-1's
+home) carried a single boolean-column E712; converted to `.is_(True)`.
+
+### Doc correction — pass 2's "dead fields" future note is stale
+
+Pass 1/2's future-dev item "remove or populate `uploader_name`/`folder_name` dead
+response fields" is **already resolved**: DOC2-1 (pass 2) populates both via
+`attach_document_names`. Removed from the open list below.
+
+### DOC-4 / DOC-5 — 🚩 FLAGGED (product decisions, unchanged)
+
+DOC-4 (summary aggregates counts across all folders incl. restricted — count-only,
+no content) and DOC-5 (per-folder ACL isn't hierarchical, so `ORGANIZATION`-visible
+apparatus/facility child folders under a `LEADERSHIP` root are directly readable)
+remain owner decisions in `KNOWN_LIMITATIONS.md`. Member personal folders stay
+`OWNER`-visibility, so the sensitive case is closed regardless.
+
+### Future development (updated)
+
+1. **DOC-5 hierarchical-ACL decision** — the one potential access gap, depending on
+   intent.
+2. **DOC-4 summary scoping** — scope the aggregate to accessible folders if the
+   count-leak matters.
+3. **`get_folders` should call `can_access_folder`** rather than re-inlining it
+   (drift risk).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit` 0
+(no frontend change) · eslint unaffected · document tests **39 passed** (all DB-free).
 
 ---
 

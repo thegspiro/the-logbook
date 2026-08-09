@@ -46,7 +46,7 @@ from its open list.
 | B5 | elections | ELEC2 | ✅ (p1, p2, p3) |
 | B6 | meetings & minutes | MM2 | ✅ (p1, p2, p3) |
 | B7 | equipment-check | EC2 | ✅ (p1, p2, p3) |
-| B8 | documents | DOC2 | ⬜ |
+| B8 | documents | DOC2 | ✅ (p1, p2, p3) |
 | B9 | membership pipeline | MP2 | ⬜ |
 | B10 | messaging & communications | MSG2 | ⬜ |
 | B11 | notifications | NOTIF2 | ⬜ |
@@ -1479,3 +1479,16 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   flake8/black/tsc clean. No CHANGELOG (internal cross-tenant hardening, no
   user-visible change — matching EC2-1/EC2-2). See equipment-check.md → Pass 3.
   Next: B8 documents.
+
+- **B8 documents ✅ (pass 3).** Re-verified DOC-6 (`assert_in_org` on folder
+  parent_id/owner_user_id + update_document folder_id) and DOC2-1
+  (`attach_document_names`) hold; DOC-2/DOC-3 access + upload guards intact. **Latent-500
+  lens over-flagged, then cleared:** it flagged `DocumentFolderCreate/Update.visibility`
+  as free-str→ENUM, but both carry `Field(pattern="^(organization|leadership|owner)$")`
+  — validated at the schema (422), so no 500 path; with DOC-6's `status: Optional[DocumentStatus]`
+  every enum-mapped request field is validated. **No fix needed** (a lens false positive a
+  read resolves). **Swept DOC2-2** — 1 `is_system == True # noqa: E712` in the sibling
+  `document_service.py`. Corrected a stale future-dev note: the "dead uploader_name/folder_name
+  fields" were already populated by DOC2-1. DOC-4/DOC-5 remain flagged product decisions.
+  39 document tests pass. Gate: flake8/black/tsc clean. No CHANGELOG. See documents.md →
+  Pass 3. Next: B9 membership pipeline.
