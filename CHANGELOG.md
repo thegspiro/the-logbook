@@ -144,6 +144,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a message asking for a second authorized person — matching how approvals already
   worked. Automatic payment reconciliation (from the payment provider) is unaffected.
 
+- **Self-reported training that earns a certification can no longer auto-approve.**
+  A member submitting their own training toward a certification or a tracked
+  requirement (a certification course, a submission carrying a certification
+  number/expiration, or one linked to a training category) is now always routed to
+  an officer for review, even where the department had auto-approve turned on.
+  Auto-approve still applies to plain logged hours and skills practice, so nobody
+  can grant themselves a credential without a second person signing off.
+
 ### Dashboard: action items are now shown only to members allowed to see them (2026-08-08)
 
 **Security**

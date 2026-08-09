@@ -113,16 +113,22 @@ backfill — CI-5 — completes). These stay flagged.
 `get_matrix`, `update_qualification`, and the other by-id methods all filter
 `organization_id` alongside `id`.
 
-### TR-5 — LOW/MED — Auto-approved submissions bypass separation-of-duties — 🚩 FLAGGED (config/product decision)
+### TR-5 — LOW/MED — Auto-approved submissions bypass separation-of-duties — ✅ RESOLVED (owner decision, 2026-08-09)
 
-Unchanged, and re-confirmed as the OPS-4 clarification found: the *manual* review
-path uses the shared `assert_different_person` guard, but the **auto-approve**
-branch in `create_submission` (`require_approval=False` or
-`hours_completed <= auto_approve_under_hours`) spawns a COMPLETED record crediting
-the member's self-reported hours **with no reviewer at all** — so an actor≠subject
-check doesn't apply. The only limit on member self-credit is the org's auto-approve
-config. Closing it means bounding the auto-approve threshold or accepting it as
-documented config — a product decision. Recorded in `KNOWN_LIMITATIONS.md`.
+The *manual* review path already used the shared `assert_different_person` guard,
+but the **auto-approve** branch in `create_submission` (`require_approval=False` or
+`hours_completed <= auto_approve_under_hours`) spawned a COMPLETED record crediting
+the member's self-reported hours **with no reviewer at all**. Owner decision:
+*disable auto-approve when separation of duties applies.* `create_submission` now
+calls `_credits_certification_or_requirement(training_type, kwargs)` and routes any
+submission that would credit a certification/requirement — training_type
+`certification`, any certification credential field
+(`certification_number`/`issuing_agency`/`expiration_date`), or a linked
+`category_id` (the mechanism by which training counts toward a requirement) — to
+`PENDING_REVIEW` regardless of the org's auto-approve config. Only non-crediting
+submissions (plain logged hours, skills practice) still auto-approve, so no member
+can self-credit a credential. Covered by
+`tests/test_training_autoapprove_credit_guard.py` (7 tests).
 
 ### TR-4 — LOW — `year` default in requirements-progress — 🚩 FLAGGED (compliance-semantics)
 
@@ -151,10 +157,9 @@ severity note corrected — the mapping case was a live leak); TR-4/TR-5 stand.
 
 ## Future development
 
-1. **TR-5** — bound the auto-approve hours threshold or accept as documented config.
-2. **TR-6 residual** — org-filter the backstopped lookups; make `_decrypt_field`
+1. **TR-6 residual** — org-filter the backstopped lookups; make `_decrypt_field`
    fail closed after the CI-5 backfill.
-3. **TR-4** — decide the `year` default semantics.
+2. **TR-4** — decide the `year` default semantics.
 
 ## Completion gate
 
