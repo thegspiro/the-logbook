@@ -12,6 +12,46 @@
 
 ---
 
+## Pass 3 (2026-08-09) — verified clean; latent-500 lens clears (Literal-typed)
+
+No code change. Re-verified the guards hold: GF-6/GF-12 `assert_in_org` on the
+pledge/expenditure/compliance-task FKs (`grant_service.py` 241/249/257/786);
+GF-10/GF-11 enum fixes (`reporting_frequency`/`task_type`) intact. E712-free across
+`grant_service.py` and `fundraising_service.py`.
+
+### Latent-500 lens (the B1 finding) — clears; the module uses `Literal` types
+
+The grant schemas validate their enum fields with **`Literal` types** (63 uses —
+`ReportingFrequencyLiteral`, `ComplianceTaskTypeLiteral`, `PaymentMethodLiteral`, …),
+which Pydantic rejects out-of-set values against with a 422. That's how GF-10/GF-11
+were fixed, and it covers the surface. The lens flagged
+`GrantExpenditureCreate/Update.payment_method` as free-`str`, but that is a **double
+false positive**: (a) the automated check doesn't recognize `Literal` as validation,
+and (b) `GrantExpenditure.payment_method` is a plain **`String`** column, not a strict
+ENUM — so an unrecognized value stores fine, with no 500.
+
+### GF2-obs — LOW — expenditure `payment_method` is free-text where a sibling uses a Literal — noted, not changed
+
+`GrantExpenditureCreate/Update.payment_method` is `Optional[str]` against a `String`
+column, while another schema in the module types the same concept as
+`PaymentMethodLiteral`. This is an **inconsistency, not a defect** — no 500, no
+security issue, and the `String` column implies free-text payment methods (custom
+"wire/ACH/…") were allowed by design. Tightening it to the Literal would reject
+previously-valid custom values — a product call on a money module, not a review
+auto-fix. Recorded as a consistency observation; folds naturally into the GF-9
+money/validation-breadth follow-up.
+
+### Still flagged (unchanged)
+
+- **GF-7** (grant financial state machine + overspend guard), **GF-8**
+  (`is_anonymous` not enforced in donor responses), **GF-9** (float money math + the
+  donor-PII gate breadth) — all product/refactor-shaped, in `KNOWN_LIMITATIONS.md`.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · no tests changed (no code change).
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified the pass-1 GF-6 FK validations all hold (`_validate_pledge_fks`,

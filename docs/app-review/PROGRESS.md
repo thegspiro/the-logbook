@@ -52,7 +52,7 @@ from its open list.
 | B11 | notifications | NOTIF2 | ✅ (p1, p2, p3) |
 | B12 | integrations | INT2 | ✅ (p1, p2, p3) |
 | B13 | forms | FORM2 | ✅ (p1, p2, p3) |
-| B14 | grants & fundraising | GF2 | ⬜ |
+| B14 | grants & fundraising | GF2 | ✅ (p1, p2, p3) |
 | B15 | admin-hours | AH2 | ⬜ |
 | B16 | reports & analytics | RPT2 | ⬜ |
 | B17 | events | EV2 | ⬜ |
@@ -1548,3 +1548,15 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   6 boolean-column E712 → `.is_()`, keeping 1 `json_extract == True` JSON compare with
   an explanatory noqa. **10 tests added.** Gate: flake8/black clean; tsc n/a. CHANGELOG
   updated. See forms.md → Pass 3. Next: B14 grants & fundraising.
+
+- **B14 grants & fundraising ✅ (pass 3) — verified clean, no code change.**
+  Re-verified GF-6/GF-12 `assert_in_org` FK guards and GF-10/GF-11 enum fixes hold;
+  E712-free. **Latent-500 lens clears:** the module validates its enum fields with
+  `Literal` types (63 uses — how GF-10/11 were fixed). The one flag
+  (`GrantExpenditure*.payment_method`) is a double false positive — the lens doesn't
+  recognize `Literal` validation, and that column is a plain `String` (not ENUM), so
+  no 500. Noted GF2-obs (LOW): expenditure `payment_method` is free-text where a
+  sibling uses `PaymentMethodLiteral` — an inconsistency not a defect (String column
+  implies intentional free-text custom methods); folds into the GF-9 follow-up rather
+  than a money-module auto-fix. GF-7/8/9 remain flagged. No CHANGELOG. See
+  grants-fundraising.md → Pass 3. **B9–B14 batch complete.**
