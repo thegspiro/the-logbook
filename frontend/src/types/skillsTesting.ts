@@ -252,6 +252,10 @@ export interface SkillTest {
   template_sections?: SkillTemplateSection[] | undefined;
   /** Template global time limit in seconds */
   template_time_limit_seconds?: number | undefined;
+  /** Whether every critical (required) criterion must pass for the test to
+   *  pass. Sent so the examiner screen can warn that a critical step left
+   *  unscored is scored as a failure — which is what the backend does. */
+  template_require_all_critical?: boolean | undefined;
 }
 
 export interface SkillTestCreate {

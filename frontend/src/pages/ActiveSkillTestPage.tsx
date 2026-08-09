@@ -48,6 +48,7 @@ import { FormStatus } from '../constants/enums';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
 import { TestViewersPanel } from '../components/training/TestViewersPanel';
 import { SkillTestOfficerActions } from '../components/training/SkillTestOfficerActions';
+import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { getErrorMessage, toAppError } from '../utils/errorHandling';
 import type {
   SkillCriterion,
@@ -113,43 +114,54 @@ const PassFailCriterion: React.FC<{
   criterion: SkillCriterion;
   result: CriterionResult | undefined;
   onChange: (result: Partial<CriterionResult>) => void;
-}> = ({ criterion, result, onChange }) => (
-  <div className="space-y-2">
-    <div className="flex items-start gap-3">
-      <div className="flex-1">
-        <p className="text-theme-text-primary text-base font-medium">
-          {criterion.label}
-          {criterion.required && <span className="ml-1 text-sm text-red-500">(Critical)</span>}
-        </p>
-        {criterion.description && <p className="text-theme-text-muted mt-0.5 text-sm">{criterion.description}</p>}
+}> = ({ criterion, result, onChange }) => {
+  const marked = result?.passed === true || result?.passed === false;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          <p className="text-theme-text-primary text-base font-medium">
+            {criterion.label}
+            {criterion.required && <span className="ml-1 text-sm text-red-500">(Critical)</span>}
+          </p>
+          {criterion.description && <p className="text-theme-text-muted mt-0.5 text-sm">{criterion.description}</p>}
+        </div>
       </div>
+      <div className="flex gap-3">
+        {/* Tapping the mark that is already set clears it. Without this the only
+            way out of a mis-tap is to record the opposite verdict on a candidate
+            — there is no other route back to "not scored", and an unscored step
+            and a failed one are very different things on a scorecard. */}
+        <button
+          onClick={() => onChange({ passed: result?.passed === true ? null : true })}
+          aria-pressed={result?.passed === true}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-4 text-lg font-bold transition-all ${
+            result?.passed === true
+              ? 'scale-[1.02] bg-green-600 text-white shadow-lg shadow-green-600/30'
+              : 'bg-theme-surface border-theme-surface-border text-theme-text-muted border-2 hover:border-green-500'
+          }`}
+        >
+          <Check className="h-6 w-6" />
+          PASS
+        </button>
+        <button
+          onClick={() => onChange({ passed: result?.passed === false ? null : false })}
+          aria-pressed={result?.passed === false}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-4 text-lg font-bold transition-all ${
+            result?.passed === false
+              ? 'scale-[1.02] bg-red-600 text-white shadow-lg shadow-red-600/30'
+              : 'bg-theme-surface border-theme-surface-border text-theme-text-muted border-2 hover:border-red-500'
+          }`}
+        >
+          <X className="h-6 w-6" />
+          FAIL
+        </button>
+      </div>
+      {marked && <p className="text-theme-text-muted text-xs">Tapped the wrong one? Tap it again to clear it.</p>}
     </div>
-    <div className="flex gap-3">
-      <button
-        onClick={() => onChange({ passed: true })}
-        className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-4 text-lg font-bold transition-all ${
-          result?.passed === true
-            ? 'scale-[1.02] bg-green-600 text-white shadow-lg shadow-green-600/30'
-            : 'bg-theme-surface border-theme-surface-border text-theme-text-muted border-2 hover:border-green-500'
-        }`}
-      >
-        <Check className="h-6 w-6" />
-        PASS
-      </button>
-      <button
-        onClick={() => onChange({ passed: false })}
-        className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-4 text-lg font-bold transition-all ${
-          result?.passed === false
-            ? 'scale-[1.02] bg-red-600 text-white shadow-lg shadow-red-600/30'
-            : 'bg-theme-surface border-theme-surface-border text-theme-text-muted border-2 hover:border-red-500'
-        }`}
-      >
-        <X className="h-6 w-6" />
-        FAIL
-      </button>
-    </div>
-  </div>
-);
+  );
+};
 
 const ScoreCriterion: React.FC<{
   criterion: SkillCriterion;
@@ -158,6 +170,10 @@ const ScoreCriterion: React.FC<{
 }> = ({ criterion, result, onChange }) => {
   const maxScore = criterion.max_score ?? 100;
   const passingScore = criterion.passing_score ?? 0;
+  // A step nobody has scored yet is not a zero. Defaulting the display to 0
+  // painted every untouched critical step red before the candidate had done
+  // anything, which reads as a fail the examiner never recorded.
+  const scored = result?.score != null;
   const currentScore = result?.score ?? 0;
   const isCritical = criterion.required;
   // Non-critical criteria always "pass" — only critical criteria can fail
@@ -172,7 +188,13 @@ const ScoreCriterion: React.FC<{
   };
 
   // Non-critical uses neutral blue styling; critical uses green/red
-  const scoreColor = isCritical ? (isPassing ? 'text-green-600' : 'text-red-600') : 'text-blue-600 dark:text-blue-400';
+  const scoreColor = !scored
+    ? 'text-theme-text-muted'
+    : isCritical
+      ? isPassing
+        ? 'text-green-600'
+        : 'text-red-600'
+      : 'text-blue-600 dark:text-blue-400';
 
   return (
     <div className="space-y-2">
@@ -185,7 +207,7 @@ const ScoreCriterion: React.FC<{
           {criterion.description && <p className="text-theme-text-muted mt-0.5 text-sm">{criterion.description}</p>}
         </div>
         <div className={`text-2xl font-bold ${scoreColor}`}>
-          {currentScore}/{maxScore}
+          {scored ? currentScore : '—'}/{maxScore}
         </div>
       </div>
       {usePointButtons ? (
@@ -194,8 +216,9 @@ const ScoreCriterion: React.FC<{
             <button
               key={i}
               onClick={() => handleScoreChange(i)}
+              aria-pressed={scored && currentScore === i}
               className={`h-12 min-w-12 rounded-xl text-lg font-bold transition-all ${
-                currentScore === i
+                scored && currentScore === i
                   ? isCritical
                     ? i >= passingScore
                       ? 'scale-105 bg-green-600 text-white shadow-lg shadow-green-600/30'
@@ -210,6 +233,7 @@ const ScoreCriterion: React.FC<{
           {isCritical && passingScore > 0 && (
             <p className="text-theme-text-muted mt-1 w-full text-xs">Must score {passingScore}+ pts to pass</p>
           )}
+          {!scored && <p className="text-theme-text-muted mt-1 w-full text-xs">Tap a number to score this step.</p>}
         </div>
       ) : (
         <div className="space-y-1">
@@ -219,11 +243,13 @@ const ScoreCriterion: React.FC<{
             max={maxScore}
             value={currentScore}
             onChange={(e) => handleScoreChange(Number(e.target.value))}
+            aria-label={`${criterion.label} score out of ${maxScore}`}
             className="h-3 w-full cursor-pointer appearance-none rounded-lg accent-red-600"
             style={{
-              background: `linear-gradient(to right, ${isCritical ? (isPassing ? 'var(--status-passed)' : 'var(--status-failed)') : 'var(--accent-blue)'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)`,
+              background: `linear-gradient(to right, ${!scored ? 'var(--surface-border)' : isCritical ? (isPassing ? 'var(--status-passed)' : 'var(--status-failed)') : 'var(--accent-blue)'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)`,
             }}
           />
+          {!scored && <p className="text-theme-text-muted text-xs">Drag the slider to score this step.</p>}
           <div className="text-theme-text-muted flex justify-between text-xs">
             <span>0</span>
             {isCritical && <span className="text-yellow-600">Pass: {passingScore}</span>}
@@ -267,10 +293,41 @@ const TimedCriterion: React.FC<{
     };
   }, [isRunning]);
 
+  const commitTime = (seconds: number) => {
+    onChange({ time_seconds: seconds, passed: timeLimit > 0 ? seconds <= timeLimit : true });
+  };
+
+  // Record whatever the stopwatch is showing if this criterion is torn down
+  // while it is still running. Only the Stop button used to write a value, and
+  // the whole section unmounts on Prev/Next — so an examiner who timed an
+  // evolution and then swiped to the next section lost the reading entirely,
+  // on a step whose time limit is the pass/fail criterion.
+  const latestRef = useRef({ localTimer, isRunning, timeLimit, onChange });
+  // Kept current without a dependency list, so the cleanup below stays a
+  // genuine unmount handler rather than re-running on every tick.
+  useEffect(() => {
+    latestRef.current = { localTimer, isRunning, timeLimit, onChange };
+  });
+  useEffect(
+    () => () => {
+      const { localTimer: seconds, isRunning: running, timeLimit: limit, onChange: commit } = latestRef.current;
+      if (!running || seconds === 0) return;
+      commit({ time_seconds: seconds, passed: limit > 0 ? seconds <= limit : true });
+    },
+    []
+  );
+
+  const handleStart = () => {
+    setIsRunning(true);
+    // Timing an evolution is the examiner acting on the candidate, so it starts
+    // the test clock too — the parent only learns of an action when onChange
+    // fires, and until Stop that could be minutes away.
+    onChange({ time_seconds: localTimer });
+  };
+
   const handleStop = () => {
     setIsRunning(false);
-    const passed = timeLimit > 0 ? localTimer <= timeLimit : true;
-    onChange({ time_seconds: localTimer, passed });
+    commitTime(localTimer);
   };
 
   const handleReset = () => {
@@ -306,9 +363,9 @@ const TimedCriterion: React.FC<{
         <div className="flex gap-2">
           {!isRunning ? (
             <button
-              onClick={() => setIsRunning(true)}
+              onClick={handleStart}
               className="rounded-full bg-green-500 p-3 text-white transition-colors hover:bg-green-600"
-              aria-label="Start timer"
+              aria-label={`Start timer for ${criterion.label}`}
             >
               <Play className="h-6 w-6" />
             </button>
@@ -316,7 +373,7 @@ const TimedCriterion: React.FC<{
             <button
               onClick={handleStop}
               className="rounded-full bg-red-500 p-3 text-white transition-colors hover:bg-red-600"
-              aria-label="Stop timer"
+              aria-label={`Stop timer for ${criterion.label}`}
             >
               <Square className="h-6 w-6" />
             </button>
@@ -324,12 +381,15 @@ const TimedCriterion: React.FC<{
           <button
             onClick={handleReset}
             className="bg-theme-surface-hover text-theme-text-muted rounded-full p-3 transition-colors"
-            aria-label="Reset timer"
+            aria-label={`Reset timer for ${criterion.label}`}
           >
             <Timer className="h-6 w-6" />
           </button>
         </div>
       </div>
+      <p className="text-theme-text-muted text-xs">
+        {isRunning ? 'Press the red square when the candidate finishes.' : 'Press the green arrow to start timing.'}
+      </p>
     </div>
   );
 };
@@ -399,7 +459,7 @@ const StatementCriterion: React.FC<{
   criterion: SkillCriterion;
   result: CriterionResult | undefined;
   onChange: (result: Partial<CriterionResult>) => void;
-}> = ({ criterion, onChange }) => {
+}> = ({ criterion, result, onChange }) => {
   // NOTE: the mount-time onChange below is the one criterion write the examiner
   // did not make. SectionView tags it `autoMarked` so it cannot start the
   // clock — otherwise merely opening a test whose first section leads with a
@@ -407,7 +467,16 @@ const StatementCriterion: React.FC<{
   //
   // Statements are read-only boxes for the assessor to read aloud.
   // Auto-mark as passed on first render so they don't block completion.
+  //
+  // Skipped when the mark is already on the record: this component remounts
+  // every time the examiner navigates back to its section, and re-writing an
+  // unchanged value dirties the scorecard and triggers a pointless autosave on
+  // each visit.
+  const alreadyMarked = result?.passed === true;
+  const markedRef = useRef(alreadyMarked);
   useEffect(() => {
+    if (markedRef.current) return;
+    markedRef.current = true;
     onChange({ passed: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -467,31 +536,51 @@ const CriterionNotes: React.FC<{
 
 const SectionView: React.FC<{
   section: SkillTemplateSection;
+  sectionNumber: number;
+  sectionCount: number;
   sectionResults: CriterionResult[];
+  requireAllCritical: boolean;
   onUpdateCriterion: (
     criterionId: string,
     result: Partial<CriterionResult>,
     criterionLabel?: string,
     options?: { autoMarked?: boolean }
   ) => void;
-}> = ({ section, sectionResults, onUpdateCriterion }) => {
+}> = ({ section, sectionNumber, sectionCount, sectionResults, requireAllCritical, onUpdateCriterion }) => {
   const getResult = (criterionId: string) => sectionResults.find((r) => r.criterion_id === criterionId);
+
+  // Statements are excluded from every count here. They read aloud and mark
+  // themselves, so counting them showed a section part-finished before the
+  // examiner had touched it — and let a section read "3 / 3" with a real step
+  // still blank.
+  const scorable = section.criteria.filter((c) => c.type !== 'statement');
+  const scoredCount = scorable.filter((c) => getResult(c.id)?.passed != null).length;
+  const passedCount = scorable.filter((c) => getResult(c.id)?.passed === true).length;
+  const failedCount = scorable.filter((c) => getResult(c.id)?.passed === false).length;
+  const hasCritical = scorable.some((c) => c.required);
 
   return (
     <div className="space-y-6">
       {/* Section header */}
       <div className="border-theme-surface-border border-b pb-2">
+        <p className="text-theme-text-muted text-xs font-medium tracking-wide uppercase">
+          Section {sectionNumber} of {sectionCount}
+        </p>
         <h2 className="text-theme-text-primary text-xl font-bold">{section.name}</h2>
         {section.description && <p className="text-theme-text-muted mt-1 text-sm">{section.description}</p>}
-        <div className="mt-2 flex items-center gap-4">
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
           <span className="text-theme-text-muted text-xs">
-            {sectionResults.filter((r) => r.passed !== null).length} / {section.criteria.length} evaluated
+            {scoredCount} of {scorable.length} steps scored
           </span>
-          <span className="text-xs text-green-600">
-            {sectionResults.filter((r) => r.passed === true).length} passed
-          </span>
-          <span className="text-xs text-red-600">{sectionResults.filter((r) => r.passed === false).length} failed</span>
+          {passedCount > 0 && <span className="text-xs text-green-600">{passedCount} passed</span>}
+          {failedCount > 0 && <span className="text-xs text-red-600">{failedCount} failed</span>}
         </div>
+        {hasCritical && requireAllCritical && (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+            Steps marked <span className="font-semibold">(Critical)</span> must pass. Leaving one unscored counts the
+            same as a fail.
+          </p>
+        )}
       </div>
 
       {/* Criteria */}
@@ -586,9 +675,19 @@ const CriterionResultDisplay: React.FC<{
         </span>
       );
     }
+    // A critical step left blank is flagged, not greyed out: the scorer treats
+    // an unscored critical step exactly like a failed one, so it must not sit
+    // on the review screen looking like a harmless omission.
+    if (isCritical) {
+      return (
+        <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+          <AlertTriangle className="h-3 w-3" /> Not scored
+        </span>
+      );
+    }
     return (
       <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs font-medium">
-        Not evaluated
+        Not scored
       </span>
     );
   };
@@ -683,8 +782,8 @@ const ReviewSection: React.FC<{
             {passCount > 0 && <span className="font-medium text-green-600">{passCount} passed</span>}
             {failCount > 0 && <span className="font-medium text-red-600">{failCount} failed</span>}
             {nonStatementCriteria.length - passCount - failCount > 0 && (
-              <span className="text-theme-text-muted font-medium">
-                {nonStatementCriteria.length - passCount - failCount} unevaluated
+              <span className="font-medium text-amber-600 dark:text-amber-400">
+                {nonStatementCriteria.length - passCount - failCount} not scored
               </span>
             )}
           </div>
@@ -747,8 +846,8 @@ export const ReadOnlySectionView: React.FC<{
             {passCount > 0 && <span className="font-medium text-green-600">{passCount} passed</span>}
             {failCount > 0 && <span className="font-medium text-red-600">{failCount} failed</span>}
             {nonStatementCriteria.length - passCount - failCount > 0 && (
-              <span className="text-theme-text-muted font-medium">
-                {nonStatementCriteria.length - passCount - failCount} unevaluated
+              <span className="font-medium text-amber-600 dark:text-amber-400">
+                {nonStatementCriteria.length - passCount - failCount} not scored
               </span>
             )}
           </div>
@@ -779,6 +878,49 @@ export const ReadOnlySectionView: React.FC<{
     </div>
   );
 };
+
+// ==================== Progress ====================
+
+/** How far along one section is, in the only unit the examiner cares about:
+ *  steps they still have to make a call on.
+ *
+ *  Statements are excluded throughout. They are read aloud and mark themselves,
+ *  so including them would report progress the examiner has not made.
+ */
+interface SectionProgress {
+  id: string;
+  name: string;
+  /** Steps in this section that need a call from the examiner. */
+  total: number;
+  scored: number;
+  /** Steps still blank that are marked critical — these score as failures. */
+  criticalUnscored: number;
+}
+
+function buildSectionProgress(
+  sections: SkillTemplateSection[],
+  sectionResults: SectionResult[] | undefined
+): SectionProgress[] {
+  return sections.map((section) => {
+    const results = sectionResults?.find((sr) => sr.section_id === section.id)?.criteria_results ?? [];
+    const scorable = section.criteria.filter((c) => c.type !== 'statement');
+    let scored = 0;
+    let criticalUnscored = 0;
+    for (const criterion of scorable) {
+      if (results.find((r) => r.criterion_id === criterion.id)?.passed != null) {
+        scored += 1;
+      } else if (criterion.required) {
+        criticalUnscored += 1;
+      }
+    }
+    return { id: section.id, name: section.name, total: scorable.length, scored, criticalUnscored };
+  });
+}
+
+/** `1 step` / `2 steps`, so messages read like a sentence rather than a report. */
+function steps(count: number): string {
+  return `${count} step${count === 1 ? '' : 's'}`;
+}
 
 // ==================== Main Active Test Page ====================
 
@@ -816,6 +958,15 @@ export const ActiveSkillTestPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [emailing, setEmailing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  // Confirmations are in-app dialogs rather than window.confirm: the native one
+  // is unstyled, cannot say more than one sentence, and on a phone renders as a
+  // system alert an examiner dismisses by reflex.
+  const [finishPrompt, setFinishPrompt] = useState(false);
+  const [submitPrompt, setSubmitPrompt] = useState(false);
+  const [discardPrompt, setDiscardPrompt] = useState(false);
+  // Nobody presses Save on a screen they are using with gloves on, so the
+  // examiner needs to be told, without asking, that their scoring is safe.
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
 
   // Load the test
   useEffect(() => {
@@ -911,11 +1062,44 @@ export const ActiveSkillTestPage: React.FC = () => {
     }
   }, [loadedTestId, loadedElapsedSeconds, setActiveTestTimer]);
 
-  // Hydrate template sections from the API response (must be before callbacks that reference it)
-  const templateSections = hydrateTemplateSections(
-    currentTest?.template_sections as Record<string, unknown>[] | undefined
+  // Hydrate template sections from the API response (must be before callbacks
+  // that reference it). Memoized on the raw payload so the derived progress
+  // below — and every callback that closes over the sections — keeps a stable
+  // identity between renders.
+  const rawTemplateSections = currentTest?.template_sections;
+  const templateSections = useMemo(
+    () => hydrateTemplateSections(rawTemplateSections as Record<string, unknown>[] | undefined),
+    [rawTemplateSections]
   );
   const globalTimeLimit = currentTest?.template_time_limit_seconds;
+  // Defaults to true, matching the template model's own default: the safer read
+  // is that critical steps matter, so an older record without the field still
+  // gets the warning rather than silently dropping it.
+  const requireAllCritical = currentTest?.template_require_all_critical ?? true;
+
+  // What is left to do, section by section — drives the section chips, the
+  // progress readout, the finish warning and the review banner, so all four
+  // always agree with each other.
+  const sectionResultsForProgress = currentTest?.section_results;
+  const sectionProgress = useMemo(
+    () => buildSectionProgress(templateSections, sectionResultsForProgress),
+    [templateSections, sectionResultsForProgress]
+  );
+  const totalSteps = sectionProgress.reduce((sum, s) => sum + s.total, 0);
+  const scoredSteps = sectionProgress.reduce((sum, s) => sum + s.scored, 0);
+  const unscoredSteps = totalSteps - scoredSteps;
+  const criticalUnscored = sectionProgress.reduce((sum, s) => sum + s.criticalUnscored, 0);
+  const firstIncompleteIndex = sectionProgress.findIndex((s) => s.scored < s.total);
+
+  // "Saves as you go" rather than a bare "Saved" before anything has been
+  // written: the promise is what an examiner needs to read before they trust
+  // the screen, not a status for a save that hasn't happened yet.
+  const saveStatusLabel = {
+    idle: 'Saves as you go',
+    saving: 'Saving…',
+    saved: 'Saved',
+    failed: 'Not saved',
+  }[saveState];
 
   /** Set the clock running, and stamp the test as under way the first time.
    *
@@ -984,12 +1168,15 @@ export const ActiveSkillTestPage: React.FC = () => {
   const saveTest = useCallback(
     async (updates: SkillTestUpdate) => {
       if (!currentTest) return;
+      setSaveState('saving');
       try {
         await updateTest(currentTest.id, {
           ...updates,
           expected_version: currentTest.version,
         });
+        setSaveState('saved');
       } catch (err: unknown) {
+        setSaveState('failed');
         if (toAppError(err).status === 409) {
           setConflict(true);
         }
@@ -1019,6 +1206,7 @@ export const ActiveSkillTestPage: React.FC = () => {
   const handleReloadAfterConflict = useCallback(async () => {
     if (!testId) return;
     setConflict(false);
+    setSaveState('idle');
     await loadTest(testId);
     toast.success('Reloaded the current results');
   }, [testId, loadTest]);
@@ -1054,31 +1242,19 @@ export const ActiveSkillTestPage: React.FC = () => {
     onSave: persistAutoSave,
     // Only while the evaluation is live. A completed or voided test is
     // read-only, and update_test rejects writes to it.
-    enabled: currentTest != null && !reviewing && isTestLive(currentTest.status),
+    //
+    // Suspended once a concurrent edit is detected, as the banner tells the
+    // examiner it is: every retry carries the same stale version, so it can
+    // only 409 again, and each failure re-stamps the save indicator as failed
+    // on a screen already explaining why.
+    enabled: currentTest != null && !reviewing && !conflict && isTestLive(currentTest.status),
   });
 
-  /** "Complete Test" — stops the clock, saves progress, and enters review mode */
-  const handleComplete = useCallback(async () => {
+  /** Stop the clock, save, and move on to the review screen. */
+  const enterReview = useCallback(async () => {
     if (!currentTest) return;
 
-    // Stop the clock immediately
     setActiveTestRunning(false);
-
-    // Check for unevaluated criteria
-    const totalCriteria = templateSections.reduce(
-      (sum, s) => sum + s.criteria.filter((c) => c.type !== 'statement').length,
-      0
-    );
-    const evaluatedCriteria = (currentTest.section_results ?? []).reduce(
-      (sum, sr) => sum + sr.criteria_results.filter((cr) => cr.passed !== null && cr.passed !== undefined).length,
-      0
-    );
-    const unevaluated = totalCriteria - evaluatedCriteria;
-
-    if (unevaluated > 0) {
-      const confirmMessage = `${unevaluated} criterion${unevaluated === 1 ? '' : 'a'} ha${unevaluated === 1 ? 's' : 've'} not been evaluated. Continue to review?`;
-      if (!window.confirm(confirmMessage)) return;
-    }
 
     try {
       // Save current state before entering review
@@ -1090,7 +1266,30 @@ export const ActiveSkillTestPage: React.FC = () => {
     } catch {
       toast.error('Failed to save progress');
     }
-  }, [currentTest, activeTestTimer, saveTest, templateSections, setActiveTestRunning]);
+  }, [currentTest, activeTestTimer, saveTest, setActiveTestRunning]);
+
+  /** "Finish" — warns about steps left blank before leaving the scoring screen.
+   *
+   * The clock is deliberately left running until review is actually entered: an
+   * examiner who taps Finish, reads the warning and goes back to score the last
+   * step is still mid-evaluation, and stopping the clock on them would
+   * under-record the duration on a test whose time limit may itself be the
+   * criterion.
+   */
+  const handleFinish = useCallback(() => {
+    if (unscoredSteps > 0) {
+      setFinishPrompt(true);
+      return;
+    }
+    void enterReview();
+  }, [unscoredSteps, enterReview]);
+
+  /** Send the examiner back to the first section that still has blank steps. */
+  const goToFirstUnscored = useCallback(() => {
+    setFinishPrompt(false);
+    setReviewing(false);
+    setActiveSectionIndex(firstIncompleteIndex >= 0 ? firstIncompleteIndex : 0);
+  }, [firstIncompleteIndex, setActiveSectionIndex]);
 
   /** Leave review mode and show the scored result.
    *
@@ -1172,8 +1371,8 @@ export const ActiveSkillTestPage: React.FC = () => {
     });
   }, [templateSections, currentTest?.section_results, reviewNotes]);
 
-  /** "Submit Test" — finalizes the test with notes from review, calculates results */
-  const handleSubmit = useCallback(async () => {
+  /** "Submit Test" — ask first; this is the point of no return. */
+  const requestSubmit = useCallback(() => {
     if (!currentTest) return;
 
     // Already finalized — nothing left to save. Reachable when a previous
@@ -1186,8 +1385,14 @@ export const ActiveSkillTestPage: React.FC = () => {
       return;
     }
 
-    if (!window.confirm('Submit this test? Results will be finalized and cannot be changed.')) return;
+    setSubmitPrompt(true);
+  }, [currentTest, showResults]);
 
+  /** Finalizes the test with notes from review, calculates results */
+  const handleSubmit = useCallback(async () => {
+    if (!currentTest) return;
+
+    setSubmitPrompt(false);
     setSubmitting(true);
     try {
       // Save section results with review notes
@@ -1290,7 +1495,7 @@ export const ActiveSkillTestPage: React.FC = () => {
   /** Practice: discard and return to dashboard */
   const handleDiscardPractice = useCallback(async () => {
     if (!currentTest) return;
-    if (!window.confirm('Discard this practice attempt? It will be permanently deleted.')) return;
+    setDiscardPrompt(false);
     setDiscarding(true);
     try {
       await discardPracticeTest(currentTest.id);
@@ -1353,6 +1558,31 @@ export const ActiveSkillTestPage: React.FC = () => {
     );
   }
 
+  // Where "back" goes, from every screen here. Training Admin is an
+  // officer-only page: a member examiner — or anyone on a practice run — came
+  // from the member-facing list and has to be returned to it, or they land on a
+  // page they cannot open. Resolved once so the header, the results header and
+  // the results footer button cannot disagree, which they previously did.
+  const backTarget =
+    currentTest.is_practice || !isOfficer
+      ? '/training/skills-testing'
+      : '/training/admin?page=skills-testing&tab=tests';
+
+  // Discarding a practice attempt is offered from both the review screen and
+  // the results screen, so the confirmation is built once and rendered in both.
+  const discardDialog = (
+    <ConfirmDialog
+      isOpen={discardPrompt}
+      onClose={() => setDiscardPrompt(false)}
+      onConfirm={() => void handleDiscardPractice()}
+      title="Discard this practice attempt?"
+      message="This practice attempt will be deleted for good. Nothing is recorded against the candidate."
+      cancelLabel="Keep it"
+      confirmLabel="Discard"
+      loading={discarding}
+    />
+  );
+
   // Completed test — full detail view (read-only). A voided test lands here
   // too: it is a finished result that was withdrawn, and routing it to the live
   // evaluation UI below would hand an officer editable criteria for a record
@@ -1364,13 +1594,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b px-4 py-3">
           <div className="flex items-center justify-between">
             <button
-              onClick={() =>
-                void navigate(
-                  currentTest.is_practice || !isOfficer
-                    ? '/training/skills-testing'
-                    : '/training/admin?page=skills-testing&tab=tests'
-                )
-              }
+              onClick={() => void navigate(backTarget)}
               className="hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg p-2 text-sm transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -1573,7 +1797,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                   Retake
                 </button>
                 <button
-                  onClick={() => void handleDiscardPractice()}
+                  onClick={() => setDiscardPrompt(true)}
                   disabled={discarding}
                   className="bg-theme-surface border-theme-surface-border text-theme-text-muted flex items-center justify-center gap-2 rounded-xl border-2 py-3 font-medium transition-colors hover:border-red-500 hover:text-red-600"
                 >
@@ -1584,13 +1808,15 @@ export const ActiveSkillTestPage: React.FC = () => {
             </div>
           ) : (
             <button
-              onClick={() => void navigate('/training/admin?page=skills-testing&tab=tests')}
+              onClick={() => void navigate(backTarget)}
               className="w-full rounded-xl bg-red-600 py-3 font-medium text-white transition-colors hover:bg-red-700"
             >
               Back to Tests
             </button>
           )}
         </div>
+
+        {discardDialog}
       </div>
     );
   }
@@ -1606,14 +1832,13 @@ export const ActiveSkillTestPage: React.FC = () => {
               onClick={() => setReviewing(false)}
               className="hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg p-2 text-sm transition-colors"
             >
-              <ChevronLeft className="h-4 w-4" />
-              Back
+              <ChevronLeft className="h-4 w-4 shrink-0" />
+              Back to scoring
             </button>
-            <div className="text-center">
-              <p className="text-theme-text-primary text-sm font-bold">{currentTest.template_name}</p>
-              <p className="text-theme-text-muted text-xs">Review &amp; Submit</p>
+            <div className="min-w-0 flex-1 text-right">
+              <p className="text-theme-text-primary truncate text-sm font-bold">{currentTest.candidate_name}</p>
+              <p className="text-theme-text-muted text-xs">Check the scorecard</p>
             </div>
-            <div className="w-16" /> {/* Spacer for centering */}
           </div>
         </div>
 
@@ -1628,6 +1853,31 @@ export const ActiveSkillTestPage: React.FC = () => {
 
         {/* Review Content */}
         <div ref={contentRef} className="flex-1 overflow-y-auto px-4 py-4">
+          {/* Last chance to fill in what was missed. The scorer treats an
+              unscored critical step as a failure, so this cannot be left as a
+              greyed-out count buried in a section header — it needs naming, and
+              it needs a way back to the step. */}
+          {unscoredSteps > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+              <p className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-200">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {steps(unscoredSteps)} {unscoredSteps === 1 ? 'has' : 'have'} no Pass or Fail yet
+              </p>
+              {requireAllCritical && criticalUnscored > 0 && (
+                <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                  {criticalUnscored} of {unscoredSteps === 1 ? 'them' : 'those'} {criticalUnscored === 1 ? 'is' : 'are'}{' '}
+                  marked Critical, which scores the same as a fail.
+                </p>
+              )}
+              <button
+                onClick={goToFirstUnscored}
+                className="mt-2 min-h-[44px] rounded-lg bg-amber-600 px-4 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+              >
+                Go back and score them
+              </button>
+            </div>
+          )}
+
           {/* Summary stats */}
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 text-center">
@@ -1672,7 +1922,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                 {submitting ? 'Calculating...' : 'View Results'}
               </button>
               <button
-                onClick={() => void handleDiscardPractice()}
+                onClick={() => setDiscardPrompt(true)}
                 disabled={discarding}
                 className="bg-theme-surface border-theme-surface-border text-theme-text-muted flex w-full items-center justify-center gap-2 rounded-xl border-2 py-3 font-medium transition-colors hover:border-red-500 hover:text-red-600"
               >
@@ -1682,7 +1932,7 @@ export const ActiveSkillTestPage: React.FC = () => {
             </div>
           ) : (
             <button
-              onClick={() => void handleSubmit()}
+              onClick={requestSubmit}
               disabled={submitting}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-4 text-lg font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
             >
@@ -1691,6 +1941,18 @@ export const ActiveSkillTestPage: React.FC = () => {
             </button>
           )}
         </div>
+
+        {discardDialog}
+        <ConfirmDialog
+          isOpen={submitPrompt}
+          onClose={() => setSubmitPrompt(false)}
+          onConfirm={() => void handleSubmit()}
+          title="Submit this test?"
+          message={`This files ${currentTest.candidate_name}'s result. Once submitted, the marks and notes can't be changed.`}
+          cancelLabel="Not yet"
+          confirmLabel="Submit"
+          loading={submitting}
+        />
       </div>
     );
   }
@@ -1707,22 +1969,24 @@ export const ActiveSkillTestPage: React.FC = () => {
     <div className="flex min-h-screen flex-col">
       {/* Top Bar */}
       <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b px-4 py-3">
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <button
-            onClick={() => void navigate('/training/admin?page=skills-testing&tab=tests')}
-            className="hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
+            onClick={() => void navigate(backTarget)}
+            aria-label="Leave this test"
+            className="hover:bg-theme-surface-hover mobile-touch-target rounded-lg transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <div className="text-center">
-            <p className="text-theme-text-primary text-sm font-bold">{currentTest.template_name}</p>
-            <p className="text-theme-text-muted text-xs">
-              Section {activeSectionIndex + 1} of {templateSections.length}
-            </p>
+          {/* Who is being tested, on the screen where the marks are made. The
+              examiner used to be shown the template name only, so nothing on
+              the scoring screen confirmed they had the right candidate open. */}
+          <div className="min-w-0 text-center">
+            <p className="text-theme-text-primary truncate text-sm font-bold">{currentTest.candidate_name}</p>
+            <p className="text-theme-text-muted truncate text-xs">{currentTest.template_name}</p>
           </div>
           <button
             onClick={() => void handleSaveProgress()}
-            className="bg-theme-surface border-theme-surface-border rounded-lg border px-3 py-1.5 text-xs font-medium"
+            className="bg-theme-surface border-theme-surface-border mobile-touch-target rounded-lg border px-3 text-xs font-medium"
           >
             Save
           </button>
@@ -1734,18 +1998,44 @@ export const ActiveSkillTestPage: React.FC = () => {
           onToggle={toggleTimer}
         />
 
-        {/* Section Progress Dots */}
-        <div className="mt-2 flex justify-center gap-1.5">
-          {templateSections.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goToSection(i)}
-              className={`h-2.5 w-2.5 rounded-full transition-colors ${
-                i === activeSectionIndex ? 'bg-red-600' : 'bg-theme-surface-border hover:bg-theme-text-muted'
-              }`}
-              aria-label={`Go to section ${i + 1}`}
-            />
-          ))}
+        {/* Section chips. These replaced 10px progress dots that were both
+            impossible to hit with a glove on and silent about what was left to
+            do — the examiner could only find an unscored step by walking every
+            section. A chip shows its own state, so what still needs work is
+            readable at a glance and one tap away. */}
+        <div className={`flex items-center gap-3 ${sectionProgress.length > 0 ? 'mt-2' : ''}`}>
+          <div className="hscroll flex flex-1 gap-2 py-0.5">
+            {sectionProgress.map((progress, i) => {
+              const complete = progress.total > 0 && progress.scored === progress.total;
+              const isCurrent = i === activeSectionIndex;
+              return (
+                <button
+                  key={progress.id}
+                  onClick={() => goToSection(i)}
+                  aria-current={isCurrent ? 'step' : undefined}
+                  aria-label={`Section ${i + 1}, ${progress.name}: ${progress.scored} of ${progress.total} steps scored`}
+                  className={`mobile-touch-target gap-1 rounded-full border-2 px-3 text-sm font-bold transition-colors ${
+                    isCurrent
+                      ? 'border-red-600 bg-red-600 text-white'
+                      : complete
+                        ? 'border-green-500/50 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                        : 'border-theme-surface-border text-theme-text-muted'
+                  }`}
+                >
+                  {complete && !isCurrent && <Check className="h-4 w-4" aria-hidden="true" />}
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+          {totalSteps > 0 && (
+            <div className="shrink-0 text-right leading-tight">
+              <p className="text-theme-text-primary text-xs font-bold">
+                {scoredSteps}/{totalSteps}
+              </p>
+              <p className="text-theme-text-muted text-[10px]">{saveStatusLabel}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1781,7 +2071,10 @@ export const ActiveSkillTestPage: React.FC = () => {
         {currentSection && (
           <SectionView
             section={currentSection}
+            sectionNumber={activeSectionIndex + 1}
+            sectionCount={templateSections.length}
             sectionResults={currentSectionResults}
+            requireAllCritical={requireAllCritical}
             onUpdateCriterion={(criterionId, result, criterionLabel, options) =>
               handleUpdateCriterion(
                 currentSection.id,
@@ -1794,35 +2087,80 @@ export const ActiveSkillTestPage: React.FC = () => {
             }
           />
         )}
+        {/* A published template with nothing in it, or a section list the API
+            could not return. Better a plain explanation than a blank screen
+            under a live timer. */}
+        {!currentSection && (
+          <div className="py-12 text-center">
+            <ClipboardCheck className="text-theme-text-muted mx-auto h-10 w-10" />
+            <p className="text-theme-text-primary mt-3 font-medium">Nothing to score on this test</p>
+            <p className="text-theme-text-muted mt-1 text-sm">
+              This test&apos;s template has no steps in it. Tell a training officer, then finish or leave the test.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Bottom Navigation Bar */}
+      {/* Bottom Navigation Bar.
+          The emphasis used to sit on "Complete Test": the biggest, reddest
+          button on every section ended the evaluation, while the action the
+          examiner actually wanted next — move on — was a small grey one beside
+          it. Now the primary button is whatever comes next, and finishing keeps
+          the rightmost slot on every section so it never moves under a thumb
+          that has learned where it is. */}
       <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t px-4">
         <div className="flex gap-3">
           <button
             onClick={() => goToSection(activeSectionIndex - 1)}
             disabled={!canGoBack}
-            className="bg-theme-surface border-theme-surface-border flex items-center justify-center gap-1 rounded-xl border px-4 py-3 font-medium transition-colors disabled:opacity-30"
+            className="bg-theme-surface border-theme-surface-border flex min-h-[52px] items-center justify-center gap-1 rounded-xl border px-4 font-medium transition-colors disabled:opacity-30"
           >
             <ChevronLeft className="h-5 w-5" />
             Prev
           </button>
+          {canGoForward && (
+            <button
+              onClick={() => goToSection(activeSectionIndex + 1)}
+              className="flex min-h-[52px] flex-1 items-center justify-center gap-1 rounded-xl bg-red-600 font-bold text-white transition-colors hover:bg-red-700"
+            >
+              Next
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          )}
           <button
-            onClick={() => void handleComplete()}
-            className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white transition-colors hover:bg-red-700"
+            onClick={handleFinish}
+            className={`flex min-h-[52px] items-center justify-center rounded-xl px-4 font-bold transition-colors ${
+              canGoForward
+                ? 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary border font-medium'
+                : 'flex-1 bg-red-600 text-white hover:bg-red-700'
+            }`}
           >
-            Complete Test
-          </button>
-          <button
-            onClick={() => goToSection(activeSectionIndex + 1)}
-            disabled={!canGoForward}
-            className="bg-theme-surface border-theme-surface-border flex items-center justify-center gap-1 rounded-xl border px-4 py-3 font-medium transition-colors disabled:opacity-30"
-          >
-            Next
-            <ChevronRight className="h-5 w-5" />
+            {canGoForward ? 'Finish' : 'Finish & Review'}
           </button>
         </div>
       </div>
+
+      {/* Finishing with steps left blank. Naming the count — and what an
+          unscored critical step costs — is the whole point: the old native
+          confirm said "criteria have not been evaluated" and gave the examiner
+          no way to act on it. */}
+      <ConfirmDialog
+        isOpen={finishPrompt}
+        onClose={() => setFinishPrompt(false)}
+        onConfirm={() => {
+          setFinishPrompt(false);
+          void enterReview();
+        }}
+        title="Some steps have no score"
+        message={
+          requireAllCritical && criticalUnscored > 0
+            ? `${steps(unscoredSteps)} still ${unscoredSteps === 1 ? 'has' : 'have'} no Pass or Fail. ${criticalUnscored} of ${criticalUnscored === 1 ? 'them is' : 'them are'} marked Critical, which scores the same as a fail.`
+            : `${steps(unscoredSteps)} still ${unscoredSteps === 1 ? 'has' : 'have'} no Pass or Fail. Sections with a green check are the ones you have finished.`
+        }
+        cancelLabel="Keep scoring"
+        confirmLabel="Review anyway"
+        variant="warning"
+      />
     </div>
   );
 };
