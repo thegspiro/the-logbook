@@ -40,7 +40,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
 import { checklistDoneIds } from '../utils/checklistItems';
-import { useConfirm } from '../hooks/useConfirm';
+import { useConfirm } from '../contexts/ConfirmContext';
 import type {
   TrainingProgram,
   ProgramPhase,
@@ -822,7 +822,7 @@ const EnrollmentProgressModal: React.FC<{
   onClose: () => void;
   onSaved: () => void;
 }> = ({ isOpen, enrollmentId, memberName, phases, programReqs, structureType, onClose, onSaved }) => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const [data, setData] = useState<MemberProgramProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1149,7 +1149,6 @@ const EnrollmentProgressModal: React.FC<{
           </button>
         </div>
       </div>
-      {confirmDialog}
     </div>
   );
 };

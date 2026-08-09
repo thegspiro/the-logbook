@@ -16,7 +16,7 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { formatDate, getTodayLocalDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 interface StockLotsPanelProps {
   itemId: string;
   canManage: boolean;
@@ -33,7 +33,7 @@ function emptyForm(): InventoryLotCreate {
 }
 
 const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const [lots, setLots] = useState<InventoryLot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -330,7 +330,6 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
           })}
         </ul>
       )}
-      {confirmDialog}
     </div>
   );
 };

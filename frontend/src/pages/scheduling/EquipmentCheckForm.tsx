@@ -65,7 +65,7 @@ import type {
 import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
 import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
 
-import { useConfirm } from '../../hooks/useConfirm';
+import { useConfirm } from '../../contexts/ConfirmContext';
 // ============================================================================
 // Types
 // ============================================================================
@@ -172,7 +172,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   previewMode,
   existingCheckId,
 }) => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const [results, setResults] = useState<Record<string, ItemResult>>({});
   // Lot swaps performed during this check: override the deployed item's lot /
@@ -1804,7 +1804,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           </div>
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 };

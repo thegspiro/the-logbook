@@ -13,9 +13,9 @@ import { formatTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 const ActiveSessionsTab: React.FC = () => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const activeSessions = useAdminHoursStore((s) => s.activeSessions);
   const activeSessionsLoading = useAdminHoursStore((s) => s.activeSessionsLoading);
@@ -158,7 +158,6 @@ const ActiveSessionsTab: React.FC = () => {
           })}
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 };

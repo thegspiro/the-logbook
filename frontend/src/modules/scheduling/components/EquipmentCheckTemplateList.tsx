@@ -28,7 +28,7 @@ import { TEMPLATE_TYPE_LABELS, type TemplateType } from '../types/equipmentCheck
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { PromptDialog } from '../../../components/ux';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const TIMING_LABELS: Record<string, { label: string; color: string }> = {
@@ -60,7 +60,7 @@ function cloneNameFor(template: EquipmentCheckTemplate): string {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export const EquipmentCheckTemplateList: React.FC = () => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const [templates, setTemplates] = useState<EquipmentCheckTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -363,7 +363,6 @@ export const EquipmentCheckTemplateList: React.FC = () => {
         confirmLabel="Clone template"
         loading={cloning}
       />
-      {confirmDialog}
     </div>
   );
 };

@@ -6,7 +6,7 @@ import type { MaintenanceRecord, MaintenanceType } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 interface MaintenanceFormData {
   facility_id: string;
   maintenance_type_id: string;
@@ -72,7 +72,7 @@ interface UseMaintenanceFormOptions {
 }
 
 export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: UseMaintenanceFormOptions = {}) {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [maintenanceTypes, setMaintenanceTypes] = useState<MaintenanceType[]>([]);
@@ -199,8 +199,6 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
 
   return {
     records: filtered,
-    /** Rendered by the consuming component; this hook cannot render JSX. */
-    confirmDialog,
     allRecords: records,
     maintenanceTypes,
     isLoading,

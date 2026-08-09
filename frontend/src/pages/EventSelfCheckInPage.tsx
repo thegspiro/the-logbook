@@ -7,7 +7,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime } from '../utils/dateFormatting';
 import { EventType as EventTypeEnum } from '../constants/enums';
 
-import { useConfirm } from '../hooks/useConfirm';
+import { useConfirm } from '../contexts/ConfirmContext';
 /**
  * Event Self Check-In Page
  *
@@ -18,7 +18,7 @@ import { useConfirm } from '../hooks/useConfirm';
  * 4. Validates the time window before allowing check-in
  */
 const EventSelfCheckInPage: React.FC = () => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const { id: eventId } = useParams<{ id: string }>();
   const userTz = useTimezone();
 
@@ -489,7 +489,6 @@ const EventSelfCheckInPage: React.FC = () => {
           </Link>
         </div>
       </div>
-      {confirmDialog}
     </div>
   );
 };

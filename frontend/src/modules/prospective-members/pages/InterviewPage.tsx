@@ -39,7 +39,7 @@ import { getInitials } from '../utils';
 import type { Interview, InterviewRecommendation, StageHistoryEntry } from '../types';
 import { INTERVIEW_RECOMMENDATION_LABELS, INTERVIEW_RECOMMENDATION_COLORS } from '../types';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 // ---------------------------------------------------------------------------
 // Shared Tailwind class constants
 // ---------------------------------------------------------------------------
@@ -396,7 +396,7 @@ interface InterviewCardProps {
 }
 
 const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, isOwn, timezone, onRefresh }) => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const { deleteInterview } = useProspectiveMembersStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -512,7 +512,6 @@ const InterviewCard: React.FC<InterviewCardProps> = ({ interview, applicantId, i
           <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{interview.recommendation_notes}</p>
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 };

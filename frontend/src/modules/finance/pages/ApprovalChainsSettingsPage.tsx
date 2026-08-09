@@ -17,7 +17,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { ApprovalEntityType, ApprovalStepType, ApproverType } from '../types';
 import type { ApprovalChain } from '../types';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 // =============================================================================
 // Constants
 // =============================================================================
@@ -169,7 +169,7 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
 // =============================================================================
 
 const ApprovalChainsSettingsPage: React.FC = () => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const {
     approvalChains,
     budgetCategories,
@@ -443,7 +443,6 @@ const ApprovalChainsSettingsPage: React.FC = () => {
           ))}
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 };

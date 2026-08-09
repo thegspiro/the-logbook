@@ -14,7 +14,7 @@ import type { AdminHoursCategory, AdminHoursCategoryCreate, AdminHoursCategoryUp
 import CategoryForm from './CategoryForm';
 import toast from 'react-hot-toast';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 const DEFAULT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 
 interface CategoriesTabProps {
@@ -22,7 +22,7 @@ interface CategoriesTabProps {
 }
 
 const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const categories = useAdminHoursStore((s) => s.categories);
   const categoriesLoading = useAdminHoursStore((s) => s.categoriesLoading);
   const createCategory = useAdminHoursStore((s) => s.createCategory);
@@ -269,7 +269,6 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
           ))}
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 };

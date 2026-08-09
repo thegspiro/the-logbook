@@ -12,13 +12,13 @@ import { enumLabel, ZONE_CLASSIFICATION_COLORS } from '../types';
 import { inputCls, labelCls, ROOM_TYPE_OPTIONS, ZONE_OPTIONS } from '../constants';
 import { formatNumber } from '../../../utils/dateFormatting';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
 }
 
 export default function RoomsSection({ facilityId }: Props) {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -332,7 +332,6 @@ export default function RoomsSection({ facilityId }: Props) {
           </div>
         )}
       </div>
-      {confirmDialog}
     </div>
   );
 }

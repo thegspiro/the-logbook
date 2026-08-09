@@ -12,7 +12,7 @@ import type { RSVPStatus, Event } from '../types/event';
 import { RSVPStatus as RSVPStatusEnum } from '../constants/enums';
 import { getPhaseGateWarning } from '../utils/errorHandling';
 
-import { useConfirm } from '../hooks/useConfirm';
+import { useConfirm } from '../contexts/ConfirmContext';
 interface UseRSVPFormOptions {
   eventId: string | undefined;
   event: Event | null;
@@ -20,7 +20,7 @@ interface UseRSVPFormOptions {
 }
 
 export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const [showRSVPModal, setShowRSVPModal] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>(RSVPStatusEnum.GOING);
   const [guestCount, setGuestCount] = useState(0);
@@ -121,8 +121,6 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
 
   return {
     showRSVPModal,
-    /** Rendered by the consuming component; this hook cannot render JSX. */
-    confirmDialog,
     setShowRSVPModal,
     rsvpStatus,
     setRsvpStatus,

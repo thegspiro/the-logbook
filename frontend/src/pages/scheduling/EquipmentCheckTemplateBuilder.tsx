@@ -52,7 +52,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { getErrorMessage } from '@/utils/errorHandling';
-import { useConfirm } from '../../hooks/useConfirm';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
@@ -274,7 +274,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
   const tz = useTimezone();
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const isEditing = Boolean(templateId);
 
   // State
@@ -3783,8 +3783,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
         </div>
       )}
-
-      {confirmDialog}
     </div>
   );
 };

@@ -42,9 +42,9 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 export const ProspectiveMembersPage: React.FC = () => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const navigate = useNavigate();
   const tz = useTimezone();
   const {
@@ -1291,7 +1291,6 @@ export const ProspectiveMembersPage: React.FC = () => {
           </div>
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 };

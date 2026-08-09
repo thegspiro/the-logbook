@@ -12,13 +12,13 @@ import { inputCls, labelCls, COMPLIANCE_TYPE_OPTIONS } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
 }
 
 export default function ComplianceSection({ facilityId }: Props) {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const [checklists, setChecklists] = useState<ComplianceChecklist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -233,7 +233,6 @@ export default function ComplianceSection({ facilityId }: Props) {
           </div>
         )}
       </div>
-      {confirmDialog}
     </div>
   );
 }

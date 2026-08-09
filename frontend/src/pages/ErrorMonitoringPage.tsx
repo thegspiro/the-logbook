@@ -5,7 +5,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
 
-import { useConfirm } from '../hooks/useConfirm';
+import { useConfirm } from '../contexts/ConfirmContext';
 /**
  * Where the error was raised. Rows written before the `source` context key
  * existed carry neither marker, so they fall back to "Client".
@@ -25,7 +25,7 @@ function sourceLabel(error: ErrorLog): string {
  * Data is fetched from the backend API.
  */
 const ErrorMonitoringPage: React.FC = () => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
   const canClearErrors = checkPermission('audit.manage');
@@ -316,7 +316,6 @@ const ErrorMonitoringPage: React.FC = () => {
           </div>
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 };

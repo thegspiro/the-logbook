@@ -48,7 +48,6 @@ export default function MaintenanceSection({ facilityId }: Props) {
     handleSave,
     handleComplete,
     handleDelete,
-    confirmDialog,
   } = useMaintenanceForm({ facilityId });
 
   return (
@@ -341,7 +340,6 @@ export default function MaintenanceSection({ facilityId }: Props) {
           </div>
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 }

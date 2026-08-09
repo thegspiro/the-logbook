@@ -57,7 +57,6 @@ export default function InspectionsListPage() {
     openEdit,
     handleSave,
     handleDelete,
-    confirmDialog,
   } = useInspectionForm();
 
   const getFacilityName = (facilityId: string) => facilities.find((f) => f.id === facilityId)?.name || 'Unknown';
@@ -394,7 +393,6 @@ export default function InspectionsListPage() {
           </div>
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 }

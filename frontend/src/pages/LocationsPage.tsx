@@ -35,7 +35,7 @@ import toast from 'react-hot-toast';
 import { locationsService, organizationService } from '../services/api';
 import type { Location, LocationCreate } from '../services/api';
 
-import { useConfirm } from '../hooks/useConfirm';
+import { useConfirm } from '../contexts/ConfirmContext';
 /** Copy text to clipboard with fallback for non-HTTPS contexts */
 async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard) {
@@ -922,7 +922,7 @@ function RoomCard({
 }
 
 export default function LocationsPage() {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1676,7 +1676,6 @@ export default function LocationsPage() {
           </div>
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 }

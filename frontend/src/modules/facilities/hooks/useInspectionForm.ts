@@ -6,7 +6,7 @@ import type { Inspection } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 interface InspectionFormData {
   facility_id: string;
   inspection_type: string;
@@ -83,7 +83,7 @@ interface UseInspectionFormOptions {
 }
 
 export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {}) {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -195,8 +195,6 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
 
   return {
     inspections: filtered,
-    /** Rendered by the consuming component; this hook cannot render JSX. */
-    confirmDialog,
     allInspections: inspections,
     isLoading,
     loadError,

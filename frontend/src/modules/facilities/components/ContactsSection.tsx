@@ -10,13 +10,13 @@ import type { EmergencyContact, EmergencyContactCreate } from '../../../services
 import { enumLabel } from '../types';
 import { inputCls, labelCls, CONTACT_TYPE_OPTIONS } from '../constants';
 
-import { useConfirm } from '../../../hooks/useConfirm';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
 }
 
 export default function ContactsSection({ facilityId }: Props) {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -325,7 +325,6 @@ export default function ContactsSection({ facilityId }: Props) {
           </div>
         )}
       </div>
-      {confirmDialog}
     </div>
   );
 }

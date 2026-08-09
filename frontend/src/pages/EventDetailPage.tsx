@@ -1616,7 +1616,6 @@ export const EventDetailPage: React.FC = () => {
           />
         )}
       </div>
-      {rsvpForm.confirmDialog}
     </div>
   );
 };

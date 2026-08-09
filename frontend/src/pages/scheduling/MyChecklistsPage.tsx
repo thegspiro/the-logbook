@@ -26,7 +26,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-import { useConfirm } from '../../hooks/useConfirm';
+import { useConfirm } from '../../contexts/ConfirmContext';
 const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 
 // ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ const statusBadge = (status: string) => {
 // ---------------------------------------------------------------------------
 
 export const MyChecklistsPage: React.FC = () => {
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm } = useConfirm();
   const timezone = useTimezone();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('scheduling.manage') || checkPermission('equipment_check.manage');
@@ -748,7 +748,6 @@ export const MyChecklistsPage: React.FC = () => {
           </div>
         </div>
       )}
-      {confirmDialog}
     </div>
   );
 };
