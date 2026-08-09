@@ -397,6 +397,9 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | undefined>();
   const [passingPercentage, setPassingPercentage] = useState<number | undefined>();
   const [requireAllCritical, setRequireAllCritical] = useState(true);
+  // Off by default so a new template's percentage means the same thing as every
+  // one already on record: points from scored steps only.
+  const [scorePassFailCriteria, setScorePassFailCriteria] = useState(false);
   const [tags, setTags] = useState('');
   const [requirementId, setRequirementId] = useState<string>('');
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
@@ -465,6 +468,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       );
       setPassingPercentage(currentTemplate.passing_percentage ?? undefined);
       setRequireAllCritical(currentTemplate.require_all_critical);
+      setScorePassFailCriteria(currentTemplate.score_pass_fail_criteria ?? false);
       setRequirementId(currentTemplate.requirement_id ?? '');
       setResultDisclosure(currentTemplate.result_disclosure ?? '');
       setResultRelease(currentTemplate.result_release ?? '');
@@ -547,6 +551,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       time_limit_seconds: timeLimitMinutes != null ? Math.round(timeLimitMinutes * 60) : undefined,
       passing_percentage: passingPercentage,
       require_all_critical: requireAllCritical,
+      score_pass_fail_criteria: scorePassFailCriteria,
       requirement_id: requirementId || undefined,
       // null, not undefined: undefined is dropped by exclude_unset on the
       // backend, so clearing an override back to "inherit" would silently keep
@@ -581,6 +586,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     timeLimitMinutes,
     passingPercentage,
     requireAllCritical,
+    scorePassFailCriteria,
     requirementId,
     resultDisclosure,
     resultRelease,
@@ -958,6 +964,32 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                 <span className="text-theme-text-primary text-sm">Require all critical criteria to pass</span>
               </label>
             </div>
+          </div>
+
+          {/* Which steps the percentage is actually computed from. Without this
+              setting, Pass/Fail steps were worth nothing at all — a template
+              whose knowledge questions are written as Pass/Fail produced a
+              percentage that ignored every one of them, and nothing said so. */}
+          <div className="border-theme-surface-border mt-4 border-t pt-4">
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={scorePassFailCriteria}
+                onChange={(e) => setScorePassFailCriteria(e.target.checked)}
+                className="border-theme-surface-border focus:ring-theme-focus-ring mt-0.5 rounded-sm text-blue-600"
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm font-medium">
+                  Count Pass/Fail steps toward the overall percentage
+                </span>
+                <span className="text-theme-text-muted block text-xs">
+                  A passed step earns its points, a failed one earns none. Each is worth 1 point unless you set a point
+                  value on it. Leave this off and the percentage comes from scored steps only — Pass/Fail steps still
+                  appear on the scorecard and can still fail the test outright when marked critical, but they do not
+                  move the number.
+                </span>
+              </span>
+            </label>
           </div>
         </div>
 

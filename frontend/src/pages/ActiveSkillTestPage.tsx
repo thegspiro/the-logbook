@@ -49,12 +49,16 @@ import { FormStatus } from '../constants/enums';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
 import { TestViewersPanel } from '../components/training/TestViewersPanel';
 import { SkillTestOfficerActions } from '../components/training/SkillTestOfficerActions';
+import { ScoreBreakdownPanel } from '../components/training/ScoreBreakdownPanel';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { getErrorMessage, toAppError } from '../utils/errorHandling';
+import { computeSectionTally } from '../utils/skillTestTallies';
+import type { SectionTally } from '../utils/skillTestTallies';
 import type {
   SkillCriterion,
   SkillTemplateSection,
   CriterionResult,
+  ScoreBreakdownSection,
   SectionResult,
   SkillTestStatus,
   SkillTestUpdate,
@@ -775,26 +779,50 @@ const CriterionResultDisplay: React.FC<{
   );
 };
 
-/** Compute point totals for score-type criteria in a section */
-function computeSectionPoints(
-  criteria: SkillCriterion[],
-  criteriaResults: CriterionResult[]
-): { earned: number; available: number } | null {
-  const scoreCriteria = criteria.filter((c) => c.type === 'score' && c.max_score != null && c.max_score > 0);
-  if (scoreCriteria.length === 0) return null;
+/** The figures beside a section heading on a completed scorecard.
+ *
+ *  Rendered from a single tally so the review screen and the filed record read
+ *  identically. Counts that are zero are omitted rather than shown as "0
+ *  failed" — a clean section should look clean at a glance.
+ */
+const SectionTallyBadges: React.FC<{ tally: SectionTally }> = ({ tally }) => (
+  <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+    {tally.countsTowardScore && (
+      <span className="text-theme-text-primary font-bold">
+        {tally.earned}/{tally.available} pts
+      </span>
+    )}
+    {tally.passed > 0 && <span className="font-medium text-green-600">{tally.passed} passed</span>}
+    {tally.failed > 0 && <span className="font-medium text-red-600">{tally.failed} failed</span>}
+    {tally.notScored > 0 && (
+      <span className="font-medium text-amber-600 dark:text-amber-400">{tally.notScored} not scored</span>
+    )}
+    {/* Statements are not a score, but dropping them silently would leave rows
+        on the scorecard that no number above accounts for. */}
+    {tally.statements > 0 && (
+      <span className="text-theme-text-muted">
+        {tally.statements} statement{tally.statements === 1 ? '' : 's'}
+      </span>
+    )}
+  </div>
+);
 
-  let earned = 0;
-  let available = 0;
-  for (const criterion of scoreCriteria) {
-    available += criterion.max_score ?? 0;
-    const result = criteriaResults.find(
-      (r) => r.criterion_id === criterion.id || r.criterion_label === criterion.label
-    );
-    if (result?.score != null) {
-      earned += result.score;
-    }
-  }
-  return { earned, available };
+/** The server's tally for one section, in the shape the badges render.
+ *
+ *  A filed result shows the arithmetic that actually scored it — computed
+ *  against the template snapshot the test was taken under — rather than a
+ *  second calculation over the live template, which may since have been edited.
+ */
+function tallyFromBreakdown(section: ScoreBreakdownSection): SectionTally {
+  return {
+    earned: section.earned ?? null,
+    available: section.available ?? null,
+    countsTowardScore: section.counts_toward_score,
+    passed: section.passed,
+    failed: section.failed,
+    notScored: section.not_scored,
+    statements: section.statements,
+  };
 }
 
 /** Review section showing results + editable notes for a completed test */
@@ -803,33 +831,18 @@ const ReviewSection: React.FC<{
   sectionResult: SectionResult | undefined;
   sectionNotes: string;
   onNotesChange: (notes: string) => void;
-}> = ({ section, sectionResult, sectionNotes, onNotesChange }) => {
+  scorePassFailCriteria?: boolean | undefined;
+}> = ({ section, sectionResult, sectionNotes, onNotesChange, scorePassFailCriteria }) => {
   const criteriaResults = sectionResult?.criteria_results ?? [];
-  const passCount = criteriaResults.filter((r) => r.passed === true).length;
-  const failCount = criteriaResults.filter((r) => r.passed === false).length;
-  const nonStatementCriteria = section.criteria.filter((c) => c.type !== 'statement');
-  const points = computeSectionPoints(section.criteria, criteriaResults);
+  const tally = computeSectionTally(section.criteria, criteriaResults, scorePassFailCriteria ?? false);
 
   return (
     <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
       {/* Section header */}
       <div className="border-theme-surface-border bg-theme-surface-hover/50 border-b px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-2">
           <h3 className="text-theme-text-primary font-bold">{section.name}</h3>
-          <div className="flex items-center gap-2 text-xs">
-            {points && (
-              <span className="text-theme-text-primary font-bold">
-                {points.earned}/{points.available} pts
-              </span>
-            )}
-            {passCount > 0 && <span className="font-medium text-green-600">{passCount} passed</span>}
-            {failCount > 0 && <span className="font-medium text-red-600">{failCount} failed</span>}
-            {nonStatementCriteria.length - passCount - failCount > 0 && (
-              <span className="font-medium text-amber-600 dark:text-amber-400">
-                {nonStatementCriteria.length - passCount - failCount} not scored
-              </span>
-            )}
-          </div>
+          <SectionTallyBadges tally={tally} />
         </div>
         {section.description && <p className="text-theme-text-muted mt-0.5 text-xs">{section.description}</p>}
       </div>
@@ -864,36 +877,26 @@ const ReviewSection: React.FC<{
 export const ReadOnlySectionView: React.FC<{
   section: SkillTemplateSection;
   sectionResult: SectionResult | undefined;
-}> = ({ section, sectionResult }) => {
+  /** The server's tally for this section, from the test's score_breakdown.
+   *  Preferred over recomputing: it is the arithmetic that scored the test. */
+  breakdownSection?: ScoreBreakdownSection | undefined;
+  scorePassFailCriteria?: boolean | undefined;
+}> = ({ section, sectionResult, breakdownSection, scorePassFailCriteria }) => {
   const criteriaResults = sectionResult?.criteria_results ?? [];
   // Filter out the special review-notes entry for display
   const actualCriteria = criteriaResults.filter((r) => !r.criterion_id.endsWith('-review-notes'));
   const reviewNotesEntry = criteriaResults.find((r) => r.criterion_id.endsWith('-review-notes'));
-  const passCount = actualCriteria.filter((r) => r.passed === true).length;
-  const failCount = actualCriteria.filter((r) => r.passed === false).length;
-  const nonStatementCriteria = section.criteria.filter((c) => c.type !== 'statement');
-  const points = computeSectionPoints(section.criteria, actualCriteria);
+  const tally = breakdownSection
+    ? tallyFromBreakdown(breakdownSection)
+    : computeSectionTally(section.criteria, actualCriteria, scorePassFailCriteria ?? false);
 
   return (
     <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
       {/* Section header */}
       <div className="border-theme-surface-border bg-theme-surface-hover/50 border-b px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-2">
           <h3 className="text-theme-text-primary font-bold">{section.name}</h3>
-          <div className="flex items-center gap-2 text-xs">
-            {points && (
-              <span className="text-theme-text-primary font-bold">
-                {points.earned}/{points.available} pts
-              </span>
-            )}
-            {passCount > 0 && <span className="font-medium text-green-600">{passCount} passed</span>}
-            {failCount > 0 && <span className="font-medium text-red-600">{failCount} failed</span>}
-            {nonStatementCriteria.length - passCount - failCount > 0 && (
-              <span className="font-medium text-amber-600 dark:text-amber-400">
-                {nonStatementCriteria.length - passCount - failCount} not scored
-              </span>
-            )}
-          </div>
+          <SectionTallyBadges tally={tally} />
         </div>
         {section.description && <p className="text-theme-text-muted mt-0.5 text-xs">{section.description}</p>}
       </div>
@@ -1807,13 +1810,29 @@ export const ActiveSkillTestPage: React.FC = () => {
             )}
           </div>
 
+          {/* How the headline percentage was reached. Sits above the sections
+              so a reader meets the arithmetic before the detail it summarizes. */}
+          {currentTest.score_breakdown && (
+            <div className="mb-4">
+              <ScoreBreakdownPanel breakdown={currentTest.score_breakdown} />
+            </div>
+          )}
+
           {/* Section-by-section results */}
           <div className="space-y-4">
             {templateSections.map((section) => {
               const sectionResult = currentTest.section_results?.find(
                 (sr) => sr.section_id === section.id || sr.section_name === section.name
               );
-              return <ReadOnlySectionView key={section.id} section={section} sectionResult={sectionResult} />;
+              return (
+                <ReadOnlySectionView
+                  key={section.id}
+                  section={section}
+                  sectionResult={sectionResult}
+                  breakdownSection={currentTest.score_breakdown?.sections.find((s) => s.section_id === section.id)}
+                  scorePassFailCriteria={currentTest.template_score_pass_fail_criteria}
+                />
+              );
             })}
           </div>
 
@@ -1984,6 +2003,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                   sectionResult={sectionResult}
                   sectionNotes={reviewNotes[section.id] ?? ''}
                   onNotesChange={(notes) => setReviewNotes((prev) => ({ ...prev, [section.id]: notes }))}
+                  scorePassFailCriteria={currentTest.template_score_pass_fail_criteria}
                 />
               );
             })}
