@@ -48,7 +48,7 @@ from its open list.
 | B7 | equipment-check | EC2 | ✅ (p1, p2, p3) |
 | B8 | documents | DOC2 | ✅ (p1, p2, p3) |
 | B9 | membership pipeline | MP2 | ✅ (p1, p2, p3) |
-| B10 | messaging & communications | MSG2 | ⬜ |
+| B10 | messaging & communications | MSG2 | ✅ (p1, p2, p3) |
 | B11 | notifications | NOTIF2 | ⬜ |
 | B12 | integrations | INT2 | ⬜ |
 | B13 | forms | FORM2 | ⬜ |
@@ -1504,3 +1504,13 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   **Swept MP2-4** (4 E712). **10 tests added**; existing MP tests pass. Gate:
   flake8/black/tsc clean. CHANGELOG updated. See membership-pipeline.md → Pass 3.
   Next: B10 messaging.
+
+- **B10 messaging ✅ (pass 3).** Re-verified MSG-2 (`_validate_targeting` on
+  create+update) and the org-scoped `_targeted_users` choke point hold. **Latent-500
+  lens clean:** `DepartmentMessage`'s enum columns (`priority`, `target_type`) are
+  already typed as `MessagePriority`/`MessageTargetType` in the inline `messages.py`
+  schemas (with an explicit comment) — no free-string→ENUM path. **Swept MSG2-1** —
+  1 residual `is_active == True # noqa: E712` in `message_delivery_service.py` that
+  pass 1 missed (it swept messaging_service.py); module now E712-free. 36 messaging
+  tests pass. Gate: flake8/black clean; tsc n/a (no FE change). No CHANGELOG. See
+  messaging.md → Pass 3. Next: B11 notifications.

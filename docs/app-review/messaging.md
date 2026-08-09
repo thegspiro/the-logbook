@@ -1,7 +1,41 @@
 # Application Review — Messaging / Communications (Tier B)
 
 **Prefix:** `MSG2` · **Iteration:** B10 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3)
+
+---
+
+## Pass 3 (2026-08-09) — verified clean; latent-500 clean; 1 residual E712
+
+Re-verified MSG-2 (`_validate_targeting` wired into both `create_message` and
+`update_message`, service 59/195/640) and the org-scoped `_targeted_users` choke
+point hold.
+
+### Latent-500 lens (the B1 finding) — clean
+
+`DepartmentMessage`'s enum columns are `priority` and `target_type`, and the inline
+request schemas in `messages.py` already type them as `MessagePriority` /
+`MessageTargetType` (with a comment: *"Typed as enums so an invalid
+priority/target_type is rejected with a 422"*). No free-string→ENUM path — this
+module was already doing the right thing before the lens existed.
+
+### MSG2-1 — NIT — 1 residual `is_active == True  # noqa: E712` swept — ✅ FIXED
+
+Pass 1 swept the 3 E712 suppressions in `messaging_service.py` but the sibling
+`message_delivery_service.py:294` still carried one (`DepartmentMessage.is_active`
+in the department-message delivery query); converted to `.is_(True)`. The module is
+now E712-free.
+
+### Still flagged (unchanged)
+
+- **MSG-3** — test-email sends to a client-supplied address (org-admin capability by
+  design, `settings.manage`-gated + logged); optional rate-limit/same-domain
+  hardening remains future dev.
+- **`get_inbox` pagination** — in-Python slice with no `total`; a perf smell at
+  scale, orthogonal to security, response-contract change.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_messaging_service.py` **36 passed** (no DB needed).
 
 ---
 
