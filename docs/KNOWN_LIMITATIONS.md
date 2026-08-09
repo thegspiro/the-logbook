@@ -531,6 +531,29 @@ Three placeholders in that guide describe this dashboard and are left open.
 The validation workflow itself shipped (2026-08-08); what is missing is the
 officer-facing surface that would show how much of it is waiting.
 
+## Integrations — No Calendar-Feed Configuration Screen (2026-08-09)
+
+`docs/training/16-integrations.md` pictures an **iCalendar configuration**
+listing "generated feed URLs for different filters (All Events, Training Only,
+My Shifts) with copy buttons", and again later as "three generated feed URLs
+with Copy buttons".
+
+What exists is one feed and one place to get it: `CalendarSubscribeCard` on the
+My Shifts tab, which reveals a single personal shifts URL. The `ical` entry in
+the integrations catalogue is a card with a description and no configuration
+screen behind it — searching `frontend/src` for a feed URL turns up only that
+one card. The backend serves exactly one feed route,
+`/api/public/v1/calendar/{token}.ics`, scoped to the member's own shifts.
+
+So the filtered feeds the guide describes — all events, training only — do not
+exist on either side. Both placeholders are left open. The subscribe card is
+captured instead against the guide-03 placeholder that actually describes it.
+
+Most of the rest of guide 16 needs a live third-party account (a Salesforce
+sync status, a connected Cal.com bookings panel, a warning state carrying a
+real provider error) and is not capturable from a demo database at all. The
+connect *dialogs* are ordinary forms and have been captured.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

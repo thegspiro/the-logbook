@@ -1614,9 +1614,7 @@ the old one and get a new one.
 > **Note:** The feed is read-only and shows roughly the last two months through
 > the next year of your assigned (non-cancelled) shifts.
 
-> **[SCREENSHOT NEEDED]:** \_[The "Subscribe to my shifts" card on My Shifts,
->
-> > expanded to show the calendar URL, Copy button, and Reset link.]\_
+![Subscribe to my shifts card showing the calendar feed URL and its controls](./images/03-34-calendar-subscribe.png)
 
 ### The On-Duty Officer Can Run Their Own Shift
 

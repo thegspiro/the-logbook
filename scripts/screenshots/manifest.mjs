@@ -2651,4 +2651,16 @@ export const SHOTS = [
     prepare: openIntegrationConnect("Slack"),
     fullPage: false,
   },
+  {
+    id: "03-34-calendar-subscribe",
+    doc: "03-scheduling.md",
+    line: 1617,
+    anchor: 'The "Subscribe to my shifts" card on My Shifts',
+    alt: "Subscribe to my shifts card showing the calendar feed URL and its controls",
+    route: "/scheduling?tab=my-shifts",
+    // The card is collapsed until the member asks for the link, which is
+    // deliberate: it holds a token that grants read access to their roster.
+    prepare: clickByName(/subscribe to my shifts/i),
+    fullPage: true,
+  },
 ];
