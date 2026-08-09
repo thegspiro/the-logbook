@@ -8,6 +8,7 @@ claimed otherwise, and no officer view could filter for it. Covers:
 
 * the overdue test itself, including the statuses it must not touch
 * expiry on read, mirroring auto_reset_if_due
+* the daily sweep runner, which covers enrollments nobody opens
 * reopening, which is the only way back out of EXPIRED
 
 DB mocked; no MySQL.
@@ -19,6 +20,11 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 from app.models.training import EnrollmentStatus
+from app.services.scheduled_tasks import (
+    SCHEDULE,
+    TASK_INTERVALS_SECONDS,
+    run_enrollment_expiry,
+)
 from app.services.training_program_service import TrainingProgramService
 
 
@@ -213,3 +219,66 @@ class TestRunDueExpirations:
         assert error is None
         assert count == 2
         assert all(e.status == EnrollmentStatus.EXPIRED for e in overdue)
+
+
+class FakeOrgSession:
+    """Minimal session whose execute() returns the org list for _for_each_org."""
+
+    def __init__(self, orgs):
+        self._orgs = orgs
+
+    async def execute(self, *args, **kwargs):
+        scalars = MagicMock()
+        scalars.all.return_value = self._orgs
+        return MagicMock(scalars=MagicMock(return_value=scalars))
+
+
+class TestExpirySweepRunner:
+    """The scheduled runner behind the daily `enrollment_expiry` task."""
+
+    async def test_it_sweeps_each_org_and_sums(self, monkeypatch):
+        orgs = [SimpleNamespace(id="org-1"), SimpleNamespace(id="org-2")]
+        sweep = AsyncMock(return_value=(3, None))
+        monkeypatch.setattr(
+            "app.services.training_program_service."
+            "TrainingProgramService.run_due_expirations",
+            sweep,
+        )
+
+        result = await run_enrollment_expiry(FakeOrgSession(orgs))
+
+        assert result["task"] == "enrollment_expiry"
+        assert result["total"] == 6  # 3 per org × 2 orgs
+        assert sweep.await_count == 2
+
+    async def test_a_failing_org_does_not_stop_the_others(self, monkeypatch):
+        orgs = [SimpleNamespace(id="org-1"), SimpleNamespace(id="org-2")]
+
+        async def _sweep(self, organization_id):
+            if organization_id == "org-1":
+                raise RuntimeError("boom")
+            return (2, None)
+
+        monkeypatch.setattr(
+            "app.services.training_program_service."
+            "TrainingProgramService.run_due_expirations",
+            _sweep,
+        )
+
+        result = await run_enrollment_expiry(FakeOrgSession(orgs))
+
+        assert result["total"] == 2
+        assert len(result["errors"]) == 1
+        assert result["errors"][0]["org_id"] == "org-1"
+
+
+class TestExpiryIsScheduledDaily:
+    def test_the_task_runs_every_day(self):
+        # Weekly would leave a member reading "active, 6 days overdue" for most
+        # of a week; an expiry is a state change both sides act on.
+        assert TASK_INTERVALS_SECONDS["enrollment_expiry"] == 86400
+        assert SCHEDULE["enrollment_expiry"]["frequency"] == "daily"
+
+    def test_the_warning_sweep_no_longer_expires_anything(self):
+        # The two were briefly one task; warnings stay weekly, expiry is daily.
+        assert TASK_INTERVALS_SECONDS["enrollment_deadline_warnings"] == 604800

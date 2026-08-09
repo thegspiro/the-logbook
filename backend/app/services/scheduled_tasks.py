@@ -22,6 +22,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 5:00 AM — reset training-program enrollments past their recert deadline
 0 5 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=recert_resets
 
+# Daily at 5:15 AM — expire training-program enrollments past their deadline
+15 5 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=enrollment_expiry
+
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
 
@@ -125,6 +128,12 @@ SCHEDULE = {
         "frequency": "weekly",
         "recommended_time": "Monday 07:30",
         "cron": "30 7 * * 1",
+    },
+    "enrollment_expiry": {
+        "description": "Expire training-program enrollments whose completion deadline has passed",
+        "frequency": "daily",
+        "recommended_time": "05:15",
+        "cron": "15 5 * * *",
     },
     "recert_resets": {
         "description": "Reset training-program enrollments whose recertification deadline has passed, starting each a fresh certification cycle",
@@ -459,25 +468,33 @@ async def run_struggling_member_check(db: AsyncSession) -> Dict[str, Any]:
 
 
 async def run_enrollment_deadline_warnings(db: AsyncSession) -> Dict[str, Any]:
-    """Warn on approaching enrollment deadlines, then expire the ones that have
-    already gone by.
-
-    Both halves belong to the same sweep: warning a member at 7 days and then
-    never acting when the date arrives is how an enrollment ends up sitting at
-    "active, 42 days overdue" forever.
-    """
+    """Send deadline warnings for approaching enrollment deadlines."""
     from app.services.struggling_member_service import StrugglingMemberService
-    from app.services.training_program_service import TrainingProgramService
 
     async def _process(db_session, org):
         service = StrugglingMemberService(db_session)
         result = await service.send_deadline_warnings(str(org.id))
-        expired, _ = await TrainingProgramService(db_session).run_due_expirations(
-            org.id
-        )
-        return result.get("warnings_sent", 0) + expired
+        return result.get("warnings_sent", 0)
 
     return await _for_each_org(db, "enrollment_deadline_warnings", _process)
+
+
+async def run_enrollment_expiry(db: AsyncSession) -> Dict[str, Any]:
+    """Expire every enrollment whose completion deadline has passed.
+
+    Daily rather than folded into the weekly warning sweep: an expiry is a
+    state change the member and their officers act on, and running it weekly
+    would leave someone reading "active, 6 days overdue" for most of a week.
+    The read-time check in the progress endpoint only catches enrollments
+    somebody opens; this covers the rest.
+    """
+    from app.services.training_program_service import TrainingProgramService
+
+    async def _process(db_session, org):
+        count, _ = await TrainingProgramService(db_session).run_due_expirations(org.id)
+        return count
+
+    return await _for_each_org(db, "enrollment_expiry", _process)
 
 
 async def run_shift_pattern_generation(db: AsyncSession) -> Dict[str, Any]:
@@ -4615,6 +4632,7 @@ TASK_RUNNERS = {
     "election_lifecycle": run_election_lifecycle,
     "struggling_member_check": run_struggling_member_check,
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
+    "enrollment_expiry": run_enrollment_expiry,
     "recert_resets": run_recert_resets,
     "membership_tier_advance": run_membership_tier_advance,
     "action_item_reminders": run_action_item_reminders,
@@ -4695,6 +4713,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "expire_ip_exceptions": 86400,
     "membership_inactivity_warnings": 86400,
     "recert_resets": 86400,
+    "enrollment_expiry": 86400,
     "shift_pattern_generation": 86400,
     "officer_directory_sync": 86400,
     # Weekly
