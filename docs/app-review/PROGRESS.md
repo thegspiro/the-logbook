@@ -44,7 +44,7 @@ from its open list.
 | B3 | inventory | INV2 | ✅ (p1, p2, p3) |
 | B4 | facilities | FAC2 | ✅ (p1, p2, p3) |
 | B5 | elections | ELEC2 | ✅ (p1, p2, p3) |
-| B6 | meetings & minutes | MM2 | ⬜ |
+| B6 | meetings & minutes | MM2 | ✅ (p1, p2, p3) |
 | B7 | equipment-check | EC2 | ⬜ |
 | B8 | documents | DOC2 | ⬜ |
 | B9 | membership pipeline | MP2 | ⬜ |
@@ -1445,3 +1445,19 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   vote counting or the hash-chain. Swept all 31 → module free of E712 noqa. No new
   tests (behavior-neutral); 82 non-DB election tests pass. Gate: flake8/black/tsc
   clean. No CHANGELOG. See elections.md → Pass 3. Next: B6 meetings & minutes.
+
+- **B6 meetings & minutes ✅ (pass 3).** Re-verified MM-4/MM2-1/MM-3-frontend hold.
+  **Fixed MM2-2** (LOW/MED latent-500, the B1 class): `meeting_type` was free `str`
+  on six request schemas but maps to a strict MySQL ENUM — `create_minutes` inserts
+  it raw, so a bad value 500'd. The care point: `meeting_type` maps to *two* enums
+  (MeetingType for meetings; MinutesMeetingType — which includes `executive` — for
+  minutes/templates), so a naive shared validator would have rejected `executive`
+  and broken the restricted-minutes path. Added per-model `@field_validator`s
+  (request-only, lowercase-normalize, reject unknown → 422), each deriving its set
+  from the correct enum; also fixed a stale MinutesBase docstring. **11 tests added**;
+  150 existing meeting/minute tests still pass. **Flagged MM2-3**: `status`/`priority`
+  free-str fields need per-field verification (priority is an Integer column — the
+  lens over-matched; some status fields are server-set on create), so a focused
+  follow-up rather than a guessed sweep. Gate: flake8/black/tsc clean. CHANGELOG
+  updated (500→422 on malformed input). See meetings-minutes.md → Pass 3. Next: B7
+  equipment-check.

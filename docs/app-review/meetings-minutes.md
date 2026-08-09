@@ -1,7 +1,58 @@
 # Application Review — Meetings & Minutes (Tier B)
 
 **Prefix:** `MM2` · **Iteration:** B6 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3)
+
+---
+
+## Pass 3 (2026-08-09) — latent-500 on `meeting_type` fixed; status/priority flagged
+
+Re-verified the landed fixes hold (MM-4 `assert_in_org` at 5+4 sites; MM2-1's
+`publish_minutes` executive guard at `document_service.py:130`; MM-3-frontend on
+`minutes.manage`). The B1 latent-500 lens then surfaced a genuine recurrence.
+
+### MM2-2 — LOW/MED — `meeting_type` accepted any string → 500 at the ENUM column — ✅ FIXED
+
+**What:** `meeting_type` was typed as a free `str` on six request schemas
+(`MeetingCreate`/`MeetingUpdate`; `MinutesCreate`/`MinutesUpdate`;
+`TemplateCreate`/`TemplateUpdate`) but maps to a **strict MySQL ENUM**. SQLAlchemy's
+Enum defaults to `validate_strings=False` (verified: the bind processor passes
+`'bogus_type'` straight through), and `create_minutes` inserts the value raw
+(`MeetingMinutes(**minutes_dict)`), so a value outside the enum reaches MySQL and
+**500s** (or stores `''` under non-strict mode) on the create/update paths. The B1
+class, recurring.
+
+**The subtlety that made this worth doing carefully:** `meeting_type` maps to **two
+different enums** — `MeetingType` (`business/special/committee/board/other`) for
+meetings, and `MinutesMeetingType`
+(`…/trustee/executive/annual/other`) for minutes and templates. Validating a minutes
+type against the meeting set would have **rejected `executive`** — the very value the
+executive-session read restriction (MM2-1/MM-3) keys on. Each validator derives its
+allowed set directly from the correct model enum, and a test asserts `executive`,
+`annual`, and `trustee` stay valid for minutes while a Meeting rejects them.
+
+**Fix:** a per-file `_validate_*_meeting_type` helper + `@field_validator` on each of
+the six **request** classes (lowercase-normalize, then reject unknown → 422). The
+validators live only on the request classes, so the response schemas (built from the
+ORM enum via `from_attributes`) are untouched. Also corrected a stale `MinutesBase`
+docstring that listed only 5 of the 8 minutes types. **11 tests added**
+(`test_meetings_meeting_type_validation.py`); the 150 existing meeting/minute tests
+still pass.
+
+### MM2-3 — LOW — `status`/`priority` free-str fields on other schemas — 🚩 FLAGGED
+
+The same lens flagged `status` (on `MeetingUpdate`, `MotionCreate`/`Update`,
+`ActionItemUpdate`) and `priority` (on `ActionItemCreate`/`Update`) as free-str, but
+these need per-field verification before a fix, not a blanket sweep: **`priority`
+maps to an `Integer` column** on `MeetingActionItem` (the name-based lens
+over-matched — a str→int concern, not str→ENUM), and several `status` fields are
+server-set on create (`create_minutes` hardcodes `DRAFT`). Flagged for a focused
+follow-up that confirms each field's actual target column and write path rather than
+guessing a validator onto an integer or a server-controlled field.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit` 0
+(no frontend change) · eslint unaffected · new validation tests **11 passed** +
+existing meeting/minute tests **150 passed** (all DB-free).
 
 ---
 

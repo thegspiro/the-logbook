@@ -141,6 +141,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   valid values, so this only affects malformed API requests, but those now return
   a 422 with the list of allowed values rather than a 500.
 
+- **Meetings & minutes: saving a meeting, minutes, or template with an
+  unrecognized meeting type now returns a clear validation error instead of a
+  server error (2026-08-09).** Same class as the medical-screening fix; the forms
+  already send valid types, so only malformed API requests are affected. Valid
+  minutes types (including executive-session minutes) are unchanged.
+
 ### Money: you can no longer approve/record and pay out the same item yourself (2026-08-09)
 
 **Security**
