@@ -5170,7 +5170,12 @@ async def list_equipment_kits(
     kits = await service.get_equipment_kits(
         current_user.organization_id, active_only=active_only
     )
-    return [EquipmentKitResponse.model_validate(k) for k in kits]
+    responses = []
+    for kit in kits:
+        payload = EquipmentKitResponse.model_validate(kit)
+        payload.item_count = len(kit.line_items or [])
+        responses.append(payload)
+    return responses
 
 
 @router.post(

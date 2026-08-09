@@ -4368,13 +4368,20 @@ class InventoryService:
     async def get_equipment_kits(
         self, organization_id: UUID, active_only: bool = True
     ) -> List[EquipmentKit]:
-        """List equipment kits for an organization."""
+        """List equipment kits for an organization.
+
+        Line items are eager-loaded so the caller can report how many each kit
+        holds — the list card shows that count, and without them every kit read
+        "0 items".
+        """
         query = select(EquipmentKit).where(
             EquipmentKit.organization_id == str(organization_id)
         )
         if active_only:
             query = query.where(EquipmentKit.active.is_(True))
-        query = query.order_by(EquipmentKit.name)
+        query = query.order_by(EquipmentKit.name).options(
+            selectinload(EquipmentKit.line_items)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

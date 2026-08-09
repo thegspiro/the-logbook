@@ -2906,6 +2906,21 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "05-50-equipment-kit-detail",
+    doc: "05-inventory.md",
+    line: 178,
+    anchor: "Screenshot of the Equipment Kit detail view showing the kit name",
+    alt: "Equipment kit detail listing its component items",
+    route: "/inventory/admin/kits",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^View New Recruit PPE Kit$/ })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: false,
+  },
+  {
     id: "05-49-variant-stock-matrix",
     doc: "05-inventory.md",
     line: 1440,

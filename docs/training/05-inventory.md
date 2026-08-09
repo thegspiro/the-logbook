@@ -175,8 +175,7 @@ Equipment kits bundle multiple inventory items into a named package for streamli
 5. Confirm the issuance.
 6. Each component item is individually assigned/issued to the member with its own tracking record.
 
-> **Screenshot needed:**
-> _[Screenshot of the Equipment Kit detail view showing the kit name, description, a table of component items with name, category, and quantity columns, and the "Issue Kit to Member" button. Show a member's size preferences being applied to a coat variant selection]_
+![Equipment kit detail listing its component items](./images/05-50-equipment-kit-detail.png)
 
 > **Hint:** Issuing a kit creates individual assignment/issuance records for each component. Returning kit components is done individually — there is no "return entire kit" operation, since components may be returned at different times or in different conditions.
 

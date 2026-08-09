@@ -1711,6 +1711,9 @@ class EquipmentKitResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # The list card reports how many items a kit holds. The full line items are
+    # only on the detail response, so the count travels on its own.
+    item_count: int = 0
 
     model_config = _response_config
 

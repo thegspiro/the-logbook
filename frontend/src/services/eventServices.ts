@@ -980,7 +980,9 @@ export interface EquipmentKit {
   created_at: string;
   updated_at: string;
   created_by?: string;
+  /** Only on the detail response; the list omits them and sends item_count. */
   line_items?: EquipmentKitItem[];
+  item_count?: number;
 }
 
 export interface EquipmentKitItem {
