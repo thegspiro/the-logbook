@@ -375,7 +375,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                     void handleToggle(preset);
                   }}
                   disabled={isCreating}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                  className={`toggle-track-sm ${
                     enabled ? 'bg-violet-600' : 'bg-theme-surface-border'
                   } ${isCreating ? 'opacity-50' : ''}`}
                 >

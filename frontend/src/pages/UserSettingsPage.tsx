@@ -1164,7 +1164,7 @@ export const UserSettingsPage: React.FC = () => {
                       }}
                       className={`${
                         push.subscribed ? 'bg-red-600' : 'bg-theme-surface-border'
-                      } focus:ring-theme-focus-ring focus:ring-offset-theme-bg relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:opacity-50`}
+                      } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                       role="switch"
                       aria-checked={push.subscribed}
                       aria-label="Push notifications on this device"
@@ -1189,7 +1189,7 @@ export const UserSettingsPage: React.FC = () => {
                     onClick={() => setEmailNotifications(!emailNotifications)}
                     className={`${
                       emailNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
-                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden`}
+                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={emailNotifications}
                   >
@@ -1213,7 +1213,7 @@ export const UserSettingsPage: React.FC = () => {
                     onClick={() => setSmsNotifications(!smsNotifications)}
                     className={`${
                       smsNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
-                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden`}
+                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={smsNotifications}
                   >
@@ -1234,7 +1234,7 @@ export const UserSettingsPage: React.FC = () => {
                     onClick={() => setEventReminders(!eventReminders)}
                     className={`${
                       eventReminders ? 'bg-red-600' : 'bg-theme-surface-border'
-                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden`}
+                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={eventReminders}
                   >
@@ -1257,7 +1257,7 @@ export const UserSettingsPage: React.FC = () => {
                     onClick={() => setTrainingReminders(!trainingReminders)}
                     className={`${
                       trainingReminders ? 'bg-red-600' : 'bg-theme-surface-border'
-                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden`}
+                    } focus:ring-theme-focus-ring focus:ring-offset-theme-bg toggle-track-md`}
                     role="switch"
                     aria-checked={trainingReminders}
                   >

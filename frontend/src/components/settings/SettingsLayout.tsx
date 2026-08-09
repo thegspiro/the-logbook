@@ -46,12 +46,10 @@ export function SettingsLayout<K extends string>({
   header,
   children,
 }: SettingsLayoutProps<K>) {
-  const buttonClass = (isActive: boolean, extra: string) =>
-    `focus:ring-theme-focus-ring ${extra} transition-colors focus:ring-2 focus:outline-hidden ${
-      isActive
-        ? 'bg-theme-accent-blue-muted text-theme-accent-blue'
-        : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
-    }`;
+  // Colours and focus behaviour come from the settings-nav-item utilities in
+  // styles/index.css; only the per-breakpoint box shape is set here.
+  const buttonClass = (isActive: boolean, shape: string) =>
+    `settings-nav-item ${shape} ${isActive ? 'settings-nav-item-active' : ''}`;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">

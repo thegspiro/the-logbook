@@ -246,7 +246,7 @@ const Toggle: React.FC<{
       type="button"
       onClick={onChange}
       disabled={disabled}
-      className={`${bg} relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden ${
+      className={`${bg} toggle-track-md ${
         color === 'red' ? 'focus:ring-theme-focus-ring' : 'focus:ring-theme-focus-ring'
       } disabled:cursor-not-allowed disabled:opacity-50`}
       role="switch"

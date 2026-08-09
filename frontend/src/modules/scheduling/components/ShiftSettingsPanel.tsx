@@ -174,15 +174,9 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 onClick={() => {
                   void handleTogglePlatoons(!platoonsEnabled);
                 }}
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                  platoonsEnabled ? 'bg-violet-600' : 'bg-theme-surface-border'
-                }`}
+                className={`toggle-track-sm ${platoonsEnabled ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
               >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    platoonsEnabled ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
+                <span className={`toggle-knob-sm ${platoonsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
             </div>
           </div>
@@ -254,14 +248,12 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   onClick={() => {
                     void saveFeature({ auto_generate_enabled: !feature.auto_generate_enabled });
                   }}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  className={`toggle-track-sm ${
                     feature.auto_generate_enabled ? 'bg-violet-600' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      feature.auto_generate_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
+                    className={`toggle-knob-sm ${feature.auto_generate_enabled ? 'translate-x-6' : 'translate-x-1'}`}
                   />
                 </button>
               </div>
@@ -330,12 +322,12 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   onClick={() => {
                     void saveFeature({ require_end_of_shift_checks: !feature.require_end_of_shift_checks });
                   }}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  className={`toggle-track-sm ${
                     feature.require_end_of_shift_checks ? 'bg-violet-600' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    className={`toggle-knob-sm ${
                       feature.require_end_of_shift_checks ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
@@ -357,12 +349,12 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   onClick={() => {
                     void saveFeature({ restrict_checkin_to_assigned: !feature.restrict_checkin_to_assigned });
                   }}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  className={`toggle-track-sm ${
                     feature.restrict_checkin_to_assigned ? 'bg-violet-600' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    className={`toggle-knob-sm ${
                       feature.restrict_checkin_to_assigned ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
@@ -486,7 +478,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                       },
                     }))
                   }
-                  className="border-theme-surface-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
+                  className="form-checkbox"
                 />
                 <span className="text-theme-text-primary text-sm">Enable equipment checks for shifts</span>
               </label>
@@ -506,7 +498,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                           },
                         }))
                       }
-                      className="border-theme-surface-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
+                      className="form-checkbox"
                     />
                     <span className="text-theme-text-primary text-sm">Require signature on completion</span>
                   </label>
@@ -524,7 +516,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                           },
                         }))
                       }
-                      className="border-theme-surface-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
+                      className="form-checkbox"
                     />
                     <span className="text-theme-text-primary text-sm">Block shift start when required items fail</span>
                   </label>
@@ -547,7 +539,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                           },
                         }))
                       }
-                      className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-24 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
+                      className="form-input w-24"
                     />
                   </div>
                 </>
