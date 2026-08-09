@@ -84,7 +84,24 @@ CANDIDATE_SEARCH_MAX_RESULTS = 15
 
 
 def _user_has_officer_role(user: User) -> bool:
-    """Check if the user has a role typically associated with officers/admins."""
+    """Check if the user has a role typically associated with officers/admins.
+
+    Governs *read* visibility: an officer sees every test in the organization,
+    everyone else sees only the ones they are party to or have been granted.
+
+    The real permission is checked first, and that is not a refinement — it is
+    the case that matters. The name and attribute checks below only recognise a
+    legacy ``user.role`` string or a literal ``user.permissions`` list, and a
+    department's training officer normally holds ``training.manage`` through a
+    *position* instead, which neither of those sees. Such an officer therefore
+    read as a non-officer here while ``_can_manage_tests`` (same authority, real
+    resolver) read as one — so the validation queue was permanently empty for
+    them: ``GET /summary`` counted the pending results, and the list endpoint
+    that is supposed to show them filtered every one away as somebody else's
+    test. The two checks have to agree on who an officer is.
+    """
+    if user_has_permission(user, "training.manage"):
+        return True
     if hasattr(user, "role") and user.role in (
         "admin",
         "owner",

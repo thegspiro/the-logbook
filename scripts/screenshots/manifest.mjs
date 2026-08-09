@@ -14,7 +14,12 @@
  *            finds the placeholder once the line hint has gone stale
  *   alt      alt text written into the markdown image tag
  *   route    path to visit, relative to the dev server root
- *   auth     'anonymous' to shoot a signed-out page in a separate context
+ *   auth     'admin' (default), 'member' to shoot what an ordinary member sees,
+ *            or 'anonymous' for a signed-out page. Each runs in its own browser
+ *            context, created on first use
+ *   theme    'dark' to shoot in dark mode; default light. The app's theme
+ *            defaults to "system", so this is driven by the context's
+ *            colorScheme rather than by clicking the theme switcher
  *   prepare  optional async (page) => void that drives the UI into the pictured
  *            state (open a modal, switch a tab, expand a panel)
  *   selector optional CSS/locator to clip to instead of the full viewport
@@ -33,6 +38,25 @@
 export const DEMO_CREDENTIALS = {
   username: "chief",
   password: "DemoP@ssw0rd!2026",
+};
+
+/**
+ * An ordinary member — no `training.manage`, no officer position.
+ *
+ * Shots marked `auth: "member"` sign in as this account. It is not
+ * interchangeable with the administrator: several routes render a different
+ * page for a member than for an officer (`/training/skills-testing` is the
+ * member's Available Tests / My Results view, not the template library), so a
+ * placeholder describing what a member sees can only be filled from a member's
+ * session.
+ *
+ * Kept in step with DEMO_MEMBER_USERNAME / DEMO_MEMBER_PASSWORD in
+ * seed_demo_data.py, which also guarantees this account exists, is not an
+ * officer, and is not being forced to change its password.
+ */
+export const DEMO_MEMBER_CREDENTIALS = {
+  username: "nbelhaj",
+  password: "DemoMember!2026",
 };
 
 /**
@@ -809,7 +833,12 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Skill Sheet Templates list page showing a table of",
     alt: "Skill sheet templates list with category and publication status",
-    route: "/training/skills-testing",
+    // Not /training/skills-testing. That route became the *member's* entry
+    // point when skills testing opened to non-officers — Available Tests and My
+    // Results — so it stopped showing the template library this placeholder is
+    // about, and kept capturing cleanly while picturing the wrong page. The
+    // officer-facing library lives under the Training Admin hub.
+    route: "/training/admin?tab=templates",
   },
   {
     id: "09-02-create-template",
@@ -831,8 +860,205 @@ export const SHOTS = [
     route: "/training/skills-testing/test/new",
     fullPage: true,
   },
+  {
+    id: "09-07-candidate-search",
+    doc: "09-skills-testing.md",
+    line: 221,
+    anchor: "The Start Skill Test page candidate field mid-search",
+    alt: "Candidate name search on the Start Skill Test page with matching members listed",
+    route: "/training/skills-testing/test/new",
+    fullPage: true,
+    // The candidate field is a server-side search, not a dropdown, so the
+    // populated state only exists mid-typing. Two characters is the documented
+    // minimum the endpoint accepts; anything shorter returns nothing and the
+    // shot would picture an empty list. The search is debounced, so the results
+    // are waited for rather than assumed.
+    prepare: async (page) => {
+      const search = page.getByPlaceholder("Type a name to search...");
+      await search.waitFor({ state: "visible", timeout: 10_000 });
+      await search.fill("a");
+      await search.fill("an");
+      await page.waitForTimeout(1200);
+    },
+  },
+  {
+    id: "09-08-template-result-disclosure",
+    doc: "09-skills-testing.md",
+    line: 863,
+    anchor: 'The template builder\'s "Result Disclosure" group',
+    alt: "Per-template Result Disclosure controls showing the inherited default",
+    route: "/training/skills-testing/templates/new",
+    // Clipped to the group rather than shot full-page: the placeholder is about
+    // three controls near the bottom of a long builder form, and a full-page
+    // capture renders them too small to read the inherit labels, which are the
+    // whole point of the picture.
+    selector: "div:has(> p:text-is('Result Disclosure'))",
+    prepare: async (page) => {
+      const group = page.getByText("Result Disclosure", { exact: true });
+      await group.waitFor({ state: "visible", timeout: 10_000 });
+      await group.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-09-member-skills-testing",
+    doc: "09-skills-testing.md",
+    line: 187,
+    anchor: "The Skills Testing landing page as seen by an",
+    alt: "Skills Testing as an ordinary member sees it — available tests and their own results",
+    // Same URL as 09-01, deliberately: this route renders an entirely different
+    // page depending on who is signed in, which is the point the placeholder
+    // makes. The officer's template library is under /training/admin.
+    route: "/training/skills-testing",
+    auth: "member",
+  },
+  {
+    id: "09-10-member-awaiting-validation",
+    doc: "09-skills-testing.md",
+    line: 389,
+    anchor: 'A member\'s "My Training → Skills Tests" list showing',
+    alt: "A member's own skills tests, one awaiting an officer's validation with its outcome withheld",
+    route: "/training/my-training",
+    auth: "member",
+    fullPage: true,
+    prepare: async (page) => {
+      // My Training renders its sections as collapsibles, and Skills Tests is
+      // collapsed by default — scrolling to the header alone captures a closed
+      // panel, which pictures none of what the placeholder describes.
+      const header = page.getByText("Skills Tests", { exact: true }).first();
+      await header.waitFor({ state: "visible", timeout: 15_000 });
+      await header.scrollIntoViewIfNeeded();
+      await header.click();
+      // Wait for the list this section fetches on expand, not a fixed delay.
+      await page
+        .getByText(/awaiting validation|practice|no skills tests/i)
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-11-validation-queue",
+    doc: "09-skills-testing.md",
+    line: 418,
+    anchor: 'The Test Records tab filtered to "Awaiting',
+    alt: "Officer review queue — completed results awaiting validation, with Validate and Void actions",
+    route: "/training/admin?tab=tests",
+    fullPage: true,
+    // The queue is a filter on the records tab rather than a page of its own,
+    // and it is an option in the status dropdown — not a button or a tab — so
+    // the shot has to select it. Without this the capture shows "All Statuses"
+    // and pictures the whole history instead of the queue.
+    prepare: async (page) => {
+      const status = page.locator("select").first();
+      await status.waitFor({ state: "visible", timeout: 15_000 });
+      await status.selectOption("pending_validation");
+      // Waits on the row badge, scoped to a span. The dropdown's own option
+      // reads "Needs Validation" too and comes first in the DOM, and an option
+      // inside a closed native select is never "visible" — so an unscoped text
+      // wait hangs on the wrong element until it times out.
+      await page
+        .locator('span:text-is("Needs validation")')
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-12-summary-pending-validation",
+    doc: "09-skills-testing.md",
+    line: 533,
+    anchor: "The Summary dashboard viewed by a training officer",
+    alt: "Skills testing summary with a non-zero Pending Validation count",
+    // The stat cards live on the Templates tab, not Test Records — and the card
+    // is labelled "Needs Validation", which it earns by *replacing* the pass
+    // rate while the queue is non-empty. Clipped to the card row so the swap is
+    // legible; a full-page shot of this tab is already 09-01.
+    route: "/training/admin?tab=templates",
+    selector: "div.grid:has(p:text-is('Needs Validation'))",
+    prepare: async (page) => {
+      await page
+        .getByText("Needs Validation", { exact: true })
+        .waitFor({ state: "visible", timeout: 15_000 });
+    },
+  },
+  {
+    id: "09-13-test-viewers-panel",
+    doc: "09-skills-testing.md",
+    line: 829,
+    anchor: "The Viewers panel on an open test, showing one",
+    alt: "Named viewers on a single test, with the note that a viewer never sees more than the candidate",
+    route: "/training/skills-testing",
+    // Clipped to the panel rather than shot full-page. The panel sits at the
+    // bottom of a long scorecard, so a full-page capture is mostly criteria
+    // rows — and the page's fixed sidebar renders twice down a tall fullPage
+    // image, which reads as a glitch in a published guide.
+    selector: 'div.card:has(p:text-is("Who else can see this result"))',
+    prepare: async (page, helpers) => {
+      // The panel renders only on the review view of a *completed*, official
+      // test, and only for an officer — so the match is not optional here: the
+      // seeder's draft tests come back first and none of them shows it.
+      await openFirstFromApi(
+        "/training/skills-testing/tests",
+        (id) => `/training/skills-testing/test/${id}`,
+        "tests",
+        (test) => test.status === "completed" && !test.is_practice,
+      )(page, helpers);
+      const viewers = page.getByText(/who else can see this result/i).first();
+      await viewers.waitFor({ state: "visible", timeout: 20_000 });
+      await viewers.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+  },
 
   // ── 10 Mobile & PWA ─────────────────────────────────────────────────
+  {
+    id: "10-10-mobile-minimum-text",
+    doc: "10-mobile-pwa.md",
+    line: 175,
+    anchor: "The dashboard on a phone showing the relative",
+    alt: "Dashboard on a phone with relative timestamps and navigation labels at the 12px minimum",
+    route: "/dashboard",
+    viewport: "mobile",
+    allowEmptyState: true,
+    // Not fullPage: the bottom navigation is fixed, and a full-page capture
+    // scrolls it out of frame — but its labels are one of the four things the
+    // 12px floor was introduced for, so the shot has to be the viewport.
+  },
+  {
+    id: "10-11-public-form-dark",
+    doc: "10-mobile-pwa.md",
+    line: 197,
+    anchor: "The public form page (`/f/<slug>`) in dark mode",
+    alt: "The public form page in dark mode, readable on the themed background",
+    // Resolved in prepare — the route is not known until capture time.
+    route: "/login",
+    auth: "anonymous",
+    theme: "dark",
+    fullPage: true,
+    prepare: async (page, helpers) => {
+      // The slug is minted per seed, and this shot is signed out, so the
+      // lookup borrows the administrator's session. `/f/{slug}` serves
+      // published public forms only — the seeder publishes one.
+      const admin = await helpers.lookupPage();
+      const slug = await admin.evaluate(async () => {
+        const response = await fetch("/api/v1/forms", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const forms = Array.isArray(body)
+          ? body
+          : body.forms || body.items || [];
+        const target = forms.find((f) => f.is_public && f.public_slug);
+        return target ? target.public_slug : null;
+      });
+      if (!slug) throw new Error("no published public form to capture");
+      await page.goto(`${new URL(page.url()).origin}/f/${slug}`, {
+        waitUntil: "domcontentloaded",
+      });
+    },
+  },
   {
     id: "10-04-mobile-dashboard",
     // same dashboard, phone width
@@ -1041,6 +1267,58 @@ export const SHOTS = [
       "Screenshot of the Prospective Members main page showing the kanban board view",
     alt: "Prospective members kanban board with a column per pipeline stage",
     route: "/prospective-members",
+  },
+  {
+    id: "15-02-board-truncated",
+    doc: "15-prospective-members.md",
+    line: 253,
+    anchor: "The kanban board for a pipeline with more than 200",
+    alt: "Kanban board reporting that it is showing only the first page of a larger pipeline",
+    route: "/prospective-members",
+    // Needs a pipeline larger than the board's 200-card ceiling, which the
+    // ordinary seed deliberately does not create:
+    //   python scripts/screenshots/seed_demo_data.py --bulk-prospects
+    // Without it the notice never renders and this shot is skipped rather than
+    // capturing an ordinary board under a placeholder describing a full one.
+    prepare: async (page) => {
+      const notice = page
+        .getByRole("status")
+        .filter({ hasText: /Showing \d+ of \d+ applicants/ });
+      await notice.first().waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "15-09-bulk-action-result",
+    doc: "15-prospective-members.md",
+    line: 495,
+    anchor: "The pair of notifications after a bulk advance that",
+    alt: "Bulk advance reporting how many moved and naming the applicants it skipped",
+    route: "/prospective-members",
+    // Runs a real bulk advance, so it *changes the seeded data* — which is why
+    // it sits last among the 15-* shots. Re-running the seeder restores a mixed
+    // page (it tops the pipeline up and re-parks two applicants at the final
+    // stage), so the shot is repeatable; it is just not idempotent on its own.
+    //
+    // The partial failure is the point. Page one is deliberately mixed: most
+    // rows are at intake and a few are at the final stage, where advancing is
+    // refused. Selecting the page produces both toasts — the count that moved,
+    // and the named applicants that could not.
+    prepare: async (page) => {
+      await clickByName("Table")(page);
+      const selectAll = page.locator("thead th:first-child button");
+      await selectAll.waitFor({ state: "visible", timeout: 15_000 });
+      await selectAll.click();
+      await clickByName("Advance All")(page);
+      // Both toasts, not just the first: the success one renders immediately
+      // and the skipped one follows the response, so waiting on either alone
+      // races the capture.
+      await page
+        .getByText(/Skipped \d+:/)
+        .first()
+        .waitFor({ state: "visible", timeout: 30_000 });
+      await page.waitForTimeout(600);
+    },
   },
   {
     id: "15-10-pipeline-settings",
@@ -1984,6 +2262,15 @@ export const SHOTS = [
     alt: "Applicant detail drawer with contact details and current stage",
     route: "/prospective-members",
     prepare: async (page) => {
+      // Search first, then click. The board shows the newest 200 applicants,
+      // so on a pipeline padded by `--bulk-prospects` these named ones are not
+      // on screen at all and a bare click times out. Narrowing the list makes
+      // the shot work at either size.
+      const search = page.getByPlaceholder(/search applicants/i);
+      if (await search.isVisible().catch(() => false)) {
+        await search.fill("Rivera");
+        await page.waitForTimeout(900);
+      }
       await page
         .locator("[class*='cursor-pointer']")
         .filter({ hasText: /Rivera|Fields|Okafor/ })

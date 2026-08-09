@@ -72,6 +72,90 @@ Where an empty phrase is incidental — an empty "My Upcoming Shifts" panel on a
 otherwise-populated dashboard, or an error monitor correctly reporting no
 errors — the manifest entry sets `allowEmptyState: true`.
 
+## Who the shot is taken as, and in which theme
+
+Several routes render a **different page** depending on who is signed in.
+`/training/skills-testing` is the clearest case: an officer gets the skill-sheet
+library, a member gets Available Tests and My Results. A placeholder describing
+what a member sees therefore cannot be filled from the administrator's session,
+and a shot that looks fine can quietly picture the wrong screen.
+
+| Field   | Values                                   | Notes                                                              |
+| ------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| `auth`  | `admin` (default), `member`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights |
+| `theme` | light (default), `dark`                  | Drives the context's `colorScheme`; the app's theme follows system |
+
+Each `auth` + `theme` combination gets its own browser context, built on first
+use — cookies are per-context, so swapping users by clearing them mid-run would
+invalidate every later shot, and `colorScheme` is fixed at context creation.
+A run that needs no member session never pays for that login.
+
+A signed-out shot that still needs an id or slug the seeder minted can borrow an
+authenticated session: `prepare` receives a second argument with
+`lookupPage()`, which resolves to a signed-in page. `10-11-public-form-dark`
+uses it to find the published form's `public_slug` before navigating the
+anonymous page to `/f/{slug}`.
+
+## States the seeder has to manufacture
+
+Some pictured states cannot be produced by the administrator the seeder runs as,
+and the seeder makes them explicitly:
+
+- **A result awaiting validation.** An officer's own completion validates in the
+  same step, so every test the seeder creates lands already signed off. It signs
+  in as one ordinary member and has them examine a second one, which is the only
+  way to leave a result in the queue.
+- **A named viewer.** Granted on a _completed_ test — the panel renders only on
+  the review view of a finished official test, so a grant on a draft is a row no
+  screen ever shows.
+- **A published public form.** `/f/{slug}` serves published forms only; a draft
+  renders as "not found", which is what the public-form shots would otherwise
+  capture.
+
+### `--bulk-prospects` — a pipeline past the board's ceiling
+
+```bash
+python scripts/screenshots/seed_demo_data.py --bulk-prospects        # 247
+python scripts/screenshots/seed_demo_data.py --bulk-prospects 300    # explicit
+```
+
+The kanban groups applicants into columns client-side, so it fetches 200 and
+says plainly when there are more — the notice `15-02-board-truncated` pictures.
+Producing that needs a genuinely oversized pipeline, which is **not** wanted in
+the ordinary demo data: 200+ filler applicants bury the twelve named ones the
+other prospective-member screenshots are composed around, and cost a few hundred
+requests on every seed. Hence opt-in.
+
+It tops the pipeline **up to** the target and is safe to re-run — the filler
+uses deterministic `applicant.NNNN@intake.example.org` addresses, so a second
+run adds only what is missing. Every fourth one is advanced a stage or two:
+without that the board is three empty columns under a notice about having too
+many applicants, because the newest 200 are all sitting at intake.
+
+To get back to a small pipeline, drop the filler by email prefix — or reseed
+onto an empty database, which is the cleaner reset.
+
+It also parks the two most recently created applicants at the **final** stage.
+The table lists newest first, so those land on page one and make a select-all
+there a genuinely mixed batch — most advance, those two cannot. That partial
+failure is the subject of `15-09-bulk-action-result`, and without it a bulk
+advance from page one succeeds uniformly and pictures nothing.
+
+> **`15-09` changes the data it pictures.** It runs a real bulk advance, so the
+> applicants on page one move a stage. That is why it sits last among the `15-*`
+> shots. Re-running the seeder restores a mixed page, so the shot is repeatable
+> — it is just not idempotent on its own.
+
+> **Capture the two bulk shots narrowly.** A bulk-seeded pipeline is visible in
+> every other prospective-member shot — the board fills with `Applicant 0284`
+> cards and the stat card reads 320 rather than the handful of named applicants
+> the guide walks through. So run the bulk seed, capture with
+> `--only 15-02` and `--only 15-09`, and leave the rest of the `15-*` images
+> alone. Re-capturing the whole guide against filler data replaces good
+> screenshots with worse ones, and nothing in the harness flags that: filler
+> applicants are real records, so the shots pass every check and simply read
+> badly.
+
 ## How a shot finds its placeholder
 
 Each entry records the placeholder's `line`, but that is only a hint: applying
@@ -89,7 +173,23 @@ declines to guess if two placeholders match it.
 3. If the shot pictures a modal, a specific tab, or an expanded panel, give it a
    `prepare(page)` that drives the UI there. For a detail page, use
    `openFirstFromApi()` rather than hard-coding an id — ids change every seed.
-4. Capture with `--only <id-prefix>`, look at the PNG, then apply.
+4. If it pictures what a **member** sees, or a **dark-mode** page, set `auth` /
+   `theme` rather than reaching for the administrator's session.
+5. Capture with `--only <id-prefix>`, **look at the PNG**, then apply.
+
+> **Look at the image, every time.** A capture that exits `+` proves only that
+> Playwright reached a page and wrote a file. It does not prove the page is the
+> one the placeholder describes: a collapsed accordion, an unapplied filter, or
+> a route that now renders a different audience's view all capture cleanly.
+> Every one of those happened while these shots were being written.
+
+Two waiting pitfalls worth knowing, both of which cost a debugging round here:
+
+- **Native `<option>` elements are never "visible"** to Playwright. Waiting on
+  text that also appears in a closed `<select>` hangs until it times out — scope
+  the wait to the element you actually mean (`span:text-is("Needs validation")`).
+- **`fullPage` duplicates fixed elements** down a tall page, so a sidebar can
+  appear twice in one image. Prefer `selector` when the subject is one panel.
 
 Ids are the filename and the applier's key, so keep them stable once a shot has
 been applied — renaming one orphans the image already referenced in the guide.

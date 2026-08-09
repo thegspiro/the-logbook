@@ -2867,7 +2867,16 @@ class MembershipPipelineService:
     async def _find_active_prospect_by_email(
         self, organization_id: str, email: str
     ) -> Optional[ProspectiveMember]:
-        """Return an existing active/pending prospect with the given email."""
+        """Return an existing active/pending prospect with the given email.
+
+        Eager-loads the same relationships :meth:`get_prospect` does, because
+        ``create_prospect`` returns this instance straight to the client when it
+        detects a duplicate. ``ProspectResponse`` reads ``current_step`` and
+        ``step_progress``, and resolving those lazily from the async response
+        path raises ``MissingGreenlet`` rather than merely being slow — so
+        without this the duplicate path answered **500** instead of returning
+        the existing applicant, which is the whole point of detecting one.
+        """
         result = await self.db.execute(
             select(ProspectiveMember)
             .where(
@@ -2880,6 +2889,15 @@ class MembershipPipelineService:
                         ]
                     ),
                 )
+            )
+            .options(
+                selectinload(ProspectiveMember.current_step),
+                selectinload(ProspectiveMember.pipeline).selectinload(
+                    MembershipPipeline.steps
+                ),
+                selectinload(ProspectiveMember.step_progress).selectinload(
+                    ProspectStepProgress.step
+                ),
             )
             .order_by(ProspectiveMember.created_at)
             .limit(1)

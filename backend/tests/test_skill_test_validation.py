@@ -15,6 +15,10 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from app.api.v1.endpoints.skills_testing import (
+    _can_manage_tests,
+    _user_has_officer_role,
+)
 from app.models.skills_testing import ResultDisclosure, ResultRelease, SkillTestStatus
 from app.services.skills_testing_service import (
     RESULT_VIEW_PENDING,
@@ -231,3 +235,71 @@ def _scalar(value):
     r.scalar.return_value = value
     r.scalar_one_or_none.return_value = value
     return r
+
+
+class TestOfficerRecognition:
+    """Read visibility and write authority must agree on who an officer is.
+
+    ``_user_has_officer_role`` gates what an officer may *see* — the org-wide
+    test list, including the validation queue — while ``_can_manage_tests``
+    gates what they may *do*. They answered differently for the ordinary case:
+    a training officer holding ``training.manage`` through a **position**.
+
+    The read-side check only recognised a legacy ``user.role`` string or a
+    literal ``user.permissions`` list, neither of which a position sets. So
+    ``GET /summary`` counted results awaiting validation while
+    ``GET /tests?pending_validation=true`` filtered every one of them away as
+    somebody else's test, and the review queue was permanently empty for the
+    officers it exists for.
+    """
+
+    @staticmethod
+    def _user_with_position_permission(permission):
+        """A user whose only grant comes from a position, as in a real org."""
+        return SimpleNamespace(
+            id="user-officer",
+            role=None,
+            permissions=None,
+            rank=None,
+            positions=[SimpleNamespace(permissions=[permission])],
+        )
+
+    def test_position_granted_officer_is_recognized(self):
+        officer = self._user_with_position_permission("training.manage")
+
+        assert _user_has_officer_role(officer) is True
+        assert _can_manage_tests(officer) is True
+
+    def test_position_granted_wildcard_admin_is_recognized(self):
+        admin = self._user_with_position_permission("*")
+
+        assert _user_has_officer_role(admin) is True
+        assert _can_manage_tests(admin) is True
+
+    def test_plain_member_is_not_an_officer(self):
+        """The check must not have been widened into "any authenticated user"."""
+        member = self._user_with_position_permission("training.view")
+
+        assert _user_has_officer_role(member) is False
+        assert _can_manage_tests(member) is False
+
+    def test_the_two_checks_agree(self):
+        """Whatever else is true, these may not disagree — that was the bug."""
+        for permission in ("training.manage", "*", "training.view", "events.manage"):
+            user = self._user_with_position_permission(permission)
+
+            assert _user_has_officer_role(user) == _can_manage_tests(
+                user
+            ), f"read and write authority disagree for {permission!r}"
+
+    def test_legacy_role_name_still_recognized(self):
+        """The older heuristics stay: this widened the check, it did not swap it."""
+        legacy = SimpleNamespace(
+            id="user-legacy",
+            role="training_officer",
+            permissions=None,
+            rank=None,
+            positions=[],
+        )
+
+        assert _user_has_officer_role(legacy) is True
