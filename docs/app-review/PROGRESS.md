@@ -49,7 +49,7 @@ from its open list.
 | B8 | documents | DOC2 | ✅ (p1, p2, p3) |
 | B9 | membership pipeline | MP2 | ✅ (p1, p2, p3) |
 | B10 | messaging & communications | MSG2 | ✅ (p1, p2, p3) |
-| B11 | notifications | NOTIF2 | ⬜ |
+| B11 | notifications | NOTIF2 | ✅ (p1, p2, p3) |
 | B12 | integrations | INT2 | ⬜ |
 | B13 | forms | FORM2 | ⬜ |
 | B14 | grants & fundraising | GF2 | ⬜ |
@@ -1514,3 +1514,14 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   pass 1 missed (it swept messaging_service.py); module now E712-free. 36 messaging
   tests pass. Gate: flake8/black clean; tsc n/a (no FE change). No CHANGELOG. See
   messaging.md → Pass 3. Next: B11 notifications.
+
+- **B11 notifications ✅ (pass 3).** Re-verified NOTIF2-3 (push-endpoint SSRF
+  validator) and push scoping/fail-safe delivery hold. **Fixed NOTIF2-4** (latent-500):
+  rule `trigger`/`category`/`channel` were free-str → strict ENUM, stored raw
+  (create_rule `**rule_data`, update_rule setattr) → 500 on bad value. Added
+  `@field_validator`s (NotificationTrigger/Category/Channel), request-only → 422. **7
+  tests added.** **NOTIF2-3 DNS-rebinding residual kept flagged deliberately** — a
+  shared `assert_outbound_url_safe` exists, but adding resolve-time checks needs care
+  around the push test-harness (pass 2's reason) and the subscribe-vs-send rebinding
+  window; not a batch drive-by. E712 already clean (pass 1). Gate: flake8/black clean;
+  tsc n/a. CHANGELOG updated. See notifications.md → Pass 3. Next: B12 integrations.

@@ -1,7 +1,51 @@
 # Application Review — Notifications (Tier B)
 
 **Prefix:** `NOTIF2` · **Iteration:** B11 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3)
+
+---
+
+## Pass 3 (2026-08-09) — latent-500 on rule enums; push SSRF re-verified
+
+Re-verified NOTIF2-3 (`validate_push_endpoint` at the API boundary, `push_service.py`
++ `notifications.py:380`) and the push scoping/fail-safe delivery hold. The B1
+latent-500 lens surfaced a genuine recurrence on the rule schemas.
+
+### NOTIF2-4 — LOW/MED — Rule `trigger`/`category`/`channel` 500 on a bad value — ✅ FIXED
+
+**What:** `trigger`, `category`, and `channel` on `NotificationRuleCreate`/`Update`
+were typed as free `str` but map to **strict MySQL ENUM** columns
+(`NotificationTrigger` / `NotificationCategory` / `NotificationChannel`), and are
+stored **raw** — `create_rule` via `**rule_data`, `update_rule` via its `setattr`
+loop. So an out-of-set value passed Pydantic, reached MySQL, and 500'd. The B1 class
+(pass 1's "mass-assignment not reachable" note confirmed these fields flow straight
+into the row, which is exactly the raw-insert path).
+
+**Fix:** `@field_validator`s on all three fields on both request classes, each
+deriving its value set from the model enum, lowercase-normalizing and rejecting
+unknowns → 422. Request-only, so `NotificationRuleResponse` (built from the ORM enum)
+is untouched; the rule editor sends only valid values. **7 tests added.**
+
+### NOTIF2-3 residual (DNS rebinding) — 🚩 STILL FLAGGED (deliberately)
+
+The push-endpoint validator blocks IP-literal/localhost/private-suffix hosts at
+subscribe time, but a public hostname that *resolves* to a private IP still isn't
+caught. A shared `assert_outbound_url_safe` (with `_assert_hostname_resolves_public`)
+exists in `app/utils/url_validator.py` and would close it — **but** pass 2 put the
+validator at the API boundary precisely because the delivery integration tests call
+`service.subscribe` directly with a `127.0.0.1` endpoint, and the 17 endpoint-validation
+unit tests use non-resolving fake hosts. Adding real DNS resolution (subscribe-time
+vs the send-time rebinding window, plus the test-harness interaction) is a careful
+change, not a batch drive-by; kept as the recorded hardening follow-up.
+
+### Still flagged (unchanged)
+
+- Unused frontend `markLogRead` (frontend-shared cleanup); `get_logs` pagination
+  (build-query-then-subquery-count pattern, fine at scale).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · new rule-enum tests **7 passed** + notification-service
+tests pass (DB-free).
 
 ---
 
