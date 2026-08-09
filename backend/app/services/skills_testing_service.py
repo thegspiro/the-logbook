@@ -13,7 +13,7 @@ pure-scoring path stays import-light.
 from __future__ import annotations
 
 import copy
-from datetime import datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -702,3 +702,173 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
 
     redacted["section_results"] = clean_sections
     return redacted
+
+
+# ===========================================================================
+# Candidate notification — telling the member a result is theirs to read
+# ===========================================================================
+
+
+def candidate_result_view(
+    test: SkillTest,
+    template: SkillTemplate | None,
+    org_config: Any | None,
+) -> str:
+    """How much of ``test`` its own candidate may currently see.
+
+    A thin wrapper over :func:`resolve_result_view` that fixes the reader as the
+    person tested. Used by the officer-facing UI to state, before an officer
+    acts, exactly what the member will end up seeing — and by the notification
+    path below to decide whether there is anything to tell them about at all.
+    """
+    return resolve_result_view(
+        test,
+        template,
+        org_config,
+        is_officer=False,
+        user_id=str(test.candidate_id),
+    )
+
+
+def _result_headline(test: SkillTest) -> str:
+    """ "Passed (86%)" / "Failed" — the outcome in the form a member reads it."""
+    from app.models.skills_testing import SkillTestResult
+
+    outcome = {
+        SkillTestResult.PASS.value: "Passed",
+        SkillTestResult.FAIL.value: "Failed",
+    }.get(getattr(test, "result", None) or "", "Recorded")
+
+    score = getattr(test, "overall_score", None)
+    if score is None:
+        return outcome
+    return f"{outcome} ({round(score)}%)"
+
+
+async def notify_candidate_result_available(
+    db: AsyncSession,
+    *,
+    test: SkillTest,
+    template: SkillTemplate | None,
+    org_config: Any | None,
+    organization_id: Any,
+) -> bool:
+    """Tell the candidate their result is now theirs to read. Returns whether it sent.
+
+    Gated on :func:`candidate_result_view` rather than on the officer's action,
+    because the two are not the same event. Validating a result under the
+    ``on_release`` mode makes it count without making it visible; releasing one
+    that is still awaiting validation reveals nothing. A notification is only
+    honest when the member can actually open what it points at, so the same
+    resolver the read endpoints use decides whether this fires.
+
+    Best-effort: a notification failure must not fail the validation or release
+    that produced it, so everything here is caught and logged. The result stands
+    either way; the member would simply find it in their history unprompted.
+    """
+    if getattr(test, "is_practice", False):
+        return False
+
+    view = candidate_result_view(test, template, org_config)
+    from app.models.skills_testing import ResultDisclosure
+
+    if view not in (ResultDisclosure.SCORES.value, ResultDisclosure.FULL.value):
+        return False
+
+    template_name = getattr(template, "name", None) or "Skills test"
+    # SCORES strips every note before the member ever sees the scorecard, so
+    # promising notes at that tier would send them looking for something that
+    # was deliberately withheld.
+    notes_line = (
+        " The scorecard includes the examiner's notes."
+        if view == ResultDisclosure.FULL.value
+        else " Per-criterion scoring is shown; examiner notes are not."
+    )
+
+    return await _log_candidate_notification(
+        db,
+        organization_id=organization_id,
+        candidate_id=str(test.candidate_id),
+        test_id=str(test.id),
+        subject=f"Skills test result: {template_name}",
+        message=(
+            f"Your {template_name} skills test has been reviewed and recorded: "
+            f"{_result_headline(test)}.{notes_line}"
+        ),
+    )
+
+
+async def notify_candidate_result_voided(
+    db: AsyncSession,
+    *,
+    test: SkillTest,
+    template: SkillTemplate | None,
+    org_config: Any | None,
+    organization_id: Any,
+) -> bool:
+    """Tell the candidate a result of theirs was withdrawn. Returns whether it sent.
+
+    Same visibility gate as the release notification: a member who was never
+    shown the result has nothing to reconcile, and telling them one was voided
+    would disclose by implication the evaluation the policy withheld.
+    """
+    if getattr(test, "is_practice", False):
+        return False
+
+    view = candidate_result_view(test, template, org_config)
+    from app.models.skills_testing import ResultDisclosure
+
+    if view not in (ResultDisclosure.SCORES.value, ResultDisclosure.FULL.value):
+        return False
+
+    template_name = getattr(template, "name", None) or "Skills test"
+    reason = (getattr(test, "void_reason", None) or "").strip()
+
+    return await _log_candidate_notification(
+        db,
+        organization_id=organization_id,
+        candidate_id=str(test.candidate_id),
+        test_id=str(test.id),
+        subject=f"Skills test result withdrawn: {template_name}",
+        message=(
+            f"Your {template_name} skills test result has been voided and no "
+            "longer counts toward your record."
+            + (f" Reason: {reason}" if reason else "")
+        ),
+    )
+
+
+async def _log_candidate_notification(
+    db: AsyncSession,
+    *,
+    organization_id: Any,
+    candidate_id: str,
+    test_id: str,
+    subject: str,
+    message: str,
+) -> bool:
+    """Write one in-app notification to the candidate, swallowing any failure."""
+    try:
+        from app.models.notification import NotificationCategory, NotificationChannel
+        from app.services.notifications_service import NotificationsService
+
+        _, error = await NotificationsService(db).log_notification(
+            organization_id=organization_id,
+            log_data={
+                "recipient_id": candidate_id,
+                "channel": NotificationChannel.IN_APP,
+                "subject": subject,
+                "message": message,
+                "category": NotificationCategory.TRAINING,
+                "action_url": f"/training/my-skill-tests/{test_id}",
+                "delivered": True,
+                "sent_at": datetime.now(timezone.utc),
+            },
+        )
+        if error:
+            logger.error(f"Skills-test candidate notification failed: {error}")
+            return False
+        return True
+    except Exception as e:  # pragma: no cover - defensive
+        logger.error(f"Skills-test candidate notification failed: {e}")
+        return False

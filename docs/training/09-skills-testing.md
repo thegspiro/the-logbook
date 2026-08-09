@@ -406,7 +406,17 @@ What is new is the **review queue** of tests other members ran:
    Skills Testing summary dashboard.
 3. Open a result and read the scorecard — every criterion, the notes, and the
    measured time are all there.
-4. **Validate** to accept it, or **Void** to reject it.
+4. **Accept result** to validate it, or **Void result** to reject it. Both sit
+   at the bottom of the scorecard you have just read, under **Officer actions**,
+   so the decision is made on the record rather than on a list row _(2026-08-08)_.
+
+Each action states what it will do to _this_ test before you take it — whether
+the candidate is notified, and whether they will see your notes or only the
+scores. That sentence is resolved from the disclosure settings actually in force
+(test, then template, then department default), so it is worth reading even on a
+skill you administer often: a template can override the department, and a single
+test can override the template. See
+[Who Sees a Result](#who-sees-a-result--disclosure-settings-2026-08-08).
 
 **Validate** is the moment the result becomes real: the pipeline requirement is
 credited if it passed, one attempt is spent, the department statistics move, and
@@ -565,48 +575,53 @@ Lt. Santos navigates to **Training Admin > Skills Testing > Templates** and clic
 - **Time Limit:** 10 minutes
 
 **Section 1: Scene Size-Up**
-| # | Criterion | Required |
-|---|-----------|----------|
-| 1 | Takes or verbalizes appropriate PPE precautions | Yes |
-| 2 | Determines the scene/situation is safe | Yes |
-| 3 | Determines the mechanism of injury/nature of illness | No |
-| 4 | Determines the number of patients | No |
-| 5 | Requests additional EMS assistance if necessary | No |
-| 6 | Considers stabilization of the spine | Yes |
+
+| #   | Criterion                                            | Required |
+| --- | ---------------------------------------------------- | -------- |
+| 1   | Takes or verbalizes appropriate PPE precautions      | Yes      |
+| 2   | Determines the scene/situation is safe               | Yes      |
+| 3   | Determines the mechanism of injury/nature of illness | No       |
+| 4   | Determines the number of patients                    | No       |
+| 5   | Requests additional EMS assistance if necessary      | No       |
+| 6   | Considers stabilization of the spine                 | Yes      |
 
 **Section 2: Primary Survey / Resuscitation**
-| # | Criterion | Required |
-|---|-----------|----------|
-| 1 | Verbalizes general impression of the patient | No |
-| 2 | Determines responsiveness/level of consciousness (AVPU) | No |
-| 3 | Determines chief complaint/apparent life threats | No |
-| 4 | Assesses airway and breathing — assessment and corrective interventions | Yes |
-| 5 | Assesses circulation — bleeding, pulse, skin (color/temperature/moisture) | Yes |
-| 6 | Identifies patient priority and makes transport decision | No |
+
+| #   | Criterion                                                                 | Required |
+| --- | ------------------------------------------------------------------------- | -------- |
+| 1   | Verbalizes general impression of the patient                              | No       |
+| 2   | Determines responsiveness/level of consciousness (AVPU)                   | No       |
+| 3   | Determines chief complaint/apparent life threats                          | No       |
+| 4   | Assesses airway and breathing — assessment and corrective interventions   | Yes      |
+| 5   | Assesses circulation — bleeding, pulse, skin (color/temperature/moisture) | Yes      |
+| 6   | Identifies patient priority and makes transport decision                  | No       |
 
 **Section 3: History Taking**
-| # | Criterion | Required |
-|---|-----------|----------|
-| 1 | Obtains baseline vital signs (BP, pulse, respirations) | No |
-| 2 | Attempts to obtain SAMPLE history | No |
+
+| #   | Criterion                                              | Required |
+| --- | ------------------------------------------------------ | -------- |
+| 1   | Obtains baseline vital signs (BP, pulse, respirations) | No       |
+| 2   | Attempts to obtain SAMPLE history                      | No       |
 
 **Section 4: Secondary Assessment**
-| # | Criterion | Required |
-|---|-----------|----------|
-| 1 | Inspects and palpates head, neck, and cervical spine | No |
-| 2 | Inspects and palpates chest | No |
-| 3 | Inspects and palpates abdomen | No |
-| 4 | Inspects and palpates pelvis | No |
-| 5 | Inspects and palpates lower extremities (pulses, motor, sensation) | No |
-| 6 | Inspects and palpates upper extremities (pulses, motor, sensation) | No |
-| 7 | Inspects and palpates posterior (log roll technique) | No |
-| 8 | Manages secondary injuries and wounds appropriately | No |
+
+| #   | Criterion                                                          | Required |
+| --- | ------------------------------------------------------------------ | -------- |
+| 1   | Inspects and palpates head, neck, and cervical spine               | No       |
+| 2   | Inspects and palpates chest                                        | No       |
+| 3   | Inspects and palpates abdomen                                      | No       |
+| 4   | Inspects and palpates pelvis                                       | No       |
+| 5   | Inspects and palpates lower extremities (pulses, motor, sensation) | No       |
+| 6   | Inspects and palpates upper extremities (pulses, motor, sensation) | No       |
+| 7   | Inspects and palpates posterior (log roll technique)               | No       |
+| 8   | Manages secondary injuries and wounds appropriately                | No       |
 
 **Section 5: Reassessment**
-| # | Criterion | Required |
-|---|-----------|----------|
-| 1 | Demonstrates ongoing reassessment of vital signs | No |
-| 2 | Verbalizes continued treatment and monitoring | No |
+
+| #   | Criterion                                        | Required |
+| --- | ------------------------------------------------ | -------- |
+| 1   | Demonstrates ongoing reassessment of vital signs | No       |
+| 2   | Verbalizes continued treatment and monitoring    | No       |
 
 **Totals:** 5 sections, 20 criteria (5 required/critical)
 
@@ -873,6 +888,35 @@ unreleased result, not only under the "on release" mode — the action is
 idempotent and refuses tests whose results are never shown, so you do not have to
 work out which mode a given template inherits before you can act.
 
+Opening the result itself gives you the same action under **Officer actions**,
+but shown only where it is a real step: under the "on release" mode, on a result
+not yet released, for a test the member is allowed to see at all. Elsewhere the
+result is already as visible as it will ever be, and a Release button would
+imply the member is waiting on something.
+
+### The member is told when a result becomes theirs to read _(2026-08-08)_
+
+The moment a result becomes visible to the candidate, they get an in-app
+notification linking to it — **not** the moment an officer clicks something. The
+two are not the same, and the notification follows the disclosure rules rather
+than the button:
+
+| What happens                                             | Is the member notified?                                                    |
+| -------------------------------------------------------- | -------------------------------------------------------------------------- |
+| An officer completes a test (validates in the same step) | Yes, under "on completion"                                                 |
+| A member-run submission is accepted by an officer        | Yes, under "on completion"                                                 |
+| A result is accepted under the "on release" mode         | No — it counts, but they still cannot read it                              |
+| That same result is later released                       | Yes                                                                        |
+| A result is accepted where disclosure is **Not shown**   | No. Announcing a result they may not read would disclose it by implication |
+| A member runs the test and nobody has validated it yet   | No. There is no decided outcome to tell them about                         |
+| An official result they could see is **voided**          | Yes, with the reason                                                       |
+| A result they could never see is voided                  | No                                                                         |
+| Any practice attempt                                     | No — practice is the member's own drill note                               |
+
+The notification says which level they are getting: at **Scores only** it states
+that examiner notes are not included, so nobody goes looking for commentary that
+was deliberately withheld.
+
 ### Edge cases worth knowing
 
 - **A withheld result reads as _absent_, not as _forbidden_.** It is dropped from
@@ -893,7 +937,9 @@ work out which mode a given template inherits before you can act.
 ## Withdrawing a Result — Void, Cancel, Delete _(2026-08-08)_
 
 Three different things can go wrong with a test, and they are three different
-actions. The records tab offers exactly one of them per row.
+actions. The records tab offers exactly one of them per row; **Void** is also
+available under **Officer actions** on the result page itself, which is where
+you normally discover that a result should not stand.
 
 | Action     | Use it for                                            | What happens                                                                                                                                                                                                                                         |
 | ---------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

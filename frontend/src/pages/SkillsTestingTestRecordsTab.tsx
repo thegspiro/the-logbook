@@ -16,11 +16,8 @@ import type { SkillTestListItem } from '../types/skillsTesting';
 import { EmptyState } from '../components/ux';
 import { Modal } from '../components/Modal';
 import { getErrorMessage } from '../utils/errorHandling';
+import { MIN_VOID_REASON_LENGTH } from '../components/training/SkillTestOfficerActions';
 import { ClipboardList } from 'lucide-react';
-
-/** Matches the backend's SkillTestVoidRequest minimum — a void stays visible in
- *  the member's history, so the record has to say why it was withdrawn. */
-const MIN_VOID_REASON_LENGTH = 10;
 
 /** Sentinel for the status dropdown. Not a SkillTestStatus — pending validation
  *  is a property of a *completed* test, so it maps to its own query param. */
