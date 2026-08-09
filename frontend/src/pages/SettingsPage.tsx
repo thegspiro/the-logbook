@@ -61,12 +61,13 @@ import StorageSettingsSection from '../components/settings/StorageSettingsSectio
 import AuthSettingsSection from '../components/settings/AuthSettingsSection';
 import { MfaPolicyCard } from '../components/settings/MfaPolicyCard';
 import RanksSettingsSection from '../components/settings/RanksSettingsSection';
+import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 
 // ── Section definitions ──
 
 type SectionKey = 'general' | 'modules' | 'members' | 'ranks' | 'email' | 'storage' | 'authentication';
 
-const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; description: string }[] = [
+const SECTIONS: SettingsSection<SectionKey>[] = [
   {
     key: 'general',
     label: 'General',
@@ -1255,81 +1256,28 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h2 className="text-theme-text-primary text-2xl font-bold">Organization Settings</h2>
-            <p className="text-theme-text-muted mt-1 text-sm">
-              Manage your department profile, modules, and configuration.
-            </p>
+      <SettingsLayout
+        sections={SECTIONS}
+        activeSection={activeSection}
+        onSectionChange={switchSection}
+        navLabel="Settings sections"
+        header={
+          <div className="mb-8 flex items-start justify-between">
+            <div>
+              <h2 className="text-theme-text-primary text-2xl font-bold">Organization Settings</h2>
+              <p className="text-theme-text-muted mt-1 text-sm">
+                Manage your department profile, modules, and configuration.
+              </p>
+            </div>
+            <HelpLink
+              topic="settings"
+              tooltip="Configure your department's name, logo, timezone, modules, member settings, and rank structure from this page."
+            />
           </div>
-          <HelpLink
-            topic="settings"
-            tooltip="Configure your department's name, logo, timezone, modules, member settings, and rank structure from this page."
-          />
-        </div>
-
-        <div className="flex flex-col gap-6 md:flex-row">
-          {/* Mobile: horizontal scrollable tabs */}
-          <nav className="border-theme-surface-border -mx-4 border-b px-4 md:hidden" aria-label="Settings sections">
-            <div className="flex scrollbar-thin gap-1 overflow-x-auto scroll-smooth pb-2">
-              {SECTIONS.map(({ key, label, icon: Icon }) => {
-                const isActive = activeSection === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => switchSection(key)}
-                    className={`focus:ring-theme-focus-ring flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
-                      isActive
-                        ? 'bg-theme-accent-blue-muted text-theme-accent-blue'
-                        : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
-                    }`}
-                    aria-current={isActive ? 'page' : undefined}
-                  >
-                    <Icon className={`h-4 w-4 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-
-          {/* Desktop: sidebar */}
-          <nav className="hidden shrink-0 md:block md:w-56" aria-label="Settings sections">
-            <div className="space-y-1 md:sticky md:top-24">
-              {SECTIONS.map(({ key, label, icon: Icon, description }) => {
-                const isActive = activeSection === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => switchSection(key)}
-                    className={`focus:ring-theme-focus-ring flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left transition-colors focus:ring-2 focus:outline-hidden ${
-                      isActive
-                        ? 'bg-theme-accent-blue-muted text-theme-accent-blue'
-                        : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
-                    }`}
-                    aria-current={isActive ? 'page' : undefined}
-                  >
-                    <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{label}</p>
-                      <p className={`text-xs ${isActive ? 'text-theme-accent-blue/70' : 'text-theme-text-muted'}`}>
-                        {description}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-
-          {/* Content panel */}
-          <main className="min-w-0 flex-1">
-            <div className="bg-theme-surface rounded-lg p-4 shadow-sm backdrop-blur-xs sm:p-6">{renderContent()}</div>
-          </main>
-        </div>
-      </div>
+        }
+      >
+        {renderContent()}
+      </SettingsLayout>
     </div>
   );
 };

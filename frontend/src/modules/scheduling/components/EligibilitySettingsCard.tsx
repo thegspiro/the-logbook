@@ -88,14 +88,14 @@ export const EligibilitySettingsCard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="bg-theme-surface border-theme-surface-border flex items-center justify-center rounded-xl border p-5 py-12">
+      <div className="card-secondary flex items-center justify-center p-5 py-12">
         <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border space-y-6 rounded-xl border p-5">
+    <div className="card-secondary space-y-6 p-5">
       <div>
         <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
           <Shield className="h-4 w-4" /> Position Eligibility

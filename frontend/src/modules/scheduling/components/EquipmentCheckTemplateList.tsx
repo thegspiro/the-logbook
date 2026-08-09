@@ -158,7 +158,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
   );
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+    <div className="card-secondary p-5">
       <div className="mb-1 flex items-center justify-between">
         <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
           <ClipboardCheck className="h-4 w-4" /> Check Templates

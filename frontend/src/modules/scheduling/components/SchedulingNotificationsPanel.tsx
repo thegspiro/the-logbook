@@ -342,7 +342,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+    <div className="card-secondary p-5">
       <div className="mb-1 flex items-center gap-2">
         <Bell className="h-4 w-4 text-violet-500" />
         <h3 className="text-theme-text-primary text-base font-semibold">Scheduling Notifications</h3>

@@ -1,22 +1,23 @@
 /**
  * Shift Settings Panel
  *
- * Department-wide scheduling settings organized into tabbed sections:
- * General, Apparatus, Notifications, and Equipment.
- *
- * This is a thin orchestrator that manages the top-level settings state and
+ * Body of one department-wide scheduling settings section. The section list,
+ * the nav that selects between them, and the page chrome belong to
+ * SchedulingSettingsPage — this holds the settings state the sections share and
  * delegates rendering to focused card components.
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { Settings, Truck, ClipboardCheck, Bell, LayoutTemplate, Shield, FileBarChart, Users } from 'lucide-react';
+import { ClipboardCheck, Truck, Users } from 'lucide-react';
 import type { ShiftTemplateRecord, SchedulingFeatureSettings } from '../services/api';
 import { schedulingService } from '../services/api';
 import { useSchedulingStore } from '../store/schedulingStore';
 import type { ShiftSettings } from '../types/shiftSettings';
 import { BUILTIN_POSITIONS, DEFAULT_SETTINGS, SETTINGS_KEY } from '../types/shiftSettings';
+import type { SettingsTab } from './schedulingSettingsSections';
+import { LOCALLY_SAVED_SECTIONS } from './schedulingSettingsSections';
 import { SchedulingNotificationsPanel } from './SchedulingNotificationsPanel';
 import { TemplatesOverviewCard } from './TemplatesOverviewCard';
 import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
@@ -27,25 +28,6 @@ import { EquipmentCheckTemplateList } from './EquipmentCheckTemplateList';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-export type SettingsTab =
-  'general' | 'apparatus' | 'platoons' | 'notifications' | 'equipment' | 'eligibility' | 'shift-reports';
-
-const SETTINGS_TABS: {
-  id: SettingsTab;
-  label: string;
-  icon: React.ElementType;
-}[] = [
-  { id: 'general', label: 'General', icon: LayoutTemplate },
-  { id: 'apparatus', label: 'Apparatus', icon: Truck },
-  { id: 'platoons', label: 'Platoons', icon: Users },
-  { id: 'eligibility', label: 'Eligibility', icon: Shield },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'equipment', label: 'Equipment', icon: ClipboardCheck },
-  { id: 'shift-reports', label: 'Shift Reports', icon: FileBarChart },
-];
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -59,16 +41,18 @@ interface ShiftSettingsPanelProps {
     positions?: Array<string | { position: string; required?: boolean }> | undefined;
   }>;
   onNavigateToTemplates: () => void;
-  defaultTab?: SettingsTab | undefined;
+  /** Section to render. Owned by the page so it can mirror it into the URL. */
+  activeTab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
 }
 
 export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   templates,
   apparatusList,
   onNavigateToTemplates,
-  defaultTab,
+  activeTab,
+  onTabChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab || 'general');
   const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
   const loadSettings = useSchedulingStore((s) => s.loadSettings);
   const setPlatoonsEnabled = useSchedulingStore((s) => s.setPlatoonsEnabled);
@@ -78,16 +62,13 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     void loadSettings();
   }, [loadSettings]);
 
-  // Hide the Platoons tab unless the department has enabled platoon scheduling.
-  const visibleTabs = SETTINGS_TABS.filter((t) => t.id !== 'platoons' || platoonsEnabled);
-
   const handleTogglePlatoons = async (enabled: boolean) => {
     setSavingPlatoonToggle(true);
     try {
       await schedulingService.updateFeatureSettings({ platoons_enabled: enabled });
       setPlatoonsEnabled(enabled);
       toast.success(`Platoon scheduling ${enabled ? 'enabled' : 'disabled'}`);
-      if (!enabled && activeTab === 'platoons') setActiveTab('general');
+      if (!enabled && activeTab === 'platoons') onTabChange('general');
     } catch {
       toast.error('Failed to update platoon setting');
     } finally {
@@ -170,40 +151,11 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   };
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <div>
-        <h2 className="text-theme-text-primary flex items-center gap-2 text-xl font-bold">
-          <Settings className="h-5 w-5" /> Shift Settings
-        </h2>
-        <p className="text-theme-text-muted mt-1 text-sm">Configure department-wide defaults for shift scheduling.</p>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="bg-theme-surface-hover/50 flex gap-1 overflow-x-auto rounded-lg p-1">
-        {visibleTabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
-                isActive
-                  ? 'bg-theme-surface text-theme-text-primary shadow-sm'
-                  : 'text-theme-text-muted hover:text-theme-text-secondary'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
+    <div className="space-y-6">
       {/* ─── General Tab ─── */}
       {activeTab === 'general' && (
         <div className="space-y-6">
-          <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+          <div className="card-secondary p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
@@ -236,7 +188,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           </div>
 
           {feature && (
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+            <div className="card-secondary p-5">
               <h3 className="text-theme-text-primary text-base font-semibold">Overtime advisory</h3>
               <p className="text-theme-text-muted mt-1 text-sm">
                 Warn (without blocking) when assigning a member whose scheduled hours in a trailing window exceed a
@@ -285,7 +237,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           )}
 
           {feature && (
-            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+            <div className="card-secondary p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h3 className="text-theme-text-primary text-base font-semibold">Automatic shift generation</h3>
@@ -343,7 +295,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           )}
 
           {feature && (
-            <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-xl border p-5">
+            <div className="card-secondary space-y-4 p-5">
               <h3 className="text-theme-text-primary text-base font-semibold">Shift close-out rules</h3>
               {!feature.require_end_of_shift_checks && (
                 <div className="text-theme-text-secondary rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-sm">
@@ -444,7 +396,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           />
 
           {/* Apparatus Inventory */}
-          <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+          <div className="card-secondary p-5">
             <h3 className="text-theme-text-primary mb-3 text-base font-semibold">Apparatus Inventory</h3>
             {normalizedApparatusList.length === 0 ? (
               <p className="text-theme-text-muted text-sm">
@@ -513,7 +465,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       {/* ─── Equipment Tab ─── */}
       {activeTab === 'equipment' && (
         <div className="space-y-6">
-          <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+          <div className="card-secondary p-5">
             <h3 className="text-theme-text-primary mb-3 flex items-center gap-2 text-base font-semibold">
               <ClipboardCheck className="h-4 w-4" /> Equipment Checks
             </h3>
@@ -614,24 +566,27 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         </div>
       )}
 
-      {/* Save Actions — visible on all tabs */}
-      <div className="flex items-center justify-between pt-2">
-        <button
-          onClick={handleReset}
-          className="text-theme-text-muted hover:text-theme-text-primary text-sm transition-colors"
-        >
-          Reset to defaults
-        </button>
-        <div className="flex items-center gap-3">
-          {saved && <span className="text-sm text-green-600 dark:text-green-400">Settings saved</span>}
+      {/* Save Actions — only on the sections this button actually writes. */}
+      {LOCALLY_SAVED_SECTIONS.includes(activeTab) && (
+        <div className="border-theme-surface-border flex items-center justify-between border-t pt-4">
           <button
-            onClick={handleSave}
-            className="rounded-lg bg-violet-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+            onClick={handleReset}
+            className="text-theme-text-muted hover:text-theme-text-primary text-sm transition-colors"
           >
-            Save Settings
+            Reset to defaults
           </button>
+          <div className="flex items-center gap-3">
+            {saved && (
+              <span className="text-sm text-green-600 dark:text-green-400" role="status" aria-live="polite">
+                Settings saved
+              </span>
+            )}
+            <button onClick={handleSave} className="btn-primary px-6 py-2 text-sm">
+              Save Settings
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
