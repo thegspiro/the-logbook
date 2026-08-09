@@ -159,6 +159,40 @@ class TrainingRequirementEnhancedResponse(
 # Training Program Schemas
 
 
+class ReminderConditions(BaseModel):
+    """When a program nags an enrolled member about their deadline.
+
+    ``extra="ignore"`` on purpose: ``milestone_threshold`` shipped in an early
+    sketch of this blob and is not honored (ProgramMilestone rows already fire
+    progress-based notifications). Old rows keep the key and still validate;
+    new writes drop it.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    # Days before the deadline to warn. A single int is accepted so rows written
+    # against the original shape (``"days_before_deadline": 90``) still load.
+    days_before_deadline: Optional[List[int]] = None
+    # Skip the warning for members at or above this completion percentage.
+    send_if_below_percentage: Optional[float] = Field(None, ge=0, le=100)
+
+    @field_validator("days_before_deadline", mode="before")
+    @classmethod
+    def _accept_single_day(cls, value: Any) -> Any:
+        if value is None or isinstance(value, list):
+            return value
+        return [value]
+
+    @field_validator("days_before_deadline", mode="after")
+    @classmethod
+    def _reject_negative_days(cls, value: Optional[List[int]]) -> Optional[List[int]]:
+        if value and any(day < 0 for day in value):
+            raise ValueError(
+                "Reminder days must be zero or more days before the due date"
+            )
+        return value
+
+
 class TrainingProgramBase(BaseModel):
     """Base training program schema"""
 
@@ -170,6 +204,7 @@ class TrainingProgramBase(BaseModel):
     structure_type: ProgramStructureTypeStr = "flexible"
     time_limit_days: Optional[int] = Field(None, ge=0)
     warning_days_before: int = Field(default=30, ge=0)
+    reminder_conditions: Optional[ReminderConditions] = None
     is_template: bool = False
     # Recertification cycle: when enabled, enrolled members' progress auto-resets
     # on a recurring deadline. anchor_month/day optionally pin it to a fixed date
@@ -195,6 +230,7 @@ class TrainingProgramUpdate(BaseModel):
     structure_type: Optional[ProgramStructureTypeStr] = None
     time_limit_days: Optional[int] = Field(None, ge=0)
     warning_days_before: Optional[int] = Field(None, ge=0)
+    reminder_conditions: Optional[ReminderConditions] = None
     is_template: Optional[bool] = None
     active: Optional[bool] = None
     recert_enabled: Optional[bool] = None
@@ -606,6 +642,10 @@ class MemberProgramProgress(BaseModel):
     next_milestones: List[ProgramMilestoneResponse] = []
     time_remaining_days: Optional[int] = None
     is_behind_schedule: bool = False
+    # Requirement id -> names of the prerequisites still blocking it. Present so
+    # the member's page can grey a step out and say what unlocks it, instead of
+    # offering work that the API will refuse.
+    locked_requirements: Dict[str, List[str]] = {}
 
 
 # Registry Import Schemas

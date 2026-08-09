@@ -15,12 +15,18 @@ const mockAddProgramRequirement = vi.fn();
 const mockCreateRequirementEnhanced = vi.fn();
 const mockGetRequirementsEnhanced = vi.fn();
 const mockGetCourses = vi.fn();
+const mockCreateProgramPhase = vi.fn();
+const mockUpdateProgramPhase = vi.fn();
+const mockUpdateProgram = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
     addProgramRequirement: (...a: unknown[]) => mockAddProgramRequirement(...a) as unknown,
     createRequirementEnhanced: (...a: unknown[]) => mockCreateRequirementEnhanced(...a) as unknown,
     getRequirementsEnhanced: (...a: unknown[]) => mockGetRequirementsEnhanced(...a) as unknown,
+    createProgramPhase: (...a: unknown[]) => mockCreateProgramPhase(...a) as unknown,
+    updateProgramPhase: (...a: unknown[]) => mockUpdateProgramPhase(...a) as unknown,
+    updateProgram: (...a: unknown[]) => mockUpdateProgram(...a) as unknown,
   },
   trainingService: {
     getCourses: (...a: unknown[]) => mockGetCourses(...a) as unknown,
@@ -32,7 +38,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 // Imported after the mocks so the modal picks them up.
-import { RequirementFormModal } from './PipelineEditModals';
+import { EditProgramModal, PhaseFormModal, RequirementFormModal } from './PipelineEditModals';
 
 const cprRequirement = {
   id: 'req-cpr',
@@ -153,5 +159,153 @@ describe('RequirementFormModal', () => {
     expect(await screen.findByText(/apply everywhere it is used/)).toBeInTheDocument();
     // Editing never offers the link/create switch.
     expect(screen.queryByRole('tab', { name: 'Use an existing requirement' })).not.toBeInTheDocument();
+  });
+});
+
+const phases = [
+  {
+    id: 'ph-1',
+    program_id: 'prog-1',
+    phase_number: 1,
+    name: 'Classroom',
+    requires_manual_advancement: false,
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'ph-2',
+    program_id: 'prog-1',
+    phase_number: 2,
+    name: 'Skills',
+    requires_manual_advancement: false,
+    created_at: '',
+    updated_at: '',
+  },
+];
+
+describe('PhaseFormModal — phase prerequisites', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCreateProgramPhase.mockResolvedValue({ id: 'ph-3' });
+    mockUpdateProgramPhase.mockResolvedValue({ id: 'ph-2' });
+  });
+
+  it('offers the program’s other phases as prerequisites', async () => {
+    renderWithRouter(
+      <PhaseFormModal
+        programId="prog-1"
+        phase={phases[1]}
+        allPhases={phases}
+        nextPhaseNumber={3}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText(/Phase 1: Classroom/)).toBeInTheDocument();
+    // A phase can't gate itself, so it is not in its own list.
+    expect(screen.queryByLabelText(/Phase 2: Skills/)).not.toBeInTheDocument();
+  });
+
+  it('sends the ticked prerequisites as ids', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <PhaseFormModal
+        programId="prog-1"
+        phase={phases[1]}
+        allPhases={phases}
+        nextPhaseNumber={3}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText(/Phase 1: Classroom/));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgramPhase).toHaveBeenCalledWith(
+        'prog-1',
+        'ph-2',
+        expect.objectContaining({ prerequisite_phase_ids: ['ph-1'] })
+      );
+    });
+  });
+
+  it('hides the picker when there is nothing to pick', async () => {
+    renderWithRouter(<PhaseFormModal programId="prog-1" nextPhaseNumber={1} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(screen.queryByText(/Finish these phases first/)).not.toBeInTheDocument();
+  });
+});
+
+const program = {
+  id: 'prog-1',
+  organization_id: 'org-1',
+  name: 'Recruit School',
+  version: 1,
+  structure_type: 'phases' as const,
+  allows_concurrent_enrollment: true,
+  warning_days_before: 30,
+  is_template: false,
+  active: true,
+  recert_enabled: false,
+  created_at: '',
+  updated_at: '',
+};
+
+describe('EditProgramModal — deadline reminders', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpdateProgram.mockResolvedValue(program);
+  });
+
+  it('saves a custom reminder schedule and on-track cutoff', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/All reminder days/), '60, 30, 7');
+    await user.type(screen.getByLabelText(/below this percent complete/), '40');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({
+          reminder_conditions: {
+            days_before_deadline: [60, 30, 7],
+            send_if_below_percentage: 40,
+          },
+        })
+      );
+    });
+  });
+
+  it('rejects a non-numeric reminder day instead of dropping it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/All reminder days/), '30, soon');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).not.toHaveBeenCalled();
+    });
+  });
+
+  it('leaves the cutoff unset when the field is blank', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({
+          reminder_conditions: { days_before_deadline: [], send_if_below_percentage: undefined },
+        })
+      );
+    });
   });
 });

@@ -47,7 +47,8 @@ def _progress(user_id="u1"):
     return SimpleNamespace(
         id=str(uuid4()),
         enrollment_id="enr-1",
-        enrollment=SimpleNamespace(user_id=user_id),
+        requirement_id="req-1",
+        enrollment=SimpleNamespace(user_id=user_id, program_id="prog-1"),
         requirement=SimpleNamespace(passing_score=70, max_attempts=None),
         status=RequirementProgressStatus.NOT_STARTED,
         progress_value=0.0,

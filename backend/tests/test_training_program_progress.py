@@ -238,7 +238,8 @@ class TestUpdateRequirementProgressAuth:
         return SimpleNamespace(
             id="p1",
             enrollment_id="enr-1",
-            enrollment=SimpleNamespace(user_id=owner),
+            requirement_id="req-1",
+            enrollment=SimpleNamespace(user_id=owner, program_id="prog-1"),
             updated_at=None,
         )
 

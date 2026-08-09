@@ -62,7 +62,9 @@ from app.services.training_waiver_service import (
     get_rolling_period_months,
 )
 from app.utils.checklist import checklist_progress, prune_done_ids, to_storage
+from app.utils.json_ids import normalize_id_list
 from app.utils.org_scoping import assert_all_in_org
+from app.utils.phase_prerequisites import find_cycle
 
 
 class TrainingProgramService:
@@ -718,10 +720,16 @@ class TrainingProgramService:
             description=program_data.description,
             code=program_data.code,
             target_position=program_data.target_position,
-            target_roles=program_data.target_roles,
+            # JSON column — ids arrive as UUIDs and json.dumps can't write those.
+            target_roles=normalize_id_list(program_data.target_roles) or None,
             structure_type=structure_type,
             time_limit_days=program_data.time_limit_days,
             warning_days_before=program_data.warning_days_before,
+            reminder_conditions=(
+                program_data.reminder_conditions.model_dump(exclude_none=True)
+                if program_data.reminder_conditions
+                else None
+            ),
             is_template=program_data.is_template,
             recert_enabled=program_data.recert_enabled,
             recert_interval_months=program_data.recert_interval_months,
@@ -1021,6 +1029,17 @@ class TrainingProgramService:
             except ValueError:
                 return None, f"Invalid structure type: {data['structure_type']}"
 
+        # Both are JSON columns; model_dump leaves UUIDs as objects, which
+        # json.dumps refuses at commit time.
+        if data.get("target_roles"):
+            data["target_roles"] = normalize_id_list(data["target_roles"]) or None
+        if data.get("reminder_conditions"):
+            data["reminder_conditions"] = {
+                key: value
+                for key, value in data["reminder_conditions"].items()
+                if value is not None
+            }
+
         for field, value in data.items():
             setattr(program, field, value)
 
@@ -1203,6 +1222,60 @@ class TrainingProgramService:
                 await self._recalculate_enrollment_progress(UUID(str(eid)))
                 await self._maybe_auto_advance_phase(UUID(str(eid)))
 
+    async def _validate_phase_prerequisites(
+        self,
+        program_id: Any,
+        phase_id: Optional[Any],
+        prerequisite_phase_ids: Optional[Any],
+    ) -> Tuple[Optional[List[str]], Optional[str]]:
+        """Check a phase's ``prerequisite_phase_ids`` and return them as strings.
+
+        Three things can go wrong with a client-supplied prerequisite list, and
+        all three are silent if unchecked:
+
+        * an id from another program (or a typo) — a dangling edge that gates
+          nothing, and a cross-tenant reference we must not persist (Pitfall 14c)
+        * a phase listing itself — nobody could ever start it
+        * a cycle — "Phase 2 needs Phase 3, Phase 3 needs Phase 2" strands every
+          enrolled member with no error an officer could act on
+
+        Returns ``(ids, None)`` on success — ``None`` for ids when the list is
+        empty, so the column stays NULL rather than holding an empty array.
+        """
+        ids = normalize_id_list(prerequisite_phase_ids)
+        if not ids:
+            return None, None
+
+        result = await self.db.execute(
+            select(ProgramPhase).where(ProgramPhase.program_id == str(program_id))
+        )
+        phases = list(result.scalars().all())
+        names = {str(p.id): p.name for p in phases}
+
+        unknown = [pid for pid in ids if pid not in names]
+        if unknown:
+            return None, (
+                f"{len(unknown)} prerequisite phase(s) are not part of this program"
+            )
+
+        if phase_id is not None and str(phase_id) in ids:
+            return None, "A phase cannot be its own prerequisite"
+
+        if phase_id is not None:
+            graph: Dict[str, List[str]] = {
+                str(p.id): normalize_id_list(p.prerequisite_phase_ids) for p in phases
+            }
+            graph[str(phase_id)] = ids
+            cycle = find_cycle(graph, str(phase_id))
+            if cycle:
+                chain = " → ".join(names.get(pid, pid) for pid in cycle)
+                return None, (
+                    "These prerequisites loop back on each other, so no member "
+                    f"could ever finish them: {chain}"
+                )
+
+        return ids, None
+
     async def create_program_phase(
         self,
         phase_data: ProgramPhaseCreate,
@@ -1231,13 +1304,21 @@ class TrainingProgramService:
                 f"Phase {phase_data.phase_number} already exists for this program",
             )
 
+        prerequisite_ids, error = await self._validate_phase_prerequisites(
+            program_id=phase_data.program_id,
+            phase_id=None,
+            prerequisite_phase_ids=phase_data.prerequisite_phase_ids,
+        )
+        if error:
+            return None, error
+
         # Create phase (DB-level unique constraint prevents race conditions)
         phase = ProgramPhase(
             program_id=phase_data.program_id,
             phase_number=phase_data.phase_number,
             name=phase_data.name,
             description=phase_data.description,
-            prerequisite_phase_ids=phase_data.prerequisite_phase_ids,
+            prerequisite_phase_ids=prerequisite_ids,
             time_limit_days=phase_data.time_limit_days,
             requires_manual_advancement=phase_data.requires_manual_advancement,
         )
@@ -1288,6 +1369,17 @@ class TrainingProgramService:
 
         data = updates.model_dump(exclude_unset=True)
         data.pop("phase_number", None)  # reordering is a separate operation
+
+        if "prerequisite_phase_ids" in data:
+            prerequisite_ids, error = await self._validate_phase_prerequisites(
+                program_id=program_id,
+                phase_id=phase_id,
+                prerequisite_phase_ids=data["prerequisite_phase_ids"],
+            )
+            if error:
+                return None, error
+            data["prerequisite_phase_ids"] = prerequisite_ids
+
         for field, value in data.items():
             setattr(phase, field, value)
 
@@ -1381,8 +1473,19 @@ class TrainingProgramService:
             )
             .order_by(ProgramPhase.phase_number)
         )
-        remaining_phases = remaining_result.scalars().all()
+        remaining_phases = list(remaining_result.scalars().all())
         fallback_phase_id = remaining_phases[0].id if remaining_phases else None
+
+        # Drop the deleted phase from every other phase's prerequisite list. A
+        # dangling id gates nothing, but it survives duplication and export, and
+        # it reads as a real prerequisite in the editor. Reassign a fresh list
+        # rather than mutating in place — a plain JSON column doesn't track
+        # in-place changes and the UPDATE would never be issued.
+        for other in remaining_phases:
+            current = normalize_id_list(other.prerequisite_phase_ids)
+            if str(phase_id) in current:
+                pruned = [pid for pid in current if pid != str(phase_id)]
+                other.prerequisite_phase_ids = pruned or None
         reanchored_ids = [str(r[0]) for r in enroll_rows if str(r[1]) == str(phase_id)]
         if reanchored_ids:
             await self.db.execute(
@@ -2302,6 +2405,16 @@ class TrainingProgramService:
                     "Only a training officer can mark a requirement "
                     "complete or verified",
                 )
+
+        # A requirement gated by an unfinished prerequisite can't be signed off
+        # yet. Checked before anything is applied so a locked requirement is
+        # rejected whole rather than half-updated.
+        locks = await self.prerequisite_locks(
+            progress.enrollment_id, progress.enrollment.program_id
+        )
+        blockers = locks.get(str(progress.requirement_id))
+        if blockers:
+            return None, self._locked_message(blockers)
 
         # Update status
         if updates.status:
@@ -3573,6 +3686,92 @@ class TrainingProgramService:
             except Exception as e:
                 logger.error(f"Failed to send program completion notification: {e}")
 
+    # ==================== Requirement Prerequisite Methods ====================
+
+    async def prerequisite_locks(
+        self,
+        enrollment_id: Any,
+        program_id: Any,
+    ) -> Dict[str, List[str]]:
+        """Which requirements this enrollment can't work on yet, and why.
+
+        A program↔requirement link flagged ``is_prerequisite`` gates the *other*
+        requirements sharing its scope — its phase, or the program-level pool
+        for links with no phase. Until every gate in a scope is satisfied, the
+        rest of that scope is locked.
+
+        Returns ``{requirement_id: [blocking requirement names]}``, empty when
+        nothing is gated. A requirement linked into more than one scope is
+        locked only when *every* one of its links is locked — otherwise an
+        unrelated phase's gate would block work the member is cleared for.
+
+        The gate governs officer sign-off and what the member is told to work on.
+        Credit that flows in automatically from logged training is deliberately
+        not blocked: the hours happened, and dropping them on the floor would be
+        worse than crediting them early.
+        """
+        result = await self.db.execute(
+            select(ProgramRequirement)
+            .options(selectinload(ProgramRequirement.requirement))
+            .where(ProgramRequirement.program_id == str(program_id))
+        )
+        links = list(result.scalars().all())
+        gates = [link for link in links if link.is_prerequisite]
+        if not gates:
+            return {}
+
+        progress_result = await self.db.execute(
+            select(RequirementProgress).where(
+                RequirementProgress.enrollment_id == str(enrollment_id),
+                RequirementProgress.requirement_id.in_(
+                    [str(gate.requirement_id) for gate in gates]
+                ),
+            )
+        )
+        satisfied = {
+            str(row.requirement_id)
+            for row in progress_result.scalars().all()
+            if (row.progress_percentage or 0.0) >= 100.0
+        }
+
+        unmet_by_scope: Dict[Optional[str], List[str]] = {}
+        for gate in gates:
+            if str(gate.requirement_id) in satisfied:
+                continue
+            scope = str(gate.phase_id) if gate.phase_id else None
+            name = getattr(gate.requirement, "name", None) or "an earlier step"
+            blockers = unmet_by_scope.setdefault(scope, [])
+            if name not in blockers:
+                blockers.append(name)
+        if not unmet_by_scope:
+            return {}
+
+        blocked_links: Dict[str, List[List[str]]] = {}
+        for link in links:
+            if link.is_prerequisite:
+                continue
+            scope = str(link.phase_id) if link.phase_id else None
+            blocked_links.setdefault(str(link.requirement_id), []).append(
+                unmet_by_scope.get(scope) or []
+            )
+
+        return {
+            requirement_id: sorted({name for scope in scopes for name in scope})
+            for requirement_id, scopes in blocked_links.items()
+            if all(scopes)
+        }
+
+    @staticmethod
+    def _locked_message(blockers: List[str]) -> str:
+        """Plain-language reason a requirement is still locked."""
+        if len(blockers) == 1:
+            listed = blockers[0]
+        elif len(blockers) == 2:
+            listed = f"{blockers[0]} and {blockers[1]}"
+        else:
+            listed = f"{', '.join(blockers[:-1])}, and {blockers[-1]}"
+        return f"Finish {listed} first — this step unlocks after that."
+
     # ==================== Phase Advancement Methods ====================
 
     async def _is_phase_complete(
@@ -3605,6 +3804,34 @@ class TrainingProgramService:
             if (row.progress_percentage or 0.0) >= 100.0
         }
         return all(rid in satisfied for rid in required_ids)
+
+    async def _unmet_phase_prerequisites(
+        self,
+        enrollment_id: UUID,
+        phase: ProgramPhase,
+        phases_by_id: Dict[str, ProgramPhase],
+    ) -> List[str]:
+        """Names of the phases that gate ``phase`` and aren't finished yet.
+
+        Phase order and phase prerequisites answer different questions:
+        ``phase_number`` is the order phases are *shown and walked* in, while
+        ``prerequisite_phase_ids`` says which phases must be *finished* first.
+        A program with an optional or parallel track needs both — e.g. Ride-Along
+        (phase 3) may require Skills (phase 2) while Classroom (phase 4) doesn't.
+
+        A prerequisite pointing at a phase that no longer exists is ignored: it
+        can't be completed, so honoring it would strand the member forever.
+        """
+        unmet: List[str] = []
+        for prerequisite_id in normalize_id_list(phase.prerequisite_phase_ids):
+            prerequisite = phases_by_id.get(prerequisite_id)
+            if prerequisite is None:
+                continue
+            if not await self._is_phase_complete(
+                enrollment_id, UUID(str(prerequisite.id))
+            ):
+                unmet.append(prerequisite.name)
+        return unmet
 
     @staticmethod
     def _next_phase(
@@ -3690,6 +3917,19 @@ class TrainingProgramService:
                     "The current phase's requirements are not yet complete",
                 )
 
+        if not force:
+            unmet = await self._unmet_phase_prerequisites(
+                enrollment_id,
+                next_phase,
+                {str(p.id): p for p in program.phases},
+            )
+            if unmet:
+                return (
+                    None,
+                    f"{next_phase.name} can't start until these phases are "
+                    f"finished: {', '.join(unmet)}",
+                )
+
         await self.db.execute(
             update(ProgramEnrollment)
             .where(ProgramEnrollment.id == str(enrollment_id))
@@ -3749,6 +3989,11 @@ class TrainingProgramService:
                 return
             next_phase = self._next_phase(phases, enrollment.current_phase_id)
             if next_phase is None:
+                return
+            if await self._unmet_phase_prerequisites(enrollment_id, next_phase, by_id):
+                # The member finished this phase but not everything the next one
+                # depends on. Advancing anyway would drop them into work they
+                # aren't cleared for; an officer can still force it.
                 return
 
             await self.db.execute(
@@ -3981,6 +4226,7 @@ class TrainingProgramService:
 
         # Serialize phases
         phases = []
+        by_id = {str(p.id): p for p in program.phases}
         for phase in sorted(program.phases, key=lambda p: p.phase_number):
             phase_reqs = []
             for pr in sorted(phase.requirements, key=lambda r: r.sort_order):
@@ -4017,6 +4263,14 @@ class TrainingProgramService:
                     "description": phase.description,
                     "requires_manual_advancement": phase.requires_manual_advancement,
                     "time_limit_days": phase.time_limit_days,
+                    # Exported by phase *number*, not id: the importing
+                    # department mints new phase ids, so raw ids would land as
+                    # dangling references. Numbers survive the round trip.
+                    "prerequisite_phase_numbers": sorted(
+                        by_id[pid].phase_number
+                        for pid in normalize_id_list(phase.prerequisite_phase_ids)
+                        if pid in by_id
+                    ),
                     "requirements": phase_reqs,
                     "milestones": phase_milestones,
                 }
@@ -4178,6 +4432,7 @@ class TrainingProgramService:
         await self.db.flush()
 
         # Import phases
+        phases_by_number: Dict[int, ProgramPhase] = {}
         for phase_data in data.get("phases", []):
             phase = ProgramPhase(
                 program_id=program.id,
@@ -4191,6 +4446,7 @@ class TrainingProgramService:
             )
             self.db.add(phase)
             await self.db.flush()
+            phases_by_number[phase.phase_number] = phase
 
             for req_data in phase_data.get("requirements", []):
                 req_id, req_created = await self._resolve_or_create_requirement(
@@ -4233,6 +4489,21 @@ class TrainingProgramService:
                         verification_notes=ms_data.get("verification_notes"),
                     )
                 )
+
+        # Re-link phase prerequisites now that every phase has an id in this
+        # department. Numbers that aren't in the file are dropped rather than
+        # imported as dangling references.
+        for phase_data in data.get("phases", []):
+            phase = phases_by_number.get(phase_data.get("phase_number", 0))
+            if phase is None:
+                continue
+            linked = [
+                str(phases_by_number[number].id)
+                for number in phase_data.get("prerequisite_phase_numbers") or []
+                if number in phases_by_number and number != phase.phase_number
+            ]
+            if linked:
+                phase.prerequisite_phase_ids = linked
 
         # Program-level requirements
         for req_data in data.get("program_requirements", []):

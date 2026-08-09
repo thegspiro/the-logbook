@@ -25,8 +25,10 @@ def _progress(required_courses):
     return SimpleNamespace(
         id="p1",
         enrollment_id="enr-1",
+        requirement_id="req-1",
         enrollment=SimpleNamespace(
             user_id="u1",
+            program_id="prog-1",
             enrolled_at=None,
             target_completion_date=None,
             program=SimpleNamespace(organization_id="org-1"),

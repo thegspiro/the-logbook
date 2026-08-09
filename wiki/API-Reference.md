@@ -409,6 +409,22 @@ DELETE /api/v1/training/programs/programs/{program_id}/milestones/{milestone_id}
   entry). Reorder endpoints take an ordered id list and renumber in one transaction.
 - **Program create/response** now include `code` and `version`; each program
   phase includes `requires_manual_advancement`.
+- **Phase prerequisites.** `prerequisite_phase_ids` on a phase create/update names
+  phases in the same program that must be _finished_ before it opens (distinct from
+  `phase_number`, which is only the order). Rejected with a 400 when an id belongs to
+  another program, a phase lists itself, or the result would form a cycle. Both
+  `advance-phase` and automatic advancement honor them; `force=true` overrides.
+- **Requirement prerequisites.** A program↔requirement link with
+  `is_prerequisite: true` gates the other requirements in its scope (its phase, or
+  the program-level pool). `PATCH /progress/{progress_id}` refuses a gated
+  requirement, and `GET /enrollments/{enrollment_id}` returns
+  `locked_requirements: { requirement_id: [blocking requirement names] }` so the UI
+  can grey the step out with the reason.
+- **Deadline reminders.** `reminder_conditions` is now accepted on program
+  create/update: `days_before_deadline` (int or list of ints) and
+  `send_if_below_percentage` (0–100). Unset falls back to `warning_days_before`
+  plus 14- and 7-day follow-ups; the weekly `enrollment_deadline_warnings` sweep
+  reads it per program instead of a fixed `[30, 14, 7]`.
 
 ### Soft Phase Gate on Attendance _(2026-07-14)_
 

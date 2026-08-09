@@ -97,7 +97,8 @@ def _progress(items, owner="u1", notes=None):
     return SimpleNamespace(
         id=str(uuid4()),
         enrollment_id="enr-1",
-        enrollment=SimpleNamespace(user_id=owner),
+        requirement_id="req-1",
+        enrollment=SimpleNamespace(user_id=owner, program_id="prog-1"),
         requirement=SimpleNamespace(
             requirement_type=RequirementType.CHECKLIST,
             checklist_items=items,

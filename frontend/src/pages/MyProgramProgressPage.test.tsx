@@ -252,3 +252,80 @@ describe('MyProgramProgressPage — checklist steps', () => {
     expect(screen.getByText(/1 \/ 3 steps/)).toBeInTheDocument();
   });
 });
+
+describe('MyProgramProgressPage — locked requirements', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: {
+        id: 'enr-1',
+        current_phase_id: null,
+        progress_percentage: 0,
+        enrolled_at: '2026-02-01T00:00:00Z',
+        status: 'active',
+      },
+      program: { id: 'prog-1', name: 'Recruit School' },
+      requirement_progress: [
+        {
+          id: 'rp-gate',
+          requirement_id: 'req-gate',
+          status: 'not_started',
+          progress_percentage: 0,
+          requirement: { id: 'req-gate', name: 'Orientation' },
+        },
+        {
+          id: 'rp-locked',
+          requirement_id: 'req-locked',
+          status: 'not_started',
+          progress_percentage: 0,
+          requirement: { id: 'req-locked', name: 'Ride-Alongs' },
+        },
+      ],
+      completed_requirements: 0,
+      total_requirements: 2,
+      next_milestones: [],
+      is_behind_schedule: false,
+      locked_requirements: { 'req-locked': ['Orientation'] },
+    });
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockResolvedValue([
+      {
+        id: 'pr-gate',
+        program_id: 'prog-1',
+        phase_id: null,
+        requirement_id: 'req-gate',
+        is_required: true,
+        is_prerequisite: true,
+        sort_order: 0,
+        created_at: '',
+      },
+      {
+        id: 'pr-locked',
+        program_id: 'prog-1',
+        phase_id: null,
+        requirement_id: 'req-locked',
+        is_required: true,
+        is_prerequisite: false,
+        sort_order: 1,
+        created_at: '',
+      },
+    ]);
+  });
+
+  it('says what unlocks a gated requirement rather than hiding it', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    // The step is still listed — a step that vanishes reads as a bug.
+    expect(await screen.findByText('Ride-Alongs')).toBeInTheDocument();
+    expect(screen.getByText(/Locked until you finish Orientation/)).toBeInTheDocument();
+  });
+
+  it('leaves the prerequisite itself open', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    await screen.findByText('Orientation');
+    // Exactly one of the two requirements is gated — the prerequisite is not
+    // locked behind itself.
+    expect(screen.getAllByText(/Locked until/)).toHaveLength(1);
+  });
+});

@@ -26,7 +26,10 @@ def _progress(passing_score=70.0, max_attempts=None, prior_notes=None):
     return SimpleNamespace(
         id="p1",
         enrollment_id="enr-1",
-        enrollment=SimpleNamespace(user_id="u1", program=SimpleNamespace()),
+        requirement_id="req-1",
+        enrollment=SimpleNamespace(
+            user_id="u1", program_id="prog-1", program=SimpleNamespace()
+        ),
         requirement=SimpleNamespace(
             passing_score=passing_score, max_attempts=max_attempts
         ),

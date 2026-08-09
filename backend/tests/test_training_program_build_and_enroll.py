@@ -375,7 +375,8 @@ class TestNonNumericCompletion:
         progress = SimpleNamespace(
             id="p1",
             enrollment_id="enr-1",
-            enrollment=SimpleNamespace(user_id="me"),
+            requirement_id="req-1",
+            enrollment=SimpleNamespace(user_id="me", program_id="prog-1"),
             status=RequirementProgressStatus.NOT_STARTED,
             progress_percentage=0.0,
             started_at=None,

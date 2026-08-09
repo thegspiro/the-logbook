@@ -190,7 +190,9 @@ class TestDeletePhase:
         phase = SimpleNamespace(id=phase_id)
         link_id, req_id = str(uuid4()), str(uuid4())
         e1, e2 = str(uuid4()), str(uuid4())
-        remaining = SimpleNamespace(id=str(uuid4()), phase_number=2)
+        remaining = SimpleNamespace(
+            id=str(uuid4()), phase_number=2, prerequisite_phase_ids=[phase_id]
+        )
         db = RecordingSession(
             [
                 _rows([(link_id, req_id)]),  # requirement links on phase
@@ -215,6 +217,9 @@ class TestDeletePhase:
         # Both enrollments recomputed; only the parked one re-advanced.
         assert svc._recalculate_enrollment_progress.await_count == 2
         assert svc._maybe_auto_advance_phase.await_count == 1
+        # The surviving phase no longer points at the phase that just went away
+        # — a dangling prerequisite gates nothing but still reads as a real one.
+        assert remaining.prerequisite_phase_ids is None
 
 
 class TestRemoveRequirement:
