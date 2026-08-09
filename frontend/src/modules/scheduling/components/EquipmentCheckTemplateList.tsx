@@ -26,6 +26,7 @@ import { schedulingService } from '../services/api';
 import type { EquipmentCheckTemplate } from '../types/equipmentCheck';
 import { TEMPLATE_TYPE_LABELS, type TemplateType } from '../types/equipmentCheck';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { PromptDialog } from '../../../components/ux';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,11 @@ function countItems(template: EquipmentCheckTemplate): number {
   return (template.compartments ?? []).reduce((sum, c) => sum + (c.items?.length ?? 0), 0);
 }
 
+/** The name a clone gets unless the user types their own. */
+function cloneNameFor(template: EquipmentCheckTemplate): string {
+  return `${template.name} (Copy)`;
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export const EquipmentCheckTemplateList: React.FC = () => {
@@ -59,6 +65,8 @@ export const EquipmentCheckTemplateList: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [hideInactive, setHideInactive] = useState(false);
+  const [cloneTarget, setCloneTarget] = useState<EquipmentCheckTemplate | null>(null);
+  const [cloning, setCloning] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -105,16 +113,28 @@ export const EquipmentCheckTemplateList: React.FC = () => {
     }
   };
 
-  const handleClone = async (template: EquipmentCheckTemplate) => {
-    const defaultName = `${template.name} (Copy)`;
-    const newName = window.prompt('Name for the cloned template:', defaultName);
-    if (newName === null) return;
+  /** Copy a template under a new name.
+   *
+   * Was a window.prompt, which a browser may suppress — and a suppressed
+   * prompt returns null, the same value Cancel returns, so cloning could
+   * silently do nothing.
+   */
+  const handleClone = async (newName: string) => {
+    if (!cloneTarget) return;
+    const template = cloneTarget;
+    setCloning(true);
     try {
-      const cloned = await schedulingService.cloneEquipmentCheckTemplate(template.id, newName.trim() || defaultName);
+      const cloned = await schedulingService.cloneEquipmentCheckTemplate(
+        template.id,
+        newName || cloneNameFor(template)
+      );
       setTemplates((prev) => [...prev, cloned]);
+      setCloneTarget(null);
       toast.success(`Cloned as "${cloned.name}"`);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to clone template'));
+    } finally {
+      setCloning(false);
     }
   };
 
@@ -292,9 +312,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                     <Pencil className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
                   </a>
                   <button
-                    onClick={() => {
-                      void handleClone(template);
-                    }}
+                    onClick={() => setCloneTarget(template)}
                     className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-blue-500/10 hover:text-blue-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
                     aria-label={`Clone ${template.name}`}
                   >
@@ -320,6 +338,22 @@ export const EquipmentCheckTemplateList: React.FC = () => {
           })}
         </div>
       )}
+
+      <PromptDialog
+        isOpen={cloneTarget !== null}
+        onClose={() => setCloneTarget(null)}
+        onSubmit={(newName) => void handleClone(newName)}
+        title="Clone check template"
+        message={
+          cloneTarget
+            ? `Copies every compartment and item from "${cloneTarget.name}" into a new template you can edit.`
+            : undefined
+        }
+        label="Name for the copy"
+        defaultValue={cloneTarget ? cloneNameFor(cloneTarget) : ''}
+        confirmLabel="Clone template"
+        loading={cloning}
+      />
     </div>
   );
 };

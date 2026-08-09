@@ -5,7 +5,7 @@
  * request info, approval timeline, and action buttons.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router';
 import { ArrowLeft, AlertTriangle, FileCheck, CheckCircle, Clock, XCircle, Ban, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -13,6 +13,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { checkRequestService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
+import { PromptDialog } from '@/components/ux/PromptDialog';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
@@ -66,6 +67,8 @@ const CheckRequestDetailPage: React.FC = () => {
   const tz = useTimezone();
   const { id } = useParams<{ id: string }>();
   const { selectedCheckRequest: cr, isLoading, error, fetchCheckRequest, submitCheckRequest } = useFinanceStore();
+  const [showIssueDialog, setShowIssueDialog] = useState(false);
+  const [issuing, setIssuing] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -83,16 +86,24 @@ const CheckRequestDetailPage: React.FC = () => {
     }
   };
 
-  const handleIssue = async () => {
+  /** Record the check number this request was paid with.
+   *
+   * Was a window.prompt, which a browser may suppress — and a suppressed
+   * prompt returns null, the same value Cancel returns, so issuing a check
+   * could silently do nothing on a page that gave no other feedback.
+   */
+  const handleIssue = async (checkNumber: string) => {
     if (!id || !cr) return;
-    const checkNumber = window.prompt('Enter check number:');
-    if (!checkNumber) return;
+    setIssuing(true);
     try {
       await checkRequestService.issue(id, checkNumber);
       toast.success('Check issued');
+      setShowIssueDialog(false);
       void fetchCheckRequest(id);
     } catch {
       toast.error('Failed to issue check');
+    } finally {
+      setIssuing(false);
     }
   };
 
@@ -192,7 +203,7 @@ const CheckRequestDetailPage: React.FC = () => {
             {canIssue && (
               <button
                 type="button"
-                onClick={() => void handleIssue()}
+                onClick={() => setShowIssueDialog(true)}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
               >
                 <CheckCircle className="h-3.5 w-3.5" />
@@ -326,6 +337,24 @@ const CheckRequestDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <PromptDialog
+        isOpen={showIssueDialog}
+        onClose={() => setShowIssueDialog(false)}
+        onSubmit={(checkNumber) => void handleIssue(checkNumber)}
+        title="Issue check"
+        message={
+          <>
+            Records {formatCurrency(cr.amount)} to{' '}
+            <span className="text-theme-text-primary font-medium">{cr.payeeName}</span> as paid, against{' '}
+            {cr.requestNumber}.
+          </>
+        }
+        label="Check number"
+        placeholder="e.g. 10428"
+        confirmLabel="Issue check"
+        loading={issuing}
+      />
     </div>
   );
 };

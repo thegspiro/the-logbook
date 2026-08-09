@@ -22,6 +22,7 @@ export { Collapsible } from './Collapsible';
 // Feedback & Confirmation
 export { EmptyState } from './EmptyState';
 export { ConfirmDialog } from './ConfirmDialog';
+export { PromptDialog } from './PromptDialog';
 export { SuccessAnimation } from './SuccessAnimation';
 export { Tooltip } from './Tooltip';
 export { Avatar } from './Avatar';
