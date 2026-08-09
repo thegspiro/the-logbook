@@ -344,6 +344,52 @@ class TrainingProgramService:
             return str(exc)
         return None
 
+    async def _validate_linked_requirements(
+        self, phase_inputs: List[Any], organization_id: UUID
+    ) -> Optional[str]:
+        """Verify the existing requirements a build payload links are usable.
+
+        Two checks, both before anything is written: the ids belong to the
+        caller's org (XC-1 — a client-supplied FK), and no phase links the same
+        requirement twice, which would otherwise produce duplicate links and a
+        member counted against the same item twice in one phase. The same
+        requirement in *different* phases is allowed, matching
+        ``add_requirement_to_program``.
+
+        Returns the message instead of raising, to match this service's
+        ``(result, error)`` convention.
+        """
+        linked_ids: List[str] = []
+        for phase_input in phase_inputs:
+            seen_in_phase: set[str] = set()
+            for req_input in phase_input.requirements:
+                req_id = getattr(req_input, "requirement_id", None)
+                if not req_id:
+                    continue
+                req_id = str(req_id)
+                if req_id in seen_in_phase:
+                    return (
+                        f"Phase {phase_input.phase_number} links the same "
+                        "requirement more than once"
+                    )
+                seen_in_phase.add(req_id)
+                linked_ids.append(req_id)
+
+        if not linked_ids:
+            return None
+
+        try:
+            await assert_all_in_org(
+                self.db,
+                TrainingRequirement,
+                linked_ids,
+                organization_id,
+                label="linked requirement",
+            )
+        except ValueError as exc:
+            return str(exc)
+        return None
+
     async def create_training_requirement(
         self,
         requirement_data: TrainingRequirementEnhancedCreate,
@@ -599,6 +645,16 @@ class TrainingProgramService:
         if course_error:
             return None, course_error
 
+        # Same for requirements the payload links rather than defines: the ids
+        # come from the client, so they must be confirmed in-org before any of
+        # them is stored (an unvalidated FK would persist a cross-tenant
+        # reference).
+        requirement_error = await self._validate_linked_requirements(
+            payload.phases, organization_id
+        )
+        if requirement_error:
+            return None, requirement_error
+
         program = TrainingProgram(
             organization_id=organization_id,
             name=prog.name,
@@ -632,6 +688,21 @@ class TrainingProgramService:
             await self.db.flush()
 
             for idx, req_input in enumerate(phase_input.requirements):
+                # An existing department requirement: link it and move on. It
+                # belongs to the department, so the link never owns it.
+                if getattr(req_input, "requirement_id", None):
+                    self.db.add(
+                        ProgramRequirement(
+                            program_id=program.id,
+                            phase_id=phase.id,
+                            requirement_id=str(req_input.requirement_id),
+                            is_required=req_input.is_required,
+                            sort_order=req_input.sort_order or idx,
+                            owns_requirement=False,
+                        )
+                    )
+                    continue
+
                 try:
                     req_type = RequirementType(req_input.requirement_type)
                 except ValueError:

@@ -1188,6 +1188,14 @@ export interface ProgramEnrollmentWithUser extends ProgramEnrollment {
 
 // Atomic program build (create-pipeline wizard) — one nested payload persisted
 // in a single backend transaction.
+/** Links an existing department requirement into a phase during program build. */
+export interface ProgramBuildRequirementLink {
+  requirement_id: string;
+  is_required: boolean;
+  sort_order: number;
+}
+
+/** Defines a new program-specific requirement during program build. */
 export interface ProgramBuildRequirementInput {
   name: string;
   description?: string | undefined;
@@ -1221,7 +1229,9 @@ export interface ProgramBuildPhaseInput {
   description?: string | undefined;
   time_limit_days?: number | undefined;
   requires_manual_advancement: boolean;
-  requirements: ProgramBuildRequirementInput[];
+  // Each entry either links an existing requirement or defines a new one —
+  // never both; the backend rejects a payload carrying an id and a name.
+  requirements: (ProgramBuildRequirementInput | ProgramBuildRequirementLink)[];
   milestones: ProgramBuildMilestoneInput[];
 }
 

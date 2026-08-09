@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.training import RequirementFrequency as ModelRequirementFrequency
 from app.models.training import TrainingType as ModelTrainingType
@@ -634,9 +634,20 @@ class RegistrySelectiveImport(BaseModel):
 
 
 class ProgramBuildRequirementInput(BaseModel):
-    """A requirement to create and link within a phase during program build."""
+    """
+    One requirement within a phase during program build — either an existing
+    department requirement to link (``requirement_id``) or a new one to create
+    (everything else). Exactly one of the two forms, never both.
+    """
 
-    name: str = Field(..., min_length=1, max_length=255)
+    requirement_id: Optional[UUID] = Field(
+        None,
+        description=(
+            "Link this existing department requirement instead of creating one. "
+            "When set, every definition field below is ignored."
+        ),
+    )
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     requirement_type: RequirementTypeStr = "hours"
     frequency: str = "one_time"
@@ -661,6 +672,17 @@ class ProgramBuildRequirementInput(BaseModel):
     allows_external_credit: bool = False
     is_required: bool = True
     sort_order: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _link_or_define_not_both(self) -> "ProgramBuildRequirementInput":
+        if self.requirement_id and self.name:
+            raise ValueError(
+                "Provide either requirement_id (to link an existing requirement) "
+                "or name (to define a new one), not both"
+            )
+        if not self.requirement_id and not self.name:
+            raise ValueError("Each requirement needs a requirement_id or a name")
+        return self
 
 
 class ProgramBuildMilestoneInput(BaseModel):
