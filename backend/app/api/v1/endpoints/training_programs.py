@@ -29,6 +29,7 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     PhaseReorderRequest,
     ProgramBuildRequest,
     ProgramEnrollmentCreate,
+    ProgramEnrollmentReopen,
     ProgramEnrollmentResponse,
     ProgramEnrollmentWithdraw,
     ProgramEnrollmentWithUserResponse,
@@ -1205,7 +1206,12 @@ async def get_enrollment_progress(
     # only after the permission check so an unauthorized caller can never trigger
     # a write. On a reset, re-load the enrollment so its eager-loaded phase and
     # requirement rows reflect the new cycle rather than the pre-reset state.
-    if await service.auto_reset_if_due(enrollment):
+    # An enrollment past its completion deadline expires the same way, so the
+    # page reports the state it is actually in rather than showing "42 days
+    # overdue" against a status that still says active.
+    if await service.auto_reset_if_due(
+        enrollment
+    ) or await service.auto_expire_if_overdue(enrollment):
         refreshed = await service.get_enrollment_by_id(
             enrollment_id=enrollment_id,
             organization_id=current_user.organization_id,
@@ -1484,6 +1490,56 @@ async def reset_enrollment_progress(
             "enrollment_id": str(enrollment_id),
             "target_user_id": str(enrollment.user_id),
             "action": "enrollment_cycle_reset",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return enrollment
+
+
+@router.post(
+    "/enrollments/{enrollment_id}/reopen", response_model=ProgramEnrollmentResponse
+)
+async def reopen_enrollment(
+    enrollment_id: UUID,
+    payload: ProgramEnrollmentReopen | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Put an expired enrollment back to active, optionally on a new deadline.
+
+    An officer granting an extension to a member who ran out of time. The
+    member's completed requirements are untouched.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    enrollment, error = await service.reopen_enrollment(
+        enrollment_id=enrollment_id,
+        organization_id=current_user.organization_id,
+        target_completion_date=payload.target_completion_date if payload else None,
+    )
+    if error == "Enrollment not found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_enrollment_reopened",
+        event_category="training",
+        severity="info",
+        event_data={
+            "enrollment_id": str(enrollment_id),
+            "target_user_id": str(enrollment.user_id),
+            "new_deadline": (
+                str(enrollment.target_completion_date)
+                if enrollment.target_completion_date
+                else None
+            ),
+            "action": "enrollment_reopened",
         },
         user_id=str(current_user.id),
         username=current_user.username,

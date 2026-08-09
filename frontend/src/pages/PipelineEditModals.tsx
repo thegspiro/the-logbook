@@ -11,11 +11,13 @@ import { trainingProgramService } from '../services/api';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
+import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
 import { REQUIREMENT_TYPE_OPTIONS } from '../constants/enums';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import { getErrorMessage } from '../utils/errorHandling';
 import type {
+  ChecklistItem,
   ProgramMilestone,
   ProgramPhase,
   ProgramRequirement,
@@ -458,7 +460,7 @@ export const RequirementFormModal: React.FC<{
   const [calls, setCalls] = useState(req?.required_calls?.toString() ?? '');
   const [passing, setPassing] = useState(req?.passing_score?.toString() ?? '');
   const [attempts, setAttempts] = useState(req?.max_attempts?.toString() ?? '');
-  const [checklist, setChecklist] = useState((req?.checklist_items ?? []).join('\n'));
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(req?.checklist_items ?? []);
   const [requiredCourses, setRequiredCourses] = useState<string[]>(req?.required_courses ?? []);
   const [recencyDays, setRecencyDays] = useState<number | undefined>(req?.recency_days ?? undefined);
   const [isRequired, setIsRequired] = useState(link?.is_required !== false);
@@ -524,13 +526,7 @@ export const RequirementFormModal: React.FC<{
         required_calls: type === 'calls' && calls ? Number(calls) : undefined,
         passing_score: type === 'knowledge_test' && passing ? Number(passing) : undefined,
         max_attempts: type === 'knowledge_test' && attempts ? Number(attempts) : undefined,
-        checklist_items:
-          type === 'checklist'
-            ? checklist
-                .split('\n')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : undefined,
+        checklist_items: type === 'checklist' ? checklist.filter((i) => i.text.trim()) : undefined,
         // Always sent (as [] for other types) so switching a requirement away
         // from courses/certification clears stale links — a leftover course id
         // narrows the hours evaluator to only that course's records.
@@ -735,20 +731,7 @@ export const RequirementFormModal: React.FC<{
               </div>
             </div>
           )}
-          {type === 'checklist' && (
-            <div>
-              <label className="form-label" htmlFor="rq-check">
-                Checklist items (one per line)
-              </label>
-              <textarea
-                id="rq-check"
-                className="form-input"
-                rows={4}
-                value={checklist}
-                onChange={(e) => setChecklist(e.target.value)}
-              />
-            </div>
-          )}
+          {type === 'checklist' && <ChecklistItemsEditor idPrefix="rq" items={checklist} onChange={setChecklist} />}
           {linksCourses && (
             <CourseLibraryPicker
               idPrefix="rq"

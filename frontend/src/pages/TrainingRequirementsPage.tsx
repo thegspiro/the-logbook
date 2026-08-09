@@ -22,6 +22,7 @@ import {
 import { trainingService, trainingProgramService } from '../services/api';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
+import { toChecklistItems } from '../utils/checklistItems';
 import type {
   TrainingRequirement,
   TrainingRequirementCreate,
@@ -872,12 +873,12 @@ const TemplateModal: React.FC<{
       name: 'SCBA Fit Test & Respiratory Protection',
       description: 'Annual respirator fit testing and respiratory protection training required by OSHA 29 CFR 1910.134',
       requirement_type: 'checklist',
-      checklist_items: [
+      checklist_items: toChecklistItems([
         'Medical clearance for respirator use current',
         'Annual quantitative/qualitative fit test passed',
         'SCBA donning, doffing, and emergency procedures reviewed',
         'Facepiece seal check and user maintenance reviewed',
-      ],
+      ]),
       frequency: 'annual',
       applies_to_all: true,
       due_date_type: 'calendar_period',
@@ -908,13 +909,13 @@ const TemplateModal: React.FC<{
       description: 'One-time onboarding checklist for probationary members — completed once, never repeats',
       requirement_type: 'checklist',
       training_type: 'orientation',
-      checklist_items: [
+      checklist_items: toChecklistItems([
         'Station tour and facility safety orientation',
         'PPE issued and fit checked',
         'SCBA fit test completed',
         'Radio and communications procedures reviewed',
         'Department SOPs/SOGs reviewed',
-      ],
+      ]),
       frequency: 'one_time',
       applies_to_all: false,
       required_membership_types: ['probationary'],

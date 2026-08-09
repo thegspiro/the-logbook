@@ -929,7 +929,11 @@ class TestTrainingSchemas:
         assert schema.required_call_types == ["structure_fire", "medical"]
 
     def test_training_requirement_enhanced_create_checklist_type(self):
-        """TrainingRequirementEnhancedCreate with checklist requirement"""
+        """Bare strings still work and land as visible steps with ids.
+
+        Every client sent plain strings before steps grew per-step visibility,
+        and the built-in sample templates still declare them that way.
+        """
         items = ["Medical exam", "Fitness test", "Vision test"]
         schema = TrainingRequirementEnhancedCreate(
             name="Annual Medical",
@@ -939,7 +943,24 @@ class TestTrainingSchemas:
             frequency="annual",
         )
         assert schema.requirement_type == "checklist"
-        assert schema.checklist_items == items
+        assert [i.text for i in schema.checklist_items] == items
+        assert all(i.member_visible for i in schema.checklist_items)
+        assert len({i.id for i in schema.checklist_items}) == 3
+
+    def test_training_requirement_enhanced_create_hidden_checklist_step(self):
+        """A step can be kept off the member's view without hiding the item."""
+        schema = TrainingRequirementEnhancedCreate(
+            name="Recruit intake",
+            requirement_type="checklist",
+            checklist_items=[
+                "Gear issued",
+                {"text": "References called", "member_visible": False},
+            ],
+            frequency="one_time",
+        )
+        visible, hidden = schema.checklist_items
+        assert visible.member_visible is True
+        assert hidden.member_visible is False
 
     def test_training_requirement_enhanced_create_skills_type(self):
         """TrainingRequirementEnhancedCreate with skills_evaluation requirement.

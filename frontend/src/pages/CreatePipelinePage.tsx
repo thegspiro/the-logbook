@@ -23,9 +23,11 @@ import { trainingProgramService } from '../services/api';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
+import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import type {
+  ChecklistItem,
   ProgramStructureType,
   RequirementType,
   RequirementFrequency,
@@ -64,7 +66,7 @@ interface RequirementFormData {
   required_calls: string;
   passing_score: string;
   max_attempts: string;
-  checklist_items: string[];
+  checklist_items: ChecklistItem[];
   // Course-library ids backing a `courses` or `certification` requirement.
   required_courses: string[];
   // Freshness window in days, or undefined for no window.
@@ -176,7 +178,7 @@ const toRequirementPayload = (reqData: RequirementFormData) =>
         required_calls: reqData.required_calls ? parseInt(reqData.required_calls) : undefined,
         passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
         max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
-        checklist_items: reqData.checklist_items.filter((i) => i.trim()),
+        checklist_items: reqData.checklist_items.filter((i) => i.text.trim()),
         required_courses: reqData.required_courses.length > 0 ? reqData.required_courses : undefined,
         recency_days: reqData.recency_days,
         allows_external_credit: reqData.allows_external_credit,
@@ -550,7 +552,7 @@ const StepRequirements: React.FC<{
     groupKey: string,
     reqId: string,
     field: string,
-    value: string | boolean | string[] | number | undefined
+    value: string | boolean | string[] | ChecklistItem[] | number | undefined
   ) => void;
 }> = ({
   groups,
@@ -845,20 +847,11 @@ const StepRequirements: React.FC<{
                     )}
 
                     {req.requirement_type === 'checklist' && (
-                      <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">
-                          Checklist Items (one per line)
-                        </label>
-                        <textarea
-                          value={req.checklist_items.join('\n')}
-                          onChange={(e) =>
-                            onUpdateRequirement(phase.key, req.id, 'checklist_items', e.target.value.split('\n'))
-                          }
-                          rows={4}
-                          className="form-input-sm"
-                          placeholder="Enter each checklist item on a new line..."
-                        />
-                      </div>
+                      <ChecklistItemsEditor
+                        idPrefix={`wizard-${req.id}`}
+                        items={req.checklist_items}
+                        onChange={(items) => onUpdateRequirement(phase.key, req.id, 'checklist_items', items)}
+                      />
                     )}
 
                     {req.requirement_type === 'knowledge_test' && (
@@ -1338,7 +1331,7 @@ const CreatePipelinePage: React.FC = () => {
     groupKey: string,
     reqId: string,
     field: string,
-    value: string | boolean | string[] | number | undefined
+    value: string | boolean | string[] | ChecklistItem[] | number | undefined
   ) => {
     editRequirements(groupKey, (reqs) => reqs.map((r) => (r.id === reqId ? { ...r, [field]: value } : r)));
   };

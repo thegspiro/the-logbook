@@ -61,6 +61,7 @@ from app.services.training_waiver_service import (
     fetch_user_waivers,
     get_rolling_period_months,
 )
+from app.utils.checklist import checklist_progress, prune_done_ids, to_storage
 from app.utils.org_scoping import assert_all_in_org
 
 
@@ -250,6 +251,70 @@ class TrainingProgramService:
                     "message": message,
                     "category": NotificationCategory.TRAINING,
                     "action_url": f"/training/my-progress/{enrollment.id}",
+                    "delivered": True,
+                    "sent_at": datetime.now(timezone.utc),
+                },
+            )
+
+    async def _notify_enrollment_expired(
+        self,
+        enrollment: ProgramEnrollment,
+        program: TrainingProgram,
+    ) -> None:
+        """Tell the member their program deadline passed, and tell the training
+        officers so someone can extend it, reopen it, or close it out. An
+        expiry nobody is told about is just the record going quiet."""
+        from app.services.struggling_member_service import StrugglingMemberService
+
+        organization_id = enrollment.organization_id
+        notif_service = NotificationsService(self.db)
+
+        user_result = await self.db.execute(
+            select(User).where(User.id == str(enrollment.user_id))
+        )
+        user = user_result.scalar_one_or_none()
+
+        deadline = getattr(enrollment, "target_completion_date", None)
+        progress = round(enrollment.progress_percentage or 0)
+
+        if user:
+            await notif_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "recipient_id": str(user.id),
+                    "channel": NotificationChannel.IN_APP,
+                    "subject": f"Training deadline passed: {program.name}",
+                    "message": (
+                        f"The deadline for {program.name} "
+                        f"{'was ' + str(deadline) if deadline else 'has passed'} and "
+                        f"you finished {progress}% of it. Your progress is saved — "
+                        f"talk to a training officer about getting more time."
+                    ),
+                    "category": NotificationCategory.TRAINING,
+                    "action_url": f"/training/my-progress/{enrollment.id}",
+                    "delivered": True,
+                    "sent_at": datetime.now(timezone.utc),
+                },
+            )
+
+        member_name = getattr(user, "full_name", None) or "A member"
+        officers = await StrugglingMemberService(self.db)._get_training_officers(
+            str(organization_id)
+        )
+        for officer in officers:
+            await notif_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "recipient_id": str(officer.id),
+                    "channel": NotificationChannel.IN_APP,
+                    "subject": f"Enrollment expired: {member_name} - {program.name}",
+                    "message": (
+                        f"{member_name} passed the {program.name} deadline at "
+                        f"{progress}% complete. Reopen the enrollment to grant an "
+                        f"extension, or close it out."
+                    ),
+                    "category": NotificationCategory.TRAINING,
+                    "action_url": f"/training/programs/{program.id}?tab=enrollments",
                     "delivered": True,
                     "sent_at": datetime.now(timezone.utc),
                 },
@@ -499,7 +564,7 @@ class TrainingProgramService:
             required_calls=requirement_data.required_calls,
             required_call_types=requirement_data.required_call_types,
             required_skills=requirement_data.required_skills,
-            checklist_items=requirement_data.checklist_items,
+            checklist_items=to_storage(requirement_data.checklist_items),
             passing_score=getattr(requirement_data, "passing_score", None),
             max_attempts=getattr(requirement_data, "max_attempts", None),
             recency_days=getattr(requirement_data, "recency_days", None),
@@ -582,12 +647,19 @@ class TrainingProgramService:
             if course_error:
                 return None, course_error
 
-        # A changed numeric target changes completion math for enrolled members.
+        # Steps arrive as schema objects or legacy strings; store one shape.
+        if "checklist_items" in updates:
+            updates["checklist_items"] = to_storage(updates["checklist_items"])
+
+        # A changed target changes completion math for enrolled members. For a
+        # checklist that means the *set of steps*: adding a ninth step to an
+        # eight-step list has to drop everyone tracking it from 100% to 89%.
         target_fields = {
             "required_hours",
             "required_shifts",
             "required_calls",
             "required_courses",
+            "checklist_items",
         }
         target_changed = any(
             field in updates and getattr(requirement, field, None) != value
@@ -835,9 +907,7 @@ class TrainingProgramService:
             except ValueError:
                 frequency = RequirementFrequency.ONE_TIME
 
-            checklist = [
-                c for c in (req_input.checklist_items or []) if c.strip()
-            ] or None
+            checklist = to_storage(req_input.checklist_items) or None
 
             requirement = TrainingRequirement(
                 organization_id=organization_id,
@@ -1026,15 +1096,70 @@ class TrainingProgramService:
         await self.db.commit()
         return True, None
 
+    async def _recompute_checklist_progress(
+        self, requirement: TrainingRequirement
+    ) -> None:
+        """Re-derive percentages after the *steps* of a checklist changed.
+
+        Only rows that carry a per-step tick record are touched. A row an
+        officer marked complete wholesale has no tick set to re-measure, and
+        knocking it back to 0% because a ninth step was added would discard a
+        sign-off nobody asked to revisit.
+        """
+        rows_result = await self.db.execute(
+            select(RequirementProgress).where(
+                RequirementProgress.requirement_id == str(requirement.id)
+            )
+        )
+        affected_enrollment_ids = set()
+        for row in rows_result.scalars().all():
+            notes = row.progress_notes or {}
+            if "checklist_done" not in notes:
+                continue
+
+            done = prune_done_ids(requirement.checklist_items, notes["checklist_done"])
+            completed, total = checklist_progress(requirement.checklist_items, done)
+
+            updated_notes = copy.deepcopy(notes)
+            updated_notes["checklist_done"] = done
+            row.progress_notes = updated_notes
+            row.progress_value = float(completed)
+            row.progress_percentage = (completed / total * 100) if total else 0.0
+            row.status = self._checklist_status(completed, total)
+            row.completed_at = (
+                datetime.now(timezone.utc) if completed and completed == total else None
+            )
+            affected_enrollment_ids.add(row.enrollment_id)
+
+        if affected_enrollment_ids:
+            await self.db.commit()
+            for eid in affected_enrollment_ids:
+                await self._recalculate_enrollment_progress(UUID(str(eid)))
+                await self._maybe_auto_advance_phase(UUID(str(eid)))
+
+    @staticmethod
+    def _checklist_status(completed: int, total: int) -> "RequirementProgressStatus":
+        """Status implied by a checklist's tick count."""
+        if total and completed >= total:
+            return RequirementProgressStatus.COMPLETED
+        if completed:
+            return RequirementProgressStatus.IN_PROGRESS
+        return RequirementProgressStatus.NOT_STARTED
+
     async def _recompute_progress_for_requirement(
         self, requirement: TrainingRequirement
     ) -> None:
         """
-        After a requirement's numeric target changes (hours/shifts/calls/course
-        count), re-derive the stored ``progress_percentage`` on every progress
-        row for it, then roll up each affected enrollment. Without this the row
-        percentages stay stale until the next manual progress update.
+        After a requirement's target changes (hours/shifts/calls/course count,
+        or the set of checklist steps), re-derive the stored
+        ``progress_percentage`` on every progress row for it, then roll up each
+        affected enrollment. Without this the row percentages stay stale until
+        the next manual progress update.
         """
+        if requirement.requirement_type == RequirementType.CHECKLIST:
+            await self._recompute_checklist_progress(requirement)
+            return
+
         numeric_targets = {
             RequirementType.HOURS: requirement.required_hours,
             RequirementType.SHIFTS: requirement.required_shifts,
@@ -2154,6 +2279,11 @@ class TrainingProgramService:
         # which routes to an officer. System callers (acting_user_id is None) and
         # officers are unaffected.
         if acting_user_id is not None and not can_manage:
+            if updates.checklist_done is not None:
+                return (
+                    None,
+                    "Only a training officer can check off a checklist step",
+                )
             if updates.test_score is not None:
                 return None, "Only a training officer can record a test score"
             if updates.progress_value is not None:
@@ -2267,6 +2397,42 @@ class TrainingProgramService:
                     progress.started_at = datetime.now(timezone.utc)
                 if progress.status != RequirementProgressStatus.IN_PROGRESS:
                     progress.status = RequirementProgressStatus.IN_PROGRESS
+                progress.completed_at = None
+
+        # Checklist step sign-off: the officer sends the full set of ticked
+        # steps and the percentage is ticked/total, which is what turns a
+        # checklist from an all-or-nothing item into something a member can
+        # watch fill up. Officer-only steps are in the denominator — they are
+        # real work, and leaving them out would let the requirement read 100%
+        # while the background check was still outstanding.
+        if updates.checklist_done is not None:
+            requirement = progress.requirement
+            if (
+                requirement is None
+                or requirement.requirement_type != RequirementType.CHECKLIST
+            ):
+                return None, "This requirement is not a checklist"
+
+            done = prune_done_ids(requirement.checklist_items, updates.checklist_done)
+            completed, total = checklist_progress(requirement.checklist_items, done)
+            if total == 0:
+                return None, "This checklist has no steps to check off"
+
+            notes = copy.deepcopy(progress.progress_notes or {})
+            notes["checklist_done"] = done
+            progress.progress_notes = notes
+            progress.progress_value = float(completed)
+            progress.progress_percentage = completed / total * 100
+            progress.status = self._checklist_status(completed, total)
+
+            if completed and not progress.started_at:
+                progress.started_at = datetime.now(timezone.utc)
+            if completed == total:
+                progress.completed_at = datetime.now(timezone.utc)
+                if verified_by:
+                    progress.verified_by = verified_by
+                    progress.verified_at = datetime.now(timezone.utc)
+            else:
                 progress.completed_at = None
 
         # Update progress value
@@ -3103,6 +3269,110 @@ class TrainingProgramService:
         await self.db.refresh(enrollment)
         await self._safe_notify_recert_reset(enrollment, program)
         return True
+
+    @staticmethod
+    def _is_overdue(enrollment: ProgramEnrollment) -> bool:
+        """Whether an ACTIVE enrollment has run past its completion deadline."""
+        if enrollment.status != EnrollmentStatus.ACTIVE:
+            return False
+        target = getattr(enrollment, "target_completion_date", None)
+        return bool(target and target < datetime.now(timezone.utc).date())
+
+    async def _expire_enrollment(self, enrollment: ProgramEnrollment) -> None:
+        """Move one overdue enrollment to EXPIRED and tell the people affected."""
+        enrollment.status = EnrollmentStatus.EXPIRED
+        enrollment.updated_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+
+        try:
+            program = await self._get_program_for_enrollment(enrollment)
+            if program:
+                await self._notify_enrollment_expired(enrollment, program)
+        except Exception as e:
+            logger.error(f"Failed to send enrollment-expiry notification: {e}")
+
+    async def auto_expire_if_overdue(self, enrollment: ProgramEnrollment) -> bool:
+        """If this enrollment is past its deadline, mark it EXPIRED in place.
+
+        Returns True when it expired. Safe to call on every progress load — the
+        same read-time pattern as ``auto_reset_if_due``, so an enrollment nobody
+        has swept yet still reports its true state the moment someone opens it.
+        """
+        if not self._is_overdue(enrollment):
+            return False
+        await self._expire_enrollment(enrollment)
+        return True
+
+    async def run_due_expirations(
+        self, organization_id: UUID
+    ) -> Tuple[int, Optional[str]]:
+        """Expire every enrollment in the organization that has run past its
+        completion deadline. Intended for the weekly deadline sweep — the
+        read-time check only catches the ones somebody looks at.
+
+        Returns (expired_count, error_message).
+        """
+        today = datetime.now(timezone.utc).date()
+        result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram, ProgramEnrollment.program_id == TrainingProgram.id)
+            .where(
+                TrainingProgram.organization_id == str(organization_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                ProgramEnrollment.target_completion_date.isnot(None),
+                ProgramEnrollment.target_completion_date < today,
+            )
+        )
+
+        count = 0
+        for enrollment in result.scalars().all():
+            # Re-check per row: the WHERE clause and _is_overdue must agree, and
+            # the helper is the single definition of "overdue".
+            if not self._is_overdue(enrollment):
+                continue
+            await self._expire_enrollment(enrollment)
+            count += 1
+
+        return count, None
+
+    async def reopen_enrollment(
+        self,
+        enrollment_id: UUID,
+        organization_id: UUID,
+        target_completion_date: Optional[date] = None,
+    ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
+        """Put an expired enrollment back to ACTIVE, optionally on a new
+        deadline (an officer granting an extension).
+
+        Without this, EXPIRED would be a state with no way out — the member
+        would be stuck and their progress frozen with no officer recourse.
+        Progress rows are untouched: the member keeps everything they finished.
+        """
+        enrollment = await self.get_enrollment_by_id(enrollment_id, organization_id)
+        if not enrollment:
+            return None, "Enrollment not found"
+        if enrollment.status != EnrollmentStatus.EXPIRED:
+            return None, "Only an expired enrollment can be reopened"
+
+        if target_completion_date is not None:
+            if target_completion_date < datetime.now(timezone.utc).date():
+                return None, "The new deadline must be in the future"
+            enrollment.target_completion_date = target_completion_date
+
+        enrollment.status = EnrollmentStatus.ACTIVE
+        # Let the warning sweep speak again on the new deadline.
+        enrollment.deadline_warning_sent = False
+        enrollment.deadline_warning_sent_at = None
+        enrollment.updated_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+
+        # A member who quietly finished everything while expired should not have
+        # to wait for the next progress edit to be marked complete.
+        await self._recalculate_enrollment_progress(UUID(str(enrollment.id)))
+        await self.db.refresh(enrollment)
+        return enrollment, None
 
     async def run_due_recert_resets(
         self, organization_id: UUID
@@ -4404,7 +4674,7 @@ class TrainingProgramService:
                     required_calls=req_data.get("required_calls"),
                     required_call_types=req_data.get("required_call_types"),
                     required_skills=req_data.get("required_skills"),
-                    checklist_items=req_data.get("checklist_items"),
+                    checklist_items=to_storage(req_data.get("checklist_items")),
                     category_ids=category_ids,
                     frequency=req_data.get("frequency", "annual"),
                     time_limit_days=req_data.get("time_limit_days"),

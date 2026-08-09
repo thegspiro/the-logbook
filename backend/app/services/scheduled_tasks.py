@@ -459,13 +459,23 @@ async def run_struggling_member_check(db: AsyncSession) -> Dict[str, Any]:
 
 
 async def run_enrollment_deadline_warnings(db: AsyncSession) -> Dict[str, Any]:
-    """Send deadline warnings for approaching enrollment deadlines."""
+    """Warn on approaching enrollment deadlines, then expire the ones that have
+    already gone by.
+
+    Both halves belong to the same sweep: warning a member at 7 days and then
+    never acting when the date arrives is how an enrollment ends up sitting at
+    "active, 42 days overdue" forever.
+    """
     from app.services.struggling_member_service import StrugglingMemberService
+    from app.services.training_program_service import TrainingProgramService
 
     async def _process(db_session, org):
         service = StrugglingMemberService(db_session)
         result = await service.send_deadline_warnings(str(org.id))
-        return result.get("warnings_sent", 0)
+        expired, _ = await TrainingProgramService(db_session).run_due_expirations(
+            org.id
+        )
+        return result.get("warnings_sent", 0) + expired
 
     return await _for_each_org(db, "enrollment_deadline_warnings", _process)
 

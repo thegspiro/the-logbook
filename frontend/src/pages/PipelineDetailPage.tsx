@@ -29,6 +29,7 @@ import {
   ArrowDown,
   Flag,
   RotateCcw,
+  EyeOff,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -38,6 +39,7 @@ import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormMo
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
+import { checklistDoneIds } from '../utils/checklistItems';
 import type {
   TrainingProgram,
   ProgramPhase,
@@ -604,6 +606,16 @@ const RequirementProgressRow: React.FC<{
     setValue(record.progress_value ? String(record.progress_value) : '');
   }, [record.progress_value]);
 
+  const checklistItems = req?.requirement_type === 'checklist' ? (req.checklist_items ?? []) : [];
+  const doneIds = checklistDoneIds(record);
+
+  const toggleChecklistItem = (itemId: string) => {
+    // The whole set goes back, not a single toggle — a retry or a second
+    // officer on the same record then cannot leave a step half-applied.
+    const next = doneIds.includes(itemId) ? doneIds.filter((id) => id !== itemId) : [...doneIds, itemId];
+    void onUpdate(record.id, { checklist_done: next });
+  };
+
   const isDone = record.status === 'completed' || record.status === 'verified';
   const statusMeta = STATUS_META[record.status];
   const passThreshold = req?.passing_score ?? 70;
@@ -670,6 +682,36 @@ const RequirementProgressRow: React.FC<{
           >
             <Save className="h-3.5 w-3.5" /> Save
           </button>
+        </div>
+      )}
+
+      {/* Checklist steps: signed off one at a time, so the member watches the
+          requirement fill up instead of waiting on a single all-or-nothing tick. */}
+      {checklistItems.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {checklistItems.map((item) => {
+            const checked = doneIds.includes(item.id);
+            return (
+              <label key={item.id} className="text-theme-text-secondary flex cursor-pointer items-start gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={saving}
+                  onChange={() => toggleChecklistItem(item.id)}
+                  className="form-checkbox mt-0.5 shrink-0"
+                />
+                <span className={checked ? 'text-theme-text-muted line-through' : ''}>{item.text}</span>
+                {!item.member_visible && (
+                  <span
+                    title="Officer-only — the member does not see this step"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-400"
+                  >
+                    <EyeOff className="h-3 w-3" aria-hidden="true" /> Officer only
+                  </span>
+                )}
+              </label>
+            );
+          })}
         </div>
       )}
 
@@ -785,6 +827,8 @@ const EnrollmentProgressModal: React.FC<{
   const [savingId, setSavingId] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
   const [resettingCycle, setResettingCycle] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [newDeadline, setNewDeadline] = useState('');
 
   const load = useCallback(async () => {
     if (!enrollmentId) return;
@@ -876,6 +920,22 @@ const EnrollmentProgressModal: React.FC<{
     }
   };
 
+  const handleReopen = async () => {
+    if (!enrollmentId) return;
+    setReopening(true);
+    try {
+      await trainingProgramService.reopenEnrollment(enrollmentId, newDeadline);
+      toast.success(newDeadline ? 'Reopened with a new deadline' : 'Enrollment reopened');
+      setNewDeadline('');
+      await load();
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reopen this enrollment'));
+    } finally {
+      setReopening(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const phased = structureType === 'phases' && phases.length > 0;
@@ -931,6 +991,45 @@ const EnrollmentProgressModal: React.FC<{
               <X className="h-5 w-5" />
             </button>
           </div>
+          {/* An expired enrollment is a dead end without a way back: the member
+              cannot make progress and the officer has nothing to act on. */}
+          {data?.enrollment.status === 'expired' && (
+            <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Deadline passed — this enrollment expired at {overall}% complete.
+              </p>
+              <p className="text-theme-text-secondary mt-1 text-xs">
+                Reopening keeps everything {memberName} has already finished. Give them a new deadline, or reopen on the
+                old one.
+              </p>
+              <div className="mt-2 flex flex-wrap items-end gap-2">
+                <div>
+                  <label htmlFor="reopen-deadline" className="text-theme-text-muted mb-1 block text-xs">
+                    New deadline (optional)
+                  </label>
+                  <input
+                    id="reopen-deadline"
+                    type="date"
+                    value={newDeadline}
+                    onChange={(e) => setNewDeadline(e.target.value)}
+                    className="form-input-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleReopen();
+                  }}
+                  disabled={reopening}
+                  className="btn-primary px-3 text-xs disabled:opacity-50"
+                >
+                  {reopening ? 'Reopening...' : 'Reopen enrollment'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-3 flex flex-wrap gap-2">
             {phased && (
               <button
