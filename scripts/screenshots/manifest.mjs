@@ -302,6 +302,29 @@ export function openStaffedShift(extraMatch) {
  * where the kanban card's clickable region is a styled div with no role.
  */
 /**
+ * Pick a room on the Storage Areas page.
+ *
+ * The page lists nothing until a room is chosen — its area query is keyed on
+ * the room id — so every shot of it has to make that choice first. Takes the
+ * first room that actually has areas under it rather than the first in the
+ * list, since a room with none renders the same empty prompt.
+ */
+export async function selectStorageRoom(page) {
+  const room = page.locator("#room-select");
+  await room.waitFor({ timeout: 10_000 });
+  const options = await room.locator("option").evaluateAll((nodes) =>
+    nodes.map((n) => n.value).filter(Boolean),
+  );
+  for (const value of options) {
+    await room.selectOption(value);
+    await page.waitForTimeout(600);
+    if (await page.getByRole("button", { name: /^Show \d+ items? in / }).count()) {
+      return;
+    }
+  }
+}
+
+/**
  * Open a named integration's connect dialog.
  *
  * Every card carries an identical "Connect" button and the dialog is component
@@ -1394,6 +1417,16 @@ export const SHOTS = [
       "Screenshot of the Storage Areas page showing an expanded storage area panel",
     alt: "Storage areas page with an expanded area listing its items",
     route: "/inventory/storage-areas",
+    prepare: async (page) => {
+      await selectStorageRoom(page);
+      // The last area rather than the first, so this and 05-48 — which both
+      // want an area expanded — do not publish the same picture twice.
+      await page
+        .getByRole("button", { name: /^Show \d+ items? in / })
+        .last()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
   },
   {
     id: "05-45-impact-planner",
@@ -2871,6 +2904,37 @@ export const SHOTS = [
     alt: "Shift report settings with checklist timing, validation and form sections",
     route: "/scheduling/settings?tab=shift-reports",
     fullPage: true,
+  },
+  {
+    id: "05-48-storage-area-items",
+    doc: "05-inventory.md",
+    line: 1386,
+    anchor: "Screenshot of the Storage Areas page with one area expanded showing",
+    alt: "Storage area expanded to show the items stored in it",
+    route: "/inventory/storage-areas",
+    prepare: async (page) => {
+      await selectStorageRoom(page);
+      // The count is the control: clicking it opens the inline items panel.
+      // Its accessible name carries the count, so a "Show N items in …" match
+      // also guarantees the area picked is not empty.
+      await page
+        .getByRole("button", { name: /^Show \d+ items? in / })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-47-items-filter-bar",
+    doc: "05-inventory.md",
+    line: 1454,
+    anchor: "Screenshot of the Items List filter bar showing the three new dropdown filters",
+    alt: "Items list filter bar with the size, colour and style dropdowns",
+    route: "/inventory/items",
+    // Clipped to the filter card. The placeholder asks for the Size dropdown
+    // open; a native <select> popup is drawn by the OS outside the page, so
+    // Playwright cannot capture it — the closed row is what there is to show.
+    selector: 'div.card-secondary:has(select[aria-label="Filter by size"])',
   },
   {
     id: "05-46-size-preferences",

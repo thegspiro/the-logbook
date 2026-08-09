@@ -99,6 +99,39 @@ def _format_sequential_barcode(prefix: str, number: int) -> str:
     return f"{prefix}{number:0{BARCODE_MIN_DIGITS}d}"
 
 
+# Sizes whose display form is not just the code upper-cased. Mirrors the
+# frontend's STANDARD_SIZES labels so an item named here matches the label the
+# member picked from.
+_SIZE_LABELS = {
+    "xxl": "XXL",
+    "xxxl": "3XL",
+    "xxxxl": "4XL",
+    "one_size": "One Size",
+    "custom": "Custom",
+}
+
+
+def _size_label(size: str) -> str:
+    """Display form of a stored size code — ``l`` reads as ``L``.
+
+    Numeric sizes (boot 10.5, waist 34) are returned unchanged; upper-casing
+    them would be a no-op but the explicit path keeps that obvious.
+    """
+    code = (size or "").strip()
+    if not code:
+        return ""
+    # Accept a value that has already been through here ("One Size") as well as
+    # the stored code ("one_size").
+    key = code.lower().replace(" ", "_")
+    if key in _SIZE_LABELS:
+        return _SIZE_LABELS[key]
+    if any(character.isdigit() for character in code):
+        return code
+    if "_" in code or " " in code:
+        return code.replace("_", " ").title()
+    return code.upper()
+
+
 # Supported extra-line field keys that can be requested on labels.
 _EXTRA_LINE_FIELDS = {"location", "category", "condition", "custom"}
 
@@ -3447,7 +3480,11 @@ class InventoryService:
         items_created: List[InventoryItem] = []
 
         for size, color, style in combos:
-            name_parts = [base_name, size]
+            # Sizes arrive as the stored codes ("l", "xxl", "one_size") because
+            # that is what the size picker submits. Styles were already being
+            # humanised here; sizes were not, so a coat came out named
+            # "Structural Coat — l" everywhere the item name is shown.
+            name_parts = [base_name, _size_label(size)]
             if color:
                 name_parts.append(color)
             if style:

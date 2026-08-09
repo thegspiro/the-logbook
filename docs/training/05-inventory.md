@@ -1382,8 +1382,7 @@ Storage areas now display the inventory items assigned to each area:
    - Condition indicator
 4. Click on any item to navigate directly to its detail page
 
-> **Screenshot needed:**
-> _[Screenshot of the Storage Areas page with one area expanded showing 3-4 inventory items in an inline panel, each with name, serial number, and status badge. Show the expand/collapse arrow on the area header]_
+![Storage area expanded to show the items stored in it](./images/05-48-storage-area-items.png)
 
 ### Always-Visible Barcode & Asset Tag
 
@@ -1450,7 +1449,7 @@ The Items List page now includes three new filter dropdowns for variant-based fi
 
 These filters work alongside existing category, status, condition, and location filters. Selecting a size filter, for example, shows only items with that size variant attribute — useful for quickly finding all "XL" items across all categories.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Items List filter bar showing the three new dropdown filters (Size, Color, Style) alongside the existing Category and Status filters. Show the Size dropdown open with options like "S", "M", "L", "XL"._
+![Items list filter bar with the size, colour and style dropdowns](./images/05-47-items-filter-bar.png)
 
 ### Barcode Label Improvements
 

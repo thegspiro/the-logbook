@@ -494,6 +494,19 @@ class Seeder:
             if facility.get("id"):
                 payload["facility_id"] = facility["id"]
             created.append(self.api.post("/locations", payload))
+
+        # The Storage Areas page treats a location as a room only when it has a
+        # room number or a facility-room link, and its area list is keyed on
+        # the selected room. Stations seeded without one left the page stuck on
+        # "Select a facility and room above" with an empty, disabled dropdown —
+        # no storage area was reachable at all.
+        for index, location in enumerate(created):
+            location_id = pick(location, "id")
+            if not location_id or pick(location, "room_number", "roomNumber"):
+                continue
+            room_number = f"{101 + index}"
+            self.api.patch(f"/locations/{location_id}", {"room_number": room_number})
+            location["room_number"] = room_number
         return created
 
     def seed_apparatus(self, stations: list[dict]) -> list[dict]:
@@ -1430,6 +1443,41 @@ class Seeder:
                 blueprint[index % len(blueprint)],
             )
 
+    def _file_items_into_areas(
+        self,
+        areas: list[dict],
+        category_ids: dict[str, Any],
+    ) -> None:
+        """Put each item on a shelf.
+
+        Storage areas ship empty, so the page's item counts all read 0 and the
+        inline items panel — the thing the guide describes — cannot be opened
+        at all. Items are filed by category, falling back to the quartermaster
+        shelving.
+
+        Items are re-read here rather than threaded in from `seed_inventory`:
+        a create response carries no `category_id`, so routing off that list
+        put every item under the fallback area.
+        """
+        by_name = {a.get("name"): pick(a, "id") for a in areas}
+        default_area = by_name.get("Quartermaster Shelving")
+        routing = {
+            category_ids.get("Structural PPE"): by_name.get("Turnout Gear Racks"),
+            category_ids.get("SCBA & Air Supply"): by_name.get("SCBA Cabinet"),
+            category_ids.get("Uniforms"): by_name.get("Uniform Bins"),
+        }
+        for item in items(self.api.get("/inventory/items?limit=500"), "items"):
+            item_id = pick(item, "id")
+            if not item_id:
+                continue
+            area_id = routing.get(pick(item, "category_id", "categoryId"))
+            area_id = area_id or default_area
+            if not area_id:
+                continue
+            if pick(item, "storage_area_id", "storageAreaId") == area_id:
+                continue
+            self.api.patch(f"/inventory/items/{item_id}", {"storage_area_id": area_id})
+
     def seed_inventory_operations(
         self,
         categories: list[dict],
@@ -1465,6 +1513,8 @@ class Seeder:
             if location_id:
                 payload["location_id"] = location_id
             areas.append(self.api.post("/inventory/storage-areas", payload))
+
+        self._file_items_into_areas(areas, category_ids)
 
         kits = items(self.api.get("/inventory/kits"), "kits")
         kit_names = {k.get("name") for k in kits}
