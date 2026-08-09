@@ -268,6 +268,38 @@ export function openStaffedShift(extraMatch) {
   };
 }
 
+/**
+ * Open an election's detail page and switch to one of its workflow tabs.
+ *
+ * The tabs are component state rather than a query parameter, so they can only
+ * be reached by clicking. Matched on the tab's `id` rather than its label: the
+ * Ballot tab renders a count badge inside the button, so its accessible name is
+ * "Ballot 1" and an anchored label match never fires. The election id is minted
+ * per seed, hence the lookup.
+ */
+/**
+ * The seeded election that has candidates. Elections are listed newest-first
+ * and the draft bylaw vote comes back before the officer election, so a shot
+ * that just takes the first record lands on an election nobody has been
+ * nominated for and every tab shows its empty state.
+ */
+export const isNominatingElection = (election) =>
+  (election.status ?? "") === "nominations";
+
+export function openElectionTab(tabId, match) {
+  return async (page) => {
+    await openFirstFromApi(
+      "/elections?limit=20",
+      (id) => `/elections/${id}`,
+      "elections",
+      match,
+    )(page);
+    const tab = page.locator(`#tab-${tabId}`);
+    await tab.waitFor({ timeout: 10_000 });
+    await tab.click({ timeout: 10_000 });
+  };
+}
+
 export const SHOTS = [
   // ── 00 Getting Started ──────────────────────────────────────────────
   {
@@ -2258,5 +2290,76 @@ export const SHOTS = [
       (request) => (request.status ?? "") !== "draft",
     ),
     fullPage: true,
+  },
+
+  // ── Ninth batch: elections workflow tabs ───────────────────────────
+  {
+    id: "14-04-ballot-configuration",
+    doc: "14-elections.md",
+    line: 115,
+    anchor:
+      "Screenshot of the ballot item configuration showing a position field",
+    alt: "Ballot item configuration with its position and candidate settings",
+    route: "/elections",
+    prepare: async (page) => {
+      await openElectionTab("ballot", isNominatingElection)(page);
+      // Items render collapsed; the position, candidate list and write-in
+      // toggle the placeholder names are inside one. The disclosure is an
+      // icon-only button labelled "Expand" — the item's title is not clickable.
+      await page
+        .getByRole("button", { name: "Expand" })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
+    // The Results & Publishing panel sits above every tab and reads "No votes
+    // cast yet" — accurate for an election still taking nominations, and
+    // nothing to do with the tab this shot is of.
+    allowEmptyState: true,
+  },
+  {
+    id: "14-05-nominations-tab",
+    doc: "14-elections.md",
+    line: 152,
+    anchor: "Screenshot of the Nominations tab showing the",
+    alt: "Nominations tab with the nominate form and current nominations",
+    route: "/elections",
+    prepare: openElectionTab("nominations", isNominatingElection),
+    fullPage: true,
+    // The Results & Publishing panel sits above every tab and reads "No votes
+    // cast yet" — accurate for an election still taking nominations, and
+    // nothing to do with the tab this shot is of.
+    allowEmptyState: true,
+  },
+  {
+    id: "14-06-candidate-form",
+    doc: "14-elections.md",
+    line: 178,
+    anchor:
+      "Screenshot of the candidate nomination form showing member dropdown",
+    alt: "Candidate nomination form with member, position and statement fields",
+    route: "/elections",
+    prepare: async (page) => {
+      await openElectionTab("candidates", isNominatingElection)(page);
+      await clickByName(/add candidate/i)(page);
+    },
+    // The tab lists candidates; the *form* the placeholder names is behind
+    // "Add Candidate". It renders inline rather than as a modal, part-way down
+    // a long page, so clip to the card instead of shooting the viewport.
+    selector: 'div:has(> h4:text-is("Add New Candidate"))',
+  },
+  {
+    id: "14-07-eligibility-roster",
+    doc: "14-elections.md",
+    line: 210,
+    anchor: "Screenshot of the Eligibility Roster showing a table of members",
+    alt: "Eligibility roster listing members with their eligibility status",
+    route: "/elections",
+    prepare: async (page) => {
+      await openElectionTab("eligibility", isNominatingElection)(page);
+      await clickByName(/voter eligibility roster/i)(page);
+    },
+    fullPage: true,
+    allowEmptyState: true,
   },
 ];

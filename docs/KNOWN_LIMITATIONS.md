@@ -419,6 +419,34 @@ Verified 2026-08-08 by counting non-test call sites under `frontend/src` for
 each service method and each store action, and by searching both navigation
 components for the module's route.
 
+## Finance — Five Guide Sections With No Screen (2026-08-09)
+
+Found while capturing `docs/training/11-finance.md`. Five of that guide's nine
+placeholders picture screens the frontend does not render; their placeholders
+are left open. Four defects found alongside them were fixed — see the commit
+that added the purchase request, expense report and check request shots.
+
+| Guide section                | What exists                                                                                                                                 | State                |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Create Budget form           | `financeStore.createBudget` over a working API, **no component calls it**. `BudgetsPage` is read-only — it has no create control at all.     | ❌ Store action only |
+| Add Approval Step form       | `ApprovalChainsSettingsPage` renders a chain's steps and offers no way to add, edit or remove one.                                            | ❌ Not built         |
+| Create Dues Schedule form    | `financeStore.createDuesSchedule`, **no component calls it**.                                                                                 | ❌ Store action only |
+| QuickBooks export mapping    | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.                                  | ❌ API + types only  |
+| Export logs                  | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                                                      | ❌ API + types only  |
+
+**Budget detail's transaction history is a stub, not an empty state.**
+`BudgetDetailPage` renders `<EmptyState title="No transactions yet">`
+unconditionally — there is no fetch behind it and no code path that ever
+displays a transaction. The guide's placeholder asks for "a table of linked
+transactions below" the progress bar. The stacked progress bar is real and
+correct; the table does not exist. This is why that screenshot has been held
+back through several rounds of seeding: purchase requests, expense reports and
+check requests were all charged against the budgets and the panel still said
+"No transactions yet", because nothing could have changed it.
+
+Verified 2026-08-09 by counting non-test call sites for each store action and
+service method, and by reading the render bodies.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

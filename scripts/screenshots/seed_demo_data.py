@@ -2953,7 +2953,87 @@ class Seeder:
                     },
                 )
             )
+        self._seed_nominations(elections)
         return elections
+
+    def _seed_nominations(self, elections: list[dict]) -> None:
+        """Nominate candidates for the officer election.
+
+        The Nominations and Candidates tabs are both empty until somebody is
+        put forward, and nominations are only accepted while the election is in
+        its nomination phase — a draft election refuses them.
+        """
+        election = next(
+            (
+                e
+                for e in elections
+                if e.get("title") == "Annual Officer Elections" and pick(e, "id")
+            ),
+            None,
+        )
+        if not election:
+            return
+        election_id = pick(election, "id")
+        if items(self.api.get(f"/elections/{election_id}/candidates"), "candidates"):
+            return
+        if str(pick(election, "status") or "").lower() == "draft":
+            try:
+                self.api.post(f"/elections/{election_id}/open-nominations")
+            except ApiError as exc:
+                if exc.code != 400:
+                    raise
+                self.blocked.append(f"open nominations: {exc}")
+                return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{m.get('first_name') or m.get('firstName')} "
+            f"{m.get('last_name') or m.get('lastName')}": pick(m, "id")
+            for m in members
+        }
+        nominations = [
+            (
+                "Fire Chief",
+                "Dana Ruiz",
+                "Twenty-two years on the job, the last "
+                "six as deputy. I want to finish the staffing plan we started.",
+            ),
+            (
+                "Fire Chief",
+                "Marcus Bell",
+                "My focus is training depth — every "
+                "seat on every rig covered by two qualified people.",
+            ),
+            (
+                "Deputy Chief",
+                "Priya Raman",
+                "Operations first: response times, "
+                "apparatus readiness, and a rebuilt duty roster.",
+            ),
+            (
+                "Captain",
+                "Callum Frazier",
+                "I have run B-shift for four years "
+                "and would like to keep doing it with a formal mandate.",
+            ),
+        ]
+        for position, name, statement in nominations:
+            user_id = by_name.get(name)
+            if not user_id:
+                continue
+            try:
+                self.api.post(
+                    f"/elections/{election_id}/nominations",
+                    {
+                        "position": position,
+                        "nominee_user_id": user_id,
+                        "statement": statement,
+                    },
+                )
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+                self.blocked.append(f"nominate {name}: {exc}")
 
     # -- prospective members -----------------------------------------
 
