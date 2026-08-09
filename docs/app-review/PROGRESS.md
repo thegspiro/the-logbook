@@ -59,7 +59,7 @@ from its open list.
 | B18 | training | TR2 | ✅ (p1, p2, p3) |
 | B19 | scheduling | SCH2 | ✅ (p1, p2, p3) |
 | B20 | finance | FIN2 | ✅ (p1, p2, p3) |
-| B21 | orgs, roles & users | ORU2 | ⬜ |
+| B21 | orgs, roles & users | ORU2 | ✅ (p1, p2, p3) |
 | B22 | compliance & skills | CS2 | ⬜ |
 | B23 | security, audit & IP | SEC2 | ⬜ |
 | B24 | core infra | CI2 | ⬜ |
@@ -1625,3 +1625,13 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   added**; finance unit tests pass. E712 already clean (pass 2). FIN-7 residual
   (float→Decimal) + FIN-N stay flagged. Gate: flake8/black clean; tsc n/a. CHANGELOG
   updated. See finance.md → Pass 3.
+
+- **B21 orgs, roles & users ✅ (pass 3) — verified clean, no code change.** Re-verified
+  the permission-ceiling guards on the highest-risk (privilege-escalation) module:
+  ORU-7a/7b (`_enforce_permission_grant_ceiling`/`_enforce_role_edit_ceiling`,
+  roles.py 51/87 wired at 228/312/327/452) and **ORU-7d CRITICAL**
+  (`_enforce_rank_grant_ceiling`, users.py 673, wired into create_member 234 +
+  update_user_profile 1314; test_rank_grant_ceiling.py 4/4 pass). Latent-500 lens
+  clean (identifier_type/leave_type/organization_type/status properly typed); E712-free
+  across role/org/user services. ORU-7c (org-wide member-role mass-escalation) stays
+  flagged. No CHANGELOG. See orgs-roles-users.md → Pass 3. Next: B22 compliance & skills.

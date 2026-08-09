@@ -14,6 +14,37 @@ member-role guard) left open.
 
 ---
 
+## Pass 3 (2026-08-09) — verified clean on the privilege-escalation surface
+
+Re-verified the module's permission-ceiling guards all hold — the crux of this,
+the highest-risk module:
+
+- **ORU-7a/7b** — `_enforce_permission_grant_ceiling` / `_enforce_role_edit_ceiling`
+  (`roles.py` 51/87) are wired into the role create/update/grant paths (228/312/327/452);
+  last-admin/lockout protection intact.
+- **ORU-7d (CRITICAL)** — `_enforce_rank_grant_ceiling` (`users.py` 673) is wired into
+  both `create_member` (234) and `update_user_profile` (1314, only when the rank
+  actually changes), so a `users.create`/`members.manage` holder still can't mint or
+  self-assign a rank carrying permissions beyond their own. `test_rank_grant_ceiling.py`
+  4/4 pass.
+
+**Latent-500 lens clean:** the enum columns (`identifier_type`, `leave_type`,
+`organization_type`, `status`) are all properly typed in the user/role/org request
+schemas — no free-string→ENUM path. **E712-free** across `role_service.py`,
+`organization_service.py`, `user_service.py`.
+
+### Still flagged (unchanged)
+
+- **ORU-7c** — mass-editing the org-wide `member` role can escalate every member at
+  once; intended (an org-wide role *should* be broadly editable) but sharp. An
+  optional dedicated confirmation/guard is the owner's call, in `KNOWN_LIMITATIONS.md`.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_rank_grant_ceiling.py` **4 passed** (DB-free); no
+code changed.
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified pass-1 ORU-7a (`_enforce_role_edit_ceiling`) and ORU-7b (last-admin
