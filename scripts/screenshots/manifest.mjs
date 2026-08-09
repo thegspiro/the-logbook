@@ -1407,6 +1407,9 @@ export const SHOTS = [
       "Screenshot of the label printing page showing the format dropdown (Letter, Dymo",
     alt: "Inventory label printing page with format presets and preview",
     route: "/inventory/print-labels",
+    // The page prints whatever ?ids= names and otherwise renders "No items
+    // specified" — which is what this shot published until 2026-08-09.
+    prepare: withIdsFromApi("/inventory/items?limit=6", "items"),
     fullPage: true,
   },
   {
@@ -2903,6 +2906,39 @@ export const SHOTS = [
       "Screenshot of the Shift Reports Settings tab showing three cards",
     alt: "Shift report settings with checklist timing, validation and form sections",
     route: "/scheduling/settings?tab=shift-reports",
+    fullPage: true,
+  },
+  {
+    id: "05-52-item-maintenance",
+    doc: "05-inventory.md",
+    line: 566,
+    anchor: "Screenshot of the maintenance section on an item detail page, showing past",
+    alt: "Item inspections tab listing its service history",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // The Inspections tab only exists for a category that tracks
+      // maintenance, so pick a Structural PPE item rather than the first one.
+      await openFirstFromApi(
+        "/inventory/items?limit=200",
+        (id) => `/inventory/items/${id}`,
+        "items",
+        (item) => (item.name || "").startsWith("Bunker Coat"),
+      )(page);
+      await clickByName(/^Inspections$/)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-51-label-print-settings",
+    doc: "05-inventory.md",
+    line: 531,
+    anchor: "Screenshot of the barcode print page Settings panel showing the Label Size grid",
+    alt: "Label print settings with the size presets and content options",
+    route: "/inventory/print-labels",
+    prepare: async (page) => {
+      await withIdsFromApi("/inventory/items?limit=6", "items")(page);
+      await clickByName(/^Settings$/)(page);
+    },
     fullPage: true,
   },
   {

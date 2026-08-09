@@ -526,8 +526,7 @@ Generate barcode labels for inventory items to attach to equipment.
 
 Labels include a Code128 barcode (with the required quiet-zone margins), the item name, and the asset tag or serial number.
 
-> **Screenshot needed:**
-> _[Screenshot of the barcode print page Settings panel showing the Label Size grid with the eight presets plus a highlighted "Custom size" card, the Width/Height (in) inputs revealed below it, the Copies field, the Additional Info chips (Location/Category/Condition), and the PDF / Print Labels buttons]_
+![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
 ### Connecting a Sticker / Label Printer
 
@@ -535,7 +534,7 @@ Both paths produce **actual-size** barcodes — the key to making them scannable
 
 1. Install your label printer's driver and load the label stock.
 2. Pick the matching preset, or choose **Custom size** and enter the label's real dimensions. **Your choice is remembered per position and per module** — it's saved to your highest-priority position (role) and scoped to the area of the app you're printing from, so whoever fills that role gets the same printer on any computer. Different teams that use different printers each keep their own (e.g., the Quartermaster keeps a Rollo for inventory, the apparatus team keeps a different printer, the outreach team another). The choice is also cached locally so it loads instantly.
-3. Click **Print Test Label** (thermal presets) to download a single-label PDF and confirm alignment and orientation before printing the whole batch.
+3. Click **Download Test Label** to get a single-label PDF and confirm alignment and orientation before printing the whole batch.
 4. When printing, select the label printer, set **Scale** to **100%** (disable "Fit to page" / "Shrink to fit"), set margins to **None**, and set the paper/media size to the label stock.
 
 > **Rollo and other roll-fed printers:** Two Rollo presets are built in — **Rollo 4" × 6"** (portrait shipping labels) and **Rollo / Thermal 2" × 1"** (small asset labels) — and any other Rollo roll works via **Custom size**. The **PDF** path is recommended: it generates each label at the exact size, pre-rotated for the printer's feed direction.
@@ -563,8 +562,7 @@ Navigate to **Inventory Admin** and check the **Maintenance Due** section for it
 4. Enter the maintenance type, date, description, and cost.
 5. Save.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the maintenance section on an item detail page, showing past maintenance records in a timeline and the "Add Maintenance Record" form with type dropdown, date, description, and cost fields]_
+![Item inspections tab listing its service history](./images/05-52-item-maintenance.png)
 
 ---
 

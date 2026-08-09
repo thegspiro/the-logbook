@@ -456,8 +456,6 @@ out. So:
 
 ## Scheduled Tasks
 
-Navigate to **Administration > Scheduled Tasks** to view and manage automated tasks.
-
 Scheduled tasks run automatically on a schedule:
 
 | Task                                  | Description                                                                          |
@@ -472,15 +470,21 @@ Scheduled tasks run automatically on a schedule:
 | **Process Scheduled Emails**          | Send pending pipeline automated emails (polls every 60 seconds) _(added 2026-03-13)_ |
 | **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                      |
 
-For each task you can see:
-
-- Last run time
-- Next scheduled run
-- Frequency
-- Enabled/disabled status
-
 > **Screenshot placeholder:**
 > _[Screenshot of the Scheduled Tasks page showing a list of tasks with name, frequency, last run time, next run time, and enabled toggle switches]_
+
+**Not yet built:** there is no **Administration > Scheduled Tasks** page. The
+tasks above are real and do run — see the in-process runner below — but the
+only way to inspect them is the API: `GET /scheduled/tasks` lists every task
+with its recommended cron schedule, and `POST /scheduled/run-task?task=<id>`
+triggers one by hand. That last one runs across **every** organization, so it
+is restricted to a platform System Owner (`system.run_tasks`), not a
+department admin.
+
+Note that even the API reports only the schedule. Last-run and next-run times
+and a per-task enabled flag — the columns the placeholder describes — are not
+stored anywhere, so a page for this would need backend work first. The
+placeholder stays open.
 
 ## In-Process Scheduled Task Runner (2026-03-25)
 

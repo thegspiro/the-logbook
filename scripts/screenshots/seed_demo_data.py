@@ -1443,6 +1443,55 @@ class Seeder:
                 blueprint[index % len(blueprint)],
             )
 
+    def _seed_item_maintenance(
+        self, category_ids: dict[str, Any], members: list[dict]
+    ) -> None:
+        """Service history for the items whose category tracks it.
+
+        The item detail page only offers its Inspections tab for a category
+        with `requires_maintenance`, and that tab is empty without records —
+        so the guide's maintenance timeline had nothing behind it.
+        """
+        tracked = {
+            category_ids.get("Structural PPE"),
+            category_ids.get("SCBA & Air Supply"),
+        }
+        tracked.discard(None)
+        if not tracked:
+            return
+        performer = next((pick(m, "id") for m in members if pick(m, "id")), None)
+        blueprint = [
+            ("routine_inspection", 150, "Annual NFPA 1851 routine inspection.", None),
+            ("advanced_cleaning", 95, "Advanced cleaning after a working fire.", 85.00),
+            ("repair", 40, "Replaced a torn wristlet and re-taped the seam.", 140.00),
+        ]
+        for item in items(self.api.get("/inventory/items?limit=500"), "items"):
+            item_id = pick(item, "id")
+            if not item_id or pick(item, "category_id", "categoryId") not in tracked:
+                continue
+            if items(
+                self.api.get(f"/inventory/items/{item_id}/maintenance"), "records"
+            ):
+                continue
+            for kind, days_ago, description, cost in blueprint:
+                completed = TODAY - timedelta(days=days_ago)
+                payload = {
+                    "item_id": item_id,
+                    "maintenance_type": kind,
+                    "scheduled_date": str(completed - timedelta(days=3)),
+                    "completed_date": str(completed),
+                    "next_due_date": str(completed + timedelta(days=365)),
+                    "description": description,
+                    "condition_after": "good",
+                    "passed": True,
+                    "is_completed": True,
+                }
+                if cost is not None:
+                    payload["cost"] = cost
+                if performer:
+                    payload["performed_by"] = performer
+                self.api.post("/inventory/maintenance", payload)
+
     def _file_items_into_areas(
         self,
         areas: list[dict],
@@ -1489,6 +1538,7 @@ class Seeder:
         items_by_name = {i.get("name"): i for i in inventory_items}
 
         self._seed_size_preferences(members)
+        self._seed_item_maintenance(category_ids, members)
 
         areas = items(self.api.get("/inventory/storage-areas"), "storage_areas")
         area_names = {a.get("name") for a in areas}

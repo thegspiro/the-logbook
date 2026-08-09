@@ -120,7 +120,7 @@ const CRASHED = /Oops! Something went wrong|Show error details/i;
  * page somewhere it cannot render. Failing the shot is what surfaces that.
  */
 const PAGE_ERROR =
-  /no [a-z ]{2,30} (id )?provided|failed to load|could not be loaded|unable to load|invalid (id|request)/i;
+  /no [a-z ]{2,30} (id |ids )?(provided|specified|selected)|failed to load|could not be loaded|unable to load|invalid (id|request)|go back to [a-z ]{2,30} and select/i;
 
 async function detectPageError(page) {
   const text = await pageText(page);

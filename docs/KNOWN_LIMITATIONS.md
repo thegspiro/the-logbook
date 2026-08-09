@@ -618,6 +618,46 @@ Total: hrs" with the number missing; and the annual report's
 which the dashboard reads without guarding — `field_details.map` threw and took
 the whole Annual Report tab into the ErrorBoundary.
 
+## Admin — No Scheduled Tasks Page (2026-08-09)
+
+`docs/training/08-admin-reports.md` told administrators to "Navigate to
+**Administration > Scheduled Tasks** to view and manage automated tasks", and
+listed the columns they would find there: last run, next run, frequency, and an
+enabled toggle.
+
+There is no such page. Searching `frontend/src` for "scheduled task" in any
+casing returns nothing. What exists is `app/api/v1/endpoints/scheduled.py`:
+`GET /scheduled/tasks` lists each task with its recommended cron schedule, and
+`POST /scheduled/run-task` triggers one — the latter restricted to a platform
+System Owner (`system.run_tasks`) because each task iterates every
+organization.
+
+The gap is wider than a missing screen. The API reports the _schedule_ only;
+last-run and next-run times and a per-task enabled flag are not persisted
+anywhere, so the page the guide describes needs backend work before it needs a
+frontend. The placeholder is left open and the prose now says where the tasks
+actually live.
+
+## Inventory — Three List Endpoints That Under-Report (2026-08-09)
+
+All fixed 2026-08-09, grouped because they are one mistake made three times: a
+list response omits a field the card reads, and the card renders the absence as
+a plausible zero rather than an error.
+
+- **Equipment kits.** `EquipmentKitResponse` carries no line items — only the
+  detail response does — and `get_equipment_kits` did not eager-load them
+  either. The card counts `kit.line_items.length`, so every kit read "0 items",
+  including one holding four. Now sends `item_count`.
+- **ISO readiness.** The payload never sent `total_department_hours`, which the
+  category card prints, so each read "Dept Total: hrs" with the number missing.
+- **Annual compliance report.** `record_completeness` omitted `field_details`,
+  which the dashboard maps over without guarding — that one did throw, and took
+  the whole tab into the ErrorBoundary.
+
+Worth remembering when adding a field to a card: check whether the _list_
+endpoint sends it, not just the detail one. Two of these three failed silently
+for as long as they existed.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked
