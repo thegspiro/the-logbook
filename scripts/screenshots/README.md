@@ -72,6 +72,46 @@ Where an empty phrase is incidental — an empty "My Upcoming Shifts" panel on a
 otherwise-populated dashboard, or an error monitor correctly reporting no
 errors — the manifest entry sets `allowEmptyState: true`.
 
+## Who the shot is taken as, and in which theme
+
+Several routes render a **different page** depending on who is signed in.
+`/training/skills-testing` is the clearest case: an officer gets the skill-sheet
+library, a member gets Available Tests and My Results. A placeholder describing
+what a member sees therefore cannot be filled from the administrator's session,
+and a shot that looks fine can quietly picture the wrong screen.
+
+| Field   | Values                                   | Notes                                                              |
+| ------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| `auth`  | `admin` (default), `member`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights |
+| `theme` | light (default), `dark`                  | Drives the context's `colorScheme`; the app's theme follows system |
+
+Each `auth` + `theme` combination gets its own browser context, built on first
+use — cookies are per-context, so swapping users by clearing them mid-run would
+invalidate every later shot, and `colorScheme` is fixed at context creation.
+A run that needs no member session never pays for that login.
+
+A signed-out shot that still needs an id or slug the seeder minted can borrow an
+authenticated session: `prepare` receives a second argument with
+`lookupPage()`, which resolves to a signed-in page. `10-11-public-form-dark`
+uses it to find the published form's `public_slug` before navigating the
+anonymous page to `/f/{slug}`.
+
+## States the seeder has to manufacture
+
+Some pictured states cannot be produced by the administrator the seeder runs as,
+and the seeder makes them explicitly:
+
+- **A result awaiting validation.** An officer's own completion validates in the
+  same step, so every test the seeder creates lands already signed off. It signs
+  in as one ordinary member and has them examine a second one, which is the only
+  way to leave a result in the queue.
+- **A named viewer.** Granted on a _completed_ test — the panel renders only on
+  the review view of a finished official test, so a grant on a draft is a row no
+  screen ever shows.
+- **A published public form.** `/f/{slug}` serves published forms only; a draft
+  renders as "not found", which is what the public-form shots would otherwise
+  capture.
+
 ## How a shot finds its placeholder
 
 Each entry records the placeholder's `line`, but that is only a hint: applying
@@ -89,7 +129,23 @@ declines to guess if two placeholders match it.
 3. If the shot pictures a modal, a specific tab, or an expanded panel, give it a
    `prepare(page)` that drives the UI there. For a detail page, use
    `openFirstFromApi()` rather than hard-coding an id — ids change every seed.
-4. Capture with `--only <id-prefix>`, look at the PNG, then apply.
+4. If it pictures what a **member** sees, or a **dark-mode** page, set `auth` /
+   `theme` rather than reaching for the administrator's session.
+5. Capture with `--only <id-prefix>`, **look at the PNG**, then apply.
+
+> **Look at the image, every time.** A capture that exits `+` proves only that
+> Playwright reached a page and wrote a file. It does not prove the page is the
+> one the placeholder describes: a collapsed accordion, an unapplied filter, or
+> a route that now renders a different audience's view all capture cleanly.
+> Every one of those happened while these shots were being written.
+
+Two waiting pitfalls worth knowing, both of which cost a debugging round here:
+
+- **Native `<option>` elements are never "visible"** to Playwright. Waiting on
+  text that also appears in a closed `<select>` hangs until it times out — scope
+  the wait to the element you actually mean (`span:text-is("Needs validation")`).
+- **`fullPage` duplicates fixed elements** down a tall page, so a sidebar can
+  appear twice in one image. Prefer `selector` when the subject is one panel.
 
 Ids are the filename and the applier's key, so keep them stable once a shot has
 been applied — renaming one orphans the image already referenced in the guide.

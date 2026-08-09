@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Skills testing: the validation queue was empty for the officers it exists for (2026-08-09)
+
+**Fixed**
+
+- **`GET /tests?pending_validation=true` returned nothing while the dashboard
+  said results were waiting.** Skills testing has two checks for "is this user
+  an officer": one gates what they may _do_, the other what they may _see_. The
+  write-side check asks the real permission resolver; the read-side one only
+  recognised a legacy `user.role` string or a literal `user.permissions` list —
+  and a training officer normally holds `training.manage` through a **position**,
+  which neither of those sees.
+
+  So the same officer read as an officer to `GET /summary`, which counted the
+  results awaiting validation, and as an ordinary member to `GET /tests`, which
+  filtered every one of them away as somebody else's test. The **Needs
+  Validation** card showed a number, the queue behind it was empty, and the
+  officer had no route to the results it was counting. The org-wide test list
+  was truncated to the officer's own tests for the same reason.
+
+  Both checks now resolve the real permission. The older role-name heuristics
+  are kept — this widened the check rather than swapping it — and a test pins
+  the two to agree, since their disagreeing is the whole defect.
+
+> **Found by building the demo data for the documentation screenshots**, which
+> is the first time anything exercised the queue as a real officer rather than
+> as a fixture holding a literal permission list.
+
+---
+
 ### Storefront: a payment in the wrong currency is no longer auto-applied (2026-08-08)
 
 **Fixed**
@@ -4999,13 +5028,14 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Conflict resolution**: When records are modified on both sides between syncs, configurable strategies (Salesforce wins, Logbook wins, most recent wins) prevent data loss
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Salesforce API rate limit exceeded during sync | Sync pauses, retries with exponential backoff, logs partial progress |
-| Webhook received for unmapped Salesforce object | Event logged and skipped; no error returned to Salesforce |
-| Member deleted in Logbook but exists in Salesforce | Configurable: soft-delete in Salesforce or unlink without delete |
-| Salesforce field mapping references nonexistent field | Mapping validation on save rejects invalid field references |
-| OAuth token expires mid-sync | Auto-refresh token and retry from the failed record |
+
+| Scenario                                              | Behavior                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Salesforce API rate limit exceeded during sync        | Sync pauses, retries with exponential backoff, logs partial progress |
+| Webhook received for unmapped Salesforce object       | Event logged and skipped; no error returned to Salesforce            |
+| Member deleted in Logbook but exists in Salesforce    | Configurable: soft-delete in Salesforce or unlink without delete     |
+| Salesforce field mapping references nonexistent field | Mapping validation on save rejects invalid field references          |
+| OAuth token expires mid-sync                          | Auto-refresh token and retry from the failed record                  |
 
 #### Vector Solutions Integration Enhancements
 
@@ -5015,11 +5045,12 @@ resolved a set of schema/data-integrity inconsistencies.
 - **API spec compliance**: Fixed Vector Solutions API client to match their actual authentication flow (API key in header, not query parameter) and pagination format (offset-based, not cursor-based)
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Vector Solutions category has no internal mapping | Record imported with a "Unmapped" category flag; officer prompted to map |
-| Credit hours differ from clock hours | Both values stored; `credit_hours` used for CE credit, `hours` for compliance |
-| Duplicate record detected during import | Skipped with duplicate reason logged; deduplication uses member + course + date |
+
+| Scenario                                          | Behavior                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Vector Solutions category has no internal mapping | Record imported with a "Unmapped" category flag; officer prompted to map        |
+| Credit hours differ from clock hours              | Both values stored; `credit_hours` used for CE credit, `hours` for compliance   |
+| Duplicate record detected during import           | Skipped with duplicate reason logged; deduplication uses member + course + date |
 
 #### National Registry (NREMT) Standard Linkage
 
@@ -5029,10 +5060,11 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Compliance auto-tracking**: Training records filed under categories with `registry_code` set automatically count toward the corresponding NCCR requirement, eliminating manual cross-referencing
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Category has registry_code but no matching NCCR requirement exists | Hours counted in category but not toward NCCR compliance; warning shown on compliance report |
-| NREMT hour distribution updated after records already filed | Existing records retain original credit; re-calculation available via compliance matrix refresh |
+
+| Scenario                                                           | Behavior                                                                                        |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Category has registry_code but no matching NCCR requirement exists | Hours counted in category but not toward NCCR compliance; warning shown on compliance report    |
+| NREMT hour distribution updated after records already filed        | Existing records retain original credit; re-calculation available via compliance matrix refresh |
 
 #### Training Program Export/Import
 
@@ -5041,11 +5073,12 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Cross-department sharing**: Enables mutual aid training programs and standardized curricula across departments
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Imported program references a course that already exists | Existing course reused; no duplicate created |
-| Imported program has a phase name matching an existing phase | New phase created with " (Imported)" suffix to avoid collision |
-| Export includes category registry codes | Registry codes included; importing department maps them to their own categories |
+
+| Scenario                                                     | Behavior                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Imported program references a course that already exists     | Existing course reused; no duplicate created                                    |
+| Imported program has a phase name matching an existing phase | New phase created with " (Imported)" suffix to avoid collision                  |
+| Export includes category registry codes                      | Registry codes included; importing department maps them to their own categories |
 
 #### Training Category Tracking Improvements
 
@@ -5061,11 +5094,12 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Route**: Added to training module routes, accessible to users with `training.manage` permission
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Manual report filed for a date that has a scheduled shift | Warning shown; officer can proceed (reports are independent) |
-| Apparatus type has no skill/task mappings configured | Form shows empty skills/tasks sections; officer can manually add entries |
-| Manual report with zero hours (same start/end time) | Validation prevents submission; minimum 15-minute shift required |
+
+| Scenario                                                  | Behavior                                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Manual report filed for a date that has a scheduled shift | Warning shown; officer can proceed (reports are independent)             |
+| Apparatus type has no skill/task mappings configured      | Form shows empty skills/tasks sections; officer can manually add entries |
+| Manual report with zero hours (same start/end time)       | Validation prevents submission; minimum 15-minute shift required         |
 
 #### Shift Completion Service Hardening
 
@@ -5101,11 +5135,12 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Membership tier service**: Fixed edge cases in tier advancement logic for members transitioning from prospect to active status
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Applicant linked to an election that is deleted | Election reference cleared; "Election Removed" placeholder shown |
+
+| Scenario                                              | Behavior                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------- |
+| Applicant linked to an election that is deleted       | Election reference cleared; "Election Removed" placeholder shown           |
 | Pipeline stage reorder while applicants are in-flight | Applicants retain their current stage; reorder only affects visual display |
-| Applicant has linked events from a disabled module | Events section hidden; data preserved for when module is re-enabled |
+| Applicant has linked events from a disabled module    | Events section hidden; data preserved for when module is re-enabled        |
 
 #### Test Coverage Expansion
 
@@ -5967,16 +6002,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario                                      | Behavior                                                                         |
+| Scenario | Behavior |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
-| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
-| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
-| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
-| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
-| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 

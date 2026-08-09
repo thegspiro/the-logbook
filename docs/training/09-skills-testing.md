@@ -184,10 +184,7 @@ decide that the result stands. That decision is a second, separate step:
 
 Template authoring is unchanged — writing the standard is still an officer act.
 
-> **[SCREENSHOT NEEDED]:** _The Skills Testing landing page as seen by an
-> ordinary member (no training.manage). Show the Tests tab present and the
-> "New Test" button available, with the Templates tab either absent or
-> read-only, so the difference from the officer view is visible._
+![Skills Testing as an ordinary member sees it — available tests and their own results](./images/09-09-member-skills-testing.png)
 
 ### Setting Up a Test Session
 
@@ -386,10 +383,7 @@ The outcome is withheld from the candidate on purpose. Nobody has yet decided
 that the result stands, so showing a PASS or a FAIL would be asserting something
 no officer has agreed to.
 
-> **[SCREENSHOT NEEDED]:** _A member's "My Training → Skills Tests" list showing
-> one row badged "Awaiting validation" with the score and PASS/FAIL columns
-> visibly empty, alongside a normal validated result showing a green PASS badge
-> for contrast._
+![A member's own skills tests, one awaiting an officer's validation with its outcome withheld](./images/09-10-member-awaiting-validation.png)
 
 ### If you are a training officer
 
@@ -399,11 +393,13 @@ obtain, so there is no queue of your own tests to approve afterward.
 
 What is new is the **review queue** of tests other members ran:
 
-1. Go to **Training Admin > Skills Testing > Tests**.
-2. Filter for results **awaiting validation**. The count also appears on the
-   Skills Testing summary dashboard.
+1. Go to **Training Admin > Skills Testing > Test Records**.
+2. Set the status dropdown to **Needs Validation**. A **Needs validation** badge
+   also marks these rows in the unfiltered list, so you can spot them without
+   filtering.
 3. Open a result and read the scorecard — every criterion, the notes, and the
-   measured time are all there.
+   measured time are all there. A banner at the top states plainly that the
+   result does not yet count toward the candidate's record.
 4. **Accept result** to validate it, or **Void result** to reject it. Both sit
    at the bottom of the scorecard you have just read, under **Officer actions**,
    so the decision is made on the record rather than on a list row _(2026-08-08)_.
@@ -416,6 +412,12 @@ skill you administer often: a template can override the department, and a single
 test can override the template. See
 [Who Sees a Result](#who-sees-a-result--disclosure-settings-2026-08-08).
 
+> **Where the count lives.** The **Templates** tab carries a **Needs
+> Validation** stat card, which appears only while the queue is non-empty — it
+> takes the Pass Rate card's place, on the reasoning that a queue nobody clears
+> is blocking candidates from getting credit and so outranks the pass rate for
+> attention.
+
 **Validate** is the moment the result becomes real: the pipeline requirement is
 credited if it passed, one attempt is spent, the department statistics move, and
 the candidate can see the outcome under the template's normal disclosure rules.
@@ -425,14 +427,7 @@ is deliberate — voiding keeps the submission and records the reason it was
 refused, rather than deleting an evaluation somebody actually sat for. The
 candidate sees the reason.
 
-> **[SCREENSHOT NEEDED]:** _The Test Records tab filtered to "Awaiting
-> validation", showing three rows with candidate name, examiner name, template
-> and date, and a row-level action group containing both **Validate** and
-> **Void** buttons._
-
-> **[SCREENSHOT NEEDED]:** _The Skills Testing summary dashboard with the
-> "Pending validation" stat card showing a non-zero count, so the badge that
-> drives officers to the queue is visible._
+![Officer review queue — completed results awaiting validation, with Validate and Void actions](./images/09-11-validation-queue.png)
 
 ### Edge cases
 
@@ -519,15 +514,15 @@ name.)_
 
 Navigate to **Training Admin > Skills Testing > Summary** for a department-wide overview:
 
-| Metric                  | Description                                                                                         |
-| ----------------------- | --------------------------------------------------------------------------------------------------- |
-| **Total Templates**     | Number of skill sheet templates (archived excluded)                                                 |
-| **Published Templates** | Templates available for testing                                                                     |
-| **Total Tests**         | All-time official test sessions. Practice attempts and **voided** results are excluded              |
-| **Tests This Month**    | Official test sessions created in the current month, on the same exclusions                         |
-| **Pass Rate**           | Percentage of **validated** completed tests that resulted in a pass                                 |
-| **Average Score**       | Mean percentage score across **validated** completed tests                                          |
-| **Pending Validation**  | Official results awaiting an officer's sign-off. **Officers only** — it reads `0` for everyone else |
+| Metric                  | Description                                                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Total Templates**     | Number of skill sheet templates (archived excluded)                                                                                             |
+| **Published Templates** | Templates available for testing                                                                                                                 |
+| **Total Tests**         | All-time official test sessions. Practice attempts and **voided** results are excluded                                                          |
+| **Tests This Month**    | Official test sessions created in the current month, on the same exclusions                                                                     |
+| **Pass Rate**           | Percentage of **validated** completed tests that resulted in a pass                                                                             |
+| **Average Score**       | Mean percentage score across **validated** completed tests                                                                                      |
+| **Needs Validation**    | Official results awaiting an officer's sign-off. It **replaces the Pass Rate card** while the queue is non-empty, and appears for officers only |
 
 > **Pass rate and average score count only validated results** _(2026-08-08)_.
 > A member-run result nobody has signed off is a submission, not yet the
@@ -535,17 +530,16 @@ Navigate to **Training Admin > Skills Testing > Summary** for a department-wide 
 > evaluations an officer may still reject. Expect these two figures to lag the
 > raw test count while a review queue is outstanding.
 
-> **Pending Validation is deliberately officer-only.** It is an org-wide count of
+> **Needs Validation is deliberately officer-only.** It is an org-wide count of
 > _other people's_ outstanding evaluations, which is not a member's to see, and
 > it is only actionable by someone who can validate. Members receive `0` rather
 > than a hidden card.
 
 > **[SCREENSHOT NEEDED]:** _The Summary dashboard viewed by a training officer
-> with a non-zero **Pending Validation** card visible, so the review-queue badge
+> with a non-zero **Needs Validation** card visible, so the review-queue badge
 > that drives officers to the queue can be seen alongside the other stats._
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Skills Testing Summary dashboard showing six stat cards in a 3x2 grid: Total Templates (12), Published Templates (8), Total Tests (156), Tests This Month (14), Pass Rate (82%), Average Score (76.4%). Each card has an icon and is color-coded]_
+![Skills testing summary with a non-zero Pending Validation count](./images/09-12-summary-pending-validation.png)
 
 ---
 
@@ -836,10 +830,7 @@ _other_ candidate's results too.
 | Adding someone to a **withheld** result | They see exactly what the candidate sees, which for "Nothing" is nothing at all                               |
 | Removing a viewer                       | Takes effect immediately; the result disappears from their list                                               |
 
-> **[SCREENSHOT NEEDED]:** _The Viewers panel on an open test, showing one
-> already-granted viewer with their name and the date granted plus a remove
-> (trash) button, and the "Add viewer" search box below it with the note that a
-> viewer sees the result at the candidate's disclosure level._
+![Named viewers on a single test, with the note that a viewer never sees more than the candidate](./images/09-13-test-viewers-panel.png)
 
 ### Setting the department default
 
@@ -1067,7 +1058,7 @@ Competency Matrix reflects new scores
 | Test shows FAIL but score is above passing percentage            | Check if "Require All Critical" is enabled. If any required criterion was not passed, the result is an automatic FAIL regardless of the score.                                                                                                                                                                                                                    |
 | Candidate doesn't appear in the search                           | Type at least **two characters** of their name — nothing is shown before that, and there is no "browse everyone" option by design. Only the first 15 matches appear and the list does not say it was cut short, so type more of the name rather than scrolling. The candidate must also be an **active** member of your organization; check their account status. |
 | The candidate field is missing entirely                          | Looking up a candidate needs `training.view` or `training.manage`. A position with no training access cannot search for test candidates. Ask an administrator to add the permission to your position.                                                                                                                                                             |
-| A member ran a test but nothing shows on the candidate's record  | Expected. An official test run by a member who is not a training officer is a **submission** until an officer validates it — it credits no requirement and shows no outcome. Open **Skills Testing > Tests**, filter for results awaiting validation, and Validate or Void it.                                                                                    |
+| A member ran a test but nothing shows on the candidate's record  | Expected. An official test run by a member who is not a training officer is a **submission** until an officer validates it — it credits no requirement and shows no outcome. Open **Training Admin > Skills Testing > Test Records**, set the status dropdown to **Needs Validation**, and Validate or Void it.                                                   |
 | "You cannot validate a test you are the candidate in"            | Separation of duties. An officer cannot sign off their own evaluation, even when someone else examined them — another officer has to validate it.                                                                                                                                                                                                                 |
 | Validate is refused — "nothing to validate"                      | Practice attempts are never recorded, so there is nothing to sign off. Voided results and tests still in progress are refused for the same reason: only a completed, official, non-voided test has a result to validate.                                                                                                                                          |
 | Old results appeared in the review queue                         | They should not. Every official result predating 2026-08-08 was backfilled as validated by its examiner — under the old rules only officers could run them. If you see historical results queued, report it rather than mass-validating.                                                                                                                          |

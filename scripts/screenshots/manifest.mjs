@@ -14,7 +14,12 @@
  *            finds the placeholder once the line hint has gone stale
  *   alt      alt text written into the markdown image tag
  *   route    path to visit, relative to the dev server root
- *   auth     'anonymous' to shoot a signed-out page in a separate context
+ *   auth     'admin' (default), 'member' to shoot what an ordinary member sees,
+ *            or 'anonymous' for a signed-out page. Each runs in its own browser
+ *            context, created on first use
+ *   theme    'dark' to shoot in dark mode; default light. The app's theme
+ *            defaults to "system", so this is driven by the context's
+ *            colorScheme rather than by clicking the theme switcher
  *   prepare  optional async (page) => void that drives the UI into the pictured
  *            state (open a modal, switch a tab, expand a panel)
  *   selector optional CSS/locator to clip to instead of the full viewport
@@ -33,6 +38,25 @@
 export const DEMO_CREDENTIALS = {
   username: "chief",
   password: "DemoP@ssw0rd!2026",
+};
+
+/**
+ * An ordinary member — no `training.manage`, no officer position.
+ *
+ * Shots marked `auth: "member"` sign in as this account. It is not
+ * interchangeable with the administrator: several routes render a different
+ * page for a member than for an officer (`/training/skills-testing` is the
+ * member's Available Tests / My Results view, not the template library), so a
+ * placeholder describing what a member sees can only be filled from a member's
+ * session.
+ *
+ * Kept in step with DEMO_MEMBER_USERNAME / DEMO_MEMBER_PASSWORD in
+ * seed_demo_data.py, which also guarantees this account exists, is not an
+ * officer, and is not being forced to change its password.
+ */
+export const DEMO_MEMBER_CREDENTIALS = {
+  username: "nbelhaj",
+  password: "DemoMember!2026",
 };
 
 /**
@@ -876,8 +900,165 @@ export const SHOTS = [
       await page.waitForTimeout(400);
     },
   },
+  {
+    id: "09-09-member-skills-testing",
+    doc: "09-skills-testing.md",
+    line: 187,
+    anchor: "The Skills Testing landing page as seen by an",
+    alt: "Skills Testing as an ordinary member sees it — available tests and their own results",
+    // Same URL as 09-01, deliberately: this route renders an entirely different
+    // page depending on who is signed in, which is the point the placeholder
+    // makes. The officer's template library is under /training/admin.
+    route: "/training/skills-testing",
+    auth: "member",
+  },
+  {
+    id: "09-10-member-awaiting-validation",
+    doc: "09-skills-testing.md",
+    line: 389,
+    anchor: 'A member\'s "My Training → Skills Tests" list showing',
+    alt: "A member's own skills tests, one awaiting an officer's validation with its outcome withheld",
+    route: "/training/my-training",
+    auth: "member",
+    fullPage: true,
+    prepare: async (page) => {
+      // My Training renders its sections as collapsibles, and Skills Tests is
+      // collapsed by default — scrolling to the header alone captures a closed
+      // panel, which pictures none of what the placeholder describes.
+      const header = page.getByText("Skills Tests", { exact: true }).first();
+      await header.waitFor({ state: "visible", timeout: 15_000 });
+      await header.scrollIntoViewIfNeeded();
+      await header.click();
+      // Wait for the list this section fetches on expand, not a fixed delay.
+      await page
+        .getByText(/awaiting validation|practice|no skills tests/i)
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-11-validation-queue",
+    doc: "09-skills-testing.md",
+    line: 418,
+    anchor: 'The Test Records tab filtered to "Awaiting',
+    alt: "Officer review queue — completed results awaiting validation, with Validate and Void actions",
+    route: "/training/admin?tab=tests",
+    fullPage: true,
+    // The queue is a filter on the records tab rather than a page of its own,
+    // and it is an option in the status dropdown — not a button or a tab — so
+    // the shot has to select it. Without this the capture shows "All Statuses"
+    // and pictures the whole history instead of the queue.
+    prepare: async (page) => {
+      const status = page.locator("select").first();
+      await status.waitFor({ state: "visible", timeout: 15_000 });
+      await status.selectOption("pending_validation");
+      // Waits on the row badge, scoped to a span. The dropdown's own option
+      // reads "Needs Validation" too and comes first in the DOM, and an option
+      // inside a closed native select is never "visible" — so an unscoped text
+      // wait hangs on the wrong element until it times out.
+      await page
+        .locator('span:text-is("Needs validation")')
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-12-summary-pending-validation",
+    doc: "09-skills-testing.md",
+    line: 533,
+    anchor: "The Summary dashboard viewed by a training officer",
+    alt: "Skills testing summary with a non-zero Pending Validation count",
+    // The stat cards live on the Templates tab, not Test Records — and the card
+    // is labelled "Needs Validation", which it earns by *replacing* the pass
+    // rate while the queue is non-empty. Clipped to the card row so the swap is
+    // legible; a full-page shot of this tab is already 09-01.
+    route: "/training/admin?tab=templates",
+    selector: "div.grid:has(p:text-is('Needs Validation'))",
+    prepare: async (page) => {
+      await page
+        .getByText("Needs Validation", { exact: true })
+        .waitFor({ state: "visible", timeout: 15_000 });
+    },
+  },
+  {
+    id: "09-13-test-viewers-panel",
+    doc: "09-skills-testing.md",
+    line: 829,
+    anchor: "The Viewers panel on an open test, showing one",
+    alt: "Named viewers on a single test, with the note that a viewer never sees more than the candidate",
+    route: "/training/skills-testing",
+    // Clipped to the panel rather than shot full-page. The panel sits at the
+    // bottom of a long scorecard, so a full-page capture is mostly criteria
+    // rows — and the page's fixed sidebar renders twice down a tall fullPage
+    // image, which reads as a glitch in a published guide.
+    selector: 'div.card:has(p:text-is("Who else can see this result"))',
+    prepare: async (page, helpers) => {
+      // The panel renders only on the review view of a *completed*, official
+      // test, and only for an officer — so the match is not optional here: the
+      // seeder's draft tests come back first and none of them shows it.
+      await openFirstFromApi(
+        "/training/skills-testing/tests",
+        (id) => `/training/skills-testing/test/${id}`,
+        "tests",
+        (test) => test.status === "completed" && !test.is_practice,
+      )(page, helpers);
+      const viewers = page.getByText(/who else can see this result/i).first();
+      await viewers.waitFor({ state: "visible", timeout: 20_000 });
+      await viewers.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+  },
 
   // ── 10 Mobile & PWA ─────────────────────────────────────────────────
+  {
+    id: "10-10-mobile-minimum-text",
+    doc: "10-mobile-pwa.md",
+    line: 175,
+    anchor: "The dashboard on a phone showing the relative",
+    alt: "Dashboard on a phone with relative timestamps and navigation labels at the 12px minimum",
+    route: "/dashboard",
+    viewport: "mobile",
+    allowEmptyState: true,
+    // Not fullPage: the bottom navigation is fixed, and a full-page capture
+    // scrolls it out of frame — but its labels are one of the four things the
+    // 12px floor was introduced for, so the shot has to be the viewport.
+  },
+  {
+    id: "10-11-public-form-dark",
+    doc: "10-mobile-pwa.md",
+    line: 197,
+    anchor: "The public form page (`/f/<slug>`) in dark mode",
+    alt: "The public form page in dark mode, readable on the themed background",
+    // Resolved in prepare — the route is not known until capture time.
+    route: "/login",
+    auth: "anonymous",
+    theme: "dark",
+    fullPage: true,
+    prepare: async (page, helpers) => {
+      // The slug is minted per seed, and this shot is signed out, so the
+      // lookup borrows the administrator's session. `/f/{slug}` serves
+      // published public forms only — the seeder publishes one.
+      const admin = await helpers.lookupPage();
+      const slug = await admin.evaluate(async () => {
+        const response = await fetch("/api/v1/forms", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const forms = Array.isArray(body)
+          ? body
+          : body.forms || body.items || [];
+        const target = forms.find((f) => f.is_public && f.public_slug);
+        return target ? target.public_slug : null;
+      });
+      if (!slug) throw new Error("no published public form to capture");
+      await page.goto(`${new URL(page.url()).origin}/f/${slug}`, {
+        waitUntil: "domcontentloaded",
+      });
+    },
+  },
   {
     id: "10-04-mobile-dashboard",
     // same dashboard, phone width
