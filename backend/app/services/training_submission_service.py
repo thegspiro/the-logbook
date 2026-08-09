@@ -27,6 +27,7 @@ from app.models.training import (
 )
 from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
+from app.utils.model_updates import apply_updates
 
 
 class TrainingSubmissionService:
@@ -65,9 +66,7 @@ class TrainingSubmissionService:
         """Update self-report configuration."""
         config = await self.get_config(organization_id)
 
-        for key, value in kwargs.items():
-            if value is not None and hasattr(config, key):
-                setattr(config, key, value)
+        apply_updates(config, kwargs)
 
         config.updated_by = updated_by
         await self.db.commit()
@@ -219,9 +218,7 @@ class TrainingSubmissionService:
                 "Cannot edit a submission that has been approved or rejected"
             )
 
-        for key, value in kwargs.items():
-            if value is not None and hasattr(submission, key):
-                setattr(submission, key, value)
+        apply_updates(submission, kwargs)
 
         # If it was revision_requested, move back to pending
         if submission.status == SubmissionStatus.REVISION_REQUESTED:

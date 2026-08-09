@@ -22,7 +22,7 @@ NOW = datetime.now(tz.utc)
 LOC_ID = str(uuid4())
 
 
-def _event(window_type, starts_in_minutes):
+def _event(window_type, starts_in_minutes, allow_guest_check_in=False):
     start = NOW + timedelta(minutes=starts_in_minutes)
     return SimpleNamespace(
         id=uuid4(),
@@ -38,6 +38,7 @@ def _event(window_type, starts_in_minutes):
         check_in_window_type=window_type,
         check_in_minutes_before=None,
         check_in_minutes_after=None,
+        allow_guest_check_in=allow_guest_check_in,
     )
 
 
@@ -98,6 +99,27 @@ class TestPublicDisplayWindow:
         with pytest.raises(HTTPException) as exc:
             await _call(code="bad!")  # non-alphanumeric
         assert exc.value.status_code == 404
+
+
+class TestGuestCheckInFlag:
+    """The kiosk only draws a guest QR code for events that opted in.
+
+    The flag gates an unauthenticated write endpoint, so a display must never
+    advertise guest sign-in for an event that has not enabled it.
+    """
+
+    async def test_flag_defaults_off(self, monkeypatch):
+        _patch_location_service(monkeypatch, [_event(CheckInWindowType.FLEXIBLE, 10)])
+        result = await _call()
+        assert result.current_events[0]["allow_guest_check_in"] is False
+
+    async def test_flag_is_reported_when_enabled(self, monkeypatch):
+        _patch_location_service(
+            monkeypatch,
+            [_event(CheckInWindowType.FLEXIBLE, 10, allow_guest_check_in=True)],
+        )
+        result = await _call()
+        assert result.current_events[0]["allow_guest_check_in"] is True
 
 
 class TestKioskTimezone:

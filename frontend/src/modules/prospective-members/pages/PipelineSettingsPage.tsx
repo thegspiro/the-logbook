@@ -40,6 +40,7 @@ import { PipelineBuilder } from '../components/PipelineBuilder';
 import { ReportStageGroupsEditor } from '../components/ReportStageGroupsEditor';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { blankToNull } from '../../../utils/formValues';
 import type { Pipeline, PipelineListItem, InactivityConfig, InactivityTimeoutPreset } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, TIMEOUT_PRESET_LABELS } from '../types';
 import { getEffectiveTimeoutDays } from '../utils';
@@ -133,7 +134,9 @@ export const PipelineSettingsPage: React.FC = () => {
     try {
       const updated = await pipelineService.updatePipeline(currentPipeline.id, {
         name: pipelineName.trim(),
-        description: pipelineDescription.trim() || undefined,
+        // Null, not undefined: an omitted key reads as "leave alone", so an
+        // emptied description would never actually be removed.
+        description: blankToNull(pipelineDescription),
       });
       setCurrentPipeline(updated);
       setEditingPipelineName(false);

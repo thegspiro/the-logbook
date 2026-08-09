@@ -142,6 +142,24 @@ class Event(Base):
         Boolean, nullable=False, default=False, server_default="0"
     )  # Require manual check-out
 
+    # Guest (non-member) check-in settings.
+    #
+    # Off by default and deliberately opt-in per event: enabling it exposes an
+    # unauthenticated write path (see app/api/public/display.py) that anyone
+    # standing in front of the room tablet can reach. It belongs on outreach
+    # events — volunteer interest nights, open houses — and must stay off for
+    # business meetings and training sessions, whose attendance drives records
+    # that only apply to members.
+    allow_guest_check_in = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # When guest check-in is on, also open a prospective-member record for each
+    # guest who supplies an email, so a recruitment lead is not lost between the
+    # sign-in sheet and the membership pipeline.
+    guest_check_in_creates_prospect = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
     # Recurrence
     is_recurring = Column(Boolean, nullable=False, default=False, server_default="0")
     recurrence_pattern = Column(
@@ -424,6 +442,16 @@ class EventExternalAttendee(Base):
     source_id = Column(String(36), nullable=True)
     notes = Column(Text, nullable=True)
 
+    # Prospective member opened from this attendance, when the event has
+    # guest_check_in_creates_prospect enabled. SET NULL so purging a prospect
+    # (retention, withdrawal) never destroys the attendance record itself —
+    # who was in the room is the event's history, not the prospect's.
+    prospect_id = Column(
+        String(36),
+        ForeignKey("prospective_members.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Metadata
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -443,6 +471,7 @@ class EventExternalAttendee(Base):
         Index("ix_ext_attendees_event_id", "event_id"),
         Index("ix_ext_attendees_org_id", "organization_id"),
         Index("ix_ext_attendees_email", "email"),
+        Index("ix_ext_attendees_prospect_id", "prospect_id"),
     )
 
 

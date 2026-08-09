@@ -34,6 +34,8 @@ export interface Event {
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
   require_checkout?: boolean;
+  allow_guest_check_in?: boolean;
+  guest_check_in_creates_prospect?: boolean;
   custom_fields?: Record<string, string | number | boolean | null>;
   attachments?: EventAttachment[];
   is_recurring?: boolean;
@@ -106,6 +108,8 @@ export interface EventCreate {
   check_in_minutes_before?: number | undefined;
   check_in_minutes_after?: number | undefined;
   require_checkout?: boolean | undefined;
+  allow_guest_check_in?: boolean | undefined;
+  guest_check_in_creates_prospect?: boolean | undefined;
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;
   is_draft?: boolean | undefined;
@@ -134,6 +138,8 @@ export interface EventUpdate {
   check_in_minutes_before?: number | undefined;
   check_in_minutes_after?: number | undefined;
   require_checkout?: boolean | undefined;
+  allow_guest_check_in?: boolean | undefined;
+  guest_check_in_creates_prospect?: boolean | undefined;
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;
 }
@@ -225,6 +231,32 @@ export interface QRCheckInData {
   location_name?: string | undefined;
   require_checkout?: boolean | undefined;
   timezone?: string | undefined;
+  allow_guest_check_in?: boolean | undefined;
+}
+
+/** Public event detail shown on the unauthenticated guest sign-in page. */
+export interface GuestCheckInEventInfo {
+  event_id: string;
+  event_name: string;
+  event_type?: string | undefined;
+  start_datetime: string;
+  end_datetime: string;
+  location_name?: string | undefined;
+  organization_name?: string | undefined;
+  is_open: boolean;
+  closed_reason?: string | undefined;
+  collects_prospect_details: boolean;
+  timezone?: string | undefined;
+}
+
+/** Confirmation returned after a guest records their attendance. */
+export interface GuestCheckInResult {
+  status: string;
+  attendee_id: string;
+  event_name: string;
+  checked_in_at: string;
+  prospect_created: boolean;
+  message: string;
 }
 
 export interface CheckInActivity {

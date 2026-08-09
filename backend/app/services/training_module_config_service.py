@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import TrainingModuleConfig
+from app.utils.model_updates import apply_updates
 
 DEFAULT_VISIBILITY: Dict[str, Any] = {
     "show_training_history": True,
@@ -66,9 +67,7 @@ class TrainingModuleConfigService:
         """Update configuration fields. Only supplied fields are changed."""
         config = await self.get_config(organization_id)
 
-        for key, value in kwargs.items():
-            if value is not None and hasattr(config, key):
-                setattr(config, key, value)
+        apply_updates(config, kwargs)
 
         if updated_by:
             config.updated_by = str(updated_by)

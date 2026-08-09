@@ -256,27 +256,27 @@ export interface StoreNotificationTest {
 export interface StoreSettingsUpdate {
   isEnabled?: boolean;
   storeName?: string;
-  tagline?: string | undefined;
-  description?: string | undefined;
+  tagline?: string | null;
+  description?: string | null;
   acceptedPaymentMethods?: string[];
-  paymentPolicy?: StorePaymentPolicy | undefined;
-  venmoHandle?: string | undefined;
-  paypalMeUrl?: string | undefined;
-  paypalEmail?: string | undefined;
-  cashAppCashtag?: string | undefined;
-  zelleHandle?: string | undefined;
-  zelleInstructions?: string | undefined;
-  checkPayableTo?: string | undefined;
-  checkMailingAddress?: string | undefined;
-  cashInstructions?: string | undefined;
-  payrollDeductionInstructions?: string | undefined;
-  otherPaymentInstructions?: string | undefined;
-  paymentInstructions?: string | undefined;
+  paymentPolicy?: StorePaymentPolicy | null;
+  venmoHandle?: string | null;
+  paypalMeUrl?: string | null;
+  paypalEmail?: string | null;
+  cashAppCashtag?: string | null;
+  zelleHandle?: string | null;
+  zelleInstructions?: string | null;
+  checkPayableTo?: string | null;
+  checkMailingAddress?: string | null;
+  cashInstructions?: string | null;
+  payrollDeductionInstructions?: string | null;
+  otherPaymentInstructions?: string | null;
+  paymentInstructions?: string | null;
   taxRate?: number;
-  shippingFlatRate?: number | undefined;
+  shippingFlatRate?: number | null;
   allowPickup?: boolean;
   allowShipping?: boolean;
-  pickupLocation?: string | undefined;
+  pickupLocation?: string | null;
   notifyEmails?: string[];
   notifyAdminsOnOrder?: boolean;
   sendOrderConfirmation?: boolean;
@@ -289,8 +289,8 @@ export interface StoreSettingsUpdate {
   sendVendorOrderUpdates?: boolean;
   paymentReminderDays?: number;
   windowReminderHours?: number;
-  termsText?: string | undefined;
-  receiptFooter?: string | undefined;
+  termsText?: string | null;
+  receiptFooter?: string | null;
 }
 
 export interface StoreProductVariant {
@@ -346,25 +346,25 @@ export interface StoreProduct {
 
 export interface StoreProductInput {
   name: string;
-  sku?: string | undefined;
-  description?: string | undefined;
-  imageUrl?: string | undefined;
-  category?: string | undefined;
+  sku?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+  category?: string | null;
   price: number;
-  cost?: number | undefined;
+  cost?: number | null;
   isTaxable: boolean;
   status: StoreProductStatus;
-  maxPerMember?: number | undefined;
+  maxPerMember?: number | null;
   trackStock: boolean;
-  stockQuantity?: number | undefined;
+  stockQuantity?: number | null;
   requiresVariant: boolean;
   personalizationEnabled: boolean;
   personalizationRequired: boolean;
-  personalizationLabel?: string | undefined;
+  personalizationLabel?: string | null;
   personalizationMaxLength: number;
   personalizationPrice: number;
   sortOrder: number;
-  internalNotes?: string | undefined;
+  internalNotes?: string | null;
   variants: StoreProductVariantInput[];
 }
 

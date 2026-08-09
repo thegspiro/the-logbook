@@ -50,6 +50,7 @@ from app.models.storefront import (
 from app.models.user import Organization, User
 from app.services.storefront_notification_service import StorefrontNotificationService
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.storefront_payments import (
@@ -272,23 +273,32 @@ class StorefrontService:
     async def update_settings(
         self, organization_id: str, data: Dict[str, Any]
     ) -> StoreSettings:
-        """Apply a partial settings update."""
+        """Apply a partial settings update.
+
+        `data` is an ``exclude_unset`` dump, so a null here is the treasurer
+        clearing a field (a stale Venmo handle, a mailing address) — it is
+        written through, not skipped.
+        """
         settings = await self.get_settings(organization_id)
-        for key, value in data.items():
-            if value is None or not hasattr(settings, key):
-                continue
-            if key == "accepted_payment_methods":
-                chosen = [m.value if hasattr(m, "value") else str(m) for m in value]
-                # A store has to accept something, and cash is the one method
-                # that needs no setup to work. Un-ticking everything therefore
-                # lands back here rather than leaving a store nobody can pay.
-                setattr(settings, key, chosen or list(_DEFAULT_PAYMENT_METHODS))
-            elif key == "notify_emails":
-                setattr(
-                    settings, key, [str(e).strip() for e in value if str(e).strip()]
-                )
-            else:
-                setattr(settings, key, value)
+        normalized = dict(data)
+
+        if "accepted_payment_methods" in normalized:
+            raw = normalized["accepted_payment_methods"] or []
+            chosen = [m.value if hasattr(m, "value") else str(m) for m in raw]
+            # A store has to accept something, and cash is the one method that
+            # needs no setup to work. Un-ticking everything therefore lands
+            # back here rather than leaving a store nobody can pay.
+            normalized["accepted_payment_methods"] = chosen or list(
+                _DEFAULT_PAYMENT_METHODS
+            )
+
+        if "notify_emails" in normalized:
+            raw_emails = normalized["notify_emails"] or []
+            normalized["notify_emails"] = [
+                str(e).strip() for e in raw_emails if str(e).strip()
+            ]
+
+        apply_updates(settings, normalized)
         await self.db.commit()
         await self.db.refresh(settings)
         return settings
@@ -392,9 +402,7 @@ class StorefrontService:
                 label="inventory item",
             )
 
-        for key, value in data.items():
-            if value is not None and hasattr(product, key):
-                setattr(product, key, value)
+        apply_updates(product, data)
 
         if variants is not None:
             await self._replace_variants(product, variants)
@@ -644,9 +652,7 @@ class StorefrontService:
             raise ValueError("Order window not found")
 
         offerings = data.pop("offerings", None)
-        for key, value in data.items():
-            if value is not None and hasattr(window, key):
-                setattr(window, key, value)
+        apply_updates(window, data)
 
         opens_at = _as_aware(window.opens_at)
         closes_at = _as_aware(window.closes_at)
