@@ -923,7 +923,7 @@ class FacilitiesService:
                 select(FacilityPhoto)
                 .where(FacilityPhoto.facility_id == photo.facility_id)
                 .where(FacilityPhoto.organization_id == str(organization_id))
-                .where(FacilityPhoto.is_primary == True)  # noqa: E712
+                .where(FacilityPhoto.is_primary.is_(True))
                 .where(FacilityPhoto.id != photo_id)
             )
             for other_photo in existing.scalars().all():

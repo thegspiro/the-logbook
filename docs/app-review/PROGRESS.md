@@ -42,7 +42,7 @@ from its open list.
 | B1 | medical-screening | MS2 | ✅ (p1, p2, p3) |
 | B2 | apparatus | AP2 | ✅ (p1, p2, p3) |
 | B3 | inventory | INV2 | ✅ (p1, p2, p3) |
-| B4 | facilities | FAC2 | ⬜ |
+| B4 | facilities | FAC2 | ✅ (p1, p2, p3) |
 | B5 | elections | ELEC2 | ⬜ |
 | B6 | meetings & minutes | MM2 | ⬜ |
 | B7 | equipment-check | EC2 | ⬜ |
@@ -1418,3 +1418,17 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   (behavior-neutral sweep); gate: flake8/black/tsc clean, 142 non-DB inventory tests
   pass (75 db_session errors are the known no-MySQL limit). No CHANGELOG (no
   user-visible change). See inventory.md → Pass 3. Next: B4 facilities.
+
+- **B4 facilities ✅ (pass 3).** Re-verified the FK-validation class is fully closed:
+  FAC2-1's `_assert_facility_in_org` wired into all 9 `facility_id` update paths (+
+  `update_compliance_item`'s checklist_id), "only when supplied" semantics intact;
+  FAC-3 create-path validation intact; 95/95 endpoints permission-gated. **Swept the
+  last E712** (FAC2-2): a second `is_primary == True # noqa: E712` survived in
+  `update_photo`'s set-as-primary path (pass 1 only fixed `create_photo`'s) →
+  `.is_(True)`; module now free of every E712 noqa. **Latent-500 lens clean:** an
+  automated check of every facilities `*Create`/`*Update` field mapping to one of the
+  16 enum columns found 0 typed as free `str`. **FAC-4 stays flagged** (owner call):
+  `list_facilities` search is wired-but-unexposed — a one-line API addition, but an
+  unrequested API-surface change. No new tests (behavior-neutral sweep; the 9
+  FAC2-1 service tests still pass). Gate: flake8/black/tsc clean. No CHANGELOG (no
+  user-visible change). See facilities.md → Pass 3. Next: B5 elections.
