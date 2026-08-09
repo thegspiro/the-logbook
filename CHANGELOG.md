@@ -152,6 +152,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Auto-approve still applies to plain logged hours and skills practice, so nobody
   can grant themselves a credential without a second person signing off.
 
+- **Emailing a compliance report to someone outside the department is now
+  recorded.** You can still send reports to any address (an outside auditor, a
+  state office), but each send to a recipient who isn't a member of your
+  organization is written to the audit log — who sent it, when, and to which
+  external addresses — so there's a trail whenever member/compliance data leaves
+  the department. Sending to fellow members is unaffected and creates no such entry.
+
 ### Dashboard: action items are now shown only to members allowed to see them (2026-08-08)
 
 **Security**

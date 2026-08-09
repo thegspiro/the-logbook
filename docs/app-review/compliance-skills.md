@@ -98,10 +98,17 @@ dual-control — a workflow change. Already in `KNOWN_LIMITATIONS.md` (CS-8).
 - **Monthly windowing** — monthly reports still return the annual dataset
   relabeled; a real monthly view needs `generate_annual_report` to accept a month
   window (data-layer feature). Deferred.
-- **Recipient allow-list** — report emailing accepts client-supplied
-  `additional_recipients` with no allow-list; restricting to org-member emails
-  would close an exfiltration path but breaks legitimate external auditors (owner
-  decision). Deferred.
+- **Recipient allow-list** — ✅ RESOLVED (owner decision, 2026-08-09). Restricting
+  recipients to org-member emails would break legitimate external auditors, so the
+  owner chose *allow any recipient, but audit-log each external send.*
+  `_email_report` now calls the shared `audit_external_recipients`
+  (`app/utils/external_recipients.py`), which classifies recipients against org
+  membership (work + personal email, case-insensitive) and writes one
+  `external_recipient_send` audit event listing every out-of-org address, with the
+  acting user threaded through `generate_report`/`email_existing_report`. Covered by
+  `tests/test_external_recipient_audit.py` (7 tests). (The saved-report
+  `email_recipients` on the reports module is stored schedule config with no live
+  send path yet; when that path is built it should call the same helper.)
 - `records_with_certification` mislabel (ambiguous-intent) left as-is.
 
 ## Cleanup applied
