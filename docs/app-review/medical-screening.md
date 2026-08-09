@@ -1,7 +1,65 @@
 # Application Review — Medical Screening (Tier B)
 
 **Prefix:** `MS2` · **Iteration:** B1 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — MS-1 closed: PHI encrypted at rest
+
+The pass-4 deliverable is closing **MS-1**, the highest-value follow-up flagged
+since pass 1: the four PHI columns on `screening_records` were stored in
+plaintext. They are now encrypted at rest.
+
+### MS-1 — MED — PHI columns stored in plaintext — ✅ FIXED
+
+**What:** `provider_name`, `result_summary`, `result_data`, and `notes` on
+`ScreeningRecord` carry protected health information (examining provider,
+free-text summaries, structured scores/measurements, reviewer notes) and were
+persisted as plaintext `VARCHAR`/`TEXT`/`JSON`.
+
+**Why it was deferred before:** it read as needing a data-migration with a
+backfill risk. Two things made it safely closeable this pass without that risk:
+(1) `EncryptedText` already exists and is **transparent** — it encrypts on write
+(AES-256-GCM) and, on read, returns legacy plaintext untouched when decryption
+raises `InvalidToken` — so existing rows keep reading correctly whether or not
+they've been re-encrypted; (2) the four fields are pure payload — a repo-wide
+search confirms none is used in a `WHERE`/`filter`/`ILIKE`/`==`, so encrypting
+them can't break a lookup.
+
+**Fix — three parts:**
+
+1. **New `EncryptedJSON` column type** (`app/core/encrypted_types.py`) — the same
+   transparent contract as `EncryptedText`, but `json.dumps`/`json.loads` around
+   the payload. Its legacy-read path also handles the `JSON`→`TEXT` alter: a
+   pre-encryption row is the JSON *text*, so an `InvalidToken` read falls back to
+   `json.loads` of that text (and to the raw string only if it isn't valid JSON).
+2. **Model** (`app/models/medical_screening.py`) — `provider_name`,
+   `result_summary`, `notes` → `EncryptedText`; `result_data` → `EncryptedJSON`.
+3. **Alembic migration**
+   (`20260809_0001_encrypt_medical_screening_phi.py`) — alters `provider_name`
+   `VARCHAR(255)`→`TEXT` and `result_data` `JSON`→`TEXT` (ciphertext exceeds 255
+   chars and isn't valid JSON), then encrypts existing rows in place. Reversible
+   `downgrade()` decrypts and restores the column types.
+
+**7 DB-free unit tests** (`tests/test_encrypted_types.py`) pin round-trip,
+ciphertext-at-rest, none/empty pass-through, and legacy-plaintext tolerance
+(including the JSON-text legacy shape) for both column types.
+
+**Migration caveat (must verify in CI/staging):** the sandbox has no MySQL, so
+the migration's `upgrade()`/`downgrade()` could not be executed here — only the
+Python-level encrypt/decrypt round-trips were unit-tested. The `ALTER`s and the
+in-place backfill must be verified against a real MySQL instance before deploy,
+and — as with any encryption-at-rest change — a database backup should be taken
+first. `EncryptedText`/`EncryptedJSON` tolerate un-backfilled legacy rows, so a
+partial run is safe to re-run.
+
+MS2-5 (pass-3 enum validators) re-verified intact: `screening_type`/`status`
+`@field_validator`s still present on all four request schemas.
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean (migration
+reformatted) · `tsc --noEmit` n/a (no frontend change) ·
+`tests/test_encrypted_types.py` **12 passed**.
 
 ---
 

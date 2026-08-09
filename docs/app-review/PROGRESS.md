@@ -39,7 +39,7 @@ from its open list.
 
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ⬜ |
+| B1 | medical-screening | MS2 | ✅ (p1, p2, p3, p4) |
 | B2 | apparatus | AP2 | ⬜ |
 | B3 | inventory | INV2 | ⬜ |
 | B4 | facilities | FAC2 | ⬜ |
@@ -1733,4 +1733,23 @@ Next feature: **B1 medical-screening**.
 
 ### Pass 4 log
 
-(pending)
+- **B1 medical-screening ✅ (pass 4) — MS-1 closed: PHI encrypted at rest.** The
+  four PHI columns on `screening_records` (`provider_name`, `result_summary`,
+  `result_data`, `notes`) were plaintext; MS-1 has been the top flagged follow-up
+  since pass 1. Closed it safely without a backfill-risk migration: (1) added a new
+  transparent `EncryptedJSON` column type alongside `EncryptedText`
+  (`app/core/encrypted_types.py`) — `json.dumps`/`loads` around the payload, and a
+  legacy-read path that `json.loads` a pre-encryption `JSON`→`TEXT` row; (2)
+  converted the three text/identity columns to `EncryptedText` and `result_data`
+  to `EncryptedJSON` (`app/models/medical_screening.py`); (3) wrote the Alembic
+  migration (`20260809_0001_encrypt_medical_screening_phi.py`) — alters
+  `provider_name` `VARCHAR(255)`→`TEXT` and `result_data` `JSON`→`TEXT`, then
+  encrypts existing rows in place, with a reversible `downgrade()`. Safe because
+  `EncryptedText`/`EncryptedJSON` return legacy plaintext untouched on
+  `InvalidToken`, and a repo-wide search confirmed none of the four fields is used
+  in a `WHERE`/`filter`. **7 DB-free tests** (`tests/test_encrypted_types.py`, 12
+  cases) pin round-trip / ciphertext-at-rest / legacy tolerance for both types.
+  MS2-5 enum validators re-verified intact. **Caveat:** the migration `ALTER`s +
+  backfill can't run in the no-MySQL sandbox — must be verified in CI/staging with
+  a DB backup first; partial runs are safe to re-run. Gate: flake8 0 · black clean
+  · tsc n/a. See medical-screening.md → Pass 4. Next: B2 apparatus.

@@ -176,6 +176,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The finance forms already send valid values, so only malformed API requests are
   affected.
 
+### Security: medical-screening health information is now encrypted at rest (2026-08-09)
+
+**Security**
+
+- Medical screening records store protected health information — the examining
+  provider's name, the result summary, structured results (scores/measurements),
+  and reviewer notes. These fields were previously held in the database as plain
+  text; they are now encrypted at rest with AES-256-GCM, matching how shift-report
+  narratives are already protected. Decryption is transparent, so the screening
+  screens behave exactly as before — nothing changes for users, but a database or
+  backup file no longer exposes the underlying health details.
+- Applied by a database migration that converts existing records in place. As with
+  any encryption-at-rest change, take a database backup before upgrading; the
+  migration is safe to re-run.
+
 ### Money: you can no longer approve/record and pay out the same item yourself (2026-08-09)
 
 **Security**
