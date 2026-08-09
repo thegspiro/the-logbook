@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CourseLibraryPicker } from './CourseLibraryPicker';
 import { RecencyWindowField } from './RecencyWindowField';
+import { ChecklistItemsEditor } from './ChecklistItemsEditor';
 import { useCourseLibrary } from '../../hooks/useCourseLibrary';
 import type {
   TrainingRequirement,
@@ -57,7 +58,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     required_hours: seed?.required_hours || undefined,
     required_shifts: seed?.required_shifts || undefined,
     required_calls: seed?.required_calls || undefined,
-    checklist_items: (seed?.checklist_items || []).join('\n'),
+    checklist_items: seed?.checklist_items ?? [],
     passing_score: seed?.passing_score || undefined,
     max_attempts: seed?.max_attempts || undefined,
     frequency: seedFrequency,
@@ -96,12 +97,6 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   // as annual.
   const isOneTime = formData.frequency === 'one_time';
 
-  const splitLines = (value: string): string[] =>
-    value
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -111,7 +106,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
 
     // Mirror the backend TrainingRequirementCreate validator so users get a
     // specific message instead of a generic 422 failure
-    const checklistItems = splitLines(formData.checklist_items);
+    const checklistItems = formData.checklist_items.filter((i) => i.text.trim());
     if (formData.requirement_type === 'hours' && !formData.required_hours) {
       toast.error('Required hours must be set for an hours requirement');
       return;
@@ -452,23 +447,11 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
             )}
 
             {formData.requirement_type === 'checklist' && (
-              <div>
-                <label
-                  htmlFor="req-checklist-items"
-                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                >
-                  Checklist Items
-                </label>
-                <textarea
-                  id="req-checklist-items"
-                  value={formData.checklist_items}
-                  onChange={(e) => setFormData({ ...formData, checklist_items: e.target.value })}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder={'One item per line, e.g.\nStation tour completed\nSCBA fit test'}
-                  rows={5}
-                />
-                <p className="text-theme-text-muted mt-1 text-sm">Each line becomes an item members must check off.</p>
-              </div>
+              <ChecklistItemsEditor
+                idPrefix="req"
+                items={formData.checklist_items}
+                onChange={(items) => setFormData({ ...formData, checklist_items: items })}
+              />
             )}
 
             {formData.requirement_type === 'knowledge_test' && (

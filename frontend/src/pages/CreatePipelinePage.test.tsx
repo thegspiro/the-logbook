@@ -1,7 +1,9 @@
 /**
- * Covers the create-pipeline wizard's requirement step, specifically the
- * "Link Existing" path: a phase can attach a requirement the department
- * already tracks instead of defining a duplicate of it.
+ * Covers the create-pipeline wizard's requirement step: the "Link Existing"
+ * path (a phase attaches a requirement the department already tracks instead of
+ * defining a duplicate), the one-list structure that has no phases at all, and
+ * the pre-submit checks that name the offending phase rather than letting the
+ * build endpoint return an unattributable 422.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -50,11 +52,12 @@ const cprRequirement = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-/** Walks the wizard to the Requirements step with one phase defined. */
+/** Walks the wizard to the Requirements step with one named phase defined. */
 const goToRequirementsWithAPhase = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.type(screen.getByLabelText(/Program Name/), 'Recruit School');
   await user.click(screen.getByRole('button', { name: /Next/ }));
   await user.click(await screen.findByRole('button', { name: /Add Phase/ }));
+  await user.type(await screen.findByPlaceholderText(/Engine Company Operations/), 'Orientation');
   await user.click(screen.getByRole('button', { name: /Next/ }));
 };
 
@@ -85,7 +88,7 @@ describe('CreatePipelinePage — linking existing requirements', () => {
     expect(payload.phases[0]?.requirements[0]).toEqual({
       requirement_id: 'req-cpr',
       is_required: true,
-      sort_order: 1,
+      sort_order: 0,
     });
   });
 
@@ -102,5 +105,73 @@ describe('CreatePipelinePage — linking existing requirements', () => {
 
     expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('Phase 1'));
     expect(mockBuildProgram).not.toHaveBeenCalled();
+  });
+
+  it('refuses to submit an unnamed phase instead of letting the server 422', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Recruit School');
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(await screen.findByRole('button', { name: /Add Phase/ }));
+    await user.click(screen.getByRole('button', { name: /Next/ })); // requirements
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('Phase 1 needs a name'));
+    expect(mockBuildProgram).not.toHaveBeenCalled();
+  });
+
+  it('refuses an hours requirement with no target, which nobody could complete', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await goToRequirementsWithAPhase(user);
+    await user.click(await screen.findByRole('button', { name: /New Requirement/ }));
+    await user.type(await screen.findByPlaceholderText(/Hose Operations Skills/), 'Ride-alongs');
+    // Leave "Required Hours" blank.
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('needs a number to count toward'));
+    expect(mockBuildProgram).not.toHaveBeenCalled();
+  });
+});
+
+describe('CreatePipelinePage — a one-list program', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
+    mockGetCourses.mockResolvedValue([]);
+    mockBuildProgram.mockResolvedValue({ id: 'prog-2' });
+  });
+
+  it('skips the Phases step and sends requirements at the program level', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Annual CE');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    // No Phases step to pass through — Next goes straight to Requirements.
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(await screen.findByRole('button', { name: /Link Existing/ }));
+    await user.click(await screen.findByRole('radio', { name: /CPR\/BLS Certification/ }));
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    await waitFor(() => expect(mockBuildProgram).toHaveBeenCalledTimes(1));
+    const payload = mockBuildProgram.mock.calls[0]?.[0] as {
+      phases: unknown[];
+      requirements: Record<string, unknown>[];
+    };
+    expect(payload.phases).toEqual([]);
+    expect(payload.requirements[0]).toEqual({
+      requirement_id: 'req-cpr',
+      is_required: true,
+      sort_order: 0,
+    });
   });
 });

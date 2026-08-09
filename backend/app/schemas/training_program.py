@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.models.training import RequirementFrequency as ModelRequirementFrequency
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
+from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.enum_validation import validate_enum_value
 
 _response_config = ConfigDict(from_attributes=True)
@@ -58,7 +59,7 @@ class TrainingRequirementEnhancedBase(BaseModel):
     required_calls: Optional[int] = Field(None, ge=0)
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
-    checklist_items: Optional[List[str]] = None
+    checklist_items: Optional[List[ChecklistItem]] = None
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
     # Freshness window: a completion older than this many days doesn't count
@@ -84,6 +85,13 @@ class TrainingRequirementEnhancedBase(BaseModel):
     def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
         return validate_enum_value(v, ModelTrainingType, "training_type")
 
+    @field_validator("checklist_items", mode="before")
+    @classmethod
+    def _coerce_checklist_items(cls, v):
+        # Accepts the legacy bare-string form as well as objects, so older
+        # clients and the built-in sample templates keep working.
+        return coerce_checklist_items(v)
+
 
 class TrainingRequirementEnhancedCreate(TrainingRequirementEnhancedBase):
     """Schema for creating an enhanced training requirement"""
@@ -104,7 +112,7 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     required_calls: Optional[int] = Field(None, ge=0)
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
-    checklist_items: Optional[List[str]] = None
+    checklist_items: Optional[List[ChecklistItem]] = None
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
     recency_days: Optional[int] = Field(None, ge=1, le=3650)
@@ -124,6 +132,13 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     @classmethod
     def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
         return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @field_validator("checklist_items", mode="before")
+    @classmethod
+    def _coerce_checklist_items(cls, v):
+        # Accepts the legacy bare-string form as well as objects, so older
+        # clients and the built-in sample templates keep working.
+        return coerce_checklist_items(v)
 
 
 class TrainingRequirementEnhancedResponse(
@@ -370,6 +385,16 @@ class ProgramEnrollmentWithdraw(BaseModel):
     reason: Optional[str] = Field(None, max_length=500)
 
 
+class ProgramEnrollmentReopen(BaseModel):
+    """Options when an officer reopens an expired enrollment.
+
+    Omitting the date reopens on the old deadline, which is only useful if the
+    officer is about to change it another way — the usual call is an extension.
+    """
+
+    target_completion_date: Optional[date] = None
+
+
 class ApplyTrainingRecordRequest(BaseModel):
     """Officer applies an existing training record toward a pipeline requirement."""
 
@@ -444,6 +469,11 @@ class RequirementProgressUpdate(BaseModel):
     # Officer-entered knowledge/skills test score (0-100). Pass/fail is derived
     # from the requirement's passing_score; a pass completes the requirement.
     test_score: Optional[float] = Field(None, ge=0, le=100)
+    # Ticked steps of a CHECKLIST requirement, as the full set of step ids that
+    # are done. Sending the whole set (rather than one toggle) keeps the write
+    # idempotent, so a retry or two officers on the same record cannot leave a
+    # step half-applied.
+    checklist_done: Optional[List[str]] = None
 
 
 class RequirementProgressResponse(RequirementProgressBase, UTCResponseBase):
@@ -656,7 +686,7 @@ class ProgramBuildRequirementInput(BaseModel):
     required_calls: Optional[int] = Field(None, ge=0)
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
-    checklist_items: Optional[List[str]] = None
+    checklist_items: Optional[List[ChecklistItem]] = None
     required_courses: Optional[List[str]] = Field(
         None, description="Course IDs that satisfy a 'courses' requirement"
     )
@@ -672,6 +702,13 @@ class ProgramBuildRequirementInput(BaseModel):
     allows_external_credit: bool = False
     is_required: bool = True
     sort_order: int = Field(default=0, ge=0)
+
+    @field_validator("checklist_items", mode="before")
+    @classmethod
+    def _coerce_checklist_items(cls, v):
+        # Accepts the legacy bare-string form as well as objects, so older
+        # clients and the built-in sample templates keep working.
+        return coerce_checklist_items(v)
 
     @model_validator(mode="after")
     def _link_or_define_not_both(self) -> "ProgramBuildRequirementInput":
@@ -711,6 +748,11 @@ class ProgramBuildRequest(BaseModel):
 
     program: TrainingProgramCreate
     phases: List[ProgramBuildPhaseInput] = []
+    # Requirements that belong to the program rather than to any phase. A
+    # flexible program has no phases at all, so without these the wizard could
+    # only ever produce an empty one.
+    requirements: List[ProgramBuildRequirementInput] = []
+    milestones: List[ProgramBuildMilestoneInput] = []
 
 
 class MemberEligibilityResponse(BaseModel):

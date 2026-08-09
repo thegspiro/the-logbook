@@ -21,6 +21,7 @@ const mockUpdateProgram = vi.fn();
 const mockCreateProgramPhase = vi.fn();
 const mockDeleteProgramPhase = vi.fn();
 const mockDeleteProgram = vi.fn();
+const mockReopenEnrollment = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -40,6 +41,7 @@ vi.mock('../services/api', () => ({
     createProgramPhase: (...a: unknown[]) => mockCreateProgramPhase(...a) as unknown,
     deleteProgramPhase: (...a: unknown[]) => mockDeleteProgramPhase(...a) as unknown,
     deleteProgram: (...a: unknown[]) => mockDeleteProgram(...a) as unknown,
+    reopenEnrollment: (...a: unknown[]) => mockReopenEnrollment(...a) as unknown,
   },
 }));
 
@@ -574,5 +576,150 @@ describe('PipelineDetailPage — enrollment progress management', () => {
         })
       )
     );
+  });
+});
+
+describe('PipelineDetailPage — requirements outside any phase', () => {
+  const programLevelLink = {
+    id: 'pr-flat',
+    program_id: 'prog-1',
+    phase_id: null,
+    requirement_id: 'req-ce',
+    is_required: true,
+    is_prerequisite: false,
+    sort_order: 0,
+    owns_requirement: true,
+    created_at: '2026-01-01T00:00:00Z',
+    requirement: {
+      id: 'req-ce',
+      name: 'Annual CE Hours',
+      requirement_type: 'hours',
+      required_hours: 24,
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockResolvedValue({ ...program, structure_type: 'flexible' });
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockResolvedValue([programLevelLink]);
+    mockGetProgramEnrollments.mockResolvedValue([]);
+  });
+
+  it('renders a requirement that belongs to the program rather than a phase', async () => {
+    // A flexible pipeline has no phases at all, so its requirements only ever
+    // appear here — the page used to render phase requirements exclusively and
+    // showed such a program as empty.
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByText('Requirements outside any phase')).toBeInTheDocument();
+    expect(await screen.findByText('Annual CE Hours')).toBeInTheDocument();
+  });
+
+  it('offers an officer a way to add one', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Add requirement/i }));
+
+    expect(await screen.findByRole('dialog', { name: /Add requirement/i })).toBeInTheDocument();
+  });
+});
+
+describe('PipelineDetailPage — checklist sign-off and expiry', () => {
+  const checklistProgress = {
+    id: 'rp-check',
+    enrollment_id: 'enr-1',
+    requirement_id: 'req-check',
+    status: 'in_progress',
+    progress_value: 1,
+    progress_percentage: 50,
+    progress_notes: { checklist_done: ['s1'] },
+    created_at: '',
+    updated_at: '',
+    requirement: {
+      id: 'req-check',
+      name: 'Station Orientation',
+      requirement_type: 'checklist',
+      checklist_items: [
+        { id: 's1', text: 'Station tour', member_visible: true },
+        { id: 's2', text: 'References called', member_visible: false },
+      ],
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockResolvedValue(program);
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockResolvedValue([enrollment]);
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment,
+      program,
+      requirement_progress: [checklistProgress],
+      completed_requirements: 0,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+  });
+
+  const openProgress = async () => {
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }));
+    return screen.findByRole('dialog');
+  };
+
+  it('ticks one step at a time, sending the whole set', async () => {
+    const dialog = await openProgress();
+
+    // 's1' is already ticked; checking 's2' sends both, not just the change —
+    // an idempotent write, so a retry cannot half-apply it.
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /References called/ }));
+
+    await waitFor(() => expect(mockUpdateProgress).toHaveBeenCalledWith('rp-check', { checklist_done: ['s1', 's2'] }));
+  });
+
+  it('unticking a done step sends the set without it', async () => {
+    const dialog = await openProgress();
+
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /Station tour/ }));
+
+    await waitFor(() => expect(mockUpdateProgress).toHaveBeenCalledWith('rp-check', { checklist_done: [] }));
+  });
+
+  it('marks the officer-only step so nobody assumes the member can see it', async () => {
+    const dialog = await openProgress();
+
+    expect(within(dialog).getByText('References called')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Officer only/)).toBeInTheDocument();
+  });
+
+  it('offers a way out of an expired enrollment', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: { ...enrollment, status: 'expired', progress_percentage: 60 },
+      program,
+      requirement_progress: [checklistProgress],
+      completed_requirements: 0,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+
+    const dialog = await openProgress();
+
+    expect(within(dialog).getByText(/Deadline passed/)).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByLabelText(/New deadline/i), '2027-01-31');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Reopen enrollment/i }));
+
+    await waitFor(() => expect(mockReopenEnrollment).toHaveBeenCalledWith('enr-1', '2027-01-31'));
+  });
+
+  it('shows no expiry banner on a healthy enrollment', async () => {
+    const dialog = await openProgress();
+    expect(within(dialog).queryByText(/Deadline passed/)).not.toBeInTheDocument();
   });
 });

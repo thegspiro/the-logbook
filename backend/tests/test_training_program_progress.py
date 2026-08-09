@@ -45,6 +45,11 @@ class RecordingSession:
         self.added.append(obj)
 
     async def execute(self, statement, *args, **kwargs):
+        # Compile every statement before answering it. A mocked session never
+        # touches the ORM otherwise, and some construction errors — notably a
+        # join with no inferable ON clause — surface only at compile time, so
+        # without this the suite happily passes queries that 500 in production.
+        str(statement)
         self.statements.append(statement)
         return self._results.pop(0) if self._results else MagicMock()
 
@@ -52,12 +57,27 @@ class RecordingSession:
         return sum(1 for s in self.statements if type(s).__name__ == "Update")
 
 
-def _enrollment(status=EnrollmentStatus.ACTIVE):
-    return SimpleNamespace(id="enr-1", program_id="prog-1", status=status, user_id="u1")
+def _enrollment(status=EnrollmentStatus.ACTIVE, percentage=0.0):
+    return SimpleNamespace(
+        id="enr-1",
+        organization_id="org-1",
+        program_id="prog-1",
+        status=status,
+        user_id="u1",
+        progress_percentage=percentage,
+    )
 
 
-def _prog(pct):
-    return SimpleNamespace(progress_percentage=pct)
+def _prog(pct, requirement_id=None):
+    return SimpleNamespace(
+        progress_percentage=pct,
+        requirement_id=requirement_id or f"req-{pct}",
+    )
+
+
+def _required(*requirement_ids):
+    """The id set returned by get_required_requirement_ids()."""
+    return _scalars(list(requirement_ids))
 
 
 class TestRecalculateEnrollmentProgress:
@@ -67,19 +87,48 @@ class TestRecalculateEnrollmentProgress:
         assert db.update_count() == 0
         db.commit.assert_not_awaited()
 
+    async def test_program_without_required_items_is_noop(self):
+        db = RecordingSession([_one(_enrollment()), _required()])
+        await TrainingProgramService(db)._recalculate_enrollment_progress("enr-1")
+        assert db.update_count() == 0
+
     async def test_no_required_progress_is_noop(self):
-        db = RecordingSession([_one(_enrollment()), _scalars([])])
+        db = RecordingSession([_one(_enrollment()), _required("r1"), _scalars([])])
         await TrainingProgramService(db)._recalculate_enrollment_progress("enr-1")
         assert db.update_count() == 0
 
     async def test_partial_progress_updates_without_completing(self):
         # Average of 40 and 60 = 50 -> one UPDATE (percentage), no completion.
         db = RecordingSession(
-            [_one(_enrollment()), _scalars([_prog(40.0), _prog(60.0)])]
+            [
+                _one(_enrollment()),
+                _required("r1", "r2"),
+                _scalars([_prog(40.0, "r1"), _prog(60.0, "r2")]),
+                MagicMock(),  # update percentage
+                _scalars([]),  # milestone lookup
+            ]
         )
         await TrainingProgramService(db)._recalculate_enrollment_progress("enr-1")
         assert db.update_count() == 1
         db.commit.assert_awaited()
+
+    async def test_a_requirement_linked_twice_counts_once(self):
+        # Same requirement in two phases: two progress rows at 100 and 0 must
+        # not average to 50 — the requirement is one item, and its best standing
+        # is what counts.
+        db = RecordingSession(
+            [
+                _one(_enrollment()),
+                _required("r1", "r2"),
+                _scalars([_prog(100.0, "r1"), _prog(0.0, "r1"), _prog(100.0, "r2")]),
+                MagicMock(),  # update percentage
+                MagicMock(),  # update status=completed
+                _scalars([]),  # milestone lookup
+                _one(None),  # program fetch (notification path)
+            ]
+        )
+        await TrainingProgramService(db)._recalculate_enrollment_progress("enr-1")
+        assert db.update_count() == 2
 
     async def test_completion_marks_and_notifies_when_newly_complete(self, monkeypatch):
         # Average 100 from a not-yet-completed enrollment -> two UPDATEs
@@ -89,9 +138,11 @@ class TestRecalculateEnrollmentProgress:
             RecordingSession(
                 [
                     _one(_enrollment(status=EnrollmentStatus.ACTIVE)),
-                    _scalars([_prog(100.0), _prog(100.0)]),
+                    _required("r1", "r2"),
+                    _scalars([_prog(100.0, "r1"), _prog(100.0, "r2")]),
                     MagicMock(),  # update percentage
                     MagicMock(),  # update status=completed
+                    _scalars([]),  # milestone lookup
                     _one(program),  # program fetch
                     _one(SimpleNamespace(id="u1")),  # user fetch
                 ]
@@ -109,8 +160,11 @@ class TestRecalculateEnrollmentProgress:
         svc = TrainingProgramService(
             RecordingSession(
                 [
-                    _one(_enrollment(status=EnrollmentStatus.COMPLETED)),
-                    _scalars([_prog(100.0)]),
+                    _one(
+                        _enrollment(status=EnrollmentStatus.COMPLETED, percentage=100.0)
+                    ),
+                    _required("r1"),
+                    _scalars([_prog(100.0, "r1")]),
                     MagicMock(),
                     MagicMock(),
                 ]
@@ -120,6 +174,60 @@ class TestRecalculateEnrollmentProgress:
         monkeypatch.setattr(svc, "_notify_program_completion", notify)
         await svc._recalculate_enrollment_progress("enr-1")
         notify.assert_not_awaited()
+
+
+class TestMilestoneNotifications:
+    """Crossing a milestone threshold notifies the member — the wizard promises
+    it, and nothing evaluated milestones before."""
+
+    def _milestone(self, name="Halfway", threshold=50.0, message=None):
+        return SimpleNamespace(
+            name=name,
+            completion_percentage_threshold=threshold,
+            notification_message=message,
+        )
+
+    async def test_crossed_milestone_notifies_once(self, monkeypatch):
+        svc = TrainingProgramService(
+            RecordingSession(
+                [
+                    _one(_enrollment(percentage=20.0)),
+                    _required("r1", "r2"),
+                    _scalars([_prog(100.0, "r1"), _prog(20.0, "r2")]),
+                    MagicMock(),  # update percentage -> 60
+                    _scalars([self._milestone(threshold=50.0)]),
+                ]
+            )
+        )
+        logged = AsyncMock()
+        monkeypatch.setattr(
+            "app.services.training_program_service.NotificationsService",
+            lambda db: SimpleNamespace(log_notification=logged),
+        )
+        await svc._recalculate_enrollment_progress("enr-1")
+        logged.assert_awaited_once()
+        payload = logged.await_args.kwargs["log_data"]
+        assert payload["recipient_id"] == "u1"
+        assert payload["action_url"] == "/training/my-progress/enr-1"
+
+    async def test_progress_that_does_not_advance_notifies_nothing(self, monkeypatch):
+        svc = TrainingProgramService(
+            RecordingSession(
+                [
+                    _one(_enrollment(percentage=60.0)),
+                    _required("r1", "r2"),
+                    _scalars([_prog(100.0, "r1"), _prog(20.0, "r2")]),
+                    MagicMock(),  # update percentage -> 60, unchanged
+                ]
+            )
+        )
+        logged = AsyncMock()
+        monkeypatch.setattr(
+            "app.services.training_program_service.NotificationsService",
+            lambda db: SimpleNamespace(log_notification=logged),
+        )
+        await svc._recalculate_enrollment_progress("enr-1")
+        logged.assert_not_awaited()
 
 
 class TestUpdateRequirementProgressAuth:
@@ -191,6 +299,49 @@ class TestUpdateRequirementProgressAuth:
         assert err is None
 
 
+class TestEnrollmentProgressRows:
+    """Enrollment tracks one progress row per requirement, not per link."""
+
+    async def test_a_requirement_in_two_phases_gets_one_progress_row(self, monkeypatch):
+        from app.models.training import RequirementProgress
+        from app.schemas.training_program import ProgramEnrollmentCreate
+
+        shared_id = str(uuid4())
+        program = SimpleNamespace(
+            id=str(uuid4()),
+            organization_id="org-1",
+            structure_type="flexible",
+            phases=[],
+            time_limit_days=None,
+            recert_enabled=False,
+        )
+        links = [
+            SimpleNamespace(requirement_id=shared_id),
+            SimpleNamespace(requirement_id=shared_id),  # same item, second phase
+            SimpleNamespace(requirement_id=str(uuid4())),
+        ]
+        db = RecordingSession(
+            [
+                _one(program),  # get_program_by_id
+                _one(SimpleNamespace(id="u1")),  # user lookup
+                _one(None),  # no existing active enrollment
+                _one(program),  # get_program_requirements -> get_program_by_id
+                _scalars(links),  # the program's requirement links
+            ]
+        )
+        svc = TrainingProgramService(db)
+        monkeypatch.setattr(svc, "_notify_enrollment", AsyncMock())
+
+        enrollment, error = await svc.enroll_member(
+            ProgramEnrollmentCreate(user_id=uuid4(), program_id=uuid4()),
+            uuid4(),
+        )
+
+        assert error is None
+        rows = [o for o in db.added if isinstance(o, RequirementProgress)]
+        assert len({str(r.requirement_id) for r in rows}) == len(rows) == 2
+
+
 class TestAddRequirementBackfill:
     """Adding a requirement to a program must backfill progress rows for
     in-progress enrollments, or the new requirement is never counted and a
@@ -210,6 +361,7 @@ class TestAddRequirementBackfill:
                 _one(requirement),  # TrainingRequirement lookup
                 _one(None),  # duplicate check
                 MagicMock(all=MagicMock(return_value=[(e1,), (e2,)])),  # enrollments
+                _scalars([]),  # none already track this requirement
             ]
         )
         svc = TrainingProgramService(db)
@@ -244,6 +396,7 @@ class TestAddRequirementBackfill:
                 _one(SimpleNamespace(id=str(uuid4()))),  # TrainingRequirement lookup
                 _one(None),  # duplicate check
                 MagicMock(all=MagicMock(return_value=[])),  # no enrollments
+                _scalars([]),  # nothing already tracking it
             ]
         )
         svc = TrainingProgramService(db)

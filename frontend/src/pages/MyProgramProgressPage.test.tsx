@@ -177,3 +177,78 @@ describe('MyProgramProgressPage', () => {
     expect(screen.queryByRole('button', { name: /Leave program/i })).not.toBeInTheDocument();
   });
 });
+
+describe('MyProgramProgressPage — checklist steps', () => {
+  const checklistRecord = {
+    id: 'rp-check',
+    enrollment_id: 'enr-1',
+    requirement_id: 'req-check',
+    status: 'in_progress',
+    progress_value: 1,
+    progress_percentage: 33,
+    progress_notes: { checklist_done: ['s1'] },
+    created_at: '',
+    updated_at: '',
+    requirement: {
+      id: 'req-check',
+      name: 'Station Orientation',
+      requirement_type: 'checklist',
+      checklist_items: [
+        { id: 's1', text: 'Station tour', member_visible: true },
+        { id: 's2', text: 'PPE issued', member_visible: true },
+        { id: 's3', text: 'References called', member_visible: false },
+      ],
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: {
+        id: 'enr-1',
+        current_phase_id: null,
+        progress_percentage: 33,
+        enrolled_at: '2026-02-01T00:00:00Z',
+        status: 'active',
+      },
+      program: { id: 'prog-1', name: 'Recruit School' },
+      current_phase: null,
+      requirement_progress: [checklistRecord],
+      completed_requirements: 0,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockResolvedValue([
+      {
+        id: 'pr-check',
+        program_id: 'prog-1',
+        phase_id: null,
+        requirement_id: 'req-check',
+        is_required: true,
+        is_prerequisite: false,
+        sort_order: 0,
+        created_at: '',
+      },
+    ]);
+  });
+
+  it('names the steps instead of leaving the member to guess', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText('Station tour')).toBeInTheDocument();
+    expect(screen.getByText('PPE issued')).toBeInTheDocument();
+  });
+
+  it('keeps an officer-only step off the page but still counts it', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    await screen.findByText('Station tour');
+    // The text of a hidden step is never rendered...
+    expect(screen.queryByText('References called')).not.toBeInTheDocument();
+    // ...but it is accounted for, so "1 / 3 steps" still adds up on screen.
+    expect(screen.getByText(/1 more step your officer records/)).toBeInTheDocument();
+    expect(screen.getByText(/1 \/ 3 steps/)).toBeInTheDocument();
+  });
+});

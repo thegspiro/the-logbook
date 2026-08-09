@@ -654,6 +654,21 @@ export interface ComplianceSummary {
   is_exempt?: boolean | undefined;
 }
 
+/**
+ * One step of a CHECKLIST requirement.
+ *
+ * Steps used to be bare strings. They carry an id so ticking one survives the
+ * list being reordered or a neighbour reworded, and `member_visible` so a
+ * department can keep some steps officer-only — a background check coming back,
+ * references being called — without hiding the whole requirement from the
+ * member it applies to.
+ */
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  member_visible: boolean;
+}
+
 export interface TrainingRequirement {
   id: string;
   organization_id: string;
@@ -675,7 +690,7 @@ export interface TrainingRequirement {
   required_calls?: number;
   required_call_types?: string[];
   required_skills?: string[];
-  checklist_items?: string[];
+  checklist_items?: ChecklistItem[];
   passing_score?: number;
   max_attempts?: number;
   frequency: RequirementFrequency;
@@ -726,7 +741,7 @@ export interface TrainingRequirementCreate {
   required_calls?: number | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
-  checklist_items?: string[] | undefined;
+  checklist_items?: ChecklistItem[] | undefined;
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
   frequency: RequirementFrequency;
@@ -767,7 +782,7 @@ export interface TrainingRequirementUpdate {
   required_calls?: number | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
-  checklist_items?: string[] | undefined;
+  checklist_items?: ChecklistItem[] | undefined;
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
   frequency?: RequirementFrequency;
@@ -1089,6 +1104,8 @@ export interface RequirementProgressNotes {
     recorded_at: string;
     recorded_by?: string | null;
   }>;
+  /** Ids of the checklist steps an officer has ticked off */
+  checklist_done?: string[];
   [key: string]: unknown;
 }
 
@@ -1116,6 +1133,11 @@ export interface RequirementProgressUpdate {
   verified_by?: string;
   /** Officer-entered knowledge/skills test score (0-100); pass/fail derived */
   test_score?: number;
+  /**
+   * The full set of ticked checklist step ids. Sent whole rather than as a
+   * single toggle so a retry cannot leave a step half-applied.
+   */
+  checklist_done?: string[];
 }
 
 export interface ProgramWithDetails extends TrainingProgram {
@@ -1206,7 +1228,7 @@ export interface ProgramBuildRequirementInput {
   required_calls?: number | undefined;
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
-  checklist_items?: string[] | undefined;
+  checklist_items?: ChecklistItem[] | undefined;
   // Course-library ids satisfying a `courses` or `certification` requirement.
   required_courses?: string[] | undefined;
   // Freshness window: a completion older than this many days doesn't count.
@@ -1238,6 +1260,10 @@ export interface ProgramBuildPhaseInput {
 export interface ProgramBuildRequest {
   program: TrainingProgramCreate;
   phases: ProgramBuildPhaseInput[];
+  // Requirements and milestones that belong to the program itself rather than
+  // to a phase — what a flexible (no-phase) program is made of.
+  requirements?: (ProgramBuildRequirementInput | ProgramBuildRequirementLink)[];
+  milestones?: ProgramBuildMilestoneInput[];
 }
 
 // ==================== External Training Integration Types ====================

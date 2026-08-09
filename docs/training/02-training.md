@@ -1642,7 +1642,7 @@ The printed record includes:
 
 The printed program includes:
 
-- Program name, description, type (Flexible/Sequential/Phase-based), and status
+- Program name, description, type (Phase-based or one-list), and status
 - Phase breakdown with all requirements listed under each phase
 - Milestone checkpoints with completion criteria
 - Enrollment roster with per-member progress percentages
@@ -1691,14 +1691,14 @@ This walkthrough follows **FF Alex Rivera**, a probationary firefighter at Oakvi
 
 ### Part 1: Enrollment (March 25)
 
-Capt. Davis navigates to **Training > Programs** and opens the "Probationary Firefighter Program." This is a **Sequential** program with 4 phases and 15 total requirements. He clicks **Enroll Member**, searches for Alex Rivera, and confirms the enrollment.
+Capt. Davis navigates to **Training > Programs** and opens the "Probationary Firefighter Program." This is a **Phase-based** program with 4 phases and 15 total requirements. He clicks **Enroll Member**, searches for Alex Rivera, and confirms the enrollment.
 
 After enrollment, the program dashboard for Alex shows:
 
 | Field            | Value                                   |
 | ---------------- | --------------------------------------- |
 | Program          | Probationary Firefighter Program        |
-| Type             | Sequential                              |
+| Type             | Phase-based                             |
 | Enrolled         | March 25, 2026                          |
 | Overall Progress | 0%                                      |
 | Phases           | 4 (Phase 1 unlocked, Phases 2-4 locked) |
@@ -1740,7 +1740,7 @@ After all 4 requirements are approved:
 | Phase 2 Status   | Unlocked (auto-triggered by Phase 1 completion) |
 | Total Hours      | 7                                               |
 
-Phase 2 (Basic Skills) automatically unlocks because the program type is Sequential — no officer action is needed to advance phases.
+Phase 2 (Basic Skills) opens automatically because Phase 1's required items are all complete — no officer action is needed unless the phase is flagged "Require officer approval to advance."
 
 ### Part 3: Phase 2 — Basic Skills via Shift Reports (April - June)
 

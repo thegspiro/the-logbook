@@ -1288,7 +1288,7 @@ may read their own enrollment) and shows:
 
 **Flexible Programs**: Shows any incomplete required requirements
 
-**Sequential Programs**: Shows the next requirement in sequence
+**One-list programs**: Shows the outstanding requirements
 
 **Phase-Based Programs**: Shows incomplete requirements in current phase
 
@@ -1297,6 +1297,24 @@ may read their own enrollment) and shows:
 - **Green** (90+ days): On track
 - **Yellow** (30-89 days): Attention needed
 - **Red** (< 30 days): Urgent
+
+A weekly sweep (`enrollment_deadline_warnings`) messages members at 30, 14 and 7
+days out.
+
+### Past the Deadline
+
+An enrollment that passes its completion date without finishing moves to
+**Expired**. The member and the training officers are both notified. Expiry
+happens when a coordinator opens the member's progress, and a daily 5:15 AM
+sweep (`enrollment_expiry`) catches the enrollments nobody is watching — daily
+rather than weekly, since an expired member reading "active, 6 days overdue" is
+the state this is meant to eliminate.
+
+Nothing is lost: every completed requirement stays completed. From the member's
+progress dialog an officer can **Reopen enrollment**, optionally on a new
+deadline, which returns it to Active and re-runs the completion check (so a
+member who finished the work while expired is marked complete rather than
+waiting for the next edit). Reopening requires `training.manage`.
 
 ---
 

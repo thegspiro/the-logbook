@@ -44,6 +44,9 @@ class RecordingSession:
         pass
 
     async def execute(self, statement, *args, **kwargs):
+        # Compile before answering: an un-joinable select only raises when
+        # SQLAlchemy compiles it, which a mocked session otherwise never does.
+        str(statement)
         self.statements.append(statement)
         return self._results.pop(0) if self._results else MagicMock()
 
@@ -60,22 +63,47 @@ def _phase(pid, number, name, manual=False):
     )
 
 
-def _prog(pct):
-    return SimpleNamespace(progress_percentage=pct)
+def _prog(pct, requirement_id=None):
+    return SimpleNamespace(
+        progress_percentage=pct,
+        requirement_id=requirement_id or f"req-{pct}",
+    )
+
+
+def _required(*requirement_ids):
+    """The id set returned by get_required_requirement_ids()."""
+    return _scalars(list(requirement_ids))
 
 
 class TestIsPhaseComplete:
     async def test_all_complete(self):
-        db = RecordingSession([_scalars([_prog(100.0), _prog(100.0)])])
+        db = RecordingSession(
+            [
+                _required("r1", "r2"),
+                _scalars([_prog(100.0, "r1"), _prog(100.0, "r2")]),
+            ]
+        )
         assert await TrainingProgramService(db)._is_phase_complete(uuid4(), uuid4())
 
     async def test_one_incomplete(self):
-        db = RecordingSession([_scalars([_prog(100.0), _prog(40.0)])])
+        db = RecordingSession(
+            [
+                _required("r1", "r2"),
+                _scalars([_prog(100.0, "r1"), _prog(40.0, "r2")]),
+            ]
+        )
         assert not await TrainingProgramService(db)._is_phase_complete(uuid4(), uuid4())
 
     async def test_no_required_rows_is_complete(self):
-        db = RecordingSession([_scalars([])])
+        db = RecordingSession([_required()])
         assert await TrainingProgramService(db)._is_phase_complete(uuid4(), uuid4())
+
+    async def test_required_item_without_a_progress_row_blocks_advancement(self):
+        # A required requirement the enrollment has no row for is not "nothing
+        # to check" — it is unfinished work, and advancing past it would let a
+        # member skip a phase outright.
+        db = RecordingSession([_required("r1", "r2"), _scalars([_prog(100.0, "r1")])])
+        assert not await TrainingProgramService(db)._is_phase_complete(uuid4(), uuid4())
 
 
 class TestNextPhase:

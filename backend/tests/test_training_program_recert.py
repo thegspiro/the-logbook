@@ -280,6 +280,7 @@ class TestNotifyRecertReset:
 
         user = SimpleNamespace(id="u1", full_name="Jane Recruit")
         enrollment = SimpleNamespace(
+            id="enr-1",
             organization_id="org-1",
             user_id="u1",
             next_recert_reset_at=date(2028, 3, 30),
@@ -298,6 +299,10 @@ class TestNotifyRecertReset:
         assert log_data["recipient_id"] == "u1"
         assert "NREMT Paramedic" in log_data["subject"]
         assert "2028-03-30" in log_data["message"]
+        # The member's link must reach a route that exists — /training/programs/
+        # {id}/progress is not one, and the router's catch-all silently bounced
+        # it to the dashboard.
+        assert log_data["action_url"] == "/training/my-progress/enr-1"
 
     async def test_noop_when_member_missing(self, monkeypatch):
         from app.services import training_program_service as mod

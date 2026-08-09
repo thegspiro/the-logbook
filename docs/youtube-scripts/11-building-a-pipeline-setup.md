@@ -7,7 +7,7 @@
 **Chapters:** 8 (each designed as a standalone clip)
 **Requires permission:** `training.manage`
 
-> **Companion videos:** Script 9 is the officer's operating manual for a *running*
+> **Companion videos:** Script 9 is the officer's operating manual for a _running_
 > pipeline; Script 10 shows the member's side. This video is purely about
 > **building** one — from an empty screen to an enrolled recruit class.
 
@@ -61,14 +61,14 @@ step.]**
 
 ### CHOOSING A STRUCTURE (2:15 – 3:00)
 
-**[SCREEN: The structure-type selector — Sequential / Phases / Flexible.]**
+**[SCREEN: The structure-type selector — Phases / One list.]**
 
-> "Then pick a **structure**. **Sequential** is a straight ordered list.
-> **Phases** groups requirements into stages that unlock in order — this is what
-> most recruit schools want. **Flexible** lets members work requirements in any
-> order. We'll choose **Phases**."
+> "Then pick a **structure**. **Phases** groups requirements into stages the
+> member works through in order — this is what most recruit schools want.
+> **One list** is everything in any order, which suits something like annual
+> continuing education. We'll choose **Phases**."
 
-**[CALLOUT: "Phases = stages that unlock in order (best for recruit schools)"]**
+**[CALLOUT: "Phases = stages, in order (best for recruit schools)"]**
 
 **[TRANSITION: Adding phases]**
 
@@ -126,7 +126,7 @@ all eight types.]**
 
 **[SCREEN: The Required ↔ Optional toggle on a requirement.]**
 
-> "Each requirement has a **Required or Optional** toggle. Only *required*
+> "Each requirement has a **Required or Optional** toggle. Only _required_
 > requirements count toward advancing a phase and toward the overall percentage.
 > Optional ones are there for enrichment without blocking progress."
 
@@ -205,7 +205,7 @@ enrollment option.]**
 > enrollment until it's met. That's a hard gate."
 
 > "Then the **concurrent enrollment** option. If you want members in only one
-> program at a time, set it — but know it's a *soft advisory*, not a hard block.
+> program at a time, set it — but know it's a _soft advisory_, not a hard block.
 > A member can absolutely be in several programs at once, which is normal for a
 > new recruit juggling onboarding paths. The picker just flags it so you're
 > aware."
@@ -251,7 +251,7 @@ quickly through Course → Schedule → Preview → Roster → Generate.]**
 
 > "Build the course's class list once under Course Library, then generate a
 > **cohort** for each intake. Pick your recruits on the roster step, and
-> generating schedules every class *and* enrolls them in this pipeline in the
+> generating schedules every class _and_ enrolls them in this pipeline in the
 > same action."
 
 **[CALLOUT: "Pipeline = what they must achieve · Cohort = when the classes are"]**
@@ -276,12 +276,12 @@ climb.]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Start From a Sample Template | 0:30–1:30 | "The Fastest Way to Build a Pipeline" |
-| Creating the Program | 1:30–3:00 | "Create-Pipeline Wizard: The Basics" |
-| Building Phases | 3:00–4:30 | "Setting Up Phases and Advancement Gates" |
-| Adding & Linking Requirements | 4:30–8:00 | "Requirement Types and How to Link Them" |
-| Recertification Setup | 9:00–10:30 | "Setting Up an Automatic Recert Cycle" |
-| Prerequisites & Enrollment Rules | 10:30–11:45 | "Prerequisites vs. Concurrent Enrollment" |
-| Publish & Enroll | 11:45–14:00 | "Go Live: Enroll Your First Recruit Class" |
+| Clip                             | Timecode    | Standalone Title                           |
+| -------------------------------- | ----------- | ------------------------------------------ |
+| Start From a Sample Template     | 0:30–1:30   | "The Fastest Way to Build a Pipeline"      |
+| Creating the Program             | 1:30–3:00   | "Create-Pipeline Wizard: The Basics"       |
+| Building Phases                  | 3:00–4:30   | "Setting Up Phases and Advancement Gates"  |
+| Adding & Linking Requirements    | 4:30–8:00   | "Requirement Types and How to Link Them"   |
+| Recertification Setup            | 9:00–10:30  | "Setting Up an Automatic Recert Cycle"     |
+| Prerequisites & Enrollment Rules | 10:30–11:45 | "Prerequisites vs. Concurrent Enrollment"  |
+| Publish & Enroll                 | 11:45–14:00 | "Go Live: Enroll Your First Recruit Class" |
