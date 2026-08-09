@@ -51,7 +51,7 @@ from its open list.
 | B10 | messaging & communications | MSG2 | ✅ (p1, p2, p3) |
 | B11 | notifications | NOTIF2 | ✅ (p1, p2, p3) |
 | B12 | integrations | INT2 | ✅ (p1, p2, p3) |
-| B13 | forms | FORM2 | ⬜ |
+| B13 | forms | FORM2 | ✅ (p1, p2, p3) |
 | B14 | grants & fundraising | GF2 | ⬜ |
 | B15 | admin-hours | AH2 | ⬜ |
 | B16 | reports & analytics | RPT2 | ⬜ |
@@ -1536,3 +1536,15 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   validated per-type). E712-free across the package. INT-5 (uninvoked
   `KNOWN_WEBHOOK_DOMAINS` allowlist) stays flagged as an owner behavior decision. No
   CHANGELOG. See integrations.md → Pass 3. Next: B13 forms.
+
+- **B13 forms ✅ (pass 3).** Re-verified FORM-1/2/3/6/7 hold. **Fixed FORM2-1**
+  (latent-500): `category`/`status`/`field_type`/`target_module`/`integration_type`
+  (FormIntegration) were free-str → strict ENUM, inserted raw → 500. Notably
+  `category` already had a validator but it only NORMALIZED case without rejecting
+  unknowns, so it never prevented the 500. Added a shared `_enum_check` (normalize +
+  validate) replacing the 2 normalize-only category validators and covering the
+  others → 422. **Cleared two false positives:** `Form.integration_type` is a String
+  column (not ENUM); `FormIntegrationUpdate` exposes no enum field. **Swept FORM2-2**:
+  6 boolean-column E712 → `.is_()`, keeping 1 `json_extract == True` JSON compare with
+  an explanatory noqa. **10 tests added.** Gate: flake8/black clean; tsc n/a. CHANGELOG
+  updated. See forms.md → Pass 3. Next: B14 grants & fundraising.

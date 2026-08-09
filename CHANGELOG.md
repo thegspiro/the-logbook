@@ -158,6 +158,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (2026-08-09).** Same class as the fixes above; the rule editor already sends
   valid values, so only malformed API requests are affected.
 
+- **Forms: saving a form, field, or integration with an unrecognized category,
+  status, field type, or target now returns a clear validation error instead of a
+  server error (2026-08-09).** Same class as the fixes above; the form builder
+  already sends valid values, so only malformed API requests are affected.
+
 ### Money: you can no longer approve/record and pay out the same item yourself (2026-08-09)
 
 **Security**

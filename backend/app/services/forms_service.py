@@ -568,7 +568,7 @@ class FormsService:
         result = await self.db.execute(
             select(Form)
             .where(Form.public_slug == slug)
-            .where(Form.is_public == True)  # noqa: E712
+            .where(Form.is_public.is_(True))
             .where(Form.status == FormStatus.PUBLISHED)
             .options(selectinload(Form.fields), selectinload(Form.integrations))
         )
@@ -1356,7 +1356,7 @@ class FormsService:
                         MembershipPipelineStep.config,
                         "$.auto_advance",
                     )
-                    == True,  # noqa: E712
+                    == True,  # noqa: E712  (JSON value compare, not a bool column)
                 )
             )
             steps = step_result.scalars().all()
@@ -2314,7 +2314,7 @@ class FormsService:
         total_result = await self.db.execute(
             select(func.count(Form.id))
             .where(Form.organization_id == org_id_str)
-            .where(Form.is_template == False)  # noqa: E712
+            .where(Form.is_template.is_(False))
         )
         total_forms = total_result.scalar()
 
@@ -2323,7 +2323,7 @@ class FormsService:
             select(func.count(Form.id))
             .where(Form.organization_id == org_id_str)
             .where(Form.status == FormStatus.PUBLISHED)
-            .where(Form.is_template == False)  # noqa: E712
+            .where(Form.is_template.is_(False))
         )
         published_forms = published_result.scalar()
 
@@ -2332,7 +2332,7 @@ class FormsService:
             select(func.count(Form.id))
             .where(Form.organization_id == org_id_str)
             .where(Form.status == FormStatus.DRAFT)
-            .where(Form.is_template == False)  # noqa: E712
+            .where(Form.is_template.is_(False))
         )
         draft_forms = draft_result.scalar()
 
@@ -2340,8 +2340,8 @@ class FormsService:
         public_result = await self.db.execute(
             select(func.count(Form.id))
             .where(Form.organization_id == org_id_str)
-            .where(Form.is_public == True)  # noqa: E712
-            .where(Form.is_template == False)  # noqa: E712
+            .where(Form.is_public.is_(True))
+            .where(Form.is_template.is_(False))
         )
         public_forms = public_result.scalar()
 
