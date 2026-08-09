@@ -3,6 +3,35 @@
 **Prefix:** `PP2` · **Iteration:** B26 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2)
 
+## Pass 3 (2026-08-09) — verified clean, no code change
+
+Re-verified this unauthenticated surface's guards hold:
+
+- **PP-1** — webhook auth uses constant-time verifiers (`verify_shared_secret` /
+  `verify_hmac_signature`, `integrations_webhook.py` 134/200); the API-key path does
+  a prefix-scan + constant-time compare.
+- **PP-4** — public feeds/display go through `public_rate_limit(get_client_ip(...))`
+  *before* any expensive work (`calendar.py`/`display.py`), and bcrypt-gated paths
+  rate-limit before hashing.
+- **PP-2/PP-3/PP-5/PP-7** — ICS escaping, ASCII display-code regex, auto-escaped
+  access-log render, throttled `last_used_at` all hold.
+
+**E712-free** across `app/api/public/`. **Latent-500 lens N/A/clean:** the public
+surface is read/webhook; the one public *write* (form submission) flows through the
+forms module's request schemas, whose enum fields were validated in B13 (FORM2-1) —
+no public-specific free-string→ENUM path.
+
+### Still flagged (unchanged)
+
+- **PP-6** — app-status token stored hashable-vs-lookup tension needs a two-column
+  storage (schema change) + a Redis-backed rate limiter (infra). **PP-7 residual** —
+  display-code lockout + per-subfield address whitelisting.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · no code changed.
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep — essentially clean
 
 Re-verified this unauthenticated surface: every portal query scopes on

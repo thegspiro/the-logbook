@@ -64,7 +64,7 @@ from its open list.
 | B23 | security, audit & IP | SEC2 | ✅ (p1, p2, p3) |
 | B24 | core infra | CI2 | ✅ (p1, p2, p3) |
 | B25 | onboarding | ONB2 | ✅ (p1, p2, p3) |
-| B26 | public-portal | PP2 | ⬜ |
+| B26 | public-portal | PP2 | ✅ (p1, p2, p3) |
 | B27 | frontend shared | FE2 | ⬜ |
 
 **36 features total.** After B27 the rotation wraps to A1.
@@ -1674,3 +1674,12 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   onboarding tests pass (DB-heavy integration tests hit the no-MySQL limit). Gate:
   flake8/black clean; tsc n/a. No CHANGELOG. See onboarding.md → Pass 3. Next: B26
   public-portal.
+
+- **B26 public-portal ✅ (pass 3) — verified clean, no code change.** Re-verified the
+  unauthenticated surface: PP-1 (webhook constant-time verifiers verify_shared_secret/
+  verify_hmac_signature; API-key prefix-scan + constant-time compare), PP-4
+  (public_rate_limit before expensive work on feeds/display), PP-2/3/5/7 hold.
+  E712-free across app/api/public/. Latent-500 lens N/A/clean — the public surface is
+  read/webhook; the one public write (form submission) goes through the forms schemas
+  validated in B13 (FORM2-1). PP-6 (token-at-rest infra/schema) + PP-7 residual stay
+  flagged. No CHANGELOG. See public-portal.md → Pass 3. Next: B27 frontend shared.
