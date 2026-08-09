@@ -243,29 +243,41 @@ def _demo_pdf(title: str, subtitle: str) -> bytes:
 
 # ── Seed steps ────────────────────────────────────────────────────────
 
+# `User.rank` stores the operational rank's *code*, not its display name — the
+# settings page validates it against the configured codes and lists every
+# mismatch as "active members with unrecognised ranks". Seeding display names
+# put all 22 demo members in that warning box.
 MEMBERS = [
-    ("Dana", "Ruiz", "chief", "Chief"),
-    ("Marcus", "Bell", "mbell", "Deputy Chief"),
-    ("Priya", "Raman", "praman", "Assistant Chief"),
-    ("Owen", "Kittredge", "okittredge", "Captain"),
-    ("Sofia", "Marchetti", "smarchetti", "Captain"),
-    ("Tobias", "Lindqvist", "tlindqvist", "Lieutenant"),
-    ("Amara", "Osei", "aosei", "Lieutenant"),
-    ("Henrik", "Vance", "hvance", "Lieutenant"),
-    ("Nadia", "Belhaj", "nbelhaj", "Firefighter"),
-    ("Callum", "Frazier", "cfrazier", "Firefighter"),
-    ("Ingrid", "Solberg", "isolberg", "Firefighter"),
-    ("Rafael", "Duarte", "rduarte", "Firefighter"),
-    ("Yuki", "Tanaka", "ytanaka", "Firefighter"),
-    ("Delia", "Okonkwo", "dokonkwo", "Firefighter/EMT"),
-    ("Bram", "Hollis", "bhollis", "Firefighter/EMT"),
-    ("Esme", "Caldwell", "ecaldwell", "Firefighter/EMT"),
-    ("Jonah", "Whitfield", "jwhitfield", "Paramedic"),
-    ("Lila", "Nakamura", "lnakamura", "Paramedic"),
-    ("Viktor", "Brennan", "vbrennan", "Probationary"),
-    ("Saoirse", "Nolan", "snolan", "Probationary"),
-    ("Emeka", "Adeyemi", "eadeyemi", "Probationary"),
-    ("Wren", "Halloway", "whalloway", "Administrative"),
+    ("Dana", "Ruiz", "chief", "fire_chief"),
+    ("Marcus", "Bell", "mbell", "deputy_chief"),
+    ("Priya", "Raman", "praman", "assistant_chief"),
+    ("Owen", "Kittredge", "okittredge", "captain"),
+    ("Sofia", "Marchetti", "smarchetti", "captain"),
+    ("Tobias", "Lindqvist", "tlindqvist", "lieutenant"),
+    ("Amara", "Osei", "aosei", "lieutenant"),
+    ("Henrik", "Vance", "hvance", "engineer"),
+    ("Nadia", "Belhaj", "nbelhaj", "firefighter"),
+    ("Callum", "Frazier", "cfrazier", "firefighter"),
+    ("Ingrid", "Solberg", "isolberg", "firefighter"),
+    ("Rafael", "Duarte", "rduarte", "firefighter"),
+    ("Yuki", "Tanaka", "ytanaka", "firefighter"),
+    ("Delia", "Okonkwo", "dokonkwo", "emt"),
+    ("Bram", "Hollis", "bhollis", "emt"),
+    ("Esme", "Caldwell", "ecaldwell", "emt"),
+    ("Jonah", "Whitfield", "jwhitfield", "emt"),
+    ("Lila", "Nakamura", "lnakamura", "emt"),
+    ("Viktor", "Brennan", "vbrennan", "probationary"),
+    ("Saoirse", "Nolan", "snolan", "probationary"),
+    ("Emeka", "Adeyemi", "eadeyemi", "probationary"),
+    ("Wren", "Halloway", "whalloway", "administrative"),
+]
+
+# The default rank set covers the operational ladder but not these two, and the
+# demo roster needs both — a probationary member is the whole point of several
+# training and eligibility screens.
+EXTRA_RANKS = [
+    ("probationary", "Probationary", 90, ["probationary", "firefighter"]),
+    ("administrative", "Administrative", 95, ["other"]),
 ]
 
 APPARATUS = [
@@ -335,12 +347,40 @@ class Seeder:
 
     # -- people ------------------------------------------------------
 
+    def seed_ranks(self) -> None:
+        """Add the ranks the demo roster uses that the defaults do not carry."""
+        existing = {
+            pick(r, "rank_code", "rankCode")
+            for r in items(self.api.get("/operational-ranks"), "ranks")
+        }
+        for code, name, order, positions in EXTRA_RANKS:
+            if code in existing:
+                continue
+            self.api.post(
+                "/operational-ranks",
+                {
+                    "rank_code": code,
+                    "display_name": name,
+                    "sort_order": order,
+                    "eligible_positions": positions,
+                },
+            )
+
     def seed_members(self) -> list[dict]:
         existing = items(self.api.get("/users?limit=200"), "users")
         by_username = {u.get("username"): u for u in existing}
         created = list(existing)
         for index, (first, last, username, rank) in enumerate(MEMBERS):
             if username in by_username:
+                # An earlier run stored display names ("Firefighter/EMT") where
+                # the code belongs; bring those in line rather than leaving the
+                # roster in the settings page's mismatch warning.
+                current = by_username[username]
+                if pick(current, "rank") != rank and pick(current, "id"):
+                    self.api.patch(
+                        f"/users/{pick(current, 'id')}/profile", {"rank": rank}
+                    )
+                    current["rank"] = rank
                 continue
             record = self.api.post(
                 "/users",
@@ -387,9 +427,9 @@ class Seeder:
         from X to Y" has nothing behind it.
         """
         promotions = [
-            ("vbrennan", "Firefighter"),
-            ("snolan", "Firefighter/EMT"),
-            ("cfrazier", "Lieutenant"),
+            ("vbrennan", "firefighter"),
+            ("snolan", "emt"),
+            ("cfrazier", "lieutenant"),
         ]
         by_username = {m.get("username"): m for m in members}
         for username, new_rank in promotions:
@@ -4215,6 +4255,7 @@ class Seeder:
     def run(self) -> int:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
+        self.step("ranks", self.seed_ranks)
         members = self.step("members", self.seed_members) or []
         self.step("member changes", lambda: self.seed_member_changes(members))
         facilities = self.step("facilities", self.seed_facilities) or []

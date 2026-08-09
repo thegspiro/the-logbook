@@ -139,8 +139,9 @@ Enable these as needed:
 - Medical Screening _(added 2026-03-13)_
 - Finance _(added 2026-03-12)_
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Module Management section showing the three categories of modules, each with enable/disable toggles. Show some optional modules enabled (green toggle) and some disabled (gray toggle)]_
+![Module management with a toggle for each optional feature](./images/08-32-module-management.png)
+
+The page groups what it shows into **Standard Modules** and **Additional Modules**, each row carrying its own Enable/Disable button. The core modules listed above are not shown at all — the header says so ("Core modules (Members, Events, Documents) are always active") rather than listing them as a third, un-toggleable group.
 
 > **Hint:** Disabling a module hides it from the navigation but does not delete any data. Re-enabling a module restores access to all previously entered data.
 
@@ -1150,6 +1151,13 @@ The Notifications page now includes a **channel filter** to view notifications b
 > **Screenshot needed:**
 > _[Screenshot of the Notifications page showing channel filter tabs (All, Email, In-App, SMS) at the top with the In-App filter active]_
 
+**Not yet built:** the channel filter. The Notifications page's tabs are
+**My Notifications**, **Notification Rules**, **Email Templates** and
+**Send Log** — the first is the member's in-app inbox, and the last is the
+delivery history, where a channel column is the closest thing to the filter
+described above. Nothing on either lets you narrow the view to one channel.
+The placeholder stays open until it does.
+
 ## Email Deliverability (2026-03-22)
 
 Email delivery has been improved for compatibility with Gmail, Microsoft, and other major providers:
@@ -1206,8 +1214,7 @@ The bell icon in the top navigation bar and the Notifications link in the side n
 
 A new **"Mark All Read"** button on the Notifications inbox clears all unread notifications in a single action. This uses a dedicated batch endpoint (`POST /notifications/logs/read-all`) for efficiency.
 
-> **Screenshot needed:**
-> _[Screenshot of the Notifications inbox page showing the "Mark All Read" button at the top right of the notification list, with several unread notifications (bold text) below]_
+![Notifications inbox with the mark-all-as-read action](./images/08-33-notifications-inbox.png)
 
 ### Read/Unread Filter and Pagination
 
@@ -1380,7 +1387,7 @@ Two behaviours worth knowing:
 - **The category holding the template you are editing is forced open**, so your
   selection cannot scroll out of view while you work.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Email Templates sidebar showing seven collapsible category headers with counts (e.g. "Members & Accounts (9)"), one expanded with its templates listed and the currently-selected template highlighted._
+![Email template categories in the editor sidebar](./images/08-34-email-templates.png)
 
 ---
 

@@ -609,17 +609,15 @@ Operational ranks define which shift positions each rank is eligible for. When m
 
 **Setting up eligible positions:**
 
-1. Navigate to **Shift Scheduling > Settings > Eligibility**.
-2. Under **Excluded from Self-Signup**, select the membership types that may not sign themselves up. Officers can still assign those members by hand.
-3. Under **Open Positions**, select the positions any eligible member may take regardless of rank or training.
-4. Click **Save Eligibility Settings**.
+1. Navigate to **Settings > Ranks** (Organization Settings → Operational Ranks).
+2. For each rank, click the position chips to toggle which positions that rank may fill. A filled chip is eligible.
+3. Changes save as you click. Existing ranks are backfilled with default eligible positions.
 
-Per-rank eligible positions are set on the rank itself, in the roles and ranks area of member settings — not here. Existing ranks are backfilled with default eligible positions.
+![Ranks settings with the eligible positions each rank may fill](./images/03-35-eligibility-matrix.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the Settings > Operational Ranks page showing the eligible positions matrix — a grid with ranks on the left (Chief, Captain, Lieutenant, Firefighter, Probationary) and position types across the top (Officer, Driver, Firefighter, EMT), with toggles for each combination]_
+A member whose rank is not one of the configured ranks is flagged on this page under **active members with unrecognised ranks** — the rank stored on a profile is the rank's _code_, so a profile carrying a free-text title will not match.
 
-**Not yet built:** the rank × position-type toggle grid described above. There is no **Operational Ranks** page. The Eligibility tab is the two chip pickers listed in steps 2 and 3; a rank's `eligible_positions` are stored and enforced, but nothing renders them as a matrix. The placeholder stays open until that screen exists.
+**Department-wide signup rules** are separate, under **Shift Scheduling > Settings > Eligibility**: which membership types may not sign themselves up at all, and which positions are open to any eligible member regardless of rank.
 
 **How it affects shift signup:**
 

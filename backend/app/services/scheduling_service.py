@@ -56,6 +56,21 @@ from app.utils.apparatus_ref import (
 )
 
 
+def _position_label(position) -> str:
+    """Human-readable position for a notification body.
+
+    `ShiftPosition` is declared twice — once in `app.models.training` and once
+    in `app.schemas.scheduling` — so an `isinstance` check against either one
+    misses members of the other, and the enum falls through to its repr:
+    members were told they had been assigned to the
+    "ShiftPosition.FIREFIGHTER position". Reading `.value` off whatever arrives
+    is indifferent to which class it came from, and also covers the ORM
+    attribute, whose `str()` is the same repr.
+    """
+    value = getattr(position, "value", position)
+    return str(value) if value else "unspecified"
+
+
 class SchedulingService:
     """Service for scheduling management"""
 
@@ -2721,15 +2736,16 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
+            position_label = _position_label(position)
             message = (
-                f"{user_name} {action} the {position} position "
+                f"{user_name} {action} the {position_label} position "
                 f"on the {shift_date_str} shift. "
                 f"This position is now open."
             )
 
             wants_email = sched_cfg.get("send_email", False)
             email_subj = (
-                f"Shift Coverage Needed \u2014 " f"{position} on {shift_date_str}"
+                f"Shift Coverage Needed \u2014 " f"{position_label} on {shift_date_str}"
             )
             email_html = (
                 f"<p>{message}</p>"
@@ -2791,7 +2807,7 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
-            position_label = position or "unspecified"
+            position_label = _position_label(position)
 
             from app.services.scheduled_tasks import resolve_check_templates
 
@@ -2981,7 +2997,7 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
-            position_label = str(assignment.position or "")
+            position_label = _position_label(assignment.position)
 
             message = (
                 f"{user_name} has confirmed the "

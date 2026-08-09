@@ -2823,13 +2823,12 @@ export const SHOTS = [
     line: 616,
     anchor:
       "Screenshot of the Settings > Operational Ranks page showing the eligible positions matrix",
-    alt: "Position eligibility matrix of ranks against position types",
-    route: "/scheduling/settings?tab=eligibility",
+    alt: "Ranks settings with the eligible positions each rank may fill",
+    // Not the scheduling module's own Eligibility tab, which is a pair of chip
+    // pickers for self-signup. The rank × position grid the guide describes
+    // lives on the ranks settings section, one per rank.
+    route: "/settings?tab=ranks",
     fullPage: true,
-    holdBack:
-      "the tab is two chip pickers — membership types excluded from self-signup, " +
-      "and positions open to everyone — not the rank × position-type toggle grid " +
-      "the placeholder describes, and there is no Operational Ranks page",
   },
   {
     id: "03-36-scheduling-general-settings",
@@ -2871,6 +2870,56 @@ export const SHOTS = [
       "Screenshot of the Shift Reports Settings tab showing three cards",
     alt: "Shift report settings with checklist timing, validation and form sections",
     route: "/scheduling/settings?tab=shift-reports",
+    fullPage: true,
+  },
+  {
+    id: "08-32-module-management",
+    doc: "08-admin-reports.md",
+    line: 142,
+    anchor: "Screenshot of the Module Management section showing the three categories",
+    alt: "Module management with a toggle for each optional feature",
+    route: "/settings?tab=modules",
+    fullPage: true,
+  },
+  {
+    id: "08-33-notifications-inbox",
+    doc: "08-admin-reports.md",
+    line: 1209,
+    anchor: "Screenshot of the Notifications inbox page showing the “Mark All Read” button",
+    alt: "Notifications inbox with the mark-all-as-read action",
+    route: "/notifications?tab=inbox",
+    // Unread only. "Show read" is on by default, and the demo database still
+    // holds notifications written before the position-label fix, whose bodies
+    // name the enum rather than the position. Publishing those would put a
+    // fixed bug into the guide.
+    prepare: async (page) => {
+      await page.getByLabel(/show read/i).first().uncheck({ timeout: 10_000 });
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-35-notifications-show-read",
+    doc: "08-admin-reports.md",
+    line: 1219,
+    anchor: "Screenshot of the Notifications inbox showing the “Show read” toggle",
+    alt: "Notifications inbox with read notifications revealed",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      await page.getByLabel(/show read/i).first().check({ timeout: 10_000 });
+    },
+    fullPage: true,
+    holdBack:
+      "revealing read notifications surfaces the ones this demo database " +
+      "recorded before the position-label fix, whose bodies read " +
+      "'ShiftPosition.FIREFIGHTER position'; capturable on a fresh seed",
+  },
+  {
+    id: "08-34-email-templates",
+    doc: "08-admin-reports.md",
+    line: 1383,
+    anchor: "Screenshot of the Email Templates sidebar showing seven collapsible category",
+    alt: "Email template categories in the editor sidebar",
+    route: "/communications/email-templates",
     fullPage: true,
   },
   {
