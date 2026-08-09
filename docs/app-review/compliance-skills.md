@@ -13,6 +13,38 @@ input-validation fixed; monthly-window + recipient allow-list + officer #6 open)
 
 ---
 
+## Pass 3 (2026-08-09) — verified clean; CS-9 recipient audit confirmed; 2 E712 swept
+
+Re-verified: **CS-10** — `_authorize_test_write` (`skills_testing.py:111`) still
+refuses `examiner == candidate` ("You cannot score or complete your own evaluation",
+wired at 1234/1376); `test_skill_test_update_guard.py` 2/2 pass. **CS-9 recipient
+audit CONFIRMED** — the recipient allow-list was resolved earlier this session
+(Decision 2): `_email_report` now calls `audit_external_recipients`
+(`compliance_config_service.py:354`), logging every send to a non-member address.
+CS-1..CS-7, CS-11 hold.
+
+**Latent-500 lens N/A:** the compliance-config and skills-testing models have **no**
+strict enum columns (statuses are stored as validated strings / driven by config),
+so there's no free-string→ENUM path.
+
+### CS2-1 — NIT — 2 boolean-column E712 swept — ✅ FIXED
+
+`compliance_config_service.py:196` (`TrainingRequirement.active`) and
+`skills_testing_service.py:366` (`SkillTest.is_practice`, in the attempt-limit
+count) carried `== True/False  # noqa: E712`; converted to `.is_(...)`. Both files
+now E712-free.
+
+### Still flagged (unchanged)
+
+- **CS-8 attestation** — self-attestation has no server-side recompute / dual-control
+  (a workflow change). **CS-9 monthly windowing** — monthly reports still return the
+  annual dataset relabeled (data-layer feature).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_skill_test_update_guard.py` **2 passed** (DB-free).
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified pass-1 (CS-9 officer #6 UUID normalization; CS-8 skills self-cert

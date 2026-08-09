@@ -60,7 +60,7 @@ from its open list.
 | B19 | scheduling | SCH2 | ✅ (p1, p2, p3) |
 | B20 | finance | FIN2 | ✅ (p1, p2, p3) |
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2, p3) |
-| B22 | compliance & skills | CS2 | ⬜ |
+| B22 | compliance & skills | CS2 | ✅ (p1, p2, p3) |
 | B23 | security, audit & IP | SEC2 | ⬜ |
 | B24 | core infra | CI2 | ⬜ |
 | B25 | onboarding | ONB2 | ⬜ |
@@ -1635,3 +1635,13 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   clean (identifier_type/leave_type/organization_type/status properly typed); E712-free
   across role/org/user services. ORU-7c (org-wide member-role mass-escalation) stays
   flagged. No CHANGELOG. See orgs-roles-users.md → Pass 3. Next: B22 compliance & skills.
+
+- **B22 compliance & skills ✅ (pass 3).** Re-verified CS-10 (`_authorize_test_write`
+  refuses examiner==candidate, test 2/2) and **CS-9 recipient audit confirmed** (the
+  allow-list was resolved this session via Decision 2 — `audit_external_recipients` in
+  `_email_report`). CS-1..7/CS-11 hold. **Latent-500 lens N/A** (no strict enum
+  columns on the compliance/skills models). **Swept CS2-1** — 2 boolean-column E712
+  (compliance_config `TrainingRequirement.active`, skills_testing `SkillTest.is_practice`)
+  → `.is_()`. CS-8 attestation SoD + CS-9 monthly windowing stay flagged. Gate:
+  flake8/black clean; tsc n/a. No CHANGELOG. See compliance-skills.md → Pass 3.
+  Next: B23 security, audit & IP.
