@@ -847,7 +847,7 @@ class SecurityMonitoringService:
         # Unacknowledged count from DB (org-scoped)
         unack_result = await db.execute(
             select(func.count(SecurityAlertRecord.id)).where(
-                SecurityAlertRecord.acknowledged == False,  # noqa: E712
+                SecurityAlertRecord.acknowledged.is_(False),
                 org_alert,
             )
         )

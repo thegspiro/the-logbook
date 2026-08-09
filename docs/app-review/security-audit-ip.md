@@ -14,6 +14,36 @@ with the **tail-truncation checkpoint cross-check flagged**.
 
 ---
 
+## Pass 3 (2026-08-09) — verified clean; 2 E712 swept
+
+Re-verified this exhaustively-hardened surface: **SEC-6** — `security_monitoring`
+resolves each alert's `organization_id` (via the alert's user) and all alert
+queries/mutations are org-scoped; **SEC-10** — `core/audit.py` stamps
+`organization_id` into the hash-chain input (v3) and audit reads/exports filter it;
+SEC-1..9 spot-checks (DoS caps, LIKE escape, geo fail-closed, keyed rehash) hold.
+
+**Latent-500 lens clean:** the only enum column here is `severity`, which is
+**server-set** (audit/alert code chooses it), not a client request field — no
+free-string→ENUM path.
+
+### SEC2-1 — NIT — 2 boolean-column E712 swept — ✅ FIXED
+
+`security_monitoring.py:850` (`SecurityAlertRecord.acknowledged`) and
+`ip_security_service.py:636` (`CountryBlockRule.is_blocked`) carried
+`== True/False  # noqa: E712`; converted to `.is_(...)`. Both files now E712-free.
+
+### Still flagged (unchanged)
+
+- **SEC-2 (residual)** — tail-truncation of the newest audit rows is detectable only
+  at the DB level (no API delete path exists); a periodic external chain-tip
+  attestation is the remaining hardening, recorded as future development.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · security/audit tests **354 passed** (DB-free; the
+`db_session` errors are the known no-MySQL fixture failures).
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified this exhaustively-hardened surface: SEC-2 tail-truncation cross-check

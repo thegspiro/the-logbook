@@ -61,7 +61,7 @@ from its open list.
 | B20 | finance | FIN2 | ✅ (p1, p2, p3) |
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2, p3) |
 | B22 | compliance & skills | CS2 | ✅ (p1, p2, p3) |
-| B23 | security, audit & IP | SEC2 | ⬜ |
+| B23 | security, audit & IP | SEC2 | ✅ (p1, p2, p3) |
 | B24 | core infra | CI2 | ⬜ |
 | B25 | onboarding | ONB2 | ⬜ |
 | B26 | public-portal | PP2 | ⬜ |
@@ -1645,3 +1645,13 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   → `.is_()`. CS-8 attestation SoD + CS-9 monthly windowing stay flagged. Gate:
   flake8/black clean; tsc n/a. No CHANGELOG. See compliance-skills.md → Pass 3.
   Next: B23 security, audit & IP.
+
+- **B23 security, audit & IP ✅ (pass 3).** Re-verified SEC-6 (security_monitoring
+  resolves + org-scopes each alert), SEC-10 (audit stamps organization_id into the
+  hash-chain input, v3; reads/exports filter it), SEC-1..9 hold. **Latent-500 lens
+  clean** — the only enum column (`severity`) is server-set, not a client input.
+  **Swept SEC2-1** — 2 boolean-column E712 (security_monitoring
+  `SecurityAlertRecord.acknowledged`, ip_security `CountryBlockRule.is_blocked`) →
+  `.is_()`. SEC-2 residual (DB-level tail-truncation detection) stays flagged. 354
+  security/audit tests pass. Gate: flake8/black clean; tsc n/a. No CHANGELOG. See
+  security-audit-ip.md → Pass 3. Next: B24 core infra.
