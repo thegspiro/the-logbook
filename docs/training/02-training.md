@@ -588,8 +588,7 @@ The matrix displays:
 - **Red** cells for non-compliant members
 - Percentage completion in each cell
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Compliance Matrix showing a grid with member names on rows, requirement names on columns, and colored cells indicating compliance status. Include a legend showing what each color means]_
+![Compliance matrix grid of members against requirements](./images/02-66-compliance-matrix.png)
 
 > **Hint:** Use this view for annual reporting and to identify which members need attention before compliance deadlines.
 
@@ -1143,22 +1142,24 @@ Navigate to **Training Admin > Import History** to import historical training re
 
 **Required Permission:** `training.manage`
 
-Navigate to **Training Admin > Advanced > Competency** to see a department-wide readiness heat-map.
+Navigate to **Training Admin > Advanced > Competency** to define the skill levels each position is expected to hold.
 
-The competency matrix provides a visual representation of skills and qualifications across all members. Each cell shows a proficiency level using color-coded indicators:
+A competency matrix is a per-position definition: a name, the position it applies to, and a list of skills with the level expected for each. The tab lists the matrices your department has defined; **Add Matrix** creates another. Levels use the Dreyfus scale, shown in the legend above the list:
 
-- **Dark green** — Expert / fully qualified
-- **Green** — Proficient
-- **Yellow** — Developing / partially trained
-- **Red** — Not trained / gap identified
-- **Gray** — Not applicable to this member's role
+- **Novice**
+- **Advanced Beginner**
+- **Competent**
+- **Proficient**
+- **Expert**
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Competency Matrix showing a heat-map grid with member names on rows, competency areas on columns, and color-coded cells. Include the filter bar at the top for filtering by station, rank, or competency category]_
 
+**Not yet built:** the department-wide member-by-competency heat-map — one row per member, one column per competency area, with a station/rank filter bar. The tab today shows only the matrix definitions; a member's own levels are readable through the API (`/training/competency/me` and `/training/competency/members/{id}`) but have no screen. The placeholder above stays open until that view exists.
+
 ### Edge Cases
 
-- The competency heat-map is cached for approximately 5 minutes. Changes to training records or skill test results may not appear immediately — wait for cache expiry or refresh the page.
+- Member competency levels are cached for approximately 5 minutes. Changes to training records or skill test results may not appear immediately — wait for cache expiry or refresh the page.
 - Members whose roles do not include a particular competency area show gray (N/A) cells, not red. This prevents false negatives in department readiness views.
 - If a member has a waiver active for a competency-related requirement, their cell reflects the waiver-adjusted status, not the full requirement.
 
@@ -1174,13 +1175,16 @@ The system automatically tracks certification expiration dates and generates rec
 
 Navigate to **Training Admin > Advanced > Recertification** to configure recertification pathways. Each pathway defines:
 
-- **Certification type** — Which certification this pathway applies to
-- **Lead time** — How far in advance to begin sending reminders (e.g., 90 days before expiry)
-- **Renewal tasks** — Specific steps required for recertification (courses, exams, documentation)
-- **Auto-generation** — Whether to automatically create renewal tasks for members
+- **Renewal type** — Hours, Courses, Assessment, or a Combination
+- **Required hours / courses** — What has to be completed inside the cycle
+- **Renewal window** — How far ahead of expiry the pathway opens, in days. This is the lead time reminders are sent from
+- **Grace period** — How long past expiry a member may still complete the renewal. Zero means the qualification lapses on the day
+- **New expiration** — How many months the renewal is good for
+- **Auto-create record** — Whether completing the renewal writes a training record automatically
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Recertification Pathways configuration page showing a list of configured pathways with certification type, lead time, and task count columns. Show one pathway expanded to reveal the renewal task checklist]_
+**Generate Tasks** scans for expiring certifications and creates the renewal tasks members will see.
+
+![Recertification pathways with renewal type, window and grace period](./images/02-68-recertification-pathways.png)
 
 ### Member View
 
@@ -1221,8 +1225,9 @@ Each instructor qualification record tracks:
 | **Certification date** | When the qualification was earned                    |
 | **Expiration date**    | When the qualification expires (if applicable)       |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Instructor Qualifications page showing a table of instructors with columns for member name, qualification type badge, qualified courses, certification date, and expiration status indicator]_
+![Instructor qualification roster with type, agency and expiry](./images/02-69-instructor-qualifications.png)
+
+The roster's **Status** column reports whether an officer has _verified_ the qualification, not whether it has expired — a lapsed qualification still reads "Pending" until someone verifies it. Read the **Expires** column for currency. The course a qualification is tied to is stored but not shown in this table; open the record to see it.
 
 ### Assigning Instructors to Sessions
 
@@ -1253,10 +1258,11 @@ The system uses the **Kirkpatrick Model** to measure training effectiveness acro
 
 ### Submitting Evaluations
 
-After a training session, evaluations can be submitted to capture participant feedback and learning outcomes. Navigate to **Training Admin > Effectiveness** and click **Submit Evaluation**.
+After a training session, evaluations capture participant feedback and learning outcomes. **Training Admin > Advanced > Effectiveness** shows one card per Kirkpatrick level with its evaluation count and average rating, above a table of the most recent evaluations.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Effectiveness Evaluation form showing fields for training session selection, evaluation level dropdown (Reaction/Learning/Behavior/Results), score slider, and notes textarea. Show a summary dashboard below with average scores per level displayed as a bar chart]_
+![Training effectiveness evaluations across the four Kirkpatrick levels](./images/02-70-effectiveness-evaluations.png)
+
+**Not yet built:** there is no evaluation form on this tab — it is read-only. Evaluations are submitted through the API (`POST /training/effectiveness/evaluations`), typically by an integration or a script, not by an officer in the browser.
 
 ### Viewing Summaries
 
@@ -1285,15 +1291,16 @@ Multi-agency training sessions allow:
 - Mutual aid tracking and documentation
 - xAPI statement delivery to external Learning Record Stores (LRS)
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Multi-Agency Training page showing a list of joint training sessions with participating organization names, session date, participant count from each org, and status badges (planned, in_progress, completed)]_
+![Multi-agency exercises with participating departments and headcounts](./images/02-71-multi-agency-training.png)
+
+Each card shows the exercise type, date and total headcount, a chip per participating organization with its role (host, participant, observer, evaluator), and a **NIMS Compliant** badge where the exercise was recorded as such. There is no planned/in-progress/completed status on an exercise — the date is what tells you whether it has happened.
 
 ### Creating a Multi-Agency Session
 
-1. Click **Create Multi-Agency Session**.
-2. Enter the session details (title, date, location, description).
-3. Add participating organizations by name or code.
-4. Assign the lead organization responsible for reporting.
+1. Click **Add Exercise**.
+2. Enter the exercise details (name, type, date, description).
+3. Add participating organizations by name, with each one's role and headcount.
+4. Assign the lead agency responsible for reporting.
 5. Click **Save**.
 
 ### Edge Cases
@@ -1339,19 +1346,20 @@ This dashboard provides:
 
 Track organizational readiness against ISO standards with:
 
-- Overall readiness score
-- Category-by-category assessment
-- Gap identification and remediation tracking
+- Overall readiness score, and an estimate of the FSRS training credit earned
+- Category-by-category assessment against the NFPA standard each one maps to, with the department total, the per-member average, and how many members meet the annual requirement
 
-> **Screenshot placeholder:**
-> _[Screenshot of the ISO Readiness dashboard showing an overall readiness percentage gauge, a breakdown by ISO category with progress bars, and a list of identified gaps with priority indicators]_
+![ISO readiness dashboard broken down by NFPA training category](./images/02-72-iso-readiness.png)
+
+This scores training only — FSRS Section 580, 9 points of roughly 105.5. It is **not** a Public Protection Classification, as the banner on the page says.
+
+Hours are attributed to an ISO category through the training **category** on the record, falling back to the categories on its course. A department that files pump training under Fire Suppression will see Driver/Operator read zero: NFPA 1002 is scored separately from NFPA 1001, so give driver/operator training its own category if you want credit for it.
 
 ### Compliance Attestations
 
 Officers can submit and track compliance attestations — formal declarations that specific compliance requirements have been verified.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Compliance Attestations page showing a table of submitted attestations with columns for attestation type, submitted by, date, status, and a "Create Attestation" button]_
+![Compliance attestations listing period, percentage and attesting officer](./images/02-73-compliance-attestations.png)
 
 ### Annual Compliance Report
 
@@ -1365,8 +1373,7 @@ Generate a comprehensive annual compliance report covering:
 
 The report can be exported as a formatted document for regulatory submissions.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Annual Compliance Report page showing summary statistics at the top (overall compliance %, members compliant, certifications current), a department-wide breakdown table, and an "Export Report" button]_
+![Annual compliance report with department-wide summary statistics](./images/02-74-annual-compliance-report.png)
 
 ### Compliance Forecast
 
@@ -1377,8 +1384,9 @@ The compliance forecast projects future compliance trends based on:
 - Scheduled training sessions
 - Historical compliance patterns
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Compliance Forecast view showing a line chart projecting compliance percentage over the next 6 months, with annotations for upcoming certification expirations and scheduled training sessions]_
+The projection horizon is **30, 60 and 90 days** — summary cards across the top, then one row per member showing each horizon alongside the certifications expiring inside it.
+
+![Compliance forecast projecting each member's compliance over 90 days](./images/02-75-compliance-forecast.png)
 
 ### Edge Cases
 

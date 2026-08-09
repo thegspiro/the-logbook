@@ -27,6 +27,8 @@ from app.models.training import (
     RecertificationPathway,
     RenewalTask,
     RenewalTaskStatus,
+    TrainingCategory,
+    TrainingCourse,
     TrainingEffectivenessEvaluation,
     TrainingRecord,
     TrainingRequirement,
@@ -39,7 +41,21 @@ from app.services.training_compliance import (
 )
 from app.services.training_waiver_service import fetch_org_waivers
 
-# ISO/FSRS training hour requirements per category (annual, per member)
+# ISO/FSRS training hour requirements per category (annual, per member).
+#
+# A record counts toward a category when either its `training_type` is in
+# `training_types`, or its training category's name/code contains one of
+# `category_keywords`.
+#
+# The keyword path is what actually does the work. `training_types` predates it
+# and lists values — "fire_training", "hazmat", "pump_operations" — that are not
+# members of the TrainingType enum (certification, continuing_education,
+# skills_practice, orientation, refresher, specialty), so on its own it can
+# never match a record and every department scored a flat 0%. Departments
+# classify fire vs EMS vs hazmat through their training categories, not through
+# training_type, so that is what this reads. The old lists are kept because a
+# department may carry legacy imported records whose type came from an external
+# provider's vocabulary.
 ISO_CATEGORIES = [
     {
         "name": "Company Training",
@@ -56,6 +72,16 @@ ISO_CATEGORIES = [
             "ladders",
             "hose_operations",
         ],
+        "category_keywords": [
+            "fire",
+            "suppression",
+            "structural",
+            "company",
+            "rescue",
+            "ladder",
+            "hose",
+            "ventilation",
+        ],
     },
     {
         "name": "Driver/Operator Training",
@@ -67,6 +93,13 @@ ISO_CATEGORIES = [
             "driver_operator",
             "emergency_vehicle_operations",
             "pump_operations",
+        ],
+        "category_keywords": [
+            "driver",
+            "operator",
+            "apparatus",
+            "pump",
+            "evoc",
         ],
     },
     {
@@ -80,6 +113,12 @@ ISO_CATEGORIES = [
             "command_training",
             "incident_command",
         ],
+        "category_keywords": [
+            "officer",
+            "leadership",
+            "command",
+            "supervis",
+        ],
     },
     {
         "name": "Hazardous Materials",
@@ -91,6 +130,10 @@ ISO_CATEGORIES = [
             "hazmat_awareness",
             "hazmat_operations",
         ],
+        "category_keywords": [
+            "hazmat",
+            "hazardous",
+        ],
     },
     {
         "name": "New Driver Training",
@@ -98,6 +141,10 @@ ISO_CATEGORIES = [
         "required_hours": 60,
         "training_types": [
             "new_driver",
+        ],
+        "category_keywords": [
+            "new driver",
+            "probationary driver",
         ],
     },
 ]
@@ -175,6 +222,40 @@ class ISOReadinessService:
         )
         records = records_result.scalars().all()
 
+        # Category name + code per id, lowercased once, for the keyword match.
+        categories_by_id = {
+            str(row.id): f"{row.name or ''} {row.code or ''}".lower()
+            for row in (
+                await self.db.execute(
+                    select(TrainingCategory).where(
+                        TrainingCategory.organization_id == organization_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+
+        # A record created from a course usually leaves `category_id` empty —
+        # the classification lives on the course, which can carry several
+        # categories. Fold the course's categories into the same label so those
+        # records are not silently uncounted.
+        course_labels = {
+            str(course.id): " ".join(
+                categories_by_id.get(str(cid), "")
+                for cid in (course.category_ids or [])
+            )
+            for course in (
+                await self.db.execute(
+                    select(TrainingCourse).where(
+                        TrainingCourse.organization_id == organization_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+
         # Build per-member, per-category hour totals
         categories_result: List[Dict[str, Any]] = []
         category_compliance_pcts: List[float] = []
@@ -197,7 +278,13 @@ class ISOReadinessService:
                     if hasattr(record.training_type, "value")
                     else str(record.training_type or "")
                 )
-                if training_type in cat["training_types"]:
+                label = categories_by_id.get(
+                    str(record.category_id or ""), ""
+                ) or course_labels.get(str(record.course_id or ""), "")
+                keywords = cat.get("category_keywords", [])
+                if training_type in cat["training_types"] or (
+                    label and any(word in label for word in keywords)
+                ):
                     member_hours[uid] += record.hours_completed or 0
 
             total_hours = sum(member_hours.values())
@@ -214,6 +301,9 @@ class ISOReadinessService:
                     "nfpa_standard": cat["nfpa_standard"],
                     "required_hours": cat["required_hours"],
                     "avg_hours_completed": round(avg_hours, 1),
+                    # The dashboard prints this next to the average; without it
+                    # the card read "Dept Total: hrs" with the number missing.
+                    "total_department_hours": round(total_hours, 1),
                     "members_meeting_requirement": members_meeting,
                     "total_members": total_members,
                     "compliance_pct": compliance_pct,
@@ -963,6 +1053,13 @@ class AnnualComplianceReportService:
                 "records_with_hours": field_lookup.get("hours_completed", 0),
                 "records_with_certification": field_lookup.get("course_name", 0),
                 "completeness_pct": record_completeness["overall_completeness_pct"],
+                # The dashboard reads both of these without guarding, so
+                # omitting them threw on `field_details.map` and took the whole
+                # Annual Report tab into the ErrorBoundary.
+                "nfpa_1401_compliant": record_completeness.get(
+                    "nfpa_1401_compliant", False
+                ),
+                "field_details": record_completeness.get("fields", []),
             },
         }
 

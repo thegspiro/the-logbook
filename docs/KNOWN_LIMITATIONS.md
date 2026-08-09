@@ -169,7 +169,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 
 | Item                                                                                                          | Status                                    | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Executive-session minutes need a viewer tier below `minutes.manage`?**                                      | Open decision (LOW)                       | MM-3 is fixed: plain `minutes.view` holders now see only approved, non-executive minutes; `minutes.manage` sees all. Follow-up open decision: if board members who attend executive sessions but don't hold `minutes.manage` should read executive minutes, a dedicated `minutes.view_executive` tier is needed (seed + roles + frontend). Also: frontend `canManage` uses `meetings.manage` while the backend uses `minutes.manage` — roles managing minutes should hold both. **Update (MM2-1, 2026-08-06):** publishing executive minutes to the shared Meeting Minutes document folder is now blocked, because that folder is readable by the broad `documents.view` audience and so bypassed the restriction. Sharing an executive session with a *restricted* audience is the same build as the `minutes.view_executive` tier above (a restricted document folder or per-document permission), not a one-click publish.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Executive-session minutes need a viewer tier below `minutes.manage`?**                                      | Open decision (LOW)                       | MM-3 is fixed: plain `minutes.view` holders now see only approved, non-executive minutes; `minutes.manage` sees all. Follow-up open decision: if board members who attend executive sessions but don't hold `minutes.manage` should read executive minutes, a dedicated `minutes.view_executive` tier is needed (seed + roles + frontend). Also: frontend `canManage` uses `meetings.manage` while the backend uses `minutes.manage` — roles managing minutes should hold both. **Update (MM2-1, 2026-08-06):** publishing executive minutes to the shared Meeting Minutes document folder is now blocked, because that folder is readable by the broad `documents.view` audience and so bypassed the restriction. Sharing an executive session with a _restricted_ audience is the same build as the `minutes.view_executive` tier above (a restricted document folder or per-document permission), not a one-click publish.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Elections: approval / multi-vote-per-position is silently broken**                                          | ✅ Resolved                               | The dedup hash now takes a method-aware discriminator (`rank:<n>` for ranked choice, `cand:<id>` for approval/multi-vote; unchanged for single-vote so existing rows keep their protection), app-level duplicate checks are per-candidate/per-rank, and the ballot UI submits approvals/rankings through the reworked atomic bulk endpoint. (ELEC-3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **Elections: `rollback_election` can enable double-voting**                                                   | ✅ Resolved (guard)                       | CLOSED→OPEN rollback is refused for anonymous elections that have votes once the salt is destroyed (the exact unsafe case); rollback with zero votes still works. Preserving the salt was rejected as it would weaken SEC-12. (ELEC-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Elections: voting tokens stored/compared in plaintext**                                                     | ✅ Resolved                               | Tokens are now stored as SHA-256 (migration `20260731_0001` hashes existing rows in place with an idempotent hex guard); the raw token exists only in the emailed ballot link and lookups hash the presented value, so DB read access no longer yields live credentials. In-flight links keep working. (ELEC-5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -330,12 +330,12 @@ Same shape as the Member Lifecycle row above — the API is built, the screen is
 not — so they are recorded rather than papered over with an approximate image.
 Their placeholders are deliberately left open.
 
-| Guide section                     | What the guide pictures                                                                                                   | What exists                                                                                                                                                                                                          | State                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Facility **Utilities** section    | Utility accounts (electric, gas, water) with the latest reading, monthly cost and a usage trend chart                     | Nine `facilitiesService` methods over `/facilities/utility-accounts` and `/utility-readings`, **zero UI consumers**. `FacilityDetailPage` renders seven sections and Utilities is not one of them.                    | ❌ API + service only          |
-| Facility **Capital Projects**     | Project list with name, budget, status badge and timeline bar                                                             | Five `facilitiesService` methods over `/facilities/capital-projects`, **zero UI consumers**.                                                                                                                          | ❌ API + service only          |
-| Apparatus **NFPA Compliance tab** | Applicable standards with per-standard compliance status (green check / red X), last assessment date and next due date    | `ApparatusOverviewTab.tsx:242` renders a single card reading "Tracking Enabled" when the flag is set. There is no standards list, no status, no dates. The flag's only other consumer is a checkbox on the edit form. | ⚠️ Flag only, no tab           |
-| Apparatus **deficiency banner**   | A banner at the top of the detail page with the deficiency date and a link to the failed equipment check                  | A "Deficiency" badge beside the status badge, on both the list row and the detail header. `deficiencySince` is on the TypeScript type and is **never rendered**; there is no banner and no link to the check.         | ⚠️ Badge only, no date or link |
+| Guide section                     | What the guide pictures                                                                                                | What exists                                                                                                                                                                                                           | State                          |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Facility **Utilities** section    | Utility accounts (electric, gas, water) with the latest reading, monthly cost and a usage trend chart                  | Nine `facilitiesService` methods over `/facilities/utility-accounts` and `/utility-readings`, **zero UI consumers**. `FacilityDetailPage` renders seven sections and Utilities is not one of them.                    | ❌ API + service only          |
+| Facility **Capital Projects**     | Project list with name, budget, status badge and timeline bar                                                          | Five `facilitiesService` methods over `/facilities/capital-projects`, **zero UI consumers**.                                                                                                                          | ❌ API + service only          |
+| Apparatus **NFPA Compliance tab** | Applicable standards with per-standard compliance status (green check / red X), last assessment date and next due date | `ApparatusOverviewTab.tsx:242` renders a single card reading "Tracking Enabled" when the flag is set. There is no standards list, no status, no dates. The flag's only other consumer is a checkbox on the edit form. | ⚠️ Flag only, no tab           |
+| Apparatus **deficiency banner**   | A banner at the top of the detail page with the deficiency date and a link to the failed equipment check               | A "Deficiency" badge beside the status badge, on both the list row and the detail header. `deficiencySince` is on the TypeScript type and is **never rendered**; there is no banner and no link to the check.         | ⚠️ Badge only, no date or link |
 
 Verified 2026-08-08 by counting non-test consumers of each service method under
 `frontend/src`, and by reading the render bodies rather than trusting the type
@@ -377,10 +377,10 @@ blank". Both placeholders are left open.
 Two further placeholders in that guide picture per-member compliance screens
 that do not exist:
 
-| Guide section                       | What exists                                                                                                                                                        | State                 |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
-| Member compliance detail view       | `fetchUserCompliance` / `fetchProspectCompliance` are defined in `medicalScreeningStore` and called by **no component**. `ComplianceDashboard` lists expiring screenings only. | ❌ Store action only  |
-| Compliance tab filtered to overdue  | `ComplianceDashboard` has no filter controls of any kind.                                                                                                          | ❌ Not built          |
+| Guide section                      | What exists                                                                                                                                                                    | State                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
+| Member compliance detail view      | `fetchUserCompliance` / `fetchProspectCompliance` are defined in `medicalScreeningStore` and called by **no component**. `ComplianceDashboard` lists expiring screenings only. | ❌ Store action only |
+| Compliance tab filtered to overdue | `ComplianceDashboard` has no filter controls of any kind.                                                                                                                      | ❌ Not built         |
 
 ## Grants & Fundraising — Pledges and Fundraising Events (2026-08-08)
 
@@ -426,13 +426,13 @@ placeholders picture screens the frontend does not render; their placeholders
 are left open. Four defects found alongside them were fixed — see the commit
 that added the purchase request, expense report and check request shots.
 
-| Guide section                | What exists                                                                                                                                 | State                |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Create Budget form           | `financeStore.createBudget` over a working API, **no component calls it**. `BudgetsPage` is read-only — it has no create control at all.     | ❌ Store action only |
-| Add Approval Step form       | `ApprovalChainsSettingsPage` renders a chain's steps and offers no way to add, edit or remove one.                                            | ❌ Not built         |
-| Create Dues Schedule form    | `financeStore.createDuesSchedule`, **no component calls it**.                                                                                 | ❌ Store action only |
-| QuickBooks export mapping    | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.                                  | ❌ API + types only  |
-| Export logs                  | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                                                      | ❌ API + types only  |
+| Guide section             | What exists                                                                                                                              | State                |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Create Budget form        | `financeStore.createBudget` over a working API, **no component calls it**. `BudgetsPage` is read-only — it has no create control at all. | ❌ Store action only |
+| Add Approval Step form    | `ApprovalChainsSettingsPage` renders a chain's steps and offers no way to add, edit or remove one.                                       | ❌ Not built         |
+| Create Dues Schedule form | `financeStore.createDuesSchedule`, **no component calls it**.                                                                            | ❌ Store action only |
+| QuickBooks export mapping | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.                             | ❌ API + types only  |
+| Export logs               | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                                                 | ❌ API + types only  |
 
 **Budget detail's transaction history is a stub, not an empty state.**
 `BudgetDetailPage` renders `<EmptyState title="No transactions yet">`
@@ -496,10 +496,10 @@ main rather than against your merge-base.
 Selecting applicants in the pipeline **table** view renders two selection bars
 stacked on top of each other, both reading "N selected":
 
-| Bar | Rendered by | Actions |
-| --- | --- | --- |
+| Bar   | Rendered by                          | Actions                               |
+| ----- | ------------------------------------ | ------------------------------------- |
 | upper | `ProspectiveMembersPage` (line ~646) | Print Badges, Advance All, Reject All |
-| lower | `PipelineTable` (line ~188) | Advance, Hold, Reject |
+| lower | `PipelineTable` (line ~188)          | Advance, Hold, Reject                 |
 
 `PipelineTable` supports both controlled and uncontrolled selection —
 `selected = externalSelected ?? internalSelected` — but it renders its own bar
@@ -552,7 +552,71 @@ captured instead against the guide-03 placeholder that actually describes it.
 Most of the rest of guide 16 needs a live third-party account (a Salesforce
 sync status, a connected Cal.com bookings panel, a warning state carrying a
 real provider error) and is not capturable from a demo database at all. The
-connect *dialogs* are ordinary forms and have been captured.
+connect _dialogs_ are ordinary forms and have been captured.
+
+## Training — The Competency Heat-Map Nobody Built (2026-08-09)
+
+`docs/training/02-training.md` described **Training Admin > Advanced >
+Competency** as "a department-wide readiness heat-map": members down the rows,
+competency areas across the columns, colour-coded cells, and a filter bar for
+station, rank or category. It even gave the colour key — dark green for expert
+through red for a gap.
+
+`CompetencySection` in `frontend/src/pages/TrainingEnhancementsTab.tsx` renders
+a card list of matrix _definitions_: one card per position, showing the name,
+the position, and a count of skill requirements. No members, no cells, no
+filter bar. The legend is the Dreyfus scale (novice → expert), which is a
+different set of five labels from the ones the guide listed.
+
+The per-member data does exist — `GET /training/competency/me` and
+`/training/competency/members/{id}` both return a member's level per skill,
+with score history and a next-evaluation date — so the heat-map is a screen
+away, not a schema away. It simply has no screen. The placeholder is left open
+and the prose now describes the definitions list that shipped.
+
+## Training — Two Advanced Tabs Are Read-Only (2026-08-09)
+
+The guide told officers to click **Submit Evaluation** on the Effectiveness tab.
+There is no such button: `EffectivenessSection` renders the four Kirkpatrick
+summary cards and a recent-evaluations table, and nothing else. Evaluations
+reach the system only through `POST /training/effectiveness/evaluations`.
+
+Same shape, smaller gap, on Instructors: the qualification a record is tied to
+_is_ stored (`course_id`), and the response now carries `course_name`, but the
+roster table has no column for it. Its **Status** column reports `verified`,
+not expiry, so a lapsed qualification reads "Pending" rather than "Expired".
+
+Both are documented in place rather than left to surprise someone.
+
+## Training — ISO Readiness Scored Every Department at Zero (2026-08-09)
+
+Fixed 2026-08-09; recorded because the failure was invisible rather than loud.
+
+`ISO_CATEGORIES` in `compliance_officer_service.py` matched a training record
+to an ISO/FSRS category by testing `record.training_type` against lists like
+`["fire_training", "structural_fire", "live_fire", …]`. None of those strings
+are members of the `TrainingType` enum, which has exactly six values —
+`certification`, `continuing_education`, `skills_practice`, `orientation`,
+`refresher`, `specialty`. The test could never be true, for any record, in any
+organization. Every category reported 0 hours, 0% compliance, and the overall
+readiness gauge read 0% with an FSRS estimate of 0 of 9 points.
+
+Nothing raised: the endpoint returned 200 with a well-formed, entirely zero
+payload, which is indistinguishable from a department that has genuinely
+recorded no training.
+
+Records are now matched on the training **category** — where departments
+actually record fire vs EMS vs hazmat — falling back to the categories on the
+record's course, since a record created from a course usually leaves
+`category_id` empty. The old `training_type` lists are kept as a second path
+for records imported from an external provider's vocabulary.
+
+Two smaller contract bugs went with it: the readiness payload never sent
+`total_department_hours`, which the card prints, so every card read "Dept
+Total: hrs" with the number missing; and the annual report's
+`record_completeness` block omitted `field_details` and `nfpa_1401_compliant`,
+which the dashboard reads without guarding — `field_details.map` threw and took
+the whole Annual Report tab into the ErrorBoundary.
 
 ## Skills Testing — Offline Support (2026-08-07)
 

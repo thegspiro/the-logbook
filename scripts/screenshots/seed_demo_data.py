@@ -1049,6 +1049,11 @@ class Seeder:
             ("Technical Rescue", "RESCUE", "#EA580C"),
             ("Hazardous Materials", "HAZMAT", "#CA8A04"),
             ("Officer Development", "OFFICER", "#7C3AED"),
+            # Its own category rather than a fold into Fire Suppression: the
+            # ISO/FSRS assessment scores driver/operator hours against NFPA
+            # 1002 separately, and a department that files pump training as
+            # fire training reads as having done none of it.
+            ("Driver/Operator", "DRIVER", "#0891B2"),
         ]:
             if name in existing:
                 continue
@@ -1070,7 +1075,7 @@ class Seeder:
         for name, code, training_type, hours, category, expires in [
             ("Firefighter I", "FF1", "certification", 160, "Fire Suppression", 60),
             ("Firefighter II", "FF2", "certification", 80, "Fire Suppression", 60),
-            ("Pump Operations", "PUMP", "skills_practice", 24, "Fire Suppression", 24),
+            ("Pump Operations", "PUMP", "skills_practice", 24, "Driver/Operator", 24),
             (
                 "Aerial Operations",
                 "AERIAL",
@@ -2400,6 +2405,330 @@ class Seeder:
                     {"program_id": program_id, "user_id": user_id},
                 )
         return programs
+
+    # -- advanced training (Training Admin > Advanced / Compliance) ----
+
+    def seed_training_enhancements(
+        self, members: list[dict], courses: list[dict]
+    ) -> None:
+        """Populate the Advanced and Compliance tabs of the training hub.
+
+        Every one of these tables ships empty, so the tabs render their
+        "nothing configured yet" cards. The guides describe populated
+        screens — a pathway with its renewal tasks, an instructor roster
+        with expiry states, a Kirkpatrick score breakdown — none of which
+        an empty state can stand in for.
+        """
+        by_name = {course.get("name"): course for course in courses}
+
+        def course_id(name: str) -> str | None:
+            course = by_name.get(name)
+            return course.get("id") if course else None
+
+        self._seed_recertification_pathways()
+        self._seed_competency_matrices()
+        self._seed_instructor_qualifications(members, course_id)
+        self._seed_effectiveness_evaluations(members, course_id)
+        self._seed_multi_agency_exercises()
+        self._seed_compliance_attestations()
+
+    def _seed_recertification_pathways(self) -> None:
+        existing = {
+            p.get("name")
+            for p in items(self.api.get("/training/recertification/pathways"))
+        }
+        blueprint = [
+            {
+                "name": "EMT-Basic Recertification",
+                "description": (
+                    "Virginia OEMS two-year cycle. Category hours are tracked "
+                    "separately so a member cannot satisfy the whole total with "
+                    "one topic."
+                ),
+                "renewal_type": "hours",
+                "required_hours": 40,
+                "renewal_window_days": 120,
+                "grace_period_days": 30,
+                "new_expiration_months": 24,
+            },
+            {
+                "name": "Firefighter I Skills Refresh",
+                "description": (
+                    "Annual refresh of the FF-I skill set. Requires the "
+                    "practical evaluation in addition to classroom hours."
+                ),
+                "renewal_type": "combination",
+                "required_hours": 16,
+                "requires_assessment": True,
+                "renewal_window_days": 90,
+                "grace_period_days": 14,
+                "new_expiration_months": 12,
+            },
+            {
+                "name": "Driver/Operator (Pumper) Recertification",
+                "description": (
+                    "Three-year pump operator cycle. No grace period — an "
+                    "expired D/O comes off the driver list the same day."
+                ),
+                "renewal_type": "courses",
+                "required_courses": ["Pump Operations"],
+                "renewal_window_days": 60,
+                "grace_period_days": 0,
+                "new_expiration_months": 36,
+            },
+        ]
+        for pathway in blueprint:
+            if pathway["name"] in existing:
+                continue
+            self.api.post("/training/recertification/pathways", pathway)
+
+    def _seed_competency_matrices(self) -> None:
+        existing = {
+            m.get("name") for m in items(self.api.get("/training/competency/matrices"))
+        }
+        blueprint = [
+            {
+                "name": "Interior Firefighter Readiness",
+                "position": "Firefighter",
+                "description": (
+                    "Core competencies expected of any member cleared to work "
+                    "inside a structure."
+                ),
+                "skill_requirements": [
+                    {
+                        "name": "SCBA donning and emergency procedures",
+                        "level": "expert",
+                    },
+                    {"name": "Hoseline advancement", "level": "proficient"},
+                    {"name": "Forcible entry", "level": "competent"},
+                    {"name": "Search and rescue", "level": "proficient"},
+                    {"name": "Ladder operations", "level": "competent"},
+                ],
+            },
+            {
+                "name": "Driver/Operator — Engine",
+                "position": "Driver/Operator",
+                "description": (
+                    "Competencies required before a member is cleared to pump "
+                    "at a working incident."
+                ),
+                "skill_requirements": [
+                    {"name": "Pump panel operation", "level": "expert"},
+                    {"name": "Hydrant connection and supply", "level": "proficient"},
+                    {"name": "Drafting", "level": "competent"},
+                    {"name": "Apparatus positioning", "level": "proficient"},
+                ],
+            },
+            {
+                "name": "Company Officer",
+                "position": "Officer",
+                "description": (
+                    "Command and supervision competencies reviewed at each "
+                    "officer evaluation."
+                ),
+                "skill_requirements": [
+                    {"name": "Initial size-up and report", "level": "expert"},
+                    {"name": "Incident command transfer", "level": "proficient"},
+                    {"name": "Accountability", "level": "expert"},
+                    {"name": "Post-incident review", "level": "competent"},
+                ],
+            },
+        ]
+        for matrix in blueprint:
+            if matrix["name"] in existing:
+                continue
+            self.api.post("/training/competency/matrices", matrix)
+
+    def _seed_instructor_qualifications(self, members: list[dict], course_id) -> None:
+        existing = {
+            (q.get("user_id"), q.get("qualification_type"), q.get("course_id"))
+            for q in items(self.api.get("/training/instructors/qualifications"))
+        }
+        # A mix of expiry states so the roster shows a current, a
+        # nearing-expiry and an already-expired badge rather than one colour.
+        blueprint = [
+            ("lead_instructor", "Firefighter I", "Fire Instructor III", 365 * 2),
+            ("instructor", "Pump Operations", "Fire Instructor II", 45),
+            ("instructor", "Hazmat Awareness", "Fire Instructor I", 365),
+            ("evaluator", "EMT-Basic Refresher", "EMS Evaluator", -30),
+            ("mentor", "New Member Orientation", None, 365 * 3),
+        ]
+        candidates = [m for m in members if pick(m, "id")]
+        for index, (kind, course, level, expires_in) in enumerate(blueprint):
+            if index >= len(candidates):
+                break
+            payload = {
+                "user_id": pick(candidates[index], "id"),
+                "qualification_type": kind,
+                "issuing_agency": "Virginia Department of Fire Programs",
+                "certification_number": f"VA-INST-{40800 + index * 17}",
+                "issued_date": str(TODAY - timedelta(days=900)),
+                "expiration_date": str(TODAY + timedelta(days=expires_in)),
+            }
+            cid = course_id(course)
+            if cid:
+                payload["course_id"] = cid
+            if level:
+                payload["certification_level"] = level
+            if (payload["user_id"], kind, cid) in existing:
+                continue
+            self.api.post("/training/instructors/qualifications", payload)
+
+    def _seed_effectiveness_evaluations(self, members: list[dict], course_id) -> None:
+        existing = {
+            (e.get("course_id"), e.get("evaluation_level"))
+            for e in items(self.api.get("/training/effectiveness/evaluations"))
+        }
+        # One evaluation at each Kirkpatrick level, so the summary has a bar
+        # for every level instead of a single populated column.
+        blueprint = [
+            ("Firefighter I", "reaction", {"overall_rating": 4.6}),
+            (
+                "Firefighter I",
+                "learning",
+                {"pre_assessment_score": 58, "post_assessment_score": 92},
+            ),
+            ("Pump Operations", "behavior", {"behavior_rating": 4.2}),
+            (
+                "Pump Operations",
+                "results",
+                {
+                    "results_notes": (
+                        "Average time to water dropped from 3:10 to 2:24 across "
+                        "the quarter following the drill series."
+                    )
+                },
+            ),
+            ("Hazmat Awareness", "reaction", {"overall_rating": 3.8}),
+            (
+                "EMT-Basic Refresher",
+                "learning",
+                {"pre_assessment_score": 71, "post_assessment_score": 88},
+            ),
+        ]
+        candidates = [m for m in members if pick(m, "id")]
+        if not candidates:
+            return
+        for index, (course, level, extra) in enumerate(blueprint):
+            cid = course_id(course)
+            if not cid or (cid, level) in existing:
+                continue
+            self.api.post(
+                "/training/effectiveness/evaluations",
+                {
+                    "user_id": pick(candidates[index % len(candidates)], "id"),
+                    "course_id": cid,
+                    "evaluation_level": level,
+                    **extra,
+                },
+            )
+
+    def _seed_multi_agency_exercises(self) -> None:
+        existing = {
+            e.get("exercise_name")
+            for e in items(self.api.get("/training/multi-agency"))
+        }
+        blueprint = [
+            {
+                "exercise_name": "Regional High-Rise Standpipe Drill",
+                "exercise_type": "mutual_aid_drill",
+                "description": (
+                    "Joint standpipe and stairwell operations in the Broad "
+                    "Street tower, run with the two neighbouring departments "
+                    "that would be dispatched on the box."
+                ),
+                "participating_organizations": [
+                    {
+                        "name": "Falls Church Volunteer Fire Department",
+                        "role": "host",
+                        "participant_count": 14,
+                    },
+                    {
+                        "name": "Arlington County Fire Department",
+                        "role": "participant",
+                        "participant_count": 9,
+                    },
+                    {
+                        "name": "City of Fairfax Fire Department",
+                        "role": "participant",
+                        "participant_count": 6,
+                    },
+                ],
+                "lead_agency": "Falls Church Volunteer Fire Department",
+                "total_participants": 29,
+                "nims_compliant": True,
+                "exercise_date": str(TODAY - timedelta(days=24)),
+            },
+            {
+                "exercise_name": "Northern Virginia Mass Casualty Tabletop",
+                "exercise_type": "tabletop",
+                "description": (
+                    "Tabletop walkthrough of a multi-patient incident on the "
+                    "I-66 corridor, focused on triage and transport control."
+                ),
+                "participating_organizations": [
+                    {
+                        "name": "Fairfax County Fire and Rescue",
+                        "role": "host",
+                        "participant_count": 12,
+                    },
+                    {
+                        "name": "Falls Church Volunteer Fire Department",
+                        "role": "participant",
+                        "participant_count": 8,
+                    },
+                    {
+                        "name": "Virginia Department of Emergency Management",
+                        "role": "observer",
+                        "participant_count": 2,
+                    },
+                ],
+                "lead_agency": "Fairfax County Fire and Rescue",
+                "total_participants": 22,
+                "nims_compliant": True,
+                "exercise_date": str(TODAY + timedelta(days=18)),
+            },
+        ]
+        for exercise in blueprint:
+            if exercise["exercise_name"] in existing:
+                continue
+            self.api.post("/training/multi-agency", exercise)
+
+    def _seed_compliance_attestations(self) -> None:
+        existing = {
+            (a.get("period_year"), a.get("period_quarter"))
+            for a in items(self.api.get("/compliance/attestations"))
+        }
+        for quarter, percentage, note in [
+            (
+                1,
+                84.0,
+                "Two members short on drill hours; both scheduled for makeup.",
+            ),
+            (
+                2,
+                91.5,
+                "All operational personnel current. SCBA fit tests re-run in May.",
+            ),
+        ]:
+            if (TODAY.year, quarter) in existing:
+                continue
+            self.api.post(
+                "/compliance/attestations",
+                {
+                    "period_type": "quarterly",
+                    "period_year": TODAY.year,
+                    "period_quarter": quarter,
+                    "compliance_percentage": percentage,
+                    "notes": note,
+                    "areas_reviewed": [
+                        "Training hours",
+                        "Certification currency",
+                        "SCBA fit testing",
+                        "Driver/operator qualifications",
+                    ],
+                },
+            )
 
     # -- skills testing ----------------------------------------------
 
@@ -3860,6 +4189,12 @@ class Seeder:
             lambda: self.seed_training_records(members, training.get("courses", [])),
         )
         self.step("training programs", lambda: self.seed_training_programs(members))
+        self.step(
+            "training enhancements",
+            lambda: self.seed_training_enhancements(
+                members, training.get("courses", [])
+            ),
+        )
         templates = self.step("skills testing", self.seed_skills_testing) or []
         self.step("skills tests", lambda: self.seed_skills_tests(templates, members))
         inventory = self.step("inventory", lambda: self.seed_inventory(stations)) or {}

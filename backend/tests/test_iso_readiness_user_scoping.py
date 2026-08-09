@@ -24,13 +24,26 @@ class TestISOReadinessUserIdNormalization:
         member_id = uuid4()  # str(m.id) will key member_hours
         member = SimpleNamespace(id=member_id)
         # A record whose user_id is a UUID object (not the str it is in prod).
+        # Unclassified on purpose: no category and no course, so the legacy
+        # training_type path is the only thing that can match it.
         record = SimpleNamespace(
             user_id=member_id,
             training_type="driver_training",  # -> Driver/Operator (needs 12h)
             hours_completed=12,
+            category_id=None,
+            course_id=None,
         )
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_scalars([member]), _scalars([record])])
+        # Query order: members, records, training categories, courses. The last
+        # two feed the category-name match that carries most real records.
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars([member]),
+                _scalars([record]),
+                _scalars([]),
+                _scalars([]),
+            ]
+        )
         result = await ISOReadinessService(db).get_iso_readiness("org-1", 2026)
 
         driver_cat = next(

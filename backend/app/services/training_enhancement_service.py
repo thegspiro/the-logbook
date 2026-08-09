@@ -22,6 +22,7 @@ from app.models.training import (
     RenewalTask,
     RenewalTaskStatus,
     TrainingCategory,
+    TrainingCourse,
     TrainingEffectivenessEvaluation,
     TrainingRecord,
     TrainingRequirement,
@@ -84,6 +85,12 @@ class RecertificationService:
             if value is not None:
                 setattr(pathway, key, value)
         await self.db.flush()
+        # `updated_at` is server-side (onupdate=func.now()), so the flush leaves
+        # it expired rather than fetching the new value back. The endpoint
+        # serialises this object after committing, which is outside the async
+        # greenlet — the lazy reload raises MissingGreenlet and the PATCH 500s.
+        # Reload here, while there is still a transaction to read in.
+        await self.db.refresh(pathway)
         return pathway
 
     async def get_user_renewal_tasks(
@@ -233,6 +240,9 @@ class CompetencyService:
             if value is not None:
                 setattr(matrix, key, value)
         await self.db.flush()
+        # See update_pathway: server-side `updated_at` stays expired after a
+        # flush and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(matrix)
         return matrix
 
     async def get_member_competencies(self, user_id: str, organization_id: str) -> list:
@@ -259,9 +269,21 @@ class InstructorQualificationService:
         course_id: Optional[str] = None,
         active_only: bool = True,
     ) -> list:
-        """Get instructor qualifications with optional filters"""
-        query = select(InstructorQualification).where(
-            InstructorQualification.organization_id == organization_id
+        """Get instructor qualifications with optional filters.
+
+        The model carries no ORM relationships, so `user_name` and
+        `course_name` on the response schema resolve to None and the roster
+        renders raw UUIDs where the instructor's name belongs. Join both in
+        and set them on the way out.
+        """
+        query = (
+            select(InstructorQualification, User, TrainingCourse)
+            .outerjoin(User, User.id == InstructorQualification.user_id)
+            .outerjoin(
+                TrainingCourse,
+                TrainingCourse.id == InstructorQualification.course_id,
+            )
+            .where(InstructorQualification.organization_id == organization_id)
         )
         if active_only:
             query = query.where(InstructorQualification.active == True)  # noqa: E712
@@ -272,7 +294,12 @@ class InstructorQualificationService:
         result = await self.db.execute(
             query.order_by(InstructorQualification.created_at.desc())
         )
-        return result.scalars().all()
+        qualifications = []
+        for qual, user, course in result.all():
+            qual.user_name = user.full_name if user else None
+            qual.course_name = course.name if course else None
+            qualifications.append(qual)
+        return qualifications
 
     async def create_qualification(
         self, organization_id: str, data: dict, created_by: str
@@ -303,6 +330,9 @@ class InstructorQualificationService:
             if value is not None:
                 setattr(qual, key, value)
         await self.db.flush()
+        # See update_pathway: server-side `updated_at` stays expired after a
+        # flush and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(qual)
         return qual
 
     async def validate_instructor_for_session(
@@ -513,6 +543,9 @@ class MultiAgencyService:
             if value is not None:
                 setattr(exercise, key, value)
         await self.db.flush()
+        # See update_pathway: server-side `updated_at` stays expired after a
+        # flush and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(exercise)
         return exercise
 
 

@@ -2708,4 +2708,108 @@ export const SHOTS = [
     },
     fullPage: false,
   },
+  {
+    id: "02-66-compliance-matrix",
+    doc: "02-training.md",
+    line: 591,
+    anchor:
+      "Screenshot of the Compliance Matrix showing a grid with member names on rows",
+    alt: "Compliance matrix grid of members against requirements",
+    route: "/training/admin?page=dashboard&tab=compliance",
+    fullPage: true,
+  },
+  {
+    id: "02-67-competency-matrix",
+    doc: "02-training.md",
+    line: 1156,
+    anchor:
+      "Screenshot of the Competency Matrix showing a heat-map grid with member names",
+    alt: "Competency matrices listing the department's readiness definitions",
+    route: "/training/admin?page=enhancements&tab=competency",
+    fullPage: true,
+    holdBack:
+      "the tab lists matrix definitions per position, not the member-by-competency " +
+      "heat-map with a station/rank filter bar the placeholder describes — and its " +
+      "legend is the Dreyfus scale, not the green/yellow/red mapping in the prose",
+  },
+  {
+    id: "02-68-recertification-pathways",
+    doc: "02-training.md",
+    line: 1182,
+    anchor:
+      "Screenshot of the Recertification Pathways configuration page showing a list",
+    alt: "Recertification pathways with renewal type, window and grace period",
+    route: "/training/admin?page=enhancements&tab=recertification",
+    fullPage: true,
+  },
+  {
+    id: "02-69-instructor-qualifications",
+    doc: "02-training.md",
+    line: 1224,
+    anchor:
+      "Screenshot of the Instructor Qualifications page showing a table of instructors",
+    alt: "Instructor qualification roster with type, agency and expiry",
+    route: "/training/admin?page=enhancements&tab=instructors",
+    fullPage: true,
+  },
+  {
+    id: "02-70-effectiveness-evaluations",
+    doc: "02-training.md",
+    line: 1258,
+    anchor:
+      "Screenshot of the Effectiveness Evaluation form showing fields for training session",
+    alt: "Training effectiveness evaluations across the four Kirkpatrick levels",
+    route: "/training/admin?page=enhancements&tab=effectiveness",
+    fullPage: true,
+  },
+  {
+    id: "02-71-multi-agency-training",
+    doc: "02-training.md",
+    line: 1288,
+    anchor:
+      "Screenshot of the Multi-Agency Training page showing a list of joint training",
+    alt: "Multi-agency exercises with participating departments and headcounts",
+    route: "/training/admin?page=enhancements&tab=multi-agency",
+    fullPage: true,
+  },
+  {
+    id: "02-72-iso-readiness",
+    doc: "02-training.md",
+    line: 1346,
+    anchor:
+      "Screenshot of the ISO Readiness dashboard showing an overall readiness percentage",
+    alt: "ISO readiness dashboard broken down by NFPA training category",
+    route: "/training/admin?page=compliance&tab=iso-readiness",
+    fullPage: true,
+  },
+  {
+    id: "02-73-compliance-attestations",
+    doc: "02-training.md",
+    line: 1353,
+    anchor:
+      "Screenshot of the Compliance Attestations page showing a table of submitted",
+    alt: "Compliance attestations listing period, percentage and attesting officer",
+    route: "/training/admin?page=compliance&tab=attestations",
+    fullPage: true,
+  },
+  {
+    id: "02-74-annual-compliance-report",
+    doc: "02-training.md",
+    line: 1368,
+    anchor:
+      "Screenshot of the Annual Compliance Report page showing summary statistics",
+    alt: "Annual compliance report with department-wide summary statistics",
+    route: "/training/admin?page=compliance&tab=annual-report",
+    fullPage: true,
+  },
+  {
+    id: "02-75-compliance-forecast",
+    doc: "02-training.md",
+    line: 1380,
+    anchor:
+      "Screenshot of the Compliance Forecast view showing a line chart projecting",
+    alt: "Compliance forecast projecting each member's compliance over 90 days",
+    route: "/training/admin?page=compliance&tab=forecast",
+    fullPage: true,
+  },
 ];
