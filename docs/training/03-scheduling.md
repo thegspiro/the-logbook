@@ -62,8 +62,7 @@ Each shift is displayed as a colored block on the calendar showing:
 
 Click on any shift to open the **Shift Detail Panel** with full information, attendance records, and actions.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the month calendar view showing several shifts across different days, with color coding for different shift types (e.g., Day shift in blue, Night shift in purple). Include the week/month toggle buttons]_
+![Month calendar of shifts with the week and month view toggle](./images/03-44-month-calendar.png)
 
 ![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
 
@@ -196,8 +195,9 @@ Officers will review the request and approve or deny it.
 - **Denied** - Request denied (reason provided)
 - **Cancelled** - Withdrawn by the member
 
-> **Screenshot placeholder:**
-> _[Screenshot of the time-off request form showing start date, end date, reason field, and submit button. Below, show a list of past requests with their statuses]_
+![Time-off request modal with its date range and reason](./images/03-43-time-off-request-form.png)
+
+Open it from **Request Time Off** on the My Shifts tab. Submitted requests, and their statuses, are listed under **Requests > Time Off** rather than below the form.
 
 ---
 

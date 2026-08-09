@@ -840,10 +840,11 @@ class Seeder:
         shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
         # Shifts are keyed by (date, apparatus) so a re-run recognises its own
         # rows; the API has no natural unique name to match on.
-        existing_keys = {
-            (s.get("shift_date"), s.get("apparatus_id") or s.get("apparatusId"))
+        existing_by_key = {
+            (s.get("shift_date"), s.get("apparatus_id") or s.get("apparatusId")): s
             for s in shifts
         }
+        existing_keys = set(existing_by_key)
         station_id = pick(stations[0], "id") if stations else None
         member_ids = [pick(m, "id") for m in members if pick(m, "id")]
         admin_id = next(
@@ -889,11 +890,20 @@ class Seeder:
             pool_cursor = 0
             for index, unit in enumerate(fleet[:3]):
                 apparatus_id = pick(unit, "id")
-                if (shift_date, apparatus_id) in existing_keys:
-                    continue
                 name, start, end, hours, color, staffing = self.SHIFT_TEMPLATES[
                     index % len(self.SHIFT_TEMPLATES)
                 ]
+                if (shift_date, apparatus_id) in existing_keys:
+                    # A shift that should read fully staffed may predate that
+                    # rule — top it up rather than leaving the calendar in the
+                    # uniform amber a short-staffed run produces.
+                    if index == 0 and offset % 2 == 0:
+                        pool_cursor += self._top_up_crew(
+                            existing_by_key[(shift_date, apparatus_id)],
+                            staffing,
+                            day_pool[pool_cursor:],
+                        )
+                    continue
                 # shift_date is a date, but start_time/end_time are full
                 # timestamps — a bare "07:00" is rejected. A shift whose end
                 # time is earlier than its start crosses midnight, so its end
@@ -934,10 +944,16 @@ class Seeder:
                 shift = self.api.post("/scheduling/shifts", payload)
                 shifts.append(shift)
 
-                # Staff each shift short of its minimum so the Open Shifts tab
-                # has vacancies to show alongside the filled assignments.
+                # Most shifts are staffed one short so the Open Shifts tab has
+                # vacancies to show. Every other day the first apparatus is
+                # crewed to its minimum instead: the calendar tints a shift by
+                # how well it is staffed, and a schedule that is uniformly short
+                # renders as a wall of amber with no green to compare it to.
+                full = index == 0 and offset % 2 == 0
                 shift_id = pick(shift, "id")
-                crew = day_pool[pool_cursor : pool_cursor + staffing - 1]
+                crew = day_pool[
+                    pool_cursor : pool_cursor + staffing - (0 if full else 1)
+                ]
                 pool_cursor += len(crew)
                 for slot, user_id in enumerate(crew):
                     try:
@@ -982,6 +998,39 @@ class Seeder:
             "apparatus": fleet,
             "shifts": shifts,
         }
+
+    def _top_up_crew(self, shift: dict, target: int, pool: list[str]) -> int:
+        """Add crew to an already-seeded shift until it meets `target`.
+
+        Returns how many members were consumed from `pool`, so the caller can
+        advance its cursor and avoid double-booking the same person elsewhere
+        in the day.
+        """
+        shift_id = pick(shift, "id")
+        if not shift_id:
+            return 0
+        assigned = items(
+            self.api.get(f"/scheduling/shifts/{shift_id}/assignments"), "assignments"
+        )
+        taken = {pick(a, "user_id", "userId") for a in assigned}
+        used = 0
+        for user_id in pool:
+            if len(assigned) + used >= target:
+                break
+            if user_id in taken:
+                continue
+            try:
+                self.api.post(
+                    f"/scheduling/shifts/{shift_id}/assignments",
+                    {"user_id": user_id, "position": "firefighter"},
+                )
+            except ApiError as exc:
+                # Same overlapping-shift refusal the create path tolerates: the
+                # member is already on duty, so the shift stays a seat short.
+                if exc.code != 400 or not SHIFT_CONFLICT.search(exc.detail):
+                    raise
+            used += 1
+        return used
 
     # -- scheduling: logged calls ------------------------------------
 
