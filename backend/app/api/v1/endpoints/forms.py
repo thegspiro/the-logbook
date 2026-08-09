@@ -92,10 +92,14 @@ async def list_forms(
     )
 
     # Enrich with counts
+    submission_counts = await service.get_submission_counts(
+        [form.id for form in forms], current_user.organization_id
+    )
     form_responses = []
     for form in forms:
         resp = FormResponse.model_validate(form)
         resp.field_count = len(form.fields) if form.fields else 0
+        resp.submission_count = submission_counts.get(str(form.id), 0)
         form_responses.append(resp)
 
     return FormsListResponse(
@@ -642,8 +646,20 @@ async def list_submissions(
         limit=pagination.limit,
     )
 
+    # `submitter_name` is only stored for public submissions, where the visitor
+    # types it. A signed-in member's name lives on the linked user, and without
+    # this the submissions list falls back to rendering the raw submitter UUID.
+    enriched = []
+    for submission in submissions:
+        resp = FormSubmissionResponse.model_validate(submission)
+        if not resp.submitter_name and submission.submitter:
+            resp.submitter_name = (
+                submission.submitter.full_name or submission.submitter.username
+            )
+        enriched.append(resp)
+
     return SubmissionsListResponse(
-        submissions=submissions,
+        submissions=enriched,
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,

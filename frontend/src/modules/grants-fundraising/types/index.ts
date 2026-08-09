@@ -309,6 +309,8 @@ export interface GrantNote {
   content: string;
   metadata: Record<string, unknown> | null;
   createdBy: string | null;
+  /** Author's display name, resolved server-side; `createdBy` is only an id. */
+  createdByName: string | null;
   createdAt: string;
 }
 

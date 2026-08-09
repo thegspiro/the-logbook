@@ -956,8 +956,7 @@ The Medical Screening module tracks health screenings, physicals, drug tests, an
    - **Completed date** and **expiration date**
    - **Result summary** and detailed result data
 
-> **Screenshot needed:**
-> _[Screenshot of the ScreeningRecordForm showing fields for member selection, requirement dropdown, scheduled date, provider name, status dropdown, and result summary text area]_
+![Screening record form with member, requirement and result fields](./images/08-22-screening-record-form.png)
 
 ### Compliance Dashboard
 
@@ -1201,8 +1200,7 @@ The bell icon in the top navigation bar and the Notifications link in the side n
 > **Screenshot needed:**
 > _[Screenshot of the top navigation bar showing the bell icon with a red badge showing "5" (unread count), next to the user avatar and settings gear]_
 
-> **Screenshot needed:**
-> _[Screenshot of the side navigation panel showing the "Notifications" link with a small red badge showing "3" next to it]_
+![Sidebar navigation with the unread notification badge](./images/08-31-sidebar-notification-badge.png)
 
 ### Batch Mark All as Read
 

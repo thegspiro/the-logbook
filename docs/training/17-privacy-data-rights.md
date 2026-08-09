@@ -32,7 +32,7 @@ departures, and answer records requests.
 Some things the department may want to do with your information are optional —
 they are not needed to run the department, so you decide.
 
-Go to **Settings → Security → Privacy Choices**.
+Go to **My Account → Security → Privacy Choices**.
 
 | Choice | What it means if you turn it on |
 |--------|--------------------------------|
@@ -69,13 +69,12 @@ Three things worth knowing:
 
 You can download everything the system stores about you at any time.
 
-1. Go to **Settings → Security**.
+1. Go to **My Account → Security**.
 2. Scroll to **Your Data**.
 3. Click **Download my data**.
 4. A JSON file (`logbook-personal-data-export.json`) downloads to your device.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the "Your Data" section showing the "Download my data" button]_
+![The Your Data section of account security with its export button](./images/17-02-download-my-data.png)
 
 ### What is in the export
 
@@ -275,7 +274,7 @@ When a member (or a former member, or an attorney) asks what the department
 holds about someone:
 
 1. **If the member can sign in**, the fastest answer is to have them use
-   **Settings → Security → Download my data** themselves. It is complete, it
+   **My Account → Security → Download my data** themselves. It is complete, it
    is instant, and it does not require you to assemble anything.
 2. **If they cannot sign in**, reactivate the account temporarily or export on
    their behalf, then follow your department's identity-verification

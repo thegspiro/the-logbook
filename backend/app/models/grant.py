@@ -448,7 +448,13 @@ class GrantApplication(Base):
         cascade="all, delete-orphan",
     )
     grant_notes = relationship(
-        "GrantNote", back_populates="application", cascade="all, delete-orphan"
+        "GrantNote",
+        back_populates="application",
+        cascade="all, delete-orphan",
+        # Newest first. The activity log renders this collection directly, and
+        # an unordered relationship comes back in whatever order the rows land
+        # in, which reads as a shuffled history rather than a timeline.
+        order_by="desc(GrantNote.created_at)",
     )
     linked_campaign = relationship(
         "FundraisingCampaign", foreign_keys=[linked_campaign_id]

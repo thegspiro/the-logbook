@@ -284,8 +284,7 @@ The Admin Edit page provides complete control over all member fields:
 - **Role Assignment** - Assign or remove positions/roles and their associated permissions
 - **Emergency Contacts** - Add, edit, or remove emergency contact entries
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Admin Member Edit page showing the form sections: personal info fields at top, department info with rank/station dropdowns, status management section, and role assignment checkboxes]_
+![Admin member edit form with personal, department and access sections](./images/01-07-admin-member-edit.png)
 
 > **Hint:** Rank and station fields use dropdowns populated from the organization's configured values, ensuring consistency across all member records.
 

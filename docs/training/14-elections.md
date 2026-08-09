@@ -112,7 +112,7 @@ After creating an election, add ballot items — the individual questions or pos
    - **Write-in allowed** — Whether voters can write in a name
    - **Approval/Denial** — For membership votes, voters approve or deny each applicant
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ballot item configuration showing a position field ("Fire Chief"), a list of nominated candidates, the write-in toggle, and Add/Remove candidate buttons._
+![Ballot item configuration with its position and candidate settings](./images/14-04-ballot-configuration.png)
 
 > **Hint:** Use **ballot item templates** (`GET /elections/templates/ballot-items`) for common configurations like officer positions or membership approval votes.
 
@@ -149,9 +149,7 @@ Safeguards:
 - Only candidates who **accepted** reach the ballot — `open_election` still
   validates this
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Nominations tab showing the
-> nominate form (position selector, member picker, statement box) and a list
-> of nominations with Accepted / Pending badges and Accept/Decline buttons._
+![Nominations tab with the nominate form and current nominations](./images/14-05-nominations-tab.png)
 
 ---
 
@@ -175,7 +173,7 @@ Safeguards:
 | **Display Order** | Sort order on the ballot |
 | **Accepted** | Whether the candidate has accepted the nomination |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the candidate nomination form showing member dropdown, position selector, statement text area, and acceptance checkbox._
+![Candidate nomination form with member, position and statement fields](./images/14-06-candidate-form.png)
 
 ### Edge Cases
 
@@ -207,7 +205,7 @@ When a member is excluded from voting but should be allowed (e.g., absent member
 4. Enter a reason for the override
 5. The member is now eligible to vote regardless of other restrictions
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Eligibility Roster showing a table of members with columns for name, rank, tier, attendance status, eligibility status (green check or red X), and an "Override" button for ineligible members._
+![Eligibility roster listing members with their eligibility status](./images/14-07-eligibility-roster.png)
 
 ### Edge Cases
 

@@ -17,7 +17,8 @@
 
 import { chromium } from "@playwright/test";
 import { execFile } from "node:child_process";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -99,6 +100,22 @@ const EMPTY_STATE =
  */
 const CRASHED = /Oops! Something went wrong|Show error details/i;
 
+/**
+ * Pages that render an in-page error instead of content — a print view opened
+ * without the record id it expects, a detail page whose id does not resolve.
+ * Like a crash this screenshots as a normal page and reads as a broken feature,
+ * and unlike an empty state it is the shot's own fault: the manifest sent the
+ * page somewhere it cannot render. Failing the shot is what surfaces that.
+ */
+const PAGE_ERROR =
+  /no [a-z ]{2,30} (id )?provided|failed to load|could not be loaded|unable to load|invalid (id|request)/i;
+
+async function detectPageError(page) {
+  const text = await pageText(page);
+  const match = text.match(PAGE_ERROR);
+  return match ? match[0].trim() : null;
+}
+
 async function pageText(page) {
   return page
     .locator("main, body")
@@ -112,8 +129,18 @@ async function detectCrash(page) {
   return CRASHED.test(text);
 }
 
-async function detectEmptyState(page) {
-  const text = await pageText(page);
+async function detectEmptyState(page, selector) {
+  // Scan what the image will actually contain. A clipped shot pictures one
+  // section, and scanning the whole page around it flags copy that is nowhere
+  // in the screenshot — the account security tab says "nothing here is
+  // required for membership", which is prose, not an empty state.
+  const text = selector
+    ? await page
+        .locator(selector)
+        .first()
+        .innerText()
+        .catch(() => "")
+    : await pageText(page);
   const match = text.match(EMPTY_STATE);
   return match ? match[0].trim() : null;
 }
@@ -139,13 +166,50 @@ async function login(page) {
   await settle(page);
 }
 
+/**
+ * Write the report, merging a `--only` run into what is already there.
+ *
+ * The applier reads this file to decide which placeholders to fill, so a
+ * narrow re-capture that replaced it would silently drop every other shot from
+ * the next apply — the images stay on disk and the placeholders stay open,
+ * which looks like the applier failing rather than the report being partial.
+ */
+async function writeReport(results) {
+  const path = resolve(HERE, "capture-report.json");
+  let merged = results;
+  if (only) {
+    let previous = [];
+    try {
+      previous = JSON.parse(await readFile(path, "utf8"));
+    } catch {
+      previous = [];
+    }
+    const fresh = new Set(results.map((r) => r.id));
+    merged = [...previous.filter((r) => !fresh.has(r.id)), ...results];
+  }
+  await writeFile(path, `${JSON.stringify(merged, null, 2)}\n`);
+}
+
+function resolveChromium() {
+  if (process.env.PLAYWRIGHT_CHROMIUM_PATH) {
+    return process.env.PLAYWRIGHT_CHROMIUM_PATH;
+  }
+  const pool = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  if (!pool) return undefined;
+  const symlink = resolve(pool, "chromium");
+  return existsSync(symlink) ? symlink : undefined;
+}
+
 async function main() {
   await mkdir(OUTPUT_DIR, { recursive: true });
 
   // PLAYWRIGHT_CHROMIUM_PATH lets an environment that ships a pre-installed
   // Chromium (whose build number may not match this Playwright release) point
-  // at it directly instead of downloading a second copy.
-  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined;
+  // at it directly instead of downloading a second copy. When the browser pool
+  // in PLAYWRIGHT_BROWSERS_PATH carries a version-agnostic `chromium` symlink,
+  // use it without being asked — bumping @playwright/test otherwise breaks
+  // capture on every such machine until someone sets the variable by hand.
+  const executablePath = resolveChromium();
   const browser = await chromium.launch({
     headless: !headed,
     ...(executablePath ? { executablePath } : {}),
@@ -197,9 +261,13 @@ async function main() {
       await optimize(target);
       const emptyState = shot.allowEmptyState
         ? null
-        : await detectEmptyState(page);
+        : await detectEmptyState(page, shot.selector);
       if (await detectCrash(page)) {
         throw new Error("page hit the ErrorBoundary — the app crashed here");
+      }
+      const pageError = await detectPageError(page);
+      if (pageError) {
+        throw new Error(`page rendered an error: "${pageError}"`);
       }
       results.push({
         id: shot.id,
@@ -210,6 +278,7 @@ async function main() {
         anchor: shot.anchor,
         alt: shot.alt,
         ...(emptyState ? { emptyState } : {}),
+        ...(shot.holdBack ? { holdBack: shot.holdBack } : {}),
       });
       console.log(
         `  ${emptyState ? "~" : "+"} ${shot.id}${emptyState ? ` (empty: "${emptyState}")` : ""}`,
@@ -224,10 +293,7 @@ async function main() {
     }
   }
 
-  await writeFile(
-    resolve(HERE, "capture-report.json"),
-    `${JSON.stringify(results, null, 2)}\n`,
-  );
+  await writeReport(results);
   await browser.close();
 
   const failed = results.filter((r) => r.status === "failed");

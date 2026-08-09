@@ -579,6 +579,9 @@ class GrantNoteResponse(UTCResponseBase):
         default=None, serialization_alias="metadata"
     )
     created_by: Optional[UUID] = None
+    # Resolved by the endpoint. Without it the activity log has only the author
+    # id to show, and renders the raw UUID beside every entry.
+    created_by_name: Optional[str] = None
     created_at: datetime
 
     model_config = _response_config

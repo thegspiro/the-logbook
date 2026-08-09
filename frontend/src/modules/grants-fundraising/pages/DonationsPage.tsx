@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import { DollarSign, Plus, Search, Filter, Receipt, Heart } from 'lucide-react';
+import { DollarSign, Search, Filter, Receipt, Heart } from 'lucide-react';
 import { fundraisingService } from '../services/api';
 import type { Donation } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -65,13 +64,12 @@ const DonationsPage: React.FC = () => {
           <h1 className="text-theme-text-primary text-2xl font-bold">Donations</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Track and manage all donation records</p>
         </div>
-        <Link
-          to="/grants/donations/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-        >
-          <Plus className="h-4 w-4" />
-          Record Donation
-        </Link>
+        {/* "Record Donation" pointed at /grants/donations/new, which has no
+            route: the router's catch-all sends unknown paths to "/", so the
+            primary action on this page silently returned the user to the home
+            dashboard. No component calls `createDonation` — the form was never
+            built. A button that appears to work and does not is worse than an
+            absent one, so it is gone until the form exists. */}
       </div>
 
       {/* Summary Card */}

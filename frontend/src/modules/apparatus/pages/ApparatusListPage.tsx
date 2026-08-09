@@ -398,7 +398,11 @@ export const ApparatusListPage: React.FC = () => {
                           <td className="px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="flex items-center">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600 font-bold text-white">
-                                {apparatus.unitNumber.substring(0, 2)}
+                                {/* Unit numbers are hyphenated ("E-1", "B-5"), so a
+                                    blind two-character prefix renders "E-", "B-" —
+                                    the separator, not the number. Drop the
+                                    punctuation first. */}
+                                {apparatus.unitNumber.replace(/[^A-Za-z0-9]/g, '').substring(0, 2)}
                               </div>
                               <div className="ml-3 min-w-0">
                                 <div className="text-theme-text-primary truncate font-medium">

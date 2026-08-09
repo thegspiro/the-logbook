@@ -33,8 +33,9 @@ python scripts/screenshots/bootstrap_demo.py
 # 2. Populate it — safe to re-run, existing records are skipped
 python scripts/screenshots/seed_demo_data.py
 
-# 3. Capture. PLAYWRIGHT_CHROMIUM_PATH is only needed where a Chromium is
-#    pre-installed at a path Playwright does not look in.
+# 3. Capture — always after step 2, which refreshes the time-sensitive records.
+#    PLAYWRIGHT_CHROMIUM_PATH is only needed where a Chromium is pre-installed
+#    at a path Playwright does not look in.
 node scripts/screenshots/capture.mjs
 node scripts/screenshots/capture.mjs --only 04-      # one guide
 node scripts/screenshots/capture.mjs --headed        # watch it run
@@ -44,6 +45,11 @@ python scripts/screenshots/apply_placeholders.py --dry-run
 python scripts/screenshots/apply_placeholders.py
 python scripts/screenshots/status_report.py
 ```
+
+**Run the seeder before every capture.** Some of what the guides picture is
+time-sensitive — the check-in monitor needs an event that is in progress _right
+now_, and the seeded drill has ended by the next run. Seeding slides it forward;
+capturing without seeding first fails that shot outright.
 
 The seeder is safe to re-run: each step lists what exists and skips it. It gives
 the demo member accounts a password, because several things the guides picture

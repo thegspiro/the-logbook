@@ -322,6 +322,131 @@ there is no screen.
 | **No UI for overdue property returns (members)**            | Open (LOW)                        | Three endpoints, no consumer. The Inventory members page shows an "Overdue Returns" figure, which is a different feature and may be the reason this was assumed to exist.                                                                             |
 | **Screenshot `01-22-member-lifecycle.png` was mislabelled** | ✅ Resolved (2026-08-08)          | Captured at `/members/admin` but applied under a "Member Lifecycle Management page" caption, so a real screenshot of the Members Admin hub read as evidence that the lifecycle page existed. Caption and manifest `alt` corrected; the image is fine. |
 
+## Apparatus & Facilities — Four Guide Sections With No Screen (2026-08-08)
+
+Found while capturing screenshots for `docs/training/06-apparatus-facilities.md`:
+four placeholders in that guide picture screens the frontend does not render.
+Same shape as the Member Lifecycle row above — the API is built, the screen is
+not — so they are recorded rather than papered over with an approximate image.
+Their placeholders are deliberately left open.
+
+| Guide section                     | What the guide pictures                                                                                                   | What exists                                                                                                                                                                                                          | State                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Facility **Utilities** section    | Utility accounts (electric, gas, water) with the latest reading, monthly cost and a usage trend chart                     | Nine `facilitiesService` methods over `/facilities/utility-accounts` and `/utility-readings`, **zero UI consumers**. `FacilityDetailPage` renders seven sections and Utilities is not one of them.                    | ❌ API + service only          |
+| Facility **Capital Projects**     | Project list with name, budget, status badge and timeline bar                                                             | Five `facilitiesService` methods over `/facilities/capital-projects`, **zero UI consumers**.                                                                                                                          | ❌ API + service only          |
+| Apparatus **NFPA Compliance tab** | Applicable standards with per-standard compliance status (green check / red X), last assessment date and next due date    | `ApparatusOverviewTab.tsx:242` renders a single card reading "Tracking Enabled" when the flag is set. There is no standards list, no status, no dates. The flag's only other consumer is a checkbox on the edit form. | ⚠️ Flag only, no tab           |
+| Apparatus **deficiency banner**   | A banner at the top of the detail page with the deficiency date and a link to the failed equipment check                  | A "Deficiency" badge beside the status badge, on both the list row and the detail header. `deficiencySince` is on the TypeScript type and is **never rendered**; there is no banner and no link to the check.         | ⚠️ Badge only, no date or link |
+
+Verified 2026-08-08 by counting non-test consumers of each service method under
+`frontend/src`, and by reading the render bodies rather than trusting the type
+definitions — `deficiencySince` and the utility/capital-project types are all
+declared, which is exactly what makes this class of gap easy to miss.
+
+The guide text has **not** been rewritten here. Two of these are one component
+away from being true, and deciding between "build the screen" and "cut the
+section" is a product call, not a documentation fix.
+
+## Medical Screening — The Add Record Form Attaches to Nobody (2026-08-08)
+
+**A screening record created through the UI is attached to no member and no
+prospect.** `ScreeningRecordForm` builds its create payload from nine fields —
+requirement, type, status, three dates, provider, result, notes — and sets
+neither `user_id` nor `prospect_id`. Both are on the frontend
+`ScreeningRecordCreate` type and both are accepted by
+`POST /medical-screening/records`; the form simply has no control for either,
+so the value can never be supplied. `MedicalScreeningPage` is the only caller,
+and it passes the payload straight through.
+
+This is worse than a missing field. Every compliance view keys off `user_id`:
+`getUserCompliance`, `getProspectCompliance` and the expiring-screenings list
+all resolve records by the member they belong to. A record entered by hand
+therefore counts toward nobody's compliance and shows as "Unknown" wherever
+records are listed — a physical exam that was really performed, recorded in the
+system, and invisible to the report that decides whether the member is cleared
+for duty.
+
+The demo data does not exhibit this because the seeder posts `user_id` to the
+API directly, bypassing the form. That is worth knowing before anyone concludes
+from a screenshot that the linkage works.
+
+`docs/training/13-medical-screening.md` describes the missing controls in two
+places — "the member dropdown" (Add Record, completed physical) and "the
+Prospect field populated with a prospective member name, the Member field
+blank". Both placeholders are left open.
+
+Two further placeholders in that guide picture per-member compliance screens
+that do not exist:
+
+| Guide section                       | What exists                                                                                                                                                        | State                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
+| Member compliance detail view       | `fetchUserCompliance` / `fetchProspectCompliance` are defined in `medicalScreeningStore` and called by **no component**. `ComplianceDashboard` lists expiring screenings only. | ❌ Store action only  |
+| Compliance tab filtered to overdue  | `ComplianceDashboard` has no filter controls of any kind.                                                                                                          | ❌ Not built          |
+
+## Grants & Fundraising — Pledges and Fundraising Events (2026-08-08)
+
+Same shape, found while capturing `docs/training/12-grants-fundraising.md`.
+
+- **Pledges.** `fundraisingService.listPledges` / `createPledge` /
+  `updatePledge` exist over a working API. The only consumer is a
+  `grantsStore` action that no component calls. The grants dashboard's
+  "Outstanding Pledges" KPI card linked to `/grants/pledges`, which has no
+  route — and because the router's catch-all redirects unknown paths to `/`,
+  clicking it bounced the user to the home dashboard with no error. The link
+  has been removed (the figure is real, the destination was not); restore it
+  when the page ships.
+- **Fundraising events.** `listFundraisingEvents` / `createFundraisingEvent` /
+  `updateFundraisingEvent`: zero consumers, no route, no page.
+- **Recording a donation.** `DonationsPage`'s primary action, "Record
+  Donation", linked to `/grants/donations/new` — also routeless, also
+  redirected to `/`. No component calls `createDonation` either, so the form
+  behind it was never built. The button has been removed; donations reach the
+  system through the API (which is how the demo seeder loads them) and through
+  no screen. This is the more serious of the two dead links: the pledges one was
+  a KPI tile, this was the page's only call to action.
+
+**The module has no navigation entry at all.** Neither `SideNavigation.tsx` nor
+`TopNavigation.tsx` mentions grants, and nothing outside the module links to
+`/grants` — the only references anywhere in `frontend/src` are the module
+catalogue in `types/modules.ts`, the route registration in `App.tsx`, and a
+cache prefix in `utils/apiCache.ts`. Enabling the module makes its pages
+routable and reachable by typing the URL, and by nothing else. That is why
+`docs/training/12-grants-fundraising.md` opens by picturing "the Grants &
+Fundraising sidebar navigation showing Dashboard, Opportunities, Applications,
+Campaigns, Donors, Donations, and Reports": the guide describes the navigation
+the module is missing. That placeholder is left open too.
+
+Verified 2026-08-08 by counting non-test call sites under `frontend/src` for
+each service method and each store action, and by searching both navigation
+components for the module's route.
+
+## Finance — Five Guide Sections With No Screen (2026-08-09)
+
+Found while capturing `docs/training/11-finance.md`. Five of that guide's nine
+placeholders picture screens the frontend does not render; their placeholders
+are left open. Four defects found alongside them were fixed — see the commit
+that added the purchase request, expense report and check request shots.
+
+| Guide section                | What exists                                                                                                                                 | State                |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Create Budget form           | `financeStore.createBudget` over a working API, **no component calls it**. `BudgetsPage` is read-only — it has no create control at all.     | ❌ Store action only |
+| Add Approval Step form       | `ApprovalChainsSettingsPage` renders a chain's steps and offers no way to add, edit or remove one.                                            | ❌ Not built         |
+| Create Dues Schedule form    | `financeStore.createDuesSchedule`, **no component calls it**.                                                                                 | ❌ Store action only |
+| QuickBooks export mapping    | `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types exist; no page, no route, no consumer.                                  | ❌ API + types only  |
+| Export logs                  | `GET /finance/export/logs` and an `ExportLog` interface; no page, no route, no consumer.                                                      | ❌ API + types only  |
+
+**Budget detail's transaction history is a stub, not an empty state.**
+`BudgetDetailPage` renders `<EmptyState title="No transactions yet">`
+unconditionally — there is no fetch behind it and no code path that ever
+displays a transaction. The guide's placeholder asks for "a table of linked
+transactions below" the progress bar. The stacked progress bar is real and
+correct; the table does not exist. This is why that screenshot has been held
+back through several rounds of seeding: purchase requests, expense reports and
+check requests were all charged against the budgets and the panel still said
+"No transactions yet", because nothing could have changed it.
+
+Verified 2026-08-09 by counting non-test call sites for each store action and
+service method, and by reading the render bodies.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

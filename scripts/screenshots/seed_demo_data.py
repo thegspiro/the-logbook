@@ -23,10 +23,12 @@ import re
 import sys
 import urllib.error
 import urllib.request
+import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from http.cookiejar import CookieJar
 from time import sleep
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from bootstrap_demo import DEMO_ADMIN_PASSWORD, DEMO_ADMIN_USERNAME
 
@@ -38,9 +40,18 @@ DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 # the run date rather than hard-coded.
 # An RSVP the app refuses because the window has closed is the rule working, not
 # a seeding error — matched on the message because the status code is a plain 400.
+# The scheduling module refuses to double-book a member across overlapping
+# shifts. That is the rule working, not a seeding error — matched on the message
+# because the status code is a plain 400.
+SHIFT_CONFLICT = re.compile(r"conflicting shift", re.IGNORECASE)
+
 RSVP_CLOSED = re.compile(
     r"deadline has passed|already ended|no longer accepting", re.IGNORECASE
 )
+
+# The demo organization's timezone, which the UI renders in. Clock times in the
+# seed data are local to it and converted on the way out.
+ORG_TIMEZONE = ZoneInfo("America/New_York")
 
 # Named because the seeder has to find this one again on a later run to keep it
 # current — see seed_events.
@@ -77,11 +88,23 @@ class Api:
                 return cookie.value
         return None
 
-    def call(self, method: str, path: str, payload: Any = None) -> Any:
+    def call(
+        self,
+        method: str,
+        path: str,
+        payload: Any = None,
+        *,
+        body: bytes | None = None,
+        content_type: str = "application/json",
+    ) -> Any:
         url = f"{self.api}{path}"
-        data = json.dumps(payload).encode() if payload is not None else None
+        data = (
+            body
+            if body is not None
+            else json.dumps(payload).encode() if payload is not None else None
+        )
         req = urllib.request.Request(url, data=data, method=method)
-        req.add_header("Content-Type", "application/json")
+        req.add_header("Content-Type", content_type)
         # Double-submit CSRF: state-changing calls echo the cookie as a header.
         if method != "GET":
             token = self._csrf()
@@ -119,6 +142,47 @@ class Api:
     def put(self, path: str, payload: Any) -> Any:
         return self.call("PUT", path, payload)
 
+    def delete(self, path: str) -> Any:
+        return self.call("DELETE", path)
+
+    def post_file(
+        self,
+        path: str,
+        fields: dict[str, str],
+        filename: str,
+        file_bytes: bytes,
+        mime_type: str,
+        field_name: str = "file",
+    ) -> Any:
+        """POST multipart/form-data — the shape file uploads require.
+
+        Hand-built rather than pulled from a library: the seeder is otherwise
+        stdlib-only so it runs against any checkout, and `urllib` has no
+        multipart encoder.
+        """
+        boundary = "----logbookseed" + uuid.uuid4().hex
+        parts: list[bytes] = []
+        for name, value in fields.items():
+            parts.append(
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                f"{value}\r\n".encode()
+            )
+        parts.append(
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{field_name}"; '
+            f'filename="{filename}"\r\n'
+            f"Content-Type: {mime_type}\r\n\r\n".encode()
+        )
+        parts.append(file_bytes)
+        parts.append(f"\r\n--{boundary}--\r\n".encode())
+        return self.call(
+            "POST",
+            path,
+            body=b"".join(parts),
+            content_type=f"multipart/form-data; boundary={boundary}",
+        )
+
     def login(self) -> None:
         self.login_as(DEMO_ADMIN_USERNAME, DEMO_ADMIN_PASSWORD)
 
@@ -143,6 +207,38 @@ def pick(record: dict, *names: str) -> Any:
         if name in record:
             return record[name]
     return None
+
+
+def _demo_pdf(title: str, subtitle: str) -> bytes:
+    """A one-page PDF standing in for a real department document.
+
+    The upload route sniffs the MIME type from the file's magic bytes rather
+    than trusting the declared Content-Type, so this has to be a genuine PDF,
+    not text with a .pdf name. reportlab is already a backend dependency; where
+    it is missing the caller still gets a valid file, just a plain-text one —
+    text/plain is on the allow-list too.
+    """
+    try:
+        from io import BytesIO
+
+        from reportlab.lib.pagesizes import LETTER
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return f"{title}\n\n{subtitle}\n".encode()
+
+    buffer = BytesIO()
+    page = canvas.Canvas(buffer, pagesize=LETTER)
+    width, height = LETTER
+    page.setFont("Helvetica-Bold", 18)
+    page.drawString(72, height - 96, title)
+    page.setFont("Helvetica", 11)
+    page.drawString(72, height - 120, subtitle)
+    page.drawString(72, height - 152, "Oakville Fire Department")
+    page.setFont("Helvetica-Oblique", 9)
+    page.drawString(72, 72, "Demonstration document generated for the training guides.")
+    page.showPage()
+    page.save()
+    return buffer.getvalue()
 
 
 # ── Seed steps ────────────────────────────────────────────────────────
@@ -280,6 +376,29 @@ class Seeder:
             created.append(record)
         return created
 
+    # -- membership: recorded changes --------------------------------
+
+    def seed_member_changes(self, members: list[dict]) -> None:
+        """Promote a couple of members so the audit history has real entries.
+
+        The history page is a timeline of *changes*. Without any it fills with
+        "Member profile viewed" rows — which the screenshot tooling itself
+        generates on every capture run — and the guide's example of "Rank changed
+        from X to Y" has nothing behind it.
+        """
+        promotions = [
+            ("vbrennan", "Firefighter"),
+            ("snolan", "Firefighter/EMT"),
+            ("cfrazier", "Lieutenant"),
+        ]
+        by_username = {m.get("username"): m for m in members}
+        for username, new_rank in promotions:
+            member = by_username.get(username)
+            user_id = pick(member or {}, "id")
+            if not user_id or (member or {}).get("rank") == new_rank:
+                continue
+            self.api.patch(f"/users/{user_id}/profile", {"rank": new_rank})
+
     # -- facilities & apparatus --------------------------------------
 
     def seed_facilities(self) -> list[dict]:
@@ -390,6 +509,37 @@ class Seeder:
         return created
 
     # -- apparatus: maintenance, fuel, equipment ---------------------
+
+    def seed_evoc_levels(self) -> list[dict]:
+        """Driver/operator certification tiers.
+
+        The apparatus form hides its "Required EVOC Level" dropdown entirely
+        when no levels are defined, and scheduling has nothing to validate a
+        driver against.
+        """
+        levels = items(self.api.get("/apparatus/evoc-levels"), "levels")
+        codes = {level.get("code") for level in levels}
+        blueprint = [
+            (1, "Basic", "EVOC-1", "Emergency vehicle operation, non-transport."),
+            (2, "Intermediate", "EVOC-2", "Engine and rescue apparatus."),
+            (3, "Advanced", "EVOC-3", "Aerial and tiller-equipped apparatus."),
+        ]
+        for number, name, code, description in blueprint:
+            if code in codes:
+                continue
+            levels.append(
+                self.api.post(
+                    "/apparatus/evoc-levels",
+                    {
+                        "level_number": number,
+                        "name": name,
+                        "code": code,
+                        "description": description,
+                        "sort_order": number,
+                    },
+                )
+            )
+        return levels
 
     def seed_apparatus_activity(self, apparatus: list[dict]) -> dict[str, list[dict]]:
         if not apparatus:
@@ -696,7 +846,6 @@ class Seeder:
         }
         station_id = pick(stations[0], "id") if stations else None
         member_ids = [pick(m, "id") for m in members if pick(m, "id")]
-        officers = member_ids[:8]
         admin_id = next(
             (
                 pick(m, "id")
@@ -725,10 +874,17 @@ class Seeder:
         # open-shifts list each need past and future rows to look real.
         for offset in range(-10, 12):
             shift_date = str(TODAY + timedelta(days=offset))
-            # The API rejects a member assigned to two shifts on one date, so
+            # The API rejects a member assigned to two overlapping shifts, so
             # crews are drawn from a single per-day pool that each apparatus
-            # consumes from in turn — rotated by the day so the roster varies.
-            rotation = offset % max(1, len(member_ids))
+            # consumes from in turn.
+            #
+            # The rotation strides by a whole day's worth of people rather than
+            # by one. The night shift runs 19:00-07:00, so its crew is still on
+            # duty into the following date; advancing the pool by a single
+            # member left consecutive days overlapping almost entirely and the
+            # API rejected the second day's assignments as conflicts.
+            per_day = sum(staffing for *_, staffing in self.SHIFT_TEMPLATES[:3])
+            rotation = (offset * per_day) % max(1, len(member_ids))
             day_pool = member_ids[rotation:] + member_ids[:rotation]
             pool_cursor = 0
             for index, unit in enumerate(fleet[:3]):
@@ -742,16 +898,21 @@ class Seeder:
                 # timestamps — a bare "07:00" is rejected. A shift whose end
                 # time is earlier than its start crosses midnight, so its end
                 # lands on the following day.
+                #
+                # The clock times above are *local* to the department, and the
+                # UI renders in the organization's timezone. Building them as
+                # UTC put a "07:00" day shift on screen as 3:00 AM, which reads
+                # as nonsense on a fire department roster.
                 start_at = datetime.combine(
                     TODAY + timedelta(days=offset),
                     time.fromisoformat(start),
-                    tzinfo=timezone.utc,
-                )
+                    tzinfo=ORG_TIMEZONE,
+                ).astimezone(timezone.utc)
                 end_at = datetime.combine(
                     TODAY + timedelta(days=offset + (1 if end <= start else 0)),
                     time.fromisoformat(end),
-                    tzinfo=timezone.utc,
-                )
+                    tzinfo=ORG_TIMEZONE,
+                ).astimezone(timezone.utc)
                 payload = {
                     "shift_date": shift_date,
                     "start_time": iso(start_at),
@@ -763,10 +924,13 @@ class Seeder:
                 }
                 if station_id:
                     payload["station_id"] = station_id
-                if officers:
-                    payload["shift_officer_id"] = officers[
-                        (offset + index) % len(officers)
-                    ]
+                # The officer is drawn from the same per-day pool as the crew.
+                # Setting shift_officer_id mints an assignment of its own, so an
+                # officer picked independently could already be crewing another
+                # apparatus that day and the API rejects the double-booking.
+                if pool_cursor < len(day_pool):
+                    payload["shift_officer_id"] = day_pool[pool_cursor]
+                    pool_cursor += 1
                 shift = self.api.post("/scheduling/shifts", payload)
                 shifts.append(shift)
 
@@ -776,13 +940,24 @@ class Seeder:
                 crew = day_pool[pool_cursor : pool_cursor + staffing - 1]
                 pool_cursor += len(crew)
                 for slot, user_id in enumerate(crew):
-                    self.api.post(
-                        f"/scheduling/shifts/{shift_id}/assignments",
-                        {
-                            "user_id": user_id,
-                            "position": "officer" if slot == 0 else "firefighter",
-                        },
-                    )
+                    try:
+                        self.api.post(
+                            f"/scheduling/shifts/{shift_id}/assignments",
+                            {
+                                "user_id": user_id,
+                                "position": ("officer" if slot == 0 else "firefighter"),
+                            },
+                        )
+                    except ApiError as exc:
+                        # The night shift runs 19:00-07:00, so its crew is still
+                        # on duty into the next date and the API refuses to
+                        # double-book them. Rotating the pool reduces that but
+                        # cannot eliminate it for every roster size, and the
+                        # rule belongs to the app, not the seeder: a refusal on
+                        # these grounds means the shift is simply short a member,
+                        # which the Open Shifts tab is meant to show anyway.
+                        if exc.code != 400 or not SHIFT_CONFLICT.search(exc.detail):
+                            raise
 
                 # Put the demo administrator on today's first shift. Several
                 # member-facing screens — "My Shifts" and, in particular, "My
@@ -807,6 +982,61 @@ class Seeder:
             "apparatus": fleet,
             "shifts": shifts,
         }
+
+    # -- scheduling: logged calls ------------------------------------
+
+    def seed_shift_calls(self) -> list[dict]:
+        """Runs logged against past shifts.
+
+        The Calls / Runs panel on a shift reads as "No calls logged for this
+        shift" without these, and the shift-report hour totals are computed from
+        them, so several downstream figures stay at zero too.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=100"), "shifts")
+        past = [
+            s
+            for s in shifts
+            if pick(s, "id")
+            and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+        ]
+        if not past:
+            return []
+
+        existing = items(
+            self.api.get(f"/scheduling/shifts/{pick(past[0], 'id')}/calls"), "calls"
+        )
+        if existing:
+            return existing
+
+        runs = [
+            ("Structure Fire", "Working fire, second alarm struck.", 3),
+            ("EMS — Chest Pain", "ALS transport to Oakville General.", 1),
+            ("Motor Vehicle Collision", "Two vehicles, one extrication.", 2),
+            ("Automatic Fire Alarm", "Burnt food, no incident.", 1),
+            ("Odor Investigation", "Natural gas odor, utility notified.", 1),
+        ]
+        created = []
+        for index, shift in enumerate(past[:5]):
+            incident_type, notes, hours = runs[index % len(runs)]
+            dispatched = datetime.combine(
+                date.fromisoformat(str(pick(shift, "shift_date", "shiftDate"))),
+                time(hour=9 + index),
+                tzinfo=ORG_TIMEZONE,
+            ).astimezone(timezone.utc)
+            created.append(
+                self.api.post(
+                    f"/scheduling/shifts/{pick(shift, 'id')}/calls",
+                    {
+                        "incident_number": f"2026-{1200 + index:04d}",
+                        "incident_type": incident_type,
+                        "dispatched_at": iso(dispatched),
+                        "on_scene_at": iso(dispatched + timedelta(minutes=6)),
+                        "cleared_at": iso(dispatched + timedelta(hours=hours)),
+                        "notes": notes,
+                    },
+                )
+            )
+        return created
 
     # -- training ----------------------------------------------------
 
@@ -1262,7 +1492,33 @@ class Seeder:
         ]
         if not started:
             return []
-        event_id = pick(started[-1], "id")
+        # The drill is the only started event whose check-in window is still
+        # open, so name it rather than trusting list order.
+        drill = next(
+            (e for e in started if e.get("title") == IN_PROGRESS_EVENT_TITLE),
+            started[-1],
+        )
+        event_id = pick(drill, "id")
+
+        # Re-read: seed_events may have slid this event's window forward on
+        # this very run, and `events` still carries the pre-patch times.
+        current = self.api.get(f"/events/{event_id}")
+        started_at = str(pick(current, "start_datetime", "startDatetime") or "")
+
+        # A check-in stamped before the event started belongs to a previous
+        # window. Left in place it makes the monitor report an average check-in
+        # of twenty-odd hours "before event start". `checked_in_at` is
+        # write-once — the override route will not move a stamp that is already
+        # set — so the whole RSVP has to go and be rebuilt by the loop below,
+        # which is also what created it (the drill's RSVP deadline has passed,
+        # so seed_event_rsvps skips it).
+        if started_at:
+            for rsvp in items(self.api.get(f"/events/{event_id}/rsvps"), "rsvps"):
+                stamp = str(pick(rsvp, "checked_in_at", "checkedInAt") or "")
+                user_id = pick(rsvp, "user_id", "userId")
+                if stamp and user_id and stamp < started_at:
+                    self.api.delete(f"/events/{event_id}/rsvps/{user_id}")
+
         checked_in = []
         for member in members[:9]:
             user_id = pick(member, "id")
@@ -1337,6 +1593,175 @@ class Seeder:
                     # configuration fact, not a seeding failure.
                     if exc.code != 400:
                         raise
+        return requests
+
+    #: (entity, chain name, [(order, step name, approver position)]). Two steps
+    #: on the money-spending documents so the approval timeline shows a chain
+    #: rather than a single box.
+    APPROVAL_CHAINS = [
+        (
+            "purchase_request",
+            "Purchase Request Approval",
+            [
+                (1, "Company officer review", "Captain"),
+                (2, "Chief approval", "Fire Chief"),
+            ],
+        ),
+        (
+            "expense_report",
+            "Expense Reimbursement Approval",
+            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Fire Chief")],
+        ),
+        (
+            "check_request",
+            "Check Request Approval",
+            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Fire Chief")],
+        ),
+    ]
+
+    def seed_approval_chains(self) -> list[dict]:
+        """Approval routing, without which nothing has a chain to picture.
+
+        A submitted request whose amount matches no chain shows "No approval
+        steps configured", which is what the detail pages rendered before this.
+        """
+        chains = items(self.api.get("/finance/approval-chains"), "approval_chains")
+        names = {c.get("name") for c in chains}
+        for applies_to, name, steps in self.APPROVAL_CHAINS:
+            if name in names:
+                continue
+            chains.append(
+                self.api.post(
+                    "/finance/approval-chains",
+                    {
+                        "name": name,
+                        "description": f"Default routing for every {applies_to.replace('_', ' ')}.",
+                        "applies_to": applies_to,
+                        "is_default": True,
+                        "steps": [
+                            {
+                                "step_order": order,
+                                "name": step_name,
+                                "step_type": "approval",
+                                "approver_type": "position",
+                                "approver_value": position,
+                                "required": True,
+                            }
+                            for order, step_name, position in steps
+                        ],
+                    },
+                )
+            )
+        return chains
+
+    def seed_expense_reports(self, finance: dict) -> list[dict]:
+        """Reimbursement claims, which the expense report detail pictures."""
+        fiscal_year_id = pick(finance.get("fiscal_year") or {}, "id")
+        budgets = finance.get("budgets") or []
+        if not fiscal_year_id:
+            return []
+        reports = items(self.api.get("/finance/expense-reports"), "expense_reports")
+        if reports:
+            return reports
+
+        planned = [
+            (
+                "FDIC Conference Expenses",
+                "Travel and registration for the annual conference.",
+                [
+                    ("Conference registration", 425.00, "conference", "FDIC"),
+                    ("Hotel — 3 nights", 402.00, "travel", "Marriott Indianapolis"),
+                    ("Mileage reimbursement", 152.00, "mileage", None),
+                ],
+            ),
+            (
+                "Station 2 supply run",
+                "Consumables purchased ahead of the open house.",
+                [
+                    ("Cleaning supplies", 86.40, "equipment_purchase", "Costco"),
+                    ("Coffee and refreshments", 54.20, "meals", "Sam's Club"),
+                ],
+            ),
+        ]
+        for index, (title, description, lines) in enumerate(planned):
+            budget_id = pick(budgets[index % len(budgets)], "id") if budgets else None
+            report = self.api.post(
+                "/finance/expense-reports",
+                {
+                    "fiscal_year_id": fiscal_year_id,
+                    "title": title,
+                    "description": description,
+                    "line_items": [
+                        {
+                            "budget_id": budget_id,
+                            "description": line_description,
+                            "amount": amount,
+                            "date_incurred": iso(NOW - timedelta(days=20 - offset)),
+                            "expense_type": expense_type,
+                            **({"merchant": merchant} if merchant else {}),
+                        }
+                        for offset, (
+                            line_description,
+                            amount,
+                            expense_type,
+                            merchant,
+                        ) in enumerate(lines)
+                    ],
+                },
+            )
+            reports.append(report)
+            # Submit the first so the detail page shows an approval chain
+            # rather than a draft with nothing to approve.
+            if index == 0:
+                try:
+                    self.api.post(
+                        f"/finance/expense-reports/{pick(report, 'id')}/submit"
+                    )
+                except ApiError as exc:
+                    if exc.code != 400:
+                        raise
+                    self.blocked.append(f"expense report submit: {exc}")
+        return reports
+
+    def seed_check_requests(self, finance: dict) -> list[dict]:
+        """Direct-payment requests, which the check request detail pictures."""
+        fiscal_year_id = pick(finance.get("fiscal_year") or {}, "id")
+        budgets = finance.get("budgets") or []
+        if not fiscal_year_id:
+            return []
+        requests = items(self.api.get("/finance/check-requests"), "check_requests")
+        if requests:
+            return requests
+
+        planned = [
+            ("ABC Fire Equipment", 2_340.00, "Nozzle and hose replacement"),
+            ("Oakville Utilities", 1_186.45, "Station 1 quarterly electricity"),
+            ("Tidewater Door Service", 1_840.00, "Station 2 bay door repair"),
+        ]
+        for index, (payee, amount, purpose) in enumerate(planned):
+            budget_id = pick(budgets[index % len(budgets)], "id") if budgets else None
+            request = self.api.post(
+                "/finance/check-requests",
+                {
+                    "fiscal_year_id": fiscal_year_id,
+                    **({"budget_id": budget_id} if budget_id else {}),
+                    "payee_name": payee,
+                    "payee_address": "1200 Commerce Way, Oakville, VA 22046",
+                    "amount": amount,
+                    "memo": purpose,
+                    "purpose": purpose,
+                },
+            )
+            requests.append(request)
+            if index == 0:
+                try:
+                    self.api.post(
+                        f"/finance/check-requests/{pick(request, 'id')}/submit"
+                    )
+                except ApiError as exc:
+                    if exc.code != 400:
+                        raise
+                    self.blocked.append(f"check request submit: {exc}")
         return requests
 
     # -- scheduling: equipment check templates and completed checks --
@@ -1477,6 +1902,170 @@ class Seeder:
                         raise
         return {"templates": templates, "checks": checks}
 
+    # -- notification rules ------------------------------------------
+
+    def seed_notification_rules(self) -> list[dict]:
+        """Automations for the notification rules list.
+
+        Rules are opt-in — a fresh department has none — so the rules tab shows
+        its empty state until some exist. Channel and category follow the
+        trigger, matching what the create dialog fills in for itself.
+        """
+        rules = items(self.api.get("/notifications/rules"), "rules")
+        names = {r.get("name") for r in rules}
+        blueprint = [
+            (
+                "Drill reminder — 24 hours out",
+                "event_reminder",
+                "events",
+                "email",
+                "Reminds everyone RSVP'd to a drill the day before.",
+                True,
+            ),
+            (
+                "Certification expiring in 60 days",
+                "training_expiry",
+                "training",
+                "email",
+                "Warns the member and the training officer well before a "
+                "certification lapses.",
+                True,
+            ),
+            (
+                "Shift roster changed",
+                "schedule_change",
+                "scheduling",
+                "in_app",
+                "Tells the affected crew when a shift is edited or reassigned.",
+                True,
+            ),
+            (
+                "Apparatus maintenance due",
+                "maintenance_due",
+                "maintenance",
+                "in_app",
+                "Flags the apparatus officer when a unit reaches its service "
+                "interval.",
+                True,
+            ),
+            (
+                "New member welcome",
+                "new_member",
+                "members",
+                "email",
+                "Sends onboarding instructions the day an account is created.",
+                False,
+            ),
+        ]
+        for name, trigger, category, channel, description, enabled in blueprint:
+            if name in names:
+                continue
+            rules.append(
+                self.api.post(
+                    "/notifications/rules",
+                    {
+                        "name": name,
+                        "description": description,
+                        "trigger": trigger,
+                        "category": category,
+                        "channel": channel,
+                        "enabled": enabled,
+                    },
+                )
+            )
+        return rules
+
+    # -- department messages -----------------------------------------
+
+    def seed_messages(self, base_url: str, members: list[dict]) -> list[dict]:
+        """Post department announcements and have some members acknowledge.
+
+        The acknowledgment report is a "who has and has not read this" list, so
+        it only says anything if the department is split — every member
+        acknowledging is as blank a picture as none of them doing so. Two
+        thirds acknowledge here; the rest stay outstanding.
+        """
+        existing = items(self.api.get("/messages?include_inactive=true"), "messages")
+        titles = {m.get("title") for m in existing}
+        blueprint = [
+            (
+                "SCBA Flow Test — Mandatory Read",
+                "Annual SCBA flow testing runs the first two weeks of next "
+                "month. Every interior-qualified member must sign up for a "
+                "slot and bring their assigned mask. Acknowledge below so the "
+                "safety officer can track coverage.",
+                "important",
+                True,
+                True,
+            ),
+            (
+                "Station 2 Bay Doors Out of Service",
+                "The centre bay door at Station 2 is awaiting a part. Use the "
+                "north bay for apparatus movements until further notice.",
+                "urgent",
+                False,
+                True,
+            ),
+            (
+                "Uniform Order Window Closes Friday",
+                "The quartermaster submits the bulk uniform order Friday at "
+                "17:00. Anything not in the storefront cart by then waits for "
+                "the next cycle.",
+                "normal",
+                False,
+                False,
+            ),
+        ]
+
+        created = list(existing)
+        for title, body, priority, requires_ack, pinned in blueprint:
+            if title in titles:
+                continue
+            created.append(
+                self.api.post(
+                    "/messages",
+                    {
+                        "title": title,
+                        "body": body,
+                        "priority": priority,
+                        "target_type": "all",
+                        "is_pinned": pinned,
+                        "requires_acknowledgment": requires_ack,
+                    },
+                )
+            )
+
+        ack_ids = [
+            pick(m, "id")
+            for m in created
+            if pick(m, "requires_acknowledgment", "requiresAcknowledgment")
+            and pick(m, "id")
+        ]
+        if not ack_ids:
+            return created
+
+        # Acknowledging is a first-person action — there is no "acknowledge on
+        # behalf of" route — so each member signs in, exactly as they do for
+        # RSVPs. Two thirds of the roster, leaving the rest outstanding.
+        signers = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME]
+        for member in signers[: (len(signers) * 2) // 3]:
+            username = member.get("username")
+            if not username:
+                continue
+            member_api = Api(base_url)
+            try:
+                member_api.login_as(username, DEMO_MEMBER_PASSWORD)
+            except ApiError:
+                continue
+            for message_id in ack_ids:
+                try:
+                    member_api.post(f"/messages/{message_id}/acknowledge")
+                except ApiError as exc:
+                    # Already acknowledged on an earlier run.
+                    if exc.code not in (400, 409):
+                        raise
+        return created
+
     # -- documents ---------------------------------------------------
 
     def seed_documents(self) -> list[dict]:
@@ -1522,7 +2111,70 @@ class Seeder:
                     },
                 )
             )
+        self._seed_document_files(folders)
         return folders
+
+    #: (folder name, document name, description) for the library contents. The
+    #: documents page and every folder card count what is in them, so a library
+    #: of empty folders is what the guides would otherwise picture.
+    DOCUMENT_FILES = [
+        (
+            "Standard Operating Guidelines",
+            "SOG 101 — Structure Fire Response",
+            "First-due assignments and initial tactics.",
+        ),
+        (
+            "Standard Operating Guidelines",
+            "SOG 204 — Vehicle Extrication",
+            "Stabilisation, tool assignments and patient packaging.",
+        ),
+        (
+            "Policies & Bylaws",
+            "Department Bylaws (Revised 2026)",
+            "Adopted at the March business meeting.",
+        ),
+        (
+            "Policies & Bylaws",
+            "Member Conduct Policy",
+            "Expectations, reporting and the disciplinary process.",
+        ),
+        (
+            "Training Materials",
+            "Ladder Company Operations — Lesson Plan",
+            "Four-hour block with skills sheet.",
+        ),
+        (
+            "Meeting Minutes",
+            "Business Meeting Minutes — July 2026",
+            "Approved as read.",
+        ),
+        (
+            "Forms & Templates",
+            "Turnout Gear Sizing Sheet",
+            "Blank sizing sheet for new members.",
+        ),
+    ]
+
+    def _seed_document_files(self, folders: list[dict]) -> None:
+        existing = {
+            d.get("name") for d in items(self.api.get("/documents"), "documents")
+        }
+        by_name = {f.get("name"): pick(f, "id") for f in folders}
+        for folder_name, name, description in self.DOCUMENT_FILES:
+            if name in existing:
+                continue
+            folder_id = by_name.get(folder_name)
+            if not folder_id:
+                continue
+            fields = {"name": name, "description": description}
+            fields["folder_id"] = str(folder_id)
+            self.api.post_file(
+                "/documents/upload",
+                fields,
+                f"{name}.pdf",
+                _demo_pdf(name, description),
+                "application/pdf",
+            )
 
     # -- finance -----------------------------------------------------
 
@@ -2106,6 +2758,138 @@ class Seeder:
             )
         return forms
 
+    # -- forms: responses --------------------------------------------
+
+    #: Sample answers per field type. Each form is submitted several times and
+    #: the index rotates through these, so the submissions table shows varied
+    #: rows rather than the same answer repeated.
+    FORM_ANSWERS: dict[str, list[Any]] = {
+        "text": ["Engine 1", "Ladder 4", "Rescue 2", "Medic 3"],
+        "textarea": [
+            "Crew reported the issue at shift change; no injuries.",
+            "Noticed during the weekly check, corrected on the spot.",
+            "Escalated to the safety officer for review.",
+            "Documented for the next company officer meeting.",
+        ],
+        "number": [12, 32, 8, 45],
+        "email": [
+            "outreach@oakvillecivic.example.org",
+            "pto@oakvilleschools.example.org",
+            "events@oakvillelibrary.example.org",
+            "info@oakvillechamber.example.org",
+        ],
+    }
+
+    #: Answers keyed on a word in the field's label, checked before the
+    #: type-based pool above. A generic text answer is a unit designation, which
+    #: reads as nonsense under "Organization name" on the community event form —
+    #: the expanded submission row shows the label beside the value, so a
+    #: mismatch is plainly visible in the guides.
+    FORM_ANSWERS_BY_LABEL: list[tuple[tuple[str, ...], list[Any]]] = [
+        (
+            ("organization", "company", "agency"),
+            [
+                "Oakville Civic Association",
+                "Oakville Elementary PTO",
+                "Oakville Public Library",
+                "Oakville Chamber of Commerce",
+            ],
+        ),
+        (
+            ("full name", "contact name", "your name"),
+            ["Priya Raman", "Henrik Vance", "Amara Osei", "Delia Okonkwo"],
+        ),
+        (
+            ("apparatus", "unit", "vehicle"),
+            ["Engine 1", "Ladder 4", "Rescue 2", "Medic 3"],
+        ),
+        (
+            ("boot",),
+            ["10 W", "11 M", "9 W", "12 M"],
+        ),
+    ]
+
+    def seed_form_submissions(
+        self, base_url: str, forms: list[dict], members: list[dict]
+    ) -> list[dict]:
+        """Answer each form a few times, as different members.
+
+        The submissions table and the results view are both empty until a form
+        has responses, and a form only accepts them once it is published — the
+        create call leaves it in draft.
+
+        A submission records the *calling* user, so four rows submitted by the
+        admin would all name the same person. Each round signs in as a
+        different member, the same way the RSVP seeder does.
+        """
+        rounds = 4
+        submitters: list[Api] = []
+        for member in [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME][
+            :rounds
+        ]:
+            member_api = Api(base_url)
+            try:
+                member_api.login_as(member["username"], DEMO_MEMBER_PASSWORD)
+            except ApiError:
+                continue
+            submitters.append(member_api)
+        if not submitters:
+            submitters = [self.api]
+
+        submissions: list[dict] = []
+        for form in forms:
+            form_id = pick(form, "id")
+            if not form_id:
+                continue
+            detail = self.api.get(f"/forms/{form_id}")
+            if str(pick(detail, "status") or "").lower() != "published":
+                detail = self.api.post(f"/forms/{form_id}/publish")
+            if items(self.api.get(f"/forms/{form_id}/submissions"), "submissions"):
+                continue
+            fields = items(detail, "fields")
+            for round_index in range(rounds):
+                data = {}
+                for field in fields:
+                    field_id = pick(field, "id")
+                    if not field_id:
+                        continue
+                    value = self._form_answer(field, round_index)
+                    if value is not None:
+                        data[str(field_id)] = value
+                if data:
+                    submitter = submitters[round_index % len(submitters)]
+                    submissions.append(
+                        submitter.post(f"/forms/{form_id}/submit", {"data": data})
+                    )
+        return submissions
+
+    def _form_answer(self, field: dict, round_index: int) -> Any:
+        field_type = str(pick(field, "field_type", "fieldType") or "text").lower()
+        if field_type == "date":
+            return (NOW - timedelta(days=3 + round_index * 5)).strftime("%Y-%m-%d")
+        if field_type in ("select", "radio", "dropdown"):
+            options = items(field, "options")
+            if not options:
+                return None
+            option = options[round_index % len(options)]
+            # An option is either {value,label} or a bare string depending on
+            # how the field was defined; submissions store the value.
+            return pick(option, "value") if isinstance(option, dict) else str(option)
+        if field_type in ("checkbox", "multiselect"):
+            options = items(field, "options")
+            if not options:
+                return None
+            option = options[round_index % len(options)]
+            return [pick(option, "value") if isinstance(option, dict) else str(option)]
+        label = str(pick(field, "label") or "").lower()
+        for keywords, labelled_pool in self.FORM_ANSWERS_BY_LABEL:
+            if any(keyword in label for keyword in keywords):
+                return labelled_pool[round_index % len(labelled_pool)]
+        pool = self.FORM_ANSWERS.get(field_type)
+        if pool is None:
+            pool = self.FORM_ANSWERS["text"]
+        return pool[round_index % len(pool)]
+
     # -- elections ---------------------------------------------------
 
     def seed_elections(self) -> list[dict]:
@@ -2169,7 +2953,87 @@ class Seeder:
                     },
                 )
             )
+        self._seed_nominations(elections)
         return elections
+
+    def _seed_nominations(self, elections: list[dict]) -> None:
+        """Nominate candidates for the officer election.
+
+        The Nominations and Candidates tabs are both empty until somebody is
+        put forward, and nominations are only accepted while the election is in
+        its nomination phase — a draft election refuses them.
+        """
+        election = next(
+            (
+                e
+                for e in elections
+                if e.get("title") == "Annual Officer Elections" and pick(e, "id")
+            ),
+            None,
+        )
+        if not election:
+            return
+        election_id = pick(election, "id")
+        if items(self.api.get(f"/elections/{election_id}/candidates"), "candidates"):
+            return
+        if str(pick(election, "status") or "").lower() == "draft":
+            try:
+                self.api.post(f"/elections/{election_id}/open-nominations")
+            except ApiError as exc:
+                if exc.code != 400:
+                    raise
+                self.blocked.append(f"open nominations: {exc}")
+                return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{m.get('first_name') or m.get('firstName')} "
+            f"{m.get('last_name') or m.get('lastName')}": pick(m, "id")
+            for m in members
+        }
+        nominations = [
+            (
+                "Fire Chief",
+                "Dana Ruiz",
+                "Twenty-two years on the job, the last "
+                "six as deputy. I want to finish the staffing plan we started.",
+            ),
+            (
+                "Fire Chief",
+                "Marcus Bell",
+                "My focus is training depth — every "
+                "seat on every rig covered by two qualified people.",
+            ),
+            (
+                "Deputy Chief",
+                "Priya Raman",
+                "Operations first: response times, "
+                "apparatus readiness, and a rebuilt duty roster.",
+            ),
+            (
+                "Captain",
+                "Callum Frazier",
+                "I have run B-shift for four years "
+                "and would like to keep doing it with a formal mandate.",
+            ),
+        ]
+        for position, name, statement in nominations:
+            user_id = by_name.get(name)
+            if not user_id:
+                continue
+            try:
+                self.api.post(
+                    f"/elections/{election_id}/nominations",
+                    {
+                        "position": position,
+                        "nominee_user_id": user_id,
+                        "statement": statement,
+                    },
+                )
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+                self.blocked.append(f"nominate {name}: {exc}")
 
     # -- prospective members -----------------------------------------
 
@@ -2466,6 +3330,8 @@ class Seeder:
                         },
                     )
 
+        self._seed_grant_notes(applications)
+
         return {
             "opportunities": opportunities,
             "applications": applications,
@@ -2473,6 +3339,56 @@ class Seeder:
             "donors": donors,
             "donations": donations,
         }
+
+    #: (note type, content, days before today). The Activity Log is a timeline,
+    #: so a single note reads as a list of one — these give it a shape, and the
+    #: types drive the per-entry icons the tab renders.
+    GRANT_NOTES = [
+        ("status_change", "Status changed to Preparing.", 62),
+        ("contact_made", "Contacted the program officer to confirm scope.", 55),
+        ("document_added", "Uploaded the department's audited financials.", 48),
+        ("status_change", "Status changed to Submitted.", 40),
+        ("milestone", "Application acknowledged by the awarding agency.", 33),
+        ("financial", "Budget item added: training equipment, $10,000.", 21),
+        ("status_change", "Status changed to Awarded.", 9),
+    ]
+
+    def _seed_grant_notes(self, applications: list[dict]) -> None:
+        """Give one application a populated Activity Log.
+
+        Only the first: the tab is pictured once in the guides, and writing a
+        timeline onto every application would slow the seeder for no gain.
+        """
+        if not applications:
+            return
+        app_id = pick(applications[0], "id")
+        if not app_id:
+            return
+        # The application already carries one auto-generated "created with
+        # status" note, so a bare truthiness check on the list never lets the
+        # timeline seed. Only a run that has already added these does.
+        if (
+            len(items(self.api.get(f"/grants/applications/{app_id}/notes"), "notes"))
+            > 1
+        ):
+            return
+        for index, (note_type, content, days_ago) in enumerate(self.GRANT_NOTES):
+            # `created_at` is server-stamped at second granularity and the log
+            # orders by it, so notes written inside the same second come back in
+            # arbitrary order and the timeline reads as nonsense. One second
+            # apart is enough to fix the ordering; the API has no way to
+            # backdate a note, so they all still carry today's date.
+            if index:
+                sleep(1)
+            self.api.post(
+                f"/grants/applications/{app_id}/notes",
+                {
+                    "applicationId": app_id,
+                    "noteType": note_type,
+                    "content": content,
+                    "metadata": {"seededDaysAgo": days_ago},
+                },
+            )
 
     # -- medical screening -------------------------------------------
 
@@ -2776,7 +3692,81 @@ class Seeder:
                     },
                 )
             )
-        return {"products": products, "windows": windows}
+
+        self._seed_store_settings()
+        orders = self._seed_store_orders(products)
+        return {"products": products, "windows": windows, "orders": orders}
+
+    def _seed_store_settings(self) -> None:
+        """Configure how members pay.
+
+        My Orders shows the payment buttons and handles only when the store has
+        methods enabled and the corresponding handle set — with none configured
+        an unpaid order shows a balance and no way to settle it.
+        """
+        settings = self.api.get("/store/settings") or {}
+        if pick(settings, "venmo_handle", "venmoHandle"):
+            return
+        self.api.put(
+            "/store/settings",
+            {
+                "isEnabled": True,
+                "storeName": "Oakville Fire Department Store",
+                "tagline": "Department apparel and accessories",
+                "acceptedPaymentMethods": ["venmo", "cash_app", "zelle", "check"],
+                "venmoHandle": "@OakvilleFD",
+                "cashAppCashtag": "$OakvilleFD",
+                "zelleHandle": "treasurer@oakvillefd.example.org",
+                "zelleInstructions": (
+                    "Put your order number in the Zelle memo so the treasurer "
+                    "can match the payment."
+                ),
+                "checkPayableTo": "Oakville Fire Department",
+                "allowPickup": True,
+                "pickupLocation": "Station 1 - Headquarters",
+            },
+        )
+
+    def _seed_store_orders(self, products: list[dict]) -> list[dict]:
+        """Place an unpaid order for the demo administrator.
+
+        The My Orders guide pictures an order awaiting payment, and orders are
+        first-person — `POST /store/orders` records the *calling* user, so this
+        has to be the account the screenshots are captured as.
+        """
+        existing = items(self.api.get("/store/orders/mine"), "orders")
+        if existing:
+            return existing
+        wanted = ("Department Job Shirt", "Ball Cap")
+        lines = []
+        for product in products:
+            if product.get("name") not in wanted:
+                continue
+            variants = items(product, "variants")
+            line = {"productId": pick(product, "id"), "quantity": 1}
+            if variants:
+                line["variantId"] = pick(variants[len(variants) // 2], "id")
+                line["personalizationText"] = "D. RUIZ"
+            lines.append(line)
+        if not lines:
+            return existing
+        try:
+            self.api.post(
+                "/store/orders",
+                {
+                    "items": lines,
+                    "paymentMethod": "venmo",
+                    "fulfillmentMethod": "pickup",
+                    "memberNotes": "Pick up on a weeknight duty shift.",
+                },
+            )
+        except ApiError as exc:
+            # No open window, or the window does not offer these products —
+            # a store configuration fact, not a seeding failure.
+            if exc.code != 400:
+                raise
+            self.blocked.append(f"store order: {exc}")
+        return items(self.api.get("/store/orders/mine"), "orders")
 
     # -- run ---------------------------------------------------------
 
@@ -2784,9 +3774,11 @@ class Seeder:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
         members = self.step("members", self.seed_members) or []
+        self.step("member changes", lambda: self.seed_member_changes(members))
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
         apparatus = self.step("apparatus", lambda: self.seed_apparatus(stations)) or []
+        self.step("evoc levels", self.seed_evoc_levels)
         self.step("apparatus activity", lambda: self.seed_apparatus_activity(apparatus))
         events = self.step("events", self.seed_events) or []
         self.step(
@@ -2797,6 +3789,7 @@ class Seeder:
             "scheduling",
             lambda: self.seed_scheduling(stations, apparatus, members),
         )
+        self.step("shift calls", self.seed_shift_calls)
         training = self.step("training", self.seed_training) or {}
         self.step(
             "training records",
@@ -2823,7 +3816,13 @@ class Seeder:
         )
         self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)
-        self.step("forms", self.seed_forms)
+        self.step("notification rules", self.seed_notification_rules)
+        self.step("messages", lambda: self.seed_messages(self.base_url, members))
+        forms = self.step("forms", self.seed_forms) or []
+        self.step(
+            "form submissions",
+            lambda: self.seed_form_submissions(self.base_url, forms, members),
+        )
         self.step("event templates", self.seed_event_templates)
         self.step("elections", self.seed_elections)
         self.step("prospective members", self.seed_prospective_members)
@@ -2833,7 +3832,10 @@ class Seeder:
         self.step("storefront", self.seed_storefront)
         finance = self.step("finance", self.seed_finance) or {}
         self.step("dues", lambda: self.seed_dues(finance.get("fiscal_year")))
+        self.step("approval chains", self.seed_approval_chains)
         self.step("purchase requests", lambda: self.seed_purchase_requests(finance))
+        self.step("expense reports", lambda: self.seed_expense_reports(finance))
+        self.step("check requests", lambda: self.seed_check_requests(finance))
         self.step("equipment checks", self.seed_equipment_checks)
 
         print(f"\nMembers on file: {len(members)}")

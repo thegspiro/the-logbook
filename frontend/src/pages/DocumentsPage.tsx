@@ -401,7 +401,9 @@ const DocumentsPage: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <h3 className="text-theme-text-primary truncate font-semibold">{folder.name}</h3>
                         <p className="text-theme-text-muted mt-1 text-sm">{folder.description || 'No description'}</p>
-                        <p className="text-theme-text-muted mt-2 text-xs">{folder.document_count} documents</p>
+                        <p className="text-theme-text-muted mt-2 text-xs">
+                          {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
+                        </p>
                       </div>
                     </div>
                   </button>

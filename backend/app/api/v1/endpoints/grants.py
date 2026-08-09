@@ -12,6 +12,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, require_permission
@@ -229,6 +230,30 @@ async def create_application(
         )
 
 
+async def _notes_with_authors(db: AsyncSession, notes) -> list[GrantNoteResponse]:
+    """Serialize notes with their author's name resolved.
+
+    A note carries only `created_by`. Rendering that is what put a raw UUID
+    beside every entry in the activity log, and the log reads the application
+    detail response as well as this collection, so both go through here. One
+    query for the whole page, not one per note.
+    """
+    author_ids = {str(n.created_by) for n in notes if n.created_by}
+    names: dict[str, str] = {}
+    if author_ids:
+        result = await db.execute(select(User).where(User.id.in_(author_ids)))
+        names = {
+            str(user.id): user.full_name or user.username
+            for user in result.scalars().all()
+        }
+    responses = []
+    for note in notes:
+        payload = GrantNoteResponse.model_validate(note)
+        payload.created_by_name = names.get(str(note.created_by))
+        responses.append(payload)
+    return responses
+
+
 @router.get("/applications/{application_id}", response_model=GrantApplicationResponse)
 async def get_application(
     application_id: UUID,
@@ -253,7 +278,9 @@ async def get_application(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Grant application not found",
             )
-        return application
+        payload = GrantApplicationResponse.model_validate(application)
+        payload.grant_notes = await _notes_with_authors(db, application.grant_notes)
+        return payload
     except HTTPException:
         raise
     except Exception as e:
@@ -852,7 +879,8 @@ async def list_notes(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
         )
-        return notes[pagination.skip : pagination.skip + pagination.limit]
+        page = notes[pagination.skip : pagination.skip + pagination.limit]
+        return await _notes_with_authors(db, page)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

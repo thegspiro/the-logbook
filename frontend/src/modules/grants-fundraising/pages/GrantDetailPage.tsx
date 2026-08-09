@@ -1039,8 +1039,8 @@ export const GrantDetailPage: React.FC = () => {
                     <div className="mb-6 min-w-0 flex-1 pb-2">
                       <p className="text-theme-text-primary text-sm">{note.content}</p>
                       <div className="text-theme-text-secondary mt-1 flex items-center gap-2 text-xs">
-                        {note.createdBy && <span>{note.createdBy}</span>}
-                        {note.createdBy && <span>&middot;</span>}
+                        {note.createdByName && <span>{note.createdByName}</span>}
+                        {note.createdByName && <span>&middot;</span>}
                         <span>{formatDate(note.createdAt, tz)}</span>
                       </div>
                     </div>

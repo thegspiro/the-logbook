@@ -675,7 +675,16 @@ def create_access_token(
         )
 
     to_encode.update(
-        {"exp": expire, "iat": datetime.now(timezone.utc), "type": "access"}
+        {
+            "exp": expire,
+            "iat": datetime.now(timezone.utc),
+            "type": "access",
+            # A unique token id. `iat`/`exp` are second-resolution, so two
+            # logins by the same user inside one second produced byte-identical
+            # tokens and the session insert then violated the unique index on
+            # `sessions.token` — a 500 on an ordinary double sign-in.
+            "jti": secrets.token_urlsafe(16),
+        }
     )
 
     encoded_jwt = jwt.encode(
@@ -717,7 +726,12 @@ def create_refresh_token(data: dict[str, Any]) -> str:
     )
 
     to_encode.update(
-        {"exp": expire, "iat": datetime.now(timezone.utc), "type": "refresh"}
+        {
+            "exp": expire,
+            "iat": datetime.now(timezone.utc),
+            "type": "refresh",
+            "jti": secrets.token_urlsafe(16),
+        }
     )
 
     encoded_jwt = jwt.encode(

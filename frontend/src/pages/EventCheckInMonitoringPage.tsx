@@ -107,6 +107,12 @@ const EventCheckInMonitoringPage: React.FC = () => {
     );
   }
 
+  // The API measures each check-in as minutes *before* the event started, so a
+  // crowd that arrived after the doors opened averages negative. Rendering the
+  // raw value under a fixed "before event start" caption read as "-147m before
+  // event start"; show the magnitude and let the caption carry the direction.
+  const avgCheckInMinutes = stats.avg_check_in_time_minutes;
+
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-6">
       {/* Header */}
@@ -174,9 +180,15 @@ const EventCheckInMonitoringPage: React.FC = () => {
         <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Avg Check-In Time</div>
           <div className="text-theme-text-primary text-3xl font-bold">
-            {stats.avg_check_in_time_minutes !== null ? `${Math.round(stats.avg_check_in_time_minutes)}m` : 'N/A'}
+            {avgCheckInMinutes !== null && avgCheckInMinutes !== undefined
+              ? `${Math.abs(Math.round(avgCheckInMinutes))}m`
+              : 'N/A'}
           </div>
-          <div className="text-theme-text-secondary mt-1 text-sm">before event start</div>
+          <div className="text-theme-text-secondary mt-1 text-sm">
+            {avgCheckInMinutes !== null && avgCheckInMinutes !== undefined && avgCheckInMinutes < 0
+              ? 'after event start'
+              : 'before event start'}
+          </div>
         </div>
       </div>
 

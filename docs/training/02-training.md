@@ -272,7 +272,7 @@ Navigate to **Training > Programs** and click **Create Program** to open the pip
 4. **Add milestones** — Add **milestone** checkpoints that mark key achievements within the program.
 5. Click **Save**. The program, all its phases, their requirements, and the milestones are created together in a single step.
 
-> **[SCREENSHOT NEEDED]:** _The pipeline wizard showing the program info fields (including the program code) at the top, a list of phases with the "Require officer approval to advance" checkbox, requirements nested under a phase with a type selector, and a milestones section, above a single "Save" button._
+![Training pipeline wizard with program details and phase list](./images/02-11-pipeline-wizard.png)
 
 > **Hint:** The **program code** must be unique within your department. Use a short, memorable code — it appears on printed program pages and travels with the program when it is exported and shared with other departments.
 
@@ -815,7 +815,7 @@ The shift report system supports a multi-stage review workflow:
 - Optionally **redact fields** — clearing sensitive content from specified fields before the trainee sees the report
 - Add **reviewer notes** (encrypted, never visible to trainees)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Pending Review view showing report cards with checkboxes, the select-all toggle at the top, and the "Approve Selected" / "Flag Selected" action buttons. Show at least 3 reports with 2 checked._
+![Shift reports pending review with selection controls](./images/02-30-shift-reports.png)
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Flagged tab showing previously flagged reports with a "Re-review" button and the flagged status badge on each card._
 
@@ -1022,7 +1022,7 @@ Officers can export training records for state reporting, annual reviews, or for
 2. Choose a period from the **Export period** dropdown — **This Month**, **This Quarter**, **This Year**, or **Lifetime**.
 3. Click **CSV** or **PDF** to download that member's records for the chosen period.
 
-> **[SCREENSHOT NEEDED]:** _The Member Training History page showing the export period dropdown next to the CSV and PDF download buttons._
+![Member training history with the export period selector and download buttons](./images/02-40-member-training-history.png)
 
 ### Bulk and Reporting Exports (Reports Tab)
 
@@ -1632,7 +1632,7 @@ The printed record includes:
 - Compliance indicators (green/yellow/red) for all active requirements
 - Complete list of training records with course name, date, hours, category, and status
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the printed Member Training History page showing the letter-size layout with member info header, summary statistics, certification table, compliance badges, and training records table._
+![Print layout for a member training history](./images/02-62-print-member-history.png)
 
 ### Printing a Training Program
 
@@ -1647,7 +1647,7 @@ The printed program includes:
 - Milestone checkpoints with completion criteria
 - Enrollment roster with per-member progress percentages
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the printed Training Program page showing the program header, phases with requirements listed under each, progress bars per requirement, milestone checkpoints, and enrollment table with member progress._
+![Print layout for a training program with phases and requirements](./images/02-63-print-program.png)
 
 ### Printing the Compliance Matrix
 
@@ -1664,7 +1664,7 @@ The printed matrix includes:
 - Designed for **landscape printing** on letter-size paper
 - Repeat column headers across page breaks when the matrix spans multiple pages
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the printed Compliance Matrix page showing the landscape grid with member names on the left, requirement names across the top, and colored cells with percentages. Show page break indicators._
+![Print layout for the compliance matrix](./images/02-65-print-compliance.png)
 
 This is particularly useful for:
 

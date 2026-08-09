@@ -529,6 +529,28 @@ class FormsService:
 
         return forms, total
 
+    async def get_submission_counts(
+        self, form_ids: List[UUID], organization_id: UUID
+    ) -> Dict[str, int]:
+        """Count submissions for several forms in one query.
+
+        One grouped count rather than a count per form: the forms list renders
+        every form on the page, so a per-form query is an N+1 on a route that
+        already loads each form's fields.
+
+        Forms with no submissions are absent from the GROUP BY result; callers
+        should default them to zero rather than treating the gap as unknown.
+        """
+        if not form_ids:
+            return {}
+        result = await self.db.execute(
+            select(FormSubmission.form_id, func.count(FormSubmission.id))
+            .where(FormSubmission.organization_id == str(organization_id))
+            .where(FormSubmission.form_id.in_([str(fid) for fid in form_ids]))
+            .group_by(FormSubmission.form_id)
+        )
+        return {str(form_id): count for form_id, count in result.all()}
+
     async def get_form_by_id(
         self, form_id: UUID, organization_id: UUID
     ) -> Optional[Form]:

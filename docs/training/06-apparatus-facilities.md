@@ -52,8 +52,7 @@ The apparatus list shows all vehicles with:
 
 Each apparatus row has a **Print label** action (printer icon). It opens the shared label print page for that unit, where you choose a label size — including any sticker/thermal printer (Dymo, Rollo, or a custom size) — and download a PDF or print directly. The barcode encodes the apparatus **asset tag** (or unit number if no asset tag is set). Your printer choice is remembered for the **apparatus team's role**, so whoever prints apparatus labels gets the same printer on any computer, independent of the inventory or other modules' printers.
 
-> **Screenshot needed:**
-> _[Screenshot of the apparatus list with the per-row "Print label" printer icon highlighted, and the label print page open showing the size presets and a preview of an "Engine 5" barcode label]_
+![Apparatus label print page with size presets and a barcode preview](./images/06-02-apparatus-label-print.png)
 
 ---
 
@@ -173,8 +172,7 @@ The facilities dashboard shows:
 
 The Facilities header has a **Print Labels** button that prints a barcode label for every facility (stations are typically few). It opens the shared label print page, where you pick a label size and download a PDF or print. The barcode encodes the **facility number**. The chosen printer is remembered for the facilities role.
 
-> **Screenshot needed:**
-> _[Screenshot of the Facilities header showing the "Print Labels" button next to "Add Facility", and the label print page previewing a "Station 1" facility label]_
+![Facility label print page previewing station barcode labels](./images/06-08-facility-label-print.png)
 
 ---
 
@@ -633,8 +631,7 @@ The Equipment Check system provides structured vehicle and equipment inspections
 
 Apparatus type badges (Engine, Ladder, Rescue, Ambulance) and status badges (In Service, Out of Service, Reserve) now display the correct icons. Previously, badge icons were rendering as text (e.g., showing the word "Truck" instead of a truck icon).
 
-> **Screenshot needed:**
-> _[Screenshot of the apparatus list showing apparatus cards with correct icon rendering — a truck icon next to "Engine 1", an ambulance icon next to "Medic 3", with status badges showing colored dots and icons]_
+![Apparatus list with type icons and status badges rendering correctly](./images/06-20-apparatus-badges.png)
 
 ### EVOC Certification Level on Apparatus
 
@@ -646,8 +643,7 @@ Each apparatus can now specify a minimum EVOC (Emergency Vehicle Operations Cour
 
 When scheduling assigns a member to a Driver/Operator position on this apparatus, the system validates their EVOC certification level against this requirement.
 
-> **Screenshot needed:**
-> _[Screenshot of the apparatus edit form showing the "Required EVOC Level" dropdown set to "Intermediate" among other apparatus fields]_
+![Apparatus edit form with the required EVOC level field](./images/06-21-apparatus-evoc-level.png)
 
 ### Standalone Equipment Checks
 

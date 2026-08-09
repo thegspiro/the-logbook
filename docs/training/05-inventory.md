@@ -69,8 +69,7 @@ Click on any item to open its edit form, where you can view and modify:
 - Purchase and warranty information
 - Notes
 
-> **Screenshot placeholder:**
-> _[Screenshot of the item edit modal showing form fields for name, description, category, serial number, asset tag, condition, status, and other item properties]_
+![Inventory item form with category, serial, condition and tracking fields](./images/05-05-item-form-modal.png)
 
 ---
 
@@ -290,8 +289,7 @@ An **issuance allowance** caps how many units of a category a member may receive
 
 ![Issuance allowances with per-category limits and periods](./images/05-11-allowances.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the New Allowance modal showing the Category dropdown, the "Applies To" role dropdown defaulting to "All members", the Max Quantity number input, the Period Type selector (Annual/Career/One-time), and Create/Cancel buttons]_
+![New allowance modal with category, role and quantity fields](./images/05-12-new-allowance-modal.png)
 
 ### How Allowances Are Enforced
 
@@ -823,8 +821,7 @@ Navigate to **Inventory Admin > Equipment Kits** (`/inventory/admin/kits`) to ma
 4. Repeat for all components in the kit.
 5. Click **Save Kit**.
 
-> **Screenshot needed:**
-> _[Screenshot of the Equipment Kit create/edit modal showing a kit named "New Recruit PPE Kit" with line items for helmet, coat, pants, boots, and gloves — each with a quantity and some marked as size-selectable]_
+![Equipment kit editor with its line items and quantities](./images/05-27-equipment-kit-modal.png)
 
 ### Managing Kits
 

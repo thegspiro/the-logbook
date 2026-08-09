@@ -592,7 +592,12 @@ const GrantsDashboardPage: React.FC = () => {
           value={formatCurrencyWhole(dashboard?.outstandingPledges ?? 0)}
           icon={<HandCoins className="h-5 w-5 text-orange-600" />}
           iconBgClass="bg-orange-100 dark:bg-orange-500/20"
-          linkTo="/grants/pledges"
+          // No linkTo: /grants/pledges has no route. The catch-all redirects
+          // unknown paths to "/", so this card used to bounce anyone who
+          // clicked it to the home dashboard with no explanation. The figure is
+          // real; only the destination is missing. Restore the link when the
+          // pledges page ships — the API and `fundraisingService.listPledges`
+          // are already there.
         />
         <KpiCard
           label="Total Raised (12mo)"

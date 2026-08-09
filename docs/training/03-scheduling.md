@@ -65,8 +65,7 @@ Click on any shift to open the **Shift Detail Panel** with full information, att
 > **Screenshot placeholder:**
 > _[Screenshot of the month calendar view showing several shifts across different days, with color coding for different shift types (e.g., Day shift in blue, Night shift in purple). Include the week/month toggle buttons]_
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Shift Detail Panel (slide-out drawer) showing shift details at the top (date, time, type, apparatus), an attendance list with check-in/out times, and action buttons (Edit Shift, Add Attendance)]_
+![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
 
 ---
 
@@ -124,8 +123,7 @@ Officers can change a member's assigned position (Officer, Driver, Firefighter, 
 **Editing Shift Details:**
 Officers can edit shift start and end times, apparatus assignment, color, notes, and custom creation times from the shift detail panel after the shift has been created.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the assignment creation form within the Shift Detail Panel, showing a member dropdown, position selector, apparatus selector, and save button]_
+![Assignment form in the shift panel with member and position selectors](./images/03-05-assignment-form.png)
 
 > **Hint:** If a member is on **Leave of Absence** for the shift date, the system will prevent the assignment and display a message: "Member is on leave of absence for this date." See [Membership > Leave of Absence](./01-membership.md#leave-of-absence) for details.
 
@@ -174,11 +172,9 @@ Calls logged against a shift contribute to **call-based training requirements** 
 
 > **Note:** Once a shift is **finalized**, the Calls / Runs section becomes read-only — the **+ Log Call**, edit, and delete controls disappear. Log calls before finalizing the shift.
 
-> **Screenshot needed:**
-> _[Screenshot of the Calls / Runs section on the shift detail panel showing the "+ Log Call" button, the count badge, and two logged-call cards — one with an amber "Cancelled en route" badge and one with a blue "Refusal" badge, each showing the incident type, incident number, a dispatched→cleared time range, and edit/delete icons]_
+![Calls and runs logged against a shift](./images/03-08-calls-runs-section.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the inline Log Call form expanded, showing the two-column layout: incident type + incident number on top, dispatched + cleared datetime-local pickers in the middle, the "Cancelled en route" and "Refusal (medical)" checkboxes, a notes textarea, and Cancel/Save buttons]_
+![Inline log call form with incident type and times](./images/03-09-log-call-form.png)
 
 ---
 
@@ -945,8 +941,7 @@ Two timezone display issues were corrected:
 
 2. **Shift time editing**: When editing a shift, the start/end times displayed in the form were showing UTC values instead of local times. A shift starting at 2:30 PM Eastern appeared as 18:30 in the edit form.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel edit form showing correctly localized start and end times (e.g., "14:30" for a 2:30 PM Eastern shift)]_
+![Shift edit form showing start and end times in the department timezone](./images/03-31-shift-edit-times.png)
 
 ### Edge Cases
 

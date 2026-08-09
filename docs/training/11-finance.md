@@ -516,7 +516,7 @@ Open a purchase request to see its detail page at `/finance/purchase-requests/:i
 - Approval chain progress -- each step with its status, assigned approver, action timestamp, and any notes
 - Budget impact (estimated amount vs. budget remaining)
 
-> **[SCREENSHOT NEEDED]:** _A Purchase Request Detail page showing the request header (PR-2026-0042, "Thermal Imaging Camera"), status badge (Approved), the approval chain timeline with two completed steps (Captain -- Approved, Chief -- Approved), and the estimated amount alongside the linked budget's remaining balance._
+![Purchase request detail with its status and approval chain](./images/11-12-purchase-request-detail.png)
 
 ### Progressing a Purchase Request After Approval
 
@@ -642,7 +642,7 @@ Open an expense report to see its detail page at `/finance/expenses/:id`. The de
 - All line items with their individual details
 - Payment status and method (once paid)
 
-> **[SCREENSHOT NEEDED]:** _An Expense Report Detail page showing the report header (ER-2026-0008, "FDIC Conference Expenses", total $979.00), status badge (Approved), the approval chain timeline, and the line items table with columns for description, amount, date, type, and merchant._
+![Expense report detail with its line items and approval status](./images/11-14-expense-report-detail.png)
 
 **Marking as Paid:**
 
@@ -740,7 +740,7 @@ After a check request is approved:
 
 The system records the check number and the issuance date. The check amount is added to the linked budget's spent total.
 
-> **[SCREENSHOT NEEDED]:** _A Check Request Detail page showing the request header (CK-2026-0015, payee "ABC Fire Equipment", $2,340.00), the Approved status badge, the approval chain timeline with completed steps, and the "Issue Check" button with the check number input field._
+![Check request detail with payee, amount and approval status](./images/11-16-check-request-detail.png)
 
 ### Voiding an Issued Check
 

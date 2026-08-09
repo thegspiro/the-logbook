@@ -4279,11 +4279,14 @@ class ShiftEquipmentCheck(Base):
         ForeignKey("equipment_check_templates.id", ondelete="SET NULL"),
         nullable=True,
     )
-    apparatus_id = Column(
-        String(36),
-        ForeignKey("apparatus.id", ondelete="SET NULL"),
-        nullable=True,
-    )
+    # Deliberately unconstrained, matching Shift.apparatus_id, which this is
+    # copied from in create_shift_check. That column is a bare String(36) and
+    # the reference is polymorphic: it may hold a full Apparatus id or a
+    # lightweight basic_apparatus one, resolved by priority in
+    # app/utils/apparatus_ref.py. A foreign key to apparatus.id therefore cannot
+    # hold for every value the column legitimately carries, and used to fail on
+    # every check submitted for a shift with an apparatus assigned.
+    apparatus_id = Column(String(36), nullable=True)
     checked_by = Column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),

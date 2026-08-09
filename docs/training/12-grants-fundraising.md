@@ -265,7 +265,7 @@ The **Activity** tab on each application provides a chronological log of all act
 | Financial | Financial event or update |
 | Compliance | Compliance-related note |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Activity tab showing a timeline of events: "Status changed to Submitted" (March 1), "Note added: Contacted program officer" (March 5), "Budget item added: Training Equipment $10,000" (March 10)._
+![Grant application activity log with its timeline of status changes and notes](./images/12-08-application-activity-log.png)
 
 ---
 

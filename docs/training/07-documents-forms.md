@@ -87,8 +87,7 @@ Documents are organized into folders. The system provides default folders, and a
 - **Rename** - Change the document name
 - **Delete** - Remove the document (requires permission)
 
-> **Screenshot placeholder:**
-> _[Screenshot showing the upload interface with a drag-and-drop zone, and a document row with action buttons (download, move, rename, delete) visible on hover]_
+![Document upload dialog with its drag-and-drop zone](./images/07-03-upload-documents.png)
 
 > **Hint:** Events automatically create a document folder for attachments. Training sessions and meetings can also have linked documents.
 
@@ -199,8 +198,7 @@ Public forms can be accessed without a login:
 3. Share the URL or QR code externally.
 4. Submissions are collected and linked to the form.
 
-> **Screenshot placeholder:**
-> _[Screenshot showing the form sharing options with the internal link, the public access toggle, the public URL, and a QR code that can be printed or downloaded]_
+![Form sharing dialog with the public URL and its QR code](./images/07-05-form-sharing.png)
 
 > **Hint:** Public forms are great for community feedback, mutual aid incident reports, or application forms linked from your department's public portal.
 
@@ -214,8 +212,7 @@ Public forms can be accessed without a login:
 4. Click any submission to view the full response.
 5. **Export to CSV** for external analysis or reporting.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the form submissions table showing rows of responses with timestamps, key field values as columns, and export/filter controls at the top]_
+![Form submissions table listing responses with their timestamps](./images/07-07-form-submissions.png)
 
 ### Survey Results Panel
 
@@ -277,8 +274,7 @@ Notification rules define when and how you are alerted. Rules can be set for:
 
 Rules can be enabled/disabled individually with toggle switches. The summary cards at the top show total rules, active rules, and total sent notifications.
 
-> **Screenshot needed:**
-> _[Screenshot of the Create Rule modal showing the name field, trigger dropdown (with options like event_reminder, training_expiry), auto-populated category and channel fields, and the description field]_
+![Create notification rule modal with its trigger and channel fields](./images/07-10-create-rule-modal.png)
 
 ### Send Log
 
@@ -342,8 +338,7 @@ department or a targeted group. There are two surfaces:
    time (see the sections below).
 6. Click **Post message** (or **Schedule message** if you set a future time).
 
-> **Screenshot needed:**
-> _[Screenshot of the New message form showing title/body, priority, audience selector with the "By role" checklist expanded, the flag toggles, and the Schedule/Expires fields]_
+![New department message form with audience and scheduling fields](./images/07-11-new-message-form.png)
 
 ### How members receive a message
 
@@ -383,8 +378,7 @@ Toggle **Require acknowledgment** for messages members must confirm they've read
   Acknowledgments are treated as compliance evidence and are recorded in the
   audit log.
 
-> **Screenshot needed:**
-> _[Screenshot of the acknowledgment report panel showing the "Acknowledged 12/20" summary and the recipient list with members who have not yet acknowledged surfaced at the top]_
+![Acknowledgment report showing who has and has not acknowledged a message](./images/07-12-acknowledgment-report.png)
 
 ### Scheduling a message
 
@@ -431,7 +425,7 @@ Members manage how they're reached under **Settings → Notifications**:
   because that email is the official record that the member was notified.
 - **Urgent Text Messages** — receive an SMS for urgent messages. Requires a mobile
   number on file, the department to have SMS (Twilio) enabled, **and** the
-  member's express **SMS consent** under **Settings → Security → Privacy Choices**
+  member's express **SMS consent** under **My Account → Security → Privacy Choices**
   (a member who has never granted consent will not receive texts, per US TCPA
   rules). Turning this off — or never granting SMS consent — never stops the email.
 

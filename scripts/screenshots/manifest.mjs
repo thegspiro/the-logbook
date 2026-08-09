@@ -20,6 +20,9 @@
  *   selector optional CSS/locator to clip to instead of the full viewport
  *   fullPage capture the whole scroll height rather than the viewport
  *   viewport 'mobile' to shoot at phone width instead of desktop
+ *   holdBack why the shot must not be applied yet, even though it captures
+ *            cleanly — for a page that renders a misleading picture rather than
+ *            an empty one, which the empty-state check cannot see
  *
  * Entries are grouped by guide and ordered by the placeholder's position in it.
  * This file covers the placeholders a plain route visit satisfies; the ones
@@ -32,13 +35,28 @@ export const DEMO_CREDENTIALS = {
   password: "DemoP@ssw0rd!2026",
 };
 
-/** Click a tab/button by its visible label. */
+/**
+ * Click a control by its visible label.
+ *
+ * Matches buttons, tabs and links, because which of the three a given tab strip
+ * uses is not predictable from the outside — Settings renders its sections as
+ * links while Medical Screening renders the same shape as buttons, and a
+ * button-only lookup simply times out on the former.
+ */
 export function clickByName(name) {
   return async (page) => {
     const target = page
       .getByRole("button", { name })
-      .or(page.getByRole("tab", { name }));
-    await target.first().click({ timeout: 10_000 });
+      .or(page.getByRole("tab", { name }))
+      .or(page.getByRole("link", { name }))
+      // Last resort: an <a> with no href, or a div wired up with onClick, has
+      // no implicit role at all, so match the visible text directly.
+      .or(page.locator("a, [role='tab'], button").filter({ hasText: name }));
+    const control = target.first();
+    // Settings renders its section tabs below the fold on a 900px viewport, and
+    // Playwright's actionability check times out on a control it cannot reach.
+    await control.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+    await control.click({ timeout: 10_000 });
   };
 }
 
@@ -102,6 +120,185 @@ export const isUpcoming = (event) => {
   const start = event.start_datetime ?? event.startDatetime ?? "";
   return start > new Date().toISOString();
 };
+
+/**
+ * Re-open the current route with query parameters taken from an API record.
+ *
+ * The print views are addressed by query string rather than path — they read
+ * `?id=` and render "No member ID provided" without it. Same reasoning as
+ * openFirstFromApi: the id is minted per seed, so it has to be discovered at
+ * capture time.
+ */
+export function withQueryFromApi(apiPath, listKey, paramsFor, match) {
+  return async (page) => {
+    const records = await page.evaluate(
+      async ([path, key]) => {
+        const response = await fetch(`/api/v1${path}`, {
+          credentials: "include",
+        });
+        if (!response.ok) return [];
+        const body = await response.json();
+        return Array.isArray(body)
+          ? body
+          : body[key] || body.items || body.results || body.data || [];
+      },
+      [apiPath, listKey ?? ""],
+    );
+    const chosen = match ? records.find(match) : records[0];
+    if (!chosen) {
+      throw new Error(
+        `withQueryFromApi: ${apiPath} returned no ${match ? "matching " : ""}records`,
+      );
+    }
+    const url = new URL(page.url());
+    for (const [key, value] of Object.entries(paramsFor(chosen))) {
+      if (value != null) url.searchParams.set(key, String(value));
+    }
+    await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  };
+}
+
+/**
+ * Re-open the current route with `?ids=` naming several records at once.
+ *
+ * The shared label print page renders one label per id in that parameter, so a
+ * sheet has to be addressed with the whole set — unlike the print views
+ * withQueryFromApi serves, which take a single record.
+ */
+export function withIdsFromApi(apiPath, listKey, limit = 6) {
+  return async (page) => {
+    const ids = await page.evaluate(
+      async ([path, key, max]) => {
+        const response = await fetch(`/api/v1${path}`, {
+          credentials: "include",
+        });
+        if (!response.ok) return [];
+        const body = await response.json();
+        const records = Array.isArray(body)
+          ? body
+          : body[key] || body.items || body.results || body.data || [];
+        return records
+          .map((record) => record.id)
+          .filter(Boolean)
+          .slice(0, max);
+      },
+      [apiPath, listKey ?? "", limit],
+    );
+    if (!ids.length) {
+      throw new Error(`withIdsFromApi: ${apiPath} returned no records`);
+    }
+    const url = new URL(page.url());
+    url.searchParams.set("ids", ids.join(","));
+    await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  };
+}
+
+/** True for a shift whose date has passed — where the logged runs are. */
+export const isPastShift = (shift) => {
+  const day = shift.shift_date ?? shift.shiftDate ?? "";
+  return day && day < new Date().toISOString().slice(0, 10);
+};
+
+/** True for a shift still to come — where the assign and edit controls are. */
+export const isFutureShift = (shift) => {
+  const day = shift.shift_date ?? shift.shiftDate ?? "";
+  return day && day > new Date().toISOString().slice(0, 10);
+};
+
+/**
+ * True for a shift that actually has people on it.
+ *
+ * The seeder tolerates the API refusing to double-book a member across
+ * overlapping shifts, so some seeded shifts end up with no crew at all. A panel
+ * shot that lands on one of those reads "No crew assigned yet", which is not
+ * what the shift guide is illustrating.
+ */
+export const isStaffedShift = (shift) =>
+  Boolean(shift.shift_officer_id ?? shift.shiftOfficerId);
+
+/** True for a staffed shift that also has runs logged against it. */
+export const hasLoggedCalls = (shift) =>
+  isStaffedShift(shift) && (shift.call_count ?? shift.callCount ?? 0) > 0;
+
+/**
+ * Open the shift detail panel on a shift that actually has a crew.
+ *
+ * The shift list carries no assignment count, and `shift_officer_id` turned out
+ * to be a poor proxy — a shift can name an officer whose assignment the API
+ * refused as a double-booking, leaving the panel reading "No crew assigned yet".
+ * So this asks each candidate's detail endpoint in turn and takes the first one
+ * that really is staffed.
+ *
+ *   extraMatch  optional further condition on the list record (past, future, …)
+ */
+export function openStaffedShift(extraMatch) {
+  return async (page) => {
+    const id = await page.evaluate(
+      async ([extra]) => {
+        const pickList = (body) =>
+          Array.isArray(body) ? body : body.shifts || body.items || [];
+        const response = await fetch("/api/v1/scheduling/shifts?limit=100", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        // eslint-disable-next-line no-new-func
+        const matches = extra ? new Function(`return ${extra}`)() : () => true;
+        for (const shift of pickList(await response.json()).filter(matches)) {
+          // The roster comes from the assignments collection. The shift detail
+          // response has no assignment list, and its `attendees` field is
+          // check-in attendance — a different thing that is empty on a shift
+          // nobody has checked into yet.
+          const detail = await fetch(
+            `/api/v1/scheduling/shifts/${shift.id}/assignments`,
+            { credentials: "include" },
+          );
+          if (!detail.ok) continue;
+          const body = await detail.json();
+          const crew = Array.isArray(body) ? body : body.assignments || [];
+          if (crew.length) return shift.id;
+        }
+        return null;
+      },
+      [extraMatch ? extraMatch.toString() : ""],
+    );
+    if (!id) throw new Error("openStaffedShift: no shift with a crew found");
+    const url = new URL(page.url());
+    url.searchParams.set("shift", id);
+    await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+  };
+}
+
+/**
+ * Open an election's detail page and switch to one of its workflow tabs.
+ *
+ * The tabs are component state rather than a query parameter, so they can only
+ * be reached by clicking. Matched on the tab's `id` rather than its label: the
+ * Ballot tab renders a count badge inside the button, so its accessible name is
+ * "Ballot 1" and an anchored label match never fires. The election id is minted
+ * per seed, hence the lookup.
+ */
+/**
+ * The seeded election that has candidates. Elections are listed newest-first
+ * and the draft bylaw vote comes back before the officer election, so a shot
+ * that just takes the first record lands on an election nobody has been
+ * nominated for and every tab shows its empty state.
+ */
+export const isNominatingElection = (election) =>
+  (election.status ?? "") === "nominations";
+
+export function openElectionTab(tabId, match) {
+  return async (page) => {
+    await openFirstFromApi(
+      "/elections?limit=20",
+      (id) => `/elections/${id}`,
+      "elections",
+      match,
+    )(page);
+    const tab = page.locator(`#tab-${tabId}`);
+    await tab.waitFor({ timeout: 10_000 });
+    await tab.click({ timeout: 10_000 });
+  };
+}
 
 export const SHOTS = [
   // ── 00 Getting Started ──────────────────────────────────────────────
@@ -1505,5 +1702,664 @@ export const SHOTS = [
     // Viewport only: the builder opens over the list page, and a full-page
     // capture trails the taller page underneath it below the fold.
     fullPage: false,
+  },
+
+  // ── Fifth batch: modals from admin list pages ──────────────────────
+  {
+    id: "05-05-item-form-modal",
+    doc: "05-inventory.md",
+    line: 71,
+    anchor:
+      "Screenshot of the item edit modal showing form fields for name, description,",
+    alt: "Inventory item form with category, serial, condition and tracking fields",
+    route: "/inventory/admin/items",
+    prepare: clickByName(/add item/i),
+    fullPage: false,
+  },
+  {
+    id: "05-12-new-allowance-modal",
+    doc: "05-inventory.md",
+    line: 288,
+    anchor:
+      "Screenshot of the New Allowance modal showing the Category dropdown, the 'Applies",
+    alt: "New allowance modal with category, role and quantity fields",
+    route: "/inventory/admin/allowances",
+    prepare: clickByName(/new allowance/i),
+    fullPage: false,
+  },
+  {
+    id: "05-27-equipment-kit-modal",
+    doc: "05-inventory.md",
+    line: 812,
+    anchor:
+      "Screenshot of the Equipment Kit create/edit modal showing a kit named 'New",
+    alt: "Equipment kit editor with its line items and quantities",
+    route: "/inventory/admin/kits",
+    prepare: clickByName(/edit new recruit ppe kit/i),
+    fullPage: false,
+  },
+  {
+    id: "02-11-pipeline-wizard",
+    doc: "02-training.md",
+    line: 269,
+    anchor:
+      "The pipeline wizard showing the program info fields (including the program code)",
+    alt: "Training pipeline wizard with program details and phase list",
+    route: "/training/programs",
+    prepare: clickByName(/new pipeline/i),
+    fullPage: true,
+  },
+
+  // ── Sixth batch: print layouts and training history ────────────────
+  {
+    id: "02-62-print-member-history",
+    doc: "02-training.md",
+    line: 1541,
+    anchor:
+      "Screenshot of the printed Member Training History page showing the letter-size layout",
+    alt: "Print layout for a member training history",
+    // The print views take their subject from the query string and render
+    // "No member ID provided" without it.
+    route: "/training/print/member",
+    prepare: withQueryFromApi("/users?limit=1", "users", (record) => ({
+      id: record.id,
+      name: [record.first_name, record.last_name].filter(Boolean).join(" "),
+    })),
+    fullPage: true,
+  },
+  {
+    id: "02-63-print-program",
+    doc: "02-training.md",
+    line: 1556,
+    anchor:
+      "Screenshot of the printed Training Program page showing the program header, phases",
+    alt: "Print layout for a training program with phases and requirements",
+    route: "/training/print/program",
+    prepare: withQueryFromApi(
+      "/training/programs/programs",
+      "programs",
+      (record) => ({ id: record.id }),
+    ),
+    fullPage: true,
+  },
+  {
+    id: "02-65-print-compliance",
+    doc: "02-training.md",
+    line: 1573,
+    anchor:
+      "Screenshot of the printed Compliance Matrix page showing the landscape grid with",
+    alt: "Print layout for the compliance matrix",
+    route: "/training/print/compliance",
+    fullPage: true,
+  },
+  {
+    id: "02-40-member-training-history",
+    doc: "02-training.md",
+    line: 947,
+    anchor:
+      "The Member Training History page showing the export period dropdown next to",
+    alt: "Member training history with the export period selector and download buttons",
+    route: "/members",
+    prepare: openFirstFromApi(
+      "/users?limit=1",
+      (id) => `/members/${id}/training`,
+      "users",
+    ),
+    fullPage: true,
+  },
+  {
+    id: "02-30-shift-reports",
+    doc: "02-training.md",
+    line: 742,
+    anchor:
+      "Screenshot of the Pending Review view showing report cards with checkboxes, the",
+    alt: "Shift reports pending review with selection controls",
+    route: "/training/shift-reports",
+    fullPage: true,
+  },
+
+  // ── Seventh batch: shift detail panel ──────────────────────────────
+  {
+    id: "03-02-shift-detail-panel",
+    doc: "03-scheduling.md",
+    line: 67,
+    anchor:
+      "Screenshot of the Shift Detail Panel (slide-out drawer) showing shift details at",
+    alt: "Shift detail panel with the crew roster and shift information",
+    route: "/scheduling",
+    prepare: openStaffedShift(),
+    fullPage: true,
+  },
+  {
+    id: "03-08-calls-runs-section",
+    doc: "03-scheduling.md",
+    line: 174,
+    anchor: "Screenshot of the Calls / Runs section on the shift detail panel",
+    alt: "Calls and runs logged against a shift",
+    route: "/scheduling",
+    prepare: openStaffedShift((shift) => (shift.call_count ?? 0) > 0),
+    fullPage: true,
+  },
+  {
+    id: "03-09-log-call-form",
+    doc: "03-scheduling.md",
+    line: 177,
+    anchor:
+      "Screenshot of the inline Log Call form expanded, showing the two-column layout:",
+    alt: "Inline log call form with incident type and times",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await openStaffedShift((shift) => (shift.call_count ?? 0) > 0)(page);
+      await clickByName(/log call/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-05-assignment-form",
+    doc: "03-scheduling.md",
+    line: 124,
+    anchor:
+      "Screenshot of the assignment creation form within the Shift Detail Panel, showing",
+    alt: "Assignment form in the shift panel with member and position selectors",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await withQueryFromApi(
+        "/scheduling/shifts?limit=100",
+        "shifts",
+        (shift) => ({ shift: shift.id }),
+        isFutureShift,
+      )(page);
+      await clickByName(/^assign$/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-31-shift-edit-times",
+    doc: "03-scheduling.md",
+    line: 926,
+    anchor:
+      "Screenshot of the ShiftDetailPanel edit form showing correctly localized start and end",
+    alt: "Shift edit form showing start and end times in the department timezone",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await withQueryFromApi(
+        "/scheduling/shifts?limit=100",
+        "shifts",
+        (shift) => ({ shift: shift.id }),
+        isFutureShift,
+      )(page);
+      await clickByName(/edit shift/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-22-screening-record-form",
+    doc: "08-admin-reports.md",
+    line: 865,
+    anchor:
+      "Screenshot of the ScreeningRecordForm showing fields for member selection, requirement dropdown, scheduled",
+    alt: "Screening record form with member, requirement and result fields",
+    route: "/medical-screening",
+    prepare: async (page) => {
+      await clickByName(/^records$/i)(page);
+      await clickByName(/add record/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-31-sidebar-notification-badge",
+    doc: "08-admin-reports.md",
+    line: 1108,
+    anchor:
+      "Screenshot of the side navigation panel showing the 'Notifications' link with a",
+    alt: "Sidebar navigation with the unread notification badge",
+    route: "/dashboard",
+    selector: "aside, nav",
+  },
+  {
+    id: "01-07-admin-member-edit",
+    doc: "01-membership.md",
+    line: 195,
+    anchor:
+      "Screenshot of the Admin Member Edit page showing the form sections: personal",
+    alt: "Admin member edit form with personal, department and access sections",
+    route: "/members",
+    prepare: openFirstFromApi(
+      "/users?limit=1",
+      (id) => `/members/admin/edit/${id}`,
+      "users",
+    ),
+    fullPage: true,
+  },
+  {
+    id: "01-08-member-audit-history",
+    doc: "01-membership.md",
+    line: 215,
+    anchor:
+      "Screenshot of the Member Audit History page showing a timeline of changes",
+    alt: "Member audit history showing recorded changes over time",
+    // The guide's example is "Rank changed from X to Y", but the timeline is
+    // dominated by "Member profile viewed" — which the capture tooling itself
+    // generates on every run, and which always outranks the seeded promotions
+    // by recency. Filling the placeholder with this would illustrate the wrong
+    // thing. Needs the page's event filter driven to a field-change type.
+    holdBack:
+      "timeline shows only 'profile viewed' events generated by the capture runs, not the field changes the guide describes",
+    // Viewport only: the history is paginated at 50 entries and a full-page
+    // capture runs past 5000px, which is unreadable in a guide. The newest
+    // entries are at the top, which is what the section describes.
+    route: "/members",
+    prepare: openFirstFromApi(
+      "/users?limit=1",
+      (id) => `/members/admin/history/${id}`,
+      "users",
+    ),
+    fullPage: false,
+  },
+  {
+    id: "15-06-applicant-drawer",
+    doc: "15-prospective-members.md",
+    line: 226,
+    anchor:
+      "Screenshot of the applicant detail drawer showing the overview tab with applicant",
+    alt: "Applicant detail drawer with contact details and current stage",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      await page
+        .locator("[class*='cursor-pointer']")
+        .filter({ hasText: /Rivera|Fields|Okafor/ })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
+  },
+
+  // ── Sixth batch: documents, forms and department messaging ─────────
+  {
+    id: "07-03-upload-documents",
+    doc: "07-documents-forms.md",
+    line: 85,
+    anchor:
+      "Screenshot showing the upload interface with a drag-and-drop zone, and a",
+    alt: "Document upload dialog with its drag-and-drop zone",
+    route: "/documents",
+    prepare: clickByName(/^upload/i),
+    fullPage: false,
+  },
+  {
+    id: "07-05-form-sharing",
+    doc: "07-documents-forms.md",
+    line: 193,
+    anchor:
+      "Screenshot showing the form sharing options with the internal link, the public",
+    alt: "Form sharing dialog with the public URL and its QR code",
+    route: "/forms",
+    prepare: async (page) => {
+      // Every form has a Share button, but the public URL and QR code this
+      // placeholder is about only render for a form with public access on.
+      // Open them in turn until the URL field appears. ("Share link", on the
+      // card itself, copies to the clipboard and opens nothing — hence the
+      // anchored pattern.)
+      const shares = page.getByRole("button", { name: /^Share$/ });
+      const count = await shares.count();
+      for (let index = 0; index < count; index += 1) {
+        await shares.nth(index).click({ timeout: 10_000 });
+        const url = page.locator("#share-public-url");
+        const shown = await url
+          .waitFor({ state: "visible", timeout: 2_000 })
+          .then(() => true)
+          .catch(() => false);
+        if (shown) return;
+        await page
+          .getByRole("button", { name: /^Done$/ })
+          .click({ timeout: 10_000 });
+      }
+      throw new Error("no form has public access enabled");
+    },
+    fullPage: false,
+  },
+  {
+    id: "07-07-form-submissions",
+    doc: "07-documents-forms.md",
+    line: 208,
+    anchor:
+      "Screenshot of the form submissions table showing rows of responses with",
+    alt: "Form submissions table listing responses with their timestamps",
+    route: "/forms",
+    prepare: async (page) => {
+      await clickByName(/^submissions$/i)(page);
+      const select = page.locator("#submission-form-select");
+      await select.waitFor({ timeout: 10_000 });
+      // Every form is listed, answered or not, and the table for an unanswered
+      // one is empty. The option label carries the count, so pick from that.
+      const value = await select.evaluate(
+        (el) =>
+          Array.from(el.options).find(
+            (option) => option.value && !/\(0 submissions\)/.test(option.text),
+          )?.value ?? "",
+      );
+      if (!value) throw new Error("no form has any submissions");
+      await select.selectOption(value);
+      // Rows collapse to submitter and timestamp; the answers this placeholder
+      // is about are behind the disclosure.
+      await page
+        .getByRole("button", { name: /^Submission by / })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
+  },
+  {
+    id: "07-10-create-rule-modal",
+    doc: "07-documents-forms.md",
+    line: 270,
+    anchor:
+      "Screenshot of the Create Rule modal showing the name field, trigger dropdown",
+    alt: "Create notification rule modal with its trigger and channel fields",
+    route: "/notifications",
+    prepare: clickByName(/add rule/i),
+    fullPage: false,
+  },
+  {
+    id: "07-11-new-message-form",
+    doc: "07-documents-forms.md",
+    line: 333,
+    anchor:
+      "Screenshot of the New message form showing title/body, priority, audience",
+    alt: "New department message form with audience and scheduling fields",
+    route: "/communications/messages",
+    prepare: async (page) => {
+      await clickByName(/new message/i)(page);
+      // The audience selector is a plain dropdown until a targeted option is
+      // chosen; "By role" is what reveals the checklist the guide describes.
+      await page.locator("#msg-target").selectOption("roles");
+    },
+    fullPage: true,
+  },
+  {
+    id: "07-12-acknowledgment-report",
+    doc: "07-documents-forms.md",
+    line: 374,
+    anchor:
+      'Screenshot of the acknowledgment report panel showing the "Acknowledged 12/20"',
+    alt: "Acknowledgment report showing who has and has not acknowledged a message",
+    route: "/communications/messages",
+    prepare: async (page) => {
+      // Every message row carries the report button, but only a message that
+      // requires acknowledgment renders the "Acknowledged n/m" line this
+      // placeholder is about. Open them in turn until one does.
+      const buttons = page.getByRole("button", {
+        name: "View acknowledgments",
+      });
+      const count = await buttons.count();
+      for (let index = 0; index < count; index += 1) {
+        await buttons.nth(index).click({ timeout: 10_000 });
+        const acknowledged = page.getByText(/Acknowledged:/).first();
+        const shown = await acknowledged
+          .waitFor({ state: "visible", timeout: 3_000 })
+          .then(() => true)
+          .catch(() => false);
+        if (shown) return;
+        // Clicking the same button again collapses the panel.
+        await buttons.nth(index).click({ timeout: 10_000 });
+      }
+      throw new Error("no message requires acknowledgment");
+    },
+    fullPage: true,
+  },
+
+  // ── Seventh batch: apparatus labels, badges and EVOC ────────────────
+  {
+    id: "06-02-apparatus-label-print",
+    doc: "06-apparatus-facilities.md",
+    line: 56,
+    anchor:
+      'Screenshot of the apparatus list with the per-row "Print label" printer icon',
+    alt: "Apparatus label print page with size presets and a barcode preview",
+    route: "/apparatus/print-labels",
+    prepare: async (page) => {
+      await withIdsFromApi("/apparatus?limit=6", "apparatus")(page);
+      // Size presets live behind Settings, which starts collapsed.
+      await clickByName(/^settings$/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-08-facility-label-print",
+    doc: "06-apparatus-facilities.md",
+    line: 177,
+    anchor:
+      'Screenshot of the Facilities header showing the "Print Labels" button next to',
+    alt: "Facility label print page previewing station barcode labels",
+    route: "/facilities/print-labels",
+    prepare: async (page) => {
+      await withIdsFromApi("/facilities?limit=6", "facilities")(page);
+      // Size presets live behind Settings, which starts collapsed.
+      await clickByName(/^settings$/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-20-apparatus-badges",
+    doc: "06-apparatus-facilities.md",
+    line: 637,
+    anchor:
+      "Screenshot of the apparatus list showing apparatus cards with correct icon",
+    alt: "Apparatus list with type icons and status badges rendering correctly",
+    route: "/apparatus",
+    fullPage: true,
+  },
+  {
+    id: "06-21-apparatus-evoc-level",
+    doc: "06-apparatus-facilities.md",
+    line: 650,
+    anchor:
+      'Screenshot of the apparatus edit form showing the "Required EVOC Level" dropdown',
+    alt: "Apparatus edit form with the required EVOC level field",
+    route: "/apparatus",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus?limit=20",
+        (id) => `/apparatus/${id}/edit`,
+        "apparatus",
+      )(page);
+      // The dropdown only renders once EVOC levels are defined, and it defaults
+      // to none — the guide pictures it set.
+      const evoc = page.locator('select[name="requiredEvocLevelId"]');
+      await evoc.waitFor({ timeout: 10_000 });
+      // Options read "Level 2 — Intermediate" and their values are seeded ids,
+      // so match on the visible text rather than naming either.
+      const value = await evoc.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) =>
+            /intermediate/i.test(option.text),
+          )?.value ?? "",
+      );
+      if (!value) throw new Error("no Intermediate EVOC level defined");
+      await evoc.selectOption(value);
+    },
+    fullPage: true,
+  },
+
+  // ── Eighth batch: personal data rights ─────────────────────────────
+  {
+    id: "17-02-download-my-data",
+    doc: "17-privacy-data-rights.md",
+    line: 78,
+    anchor:
+      'Screenshot of the "Your Data" section showing the "Download my data" button',
+    alt: "The Your Data section of account security with its export button",
+    route: "/account?tab=security",
+    // The section sits at the foot of a long tab; clip to it rather than
+    // shooting the whole page for one button.
+    selector: 'div:has(> h2:text-is("Your Data"))',
+  },
+  {
+    id: "12-08-application-activity-log",
+    doc: "12-grants-fundraising.md",
+    line: 268,
+    anchor: "Screenshot of the Activity tab showing a timeline of events",
+    alt: "Grant application activity log with its timeline of status changes and notes",
+    route: "/grants/applications",
+    prepare: async (page) => {
+      // Every application has the auto-generated "created with status" entry;
+      // only the seeded one has a timeline. The list response carries no note
+      // count, so ask each application's notes endpoint.
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/grants/applications?limit=20", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const applications = Array.isArray(body)
+          ? body
+          : body.applications || body.items || [];
+        for (const application of applications) {
+          const notes = await fetch(
+            `/api/v1/grants/applications/${application.id}/notes`,
+            { credentials: "include" },
+          );
+          if (!notes.ok) continue;
+          const list = await notes.json();
+          if ((Array.isArray(list) ? list : list.notes || []).length > 2) {
+            return application.id;
+          }
+        }
+        return null;
+      });
+      if (!id) throw new Error("no application has an activity timeline");
+      await page.goto(
+        new URL(`/grants/applications/${id}`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await clickByName(/activity log/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "18-04-my-orders-unpaid",
+    doc: "18-storefront.md",
+    line: 467,
+    anchor: "Screenshot of My Orders showing an unpaid order",
+    alt: "My Orders showing an unpaid order with its balance and payment options",
+    route: "/store/orders",
+    fullPage: true,
+  },
+  {
+    id: "11-12-purchase-request-detail",
+    doc: "11-finance.md",
+    line: 519,
+    anchor: "A Purchase Request Detail page showing the request header",
+    alt: "Purchase request detail with its status and approval chain",
+    route: "/finance/purchase-requests",
+    // A draft has no approval chain to picture, so open one that was submitted.
+    prepare: openFirstFromApi(
+      "/finance/purchase-requests",
+      (id) => `/finance/purchase-requests/${id}`,
+      "purchase_requests",
+      (request) => (request.status ?? request.Status) !== "draft",
+    ),
+    fullPage: true,
+  },
+  {
+    id: "11-14-expense-report-detail",
+    doc: "11-finance.md",
+    line: 645,
+    anchor: "An Expense Report Detail page showing the report header",
+    alt: "Expense report detail with its line items and approval status",
+    route: "/finance/expenses",
+    prepare: openFirstFromApi(
+      "/finance/expense-reports",
+      (id) => `/finance/expenses/${id}`,
+      "expense_reports",
+      (report) => (report.status ?? "") !== "draft",
+    ),
+    fullPage: true,
+  },
+  {
+    id: "11-16-check-request-detail",
+    doc: "11-finance.md",
+    line: 743,
+    anchor: "A Check Request Detail page showing the request header",
+    alt: "Check request detail with payee, amount and approval status",
+    route: "/finance/check-requests",
+    prepare: openFirstFromApi(
+      "/finance/check-requests",
+      (id) => `/finance/check-requests/${id}`,
+      "check_requests",
+      (request) => (request.status ?? "") !== "draft",
+    ),
+    fullPage: true,
+  },
+
+  // ── Ninth batch: elections workflow tabs ───────────────────────────
+  {
+    id: "14-04-ballot-configuration",
+    doc: "14-elections.md",
+    line: 115,
+    anchor:
+      "Screenshot of the ballot item configuration showing a position field",
+    alt: "Ballot item configuration with its position and candidate settings",
+    route: "/elections",
+    prepare: async (page) => {
+      await openElectionTab("ballot", isNominatingElection)(page);
+      // Items render collapsed; the position, candidate list and write-in
+      // toggle the placeholder names are inside one. The disclosure is an
+      // icon-only button labelled "Expand" — the item's title is not clickable.
+      await page
+        .getByRole("button", { name: "Expand" })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
+    // The Results & Publishing panel sits above every tab and reads "No votes
+    // cast yet" — accurate for an election still taking nominations, and
+    // nothing to do with the tab this shot is of.
+    allowEmptyState: true,
+  },
+  {
+    id: "14-05-nominations-tab",
+    doc: "14-elections.md",
+    line: 152,
+    anchor: "Screenshot of the Nominations tab showing the",
+    alt: "Nominations tab with the nominate form and current nominations",
+    route: "/elections",
+    prepare: openElectionTab("nominations", isNominatingElection),
+    fullPage: true,
+    // The Results & Publishing panel sits above every tab and reads "No votes
+    // cast yet" — accurate for an election still taking nominations, and
+    // nothing to do with the tab this shot is of.
+    allowEmptyState: true,
+  },
+  {
+    id: "14-06-candidate-form",
+    doc: "14-elections.md",
+    line: 178,
+    anchor:
+      "Screenshot of the candidate nomination form showing member dropdown",
+    alt: "Candidate nomination form with member, position and statement fields",
+    route: "/elections",
+    prepare: async (page) => {
+      await openElectionTab("candidates", isNominatingElection)(page);
+      await clickByName(/add candidate/i)(page);
+    },
+    // The tab lists candidates; the *form* the placeholder names is behind
+    // "Add Candidate". It renders inline rather than as a modal, part-way down
+    // a long page, so clip to the card instead of shooting the viewport.
+    selector: 'div:has(> h4:text-is("Add New Candidate"))',
+  },
+  {
+    id: "14-07-eligibility-roster",
+    doc: "14-elections.md",
+    line: 210,
+    anchor: "Screenshot of the Eligibility Roster showing a table of members",
+    alt: "Eligibility roster listing members with their eligibility status",
+    route: "/elections",
+    prepare: async (page) => {
+      await openElectionTab("eligibility", isNominatingElection)(page);
+      await clickByName(/voter eligibility roster/i)(page);
+    },
+    fullPage: true,
+    allowEmptyState: true,
   },
 ];
