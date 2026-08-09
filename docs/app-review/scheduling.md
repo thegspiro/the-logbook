@@ -13,6 +13,36 @@ left open.
 
 ---
 
+## Pass 3 (2026-08-09) — verified clean; latent-500 clears; 7 E712 swept
+
+Re-verified: **SCH-7** — `create_template` validates the client `apparatus_id` in-org
+via `apparatus_ref_exists` → "Apparatus not found" (service 1704; `update_template`
+mirrors it); **SCH-8** — `get_active_shift_for_apparatus` returns `Optional[Shift]`
+(no 500). SCH-1/2/3/4/6 hold; SCH-5 stays flagged.
+
+**Latent-500 lens clears:** the shift enum columns (`assignment_status`,
+`pattern_type`, `position`, `status`) are all properly typed / validated in the
+`scheduling.py` request schemas — **0** free-string→ENUM fields.
+
+### SCH2-1 — NIT — 7 boolean-column E712 swept — ✅ FIXED
+
+`scheduling_service.py` carried 7 `== True/False  # noqa: E712` comparisons
+(`Shift.is_finalized` ×3, `ShiftPattern.is_active`, `MemberLeaveOfAbsence.active` ×2,
+`TrainingRequirement.active`) — all boolean columns; converted to `.is_(...)`, now
+E712-free.
+
+### Still flagged (unchanged)
+
+- **SCH-5** — swap accept-path re-validation + approver identity (a design change to
+  the swap workflow, not a drive-by). **SCH-6 residual** — validate `station_id`/
+  `template_id` if/when the station link is wired.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · scheduling tests **109 passed** (DB-free; the `db_session`
+errors are the known no-MySQL fixture failures — this module is DB-heavy).
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified pass-1 (SCH-1–4, SCH-6; SCH-5 still flagged). Update-bypass is clean

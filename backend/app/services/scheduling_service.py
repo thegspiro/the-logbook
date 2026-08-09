@@ -1015,7 +1015,7 @@ class SchedulingService:
                     Shift.apparatus_id == apparatus_id,
                     Shift.organization_id == str(organization_id),
                     Shift.shift_date == today,
-                    Shift.is_finalized == False,  # noqa: E712
+                    Shift.is_finalized.is_(False),
                 )
                 .order_by(Shift.start_time.asc())
                 .limit(1)
@@ -1031,7 +1031,7 @@ class SchedulingService:
                 .where(
                     Shift.apparatus_id == apparatus_id,
                     Shift.organization_id == str(organization_id),
-                    Shift.is_finalized == False,  # noqa: E712
+                    Shift.is_finalized.is_(False),
                     Shift.end_time >= now - timedelta(hours=2),
                 )
                 .order_by(Shift.start_time.desc())
@@ -1049,7 +1049,7 @@ class SchedulingService:
                     Shift.apparatus_id == apparatus_id,
                     Shift.organization_id == str(organization_id),
                     Shift.shift_date > today,
-                    Shift.is_finalized == False,  # noqa: E712
+                    Shift.is_finalized.is_(False),
                 )
                 .order_by(Shift.start_time.asc())
                 .limit(1)
@@ -1782,7 +1782,7 @@ class SchedulingService:
             ShiftPattern.organization_id == str(organization_id)
         )
         if active_only:
-            query = query.where(ShiftPattern.is_active == True)  # noqa: E712
+            query = query.where(ShiftPattern.is_active.is_(True))
 
         query = query.order_by(ShiftPattern.name.asc())
         result = await self.db.execute(query)
@@ -3516,7 +3516,7 @@ class SchedulingService:
         leave_result = await self.db.execute(
             select(MemberLeaveOfAbsence).where(
                 MemberLeaveOfAbsence.organization_id == str(organization_id),
-                MemberLeaveOfAbsence.active == True,  # noqa: E712
+                MemberLeaveOfAbsence.active.is_(True),
                 MemberLeaveOfAbsence.start_date <= end_date,
                 or_(
                     MemberLeaveOfAbsence.end_date >= start_date,
@@ -3767,7 +3767,7 @@ class SchedulingService:
             leave_result = await self.db.execute(
                 select(MemberLeaveOfAbsence.user_id).where(
                     MemberLeaveOfAbsence.organization_id == str(organization_id),
-                    MemberLeaveOfAbsence.active == True,  # noqa: E712
+                    MemberLeaveOfAbsence.active.is_(True),
                     MemberLeaveOfAbsence.start_date <= shift.shift_date,
                     or_(
                         MemberLeaveOfAbsence.end_date >= shift.shift_date,
@@ -4409,7 +4409,7 @@ class SchedulingService:
         req_result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == str(organization_id))
-            .where(TrainingRequirement.active == True)  # noqa: E712
+            .where(TrainingRequirement.active.is_(True))
             .where(
                 TrainingRequirement.requirement_type.in_(
                     [

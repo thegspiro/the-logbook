@@ -57,7 +57,7 @@ from its open list.
 | B16 | reports & analytics | RPT2 | ✅ (p1, p2, p3) |
 | B17 | events | EV2 | ✅ (p1, p2, p3) |
 | B18 | training | TR2 | ✅ (p1, p2, p3) |
-| B19 | scheduling | SCH2 | ⬜ |
+| B19 | scheduling | SCH2 | ✅ (p1, p2, p3) |
 | B20 | finance | FIN2 | ⬜ |
 | B21 | orgs, roles & users | ORU2 | ⬜ |
 | B22 | compliance & skills | CS2 | ⬜ |
@@ -1601,3 +1601,15 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   passes 1–2 never swept; all boolean columns (no JSON compares) → `.is_()`. 95
   training tests pass. Gate: flake8/black clean; tsc n/a. No CHANGELOG. See training.md
   → Pass 3. Next: B19 scheduling.
+
+- **B19 scheduling ✅ (pass 3).** Re-verified SCH-7 (`create_template` validates
+  apparatus_id via `apparatus_ref_exists` → "Apparatus not found"; update mirrors),
+  SCH-8 (`get_active_shift_for_apparatus` returns Optional[Shift], no 500),
+  SCH-1/2/3/4/6 hold. **Latent-500 lens clears:** shift enum columns
+  (assignment_status/pattern_type/position/status) are properly typed/validated in the
+  scheduling schemas — 0 free-str. **Swept SCH2-1** — 7 boolean-column E712
+  (Shift.is_finalized ×3, ShiftPattern.is_active, MemberLeaveOfAbsence.active ×2,
+  TrainingRequirement.active) → `.is_()`. SCH-5 (swap accept-path design change) and
+  SCH-6 residual stay flagged. 109 scheduling tests pass (DB-heavy module; db_session
+  errors are the no-MySQL limit). Gate: flake8/black clean; tsc n/a. No CHANGELOG. See
+  scheduling.md → Pass 3. Next: B20 finance.
