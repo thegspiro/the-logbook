@@ -447,6 +447,75 @@ check requests were all charged against the budgets and the panel still said
 Verified 2026-08-09 by counting non-test call sites for each store action and
 service method, and by reading the render bodies.
 
+## Two Migrations Claimed 20260808_0002 — and What It Left Behind (2026-08-09)
+
+Two pull requests merged migrations numbered `20260808_0002`: "drop the
+shift_equipment_checks apparatus FK" and "add owns_requirement to
+program_requirements". Each was green against the main it branched from — the
+collision only existed once both had landed — so nothing caught it until a
+clean checkout of main failed three migration-chain tests. Resolved by
+renumbering the first to `20260808_0003`; `0002` kept its number because live
+databases had already applied it.
+
+**A database can be recorded as having run a migration it never saw.** The same
+pair collided at `20260808_0001` a day earlier ("drop the apparatus FK" before
+its first renumber, and "add officer validation trail to skills tests"). Any
+database that applied the former has `20260808_0001` in `alembic_version` and
+will never run the latter — so `skill_tests.validated_at` is missing while
+Alembic reports the chain as up to date. It surfaces as a query error, not a
+migration error:
+
+    (1054, "Unknown column 'skill_tests.validated_at' in 'SELECT'")
+
+Repair, for a database in that state — run the skipped revision on its own,
+then re-mark the chain:
+
+```bash
+cd backend
+python -m alembic stamp 20260807_0009      # back to the shared parent
+python -m alembic upgrade 20260808_0001    # idempotent: adds only what is missing
+python -m alembic stamp head               # 0002/0003 were already applied
+```
+
+`upgrade head` is **not** the shortcut here: `20260808_0002` uses a bare
+`add_column` and fails on a database that already has the column.
+
+**Why the failure is quiet.** `main.py`'s startup fallback resolves a forked
+head by renaming one migration file to `.stale`. Startup then logs "Migrations
+completed successfully" while one migration has silently been taken out of the
+chain. That fallback buys a working dev environment at the cost of hiding the
+fork — worth knowing before trusting a green startup log.
+
+**The general rule.** A revision id is a shared namespace across every open
+branch, and a date-stamped sequence collides the moment two people work on the
+same day. Before merging a migration, re-check `revision` against the current
+main rather than against your merge-base.
+
+## Prospective Members — Two Bulk-Action Bars at Once (2026-08-09)
+
+Selecting applicants in the pipeline **table** view renders two selection bars
+stacked on top of each other, both reading "N selected":
+
+| Bar | Rendered by | Actions |
+| --- | --- | --- |
+| upper | `ProspectiveMembersPage` (line ~646) | Print Badges, Advance All, Reject All |
+| lower | `PipelineTable` (line ~188) | Advance, Hold, Reject |
+
+`PipelineTable` supports both controlled and uncontrolled selection —
+`selected = externalSelected ?? internalSelected` — but it renders its own bar
+whenever anything is selected, including when the parent is driving the
+selection and has already drawn one. The page passes `selectedApplicants` and
+`onToggleSelect`, so both fire.
+
+The overlap is not clean, which is why this is recorded rather than fixed here:
+"Advance All" and "Advance" do the same thing on the same selection, **Hold**
+exists only on the lower bar, and **Print Badges** only on the upper. Suppressing
+either one silently drops an action, so which bar survives — or what a merged
+bar should offer — is a product call.
+
+The guide screenshot (`15-11-table-bulk-actions.png`) shows both bars, because
+that is what the page does today.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

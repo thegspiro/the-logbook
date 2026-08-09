@@ -23,7 +23,11 @@ import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DEMO_CREDENTIALS, SHOTS } from "./manifest.mjs";
+import {
+  DEMO_CREDENTIALS,
+  DEMO_MEMBER_CREDENTIALS,
+  SHOTS,
+} from "./manifest.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..", "..");
@@ -145,17 +149,17 @@ async function detectEmptyState(page, selector) {
   return match ? match[0].trim() : null;
 }
 
-async function login(page) {
+async function signIn(page, credentials) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
   await settle(page);
   await page
     .getByLabel(/username|email/i)
     .first()
-    .fill(DEMO_CREDENTIALS.username);
+    .fill(credentials.username);
   await page
     .getByLabel(/password/i)
     .first()
-    .fill(DEMO_CREDENTIALS.password);
+    .fill(credentials.password);
   await page
     .getByRole("button", { name: /sign in|log ?in/i })
     .first()
@@ -164,6 +168,89 @@ async function login(page) {
     timeout: 30_000,
   });
   await settle(page);
+}
+
+/**
+ * Browser contexts, created on demand and reused.
+ *
+ * A shot picks its context with `auth` and `theme`. They have to be separate
+ * contexts rather than one page that signs in and out, because cookies are
+ * per-context: clearing them mid-run to swap users would silently invalidate
+ * every later shot's session, and `colorScheme` is fixed when the context is
+ * created.
+ *
+ * Created lazily and keyed by the combination, so a run that needs no member
+ * session never pays for that login — which matters because `--only` runs are
+ * the common case while iterating on one guide.
+ */
+function makeSessions(browser, baseOptions) {
+  const cache = new Map();
+
+  return {
+    async pageFor(shot) {
+      const auth = shot.auth || "admin";
+      const theme = shot.theme || "light";
+      const key = `${auth}:${theme}`;
+
+      let entry = cache.get(key);
+      if (entry) return entry;
+
+      const context = await browser.newContext({
+        ...baseOptions,
+        colorScheme: theme === "dark" ? "dark" : "light",
+      });
+      const page = await context.newPage();
+
+      if (auth === "admin") {
+        await login(page, DEMO_CREDENTIALS);
+      } else if (auth === "member") {
+        // A deliberately ordinary member: no training.manage, no officer
+        // position. Shots that picture what a member sees have to be taken as
+        // one, because the officer view of the same route is a different page.
+        await login(page, DEMO_MEMBER_CREDENTIALS);
+      } else if (auth !== "anonymous") {
+        throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
+      }
+
+      entry = page;
+      cache.set(key, page);
+      return entry;
+    },
+  };
+}
+
+/**
+ * Sign in, retrying a slow first attempt.
+ *
+ * The Vite dev server compiles on first request, so the navigation right after
+ * a frontend restart can exceed the 30s timeout while the app is merely slow
+ * rather than broken. Failing there aborts the whole run before a single shot
+ * is taken — an hour of capture lost to a cold cache. The second attempt hits
+ * a warm bundle and succeeds.
+ */
+async function login(page, credentials) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await signIn(page, credentials);
+      break;
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      console.log(`  … login attempt ${attempt + 1} timed out, retrying`);
+    }
+  }
+
+  // An account the administrator created is flagged to change its password at
+  // first sign-in, and the app redirects it into that flow — where every shot
+  // would picture the same change-password form. The seeder clears the flag for
+  // the accounts the manifest signs in as; failing loudly here beats capturing
+  // twenty screenshots of a password prompt. Checked outside the retry: a set
+  // flag is a seed-data problem, and signing in twice more will not clear it.
+  if (/change-password|force-password/i.test(page.url())) {
+    throw new Error(
+      `${credentials.username} is being forced to change its password — ` +
+        "re-run seed_demo_data.py, which clears that flag for the demo accounts",
+    );
+  }
 }
 
 /**
@@ -223,20 +310,17 @@ async function main() {
     reducedMotion: "reduce",
   };
 
-  const authed = await browser.newContext(contextOptions);
-  const authedPage = await authed.newPage();
-  await login(authedPage);
-
-  // Signed-out pages (login, SSO, password reset) get their own context.
-  // Clearing cookies in the shared one would silently break every later shot.
-  const anon = await browser.newContext(contextOptions);
-  const anonPage = await anon.newPage();
+  // Signed-out pages (login, SSO, password reset), the member view and the
+  // dark-mode shots each need their own context; `sessions` builds them on
+  // first use. Clearing cookies in a shared one would silently break every
+  // later shot.
+  const sessions = makeSessions(browser, contextOptions);
 
   const results = [];
   const shots = SHOTS.filter((shot) => !only || shot.id.startsWith(only));
   for (const shot of shots) {
     const target = resolve(OUTPUT_DIR, `${shot.id}.png`);
-    const page = shot.auth === "anonymous" ? anonPage : authedPage;
+    const page = await sessions.pageFor(shot);
     try {
       await page.setViewportSize(shot.viewport === "mobile" ? MOBILE : DESKTOP);
       await page.goto(`${BASE_URL}${shot.route}`, {
@@ -244,7 +328,13 @@ async function main() {
       });
       await settle(page);
       if (shot.prepare) {
-        await shot.prepare(page);
+        // The second argument gives a prepare step a signed-in page to look
+        // things up with. A signed-out shot still needs ids the seeder minted
+        // per run — the public form's slug, for instance — and its own context
+        // has no session to ask the API with.
+        await shot.prepare(page, {
+          lookupPage: () => sessions.pageFor({ id: shot.id, auth: "admin" }),
+        });
         await settle(page);
       }
       const clip = shot.selector

@@ -65,7 +65,7 @@ Navigate to **Prospective Members > Settings** to configure the pipeline.
 5. Configure each stage's settings (auto-advance, timeout, etc.)
 6. Save
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Pipeline Builder showing stages in a vertical list with drag handles, stage names, type icons, and an "Add Stage" button at the bottom. Show one stage expanded with its configuration panel._
+![Pipeline builder listing the stages with their drag handles and types](./images/15-02-pipeline-builder.png)
 
 ### Pipeline Settings
 
@@ -224,7 +224,7 @@ The default view shows applicants as **cards on a kanban board** with one column
   whitespace-separated word must now match some field, which also means "smith
   john" finds the same person.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the kanban board showing 4-5 columns (pipeline stages) with applicant cards. Show one card being dragged between columns. Include the Active/On Hold/Withdrawn filter tabs at the top._
+![Kanban board with a column per pipeline stage and applicant cards](./images/15-04-kanban-board.png)
 
 ### The board shows everyone now _(2026-08-08)_
 
@@ -243,17 +243,19 @@ Three things changed:
 - **Switching between board and table refetches**, so neither view inherits the
   other's page position.
 - **Past 200 applicants, the board tells you.** It states plainly how many it is
-  not showing instead of quietly dropping them, and each column header shows the
-  **true** count for that stage even when not every card is drawn.
+  not showing instead of quietly dropping them.
+
+> **Past the ceiling, the column counts are counts of what loaded.** The notice
+> gives you the real total for the pipeline, but each column header counts only
+> the cards that were fetched — so on a truncated board a stage can show fewer
+> than it actually holds. That is the other reason to work from the table view
+> at this size: its filters and paging see the whole set.
 
 > **If you are running a pipeline larger than 200 active applicants**, use the
 > table view with its filters and search for day-to-day work — the board is a
 > visual overview, and beyond that size it is telling you it is one.
 
-> **[SCREENSHOT NEEDED]:** _The kanban board for a pipeline with more than 200
-> active applicants, showing the truncation notice ("Showing 200 of 247
-> applicants") above the columns, with a column header whose count exceeds the
-> number of cards drawn beneath it._
+![Kanban board reporting that it is showing only the first page of a larger pipeline](./images/15-02-board-truncated.png)
 
 ### What a card carries — and what it no longer leaks _(2026-08-08)_
 
@@ -319,14 +321,22 @@ Navigate to `/prospective-members/:applicantId/interview` to record an interview
 ### Recording an Interview
 
 1. Open the applicant's interview page
-2. Fill in the interview form:
-   - Interview date and time
-   - Interviewer name (auto-filled with current user)
-   - Recommendation (recommend, recommend with reservations, do not recommend)
-   - Notes and observations
-3. Save
+2. Click **New Interview** to open the form
+3. Fill it in:
+   - **Your Role / Title** — how you sat on the panel (Membership Coordinator,
+     Chief, President). Your identity is recorded automatically; this is the
+     capacity you served in
+   - **Interview Notes & Comments** — observations, questions asked, and the
+     applicant's responses
+   - **Recommendation** — Recommend, Recommend with Reservations, Do Not
+     Recommend, or Undecided. Choosing one reveals a **Recommendation Details**
+     box for the reasoning behind it
+4. **Submit Interview**
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Interview form showing date/time fields, interviewer name, recommendation radio buttons (Recommend, Recommend with Reservations, Do Not Recommend), and a notes text area._
+The interview is stamped with the time you submit it, so there is no date field
+to fill in.
+
+![Interview form with its scheduling, interviewer and recommendation fields](./images/15-07-interview-form.png)
 
 ### Edge Cases
 
@@ -464,16 +474,21 @@ Individual stages can override the pipeline timeout. For example, a background c
 
 Select multiple applicants on the pipeline dashboard to perform bulk actions:
 
-1. Check the boxes next to applicant names
-2. A bottom action bar appears with available actions:
-   - **Advance** — Move all selected to next stage
+1. Check the boxes next to applicant names — in **Table** view, the checkbox in
+   the header row selects everything on the current page
+2. An action bar appears with the available actions:
+   - **Advance** / **Advance All** — Move all selected to the next stage
    - **Hold** — Put all selected on hold
-   - **Reject** — Reject all selected
-   - **Reactivate** — Reactivate all selected
-   - **Delete** — Permanently remove (requires confirmation)
+   - **Reject** / **Reject All** — Reject all selected, with a reason
+   - **Print Badges** — Open the label sheet for the selected applicants
+   - On the **Inactive Applications** tab the same bar offers **Reactivate**
 3. Confirm the bulk action
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the pipeline table view with 3 applicants checked, and the bulk action bar at the bottom showing Advance, Hold, Reject, and Delete buttons._
+> **There is no bulk delete.** Applicants are withdrawn, rejected or purged by
+> the inactivity policy, not deleted in bulk — this list previously named a
+> **Delete** button that does not exist.
+
+![Pipeline table with applicants selected and the bulk action bar](./images/15-11-table-bulk-actions.png)
 
 ### Bulk actions now tell you who was skipped _(2026-08-08)_
 
@@ -490,10 +505,7 @@ applicant's name and the reason.
 **One failure never stops the rest.** If applicant #7 is already at the final
 stage, the other twenty-nine still advance.
 
-> **[SCREENSHOT NEEDED]:** _The bulk-action result summary after advancing 12
-> applicants where 2 failed — showing "10 advanced, 2 skipped" with the two
-> named applicants listed beneath and the reason next to each ("Already at the
-> final stage")._
+![Bulk advance reporting how many moved and naming the applicants it skipped](./images/15-09-bulk-action-result.png)
 
 #### A rejection reason no longer overwrites your notes
 
@@ -551,7 +563,7 @@ The pipeline dashboard shows summary statistics:
 | **Average Time to Convert** | Days from application to conversion         |
 | **By Stage**                | Count of applicants at each pipeline stage  |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the pipeline statistics cards showing Total Active (12), In Progress (8), On Hold (2), Approaching Timeout (1), Conversion Rate (72%), and Average Days to Convert (45)._
+![Pipeline statistics cards across the top of the applicant board](./images/15-12-pipeline-stats.png)
 
 ---
 

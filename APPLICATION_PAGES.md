@@ -109,7 +109,7 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/prospective-members/settings` | Pipeline Settings            | `prospective_members.manage`                         |
 | `/application-status/:token`    | Public Application Status    | None (token-based; see the public-routes note above) |
 
-> **Board view fetch size** _(2026-08-08)_: the kanban view requests `KANBAN_PAGE_SIZE` (**200**, the list endpoint's ceiling), not `DEFAULT_PAGE_SIZE` (25) — it groups applicants into stage columns client-side, so a page of 25 produced a board silently assembled from a fraction of the pipeline. Switching between board and table **refetches** rather than inheriting the other view's page. Past 200 the board renders a truncation notice, and each column header shows its true count.
+> **Board view fetch size** _(2026-08-08)_: the kanban view requests `KANBAN_PAGE_SIZE` (**200**, the list endpoint's ceiling), not `DEFAULT_PAGE_SIZE` (25) — it groups applicants into stage columns client-side, so a page of 25 produced a board silently assembled from a fraction of the pipeline. Switching between board and table **refetches** rather than inheriting the other view's page. Past 200 the board renders a truncation notice naming the real total. Column headers count only the cards that loaded, so a stage on a truncated board can read low — the table view is the accurate one at that size.
 >
 > **Board cards carry the prospect-list projection only** _(2026-08-08)_. The kanban endpoint previously declared no response model, so FastAPI serialized every `ProspectiveMember` column — including `status_token` (the credential behind the public application-status page), coordinator notes, date of birth and home address — to anyone holding `prospective_members.view`. The list and kanban endpoints now share one mapper.
 >
@@ -216,16 +216,18 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ### Skills Testing _(permissions revised 2026-08-08)_
 
-| URL                                            | Page                                              | Permission        |
-| ---------------------------------------------- | ------------------------------------------------- | ----------------- |
-| `/training/skills-testing`                     | Skills Testing (Templates / Tests / Summary tabs) | **Authenticated** |
-| `/training/skills-testing/templates/new`       | Skill Template Builder                            | `training.manage` |
-| `/training/skills-testing/templates/:id`       | Skill Template Detail                             | `training.manage` |
-| `/training/skills-testing/templates/:id/edit`  | Skill Template Builder (edit)                     | `training.manage` |
-| `/training/skills-testing/test/new`            | Start Skill Test                                  | **Authenticated** |
-| `/training/skills-testing/test/:testId`        | Active Skill Test (review)                        | **Authenticated** |
-| `/training/skills-testing/test/:testId/active` | Active Skill Test (scoring)                       | **Authenticated** |
+| URL                                            | Page                                                              | Permission        |
+| ---------------------------------------------- | ----------------------------------------------------------------- | ----------------- |
+| `/training/skills-testing`                     | Skills Testing — **member-facing** (Available Tests / My Results) | **Authenticated** |
+| `/training/skills-testing/templates/new`       | Skill Template Builder                                            | `training.manage` |
+| `/training/skills-testing/templates/:id`       | Skill Template Detail                                             | `training.manage` |
+| `/training/skills-testing/templates/:id/edit`  | Skill Template Builder (edit)                                     | `training.manage` |
+| `/training/skills-testing/test/new`            | Start Skill Test                                                  | **Authenticated** |
+| `/training/skills-testing/test/:testId`        | Active Skill Test (review)                                        | **Authenticated** |
+| `/training/skills-testing/test/:testId/active` | Active Skill Test (scoring)                                       | **Authenticated** |
 
+> **`/training/skills-testing` is the member's entry point, not the officer console** _(2026-08-08)_. When skills testing opened to members, this page became **Available Tests / My Results** — a member browses published sheets and reads their own results. The officer-facing **Templates** and **Test Records** tabs live under the Training Admin hub (`/training/admin?tab=templates` and `?tab=tests`), which is where validating, voiding and releasing happen.
+>
 > **Running a test no longer needs `training.manage`** _(2026-08-08)_. Departments routinely use senior members as evaluators, so any member may start, score and complete an official test. The officer's authority moved to a separate **validation** step (`POST /training/skills-testing/tests/{id}/validate`), which does still require `training.manage`. Template authoring is unchanged.
 >
 > Route guards are deliberately thin here — **per-record read access is enforced by the API**, so a member opening a test they are not party to receives a `404` from the API rather than being blocked at the route. A withheld result reads as absent, never as forbidden.
@@ -236,21 +238,25 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 Requires `training.manage` permission. Tab-based admin interface.
 
-| Tab              | Label              |
-| ---------------- | ------------------ |
-| `dashboard`      | Officer Dashboard  |
-| `waivers`        | Training Waivers   |
-| `submissions`    | Review Submissions |
-| `requirements`   | Requirements       |
-| `sessions`       | Create Session     |
-| `cohorts`        | Course Cohorts     |
-| `compliance`     | Compliance Matrix  |
-| `expiring-certs` | Expiring Certs     |
-| `pipelines`      | Pipelines          |
-| `shift-reports`  | Shift Reports      |
-| `integrations`   | Integrations       |
-| `import`         | Import History     |
-| `enhancements`   | Enhancements       |
+| Tab              | Label                         |
+| ---------------- | ----------------------------- |
+| `dashboard`      | Officer Dashboard             |
+| `waivers`        | Training Waivers              |
+| `submissions`    | Review Submissions            |
+| `requirements`   | Requirements                  |
+| `sessions`       | Create Session                |
+| `cohorts`        | Course Cohorts                |
+| `templates`      | Templates (Skills Testing)    |
+| `tests`          | Test Records (Skills Testing) |
+| `compliance`     | Compliance Matrix             |
+| `expiring-certs` | Expiring Certs                |
+| `pipelines`      | Pipelines                     |
+| `shift-reports`  | Shift Reports                 |
+| `integrations`   | Integrations                  |
+| `import`         | Import History                |
+| `enhancements`   | Enhancements                  |
+
+> The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.
 
 > The **Training Waivers** tab (within Officer Dashboard) shows all training waivers with summary cards, status filtering, and source tracking (Auto LOA vs Manual).
 >

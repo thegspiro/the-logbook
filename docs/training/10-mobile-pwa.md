@@ -149,11 +149,11 @@ What you will notice in practice:
 768 pixels wide — a mouse pointer does not need the target a fingertip does, and
 widening everything would have loosened desktop forms for no benefit.
 
-> **[SCREENSHOT NEEDED]:** _A side-by-side of the same form (e.g. Submit
-> Training) on a 375px-wide phone viewport, before and after, showing the taller
-> input fields and buttons — or, if a before shot is unavailable, a single
-> annotated phone screenshot with the 44px tap area indicated on an input, a
-> checkbox and a small icon button._
+> **[SCREENSHOT NEEDED — manual annotation]:** _The Submit Training form on a
+> 375px-wide phone viewport, annotated to show the 44px tap area on an input, a
+> checkbox and a small icon button. This one cannot be captured automatically:
+> the "before" state no longer exists in any running build, so the comparison
+> has to be drawn on rather than shot._
 
 ### Nothing Is Too Small to Read _(2026-08-08)_
 
@@ -172,9 +172,7 @@ labels, the day cells in the shift-pattern month grid, and the simulated barcode
 on the label-print preview. These are dense fixed-size layouts where enlarging
 the text would break the grid rather than help anyone read it.
 
-> **[SCREENSHOT NEEDED]:** _The dashboard on a phone showing the relative
-> timestamps ("2 hours ago") at the new minimum size, with the bottom navigation
-> labels and a notification count badge in the same frame._
+![Dashboard on a phone with relative timestamps and navigation labels at the 12px minimum](./images/10-10-mobile-minimum-text.png)
 
 ### Dark Mode Now Works on Public Pages _(2026-08-08)_
 
@@ -194,9 +192,7 @@ The page background is now painted by the app itself, so no page can render over
 the browser's bare canvas. **Printing is unaffected** — printed output has always
 forced a white background and still does.
 
-> **[SCREENSHOT NEEDED]:** _The public form page (`/f/<slug>`) in dark mode,
-> showing readable labels on the themed gradient background — ideally paired
-> with the ballot voting page in dark mode in the same frame._
+![The public form page in dark mode, readable on the themed background](./images/10-11-public-form-dark.png)
 
 ### Automatic Updates
 
