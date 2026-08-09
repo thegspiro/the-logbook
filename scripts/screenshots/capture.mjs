@@ -145,7 +145,7 @@ async function detectEmptyState(page, selector) {
   return match ? match[0].trim() : null;
 }
 
-async function login(page) {
+async function signIn(page) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
   await settle(page);
   await page
@@ -164,6 +164,27 @@ async function login(page) {
     timeout: 30_000,
   });
   await settle(page);
+}
+
+/**
+ * Sign in, retrying a slow first attempt.
+ *
+ * The Vite dev server compiles on first request, so the navigation right after
+ * a frontend restart can exceed the 30s timeout while the app is merely slow
+ * rather than broken. Failing there aborts the whole run before a single shot
+ * is taken — an hour of capture lost to a cold cache. The second attempt hits
+ * a warm bundle and succeeds.
+ */
+async function login(page) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await signIn(page);
+      return;
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      console.log(`  … login attempt ${attempt + 1} timed out, retrying`);
+    }
+  }
 }
 
 /**
