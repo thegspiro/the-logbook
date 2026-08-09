@@ -16,6 +16,7 @@ import { REQUIREMENT_TYPE_OPTIONS } from '../constants/enums';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import { getErrorMessage } from '../utils/errorHandling';
+import { blankToNull } from '../utils/formValues';
 import type {
   ChecklistItem,
   ProgramMilestone,
@@ -609,23 +610,26 @@ export const RequirementFormModal: React.FC<{
     }
     setSubmitting(true);
     try {
+      // Every optional field is sent on every save, as an explicit null when
+      // it does not apply. Omitting reads as "leave alone", which is how a
+      // requirement switched from hours to shifts kept its old hours target
+      // and went on evaluating against it. The same reasoning already applied
+      // to required_courses below; it applies to all of them.
       const payload = {
         name: name.trim(),
-        description: description.trim() || undefined,
+        description: blankToNull(description),
         requirement_type: type as never,
-        required_hours: type === 'hours' && hours ? Number(hours) : undefined,
-        required_shifts: type === 'shifts' && shifts ? Number(shifts) : undefined,
-        required_calls: type === 'calls' && calls ? Number(calls) : undefined,
-        passing_score: type === 'knowledge_test' && passing ? Number(passing) : undefined,
-        max_attempts: type === 'knowledge_test' && attempts ? Number(attempts) : undefined,
-        checklist_items: type === 'checklist' ? checklist.filter((i) => i.text.trim()) : undefined,
-        // Always sent (as [] for other types) so switching a requirement away
-        // from courses/certification clears stale links — a leftover course id
-        // narrows the hours evaluator to only that course's records.
+        required_hours: type === 'hours' && hours ? Number(hours) : null,
+        required_shifts: type === 'shifts' && shifts ? Number(shifts) : null,
+        required_calls: type === 'calls' && calls ? Number(calls) : null,
+        passing_score: type === 'knowledge_test' && passing ? Number(passing) : null,
+        max_attempts: type === 'knowledge_test' && attempts ? Number(attempts) : null,
+        checklist_items: type === 'checklist' ? checklist.filter((i) => i.text.trim()) : null,
+        // A leftover course id narrows the hours evaluator to only that
+        // course's records, so switching away has to clear the links.
         required_courses: linksCourses ? requiredCourses : [],
-        // Sent even when null so an officer can lift a freshness window they
-        // previously set; the service treats recency_days as clearable.
-        recency_days: linksCourses ? recencyDays : undefined,
+        // Null lifts a freshness window the officer previously set.
+        recency_days: linksCourses ? (recencyDays ?? null) : null,
         allows_external_credit: allowsExternal,
       };
       if (link) {

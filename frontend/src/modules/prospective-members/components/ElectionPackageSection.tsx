@@ -13,6 +13,7 @@ import type { Applicant } from '../types';
 import { isSafeUrl } from '../utils';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { formatDateTime } from '../../../utils/dateFormatting';
+import { blankToNull } from '../../../utils/formValues';
 import { ElectionStatus } from '../../../constants/enums';
 import { electionService } from '../../../services/electionService';
 import type { ElectionListItem } from '../../../types/election';
@@ -64,8 +65,8 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
     if (!currentElectionPackage) return;
     try {
       await updateElectionPackage(applicant.id, {
-        coordinator_notes: pkgNotes || undefined,
-        supporting_statement: pkgStatement || undefined,
+        coordinator_notes: blankToNull(pkgNotes),
+        supporting_statement: blankToNull(pkgStatement),
       });
       toast.success('Election package saved');
     } catch {
@@ -78,8 +79,8 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
     try {
       if (currentElectionPackage) {
         await updateElectionPackage(applicant.id, {
-          coordinator_notes: pkgNotes || undefined,
-          supporting_statement: pkgStatement || undefined,
+          coordinator_notes: blankToNull(pkgNotes),
+          supporting_statement: blankToNull(pkgStatement),
         });
       }
       await submitElectionPackage(applicant.id);

@@ -48,6 +48,7 @@ from app.models.finance import (
 from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.model_updates import apply_updates
 
 
 def _apply_payment_totals(dues: MemberDues) -> None:
@@ -130,9 +131,7 @@ class FinanceService:
             raise ValueError("Fiscal year not found")
         if fy.is_locked:
             raise ValueError("Fiscal year is locked and cannot be modified")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(fy, key, value)
+        apply_updates(fy, kwargs)
         await self.db.flush()
         await self.db.refresh(fy, ["updated_at"])
         return fy
@@ -215,9 +214,7 @@ class FinanceService:
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(cat, key, value)
+        apply_updates(cat, kwargs)
         await self.db.flush()
         await self.db.refresh(cat, ["updated_at"])
         return cat
@@ -269,9 +266,7 @@ class FinanceService:
         if not budget:
             raise ValueError("Budget not found")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(budget, key, value)
+        apply_updates(budget, kwargs)
         await self.db.flush()
         await self.db.refresh(budget, ["updated_at"])
         return budget
@@ -355,9 +350,7 @@ class FinanceService:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(chain, key, value)
+        apply_updates(chain, kwargs)
         await self.db.flush()
         await self.db.refresh(chain, ["updated_at"])
         return chain
@@ -396,9 +389,7 @@ class FinanceService:
         step = result.scalar_one_or_none()
         if not step:
             raise ValueError("Approval chain step not found")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(step, key, value)
+        apply_updates(step, kwargs)
         await self.db.flush()
         return step
 
@@ -1194,9 +1185,7 @@ class FinanceService:
         ):
             raise ValueError("Cannot edit a purchase request in this status")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(pr, key, value)
+        apply_updates(pr, kwargs)
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
         return pr
@@ -1408,9 +1397,7 @@ class FinanceService:
         ):
             raise ValueError("Cannot edit an expense report in this status")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(er, key, value)
+        apply_updates(er, kwargs)
         await self.db.flush()
         await self.db.refresh(er, ["updated_at"])
         return er
@@ -1560,9 +1547,7 @@ class FinanceService:
         ):
             raise ValueError("Cannot edit a check request in this status")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(cr, key, value)
+        apply_updates(cr, kwargs)
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
         return cr
@@ -1700,9 +1685,7 @@ class FinanceService:
         if not schedule:
             raise ValueError("Dues schedule not found")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(schedule, key, value)
+        apply_updates(schedule, kwargs)
         await self.db.flush()
         await self.db.refresh(schedule, ["updated_at"])
         return schedule
@@ -1987,9 +1970,7 @@ class FinanceService:
         mapping = result.scalar_one_or_none()
         if not mapping:
             raise ValueError("Export mapping not found")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(mapping, key, value)
+        apply_updates(mapping, kwargs)
         await self.db.flush()
         await self.db.refresh(mapping, ["updated_at"])
         return mapping
@@ -2242,7 +2223,8 @@ class FinanceService:
         (2) a foreign ``category_id``/``fiscal_year_id`` would leave a dangling
         cross-tenant reference that skews category/fiscal-year rollups. Only
         keys actually present in ``data`` are checked (update paths pass
-        ``exclude_none`` dumps), so this never rejects an omitted field.
+        ``exclude_unset`` dumps and a null clears rather than sets), so this
+        never rejects an omitted or explicitly-cleared field.
         """
         budget_id = data.get("budget_id")
         if budget_id and not await self.get_budget(budget_id, org_id):

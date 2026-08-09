@@ -143,7 +143,7 @@ async def update_fiscal_year(
         return await service.update_fiscal_year(
             fy_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -243,7 +243,7 @@ async def update_budget_category(
         return await service.update_budget_category(
             cat_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -330,7 +330,7 @@ async def update_budget(
         return await service.update_budget(
             budget_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -436,7 +436,7 @@ async def update_approval_chain(
         return await service.update_approval_chain(
             chain_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -500,7 +500,7 @@ async def update_chain_step(
             step_id,
             chain_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -747,7 +747,7 @@ async def update_purchase_request(
         return await service.update_purchase_request(
             pr_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -940,7 +940,7 @@ async def update_expense_report(
         return await service.update_expense_report(
             er_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1085,7 +1085,7 @@ async def update_check_request(
         return await service.update_check_request(
             cr_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1203,7 +1203,7 @@ async def update_dues_schedule(
         return await service.update_dues_schedule(
             schedule_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1425,7 +1425,7 @@ async def update_export_mapping(
         return await service.update_export_mapping(
             mapping_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_none=True),
+            **data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

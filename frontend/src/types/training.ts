@@ -727,7 +727,7 @@ export interface TrainingRequirement {
 
 export interface TrainingRequirementCreate {
   name: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   requirement_type: RequirementType;
   source?: RequirementSource | undefined;
   registry_name?: string | undefined;
@@ -735,15 +735,15 @@ export interface TrainingRequirementCreate {
   is_editable?: boolean | undefined;
   allows_external_credit?: boolean | undefined;
   training_type?: TrainingType | undefined;
-  required_hours?: number | undefined;
+  required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;
-  required_shifts?: number | undefined;
-  required_calls?: number | undefined;
+  required_shifts?: number | null | undefined;
+  required_calls?: number | null | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
-  checklist_items?: ChecklistItem[] | undefined;
-  passing_score?: number | undefined;
-  max_attempts?: number | undefined;
+  checklist_items?: ChecklistItem[] | null | undefined;
+  passing_score?: number | null | undefined;
+  max_attempts?: number | null | undefined;
   frequency: RequirementFrequency;
   year?: number | undefined;
   applies_to_all?: boolean | undefined;
@@ -762,13 +762,13 @@ export interface TrainingRequirementCreate {
   period_end_day?: number | undefined;
   include_current_month?: boolean | null | undefined;
   // Freshness window: a completion older than this many days doesn't count
-  recency_days?: number | undefined;
+  recency_days?: number | null | undefined;
   category_ids?: string[] | undefined;
 }
 
 export interface TrainingRequirementUpdate {
   name?: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   requirement_type?: RequirementType;
   source?: RequirementSource | undefined;
   registry_name?: string | undefined;
@@ -776,15 +776,15 @@ export interface TrainingRequirementUpdate {
   is_editable?: boolean | undefined;
   allows_external_credit?: boolean | undefined;
   training_type?: TrainingType | undefined;
-  required_hours?: number | undefined;
+  required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;
-  required_shifts?: number | undefined;
-  required_calls?: number | undefined;
+  required_shifts?: number | null | undefined;
+  required_calls?: number | null | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
-  checklist_items?: ChecklistItem[] | undefined;
-  passing_score?: number | undefined;
-  max_attempts?: number | undefined;
+  checklist_items?: ChecklistItem[] | null | undefined;
+  passing_score?: number | null | undefined;
+  max_attempts?: number | null | undefined;
   frequency?: RequirementFrequency;
   year?: number | undefined;
   applies_to_all?: boolean | undefined;
@@ -803,7 +803,7 @@ export interface TrainingRequirementUpdate {
   period_end_day?: number | undefined;
   include_current_month?: boolean | null | undefined;
   // Freshness window: a completion older than this many days doesn't count
-  recency_days?: number | undefined;
+  recency_days?: number | null | undefined;
   category_ids?: string[] | undefined;
   active?: boolean;
 }
