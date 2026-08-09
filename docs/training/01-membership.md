@@ -563,15 +563,17 @@ listed there, alongside training waivers.
 > two are closely related (a leave auto-links a training waiver), which is
 > presumably why.
 
-1. Click **Add Leave of Absence**.
+1. Open the **Create Waiver** tab.
 2. Select the **member** from the dropdown.
-3. Choose the **leave type**: Leave of Absence, Medical, Military, Personal, Administrative, or Other.
-4. Set the **start date** and **end date**.
-5. Optionally provide a **reason**.
-6. Click **Create Leave**.
+3. Choose the **waiver type**: Leave of Absence, Medical, Military, Personal, Administrative, or Other.
+4. Under **Applies To**, tick which requirements the leave suspends — training, meeting attendance, shifts, or all three.
+5. Set the **start date** and **end date**, or tick **Permanent (no end date)**.
+6. Optionally provide a **reason**.
+7. Click **Create Waiver**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Add Leave of Absence modal showing the member dropdown selector, leave type dropdown, start/end date pickers, and the reason text area]_
+It is a tab on that page, not a modal, and the button reads **Create Waiver** rather than "Add Leave of Absence" — a leave of absence is a waiver type, not a separate record.
+
+![Create waiver form with the member, type and date fields](./images/01-11-create-waiver.png)
 
 ### How Leave Affects Requirements
 

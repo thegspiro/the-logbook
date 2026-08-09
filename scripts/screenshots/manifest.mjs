@@ -2930,6 +2930,48 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "01-11-create-waiver",
+    doc: "01-membership.md",
+    line: 573,
+    anchor: "Screenshot of the Add Leave of Absence modal showing the member dropdown",
+    alt: "Create waiver form with the member, type and date fields",
+    route: "/members/admin/waivers",
+    prepare: clickByName(/^Create Waiver$/),
+    fullPage: true,
+  },
+  {
+    id: "04-10-event-attendance",
+    doc: "04-events-meetings.md",
+    line: 315,
+    anchor: "Screenshot of the EventRSVPSection on an event detail page showing the attendee list",
+    alt: "Event attendance list with each member's RSVP and check-in state",
+    route: "/events",
+    prepare: openFirstFromApi(
+      "/events?limit=100",
+      (id) => `/events/${id}`,
+      "events",
+      isRsvpOpen,
+    ),
+    fullPage: true,
+  },
+  {
+    id: "04-11-event-notifications",
+    doc: "04-events-meetings.md",
+    line: 346,
+    anchor: "Screenshot of the EventNotificationPanel showing the notification type dropdown",
+    alt: "Event notification panel with its type and audience controls",
+    route: "/events",
+    prepare: openFirstFromApi(
+      "/events?limit=100",
+      (id) => `/events/${id}`,
+      "events",
+      isRsvpOpen,
+    ),
+    // Clipped: the panel sits below a 21-row attendance list, which 04-10
+    // already pictures in full.
+    selector: 'div.bg-theme-surface:has(> h2:has-text("Notifications"))',
+  },
+  {
     id: "08-36-template-search",
     doc: "08-admin-reports.md",
     line: 1336,

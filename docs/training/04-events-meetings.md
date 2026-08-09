@@ -312,8 +312,7 @@ When an event reaches its capacity limit:
 - **Capacity Bar** — Visual progress bar on event cards showing RSVP count vs. capacity
 - **Non-Respondent Reminders** — Send targeted reminder notifications to members who haven't RSVP'd. Excludes members who already responded (going, not going, or maybe)
 
-> **Screenshot needed:**
-> _[Screenshot of the EventRSVPSection on an event detail page showing the attendee list with check-in times, RSVP statuses, the CSV Export and Print Roster buttons, and the RSVP activity history collapsed section]_
+![Event attendance list with each member's RSVP and check-in state](./images/04-10-event-attendance.png)
 
 ---
 
@@ -343,8 +342,7 @@ From any event's detail page, coordinators can send targeted notifications:
 | **Checked In**     | Members who checked in to the event            |
 | **Not Checked In** | Members who RSVP'd "Going" but didn't check in |
 
-> **Screenshot needed:**
-> _[Screenshot of the EventNotificationPanel showing the notification type dropdown, target audience radio buttons, message text area, and the Send button with confirmation dialog]_
+![Event notification panel with its type and audience controls](./images/04-11-event-notifications.png)
 
 ---
 
