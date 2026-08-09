@@ -85,6 +85,30 @@ export function clickByName(name) {
 }
 
 /**
+ * Select a section in the Shift Reports settings panel.
+ *
+ * The panel renders its section list *twice* — a label-only strip for phones
+ * and a label-plus-description sidebar for desktop — and hides whichever does
+ * not match the viewport. So the desktop button's accessible name is the label
+ * followed by its description ("Checklist Timing Start/end of shift checklist
+ * windows"), which an exact-label match never matches, while the label-only
+ * match resolves to the phone strip and times out clicking something hidden.
+ * Anchoring on the label text inside a *visible* button avoids both.
+ */
+export function clickSettingsSection(label) {
+  return async (page) => {
+    const button = page
+      .locator(
+        "nav[aria-label='Shift report settings sections'] button:visible",
+      )
+      .filter({ has: page.getByText(label, { exact: true }) })
+      .first();
+    await button.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+    await button.click({ timeout: 10_000 });
+  };
+}
+
+/**
  * Navigate to a detail page whose id the manifest cannot know.
  *
  * Record ids are minted by the seeder on every run, so detail shots have to
@@ -540,7 +564,60 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Skills Testing section within Training Admin, showing the template",
     alt: "Skills Testing section within Training Admin showing the template list",
-    route: "/training/skills-testing",
+    // Same trap 09-01 fell into: /training/skills-testing is the *member's*
+    // page (Available Tests / My Results), so this captured cleanly while
+    // picturing the wrong audience — and the placeholder says "within Training
+    // Admin" in as many words.
+    route: "/training/admin?tab=templates",
+  },
+  {
+    id: "02-66-compliance-thresholds",
+    doc: "02-training.md",
+    line: 628,
+    anchor: "Thresholds tab showing the",
+    alt: "Compliance thresholds configuration including the evaluation-period setting",
+    // Thresholds is the page's default tab, so no interaction is needed.
+    route: "/training/compliance-config",
+    fullPage: true,
+  },
+  {
+    id: "02-67-manual-entry-settings",
+    doc: "02-training.md",
+    line: 1002,
+    anchor: "manual entry settings panel",
+    alt: "Manual entry settings with its enable toggle, apparatus rules and shift defaults",
+    route: "/training/admin?page=setup&tab=manual-entry",
+    // Everything below the enable checkbox — the apparatus rules and the shift
+    // defaults the placeholder asks for — renders only while the feature is on,
+    // and it ships off. So the shot turns it on, which *is* a real change to
+    // the demo department: manual shift entry stays enabled afterwards.
+    prepare: async (page) => {
+      const toggle = page.getByRole("checkbox", {
+        name: /enable manual shift entry/i,
+      });
+      if (
+        !(await toggle
+          .first()
+          .isChecked()
+          .catch(() => false))
+      ) {
+        await toggle.first().click({ timeout: 10_000 });
+      }
+    },
+    fullPage: true,
+  },
+  {
+    id: "02-68-vector-category-mapping",
+    doc: "02-training.md",
+    line: 1067,
+    anchor: "Vector Solutions category mapping table",
+    alt: "External provider category mapping, pairing provider categories with internal ones",
+    route: "/training/admin?page=setup&tab=integrations",
+    fullPage: true,
+    // A department with no provider connected has nothing to map, and the
+    // mapping table is the subject — so an empty state here means the seed
+    // data cannot support the shot yet, which is worth surfacing rather than
+    // publishing an empty table under a placeholder describing a full one.
   },
 
   // ── 03 Scheduling ───────────────────────────────────────────────────
@@ -1653,6 +1730,137 @@ export const SHOTS = [
     alt: "Scheduling settings with the platoons toggle and related options",
     route: "/scheduling/settings",
     fullPage: true,
+  },
+  // Scheduling settings deep-links by `?tab=`, and the shift-reports tab is
+  // itself a section navigator showing one section at a time. Both are why
+  // these are separate shots rather than one long fullPage capture: the guide
+  // discusses the sections individually, and only one is on screen at a time.
+  {
+    id: "03-32-settings-general-closeout",
+    doc: "03-scheduling.md",
+    line: 1728,
+    anchor: "showing the Close-out",
+    alt: "Scheduling settings General tab with the close-out rules, overtime cap and shift generation options",
+    route: "/scheduling/settings?tab=general",
+    fullPage: true,
+  },
+  {
+    id: "03-33-settings-eligibility",
+    doc: "03-scheduling.md",
+    line: 619,
+    anchor: "eligible shift positions each rank may fill",
+    alt: "Operational Ranks settings, listing each rank with the shift positions it may fill",
+    // Not the scheduling module's own Eligibility tab, which controls something
+    // else entirely: which *membership types* may self-sign-up, and which
+    // positions are open to everyone. Per-rank position eligibility is set on
+    // the ranks themselves, in the main settings area.
+    route: "/settings?tab=ranks",
+    fullPage: true,
+  },
+  {
+    id: "03-40-settings-position-eligibility",
+    doc: "03-scheduling.md",
+    line: 627,
+    anchor: "which membership types may sign themselves up",
+    alt: "Scheduling settings Eligibility tab, excluding membership types from self-signup and listing open positions",
+    route: "/scheduling/settings?tab=eligibility",
+    fullPage: true,
+  },
+  {
+    id: "03-34-settings-checklist-timing",
+    doc: "03-scheduling.md",
+    line: 802,
+    anchor: "Checklist Timing",
+    alt: "Shift Reports settings with the Checklist Timing section selected",
+    route: "/scheduling/settings?tab=shift-reports",
+    prepare: clickSettingsSection("Checklist Timing"),
+    fullPage: true,
+  },
+  {
+    id: "03-35-settings-form-sections",
+    doc: "03-scheduling.md",
+    line: 836,
+    anchor: "choosing which optional sections appear on the report form",
+    alt: "Shift Reports settings Form Sections, toggling which parts of the report form appear",
+    route: "/scheduling/settings?tab=shift-reports",
+    prepare: clickSettingsSection("Form Sections"),
+    fullPage: true,
+  },
+  {
+    id: "03-36-settings-apparatus-skills",
+    doc: "03-scheduling.md",
+    line: 859,
+    anchor: "per-apparatus skills/tasks selector",
+    alt: "Shift Reports settings Apparatus Skills, showing the skills and tasks tracked for Engine",
+    route: "/scheduling/settings?tab=shift-reports",
+    prepare: async (page) => {
+      await clickSettingsSection("Apparatus Skills")(page);
+      // The section opens on the first apparatus type alphabetically
+      // (Ambulance). The guide walks through Engine, so pick that one. The
+      // pill carries its skill count, and its text is the raw lowercase type —
+      // the initial capital is CSS `capitalize`, which never reaches the DOM —
+      // so the match is loose and case-insensitive on both counts.
+      await page
+        .getByRole("button", { name: /^engine( \(\d+\))?$/i })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-37-settings-rating-scale",
+    doc: "03-scheduling.md",
+    line: 882,
+    anchor: "rating scale section with Labeled Bubbles selected",
+    alt: "Shift Reports settings Rating Scale, choosing the scale style and its per-level labels",
+    route: "/scheduling/settings?tab=shift-reports",
+    // **This shot changes the setting it pictures.** The display-style buttons
+    // save on click — there is no separate confirm — so capturing the per-level
+    // labels leaves the demo department on Labeled Bubbles rather than the
+    // documented default of Stars (1-5). Anything picturing a rating input
+    // afterwards shows bubbles. Re-select Stars in the UI when the default
+    // matters; the seeder does not own this setting and will not restore it.
+    prepare: async (page) => {
+      await clickSettingsSection("Rating Scale")(page);
+      // The per-level label editor renders only for the labelled style — the
+      // default, Stars (1-5), hides it, and the placeholder is largely about
+      // those labels. Selecting the other style is what puts them on screen.
+      await page
+        .getByRole("button", { name: /labeled bubbles/i })
+        .first()
+        .click({ timeout: 10_000 });
+      // The save toast lands in the top-right corner and would otherwise sit
+      // in the frame as though it were part of the settings page.
+      await page
+        .getByText(/display style updated/i)
+        .first()
+        .waitFor({ state: "hidden", timeout: 15_000 })
+        .catch(() => {});
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-38-notifications-assignment",
+    doc: "03-scheduling.md",
+    line: 1289,
+    anchor: "notification settings showing the Shift Assignment Alerts section",
+    alt: "Scheduling notification settings showing the shift assignment alert options",
+    route: "/scheduling/settings?tab=notifications",
+    fullPage: true,
+  },
+  {
+    id: "03-39-notifications-reminders",
+    doc: "03-scheduling.md",
+    line: 1302,
+    anchor: "Start-of-Shift Reminders section with its enable toggle",
+    alt: "Scheduling notification settings showing the start-of-shift reminder options",
+    route: "/scheduling/settings?tab=notifications",
+    // Same page as 03-38; this clips to the reminders block so the two shots
+    // are not the same image under two placeholders. The heading sits in its
+    // own flex row inside the section, so `:has(> h4)` selects that row and
+    // clips to the title alone — the section is its grandparent.
+    selector:
+      'div:has(> div > h4:text-is("Start-of-Shift Reminders")):not(:has(div:has(> div > h4:text-is("Start-of-Shift Reminders"))))',
   },
   {
     id: "03-22-equipment-check-builder",

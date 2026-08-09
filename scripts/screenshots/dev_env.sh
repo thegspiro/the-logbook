@@ -48,11 +48,38 @@ until db_up; do sleep 2; done
 until redis_up; do sleep 1; done
 echo "database and cache ready"
 
+# The backend runs from a virtualenv where one exists, and from the system
+# interpreter where the dependencies were installed globally instead. Hardcoding
+# `.venv/bin/python` fails exactly when this script is most needed: a container
+# reclaim wipes the virtualenv along with everything else, and the failure
+# surfaces as one line in a log file seven minutes later, after the readiness
+# loop gives up, rather than as an error here.
+backend_python() {
+  if [[ -x "$REPO_ROOT/backend/.venv/bin/python" ]]; then
+    echo "$REPO_ROOT/backend/.venv/bin/python"
+  else
+    command -v python3
+  fi
+}
+
 # setsid detaches these from the calling shell so they survive it exiting.
 if ! backend_up; then
   echo "starting backend..."
   cd "$REPO_ROOT/backend" || exit 1
-  setsid nohup .venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 3001 \
+  PYTHON="$(backend_python)"
+  if [[ -z "$PYTHON" ]]; then
+    echo "no python interpreter found for the backend" >&2
+    exit 1
+  fi
+  # Import the app before backgrounding it. uvicorn exits on an import error,
+  # which otherwise looks identical to a slow start until the deadline passes.
+  if ! "$PYTHON" -c "import uvicorn, main" >"$LOG_DIR/backend-import.log" 2>&1; then
+    echo "backend dependencies are not installed for $PYTHON:" >&2
+    tail -5 "$LOG_DIR/backend-import.log" >&2
+    echo "run: pip install -r backend/requirements.txt" >&2
+    exit 1
+  fi
+  setsid nohup "$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port 3001 \
     >"$LOG_DIR/backend.log" 2>&1 </dev/null &
 fi
 

@@ -625,7 +625,7 @@ Departments that hold drills late in the month often saw members flagged non-com
 2. Find the **Evaluation Period** option.
 3. Leave **Count the current (in-progress) month in compliance calculations** checked to measure members against this month's training (the default), or uncheck it so calculations stop at the end of last month.
 
-> **[SCREENSHOT NEEDED]:** _The Compliance Requirements > Thresholds tab showing the "Evaluation Period" checkbox and its helper text describing each mode and noting that individual requirements can override it._
+![Compliance thresholds configuration including the evaluation-period setting](./images/02-66-compliance-thresholds.png)
 
 ### Per-Requirement Override
 
@@ -999,7 +999,12 @@ Administrators can configure manual shift entry via the **ManualEntrySettingsPan
 | **Default Start Time**  | Pre-fill the start time field (e.g., "07:00")                      |
 | **Default Duration**    | Pre-fill the shift duration, auto-calculating the end time         |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ManualEntrySettingsPanel showing the enable toggle, apparatus requirement checkbox, apparatus multi-select, default start time input, and default duration input._
+**Everything except the enable checkbox is hidden while the feature is off**,
+which is how it ships — the apparatus rules and the shift defaults appear only
+once **Enable Manual Shift Entry** is ticked. A panel showing nothing but a
+single unticked checkbox is the feature disabled, not a broken page.
+
+![Manual entry settings with its enable toggle, apparatus rules and shift defaults](./images/02-67-manual-entry-settings.png)
 
 ### Edge Cases
 
@@ -1078,12 +1083,25 @@ Training categories can now be linked to **NREMT National Continued Competency R
 
 **How it works:**
 
-1. Navigate to **Training Admin > Requirements** and edit a training category
-2. In the **Registry Code** field, enter the NCCR code (e.g., `NCCR-CARDIOLOGY`, `NCCR-TRAUMA`)
-3. Training records filed under categories with a registry code automatically count toward the corresponding NCCR requirement
-4. The compliance matrix shows NCCR progress alongside department-specific requirements
+Registry codes are **not typed in by hand.** They arrive attached to the
+requirements you import from a standards registry, and the code travels with the
+requirement from then on:
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the training category edit form showing the new "Registry Code" field with an NCCR code entered, and a tooltip explaining that this links the category to national standards._
+1. Open a program pipeline and add a requirement from the **requirement library**
+2. Pick a registry-sourced requirement — the library shows its registry code in
+   brackets after the name, and the search box matches on that code, so
+   `NCCR` narrows the list to registry entries
+3. The imported requirement keeps its `registry_code`, `registry_name` and
+   `source` attribution
+4. The compliance matrix shows NCCR progress alongside department-specific
+   requirements
+
+> **There is no category edit form.** `registry_code` exists on the training
+> category model and its API accepts it, but no screen in the application
+> creates or edits training categories — categories appear only as selectors on
+> other forms. A previous version of this section described editing a category
+> and typing a code into a **Registry Code** field; neither the screen nor the
+> field exists. Setting a code on a category is an API-only operation today.
 
 **NREMT terminology updates:**
 

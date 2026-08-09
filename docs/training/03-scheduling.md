@@ -609,12 +609,21 @@ Operational ranks now define which shift positions each rank is eligible for. Wh
 
 **Setting up eligible positions:**
 
-1. Navigate to **Settings > Operational Ranks**.
-2. For each rank, select the eligible positions using the toggle matrix.
+1. Navigate to **Settings > Ranks** (listed as _Operational rank configuration_).
+2. Edit a rank and click **Configure eligible positions**, then click the
+   position chips to toggle them on and off. It is a per-rank list rather than
+   a single grid of every rank against every position — you set one rank at a
+   time.
 3. Save. Existing ranks are backfilled with default eligible positions.
 
-> **Screenshot needed:**
-> _[Screenshot of the Settings > Operational Ranks page showing the eligible positions matrix — a grid with ranks on the left (Chief, Captain, Lieutenant, Firefighter, Probationary) and position types across the top (Officer, Driver, Firefighter, EMT), with toggles for each combination]_
+![Operational Ranks settings, listing each rank with the shift positions it may fill](./images/03-33-settings-eligibility.png)
+
+**Do not confuse this with Scheduling > Settings > Eligibility**, which is a
+different control: it governs which _membership types_ (Prospective, Retired,
+Honorary, Administrative…) are barred from signing themselves up at all, and
+which positions are open to everyone regardless of rank.
+
+![Scheduling settings Eligibility tab, excluding membership types from self-signup and listing open positions](./images/03-40-settings-position-eligibility.png)
 
 **How it affects shift signup:**
 
@@ -781,7 +790,14 @@ After finalization, a green badge shows "Shift finalized on [date]".
 
 Navigate to **Scheduling > Settings > Shift Reports** to configure the shift completion report workflow. This settings tab connects the scheduling module to the training module and controls how officers file post-shift reports.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports Settings tab showing three cards: "Checklist Timing" with start/end toggles, "Post-Shift Validation" with enable/require/window settings, and "Report Form Sections" with toggle switches._
+The tab is a **section navigator, not a page of cards** — you pick one section
+at a time from the list and it fills the panel. There are eight: Feature
+Toggles, Checklist Timing, Post-Shift Validation, Feedback Defaults, Apparatus
+Skills, Form Sections, Review Workflow and Rating Scale. (The section is
+labelled **Form Sections**; earlier versions of this guide called it "Report
+Form Sections".)
+
+![Shift Reports settings with the Checklist Timing section selected](./images/03-34-settings-checklist-timing.png)
 
 #### Checklist Timing
 
@@ -812,7 +828,10 @@ Controls which optional sections appear on the shift completion report form when
 | Tasks Performed       | On      | Checklist of completed tasks                |
 | Call Types            | On      | Multi-select of incident types responded to |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot showing the "Report Form Sections" card with 7 toggle switches, some on (green) and some off (grey), demonstrating how officers can customize which sections appear when filing reports._
+All seven are on by default, and each is a checkbox rather than a switch. Core
+fields — trainee, date and hours — are always shown and are not listed here.
+
+![Shift Reports settings Form Sections, toggling which parts of the report form appear](./images/03-35-settings-form-sections.png)
 
 **When to toggle sections off:**
 
@@ -823,15 +842,19 @@ Controls which optional sections appear on the shift completion report form when
 
 #### Per-Apparatus-Type Skills and Tasks
 
-Below the toggles, the settings panel shows apparatus-type-specific skill and task mappings. These determine which skills and tasks appear in the report form based on the shift's assigned apparatus.
+The **Apparatus Skills** section holds apparatus-type-specific skill and task mappings. These determine which skills and tasks appear in the report form based on the shift's assigned apparatus, overriding the general defaults.
 
-1. Expand an apparatus type accordion (Engine, Ladder, Ambulance, Rescue, etc.)
+1. Pick an apparatus type from the row of pills (Ambulance, Boat, Brush, Chief,
+   Engine, Hazmat, Ladder, Rescue, Tanker). Each pill carries the number of
+   skills mapped to it, and the section opens on the first type alphabetically
+   — it is a selector, not an accordion, so exactly one type is shown at a time
 2. View the current skills and tasks mapped to that type
-3. Add new skills/tasks using the text input and "+" button
-4. Remove skills/tasks by clicking the "×" button
-5. Changes save when you click **Save** at the bottom of the settings panel
+3. Add new skills/tasks using the text input and "+ Add" button
+4. Rename with the pencil icon, or remove with the "×" button
+5. Click **Save Apparatus Skills & Tasks** — this section saves on its own
+   button, not the panel's **Save Settings** at the bottom
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the per-apparatus skills/tasks accordion, with "Engine" expanded showing skills like "Pump operations", "Hose deployment", "Hydrant connection" and a text input with "+" button for adding new skills._
+![Shift Reports settings Apparatus Skills, showing the skills and tasks tracked for Engine](./images/03-36-settings-apparatus-skills.png)
 
 **How this connects to the report form:**
 
@@ -843,13 +866,18 @@ Below the toggles, the settings panel shows apparatus-type-specific skill and ta
 
 #### Rating Scale Customization
 
-| Setting      | Default              | Description                                                            |
-| ------------ | -------------------- | ---------------------------------------------------------------------- |
-| Rating Label | "Performance Rating" | Text shown above the rating input                                      |
-| Scale Type   | Stars                | "Stars" (1-5 star icons) or "Descriptive" (labeled buttons)            |
-| Scale Labels | (none)               | Custom labels per level (e.g., 1="Needs Improvement", 5="Exceptional") |
+| Setting       | Default                                  | Description                                                                           |
+| ------------- | ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| Field label   | "Performance Rating"                     | Text shown above the rating input                                                     |
+| Display style | Stars (1-5)                              | **Stars (1-5)** or **Labeled Bubbles** — a two-button toggle, not a dropdown          |
+| Rating levels | Needs Improvement → Exceeds Expectations | Editable label per level; add, remove, rename and reorder, each level numbered from 1 |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot showing the rating scale customization section with a dropdown for scale type (Stars vs Descriptive), a text input for the rating label, and a table of 5 rows for custom labels per level._
+**The level labels only appear under Labeled Bubbles.** With the default Stars
+style the section shows just the display-style toggle and the field label —
+selecting Labeled Bubbles is what reveals the level editor. This section saves
+on its own **Save Rating Scale** button.
+
+![Shift Reports settings Rating Scale, choosing the scale style and its per-level labels](./images/03-37-settings-rating-scale.png)
 
 #### Save as Draft
 
@@ -1252,8 +1280,11 @@ When an officer assigns you to a shift, you now receive:
 
 Officers can configure these in **Settings > Scheduling > Notifications > Shift Assignment Alerts**.
 
-> **Screenshot needed:**
-> _[Screenshot of the SchedulingNotificationsPanel showing the "Shift Assignment Alerts" section with toggles for "Notify on assignment" (enabled), "Send email" (enabled), and a CC email input field]_
+There is no CC-recipient field. Email is a single **Also send email
+notification** checkbox alongside the in-app notification, and who receives it
+is decided by the alert's own role chips, not by an address typed in here.
+
+![Scheduling notification settings showing the shift assignment alert options](./images/03-38-notifications-assignment.png)
 
 ### Start-of-Shift Reminders
 
@@ -1265,8 +1296,7 @@ A scheduled task runs every 30 minutes to send reminders to members assigned to 
 
 Department settings for reminders are under **Settings > Scheduling > Notifications > Start-of-Shift Reminders**.
 
-> **Screenshot needed:**
-> _[Screenshot of the SchedulingNotificationsPanel showing the "Start-of-Shift Reminders" section with toggles for "Enable reminders" (enabled), a "Lookahead" dropdown set to "2 hours", "Send email" (disabled), and a CC email field]_
+![Scheduling notification settings showing the start-of-shift reminder options](./images/03-39-notifications-reminders.png)
 
 > **Edge case:** A shift that has already started is skipped. Reminders are sent only once per shift (tracked via `activities.start_reminder_sent`).
 
@@ -1691,10 +1721,7 @@ Under **Scheduling → Settings**, a department can turn on **automatic shift
 generation** so active patterns keep producing shifts a chosen number of weeks
 ahead — no need to press "Generate" each cycle.
 
-> **[SCREENSHOT NEEDED]:** \_[Scheduling Settings → General showing the Close-out
->
-> > rules card (require end-of-shift checks, restrict check-in), the overtime cap,
-> > and the automatic shift generation toggle.]\_
+![Scheduling settings General tab with the close-out rules, overtime cap and shift generation options](./images/03-32-settings-general-closeout.png)
 
 ### Edge Cases
 

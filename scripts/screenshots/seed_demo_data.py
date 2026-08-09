@@ -26,11 +26,50 @@ import urllib.request
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from http.cookiejar import CookieJar
-from time import sleep
+from time import monotonic, sleep
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from bootstrap_demo import DEMO_ADMIN_PASSWORD, DEMO_ADMIN_USERNAME
+
+
+class Throttle:
+    """Keep a rate-limited route *below* its ceiling instead of tripping it.
+
+    The generic 429 backoff in ``Api.call`` recovers from a limiter that has
+    already fired, which is the wrong trade for the routes that punish it. The
+    admin password-reset route allows 5 requests per 5 minutes and answers the
+    sixth with a **15-minute lockout** — so a seeder that sprints into the limit
+    pays 15 minutes per remaining account, and a run that needs eight sessions
+    spends over an hour asleep. Spacing the calls one window-slot apart costs
+    about a minute each and never triggers the lockout at all.
+
+    Not a substitute for the 429 handling: another client sharing this IP can
+    still trip the limiter, and that path stays.
+    """
+
+    def __init__(self, max_calls: int, window_seconds: float, margin: float = 2.0):
+        self.max_calls = max_calls
+        self.window = window_seconds
+        self.margin = margin
+        self._calls: list[float] = []
+
+    def wait(self) -> None:
+        now = monotonic()
+        self._calls = [t for t in self._calls if now - t < self.window]
+        if len(self._calls) >= self.max_calls:
+            # Sleep until the oldest call in the window ages out of it.
+            delay = self.window - (now - self._calls[0]) + self.margin
+            if delay > 0:
+                print(f"    pacing: waiting {delay:.0f}s to stay under the limit")
+                sleep(delay)
+            now = monotonic()
+            self._calls = [t for t in self._calls if now - t < self.window]
+        self._calls.append(monotonic())
+
+
+# `_rate_limit_admin_reset` in app/api/v1/endpoints/users.py: 5 per 300s.
+ADMIN_RESET_THROTTLE = Throttle(max_calls=5, window_seconds=300)
 
 # Shared password given to the seeded member accounts so the seeder can act as
 # them where the API has no admin-on-behalf-of route (event RSVPs). Demo-only.
@@ -264,30 +303,46 @@ def _demo_pdf(title: str, subtitle: str) -> bytes:
 
 # ── Seed steps ────────────────────────────────────────────────────────
 
+# `User.rank` holds a rank **code**, not a display name. Settings > Ranks
+# validates every active member's rank against the configured codes
+# (`DEFAULT_RANKS` in app/services/operational_rank_service.py) and banners
+# every mismatch as "N active members with unrecognised ranks" — so seeding
+# "Lieutenant" rather than "lieutenant", or inventing a rank the organization
+# does not have ("Paramedic", "Firefighter/EMT"), leaves the demo department
+# permanently displaying a warning about its own seed data. The codes below are
+# the eight an organization is created with.
 MEMBERS = [
-    ("Dana", "Ruiz", "chief", "Chief"),
-    ("Marcus", "Bell", "mbell", "Deputy Chief"),
-    ("Priya", "Raman", "praman", "Assistant Chief"),
-    ("Owen", "Kittredge", "okittredge", "Captain"),
-    ("Sofia", "Marchetti", "smarchetti", "Captain"),
-    ("Tobias", "Lindqvist", "tlindqvist", "Lieutenant"),
-    ("Amara", "Osei", "aosei", "Lieutenant"),
-    ("Henrik", "Vance", "hvance", "Lieutenant"),
-    ("Nadia", "Belhaj", "nbelhaj", "Firefighter"),
-    ("Callum", "Frazier", "cfrazier", "Firefighter"),
-    ("Ingrid", "Solberg", "isolberg", "Firefighter"),
-    ("Rafael", "Duarte", "rduarte", "Firefighter"),
-    ("Yuki", "Tanaka", "ytanaka", "Firefighter"),
-    ("Delia", "Okonkwo", "dokonkwo", "Firefighter/EMT"),
-    ("Bram", "Hollis", "bhollis", "Firefighter/EMT"),
-    ("Esme", "Caldwell", "ecaldwell", "Firefighter/EMT"),
-    ("Jonah", "Whitfield", "jwhitfield", "Paramedic"),
-    ("Lila", "Nakamura", "lnakamura", "Paramedic"),
-    ("Viktor", "Brennan", "vbrennan", "Probationary"),
-    ("Saoirse", "Nolan", "snolan", "Probationary"),
-    ("Emeka", "Adeyemi", "eadeyemi", "Probationary"),
-    ("Wren", "Halloway", "whalloway", "Administrative"),
+    ("Dana", "Ruiz", "chief", "fire_chief"),
+    ("Marcus", "Bell", "mbell", "deputy_chief"),
+    ("Priya", "Raman", "praman", "assistant_chief"),
+    ("Owen", "Kittredge", "okittredge", "captain"),
+    ("Sofia", "Marchetti", "smarchetti", "captain"),
+    ("Tobias", "Lindqvist", "tlindqvist", "lieutenant"),
+    ("Amara", "Osei", "aosei", "lieutenant"),
+    ("Henrik", "Vance", "hvance", "lieutenant"),
+    ("Nadia", "Belhaj", "nbelhaj", "firefighter"),
+    ("Callum", "Frazier", "cfrazier", "firefighter"),
+    ("Ingrid", "Solberg", "isolberg", "firefighter"),
+    ("Rafael", "Duarte", "rduarte", "firefighter"),
+    ("Yuki", "Tanaka", "ytanaka", "firefighter"),
+    ("Delia", "Okonkwo", "dokonkwo", "emt"),
+    ("Bram", "Hollis", "bhollis", "emt"),
+    ("Esme", "Caldwell", "ecaldwell", "emt"),
+    ("Jonah", "Whitfield", "jwhitfield", "emt"),
+    ("Lila", "Nakamura", "lnakamura", "emt"),
+    # The three recruits start at EMT so the seeded promotions below are real
+    # rank changes with an audit trail, not no-ops.
+    ("Viktor", "Brennan", "vbrennan", "emt"),
+    ("Saoirse", "Nolan", "snolan", "emt"),
+    ("Emeka", "Adeyemi", "eadeyemi", "emt"),
+    ("Wren", "Halloway", "whalloway", "engineer"),
 ]
+
+# The recruits the training programs enrol. Named explicitly rather than
+# derived from rank: rank is now a configured department code, and no
+# organization is created with a "probationary" one — deriving recruit status
+# from it silently enrolled nobody the moment the ranks were corrected.
+RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 
 APPARATUS = [
     ("E-1", "Engine 1", 2021, "Pierce", "Enforcer", "engine"),
@@ -408,10 +463,12 @@ class Seeder:
         generates on every capture run — and the guide's example of "Rank changed
         from X to Y" has nothing behind it.
         """
+        # Rank codes, matching MEMBERS — a promotion to a display name would
+        # re-introduce the unrecognised-rank warning one member at a time.
         promotions = [
-            ("vbrennan", "Firefighter"),
-            ("snolan", "Firefighter/EMT"),
-            ("cfrazier", "Lieutenant"),
+            ("vbrennan", "firefighter"),
+            ("snolan", "firefighter"),
+            ("cfrazier", "lieutenant"),
         ]
         by_username = {m.get("username"): m for m in members}
         for username, new_rank in promotions:
@@ -2399,7 +2456,7 @@ class Seeder:
         probationary = [
             pick(m, "id")
             for m in members
-            if str(m.get("rank") or "").lower().startswith("probation")
+            if str(pick(m, "username") or "") in RECRUIT_USERNAMES
         ]
         for program in programs:
             program_id = pick(program, "id")
@@ -2593,8 +2650,11 @@ class Seeder:
         """
 
         def clear_forced_change() -> Api:
-            # The admin reset route is heavily rate limited, so this path is
-            # slow by design and runs at most once per member.
+            # Every member reaches this, not just the ones seeded before the
+            # demo password existed: `POST /users` sets must_change_password
+            # unconditionally, so the password supplied at creation is correct
+            # and still flagged. Paced rather than raced — see ADMIN_RESET_THROTTLE.
+            ADMIN_RESET_THROTTLE.wait()
             self.api.post(
                 f"/users/{user_id}/reset-password",
                 {"new_password": DEMO_MEMBER_PASSWORD, "force_change": False},
