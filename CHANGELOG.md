@@ -133,6 +133,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > as a fixture holding a literal permission list.
 
 ---
+### Dashboard: action items are now shown only to members allowed to see them (2026-08-08)
+
+**Security**
+
+- **The dashboard's combined action-items list didn't check permissions**, so any
+  signed-in member could see the descriptions of meeting and minutes action items —
+  including items tied to executive-session minutes (disciplinary or legal matters).
+  Each half of the list is now gated the same way its own module is: meeting items
+  require meeting or minutes viewing access, and minutes items require minutes
+  viewing access.
+
+### Kiosk: check-in no longer shows as active before the window actually opens (2026-08-09)
+
+**Fixed**
+
+- **A location wall-display could show an event's check-in as "active" (with a
+  scannable QR) up to an hour before check-in actually opened**, and the scan would
+  then be rejected. The kiosk now shows check-in as active only during each event's
+  real check-in window (which varies by event).
+
 ### Property return: the total value owed is now calculated precisely (2026-08-08)
 
 **Fixed**

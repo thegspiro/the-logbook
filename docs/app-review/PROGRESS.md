@@ -22,11 +22,11 @@ been through a review pass.
 | A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ✅ (p1, p2) |
 | A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ✅ (p1, p2) |
 | A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ✅ (p1, p2) |
-| A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | 🔄 |
+| A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ✅ (p1, p2) |
 | A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ✅ (p1, p2) |
-| A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | 🔄 |
-| A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | 🔄 |
-| A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | 🔄 |
+| A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ✅ (p1, p2) |
+| A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ✅ (p1, p2) |
+| A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | ✅ (p1, p2) |
 
 ## Tier B — second pass over the audited 27
 
@@ -1289,4 +1289,55 @@ The rotation wraps from B27 back to A1. Same discipline as Tier B pass 2.
   figures (methodology reconciliation), and the DiD member-fetch org filter. Existing
   23 property-return tests pass. flake8/black clean. Money fix in CHANGELOG. See
   member-lifecycle.md → Pass 2. Next: A5 course cohorts (wave 2).
+- **A5 course cohorts & syllabus ✅ (pass 2).** Re-verified the cleanest module (XC-3,
+  generation bounds, CC-1, DST). **1 fix — CC-4** (MED XC-1: `add_ad_hoc_class`
+  validated only instructor/location in-org but persisted client `category_id`/
+  `requirement_id`/`phase_id` — which flow into the generated TrainingSession —
+  unvalidated, while the syllabus path's `_validate_references` validates exactly
+  these; extended the loop + phase-via-TrainingProgram-join to mirror it). Flagged:
+  three catalog-course JOINs missing the CC-1 org predicate (not live), reschedule/
+  cancel commit-before-cohort-match (cosmetic). **1 DB-free regression test.**
+  flake8/black clean. See course-cohorts.md → Pass 2. Next: A7.
+- **A7 dashboard & action items ✅ (pass 2).** Re-verified pass-1 (RPT-1 clean, DASH-1
+  minutes filter). **1 fix — DASH-3 (HIGH XC-2):** `/dashboard/action-items` had **no
+  permission gate** — the meeting half filtered only `organization_id`, so any member
+  (even one with neither `meetings.view` nor `minutes.view`) could read every meeting
+  action item's description org-wide, and the minutes half's `minutes_visibility_filter`
+  only reproduced the inner restricted-split, not the outer view gate. Gated each half
+  in-code as its owning module does (meeting half: meetings.view OR minutes.view;
+  minutes half: minutes.view), independently. Flagged: DASH-2, admin-summary counts
+  fold restricted items (integers only), display nits. **3 DB-free regression tests.**
+  flake8/black clean. Security fix in CHANGELOG. See dashboard.md → Pass 2. Next: A8.
+- **A8 locations & kiosk ✅ (pass 2).** Re-verified pass-1 (6/6 gated, LOC-1/2, no PP-1).
+  **1 fix — LOC-4** (MED: LOC-1 fixed the display *rendering* to use the canonical
+  `_get_check_in_window`, but the *selection* query still used a hardcoded 1h lead — a
+  superset — so the kiosk showed an active check-in QR for STRICT/early-FLEXIBLE events
+  up to an hour early, then rejected the scan. Kept a generous SQL prefilter, then
+  narrow in Python to the canonical per-event window; swept an E712). Flagged (folded
+  into LOC-3 dead-code): the authenticated display's hardcoded `is_valid` + missing
+  timezone. **1 DB-free regression test.** flake8/black clean. Kiosk fix in CHANGELOG.
+  See locations-kiosk.md → Pass 2. Next: A9.
+- **A9 platform ops & data lifecycle ✅ (pass 2) — no code change; Tier A pass 2
+  COMPLETE.** Re-verified the four services (assert_different_person wired to all four
+  SoD sites; admin-continuity ORU-7 across five paths with the service-layer role-edit
+  guard; data-export self-scoped + rate-limited + audited, no latent-500; audit-ship
+  env-only URL + HMAC + 2xx-gated watermark). All clean. **1 caller-side flag — OPS-6**
+  (MED, outside these four services): finance `approve_by_token` (public, unauth) sets
+  APPROVED with no `assert_different_person` and no `acted_by`, a twin of the
+  FIN-4-guarded `approve_step` — exploitability hinges on whether a requester can be an
+  "email" approver on their own chain (a chain-config product question); recorded, not
+  fixed. No code changed. See platform-ops.md → Pass 2.
+
+---
+
+## 🏁 Tier A pass 2 complete (2026-08-09) — full second pass done (all 36 features)
+
+All 9 Tier A modules (A1–A9) reviewed in pass 2, completing the second full pass over
+every feature (Tier A A1–A9 + Tier B B1–B27 = 36). Tier A pass-2 headline finds:
+**DASH-3 (HIGH** action-items permission bypass), **SF-4 (MED** currency-blind
+auto-settle), the **CRON-1 completion** (3 more org-loops + a deferred-commit
+data-loss), and a cluster of **float-money** fixes on member-facing chargeable totals
+(LIFE-4, CRON-6). Same discipline throughout: verified/safe fixes only, product/
+behavior/migration items flagged, regression tests added, gate green (flake8/black/
+tsc/eslint; DB-backed tests are the known no-MySQL sandbox limit).
 </content>
