@@ -1,7 +1,63 @@
 # Application Review — Inventory (Tier B)
 
 **Prefix:** `INV2` · **Iteration:** B3 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3)
+
+---
+
+## Pass 3 (2026-08-09) — closed INV2-2 (E712 sweep); latent-500 lens clean
+
+Re-verified the landed fixes hold: **INV2-1** member-in-org validation intact at
+all four member-facing mutation sites (`is_in_org(self.db, User, user_id, org)` →
+`"Member not found"` at service lines 929, 1124, 1359, 4408); **INV-3** maintenance
+item-in-org guard intact (the `"Item not found"` early return); INV-1/INV-2/INV-5/
+INV-6-safe-half unchanged.
+
+### INV2-2 — NIT — 55 `== True/False  # noqa: E712` suppressions swept — ✅ FIXED
+
+Pass 2 recorded these as a standalone cleanup to do in "one focused commit, no
+behavior change" — deliberately not mixed into the INV2-1 security fix. Done here as
+that focused commit: all 55 boolean-column comparisons in `inventory_service.py`
+(`.is_returned == False`, `.active == True`, `.is_overdue == True`, etc. — including
+the ternary at the assignment/issuance branch and the list-context conditions) were
+converted to `.is_(True)` / `.is_(False)` (Pitfall #10), removing **every**
+`# noqa: E712` from the file. Behavior-neutral for boolean columns; flake8 stays
+clean and the file needs no black reformat.
+
+### Latent-500 lens (the B1 finding) — checked, clean
+
+The B1 class (a request field typed as free `str` that maps to a strict `Enum`
+column) does **not** recur here. Inventory has a large enum surface (17 models with
+enum columns — `condition`/`status`/`tracking_type`, `request_type`/`priority`,
+`maintenance_type`, `checkout_condition`, `storage_type`, …), and an automated
+sweep of every `*Create`/`*Update` schema field that maps to an enum column found
+**0** typed as free `str` — all are properly enum-typed, so an out-of-range value
+is rejected at the schema (422) rather than reaching MySQL and 500-ing.
+
+### INV-4 remainder — LOW — dangling-only FK sweep — 🚩 OPEN (unchanged)
+
+Still the one substantive open item: the ~15 create/update methods that persist
+client-supplied `category_id`/`location_id`/`storage_id`/assignment-issuance-checkout
+ids without an in-org check. Pass 2 established (and re-confirmed here) that these are
+**integrity-only** — the read-leak subset (member `user_id` via listings) was already
+closed in INV2-1, and these remaining FKs are not projected by name into any
+response. As pass 1/2 both concluded, this is a genuine ~15-method mechanical
+`assert_in_org` sweep that "deserves a dedicated focused pass" rather than a rushed
+half-sweep in a rotation tick; kept flagged. No disclosure risk in the interim.
+
+### Future development (unchanged)
+
+1. **INV-4 dedicated XC-1 sweep** — the ~15 create/update methods, mechanical with
+   `assert_in_org`; the biggest remaining item.
+2. **Equipment-kit `optional` feature** — column + migration + `create_equipment_kit`
+   wiring (INV-6 flagged half).
+3. **`_escape_like` helper** — small DRY cleanup across the search methods.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit` 0
+(no frontend change) · eslint unaffected (no frontend change) · inventory tests
+**142 passed** (all DB-free); the 75 `test_inventory_gaps.py` errors are the known
+`db_session`/no-MySQL fixture failures (`pymysql` connection refused at setup),
+unchanged by this behavior-neutral sweep.
 
 ---
 

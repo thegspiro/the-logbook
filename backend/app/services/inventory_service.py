@@ -251,7 +251,7 @@ class InventoryService:
                 select(ItemIssuance).where(
                     ItemIssuance.item_id == item.id,
                     ItemIssuance.organization_id == str(organization_id),
-                    ItemIssuance.is_returned == False,  # noqa: E712
+                    ItemIssuance.is_returned.is_(False),
                 )
             )
             for issuance in result.scalars().all():
@@ -281,7 +281,7 @@ class InventoryService:
             asgn_result = await self.db.execute(
                 select(ItemAssignment)
                 .where(ItemAssignment.item_id == item.id)
-                .where(ItemAssignment.is_active == True)  # noqa: E712
+                .where(ItemAssignment.is_active.is_(True))
             )
             for assignment in asgn_result.scalars().all():
                 assignment.is_active = False
@@ -295,7 +295,7 @@ class InventoryService:
                 select(ItemIssuance).where(
                     ItemIssuance.item_id == item.id,
                     ItemIssuance.organization_id == str(organization_id),
-                    ItemIssuance.is_returned == False,  # noqa: E712
+                    ItemIssuance.is_returned.is_(False),
                 )
             )
             for issuance in iss_result.scalars().all():
@@ -423,7 +423,7 @@ class InventoryService:
             query = query.where(InventoryCategory.item_type == item_type)
 
         if active_only:
-            query = query.where(InventoryCategory.active == True)  # noqa: E712
+            query = query.where(InventoryCategory.active.is_(True))
 
         query = query.order_by(InventoryCategory.name).offset(skip).limit(limit)
 
@@ -485,7 +485,7 @@ class InventoryService:
                 select(func.count(InventoryItem.id)).where(
                     InventoryItem.category_id == str(category_id),
                     InventoryItem.organization_id == str(organization_id),
-                    InventoryItem.active == True,  # noqa: E712
+                    InventoryItem.active.is_(True),
                 )
             )
             if count_result.scalar():
@@ -518,7 +518,7 @@ class InventoryService:
         query = select(func.count(InventoryItem.id)).where(
             InventoryItem.organization_id == str(organization_id),
             InventoryItem.serial_number == serial_number,
-            InventoryItem.active == True,  # noqa: E712
+            InventoryItem.active.is_(True),
         )
         if exclude_item_id:
             query = query.where(InventoryItem.id != str(exclude_item_id))
@@ -684,7 +684,7 @@ class InventoryService:
             )
 
         if active_only:
-            query = query.where(InventoryItem.active == True)  # noqa: E712
+            query = query.where(InventoryItem.active.is_(True))
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
@@ -852,7 +852,7 @@ class InventoryService:
             active_co = await self.db.execute(
                 select(func.count(CheckOutRecord.id))
                 .where(CheckOutRecord.item_id == str(item_id))
-                .where(CheckOutRecord.is_returned == False)  # noqa: E712
+                .where(CheckOutRecord.is_returned.is_(False))
             )
             if active_co.scalar():
                 return (
@@ -865,7 +865,7 @@ class InventoryService:
                 active_iss = await self.db.execute(
                     select(func.count(ItemIssuance.id))
                     .where(ItemIssuance.item_id == str(item_id))
-                    .where(ItemIssuance.is_returned == False)  # noqa: E712
+                    .where(ItemIssuance.is_returned.is_(False))
                 )
                 if active_iss.scalar():
                     return False, "Cannot retire: item has unreturned pool issuances."
@@ -1007,7 +1007,7 @@ class InventoryService:
             result = await self.db.execute(
                 select(ItemAssignment)
                 .where(ItemAssignment.item_id == str(item_id))
-                .where(ItemAssignment.is_active == True)  # noqa: E712
+                .where(ItemAssignment.is_active.is_(True))
                 .order_by(ItemAssignment.assigned_date.desc())
                 .limit(1)
             )
@@ -1075,7 +1075,7 @@ class InventoryService:
         )
 
         if active_only:
-            query = query.where(ItemAssignment.is_active == True)  # noqa: E712
+            query = query.where(ItemAssignment.is_active.is_(True))
 
         query = (
             query.order_by(ItemAssignment.assigned_date.desc())
@@ -1297,7 +1297,7 @@ class InventoryService:
             .options(selectinload(ItemIssuance.user))
         )
         if active_only:
-            query = query.where(ItemIssuance.is_returned == False)  # noqa: E712
+            query = query.where(ItemIssuance.is_returned.is_(False))
         query = query.order_by(ItemIssuance.issued_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
@@ -1321,7 +1321,7 @@ class InventoryService:
             )
         )
         if active_only:
-            query = query.where(ItemIssuance.is_returned == False)  # noqa: E712
+            query = query.where(ItemIssuance.is_returned.is_(False))
         query = query.order_by(ItemIssuance.issued_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
@@ -1481,7 +1481,7 @@ class InventoryService:
         query = (
             select(CheckOutRecord)
             .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            .where(CheckOutRecord.is_returned.is_(False))
             .options(
                 selectinload(CheckOutRecord.item),
                 selectinload(CheckOutRecord.user),
@@ -1517,7 +1517,7 @@ class InventoryService:
             select(CheckOutRecord)
             .where(
                 CheckOutRecord.organization_id == str(organization_id),
-                CheckOutRecord.is_returned == False,  # noqa: E712
+                CheckOutRecord.is_returned.is_(False),
                 CheckOutRecord.expected_return_at < now,
             )
             .options(
@@ -1539,9 +1539,9 @@ class InventoryService:
             update(CheckOutRecord)
             .where(
                 CheckOutRecord.organization_id == str(organization_id),
-                CheckOutRecord.is_returned == False,  # noqa: E712
+                CheckOutRecord.is_returned.is_(False),
                 CheckOutRecord.expected_return_at < now,
-                CheckOutRecord.is_overdue == False,  # noqa: E712
+                CheckOutRecord.is_overdue.is_(False),
             )
             .values(is_overdue=True)
         )
@@ -1725,7 +1725,7 @@ class InventoryService:
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
             .where(InventoryItem.next_inspection_due <= cutoff_date)
             .options(selectinload(InventoryItem.category))
             .order_by(InventoryItem.next_inspection_due)
@@ -1770,8 +1770,8 @@ class InventoryService:
             )
             .join(InventoryItem, InventoryCategory.id == InventoryItem.category_id)
             .where(InventoryCategory.organization_id == org_id)
-            .where(InventoryCategory.active == True)  # noqa: E712
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryCategory.active.is_(True))
+            .where(InventoryItem.active.is_(True))
             .where(InventoryCategory.low_stock_threshold.isnot(None))
             .group_by(InventoryCategory.id)
             .having(
@@ -1786,7 +1786,7 @@ class InventoryService:
             items_result = await self.db.execute(
                 select(InventoryItem.name, InventoryItem.quantity)
                 .where(InventoryItem.category_id == category.id)
-                .where(InventoryItem.active == True)  # noqa: E712
+                .where(InventoryItem.active.is_(True))
                 .order_by(InventoryItem.quantity.asc())
                 .limit(5)
             )
@@ -1813,7 +1813,7 @@ class InventoryService:
         total_result = await self.db.execute(
             select(func.coalesce(func.sum(InventoryItem.quantity), 0))
             .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
         )
         total_items = total_result.scalar()
 
@@ -1824,7 +1824,7 @@ class InventoryService:
                 func.count(InventoryItem.id).label("count"),
             )
             .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
             .group_by(InventoryItem.status)
         )
         items_by_status = {row.status.value: row.count for row in status_result.all()}
@@ -1836,7 +1836,7 @@ class InventoryService:
                 func.count(InventoryItem.id).label("count"),
             )
             .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
             .group_by(InventoryItem.condition)
         )
         items_by_condition = {
@@ -1851,7 +1851,7 @@ class InventoryService:
                 )
             )
             .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
         )
         total_value = value_result.scalar() or Decimal("0.00")
 
@@ -1859,7 +1859,7 @@ class InventoryService:
         checkout_result = await self.db.execute(
             select(func.count(CheckOutRecord.id))
             .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            .where(CheckOutRecord.is_returned.is_(False))
         )
         active_checkouts = checkout_result.scalar()
 
@@ -1867,7 +1867,7 @@ class InventoryService:
         overdue_result = await self.db.execute(
             select(func.count(CheckOutRecord.id))
             .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_overdue == True)  # noqa: E712
+            .where(CheckOutRecord.is_overdue.is_(True))
         )
         overdue_checkouts = overdue_result.scalar()
 
@@ -1904,7 +1904,7 @@ class InventoryService:
             select(CheckOutRecord.item_id)
             .where(CheckOutRecord.organization_id == org_id)
             .where(CheckOutRecord.user_id == user_id)
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            .where(CheckOutRecord.is_returned.is_(False))
         )
         checkout_item_ids_result = await self.db.execute(checkout_items_q)
         checkout_item_ids = {row[0] for row in checkout_item_ids_result.all()}
@@ -1914,7 +1914,7 @@ class InventoryService:
             select(ItemAssignment.item_id)
             .where(ItemAssignment.organization_id == org_id)
             .where(ItemAssignment.user_id == user_id)
-            .where(ItemAssignment.is_active == True)  # noqa: E712
+            .where(ItemAssignment.is_active.is_(True))
         )
         assignment_item_ids_result = await self.db.execute(assignment_items_q)
         assignment_item_ids = {row[0] for row in assignment_item_ids_result.all()}
@@ -1936,7 +1936,7 @@ class InventoryService:
         total_result = await self.db.execute(
             select(func.coalesce(func.sum(InventoryItem.quantity), 0))
             .where(InventoryItem.id.in_(user_item_ids))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
         )
         total_items = total_result.scalar()
 
@@ -1947,7 +1947,7 @@ class InventoryService:
                 func.count(InventoryItem.id).label("count"),
             )
             .where(InventoryItem.id.in_(user_item_ids))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
             .group_by(InventoryItem.status)
         )
         items_by_status = {row.status.value: row.count for row in status_result.all()}
@@ -1959,7 +1959,7 @@ class InventoryService:
                 func.count(InventoryItem.id).label("count"),
             )
             .where(InventoryItem.id.in_(user_item_ids))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
             .group_by(InventoryItem.condition)
         )
         items_by_condition = {
@@ -1975,7 +1975,7 @@ class InventoryService:
                 )
             )
             .where(InventoryItem.id.in_(user_item_ids))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
         )
         total_value = value_result.scalar() or Decimal("0.00")
 
@@ -1987,8 +1987,8 @@ class InventoryService:
             select(func.count(CheckOutRecord.id))
             .where(CheckOutRecord.organization_id == org_id)
             .where(CheckOutRecord.user_id == user_id)
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
-            .where(CheckOutRecord.is_overdue == True)  # noqa: E712
+            .where(CheckOutRecord.is_returned.is_(False))
+            .where(CheckOutRecord.is_overdue.is_(True))
         )
         overdue_checkouts = overdue_result.scalar() or 0
 
@@ -1997,7 +1997,7 @@ class InventoryService:
         maint_result = await self.db.execute(
             select(func.count(InventoryItem.id))
             .where(InventoryItem.id.in_(user_item_ids))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
             .where(InventoryItem.next_inspection_due <= cutoff_date)
         )
         maintenance_due_count = maint_result.scalar() or 0
@@ -2037,7 +2037,7 @@ class InventoryService:
                 and_(
                     InventoryItem.location_id == Location.id,
                     InventoryItem.organization_id == str(organization_id),
-                    InventoryItem.active == True,  # noqa: E712
+                    InventoryItem.active.is_(True),
                 ),
             )
             .where(Location.organization_id == str(organization_id))
@@ -2058,7 +2058,7 @@ class InventoryService:
                 ).label("total_value"),
             ).where(
                 InventoryItem.organization_id == str(organization_id),
-                InventoryItem.active == True,  # noqa: E712
+                InventoryItem.active.is_(True),
                 InventoryItem.location_id.is_(None),
             )
         )
@@ -2163,7 +2163,7 @@ class InventoryService:
                 func.count(ItemAssignment.id).label("cnt"),
             )
             .where(ItemAssignment.organization_id == org_id)
-            .where(ItemAssignment.is_active == True)  # noqa: E712
+            .where(ItemAssignment.is_active.is_(True))
             .group_by(ItemAssignment.user_id)
         ).subquery("a_sub")
 
@@ -2173,7 +2173,7 @@ class InventoryService:
                 func.count(CheckOutRecord.id).label("cnt"),
             )
             .where(CheckOutRecord.organization_id == org_id)
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            .where(CheckOutRecord.is_returned.is_(False))
             .group_by(CheckOutRecord.user_id)
         ).subquery("co_sub")
 
@@ -2183,8 +2183,8 @@ class InventoryService:
                 func.count(CheckOutRecord.id).label("cnt"),
             )
             .where(CheckOutRecord.organization_id == org_id)
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
-            .where(CheckOutRecord.is_overdue == True)  # noqa: E712
+            .where(CheckOutRecord.is_returned.is_(False))
+            .where(CheckOutRecord.is_overdue.is_(True))
             .group_by(CheckOutRecord.user_id)
         ).subquery("od_sub")
 
@@ -2194,7 +2194,7 @@ class InventoryService:
                 func.coalesce(func.sum(ItemIssuance.quantity_issued), 0).label("cnt"),
             )
             .where(ItemIssuance.organization_id == org_id)
-            .where(ItemIssuance.is_returned == False)  # noqa: E712
+            .where(ItemIssuance.is_returned.is_(False))
             .group_by(ItemIssuance.user_id)
         ).subquery("i_sub")
 
@@ -2275,7 +2275,7 @@ class InventoryService:
             .where(
                 InventoryItem.id == str(item_id),
                 InventoryItem.organization_id == org_id,
-                InventoryItem.active == True,  # noqa: E712
+                InventoryItem.active.is_(True),
             )
             .options(selectinload(InventoryItem.category))
             .limit(1)
@@ -2313,7 +2313,7 @@ class InventoryService:
             select(InventoryItem)
             .where(
                 InventoryItem.organization_id == org_id,
-                InventoryItem.active == True,  # noqa: E712
+                InventoryItem.active.is_(True),
                 or_(
                     InventoryItem.barcode == code,
                     InventoryItem.serial_number == code,
@@ -2376,7 +2376,7 @@ class InventoryService:
             select(InventoryItem)
             .where(
                 InventoryItem.organization_id == org_id,
-                InventoryItem.active == True,  # noqa: E712
+                InventoryItem.active.is_(True),
                 or_(*[col.ilike(search_term) for col in field_cols]),
             )
             .options(selectinload(InventoryItem.category))
@@ -2623,7 +2623,7 @@ class InventoryService:
                         CheckOutRecord.organization_id == str(organization_id),
                         CheckOutRecord.item_id == str(item.id),
                         CheckOutRecord.user_id == user_id_str,
-                        CheckOutRecord.is_returned == False,  # noqa: E712
+                        CheckOutRecord.is_returned.is_(False),
                     )
                     .order_by(CheckOutRecord.checked_out_at.desc())
                     .limit(1)
@@ -2656,7 +2656,7 @@ class InventoryService:
                             ItemIssuance.organization_id == str(organization_id),
                             ItemIssuance.item_id == str(item.id),
                             ItemIssuance.user_id == user_id_str,
-                            ItemIssuance.is_returned == False,  # noqa: E712
+                            ItemIssuance.is_returned.is_(False),
                         )
                         .order_by(ItemIssuance.issued_at.desc())
                         .limit(1)
@@ -3837,7 +3837,7 @@ class InventoryService:
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.active.is_(True))
             .where(InventoryItem.reorder_point.isnot(None))
             .where(InventoryItem.quantity <= InventoryItem.reorder_point)
             .options(selectinload(InventoryItem.category))
@@ -3985,7 +3985,7 @@ class InventoryService:
         result = await self.db.execute(
             select(CheckOutRecord)
             .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            .where(CheckOutRecord.is_returned.is_(False))
             .where(CheckOutRecord.expected_return_at.isnot(None))
             .where(CheckOutRecord.expected_return_at < now)
             .options(
@@ -4015,7 +4015,7 @@ class InventoryService:
             .where(NFPAItemCompliance.organization_id == str(organization_id))
             .where(NFPAItemCompliance.expected_retirement_date.isnot(None))
             .where(NFPAItemCompliance.expected_retirement_date <= cutoff)
-            .where(NFPAItemCompliance.is_retired_by_age == False)  # noqa: E712
+            .where(NFPAItemCompliance.is_retired_by_age.is_(False))
         )
         records = list(result.scalars().all())
 
@@ -4786,9 +4786,9 @@ class InventoryService:
         ):
             is_assignment = source_user is ItemAssignment.user_id
             active_clause = (
-                ItemAssignment.is_active == True  # noqa: E712
+                ItemAssignment.is_active.is_(True)
                 if is_assignment
-                else ItemIssuance.is_returned == False  # noqa: E712
+                else ItemIssuance.is_returned.is_(False)
             )
             org_clause = (
                 ItemAssignment.organization_id == organization_id
@@ -5682,7 +5682,7 @@ class InventoryService:
                 await self.db.execute(
                     select(OperationalRank)
                     .where(OperationalRank.organization_id == org_id)
-                    .where(OperationalRank.is_active == True)  # noqa: E712
+                    .where(OperationalRank.is_active.is_(True))
                     .order_by(OperationalRank.sort_order, OperationalRank.display_name)
                 )
             )
@@ -5747,7 +5747,7 @@ class InventoryService:
                 await self.db.execute(
                     select(InventoryCategory)
                     .where(InventoryCategory.organization_id == org_id)
-                    .where(InventoryCategory.active == True)  # noqa: E712
+                    .where(InventoryCategory.active.is_(True))
                     .order_by(InventoryCategory.name)
                 )
             )

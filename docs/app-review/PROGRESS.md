@@ -41,7 +41,7 @@ from its open list.
 |---|---------|--------|--------|
 | B1 | medical-screening | MS2 | ✅ (p1, p2, p3) |
 | B2 | apparatus | AP2 | ✅ (p1, p2, p3) |
-| B3 | inventory | INV2 | ⬜ |
+| B3 | inventory | INV2 | ✅ (p1, p2, p3) |
 | B4 | facilities | FAC2 | ⬜ |
 | B5 | elections | ELEC2 | ⬜ |
 | B6 | meetings & minutes | MM2 | ⬜ |
@@ -1402,3 +1402,19 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   unaffected (no FE change). No CHANGELOG entry (integrity-only hardening, no
   user-visible change — matching AP2-1's treatment). See apparatus.md → Pass 3.
   Next: B3 inventory.
+
+- **B3 inventory ✅ (pass 3).** Re-verified the landed fixes hold: INV2-1
+  member-in-org validation intact at all four member-facing mutation sites; INV-3
+  maintenance item guard intact; INV-1/2/5/6-safe-half unchanged. **Closed INV2-2**
+  (the E712 cleanup pass 2 deferred to "one focused commit"): swept all 55
+  `== True/False # noqa: E712` boolean-column comparisons in `inventory_service.py`
+  to `.is_()` (Pitfall #10), removing every E712 noqa — behavior-neutral. **Latent-500
+  lens clean:** an automated check of every inventory `*Create`/`*Update` schema field
+  that maps to one of the module's 17 enum columns found 0 typed as free `str` (all
+  properly enum-typed — no free-string→ENUM 500 path, unlike B1). **INV-4 remainder
+  stays flagged** — the ~15-method dangling-only FK `assert_in_org` sweep is
+  integrity-only (read-leak subset already closed in INV2-1) and, per pass 1/2,
+  deserves a dedicated focused pass rather than a rushed half-sweep. No new tests
+  (behavior-neutral sweep); gate: flake8/black/tsc clean, 142 non-DB inventory tests
+  pass (75 db_session errors are the known no-MySQL limit). No CHANGELOG (no
+  user-visible change). See inventory.md → Pass 3. Next: B4 facilities.
