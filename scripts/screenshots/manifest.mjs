@@ -290,6 +290,23 @@ export function openStaffedShift(extraMatch) {
  * the list on the left — every configuration panel the guides describe is
  * behind that click.
  */
+/**
+ * Open a named applicant's detail drawer.
+ *
+ * Table view is the reliable entry: the name cell carries the click handler,
+ * where the kanban card's clickable region is a styled div with no role.
+ */
+export function openApplicantDrawer(name) {
+  return async (page) => {
+    await clickByName(/^table$/i)(page);
+    await page
+      .getByText(name, { exact: true })
+      .first()
+      .click({ timeout: 10_000 });
+    await page.waitForTimeout(600);
+  };
+}
+
 export function openPipelineSettings() {
   return async (page) => {
     await page
@@ -2462,6 +2479,52 @@ export const SHOTS = [
     fullPage: true,
     // "No interviews recorded yet" sits under the form — true of an applicant
     // whose first interview is being written, and not what this pictures.
+    allowEmptyState: true,
+  },
+  {
+    id: "15-05-applicant-actions",
+    doc: "15-prospective-members.md",
+    line: 209,
+    anchor:
+      "Screenshot of the applicant detail drawer showing the action buttons",
+    alt: "Applicant drawer action bar with the stage-movement buttons",
+    route: "/prospective-members",
+    prepare: openApplicantDrawer("Sam Okafor"),
+    fullPage: true,
+    allowEmptyState: true,
+  },
+  {
+    id: "15-08-election-package",
+    doc: "15-prospective-members.md",
+    line: 360,
+    anchor:
+      "Screenshot of the Election Package section in the applicant detail drawer",
+    alt: "Election package section showing the package status for an applicant at the vote",
+    route: "/prospective-members",
+    // The section renders only for an applicant on an election_vote stage —
+    // "Membership Vote" in the seeded pipeline.
+    prepare: openApplicantDrawer("Morgan Tran"),
+    fullPage: true,
+    allowEmptyState: true,
+  },
+  {
+    id: "15-09-convert-modal",
+    doc: "15-prospective-members.md",
+    line: 389,
+    anchor:
+      "Screenshot of the Convert to Member modal showing membership type selector",
+    alt: "Convert to member modal with membership type, ID and rank fields",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      // Conversion is not its own button: Advance on the *last* stage opens
+      // the modal. Riley Bishop sits on Onboarding, the final stage.
+      await openApplicantDrawer("Riley Bishop")(page);
+      await clickByName(/convert/i)(page);
+      // The modal opens on step 1 of 2 (Review Applicant); the membership
+      // type, ID, rank and start date the placeholder names are on step 2.
+      await clickByName(/^continue$/i)(page);
+    },
+    fullPage: false,
     allowEmptyState: true,
   },
 ];

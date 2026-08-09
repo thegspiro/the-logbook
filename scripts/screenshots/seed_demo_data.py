@@ -3119,7 +3119,51 @@ class Seeder:
                 self.api.post(
                     f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
                 )
+        self._seed_election_packages(prospects)
         return {"pipelines": pipelines, "prospects": prospects}
+
+    def _seed_election_packages(self, prospects: list[dict]) -> None:
+        """Build the election package for whoever is at the membership vote.
+
+        The drawer tells the reader the package "will be auto-generated when the
+        applicant reaches this stage". Nothing does that —
+        `create_election_package` has exactly one caller, the endpoint below —
+        so an applicant advanced onto the stage sits there with an empty panel.
+        Creating it here is what the coordinator would do by hand.
+        """
+        for prospect in prospects:
+            prospect_id = pick(prospect, "id")
+            if not prospect_id:
+                continue
+            # The stage lives on `current_step`, and only on the detail
+            # response — the list omits it entirely.
+            detail = self.api.get(f"/prospective-members/prospects/{prospect_id}")
+            step = pick(detail, "current_step") or {}
+            if str(pick(step, "step_type") or "").lower() != "election_vote":
+                continue
+            try:
+                self.api.get(
+                    f"/prospective-members/prospects/{prospect_id}/election-package"
+                )
+                continue
+            except ApiError as exc:
+                if exc.code != 404:
+                    raise
+            try:
+                self.api.post(
+                    f"/prospective-members/prospects/{prospect_id}/election-package",
+                    {
+                        "prospect_id": prospect_id,
+                        "coordinator_notes": (
+                            "Application, interview notes and background check "
+                            "attached for the membership vote."
+                        ),
+                    },
+                )
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+                self.blocked.append(f"election package: {exc}")
 
     # -- grants & fundraising ----------------------------------------
 

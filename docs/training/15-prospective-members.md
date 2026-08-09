@@ -206,7 +206,7 @@ For stages with explicit completion criteria:
 | **Withdraw**   | Applicant archived; typically at applicant's request              |
 | **Reactivate** | Returns a held, withdrawn, or inactive applicant to active status |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the applicant detail drawer showing the action buttons: Advance (green), Move Back (yellow), Hold (gray), Reject (red), and Withdraw (orange)._
+![Applicant drawer action bar with the stage-movement buttons](./images/15-05-applicant-actions.png)
 
 ---
 
@@ -365,7 +365,7 @@ When an applicant advances to an **Election Vote** stage, the system automatical
 | **Elected**         | Membership vote passed                 |
 | **Not Elected**     | Membership vote failed                 |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Election Package section in the applicant detail drawer, showing the package status badge, applicant snapshot fields, supporting statement text area, and "Mark Ready for Ballot" button._
+![Election package section showing the package status for an applicant at the vote](./images/15-08-election-package.png)
 
 See [Elections & Voting > Prospective Member Election Packages](./14-elections.md#prospective-member-election-packages) for the voting workflow.
 
@@ -394,7 +394,7 @@ When an applicant has completed all pipeline stages:
 - The `converted_to_member_id` field links to the new user
 - Activity log records the conversion with timestamp
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Convert to Member modal showing membership type selector, membership ID field, rank dropdown, station dropdown, role checkboxes, and Send Welcome Email toggle._
+![Convert to member modal with membership type, ID and rank fields](./images/15-09-convert-modal.png)
 
 ### Edge Cases
 
