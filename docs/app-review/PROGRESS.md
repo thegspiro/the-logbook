@@ -39,33 +39,33 @@ from its open list.
 
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ✅ (p1, p2) |
-| B2 | apparatus | AP2 | ✅ (p1, p2) |
-| B3 | inventory | INV2 | ✅ (p1, p2) |
-| B4 | facilities | FAC2 | ✅ (p1, p2) |
-| B5 | elections | ELEC2 | ✅ (p1, p2) |
-| B6 | meetings & minutes | MM2 | ✅ (p1, p2) |
-| B7 | equipment-check | EC2 | ✅ (p1, p2) |
-| B8 | documents | DOC2 | ✅ (p1, p2) |
-| B9 | membership pipeline | MP2 | ✅ (p1, p2) |
-| B10 | messaging & communications | MSG2 | ✅ (p1, p2) |
-| B11 | notifications | NOTIF2 | ✅ (p1, p2) |
-| B12 | integrations | INT2 | ✅ (p1, p2) |
-| B13 | forms | FORM2 | ✅ |
-| B14 | grants & fundraising | GF2 | ✅ (p1, p2) |
-| B15 | admin-hours | AH2 | ✅ (p1, p2) |
-| B16 | reports & analytics | RPT2 | ✅ (p1, p2) |
-| B17 | events | EV2 | ✅ (p1, p2) |
-| B18 | training | TR2 | ✅ (p1, p2) |
-| B19 | scheduling | SCH2 | ✅ (p1, p2) |
-| B20 | finance | FIN2 | ✅ (p1, p2) |
-| B21 | orgs, roles & users | ORU2 | ✅ (p1, p2) |
-| B22 | compliance & skills | CS2 | ✅ (p1, p2) |
-| B23 | security, audit & IP | SEC2 | ✅ (p1, p2) |
-| B24 | core infra | CI2 | ✅ (p1, p2) |
-| B25 | onboarding | ONB2 | ✅ (p1, p2) |
-| B26 | public-portal | PP2 | ✅ (p1, p2) |
-| B27 | frontend shared | FE2 | ✅ (p1, p2) |
+| B1 | medical-screening | MS2 | ⬜ |
+| B2 | apparatus | AP2 | ⬜ |
+| B3 | inventory | INV2 | ⬜ |
+| B4 | facilities | FAC2 | ⬜ |
+| B5 | elections | ELEC2 | ⬜ |
+| B6 | meetings & minutes | MM2 | ⬜ |
+| B7 | equipment-check | EC2 | ⬜ |
+| B8 | documents | DOC2 | ⬜ |
+| B9 | membership pipeline | MP2 | ⬜ |
+| B10 | messaging & communications | MSG2 | ⬜ |
+| B11 | notifications | NOTIF2 | ⬜ |
+| B12 | integrations | INT2 | ⬜ |
+| B13 | forms | FORM2 | ⬜ |
+| B14 | grants & fundraising | GF2 | ⬜ |
+| B15 | admin-hours | AH2 | ⬜ |
+| B16 | reports & analytics | RPT2 | ⬜ |
+| B17 | events | EV2 | ⬜ |
+| B18 | training | TR2 | ⬜ |
+| B19 | scheduling | SCH2 | ⬜ |
+| B20 | finance | FIN2 | ⬜ |
+| B21 | orgs, roles & users | ORU2 | ⬜ |
+| B22 | compliance & skills | CS2 | ⬜ |
+| B23 | security, audit & IP | SEC2 | ⬜ |
+| B24 | core infra | CI2 | ⬜ |
+| B25 | onboarding | ONB2 | ⬜ |
+| B26 | public-portal | PP2 | ⬜ |
+| B27 | frontend shared | FE2 | ⬜ |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -1341,3 +1341,28 @@ data-loss), and a cluster of **float-money** fixes on member-facing chargeable t
 behavior/migration items flagged, regression tests added, gate green (flake8/black/
 tsc/eslint; DB-backed tests are the known no-MySQL sandbox limit).
 </content>
+
+---
+
+## 🏁 Pass 2 complete (2026-08-09) — full second rotation done
+
+Both tiers finished their second pass: Tier B pass 2 completed 2026-08-08, Tier A
+pass 2 completed 2026-08-09 (all 36 features). Pass 2 also closed out the four
+owner-approved product decisions that pass-2 findings had surfaced — money
+separation-of-duties on the disburse step, training auto-approve self-credit,
+external-recipient audit logging on report emails, and read-permission gates on
+member/applicant PII (RPT-3 / INT-3 / FIN-5) — each with regression tests, mirrored
+into `KNOWN_LIMITATIONS.md` and `CHANGELOG.md`.
+
+## 🔄 Pass 3 opened (2026-08-09)
+
+Tier B reset to ⬜ for a third full pass; Tier A remains ✅ (front-loaded,
+never-reviewed surfaces already covered twice — not re-run unless directed). Pass 3
+starts from pass-2's landed fixes and the owner-decision closures: re-verify they
+still hold, confirm no regression re-opened a fixed finding, and widen the lens for
+anything pass 2 flagged-not-fixed (the remaining migration/behavior items still open
+in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
+
+### Pass 3 log
+
+(pending)
