@@ -104,7 +104,7 @@ describe('RequirementFormModal', () => {
     );
     // The department's requirement is reused as-is, not cloned.
     expect(mockCreateRequirementEnhanced).not.toHaveBeenCalled();
-    expect(onSaved).toHaveBeenCalledWith();
+    expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
   it('blocks picking a requirement the program already has', async () => {
