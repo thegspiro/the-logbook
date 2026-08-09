@@ -47,7 +47,7 @@ from its open list.
 | B6 | meetings & minutes | MM2 | ✅ (p1, p2, p3) |
 | B7 | equipment-check | EC2 | ✅ (p1, p2, p3) |
 | B8 | documents | DOC2 | ✅ (p1, p2, p3) |
-| B9 | membership pipeline | MP2 | ⬜ |
+| B9 | membership pipeline | MP2 | ✅ (p1, p2, p3) |
 | B10 | messaging & communications | MSG2 | ⬜ |
 | B11 | notifications | NOTIF2 | ⬜ |
 | B12 | integrations | INT2 | ⬜ |
@@ -1492,3 +1492,15 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   fields" were already populated by DOC2-1. DOC-4/DOC-5 remain flagged product decisions.
   39 document tests pass. Gate: flake8/black/tsc clean. No CHANGELOG. See documents.md →
   Pass 3. Next: B9 membership pipeline.
+
+- **B9 membership pipeline ✅ (pass 3).** Re-verified MP2-1/MP2-2/MP-6 hold. **Fixed
+  MP2-3** (latent-500): `step_type`/`action_type`/prospect `status` were free-str →
+  strict ENUM, inserted raw (create_step/update_step; update_prospect setattr, status
+  not protected) → 500 on bad value. Added `@field_validator`s (ProspectStatus,
+  PipelineStepType, ActionType), request-only, → 422. **Cleared two lens false
+  positives by reading:** interview `recommendation` goes through an
+  `InterviewRecommendation(...)` coercion the endpoints already convert to 400 (not a
+  500); `ProspectElectionPackage.status` is a plain String column, not an ENUM.
+  **Swept MP2-4** (4 E712). **10 tests added**; existing MP tests pass. Gate:
+  flake8/black/tsc clean. CHANGELOG updated. See membership-pipeline.md → Pass 3.
+  Next: B10 messaging.

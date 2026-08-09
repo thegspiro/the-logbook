@@ -81,7 +81,7 @@ class MembershipPipelineService:
             )
         )
         if not include_templates:
-            query = query.where(MembershipPipeline.is_template == False)  # noqa: E712
+            query = query.where(MembershipPipeline.is_template.is_(False))
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -282,7 +282,7 @@ class MembershipPipelineService:
             .where(
                 and_(
                     MembershipPipeline.organization_id == organization_id,
-                    MembershipPipeline.is_default == True,  # noqa: E712
+                    MembershipPipeline.is_default.is_(True),
                 )
             )
             .values(is_default=False)
@@ -1901,7 +1901,7 @@ class MembershipPipelineService:
                     .where(
                         TrainingProgram.organization_id == organization_id,
                         TrainingProgram.name.ilike("%probationary%"),
-                        TrainingProgram.active == True,  # noqa: E712
+                        TrainingProgram.active.is_(True),
                     )
                     .limit(1)
                 )
@@ -2807,7 +2807,7 @@ class MembershipPipelineService:
             .where(
                 and_(
                     MembershipPipeline.organization_id == organization_id,
-                    MembershipPipeline.is_default == True,  # noqa: E712
+                    MembershipPipeline.is_default.is_(True),
                 )
             )
             .options(selectinload(MembershipPipeline.steps))
