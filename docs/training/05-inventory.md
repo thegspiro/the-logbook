@@ -1435,7 +1435,7 @@ The Variant Groups page now displays a **stock matrix** showing all size × colo
 - Low-stock indicators on individual variants below threshold (dimmed with warning icon)
 - Variants with zero stock are dimmed but remain visible for reorder visibility
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Variant Groups page showing a variant group expanded into the stock matrix view. Show a grid with sizes across the top (S, M, L, XL, 2XL), colors/styles down the left (Navy/Regular, Navy/Long, Black/Regular), and stock quantities in each cell. Highlight one cell with a low-stock warning indicator._
+![Variant group stock matrix of quantities by size and colour](./images/05-49-variant-stock-matrix.png)
 
 ### Size, Color & Style Filters
 

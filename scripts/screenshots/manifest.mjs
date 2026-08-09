@@ -2906,6 +2906,23 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "05-49-variant-stock-matrix",
+    doc: "05-inventory.md",
+    line: 1440,
+    anchor: "Screenshot of the Variant Groups page showing a variant group expanded",
+    alt: "Variant group stock matrix of quantities by size and colour",
+    route: "/inventory/admin/variant-groups",
+    prepare: async (page) => {
+      // The Department Polo has both sizes and colours, so its matrix is a
+      // grid rather than a single row — the Structural Coat has sizes only.
+      await page
+        .getByRole("button", { name: /^View Department Polo$/ })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: false,
+  },
+  {
     id: "05-48-storage-area-items",
     doc: "05-inventory.md",
     line: 1386,
