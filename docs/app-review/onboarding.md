@@ -3,6 +3,36 @@
 **Prefix:** `ONB2` · **Iteration:** B25 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2)
 
+## Pass 3 (2026-08-09) — verified clean; 2 E712 swept
+
+Re-verified the completion/replay hardening: **ONB-3/ONB-9** — `complete_onboarding`
+refuses a second completion (`if status.is_completed: raise "Onboarding is already
+completed"`, service 1247); the replay guards on second-org / second-owner minting
+(436/1027) hold; **ONB-8** — the unauthenticated `/status` still returns the minimal
+post-completion body (no org-name leak).
+
+**Latent-500 lens N/A/clean:** there's no dedicated `schemas/onboarding` module — the
+flow reuses the user/role/org schemas (whose enum fields carry their own validators),
+so there's no onboarding-specific free-string→ENUM path.
+
+### ONB2-1 — NIT — 2 boolean-column E712 swept — ✅ FIXED
+
+`onboarding.py` (138/149) compared `OnboardingStatus.is_completed == True/False` with
+a `# noqa: E712`; converted to `.is_(...)`. Now E712-free.
+
+### Still flagged (unchanged)
+
+- **ONB-7** — the onboarding role editor accepts client-supplied
+  permissions/priority/system-flag; ONB-3's completion guard bounds the window, but
+  clamping/allowlisting them is the product decision (`KNOWN_LIMITATIONS.md`).
+- **ONB-8 residual** — reset re-auth policy + durable reset-audit commit.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · onboarding tests **11 passed** (DB-free; the `db_session`
+errors are the known no-MySQL fixture failures — the integration tests are DB-heavy).
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified pass-1: post-completion `/reset` blocked; second owner/org blocked

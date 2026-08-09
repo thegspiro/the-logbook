@@ -63,7 +63,7 @@ from its open list.
 | B22 | compliance & skills | CS2 | ✅ (p1, p2, p3) |
 | B23 | security, audit & IP | SEC2 | ✅ (p1, p2, p3) |
 | B24 | core infra | CI2 | ✅ (p1, p2, p3) |
-| B25 | onboarding | ONB2 | ⬜ |
+| B25 | onboarding | ONB2 | ✅ (p1, p2, p3) |
 | B26 | public-portal | PP2 | ⬜ |
 | B27 | frontend shared | FE2 | ⬜ |
 
@@ -1664,3 +1664,13 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   E712-free across app/core/ and main.py. Latent-500 lens N/A (foundational code, no
   enum request schemas). CI-9/CI-4-full/CI-10-residual/CI-11 stay flagged. No
   CHANGELOG. See core-infra.md → Pass 3. Next: B25 onboarding.
+
+- **B25 onboarding ✅ (pass 3).** Re-verified ONB-3/ONB-9 (completion guard `if
+  status.is_completed: raise` + second-org/second-owner replay guards) and ONB-8
+  (`/status` minimal post-completion body) hold. **Latent-500 lens N/A** — no
+  dedicated onboarding schema module; the flow reuses the validated user/role/org
+  schemas. **Swept ONB2-1** — 2 boolean-column E712 (`OnboardingStatus.is_completed`)
+  → `.is_()`. ONB-7 (role-editor client permissions) + ONB-8 residual stay flagged. 11
+  onboarding tests pass (DB-heavy integration tests hit the no-MySQL limit). Gate:
+  flake8/black clean; tsc n/a. No CHANGELOG. See onboarding.md → Pass 3. Next: B26
+  public-portal.
