@@ -106,18 +106,21 @@ unchanged. **1 regression test added** (`test_omitted_fields_not_reemitted`):
 a Salesforce partial config returns exactly its supplied keys, with
 `sync_direction`/`graceful_fields`/`client_secret` absent.
 
-### INT-3 — LOW-MED — `list`/`get` reads not gated by a manage/view permission — 🚩 FLAGGED (unchanged, needs a permission decision)
+### INT-3 — LOW-MED — `list`/`get` reads not gated by a manage/view permission — ✅ RESOLVED (owner decision, 2026-08-09)
 
-`list_integrations` / `get_integration` use bare `get_current_user`, so any
-authenticated member reads every integration's **non-secret** config
-(instance_url, field_mappings, api_base_url). Secrets stay redacted, so this is
-not credential exposure. Re-verified the reason it wasn't tightened: the
-integration **list is consumed cross-module** (prospective-members meeting-config,
-training-officer dashboard) gated on *those* permissions — so gating the read on
-`integrations.manage` would break those flows. The right fix is a dedicated
-`integrations.view` permission (seed + roles) or a minimal projection for the
-cross-module callers. A product/permission decision, not a drive-by; recorded in
-`KNOWN_LIMITATIONS.md`.
+`list_integrations` / `get_integration` used bare `get_current_user`, so any
+authenticated member read every integration's **non-secret** config (instance_url,
+field_mappings, api_base_url). The complication was that the integration list is
+consumed cross-module (`useConnectedIntegrations` in the membership-pipeline
+meeting-config) gated on *those* permissions — so a blanket `integrations.manage`
+gate on the read would silently break those flows. **Fix (the "minimal projection"
+option):** the full config `list`/`get` now require `integrations.manage`, and a new
+`GET /integrations/connected` returns only `integration_type`/`status`/`enabled`
+(no URLs, mappings, PHI flags, or secrets) for any authenticated org member. The
+`useConnectedIntegrations` hook was repointed to it (`getConnectedIntegrationStatus`),
+so cross-module callers keep working without the integrations-admin permission.
+`/connected` is registered before `/{integration_id}` so the literal path wins.
+Covered by `frontend/src/hooks/useConnectedIntegrations.test.ts`.
 
 ### INT-5 — LOW — Unused allowlist + dead params — 🚩 FLAGGED (unchanged)
 
@@ -146,9 +149,7 @@ cross-module callers. A product/permission decision, not a drive-by; recorded in
 
 ## Future development
 
-1. **INT-3** — a dedicated `integrations.view` permission (or minimal projection
-   for the cross-module reads).
-2. **INT-5** — enable the chat-webhook domain allowlist; batch-remove the unused
+1. **INT-5** — enable the chat-webhook domain allowlist; batch-remove the unused
    `request` params; drop `client_id` from `SECRET_CONFIG_KEYS`.
 
 ## Completion gate

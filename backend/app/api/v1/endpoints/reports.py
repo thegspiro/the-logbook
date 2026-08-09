@@ -12,7 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from fastapi import status
+
+from app.api.dependencies import require_permission, user_has_permission
 from app.core.database import get_db
 from app.core.utils import ensure_found
 from app.models.analytics import SavedReport
@@ -27,6 +29,31 @@ from app.services.reports_service import ReportsService
 
 router = APIRouter()
 
+# A handful of report types enumerate people and their personal data — the member
+# roster returns email/membership number, the pipeline overview returns applicant
+# name/email/PII. `reports.view` alone let a holder read that PII even without the
+# permission that gates the same data at its source, so each PII-bearing report
+# additionally requires the read permission for the underlying record type
+# (RPT-3, owner decision 2026-08-09). Report types absent from this map carry only
+# aggregate/operational data and stay at `reports.view`.
+PII_REPORT_PERMISSIONS: dict[str, str] = {
+    "member_roster": "members.view",
+    "pipeline_overview": "prospective_members.view",
+}
+
+
+def _enforce_report_pii_permission(current_user: User, report_type: str) -> None:
+    """Require the source-record read permission for a PII-bearing report type."""
+    required = PII_REPORT_PERMISSIONS.get(report_type)
+    if required and not user_has_permission(current_user, required):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"This report exposes protected member data and requires the "
+                f"'{required}' permission"
+            ),
+        )
+
 
 # ============================================
 # Report Generation
@@ -40,7 +67,23 @@ async def get_available_reports(
 ):
     """Get list of available reports"""
     service = ReportsService(db)
-    return await service.get_available_reports()
+    catalog = await service.get_available_reports()
+    # Hide PII-bearing reports the caller can't run, so the UI doesn't offer a
+    # report that /generate will 403 on (RPT-3).
+    reports = catalog.get("available_reports")
+    if isinstance(reports, list):
+        catalog["available_reports"] = [
+            r
+            for r in reports
+            if not (
+                isinstance(r, dict)
+                and r.get("id") in PII_REPORT_PERMISSIONS
+                and not user_has_permission(
+                    current_user, PII_REPORT_PERMISSIONS[r["id"]]
+                )
+            )
+        ]
+    return catalog
 
 
 @router.post("/generate")
@@ -50,6 +93,7 @@ async def generate_report(
     current_user: User = Depends(require_permission("reports.view")),
 ):
     """Generate a report"""
+    _enforce_report_pii_permission(current_user, request.report_type)
     service = ReportsService(db)
     report = await service.generate_report(
         current_user.organization_id,
@@ -223,6 +267,8 @@ async def run_saved_report(
         )
     )
     report = ensure_found(result.scalar_one_or_none(), "Saved report")
+
+    _enforce_report_pii_permission(current_user, report.report_type)
 
     service = ReportsService(db)
     filters = report.filters or {}

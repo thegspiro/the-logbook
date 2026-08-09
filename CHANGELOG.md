@@ -159,6 +159,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   external addresses — so there's a trail whenever member/compliance data leaves
   the department. Sending to fellow members is unaffected and creates no such entry.
 
+- **Reading personal data now needs the matching permission, not just report
+  access.** Three places where sensitive records sat behind a broad grant are
+  tightened: the member-roster and applicant-pipeline reports now require member /
+  prospective-member viewing access on top of report access (aggregate reports are
+  unchanged, and reports you can't run no longer appear in the list); expense-report
+  reimbursements are now visible only to their submitter unless you're a finance
+  manager; and an integration's configuration now requires integrations-admin access
+  to view. Features that only need to know whether an integration is *connected*
+  (such as meeting setup) keep working through a new status-only view that carries no
+  configuration.
+
 ### Dashboard: action items are now shown only to members allowed to see them (2026-08-08)
 
 **Security**

@@ -28,7 +28,7 @@ export const useConnectedIntegrations = (): UseConnectedIntegrationsResult => {
   useEffect(() => {
     let cancelled = false;
     integrationsService
-      .getIntegrations()
+      .getConnectedIntegrationStatus()
       .then((items) => {
         if (cancelled) return;
         setConnected(new Set(items.filter((i) => i.status === 'connected').map((i) => i.integration_type)));

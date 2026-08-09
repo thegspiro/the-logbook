@@ -878,8 +878,15 @@ async def list_expense_reports(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
+    # A plain finance.view holder sees only their own reimbursement submissions;
+    # finance managers see the whole queue (FIN-5).
+    restrict = (
+        None
+        if user_has_permission(current_user, "finance.manage")
+        else str(current_user.id)
+    )
     results = await service.list_expense_reports(
-        str(current_user.organization_id), status
+        str(current_user.organization_id), status, restrict_to_user=restrict
     )
     return results[pagination.skip : pagination.skip + pagination.limit]
 
@@ -920,7 +927,14 @@ async def get_expense_report(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    er = await service.get_expense_report(er_id, str(current_user.organization_id))
+    restrict = (
+        None
+        if user_has_permission(current_user, "finance.manage")
+        else str(current_user.id)
+    )
+    er = await service.get_expense_report(
+        er_id, str(current_user.organization_id), restrict_to_user=restrict
+    )
     if not er:
         raise HTTPException(status_code=404, detail="Expense report not found")
     return await _with_approval_steps(

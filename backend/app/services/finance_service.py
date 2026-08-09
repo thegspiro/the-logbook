@@ -1331,12 +1331,19 @@ class FinanceService:
         self,
         org_id: str,
         status: Optional[str] = None,
+        restrict_to_user: Optional[str] = None,
     ) -> list[ExpenseReport]:
+        # Expense reports are personal reimbursement records (payee, amounts owed).
+        # A plain finance.view holder is confined to their own submissions;
+        # restrict_to_user=None (finance managers/treasurers) sees the whole org
+        # queue (FIN-5, owner decision 2026-08-09).
         query = (
             select(ExpenseReport)
             .options(selectinload(ExpenseReport.line_items))
             .where(ExpenseReport.organization_id == org_id)
         )
+        if restrict_to_user is not None:
+            query = query.where(ExpenseReport.submitted_by == restrict_to_user)
         if status:
             query = query.where(ExpenseReport.status == status)
         query = query.order_by(ExpenseReport.created_at.desc())
@@ -1344,9 +1351,9 @@ class FinanceService:
         return list(result.scalars().unique().all())
 
     async def get_expense_report(
-        self, er_id: str, org_id: str
+        self, er_id: str, org_id: str, restrict_to_user: Optional[str] = None
     ) -> Optional[ExpenseReport]:
-        result = await self.db.execute(
+        query = (
             select(ExpenseReport)
             .options(selectinload(ExpenseReport.line_items))
             .where(
@@ -1354,6 +1361,9 @@ class FinanceService:
                 ExpenseReport.organization_id == org_id,
             )
         )
+        if restrict_to_user is not None:
+            query = query.where(ExpenseReport.submitted_by == restrict_to_user)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_expense_report(

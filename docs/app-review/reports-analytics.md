@@ -36,11 +36,14 @@ a reporting module:
 
 ### Flagged (no drive-by fix)
 
-- **RPT-3 (unchanged)** — `/available` + `/generate` gate only on `reports.view`,
-  but `member_roster` returns email + membership_number and `pipeline_overview`
-  returns applicant name/email/PII, so a `reports.view` holder without
-  `members.view`/`pipeline.view` reads PII they couldn't fetch directly. A
-  permission-granularity **product decision** (KNOWN_LIMITATIONS), not mechanical.
+- **RPT-3 — ✅ RESOLVED (owner decision, 2026-08-09)** — `member_roster` returns
+  email + membership_number and `pipeline_overview` returns applicant name/email/PII,
+  so a `reports.view` holder without `members.view`/`prospective_members.view` could
+  read PII they couldn't fetch directly. `reports.py` now maps those two report types
+  to their source-record read permission (`PII_REPORT_PERMISSIONS`) and enforces it
+  in `/generate` and `/saved/{id}/run` via `_enforce_report_pii_permission` (403 if
+  missing); `/available` hides PII reports the caller can't run. Aggregate reports
+  stay at `reports.view`. Covered by `tests/test_read_permission_gates.py`.
 - **RPT-6 (new, LOW) — `requirement_breakdown` completion % can exceed 100%.** The
   numerator counts `RequirementProgress` rows while the denominator counts
   `distinct(ProgramEnrollment.user_id)`; with no unique `(user_id, program_id)`

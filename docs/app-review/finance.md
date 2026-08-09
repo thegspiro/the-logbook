@@ -83,15 +83,19 @@ money-approval path** for **zero live benefit** — the regression risk there
 outweighs a redundant filter. Deliberately left flagged rather than threaded;
 recorded as future defense-in-depth.
 
-### FIN-4 / FIN-5 / FIN-7 — 🚩 FLAGGED (unchanged, product/behavior decisions)
+### FIN-4 / FIN-7 — 🚩 FLAGGED (unchanged, product/behavior decisions); FIN-5 ✅ RESOLVED
 
 - **FIN-4** — no `finance.disburse` separation: one `finance.manage` holder can
   create a request *and* mark it paid / issue the check / record-or-waive dues. The
   approval-chain step is SoD-guarded; the *disbursement* actions are not. Needs a
   new treasury permission on roles. (In `KNOWN_LIMITATIONS.md`.)
-- **FIN-5** — reimbursement/payee lists readable by any `finance.view` holder
-  (XC-2 shape, lower sensitivity than dues). Scoping non-managers to their own
-  submissions is a behavior change for treasurers. (In `KNOWN_LIMITATIONS.md`.)
+- **FIN-5** — ✅ RESOLVED (owner decision, 2026-08-09). Reimbursement (expense
+  report) lists/reads were readable by any `finance.view` holder. `list_expense_reports`
+  and `get_expense_report` now take `restrict_to_user`: the endpoints pass the
+  caller's id unless they hold `finance.manage`, so a plain `finance.view` holder
+  sees only their own reimbursement submissions while treasurers keep the full org
+  queue. Mutation callers pass no restriction (unchanged). Covered by
+  `tests/test_read_permission_gates.py`.
 - **FIN-7 residual** — float money math (module-wide Decimal refactor), unbounded
   transaction export + in-memory pagination (DoS surface, response-envelope
   change), no overspend/negative-balance guard, and `get_pending_approvals`
