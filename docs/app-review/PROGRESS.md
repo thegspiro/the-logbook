@@ -39,33 +39,33 @@ from its open list.
 
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ✅ (p1, p2, p3) |
-| B2 | apparatus | AP2 | ✅ (p1, p2, p3) |
-| B3 | inventory | INV2 | ✅ (p1, p2, p3) |
-| B4 | facilities | FAC2 | ✅ (p1, p2, p3) |
-| B5 | elections | ELEC2 | ✅ (p1, p2, p3) |
-| B6 | meetings & minutes | MM2 | ✅ (p1, p2, p3) |
-| B7 | equipment-check | EC2 | ✅ (p1, p2, p3) |
-| B8 | documents | DOC2 | ✅ (p1, p2, p3) |
-| B9 | membership pipeline | MP2 | ✅ (p1, p2, p3) |
-| B10 | messaging & communications | MSG2 | ✅ (p1, p2, p3) |
-| B11 | notifications | NOTIF2 | ✅ (p1, p2, p3) |
-| B12 | integrations | INT2 | ✅ (p1, p2, p3) |
-| B13 | forms | FORM2 | ✅ (p1, p2, p3) |
-| B14 | grants & fundraising | GF2 | ✅ (p1, p2, p3) |
-| B15 | admin-hours | AH2 | ✅ (p1, p2, p3) |
-| B16 | reports & analytics | RPT2 | ✅ (p1, p2, p3) |
-| B17 | events | EV2 | ✅ (p1, p2, p3) |
-| B18 | training | TR2 | ✅ (p1, p2, p3) |
-| B19 | scheduling | SCH2 | ✅ (p1, p2, p3) |
-| B20 | finance | FIN2 | ✅ (p1, p2, p3) |
-| B21 | orgs, roles & users | ORU2 | ✅ (p1, p2, p3) |
-| B22 | compliance & skills | CS2 | ✅ (p1, p2, p3) |
-| B23 | security, audit & IP | SEC2 | ✅ (p1, p2, p3) |
-| B24 | core infra | CI2 | ✅ (p1, p2, p3) |
-| B25 | onboarding | ONB2 | ✅ (p1, p2, p3) |
-| B26 | public-portal | PP2 | ✅ (p1, p2, p3) |
-| B27 | frontend shared | FE2 | ✅ (p1, p2, p3) |
+| B1 | medical-screening | MS2 | ⬜ |
+| B2 | apparatus | AP2 | ⬜ |
+| B3 | inventory | INV2 | ⬜ |
+| B4 | facilities | FAC2 | ⬜ |
+| B5 | elections | ELEC2 | ⬜ |
+| B6 | meetings & minutes | MM2 | ⬜ |
+| B7 | equipment-check | EC2 | ⬜ |
+| B8 | documents | DOC2 | ⬜ |
+| B9 | membership pipeline | MP2 | ⬜ |
+| B10 | messaging & communications | MSG2 | ⬜ |
+| B11 | notifications | NOTIF2 | ⬜ |
+| B12 | integrations | INT2 | ⬜ |
+| B13 | forms | FORM2 | ⬜ |
+| B14 | grants & fundraising | GF2 | ⬜ |
+| B15 | admin-hours | AH2 | ⬜ |
+| B16 | reports & analytics | RPT2 | ⬜ |
+| B17 | events | EV2 | ⬜ |
+| B18 | training | TR2 | ⬜ |
+| B19 | scheduling | SCH2 | ⬜ |
+| B20 | finance | FIN2 | ⬜ |
+| B21 | orgs, roles & users | ORU2 | ⬜ |
+| B22 | compliance & skills | CS2 | ⬜ |
+| B23 | security, audit & IP | SEC2 | ⬜ |
+| B24 | core infra | CI2 | ⬜ |
+| B25 | onboarding | ONB2 | ⬜ |
+| B26 | public-portal | PP2 | ⬜ |
+| B27 | frontend shared | FE2 | ⬜ |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -1716,3 +1716,21 @@ audit, RPT-3/INT-3/FIN-5 read-gates → FIN-4/FIN-5 reconciled) was re-verified 
 Same discipline throughout: verified/safe fixes only, product/behavior/migration items
 flagged, regression tests added, gate green (flake8/black/tsc/eslint; DB-backed tests
 are the known no-MySQL sandbox limit). Tier A remains ✅ (not re-run in pass 3).
+
+## 🔄 Pass 4 opened (2026-08-09)
+
+Tier B reset to ⬜ for a fourth full pass; Tier A remains ✅ (front-loaded,
+never-reviewed surfaces already covered three times — not re-run unless directed).
+Pass 4 starts from pass-3's landed fixes and the owner-decision closures: re-verify
+they still hold, confirm no regression re-opened a fixed finding, and widen the lens
+for anything still flagged in `KNOWN_LIMITATIONS.md` (the remaining
+migration/behavior/product items — e.g. MS-1 PHI-at-rest, the FIN-7 float→Decimal
+refactor, the FORM-4/5 and CS-8 product decisions, and the module-specific residual
+FK sweeps like INV-4). Pass 3 drove the latent-500 enum lens and an E712 sweep to
+completion across all 27 modules, so pass 4's marginal value is in the deeper,
+migration-shaped and product-decision items rather than another mechanical sweep.
+Next feature: **B1 medical-screening**.
+
+### Pass 4 log
+
+(pending)
