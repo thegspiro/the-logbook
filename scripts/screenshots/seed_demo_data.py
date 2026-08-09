@@ -51,6 +51,12 @@ DEMO_MEMBER_USERNAME = "nbelhaj"
 # examiner is also its candidate.
 DEMO_PEER_EXAMINER_USERNAME = "cfrazier"
 
+# How many active applicants `--bulk-prospects` tops the pipeline up to.
+# Comfortably past the board's 200-card ceiling, so the truncation notice reads
+# as a real overflow rather than an off-by-one, while staying small enough to
+# seed in well under a minute.
+BULK_PROSPECT_TARGET = 247
+
 # Screenshots must not look stale, so dated records are generated relative to
 # the run date rather than hard-coded.
 # An RSVP the app refuses because the window has closed is the rule working, not
@@ -301,9 +307,10 @@ FACILITIES = [
 
 
 class Seeder:
-    def __init__(self, api: Api, base_url: str) -> None:
+    def __init__(self, api: Api, base_url: str, bulk_prospects: int = 0) -> None:
         self.api = api
         self.base_url = base_url
+        self.bulk_prospects = bulk_prospects
         self.failures: list[str] = []
         self.blocked: list[str] = []
         self.created: dict[str, list[dict]] = {}
@@ -3336,9 +3343,29 @@ class Seeder:
             self.api.get("/prospective-members/prospects?limit=100"), "prospects"
         )
         emails = {p.get("email") for p in prospects}
+
+        def already_exists(email: str) -> bool:
+            """Is this applicant on file?
+
+            The first page is enough on an ordinary seed, but the list caps at
+            200 and ``--bulk-prospects`` pushes the pipeline well past that —
+            at which point the named applicants fall off the page and this
+            re-created every one of them on each run. Falls back to a search
+            when the page does not settle it.
+            """
+            if email in emails:
+                return True
+            if len(prospects) < 100:
+                return False
+            found = items(
+                self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+                "prospects",
+            )
+            return any(p.get("email") == email for p in found)
+
         for index, (first, last, reason) in enumerate(self.PROSPECTS):
             email = f"{first.lower()}.{last.lower()}@example.org"
-            if email in emails:
+            if already_exists(email):
                 continue
             payload = {
                 "first_name": first,
@@ -3363,6 +3390,86 @@ class Seeder:
                     f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
                 )
         return {"pipelines": pipelines, "prospects": prospects}
+
+    def seed_bulk_prospects(self, pipeline_id: str | None, target: int) -> int:
+        """Pad the pipeline out past the board's card ceiling. Opt-in only.
+
+        The kanban groups applicants into columns client-side, so it asks for
+        ``KANBAN_PAGE_SIZE`` (200) applicants and says plainly when there are
+        more than that — "Showing 200 of 247 applicants". Picturing that notice
+        needs a pipeline genuinely larger than the ceiling, and a department
+        with 200+ live applicants is not the demo data anyone else wants: it
+        would bury the twelve named applicants the other prospective-member
+        screenshots are composed around, and cost a few hundred requests on
+        every ordinary seed.
+
+        Hence the flag. It tops the pipeline up to ``target`` **active**
+        applicants and returns how many it created.
+
+        Most of the filler stays at intake, which is what a real pipeline
+        mid-recruitment looks like, but a slice of it is advanced so the later
+        columns are not empty. That matters for the picture: the board loads the
+        *newest* 200 applicants, so filler created after the twelve named
+        applicants pushes them out of the fetched page entirely — leaving three
+        columns reading "No applicants" under a notice about having too many.
+        Advancing every fourth one keeps the board legible without paying a
+        request per stage per applicant.
+        """
+        if target <= 0:
+            return 0
+
+        existing = self.api.get(
+            "/prospective-members/prospects?limit=1&status=active"
+        )
+        current = (
+            existing.get("total", 0) if isinstance(existing, dict) else len(existing)
+        )
+        missing = target - current
+        if missing <= 0:
+            print(f"    pipeline already holds {current} active applicants")
+            return 0
+
+        print(f"    creating {missing} filler applicants ({current} -> {target})")
+        created = 0
+        for index in range(missing):
+            # Deterministic addresses so a re-run recognises its own filler and
+            # tops up rather than duplicating it.
+            email = f"applicant.{current + index:04d}@intake.example.org"
+            payload = {
+                "first_name": "Applicant",
+                "last_name": f"{current + index:04d}",
+                "email": email,
+                "phone": f"(703) 555-{6000 + (current + index) % 4000:04d}",
+                "address_city": "Oakville",
+                "address_state": "VA",
+                "address_zip": "22046",
+                "interest_reason": "Applied through the open-house drive.",
+                "referral_source": "Open house",
+                "desired_membership_type": "active",
+            }
+            if pipeline_id:
+                payload["pipeline_id"] = pipeline_id
+            try:
+                prospect = self.api.post("/prospective-members/prospects", payload)
+                created += 1
+            except ApiError as exc:
+                # A duplicate-email refusal means this one already exists, which
+                # is fine; anything else is worth stopping for rather than
+                # grinding through several hundred identical failures.
+                if exc.code not in (400, 409):
+                    raise
+                continue
+
+            # Every fourth one moves down the board. Advancing past the final
+            # stage is refused with a 409, so the count is bounded by the
+            # pipeline length rather than relying on the API to absorb it.
+            if index % 4:
+                continue
+            for _ in range(1 + (index // 4) % (len(self.PIPELINE_STAGES) - 1)):
+                self.api.post(
+                    f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
+                )
+        return created
 
     # -- grants & fundraising ----------------------------------------
 
@@ -4075,7 +4182,18 @@ class Seeder:
         )
         self.step("event templates", self.seed_event_templates)
         self.step("elections", self.seed_elections)
-        self.step("prospective members", self.seed_prospective_members)
+        prospect_data = self.step(
+            "prospective members", self.seed_prospective_members
+        ) or {}
+        if self.bulk_prospects:
+            pipelines = prospect_data.get("pipelines") or []
+            self.step(
+                "bulk applicants (kanban truncation)",
+                lambda: self.seed_bulk_prospects(
+                    pick(pipelines[0], "id") if pipelines else None,
+                    self.bulk_prospects,
+                ),
+            )
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("facility activity", lambda: self.seed_facility_activity(facilities))
@@ -4105,11 +4223,27 @@ class Seeder:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:3001")
+    parser.add_argument(
+        "--bulk-prospects",
+        nargs="?",
+        type=int,
+        const=BULK_PROSPECT_TARGET,
+        default=0,
+        metavar="N",
+        help=(
+            "Pad the membership pipeline out to N active applicants so the "
+            "kanban board exceeds its card ceiling and renders the "
+            f"'Showing 200 of N' notice. Defaults to {BULK_PROSPECT_TARGET} "
+            "when the flag is given without a number. Off by default: it "
+            "costs a few hundred requests and buries the named applicants the "
+            "other prospective-member screenshots are built around."
+        ),
+    )
     args = parser.parse_args()
 
     api = Api(args.base_url)
     api.login()
-    return Seeder(api, args.base_url).run()
+    return Seeder(api, args.base_url, bulk_prospects=args.bulk_prospects).run()
 
 
 if __name__ == "__main__":

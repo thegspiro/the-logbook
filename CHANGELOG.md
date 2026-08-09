@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Prospective members: adding an applicant who is already on file returned a server error (2026-08-09)
+
+**Fixed**
+
+- **`POST /prospective-members/prospects` answered `500` for a duplicate
+  email.** Creating an applicant whose address is already on file is not meant
+  to fail: the module notifies the applicant, logs the collision, and returns
+  the **existing** record so the coordinator can see who it is — which is what
+  the guide describes and what the duplicate-detection warning in the UI is
+  built on.
+
+  The lookup that finds the existing applicant did not eager-load
+  `current_step` or `step_progress`, and the prospect response reads both — so
+  serializing the reply triggered a lazy load from the async response path,
+  which raises `MissingGreenlet` rather than merely being slow. The feature
+  worked right up to the moment it tried to answer.
+
+  It now loads the same relationships the ordinary fetch does. This is the same
+  failure mode as the kanban endpoint's, in the one path that had been missed.
+
+**Added**
+
+- **`seed_demo_data.py --bulk-prospects [N]`** pads the demo pipeline out past
+  the kanban board's 200-card ceiling (247 by default) so the truncation notice
+  can be screenshotted. Opt-in: a few hundred filler applicants would otherwise
+  bury the named ones the other prospective-member screenshots are composed
+  around. It tops up rather than duplicating on a re-run, and advances a slice
+  of the filler so the later columns are not empty.
+
+---
+
 ### Skills testing: the validation queue was empty for the officers it exists for (2026-08-09)
 
 **Fixed**

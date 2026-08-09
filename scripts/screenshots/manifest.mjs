@@ -1269,6 +1269,26 @@ export const SHOTS = [
     route: "/prospective-members",
   },
   {
+    id: "15-02-board-truncated",
+    doc: "15-prospective-members.md",
+    line: 253,
+    anchor: "The kanban board for a pipeline with more than 200",
+    alt: "Kanban board reporting that it is showing only the first page of a larger pipeline",
+    route: "/prospective-members",
+    // Needs a pipeline larger than the board's 200-card ceiling, which the
+    // ordinary seed deliberately does not create:
+    //   python scripts/screenshots/seed_demo_data.py --bulk-prospects
+    // Without it the notice never renders and this shot is skipped rather than
+    // capturing an ordinary board under a placeholder describing a full one.
+    prepare: async (page) => {
+      const notice = page
+        .getByRole("status")
+        .filter({ hasText: /Showing \d+ of \d+ applicants/ });
+      await notice.first().waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     id: "15-10-pipeline-settings",
     doc: "15-prospective-members.md",
     line: 371,

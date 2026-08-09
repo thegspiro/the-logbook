@@ -112,6 +112,29 @@ and the seeder makes them explicitly:
   renders as "not found", which is what the public-form shots would otherwise
   capture.
 
+### `--bulk-prospects` — a pipeline past the board's ceiling
+
+```bash
+python scripts/screenshots/seed_demo_data.py --bulk-prospects        # 247
+python scripts/screenshots/seed_demo_data.py --bulk-prospects 300    # explicit
+```
+
+The kanban groups applicants into columns client-side, so it fetches 200 and
+says plainly when there are more — the notice `15-02-board-truncated` pictures.
+Producing that needs a genuinely oversized pipeline, which is **not** wanted in
+the ordinary demo data: 200+ filler applicants bury the twelve named ones the
+other prospective-member screenshots are composed around, and cost a few hundred
+requests on every seed. Hence opt-in.
+
+It tops the pipeline **up to** the target and is safe to re-run — the filler
+uses deterministic `applicant.NNNN@intake.example.org` addresses, so a second
+run adds only what is missing. Every fourth one is advanced a stage or two:
+without that the board is three empty columns under a notice about having too
+many applicants, because the newest 200 are all sitting at intake.
+
+To get back to a small pipeline, drop the filler by email prefix — or reseed
+onto an empty database, which is the cleaner reset.
+
 ## How a shot finds its placeholder
 
 Each entry records the placeholder's `line`, but that is only a hint: applying

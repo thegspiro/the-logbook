@@ -243,17 +243,19 @@ Three things changed:
 - **Switching between board and table refetches**, so neither view inherits the
   other's page position.
 - **Past 200 applicants, the board tells you.** It states plainly how many it is
-  not showing instead of quietly dropping them, and each column header shows the
-  **true** count for that stage even when not every card is drawn.
+  not showing instead of quietly dropping them.
+
+> **Past the ceiling, the column counts are counts of what loaded.** The notice
+> gives you the real total for the pipeline, but each column header counts only
+> the cards that were fetched — so on a truncated board a stage can show fewer
+> than it actually holds. That is the other reason to work from the table view
+> at this size: its filters and paging see the whole set.
 
 > **If you are running a pipeline larger than 200 active applicants**, use the
 > table view with its filters and search for day-to-day work — the board is a
 > visual overview, and beyond that size it is telling you it is one.
 
-> **[SCREENSHOT NEEDED]:** _The kanban board for a pipeline with more than 200
-> active applicants, showing the truncation notice ("Showing 200 of 247
-> applicants") above the columns, with a column header whose count exceeds the
-> number of cards drawn beneath it._
+![Kanban board reporting that it is showing only the first page of a larger pipeline](./images/15-02-board-truncated.png)
 
 ### What a card carries — and what it no longer leaks _(2026-08-08)_
 
