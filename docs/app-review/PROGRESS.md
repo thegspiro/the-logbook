@@ -65,7 +65,7 @@ from its open list.
 | B24 | core infra | CI2 | ✅ (p1, p2, p3) |
 | B25 | onboarding | ONB2 | ✅ (p1, p2, p3) |
 | B26 | public-portal | PP2 | ✅ (p1, p2, p3) |
-| B27 | frontend shared | FE2 | ⬜ |
+| B27 | frontend shared | FE2 | ✅ (p1, p2, p3) |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -1683,3 +1683,36 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   read/webhook; the one public write (form submission) goes through the forms schemas
   validated in B13 (FORM2-1). PP-6 (token-at-rest infra/schema) + PP-7 residual stay
   flagged. No CHANGELOG. See public-portal.md → Pass 3. Next: B27 frontend shared.
+
+- **B27 frontend shared ✅ (pass 3) — verified clean, no code change; Tier B pass 3
+  COMPLETE.** The backend enum-latent-500/E712 lenses don't apply to the frontend; the
+  frontend-specific checks were re-run: FE-2 (PII list endpoints stay in
+  UNCACHEABLE_PREFIXES, trailing-slash bug fixed — `/users` covers the list; the
+  Decision-2/3 PII gating interacts here and the excluded set is intact), FE-1
+  (`toAppError` object/array detail), auth invariants (httpOnly cookies, shared
+  refreshPromise, CSRF, no token in localStorage), banned date/number APIs (ESLint
+  enforced). Definitive gate: `tsc --noEmit` 0; eslint 0 across services/utils/hooks/
+  contexts/components; 476 shared-layer tests pass (27 files). See frontend-shared.md
+  → Pass 3.
+
+---
+
+## 🏁 Tier B pass 3 complete (2026-08-09) — all 27 features re-reviewed
+
+Tier B (B1–B27) has now been through a **third** full pass. Pass 3's throughline was
+the **B1 latent-500 enum lens** — a request field typed as free `str` mapping to a
+strict MySQL `ENUM` column, inserted raw, 500ing on a bad value. It paid off with
+**7 genuine 500-fixes** (B1 medical-screening, B6 meetings, B9 membership-pipeline,
+B11 notifications, B13 forms, B17 events — the widest at 9 schemas, B20 finance — in
+the money module) and, just as importantly, **numerous false positives cleared by
+reading** rather than blind-fixing (Literal types, String columns, coercion paths,
+existing `@field_validator`s, `pattern=` constraints, update-schemas that omit the
+field). Two cross-tenant/behavior finds surfaced from fresh reading (B7 EC2-4 — a
+read-leak pass 2 had misclassified as integrity-only; B2 AP2-2 closure), and the
+`== True/False # noqa: E712` debt was swept module-by-module (≈**90 comparisons**
+across the services, keeping the one intentional `json_extract == True`). Every
+owner-decision fix from earlier this session (Money SoD, TR-5, external-recipient
+audit, RPT-3/INT-3/FIN-5 read-gates → FIN-4/FIN-5 reconciled) was re-verified landed.
+Same discipline throughout: verified/safe fixes only, product/behavior/migration items
+flagged, regression tests added, gate green (flake8/black/tsc/eslint; DB-backed tests
+are the known no-MySQL sandbox limit). Tier A remains ✅ (not re-run in pass 3).

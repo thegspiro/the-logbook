@@ -1,7 +1,37 @@
 # Application Review — Frontend Shared (Tier B)
 
 **Prefix:** `FE` · **Iteration:** B27 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2) · **(final Tier B item)**
+2026-08-08 (pass 2), 2026-08-09 (pass 3) · **(final Tier B item)**
+
+---
+
+## Pass 3 (2026-08-09) — verified clean, no code change
+
+The backend enum-latent-500 / E712 lenses that drove much of pass 3 don't apply to
+the frontend; the frontend-specific checks were re-run instead:
+
+- **FE-2 (HIGH) holds** — the PII list endpoints stay in `UNCACHEABLE_PREFIXES` with
+  the trailing-slash bug fixed: `'/users'` (no slash, so `GET /users` is covered),
+  plus `/medical-screening/` and the other PHI/PII prefixes; the exclusion runs via
+  `url.startsWith(prefix)` (`apiCache.ts` 224). This is also where this session's
+  Decision-2/Decision-3 PII gating interacts — the excluded set is intact.
+- **FE-1 holds** — `toAppError` handles an object/array `detail` (no `[object Object]`).
+- **Auth invariants** — httpOnly-cookie auth, shared `refreshPromise`, CSRF
+  double-submit, and the `has_session` localStorage flag pattern unchanged (no token
+  in localStorage).
+- **Banned date/number APIs** — the whole frontend still passes ESLint (which enforces
+  the `toLocaleDateString`/`date-fns` bans) and Pitfall #1 (`||` not `??` on outgoing
+  form values) was re-confirmed by the clean lint + type-check.
+
+**Gate (definitive, whole frontend after every pass-3 change):** `tsc --noEmit` **0**;
+`eslint` **0** across the shared scope (`services`/`utils`/`hooks`/`contexts`/
+`components`); shared-layer tests **476 passed (27 files)**. No code changed.
+
+### Still flagged (unchanged)
+
+- The frontend-cleanup follow-ups accumulated across the backend passes (unused
+  `markLogRead`, the `uploader_name`/`folder_name` note now resolved by DOC2-1) — a
+  future dedicated frontend-cleanup iteration, not defects.
 
 **Frontend:** the shared layer — `services/` (global `api.ts`, `apiClient.ts`,
 `errorTracking.ts`), `utils/` (`apiCache.ts`, `errorHandling.ts`, `createApiClient.ts`,
