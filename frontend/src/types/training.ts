@@ -941,6 +941,10 @@ export interface ProgramRequirement {
   is_required: boolean;
   is_prerequisite: boolean;
   sort_order: number;
+  // False when an existing department requirement was linked in rather than
+  // created for this program: editing it changes the department's copy, and
+  // unlinking leaves that copy in place.
+  owns_requirement?: boolean;
   program_specific_description?: string;
   custom_deadline_days?: number;
   notification_message?: string;
@@ -954,6 +958,9 @@ export interface ProgramRequirementCreate {
   requirement_id: string;
   is_required?: boolean;
   is_prerequisite?: boolean;
+  // Send true only when this caller just created `requirement_id` for the
+  // program — it lets unlinking delete the requirement as well.
+  owns_requirement?: boolean;
   sort_order?: number;
   program_specific_description?: string;
   custom_deadline_days?: number;
@@ -1181,6 +1188,14 @@ export interface ProgramEnrollmentWithUser extends ProgramEnrollment {
 
 // Atomic program build (create-pipeline wizard) — one nested payload persisted
 // in a single backend transaction.
+/** Links an existing department requirement into a phase during program build. */
+export interface ProgramBuildRequirementLink {
+  requirement_id: string;
+  is_required: boolean;
+  sort_order: number;
+}
+
+/** Defines a new program-specific requirement during program build. */
 export interface ProgramBuildRequirementInput {
   name: string;
   description?: string | undefined;
@@ -1214,7 +1229,9 @@ export interface ProgramBuildPhaseInput {
   description?: string | undefined;
   time_limit_days?: number | undefined;
   requires_manual_advancement: boolean;
-  requirements: ProgramBuildRequirementInput[];
+  // Each entry either links an existing requirement or defines a new one —
+  // never both; the backend rejects a payload carrying an id and a name.
+  requirements: (ProgramBuildRequirementInput | ProgramBuildRequirementLink)[];
   milestones: ProgramBuildMilestoneInput[];
 }
 

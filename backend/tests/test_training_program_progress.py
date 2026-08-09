@@ -228,6 +228,60 @@ class TestAddRequirementBackfill:
         # Each affected enrollment is recomputed so the new requirement counts.
         assert svc._recalculate_enrollment_progress.await_count == 2
 
+    async def test_link_defaults_to_not_owning_the_requirement(self):
+        """
+        The endpoint always receives an id that already exists, so ownership is
+        opt-in: unless the caller says it just created the requirement, the link
+        must not put it up for deletion on unlink.
+        """
+        from app.models.training import ProgramRequirement
+        from app.schemas.training_program import ProgramRequirementCreate
+
+        program = SimpleNamespace(id=str(uuid4()), organization_id="org-1")
+        db = RecordingSession(
+            [
+                _one(program),  # get_program_by_id
+                _one(SimpleNamespace(id=str(uuid4()))),  # TrainingRequirement lookup
+                _one(None),  # duplicate check
+                MagicMock(all=MagicMock(return_value=[])),  # no enrollments
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc._recalculate_enrollment_progress = AsyncMock()
+
+        data = ProgramRequirementCreate(program_id=uuid4(), requirement_id=uuid4())
+        _, error = await svc.add_requirement_to_program(data, uuid4())
+
+        assert error is None
+        links = [o for o in db.added if isinstance(o, ProgramRequirement)]
+        assert len(links) == 1
+        assert links[0].owns_requirement is False
+
+    async def test_link_records_ownership_when_caller_created_it(self):
+        from app.models.training import ProgramRequirement
+        from app.schemas.training_program import ProgramRequirementCreate
+
+        program = SimpleNamespace(id=str(uuid4()), organization_id="org-1")
+        db = RecordingSession(
+            [
+                _one(program),
+                _one(SimpleNamespace(id=str(uuid4()))),
+                _one(None),
+                MagicMock(all=MagicMock(return_value=[])),
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc._recalculate_enrollment_progress = AsyncMock()
+
+        data = ProgramRequirementCreate(
+            program_id=uuid4(), requirement_id=uuid4(), owns_requirement=True
+        )
+        _, error = await svc.add_requirement_to_program(data, uuid4())
+
+        assert error is None
+        links = [o for o in db.added if isinstance(o, ProgramRequirement)]
+        assert links[0].owns_requirement is True
+
 
 if __name__ == "__main__":  # pragma: no cover
     import pytest

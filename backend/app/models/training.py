@@ -23,6 +23,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.sql import true as sa_true
 
 from app.core.database import Base
 from app.core.encrypted_types import EncryptedText
@@ -1418,6 +1419,18 @@ class ProgramRequirement(Base):
         Boolean, default=False
     )  # Must complete before other requirements
     sort_order = Column(Integer, default=0)  # Display order within program/phase
+
+    # Does this link *own* the requirement it points at? True when the
+    # requirement was created for this program (the inline "create a new
+    # requirement" flow), False when an existing department requirement was
+    # linked in. Unlinking deletes the underlying requirement only when the link
+    # owned it — otherwise removing CPR from a recruit phase would delete the
+    # department's CPR requirement out from under every other user of it.
+    # Defaults True because every link that predates this column was created by
+    # the inline flow.
+    owns_requirement = Column(
+        Boolean, nullable=False, default=True, server_default=sa_true()
+    )
 
     # Program-Specific Customization
     program_specific_description = Column(

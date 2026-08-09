@@ -9,8 +9,11 @@ import toast from 'react-hot-toast';
 import { X, AlertCircle } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
+import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
+import { REQUIREMENT_TYPE_OPTIONS } from '../constants/enums';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
+import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import { getErrorMessage } from '../utils/errorHandling';
 import type {
   ProgramMilestone,
@@ -19,17 +22,6 @@ import type {
   ProgramStructureType,
   TrainingProgram,
 } from '../types/training';
-
-const REQUIREMENT_TYPES: { value: string; label: string }[] = [
-  { value: 'hours', label: 'Training hours' },
-  { value: 'shifts', label: 'Shifts' },
-  { value: 'calls', label: 'Call responses' },
-  { value: 'courses', label: 'Courses' },
-  { value: 'skills_evaluation', label: 'Skills evaluation' },
-  { value: 'knowledge_test', label: 'Knowledge test' },
-  { value: 'checklist', label: 'Checklist' },
-  { value: 'certification', label: 'Certification' },
-];
 
 const STRUCTURE_TYPES: { value: ProgramStructureType; label: string }[] = [
   { value: 'phases', label: 'Phases (staged)' },
@@ -445,9 +437,11 @@ export const RequirementFormModal: React.FC<{
   phaseId: string | null;
   link?: ProgramRequirement | undefined;
   sortOrder: number;
+  /** Requirement ids already attached to this program, to block double-linking. */
+  linkedRequirementIds?: string[];
   onClose: () => void;
   onSaved: () => void;
-}> = ({ programId, phaseId, link, sortOrder, onClose, onSaved }) => {
+}> = ({ programId, phaseId, link, sortOrder, linkedRequirementIds = [], onClose, onSaved }) => {
   const req = link?.requirement;
   const [name, setName] = useState(req?.name ?? '');
   const [description, setDescription] = useState(req?.description ?? '');
@@ -466,7 +460,48 @@ export const RequirementFormModal: React.FC<{
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
   const linksCourses = type === 'courses' || type === 'certification';
 
+  // Adding offers two routes: attach a requirement the department already
+  // tracks (the common case — CPR, HIPAA, an imported NFPA item), or define a
+  // program-specific one. Editing has no mode; it always edits the requirement
+  // behind the existing link.
+  const [mode, setMode] = useState<'existing' | 'new'>('existing');
+  const [existingId, setExistingId] = useState('');
+  const { requirements: library, loading: libraryLoading, error: libraryError } = useRequirementLibrary();
+  const linkingExisting = !link && mode === 'existing';
+  // A linked-in requirement is the department's row, so edits here reach every
+  // other program and the department requirements page.
+  const editingShared = Boolean(link) && link?.owns_requirement === false;
+
+  const linkExisting = async () => {
+    if (!existingId) {
+      toast.error('Pick a requirement to link');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await trainingProgramService.addProgramRequirement(programId, {
+        program_id: programId,
+        phase_id: phaseId ?? undefined,
+        requirement_id: existingId,
+        is_required: isRequired,
+        sort_order: sortOrder,
+        // The department owns this one; unlinking must not delete it.
+        owns_requirement: false,
+      });
+      toast.success('Requirement linked');
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to link requirement'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submit = async () => {
+    if (linkingExisting) {
+      await linkExisting();
+      return;
+    }
     if (!name.trim()) {
       toast.error('Name is required');
       return;
@@ -516,6 +551,8 @@ export const RequirementFormModal: React.FC<{
           requirement_id: created.id,
           is_required: isRequired,
           sort_order: sortOrder,
+          // Created here for this program, so unlinking may clean it up.
+          owns_requirement: true,
         });
         toast.success('Requirement added');
       }
@@ -533,170 +570,223 @@ export const RequirementFormModal: React.FC<{
       onClose={onClose}
       onSubmit={() => void submit()}
       submitting={submitting}
+      submitLabel={linkingExisting ? 'Link requirement' : 'Save'}
     >
-      <div>
-        <label className="form-label" htmlFor="rq-name">
-          Name
-        </label>
-        <input id="rq-name" className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-      <div>
-        <label className="form-label" htmlFor="rq-desc">
-          Description
-        </label>
-        <textarea
-          id="rq-desc"
-          className="form-input"
-          rows={2}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </div>
-      <div>
-        <label className="form-label" htmlFor="rq-type">
-          Type
-        </label>
-        <select id="rq-type" className="form-input" value={type} onChange={(e) => setType(e.target.value)}>
-          {REQUIREMENT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
+      {!link && (
+        <div className="tab-scroll" role="tablist" aria-label="How to add the requirement">
+          {(
+            [
+              { value: 'existing', label: 'Use an existing requirement' },
+              { value: 'new', label: 'Create a new one' },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="tab"
+              aria-selected={mode === opt.value}
+              onClick={() => setMode(opt.value)}
+              className={`shrink-0 border-b-2 px-3 py-2 text-sm whitespace-nowrap ${
+                mode === opt.value
+                  ? 'border-red-700 font-medium text-red-700 dark:border-red-400 dark:text-red-400'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
+              }`}
+            >
+              {opt.label}
+            </button>
           ))}
-        </select>
-      </div>
-      {type === 'hours' && (
-        <div>
-          <label className="form-label" htmlFor="rq-hours">
-            Required hours
-          </label>
-          <input
-            id="rq-hours"
-            type="number"
-            min={0}
-            className="form-input"
-            value={hours}
-            onChange={(e) => setHours(e.target.value)}
-          />
         </div>
       )}
-      {type === 'shifts' && (
-        <div>
-          <label className="form-label" htmlFor="rq-shifts">
-            Required shifts
-          </label>
-          <input
-            id="rq-shifts"
-            type="number"
-            min={0}
-            className="form-input"
-            value={shifts}
-            onChange={(e) => setShifts(e.target.value)}
-          />
-        </div>
-      )}
-      {type === 'calls' && (
-        <div>
-          <label className="form-label" htmlFor="rq-calls">
-            Required calls
-          </label>
-          <input
-            id="rq-calls"
-            type="number"
-            min={0}
-            className="form-input"
-            value={calls}
-            onChange={(e) => setCalls(e.target.value)}
-          />
-        </div>
-      )}
-      {type === 'knowledge_test' && (
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="form-label" htmlFor="rq-pass">
-              Passing score (%)
-            </label>
-            <input
-              id="rq-pass"
-              type="number"
-              min={0}
-              max={100}
-              className="form-input"
-              value={passing}
-              onChange={(e) => setPassing(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="form-label" htmlFor="rq-att">
-              Max attempts
-            </label>
-            <input
-              id="rq-att"
-              type="number"
-              min={1}
-              className="form-input"
-              value={attempts}
-              onChange={(e) => setAttempts(e.target.value)}
-            />
-          </div>
-        </div>
-      )}
-      {type === 'checklist' && (
-        <div>
-          <label className="form-label" htmlFor="rq-check">
-            Checklist items (one per line)
-          </label>
-          <textarea
-            id="rq-check"
-            className="form-input"
-            rows={4}
-            value={checklist}
-            onChange={(e) => setChecklist(e.target.value)}
-          />
-        </div>
-      )}
-      {linksCourses && (
-        <CourseLibraryPicker
+
+      {linkingExisting && (
+        <RequirementLibraryPicker
           idPrefix="rq"
-          compact
-          courses={courses}
-          loading={coursesLoading}
-          error={coursesError}
-          variant={type === 'certification' ? 'certification' : 'courses'}
-          selectedIds={requiredCourses}
-          onChange={setRequiredCourses}
+          requirements={library}
+          loading={libraryLoading}
+          error={libraryError}
+          linkedIds={linkedRequirementIds}
+          selectedId={existingId}
+          onChange={setExistingId}
         />
       )}
-      {linksCourses && <RecencyWindowField idPrefix="rq" value={recencyDays} onChange={setRecencyDays} />}
-      {(type === 'hours' || type === 'courses') && (
+
+      {editingShared && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-          <div className="space-y-2">
-            <p className="text-theme-text-secondary text-sm">
-              {allowsExternal ? (
-                <>
-                  Imported courses <strong>will</strong> count toward this requirement when they carry a matching
-                  category (e.g. a Vector Solutions completion).
-                </>
-              ) : (
-                <>
-                  By default, imported courses (e.g. Vector Solutions) <strong>will not</strong> count toward this
-                  requirement — only an in-house session, a skills test, or manual sign-off satisfies it.
-                </>
-              )}
-            </p>
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={allowsExternal}
-                onChange={(e) => setAllowsExternal(e.target.checked)}
-              />
-              <span className="text-theme-text-secondary text-sm">
-                Accept external / imported training credit for this requirement
-              </span>
-            </label>
-          </div>
+          <p className="text-theme-text-secondary text-sm">
+            This is a department requirement linked into the program. Changes here apply everywhere it is used — only
+            &ldquo;Required to complete the phase&rdquo; is specific to this phase.
+          </p>
         </div>
+      )}
+
+      {!linkingExisting && (
+        <>
+          <div>
+            <label className="form-label" htmlFor="rq-name">
+              Name
+            </label>
+            <input id="rq-name" className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="rq-desc">
+              Description
+            </label>
+            <textarea
+              id="rq-desc"
+              className="form-input"
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="rq-type">
+              Type
+            </label>
+            <select id="rq-type" className="form-input" value={type} onChange={(e) => setType(e.target.value)}>
+              {REQUIREMENT_TYPE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {type === 'hours' && (
+            <div>
+              <label className="form-label" htmlFor="rq-hours">
+                Required hours
+              </label>
+              <input
+                id="rq-hours"
+                type="number"
+                min={0}
+                className="form-input"
+                value={hours}
+                onChange={(e) => setHours(e.target.value)}
+              />
+            </div>
+          )}
+          {type === 'shifts' && (
+            <div>
+              <label className="form-label" htmlFor="rq-shifts">
+                Required shifts
+              </label>
+              <input
+                id="rq-shifts"
+                type="number"
+                min={0}
+                className="form-input"
+                value={shifts}
+                onChange={(e) => setShifts(e.target.value)}
+              />
+            </div>
+          )}
+          {type === 'calls' && (
+            <div>
+              <label className="form-label" htmlFor="rq-calls">
+                Required calls
+              </label>
+              <input
+                id="rq-calls"
+                type="number"
+                min={0}
+                className="form-input"
+                value={calls}
+                onChange={(e) => setCalls(e.target.value)}
+              />
+            </div>
+          )}
+          {type === 'knowledge_test' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="form-label" htmlFor="rq-pass">
+                  Passing score (%)
+                </label>
+                <input
+                  id="rq-pass"
+                  type="number"
+                  min={0}
+                  max={100}
+                  className="form-input"
+                  value={passing}
+                  onChange={(e) => setPassing(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label" htmlFor="rq-att">
+                  Max attempts
+                </label>
+                <input
+                  id="rq-att"
+                  type="number"
+                  min={1}
+                  className="form-input"
+                  value={attempts}
+                  onChange={(e) => setAttempts(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          {type === 'checklist' && (
+            <div>
+              <label className="form-label" htmlFor="rq-check">
+                Checklist items (one per line)
+              </label>
+              <textarea
+                id="rq-check"
+                className="form-input"
+                rows={4}
+                value={checklist}
+                onChange={(e) => setChecklist(e.target.value)}
+              />
+            </div>
+          )}
+          {linksCourses && (
+            <CourseLibraryPicker
+              idPrefix="rq"
+              compact
+              courses={courses}
+              loading={coursesLoading}
+              error={coursesError}
+              variant={type === 'certification' ? 'certification' : 'courses'}
+              selectedIds={requiredCourses}
+              onChange={setRequiredCourses}
+            />
+          )}
+          {linksCourses && <RecencyWindowField idPrefix="rq" value={recencyDays} onChange={setRecencyDays} />}
+          {(type === 'hours' || type === 'courses') && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <div className="space-y-2">
+                <p className="text-theme-text-secondary text-sm">
+                  {allowsExternal ? (
+                    <>
+                      Imported courses <strong>will</strong> count toward this requirement when they carry a matching
+                      category (e.g. a Vector Solutions completion).
+                    </>
+                  ) : (
+                    <>
+                      By default, imported courses (e.g. Vector Solutions) <strong>will not</strong> count toward this
+                      requirement — only an in-house session, a skills test, or manual sign-off satisfies it.
+                    </>
+                  )}
+                </p>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={allowsExternal}
+                    onChange={(e) => setAllowsExternal(e.target.checked)}
+                  />
+                  <span className="text-theme-text-secondary text-sm">
+                    Accept external / imported training credit for this requirement
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
+        </>
       )}
       <label className="text-theme-text-secondary inline-flex items-center gap-2 text-sm">
         <input type="checkbox" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} />

@@ -12,6 +12,7 @@ import {
   ListChecks,
   Flag,
   Eye,
+  Link2,
   Plus,
   Trash2,
   GripVertical,
@@ -21,13 +22,16 @@ import {
 import { trainingProgramService } from '../services/api';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
+import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
+import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import type {
   ProgramStructureType,
   RequirementType,
   RequirementFrequency,
   ProgramBuildRequest,
   TrainingCourse,
+  TrainingRequirementEnhanced,
 } from '../types/training';
 
 // ==================== Types ====================
@@ -46,6 +50,11 @@ interface PhaseFormData {
 
 interface RequirementFormData {
   id: string;
+  // 'library' entries link an existing department requirement and carry only
+  // `requirement_id` + `is_required`; 'new' entries define one from the fields
+  // below. The two never mix — the build payload rejects a card with both.
+  source: 'library' | 'new';
+  requirement_id: string;
   name: string;
   description: string;
   requirement_type: RequirementType;
@@ -100,8 +109,10 @@ const emptyPhase = (num: number): PhaseFormData => ({
   isExpanded: true,
 });
 
-const emptyRequirement = (sortOrder: number): RequirementFormData => ({
+const emptyRequirement = (sortOrder: number, source: 'library' | 'new' = 'new'): RequirementFormData => ({
   id: nextId(),
+  source,
+  requirement_id: '',
   name: '',
   description: '',
   requirement_type: 'hours',
@@ -474,7 +485,10 @@ const StepRequirements: React.FC<{
   courses: TrainingCourse[];
   coursesLoading: boolean;
   coursesError: string;
-  onAddRequirement: (phaseId: string) => void;
+  requirementLibrary: TrainingRequirementEnhanced[];
+  requirementLibraryLoading: boolean;
+  requirementLibraryError: string;
+  onAddRequirement: (phaseId: string, source: 'library' | 'new') => void;
   onRemoveRequirement: (phaseId: string, reqId: string) => void;
   onUpdateRequirement: (
     phaseId: string,
@@ -487,6 +501,9 @@ const StepRequirements: React.FC<{
   courses,
   coursesLoading,
   coursesError,
+  requirementLibrary,
+  requirementLibraryLoading,
+  requirementLibraryError,
   onAddRequirement,
   onRemoveRequirement,
   onUpdateRequirement,
@@ -509,6 +526,11 @@ const StepRequirements: React.FC<{
           A phase is finished when its <strong>required</strong> items are done. Uncheck
           <strong> &ldquo;Required&rdquo;</strong> for optional items that shouldn&apos;t hold up advancement.
         </p>
+        <p>
+          For something the department already tracks — CPR, HIPAA, an imported NFPA item — use
+          <strong> Link existing</strong> rather than retyping it. The phase then reads the same records the department
+          does, so a member who already holds it starts out credited.
+        </p>
       </InfoCallout>
     )}
 
@@ -525,242 +547,295 @@ const StepRequirements: React.FC<{
               <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span>{' '}
               {phase.name || 'Untitled'}
             </h3>
-            <button
-              onClick={() => onAddRequirement(phase.id)}
-              className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-sm px-2 py-1 text-xs"
-            >
-              <Plus className="h-3 w-3" />
-              <span>Add Requirement</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onAddRequirement(phase.id, 'library')}
+                className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-sm px-2 py-1 text-xs"
+              >
+                <Link2 className="h-3 w-3" />
+                <span>Link Existing</span>
+              </button>
+              <button
+                onClick={() => onAddRequirement(phase.id, 'new')}
+                className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-sm px-2 py-1 text-xs"
+              >
+                <Plus className="h-3 w-3" />
+                <span>New Requirement</span>
+              </button>
+            </div>
           </div>
 
           {phase.requirements.length === 0 ? (
             <p className="text-theme-text-muted py-4 text-center text-sm">No requirements yet for this phase.</p>
           ) : (
             <div className="space-y-3">
-              {phase.requirements.map((req) => (
-                <div key={req.id} className="bg-theme-surface-secondary space-y-3 rounded-lg p-3">
-                  <div className="flex items-start justify-between">
-                    <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
-                      <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">
-                          Requirement Name *
-                        </label>
-                        <input
-                          type="text"
-                          value={req.name}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'name', e.target.value)}
-                          className="form-input-sm"
-                          placeholder="e.g., Hose Operations Skills"
+              {phase.requirements.map((req) =>
+                req.source === 'library' ? (
+                  <div key={req.id} className="bg-theme-surface-secondary space-y-3 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <RequirementLibraryPicker
+                          idPrefix={`wizard-${req.id}`}
+                          requirements={requirementLibrary}
+                          loading={requirementLibraryLoading}
+                          error={requirementLibraryError}
+                          // Everything else this phase already links, so the
+                          // same requirement can't be added to it twice.
+                          linkedIds={phase.requirements
+                            .filter((r) => r.id !== req.id && r.requirement_id)
+                            .map((r) => r.requirement_id)}
+                          selectedId={req.requirement_id}
+                          onChange={(id) => onUpdateRequirement(phase.id, req.id, 'requirement_id', id)}
                         />
                       </div>
-                      <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Type</label>
-                        <select
-                          value={req.requirement_type}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'requirement_type', e.target.value)}
-                          className="form-input-sm"
-                        >
-                          <option value="hours">Training Hours</option>
-                          <option value="courses">Course Completion</option>
-                          <option value="skills_evaluation">Skills Evaluation</option>
-                          <option value="knowledge_test">Knowledge Test</option>
-                          <option value="checklist">Checklist</option>
-                          <option value="certification">Certification</option>
-                          <option value="shifts">Shift Hours</option>
-                          <option value="calls">Call Responses</option>
-                        </select>
-                        {REQUIREMENT_TYPE_HELP[req.requirement_type] && (
-                          <HelpText>{REQUIREMENT_TYPE_HELP[req.requirement_type]}</HelpText>
-                        )}
-                      </div>
+                      <button
+                        onClick={() => onRemoveRequirement(phase.id, req.id)}
+                        className="text-theme-text-muted p-1 hover:text-red-800 dark:hover:text-red-400"
+                        aria-label="Remove requirement"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => onRemoveRequirement(phase.id, req.id)}
-                      className="text-theme-text-muted ml-2 p-1 hover:text-red-800 dark:hover:text-red-400"
-                      aria-label="Remove requirement"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div>
+                      <label className="text-theme-text-secondary flex items-center space-x-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={req.is_required}
+                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
+                          className="bg-theme-input-bg border-theme-input-border h-3 w-3 rounded-sm text-red-500"
+                        />
+                        <span>Required to complete the phase</span>
+                      </label>
+                      <HelpText>
+                        The requirement&apos;s own settings — hours, linked courses, freshness window — stay under the
+                        department&apos;s control. Only this toggle is specific to the phase.
+                      </HelpText>
+                    </div>
                   </div>
-
-                  <div>
-                    <label className="text-theme-text-muted mb-1 block text-xs font-medium">Description</label>
-                    <textarea
-                      value={req.description}
-                      onChange={(e) => onUpdateRequirement(phase.id, req.id, 'description', e.target.value)}
-                      rows={2}
-                      className="form-input-sm"
-                      placeholder="Describe what this requirement entails..."
-                    />
-                  </div>
-
-                  {/* Required toggle — applies to every requirement type */}
-                  <div>
-                    <label className="text-theme-text-secondary flex items-center space-x-2 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={req.is_required}
-                        onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
-                        className="bg-theme-input-bg border-theme-input-border h-3 w-3 rounded-sm text-red-500"
-                      />
-                      <span>Required to complete the phase</span>
-                    </label>
-                    <HelpText>
-                      Uncheck for optional or extra-credit items that shouldn&apos;t hold up advancement.
-                    </HelpText>
-                  </div>
-
-                  {/* External-credit flag — a deliberate choice for each hours/
-                      courses requirement, since the default is in-house-only. */}
-                  {(req.requirement_type === 'hours' || req.requirement_type === 'courses') && (
-                    <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
-                      <AlertCircle
-                        className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
-                        aria-hidden="true"
-                      />
-                      <div>
-                        <label className="text-theme-text-secondary flex items-start gap-2 text-xs">
+                ) : (
+                  <div key={req.id} className="bg-theme-surface-secondary space-y-3 rounded-lg p-3">
+                    <div className="flex items-start justify-between">
+                      <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
+                        <div>
+                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                            Requirement Name *
+                          </label>
                           <input
-                            type="checkbox"
-                            checked={req.allows_external_credit}
-                            onChange={(e) =>
-                              onUpdateRequirement(phase.id, req.id, 'allows_external_credit', e.target.checked)
-                            }
-                            className="bg-theme-input-bg border-theme-input-border mt-0.5 h-3 w-3 rounded-sm text-red-500"
+                            type="text"
+                            value={req.name}
+                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'name', e.target.value)}
+                            className="form-input-sm"
+                            placeholder="e.g., Hose Operations Skills"
                           />
-                          <span>Accept external / imported training credit</span>
-                        </label>
-                        <HelpText>
-                          Off by default — imported courses (e.g. Vector Solutions) won&apos;t count toward this; only
-                          in-house sessions, skills tests, or manual sign-off will. Check it if online/third-party
-                          delivery is acceptable.
-                        </HelpText>
+                        </div>
+                        <div>
+                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">Type</label>
+                          <select
+                            value={req.requirement_type}
+                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'requirement_type', e.target.value)}
+                            className="form-input-sm"
+                          >
+                            <option value="hours">Training Hours</option>
+                            <option value="courses">Course Completion</option>
+                            <option value="skills_evaluation">Skills Evaluation</option>
+                            <option value="knowledge_test">Knowledge Test</option>
+                            <option value="checklist">Checklist</option>
+                            <option value="certification">Certification</option>
+                            <option value="shifts">Shift Hours</option>
+                            <option value="calls">Call Responses</option>
+                          </select>
+                          {REQUIREMENT_TYPE_HELP[req.requirement_type] && (
+                            <HelpText>{REQUIREMENT_TYPE_HELP[req.requirement_type]}</HelpText>
+                          )}
+                        </div>
                       </div>
+                      <button
+                        onClick={() => onRemoveRequirement(phase.id, req.id)}
+                        className="text-theme-text-muted ml-2 p-1 hover:text-red-800 dark:hover:text-red-400"
+                        aria-label="Remove requirement"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                  )}
 
-                  {/* Course-library link — the requirement's target for course
+                    <div>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">Description</label>
+                      <textarea
+                        value={req.description}
+                        onChange={(e) => onUpdateRequirement(phase.id, req.id, 'description', e.target.value)}
+                        rows={2}
+                        className="form-input-sm"
+                        placeholder="Describe what this requirement entails..."
+                      />
+                    </div>
+
+                    {/* Required toggle — applies to every requirement type */}
+                    <div>
+                      <label className="text-theme-text-secondary flex items-center space-x-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={req.is_required}
+                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
+                          className="bg-theme-input-bg border-theme-input-border h-3 w-3 rounded-sm text-red-500"
+                        />
+                        <span>Required to complete the phase</span>
+                      </label>
+                      <HelpText>
+                        Uncheck for optional or extra-credit items that shouldn&apos;t hold up advancement.
+                      </HelpText>
+                    </div>
+
+                    {/* External-credit flag — a deliberate choice for each hours/
+                      courses requirement, since the default is in-house-only. */}
+                    {(req.requirement_type === 'hours' || req.requirement_type === 'courses') && (
+                      <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+                        <AlertCircle
+                          className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+                          aria-hidden="true"
+                        />
+                        <div>
+                          <label className="text-theme-text-secondary flex items-start gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={req.allows_external_credit}
+                              onChange={(e) =>
+                                onUpdateRequirement(phase.id, req.id, 'allows_external_credit', e.target.checked)
+                              }
+                              className="bg-theme-input-bg border-theme-input-border mt-0.5 h-3 w-3 rounded-sm text-red-500"
+                            />
+                            <span>Accept external / imported training credit</span>
+                          </label>
+                          <HelpText>
+                            Off by default — imported courses (e.g. Vector Solutions) won&apos;t count toward this; only
+                            in-house sessions, skills tests, or manual sign-off will. Check it if online/third-party
+                            delivery is acceptable.
+                          </HelpText>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Course-library link — the requirement's target for course
                       and certification types. */}
-                  {(req.requirement_type === 'courses' || req.requirement_type === 'certification') && (
-                    <CourseLibraryPicker
-                      idPrefix={`wizard-${req.id}`}
-                      courses={courses}
-                      loading={coursesLoading}
-                      error={coursesError}
-                      variant={req.requirement_type === 'certification' ? 'certification' : 'courses'}
-                      selectedIds={req.required_courses}
-                      onChange={(ids) => onUpdateRequirement(phase.id, req.id, 'required_courses', ids)}
-                    />
-                  )}
+                    {(req.requirement_type === 'courses' || req.requirement_type === 'certification') && (
+                      <CourseLibraryPicker
+                        idPrefix={`wizard-${req.id}`}
+                        courses={courses}
+                        loading={coursesLoading}
+                        error={coursesError}
+                        variant={req.requirement_type === 'certification' ? 'certification' : 'courses'}
+                        selectedIds={req.required_courses}
+                        onChange={(ids) => onUpdateRequirement(phase.id, req.id, 'required_courses', ids)}
+                      />
+                    )}
 
-                  {/* Freshness window — offered for the types where a stale
+                    {/* Freshness window — offered for the types where a stale
                       completion is the realistic failure (a certification from
                       three years ago, a course taken before the last revision).
                       Hours/shifts/calls accrue continuously, so a window there
                       would mostly confuse. */}
-                  {(req.requirement_type === 'courses' || req.requirement_type === 'certification') && (
-                    <RecencyWindowField
-                      idPrefix={`wizard-${req.id}`}
-                      value={req.recency_days}
-                      onChange={(days) => onUpdateRequirement(phase.id, req.id, 'recency_days', days)}
-                    />
-                  )}
-
-                  {/* Conditional fields based on type */}
-                  {req.requirement_type === 'hours' && (
-                    <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Hours</label>
-                      <input
-                        type="number"
-                        value={req.required_hours}
-                        onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_hours', e.target.value)}
-                        className="form-input-sm"
-                        placeholder="e.g., 40"
-                        min={0}
-                        step={0.5}
+                    {(req.requirement_type === 'courses' || req.requirement_type === 'certification') && (
+                      <RecencyWindowField
+                        idPrefix={`wizard-${req.id}`}
+                        value={req.recency_days}
+                        onChange={(days) => onUpdateRequirement(phase.id, req.id, 'recency_days', days)}
                       />
-                    </div>
-                  )}
+                    )}
 
-                  {req.requirement_type === 'shifts' && (
-                    <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Shifts</label>
-                      <input
-                        type="number"
-                        value={req.required_shifts}
-                        onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_shifts', e.target.value)}
-                        className="form-input-sm"
-                        placeholder="e.g., 10"
-                        min={1}
-                      />
-                    </div>
-                  )}
-
-                  {req.requirement_type === 'calls' && (
-                    <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Calls</label>
-                      <input
-                        type="number"
-                        value={req.required_calls}
-                        onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_calls', e.target.value)}
-                        className="form-input-sm"
-                        placeholder="e.g., 20"
-                        min={1}
-                      />
-                    </div>
-                  )}
-
-                  {req.requirement_type === 'checklist' && (
-                    <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">
-                        Checklist Items (one per line)
-                      </label>
-                      <textarea
-                        value={req.checklist_items.join('\n')}
-                        onChange={(e) =>
-                          onUpdateRequirement(phase.id, req.id, 'checklist_items', e.target.value.split('\n'))
-                        }
-                        rows={4}
-                        className="form-input-sm"
-                        placeholder="Enter each checklist item on a new line..."
-                      />
-                    </div>
-                  )}
-
-                  {req.requirement_type === 'knowledge_test' && (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {/* Conditional fields based on type */}
+                    {req.requirement_type === 'hours' && (
                       <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">
-                          Passing Score (%)
-                        </label>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Hours</label>
                         <input
                           type="number"
-                          value={req.passing_score}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'passing_score', e.target.value)}
+                          value={req.required_hours}
+                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_hours', e.target.value)}
                           className="form-input-sm"
-                          placeholder="e.g., 70"
+                          placeholder="e.g., 40"
                           min={0}
-                          max={100}
+                          step={0.5}
                         />
-                        <HelpText>Minimum score to pass. Defaults to 70% if left blank.</HelpText>
                       </div>
+                    )}
+
+                    {req.requirement_type === 'shifts' && (
                       <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Max Attempts</label>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Shifts</label>
                         <input
                           type="number"
-                          value={req.max_attempts}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'max_attempts', e.target.value)}
+                          value={req.required_shifts}
+                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_shifts', e.target.value)}
                           className="form-input-sm"
-                          placeholder="Unlimited"
+                          placeholder="e.g., 10"
                           min={1}
                         />
-                        <HelpText>How many times a member may take it. Blank = unlimited.</HelpText>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+
+                    {req.requirement_type === 'calls' && (
+                      <div>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Calls</label>
+                        <input
+                          type="number"
+                          value={req.required_calls}
+                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_calls', e.target.value)}
+                          className="form-input-sm"
+                          placeholder="e.g., 20"
+                          min={1}
+                        />
+                      </div>
+                    )}
+
+                    {req.requirement_type === 'checklist' && (
+                      <div>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                          Checklist Items (one per line)
+                        </label>
+                        <textarea
+                          value={req.checklist_items.join('\n')}
+                          onChange={(e) =>
+                            onUpdateRequirement(phase.id, req.id, 'checklist_items', e.target.value.split('\n'))
+                          }
+                          rows={4}
+                          className="form-input-sm"
+                          placeholder="Enter each checklist item on a new line..."
+                        />
+                      </div>
+                    )}
+
+                    {req.requirement_type === 'knowledge_test' && (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                            Passing Score (%)
+                          </label>
+                          <input
+                            type="number"
+                            value={req.passing_score}
+                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'passing_score', e.target.value)}
+                            className="form-input-sm"
+                            placeholder="e.g., 70"
+                            min={0}
+                            max={100}
+                          />
+                          <HelpText>Minimum score to pass. Defaults to 70% if left blank.</HelpText>
+                        </div>
+                        <div>
+                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">Max Attempts</label>
+                          <input
+                            type="number"
+                            value={req.max_attempts}
+                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'max_attempts', e.target.value)}
+                            className="form-input-sm"
+                            placeholder="Unlimited"
+                            min={1}
+                          />
+                          <HelpText>How many times a member may take it. Blank = unlimited.</HelpText>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              )}
             </div>
           )}
         </div>
@@ -917,10 +992,12 @@ const StepReview: React.FC<{
   };
   phases: PhaseFormData[];
   courses: TrainingCourse[];
-}> = ({ info, phases, courses }) => {
+  requirementLibrary: TrainingRequirementEnhanced[];
+}> = ({ info, phases, courses, requirementLibrary }) => {
   const totalReqs = phases.reduce((sum, p) => sum + p.requirements.length, 0);
   const totalMs = phases.reduce((sum, p) => sum + p.milestones.length, 0);
   const courseNameById = new Map(courses.map((c) => [c.id, c.name]));
+  const libraryById = new Map(requirementLibrary.map((r) => [r.id, r]));
 
   return (
     <div className="space-y-6">
@@ -1005,14 +1082,30 @@ const StepReview: React.FC<{
               <p className="text-theme-text-muted text-xs font-medium uppercase">Requirements:</p>
               {phase.requirements.map((req) => (
                 <div key={req.id} className="text-theme-text-secondary text-sm">
-                  <div className="flex items-center space-x-2">
-                    <ListChecks className="h-3 w-3 text-blue-700 dark:text-blue-400" />
-                    <span>{req.name || 'Untitled'}</span>
-                    <span className="text-theme-text-muted text-xs">({req.requirement_type})</span>
-                    {req.required_hours && (
-                      <span className="text-theme-text-muted text-xs">- {req.required_hours}h</span>
-                    )}
-                  </div>
+                  {req.source === 'library' ? (
+                    <div className="flex items-center space-x-2">
+                      <Link2 className="h-3 w-3 text-blue-700 dark:text-blue-400" />
+                      {req.requirement_id ? (
+                        <>
+                          <span>{libraryById.get(req.requirement_id)?.name ?? 'Unknown requirement'}</span>
+                          <span className="text-theme-text-muted text-xs">(linked from the department)</span>
+                        </>
+                      ) : (
+                        <span className="text-amber-700 dark:text-amber-400">
+                          No requirement picked — go back and choose one, or remove the entry.
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <ListChecks className="h-3 w-3 text-blue-700 dark:text-blue-400" />
+                      <span>{req.name || 'Untitled'}</span>
+                      <span className="text-theme-text-muted text-xs">({req.requirement_type})</span>
+                      {req.required_hours && (
+                        <span className="text-theme-text-muted text-xs">- {req.required_hours}h</span>
+                      )}
+                    </div>
+                  )}
                   {req.required_courses.length > 0 && (
                     <p className="text-theme-text-muted pl-5 text-xs">
                       {req.required_courses.map((id) => courseNameById.get(id) ?? 'Unknown course').join(', ')}
@@ -1078,6 +1171,12 @@ const CreatePipelinePage: React.FC = () => {
 
   // Course catalog backing the course/certification requirement pickers.
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
+  // The department's existing requirements, for phases that link rather than define.
+  const {
+    requirements: requirementLibrary,
+    loading: requirementLibraryLoading,
+    error: requirementLibraryError,
+  } = useRequirementLibrary();
 
   // ---- Step navigation ----
   const stepIndex = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
@@ -1125,10 +1224,12 @@ const CreatePipelinePage: React.FC = () => {
   };
 
   // ---- Requirement handlers ----
-  const addRequirement = (phaseId: string) => {
+  const addRequirement = (phaseId: string, source: 'library' | 'new') => {
     setPhases((prev) =>
       prev.map((p) =>
-        p.id === phaseId ? { ...p, requirements: [...p.requirements, emptyRequirement(p.requirements.length + 1)] } : p
+        p.id === phaseId
+          ? { ...p, requirements: [...p.requirements, emptyRequirement(p.requirements.length + 1, source)] }
+          : p
       )
     );
   };
@@ -1205,6 +1306,17 @@ const CreatePipelinePage: React.FC = () => {
 
   // ---- Submit ----
   const handleSubmit = async () => {
+    // Caught here rather than server-side so the message names the phase — the
+    // build payload would otherwise reject the whole program over one empty
+    // picker with no clue which one.
+    const emptyLink = phases.find((p) => p.requirements.some((r) => r.source === 'library' && !r.requirement_id));
+    if (emptyLink) {
+      const message = `Phase ${emptyLink.phase_number} has a linked requirement with nothing picked. Choose one or remove it.`;
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
@@ -1230,23 +1342,34 @@ const CreatePipelinePage: React.FC = () => {
           description: phaseData.description || undefined,
           time_limit_days: phaseData.time_limit_days ? parseInt(phaseData.time_limit_days) : undefined,
           requires_manual_advancement: phaseData.requires_manual_advancement,
-          requirements: phaseData.requirements.map((reqData) => ({
-            name: reqData.name,
-            description: reqData.description || undefined,
-            requirement_type: reqData.requirement_type,
-            frequency: reqData.frequency,
-            required_hours: reqData.required_hours ? parseFloat(reqData.required_hours) : undefined,
-            required_shifts: reqData.required_shifts ? parseInt(reqData.required_shifts) : undefined,
-            required_calls: reqData.required_calls ? parseInt(reqData.required_calls) : undefined,
-            passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
-            max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
-            checklist_items: reqData.checklist_items.filter((i) => i.trim()),
-            required_courses: reqData.required_courses.length > 0 ? reqData.required_courses : undefined,
-            recency_days: reqData.recency_days,
-            allows_external_credit: reqData.allows_external_credit,
-            is_required: reqData.is_required,
-            sort_order: reqData.sort_order,
-          })),
+          // A linked entry sends only the id and the phase-level toggle. The
+          // payload rejects a requirement carrying both an id and a name, so
+          // the two shapes stay strictly separate.
+          requirements: phaseData.requirements.map((reqData) =>
+            reqData.source === 'library'
+              ? {
+                  requirement_id: reqData.requirement_id,
+                  is_required: reqData.is_required,
+                  sort_order: reqData.sort_order,
+                }
+              : {
+                  name: reqData.name,
+                  description: reqData.description || undefined,
+                  requirement_type: reqData.requirement_type,
+                  frequency: reqData.frequency,
+                  required_hours: reqData.required_hours ? parseFloat(reqData.required_hours) : undefined,
+                  required_shifts: reqData.required_shifts ? parseInt(reqData.required_shifts) : undefined,
+                  required_calls: reqData.required_calls ? parseInt(reqData.required_calls) : undefined,
+                  passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
+                  max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
+                  checklist_items: reqData.checklist_items.filter((i) => i.trim()),
+                  required_courses: reqData.required_courses.length > 0 ? reqData.required_courses : undefined,
+                  recency_days: reqData.recency_days,
+                  allows_external_credit: reqData.allows_external_credit,
+                  is_required: reqData.is_required,
+                  sort_order: reqData.sort_order,
+                }
+          ),
           milestones: phaseData.milestones.map((msData) => ({
             name: msData.name,
             description: msData.description || undefined,
@@ -1349,6 +1472,9 @@ const CreatePipelinePage: React.FC = () => {
               courses={courses}
               coursesLoading={coursesLoading}
               coursesError={coursesError}
+              requirementLibrary={requirementLibrary}
+              requirementLibraryLoading={requirementLibraryLoading}
+              requirementLibraryError={requirementLibraryError}
               onAddRequirement={addRequirement}
               onRemoveRequirement={removeRequirement}
               onUpdateRequirement={updateRequirement}
@@ -1363,7 +1489,9 @@ const CreatePipelinePage: React.FC = () => {
               onMoveMilestone={moveMilestone}
             />
           )}
-          {currentStep === 'review' && <StepReview info={info} phases={phases} courses={courses} />}
+          {currentStep === 'review' && (
+            <StepReview info={info} phases={phases} courses={courses} requirementLibrary={requirementLibrary} />
+          )}
         </div>
 
         {/* Navigation */}

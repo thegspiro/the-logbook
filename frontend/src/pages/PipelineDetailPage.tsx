@@ -1745,6 +1745,7 @@ const PipelineDetailPage: React.FC = () => {
           phaseId={reqModal.phaseId}
           link={reqModal.link}
           sortOrder={reqModal.phaseId ? getPhaseReqs(reqModal.phaseId).length : programReqs.length}
+          linkedRequirementIds={programReqs.map((pr) => pr.requirement_id)}
           onClose={() => setReqModal(null)}
           onSaved={afterEdit}
         />

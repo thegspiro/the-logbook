@@ -49,6 +49,13 @@ def _scalars(items):
     return r
 
 
+def _rows(rows):
+    """Result whose ``.all()`` yields raw rows, as org-scope checks read them."""
+    r = MagicMock()
+    r.all.return_value = rows
+    return r
+
+
 class RecordingSession:
     """Async session that returns queued results and records added objects."""
 
@@ -121,6 +128,98 @@ class TestBuildProgram:
         assert any(isinstance(o, ProgramMilestone) for o in added)
         # Exactly one commit — the whole build is one transaction.
         assert db.commit.await_count == 1
+
+    async def test_links_an_existing_requirement_without_recreating_it(self):
+        """
+        A phase that names an existing department requirement links it and
+        creates nothing — the whole point is that the phase reads the same
+        records the department already tracks.
+        """
+        existing_id = uuid4()
+        db = RecordingSession([_rows([(str(existing_id),)])])  # in-org check
+        svc = TrainingProgramService(db)
+
+        payload = ProgramBuildRequest(
+            program=TrainingProgramCreate(name="Recruit", structure_type="phases"),
+            phases=[
+                ProgramBuildPhaseInput(
+                    phase_number=1,
+                    name="Phase 1",
+                    requirements=[
+                        ProgramBuildRequirementInput(
+                            requirement_id=existing_id, is_required=True, sort_order=0
+                        )
+                    ],
+                )
+            ],
+        )
+
+        program, error = await svc.build_program(payload, uuid4(), uuid4())
+
+        assert error is None
+        assert isinstance(program, TrainingProgram)
+        assert not any(isinstance(o, TrainingRequirement) for o in db.added)
+        links = [o for o in db.added if isinstance(o, ProgramRequirement)]
+        assert len(links) == 1
+        assert links[0].requirement_id == str(existing_id)
+        # The department owns it, so unlinking must never delete it.
+        assert links[0].owns_requirement is False
+
+    async def test_rejects_a_requirement_from_another_org(self):
+        db = RecordingSession([_rows([])])  # in-org check resolves nothing
+        svc = TrainingProgramService(db)
+
+        payload = ProgramBuildRequest(
+            program=TrainingProgramCreate(name="Recruit", structure_type="phases"),
+            phases=[
+                ProgramBuildPhaseInput(
+                    phase_number=1,
+                    name="Phase 1",
+                    requirements=[ProgramBuildRequirementInput(requirement_id=uuid4())],
+                )
+            ],
+        )
+
+        program, error = await svc.build_program(payload, uuid4(), uuid4())
+
+        assert program is None
+        assert "linked requirement" in error
+        # Rejected before anything was written.
+        assert db.added == []
+        db.commit.assert_not_awaited()
+
+    async def test_rejects_the_same_requirement_twice_in_one_phase(self):
+        req_id = uuid4()
+        db = RecordingSession()
+        svc = TrainingProgramService(db)
+
+        payload = ProgramBuildRequest(
+            program=TrainingProgramCreate(name="Recruit", structure_type="phases"),
+            phases=[
+                ProgramBuildPhaseInput(
+                    phase_number=2,
+                    name="Phase 2",
+                    requirements=[
+                        ProgramBuildRequirementInput(requirement_id=req_id),
+                        ProgramBuildRequirementInput(requirement_id=req_id),
+                    ],
+                )
+            ],
+        )
+
+        program, error = await svc.build_program(payload, uuid4(), uuid4())
+
+        assert program is None
+        assert "Phase 2 links the same requirement more than once" in error
+        db.commit.assert_not_awaited()
+
+    async def test_requirement_input_rejects_both_forms_at_once(self):
+        with pytest.raises(ValueError, match="not both"):
+            ProgramBuildRequirementInput(requirement_id=uuid4(), name="CPR")
+
+    async def test_requirement_input_rejects_neither_form(self):
+        with pytest.raises(ValueError, match="requirement_id or a name"):
+            ProgramBuildRequirementInput(requirement_type="hours")
 
     async def test_invalid_structure_type_returns_error_without_commit(self):
         db = RecordingSession()
