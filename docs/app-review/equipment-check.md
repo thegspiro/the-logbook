@@ -1,7 +1,31 @@
 # Application Review — Equipment Check / Shift Completion (Tier B)
 
 **Prefix:** `EC2` · **Iteration:** B7 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; no code change
+
+Pass 3 closed the substantive items (EC2-4 read-leak, EC2-3 write-side FK
+validation, the three latent-500 endpoints, EC2-5 E712). Pass 4 confirmed the
+landed state holds:
+
+- **EC2-4 read-leak fix intact** — the `item_names` lookup still filters
+  `InventoryItem.organization_id == organization_id` (service ~1361), so a foreign
+  `inventory_item_id` resolves to no name.
+- **EC2-3 write-side FK validation intact** — `_validate_item_fks`
+  (`inventory_item_id` + `equipment_id` via `is_in_org`/`assert_in_org`) is present
+  (8 FK-validation refs), and `_get_compartment` gates `parent_compartment_id`.
+- **E712-free** — 0 `# noqa: E712` in both `equipment_check_service.py` and
+  `shift_completion_service.py`.
+
+Open items unchanged: **EC-11** (compliance-cadence model — a feature) and **EC-7
+residual** (whether submit endpoints should require `equipment_check.submit` — an
+owner intra-org permission call). Neither is a defect.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a · `test_equipment_check_service.py` **12 passed** (DB-free).
 
 ---
 

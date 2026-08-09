@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.election import Election, ElectionStatus
+from app.models.email_template import EmailTemplate
 from app.models.event import Event
 from app.models.membership_pipeline import (
     ActionType,
@@ -141,6 +142,9 @@ class MembershipPipelineService:
 
         if steps:
             for i, step_data in enumerate(steps):
+                await self._assert_email_template_in_org(
+                    step_data.get("email_template_id"), organization_id
+                )
                 step = MembershipPipelineStep(
                     id=generate_uuid(),
                     pipeline_id=pipeline.id,
@@ -292,6 +296,21 @@ class MembershipPipelineService:
     # Step CRUD
     # =========================================================================
 
+    async def _assert_email_template_in_org(
+        self, email_template_id: Any, organization_id: str
+    ) -> None:
+        # MP-5 (XC-1): a step's email_template_id is a client-supplied FK to the
+        # org-scoped EmailTemplate used when the stage email fires. Validate it
+        # belongs to the caller's org (optional — a step need not send email).
+        await assert_in_org(
+            self.db,
+            EmailTemplate,
+            email_template_id,
+            organization_id,
+            allow_none=True,
+            label="email template",
+        )
+
     async def add_step(
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
     ) -> Optional[MembershipPipelineStep]:
@@ -299,6 +318,10 @@ class MembershipPipelineService:
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return None
+
+        await self._assert_email_template_in_org(
+            data.get("email_template_id"), organization_id
+        )
 
         # Determine sort_order if not provided
         if "sort_order" not in data or data["sort_order"] is None:
@@ -359,6 +382,11 @@ class MembershipPipelineService:
         step = next((s for s in pipeline.steps if s.id == step_id), None)
         if not step:
             return None
+
+        if "email_template_id" in data:
+            await self._assert_email_template_in_org(
+                data.get("email_template_id"), organization_id
+            )
 
         # Capture the old form_id before applying updates so we can clean up
         # the integration if the step is being reassigned to a different form.
@@ -3439,6 +3467,16 @@ class MembershipPipelineService:
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
+
+        # MP-5 (XC-1): a client-supplied step_id must belong to this prospect's
+        # own (org-scoped) pipeline — the same guard create_interview /
+        # create_election_package apply. Without it a foreign/other-pipeline
+        # step id persists as a dangling FK on the document (and would drive the
+        # auto-advance below off a step that isn't the prospect's).
+        if step_id:
+            steps = prospect.pipeline.steps if prospect.pipeline else []
+            if not any(str(s.id) == str(step_id) for s in steps):
+                raise ValueError("Step does not belong to this prospect's pipeline")
 
         # Validate file_path: must resolve to a location under the uploads
         # volume (mounted at /app/uploads in docker-compose) to prevent path

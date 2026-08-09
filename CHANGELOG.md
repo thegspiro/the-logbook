@@ -182,6 +182,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The finance forms already send valid values, so only malformed API requests are
   affected.
 
+### Security: membership-pipeline references are scoped to your department (2026-08-09)
+
+**Security**
+
+- Setting up a membership pipeline now verifies that the department stays inside
+  its own data. A pipeline step's email template, and the step a prospect's
+  uploaded document is filed under, are checked to belong to your department (and
+  the prospect's own pipeline) before they are saved — previously a hand-crafted
+  API request could attach another department's template or an unrelated step id.
+  No change for normal use; the pipeline builder already offers only your own
+  department's templates and steps. Saving a pipeline or step with an invalid
+  reference now returns a clear validation error instead of a server error.
+
+### Security: Web Push can no longer be aimed at an internal server (2026-08-09)
+
+**Security**
+
+- Browser push notifications are delivered by the server POSTing to a URL the
+  browser supplied when the device subscribed. That URL was screened at
+  subscribe time, but a public address could later be re-pointed at an internal
+  host (a DNS-rebinding trick) to make the server issue a request to an internal
+  target. The server now re-checks the destination immediately before each push
+  in production and staging, and skips any that resolves to a private/internal
+  address. No effect on real push delivery; this only closes an internal-request
+  vector.
+
 ### Security: inventory records can no longer reference another department's data (2026-08-09)
 
 **Security**

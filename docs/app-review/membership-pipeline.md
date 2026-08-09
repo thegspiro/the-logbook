@@ -1,7 +1,57 @@
 # Application Review — Membership Pipeline (Tier B)
 
 **Prefix:** `MP2` · **Iteration:** B9 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — MP2-5: two client-FK gaps the MP-5 sweep missed
+
+Pass 4 ran the INV-4-style FK audit across the whole module (a sub-agent mapped
+every create/update/advance/bulk path). Everything MP-5/MP2-2 hardened holds —
+`referred_by`, `pipeline_id`, `election_id`, `event_id`, `role_ids`,
+`interviewer_id` (server-set to `current_user`), and the advance/regress targets
+(computed from the prospect's own pipeline) are all validated or server-derived.
+The audit found **two** client-supplied FK writes the earlier MP-5 sweep missed.
+
+### MP2-5 — LOW/MED — Two client-supplied FKs stored without an in-org check — ✅ FIXED
+
+1. **`add_prospect_document.step_id`** — the one MP-5 sibling that was skipped.
+   `create_interview` and `create_election_package` both reject a `step_id` that
+   isn't in the prospect's own pipeline, but `add_prospect_document` stored it raw
+   (and then drove `_try_auto_advance_step` off it). Added the same
+   `step in prospect.pipeline.steps` guard → `ValueError` ("Step does not belong to
+   this prospect's pipeline") on a foreign/other-pipeline step.
+
+2. **`email_template_id` on the step writers** (`create_pipeline` inline steps,
+   `add_step`, `update_step`) — a client-supplied FK to the **org-scoped**
+   `EmailTemplate` (used when the stage email fires), stored with no check and
+   **not** in `_STEP_PROTECTED_FIELDS`, so `update_step`'s generic `setattr` could
+   re-point it too. Added a shared `_assert_email_template_in_org` helper
+   (`assert_in_org(..., allow_none=True, label="email template")`) on all three
+   writers (present-key-guarded on update).
+
+**Latent-500 corrected along the way:** the `create_pipeline`, `add_step`, and
+`update_step` **endpoints had no `ValueError` handling** (only `reorder_steps` and
+the prospect endpoints did), so the new guards — and any future service
+`ValueError` — would have surfaced as 500s. All three gained the module-standard
+`except ValueError → 400 + safe_error_detail` (the same latent-500 shape closed in
+B7). No behavior change for valid callers (the pipeline builder selects templates
+from an org-scoped list); a foreign id is now a clean 400. **6 tests added**
+(`TestStepEmailTemplateValidation`, `TestProspectDocumentStepValidation`).
+
+### Still flagged (unchanged)
+
+- **MP-7 message generalization** (product call, `KNOWN_LIMITATIONS.md`).
+- **Step-in-pipeline check helper** — now that `add_prospect_document` joins
+  `complete_step`/`create_interview`/`create_election_package` as a fourth caller
+  of the same `step in prospect.pipeline.steps` idiom, a shared helper is a
+  reasonable small DRY follow-up (not done this pass — the inline form is clear and
+  each call site reads its own error).
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_membership_pipeline_service.py` **10 passed**
+(4 + 6 new) + `test_membership_pipeline_enum_validation.py` unchanged (all DB-free).
 
 ---
 

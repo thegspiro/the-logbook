@@ -1,7 +1,31 @@
 # Application Review — Documents (Tier B)
 
 **Prefix:** `DOC2` · **Iteration:** B8 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; no code change
+
+Pass 3 verified the module clean and cleared the latent-500 over-flag (the
+`visibility` fields carry `Field(pattern=...)`). Pass 4 re-verified:
+
+- **DOC-6 FK guards intact** — `assert_in_org` present at 6 sites
+  (`create_folder`/`update_folder` `parent_id` + `owner_user_id`;
+  `update_document` `folder_id`).
+- **DOC2-1 name enrichment intact**; **E712-free** in both `documents_service.py`
+  and the sibling `document_service.py`.
+
+Open items unchanged and correctly deferred: **DOC-4**/**DOC-5** (owner product
+decisions in `KNOWN_LIMITATIONS.md` — the sensitive case, member personal folders,
+stays `OWNER`-visibility regardless), and the `get_folders` → `can_access_folder`
+consolidation (a drift-risk cleanup on the ACL path — left flagged rather than
+refactored in a rotation tick, since consolidating access-control logic without a
+DB to exercise both branches is exactly the kind of change that wants its own
+verified pass).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a · document tests **39 passed** (DB-free).
 
 ---
 

@@ -45,11 +45,11 @@ from its open list.
 | B4 | facilities | FAC2 | ✅ (p1, p2, p3, p4) |
 | B5 | elections | ELEC2 | ✅ (p1, p2, p3, p4) |
 | B6 | meetings & minutes | MM2 | ✅ (p1, p2, p3, p4) |
-| B7 | equipment-check | EC2 | ⬜ |
-| B8 | documents | DOC2 | ⬜ |
-| B9 | membership pipeline | MP2 | ⬜ |
-| B10 | messaging & communications | MSG2 | ⬜ |
-| B11 | notifications | NOTIF2 | ⬜ |
+| B7 | equipment-check | EC2 | ✅ (p1, p2, p3, p4) |
+| B8 | documents | DOC2 | ✅ (p1, p2, p3, p4) |
+| B9 | membership pipeline | MP2 | ✅ (p1, p2, p3, p4) |
+| B10 | messaging & communications | MSG2 | ✅ (p1, p2, p3, p4) |
+| B11 | notifications | NOTIF2 | ✅ (p1, p2, p3, p4) |
 | B12 | integrations | INT2 | ⬜ |
 | B13 | forms | FORM2 | ⬜ |
 | B14 | grants & fundraising | GF2 | ⬜ |
@@ -1807,3 +1807,41 @@ Next feature: **B1 medical-screening**.
   `@field_validator`s (shared `_validate_enum` helper) → clean 422. **10 tests**
   (`test_meetings_status_validation.py`). Gate: flake8 0 · black clean · tsc n/a.
   See meetings-minutes.md → Pass 4.
+
+- **B7 equipment-check ✅ (pass 4) — invariants re-verified, no code change.** EC2-4
+  read-leak fix (item_names lookup org-filtered), EC2-3 write-side `_validate_item_fks`,
+  and the three latent-500 endpoint guards all hold; both services E712-free. Open:
+  EC-11 (feature), EC-7 residual (owner permission call). See equipment-check.md → Pass 4.
+
+- **B8 documents ✅ (pass 4) — invariants re-verified, no code change.** DOC-6
+  `assert_in_org` guards (6 sites), DOC2-1 name enrichment, E712-free both services.
+  Open: DOC-4/DOC-5 owner decisions; the `get_folders`→`can_access_folder` ACL
+  consolidation left flagged (a drift-risk refactor that wants its own DB-backed
+  pass, not a rotation tick). See documents.md → Pass 4.
+
+- **B9 membership pipeline ✅ (pass 4) — MP2-5: two client-FK gaps the MP-5 sweep
+  missed.** A full FK audit (sub-agent) confirmed everything MP-5/MP2-2 hardened
+  holds, and found two writes that stored a client-supplied FK raw: (1)
+  `add_prospect_document.step_id` — the one MP-5 sibling skipped; now guarded with
+  the same `step in prospect.pipeline.steps` check its siblings use; (2)
+  `email_template_id` on `create_pipeline`/`add_step`/`update_step` — a FK to the
+  org-scoped `EmailTemplate`, not in `_STEP_PROTECTED_FIELDS`; now validated via a
+  shared `_assert_email_template_in_org` (assert_in_org, allow_none). Also fixed a
+  latent-500: the three step-writer endpoints had no `except ValueError` (only
+  reorder/prospect did), so the new guards would have 500'd — added the module-standard
+  400 wrapper. 6 tests. See membership-pipeline.md → Pass 4.
+
+- **B10 messaging ✅ (pass 4) — invariants re-verified, no code change.** MSG-2
+  `_validate_targeting` wired into create/update, org-scoped `_targeted_users` choke
+  point, enum-typed priority/target_type, E712-free both services. Open: MSG-3
+  (test-email design), get_inbox pagination. See messaging.md → Pass 4.
+
+- **B11 notifications ✅ (pass 4) — NOTIF2-3 DNS-rebinding residual closed at send
+  time.** The push SSRF residual (a public host re-pointed at an internal IP after
+  subscribe) is now caught where it matters: `_send_one` calls the shared
+  `assert_outbound_url_safe` immediately before `webpush` (re-resolves, fails closed
+  on a private IP), and `send_to_user` skips a now-non-public endpoint. Running the
+  guard at *send* time — not subscribe time — sidesteps the test-harness collision
+  pass 3 flagged; it's gated to production/staging so the loopback wire-format tests
+  (development env) still dispatch, and the subscribe-time IP-literal/localhost guard
+  still runs everywhere. 4 DB-free tests. See notifications.md → Pass 4.

@@ -1,7 +1,28 @@
 # Application Review — Messaging / Communications (Tier B)
 
 **Prefix:** `MSG2` · **Iteration:** B10 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; no code change
+
+Pass 3 verified the module clean and swept the last E712. Pass 4 re-confirmed:
+
+- **MSG-2 targeting validation intact** — `_validate_targeting` wired into
+  `create_message` and `update_message` (3 refs); the org-scoped `_targeted_users`
+  choke point still bounds audience selection to the message's own org.
+- **E712-free** in both `messaging_service.py` and `message_delivery_service.py`.
+- **Latent-500 clean** — `priority`/`target_type` are enum-typed in the request
+  schemas (this module did the right thing before the lens existed).
+
+Open items unchanged: **MSG-3** (test-email to a client-supplied address — an
+org-admin `settings.manage` capability by design; optional rate-limit/same-domain
+hardening is future dev) and the `get_inbox` in-Python pagination (a perf smell at
+scale, a response-contract change orthogonal to security).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a · `test_messaging_service.py` **36 passed** (DB-free).
 
 ---
 

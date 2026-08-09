@@ -1,7 +1,62 @@
 # Application Review — Notifications (Tier B)
 
 **Prefix:** `NOTIF2` · **Iteration:** B11 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — NOTIF2-3 DNS-rebinding residual closed at send time
+
+The one substantive standing item on this module was the DNS-rebinding residual
+on Web Push. Pass 4 closes it — in the place pass 3 identified as the right one
+(send time, not subscribe time), which is also why it no longer collides with the
+test harness pass 3 flagged as the blocker.
+
+### NOTIF2-3 (residual) — MED — Public push host re-pointed at an internal IP after subscribe — ✅ FIXED
+
+**What:** `validate_push_endpoint` blocks IP-literal / localhost / `.internal`
+hosts at subscribe time, but a **public hostname that resolves to a private IP**
+(DNS rebinding) slipped through — and `PushService._send_one` later hands the
+stored endpoint to `webpush`, which POSTs to it. So a member could register a
+public host, flip its DNS to `169.254.169.254` / `127.0.0.1` / an intranet host,
+and turn each push to themselves into a blind SSRF.
+
+**Why it stayed flagged until now:** pass 3 recorded that adding real DNS
+resolution *at subscribe time* would break the delivery integration tests (they
+call `service.subscribe` directly with a `127.0.0.1` endpoint) and the 17
+endpoint-validation unit tests (non-resolving fake hosts). The insight this pass:
+the rebinding window is *between subscribe and send*, so the correct guard is at
+**send time**, which sidesteps the subscribe-time harness entirely.
+
+**Fix:** `_send_one` now calls the shared `assert_outbound_url_safe(endpoint)`
+(the same send-time re-resolution the Slack/Discord/Teams/webhook integrations
+use) immediately before `webpush`, and `send_to_user` gained an `except ValueError`
+that **skips** an endpoint that now resolves non-public (logs a warning, keeps the
+row — a transient mis-resolution shouldn't permanently drop a device). The check
+runs inside the `asyncio.to_thread` worker, so the blocking `getaddrinfo` stays
+off the event loop. It is **gated to `ENVIRONMENT in ("production", "staging")`**,
+so the loopback push emulator the wire-format tests (and local dev) point at still
+works — mirroring the `http`-in-development allowance already baked into the URL
+validator. In prod/staging the rebinding window shrinks to the resolve→connect
+interval, the same guarantee the outbound integrations already have. The
+subscribe-time `validate_push_endpoint` (IP-literals/localhost/`.internal`) still
+runs in **all** environments, so the obvious-internal endpoints are blocked
+everywhere regardless.
+
+**4 DB-free tests added** (`test_push_rebinding_guard.py`): production blocks a
+private-resolving endpoint (webpush never called) and allows a public one; staging
+also guards; development skips the guard so a loopback endpoint still dispatches.
+
+### Still flagged (unchanged)
+
+- Unused frontend `markLogRead` (frontend-shared cleanup); `get_logs` pagination
+  (build-query-then-subquery-count, fine at scale).
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_push_rebinding_guard.py` **4 passed** +
+`test_push_endpoint_validation.py` **17 passed** (all DB-free). The push
+wire-format `TestSend` tests are DB-backed (`db_session`) and unaffected — they run
+under the default `development` env, where the new guard is intentionally skipped.
 
 ---
 
