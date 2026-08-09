@@ -62,7 +62,7 @@ from its open list.
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2, p3) |
 | B22 | compliance & skills | CS2 | ✅ (p1, p2, p3) |
 | B23 | security, audit & IP | SEC2 | ✅ (p1, p2, p3) |
-| B24 | core infra | CI2 | ⬜ |
+| B24 | core infra | CI2 | ✅ (p1, p2, p3) |
 | B25 | onboarding | ONB2 | ⬜ |
 | B26 | public-portal | PP2 | ⬜ |
 | B27 | frontend shared | FE2 | ⬜ |
@@ -1655,3 +1655,12 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   `.is_()`. SEC-2 residual (DB-level tail-truncation detection) stays flagged. 354
   security/audit tests pass. Gate: flake8/black clean; tsc n/a. No CHANGELOG. See
   security-audit-ip.md → Pass 3. Next: B24 core infra.
+
+- **B24 core infra ✅ (pass 3) — verified clean, no code change.** Re-verified the
+  crypto/CSV/middleware foundation: CI-1 (SafeCsvWriter on the exporters), CI-4
+  (decrypt narrows to `except InvalidToken`; genuine AES-256-GCM InvalidTag
+  propagates), CI-5 (AES-256-GCM @ 600k PBKDF2). Pitfall #4 followed —
+  `security_middleware.py` explicitly does NOT use BaseHTTPMiddleware (all pure ASGI).
+  E712-free across app/core/ and main.py. Latent-500 lens N/A (foundational code, no
+  enum request schemas). CI-9/CI-4-full/CI-10-residual/CI-11 stay flagged. No
+  CHANGELOG. See core-infra.md → Pass 3. Next: B25 onboarding.

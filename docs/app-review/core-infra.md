@@ -3,6 +3,37 @@
 **Prefix:** `CI2` · **Iteration:** B24 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2)
 
+## Pass 3 (2026-08-09) — verified clean, no code change
+
+Re-verified the crypto/CSV/middleware foundation:
+
+- **CI-1** — `SafeCsvWriter` (`utils/csv_export.py`) present; the five exporters use
+  it (Pitfall #15).
+- **CI-4** — the field decrypt path narrows its catch to `except InvalidToken` (legacy
+  plaintext only); a genuine AES-256-GCM `InvalidTag` propagates
+  (`encrypted_types.py:49`).
+- **CI-5** — field encryption is AES-256-GCM (600k PBKDF2), per the corrected docs.
+- **Pitfall #4 (pure ASGI middleware)** — `security_middleware.py` explicitly does
+  **not** import `BaseHTTPMiddleware` (module note, line 18); every middleware there
+  is pure ASGI (`__call__(scope, receive, send)`), so the Set-Cookie-stripping hazard
+  the pitfall warns about doesn't apply.
+
+**E712-free** across `app/core/*.py` and `app/main.py`. **Latent-500 lens N/A** —
+this is foundational code (config/crypto/middleware/database), not a resource module
+with enum-bearing request schemas.
+
+### Still flagged (unchanged)
+
+- **CI-9** (TLS-CRITICAL posture, `optimize_image` fail-closed, Redis cert — ops/
+  config decisions), **CI-4 full fail-closed decrypt** (flip once the AES-256-GCM
+  backfill completes — migration-gated), **CI-11** (defense-in-depth), **CI-10
+  residual** (design/migration).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · no code changed.
+
+---
+
 ## Pass 2 (2026-08-08) — six-lens sweep — no code change
 
 Re-verified this hardened foundation against the infra lenses. **All clean, no
