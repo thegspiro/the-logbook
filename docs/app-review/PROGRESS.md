@@ -40,7 +40,7 @@ from its open list.
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
 | B1 | medical-screening | MS2 | ✅ (p1, p2, p3) |
-| B2 | apparatus | AP2 | ⬜ |
+| B2 | apparatus | AP2 | ✅ (p1, p2, p3) |
 | B3 | inventory | INV2 | ⬜ |
 | B4 | facilities | FAC2 | ⬜ |
 | B5 | elections | ELEC2 | ⬜ |
@@ -1383,3 +1383,22 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   added** (`TestRequestEnumValidation`); 29 medical-screening tests pass (was 22).
   Gate: flake8/black/tsc clean; eslint unaffected (no FE change). Fix in CHANGELOG.
   See medical-screening.md → Pass 3. Next: B2 apparatus.
+
+- **B2 apparatus ✅ (pass 3).** Re-verified AP-1 (create-path FK validation) and
+  AP2-1 (update-path re-validation of the three eager-loaded FKs) hold; 83/83 auth
+  coverage intact; the service report resolves provider names org-scoped (confirming
+  AP2-2 is integrity-only, not a read-leak). **Closed AP2-2** (the one item pass 2
+  left open): the four dangling, non-projected FKs — `apparatus.required_evoc_level_id`
+  (EvocLevel), `maintenance.component_id` (ApparatusComponent),
+  `maintenance.service_provider_id` + `component_note.service_provider_id`
+  (ApparatusServiceProvider) — are now validated in-org via `assert_in_org` on **both**
+  create and update paths (all six endpoints already convert ValueError→400; the note
+  update schema omits component_id so it can't be re-pointed). The XC-1 create/update
+  FK class is now fully resolved for this module. **Also swept** the remaining 11
+  `== True/False # noqa: E712` comparisons to `.is_()` (Pitfall #10), removing every
+  E712 noqa from the service. Latent-500 lens (the B1 enum-as-free-str class) checked
+  and clean — the sole enum column (`fuel_type`) is properly typed. **4 tests added**
+  (`test_apparatus_service.py` now 10, was 6). Gate: flake8/black/tsc clean; eslint
+  unaffected (no FE change). No CHANGELOG entry (integrity-only hardening, no
+  user-visible change — matching AP2-1's treatment). See apparatus.md → Pass 3.
+  Next: B3 inventory.
