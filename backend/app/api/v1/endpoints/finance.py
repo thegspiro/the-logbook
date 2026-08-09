@@ -834,7 +834,10 @@ async def mark_pr_paid(
     service = FinanceService(db)
     try:
         return await service.mark_pr_paid(
-            pr_id, str(current_user.organization_id), actual_amount
+            pr_id,
+            str(current_user.organization_id),
+            actual_amount,
+            acted_by=str(current_user.id),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1005,7 +1008,10 @@ async def mark_expense_paid(
     service = FinanceService(db)
     try:
         return await service.mark_expense_paid(
-            er_id, str(current_user.organization_id), payment_method
+            er_id,
+            str(current_user.organization_id),
+            payment_method,
+            acted_by=str(current_user.id),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1126,7 +1132,10 @@ async def issue_check(
     service = FinanceService(db)
     try:
         return await service.issue_check(
-            cr_id, str(current_user.organization_id), check_number
+            cr_id,
+            str(current_user.organization_id),
+            check_number,
+            acted_by=str(current_user.id),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

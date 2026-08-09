@@ -1264,11 +1264,19 @@ class FinanceService:
         return pr
 
     async def mark_pr_paid(
-        self, pr_id: str, org_id: str, actual_amount: Optional[float] = None
+        self,
+        pr_id: str,
+        org_id: str,
+        actual_amount: Optional[float] = None,
+        acted_by: Optional[str] = None,
     ) -> PurchaseRequest:
         pr = await self.get_purchase_request(pr_id, org_id)
         if not pr:
             raise ValueError("Purchase request not found")
+        # SoD (FIN-4): the person who disburses must not be the requester.
+        assert_different_person(
+            acted_by, pr.requested_by, action="mark paid", record="purchase request"
+        )
         if pr.status not in (
             PurchaseRequestStatus.APPROVED,
             PurchaseRequestStatus.ORDERED,
@@ -1471,11 +1479,19 @@ class FinanceService:
         return er
 
     async def mark_expense_paid(
-        self, er_id: str, org_id: str, payment_method: Optional[str] = None
+        self,
+        er_id: str,
+        org_id: str,
+        payment_method: Optional[str] = None,
+        acted_by: Optional[str] = None,
     ) -> ExpenseReport:
         er = await self.get_expense_report(er_id, org_id)
         if not er:
             raise ValueError("Expense report not found")
+        # SoD (FIN-4): the person who disburses must not be the requester.
+        assert_different_person(
+            acted_by, er.requested_by, action="mark paid", record="expense report"
+        )
         if er.status != ExpenseReportStatus.APPROVED:
             raise ValueError("Only approved reports can be marked as paid")
 
@@ -1603,10 +1619,15 @@ class FinanceService:
         org_id: str,
         check_number: str,
         check_date: Optional[datetime] = None,
+        acted_by: Optional[str] = None,
     ) -> CheckRequest:
         cr = await self.get_check_request(cr_id, org_id)
         if not cr:
             raise ValueError("Check request not found")
+        # SoD (FIN-4): the person who issues the check must not be the requester.
+        assert_different_person(
+            acted_by, cr.requested_by, action="issue check", record="check request"
+        )
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")
 
@@ -1850,6 +1871,8 @@ class FinanceService:
         dues = result.scalar_one_or_none()
         if not dues:
             raise ValueError("Member dues record not found")
+        # SoD (FIN-4): a member must not waive their own dues.
+        assert_different_person(waived_by, dues.user_id, action="waive", record="dues")
 
         dues.status = DuesStatus.WAIVED
         dues.waived_by = waived_by

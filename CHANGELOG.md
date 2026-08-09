@@ -133,6 +133,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > as a fixture holding a literal permission list.
 
 ---
+### Money: you can no longer approve/record and pay out the same item yourself (2026-08-09)
+
+**Security**
+
+- **Separation of duties now covers the payout step.** A finance manager can no
+  longer mark their own purchase request or expense report paid, issue a check for
+  their own request, or waive their own dues; a store manager can no longer mark
+  their own order paid, waive its balance, or refund it. The action is refused with
+  a message asking for a second authorized person — matching how approvals already
+  worked. Automatic payment reconciliation (from the payment provider) is unaffected.
+
 ### Dashboard: action items are now shown only to members allowed to see them (2026-08-08)
 
 **Security**
