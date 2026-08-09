@@ -39,7 +39,7 @@ from its open list.
 
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ⬜ |
+| B1 | medical-screening | MS2 | ✅ (p1, p2, p3) |
 | B2 | apparatus | AP2 | ⬜ |
 | B3 | inventory | INV2 | ⬜ |
 | B4 | facilities | FAC2 | ⬜ |
@@ -1366,3 +1366,20 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
 ### Pass 3 log
 
 (pending)
+
+- **B1 medical-screening ✅ (pass 3).** Re-verified every landed fix holds: MS-3
+  create-path FK validation intact and still un-bypassable via update
+  (`ScreeningRecordUpdate` omits the FK fields); MS-2/MS2-4 name resolution
+  org-scoped across the compliance, expiring, and record paths; all 13 endpoints
+  gated; compliance-by-id org-scoped (no IDOR). MS-1 (PHI plaintext) still stands,
+  migration-shaped. **1 fix — MS2-5 (LOW/MED, latent-500):** the request schemas
+  typed `screening_type`/`status` as free strings, but the columns are strict MySQL
+  ENUMs and SQLAlchemy doesn't validate the string (`validate_strings=False`) — so a
+  bad value bound straight to MySQL and 500'd on the four write paths (`POST`/`PUT`
+  records + requirements; only `POST /records` even caught `ValueError`). Verified
+  the bind passes `'bogus_status'` through unvalidated. Added a `_validate_enum`
+  helper + `@field_validator`s on the four request schemas (lowercase-normalize then
+  reject unknown → 422), request-only so the responses are untouched. **7 tests
+  added** (`TestRequestEnumValidation`); 29 medical-screening tests pass (was 22).
+  Gate: flake8/black/tsc clean; eslint unaffected (no FE change). Fix in CHANGELOG.
+  See medical-screening.md → Pass 3. Next: B2 apparatus.

@@ -133,6 +133,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > as a fixture holding a literal permission list.
 
 ---
+### Fixed
+
+- **Medical screening: saving a record with an unrecognized screening type or
+  status now shows a clear validation error instead of failing with a server
+  error (2026-08-09).** The medical-screening create/update forms already send
+  valid values, so this only affects malformed API requests, but those now return
+  a 422 with the list of allowed values rather than a 500.
+
 ### Money: you can no longer approve/record and pay out the same item yourself (2026-08-09)
 
 **Security**

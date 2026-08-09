@@ -1,7 +1,79 @@
 # Application Review — Medical Screening (Tier B)
 
 **Prefix:** `MS2` · **Iteration:** B1 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3)
+
+---
+
+## Pass 3 (2026-08-09) — six-lens sweep; 1 fix
+
+Re-verified every landed fix still holds: **MS-3** create-path FK validation
+(`assert_in_org` on `user_id`/`prospect_id`/`requirement_id`, fail-closed) intact
+and **still un-bypassable via update** — `ScreeningRecordUpdate` continues to omit
+all three FK fields, so the `setattr` loop in `update_record` can't reassign
+tenancy or subject. **MS-2 / MS2-4** name resolution intact — `_resolve_names` is
+org-scoped for all three entity types and `attach_record_names` folds the reviewer
+into the same user batch; all four record endpoints enrich only the paged slice.
+All 13 endpoints remain gated on `medical_screening.view` / `.manage`; the
+compliance-by-id reads are org-scoped through `list_records`, so a foreign
+`user_id`/`prospect_id` resolves to no data and no name (no IDOR). **MS-1** (PHI
+plaintext at rest) still stands, still migration-shaped.
+
+One new finding, fixed:
+
+### MS2-5 — LOW/MED — Out-of-enum `screening_type`/`status` on write 500s instead of 422 — ✅ FIXED
+
+**What:** the request schemas typed `screening_type` and `status` as free `str`
+(`schemas/medical_screening.py`), but the model columns are strict SQLAlchemy
+`Enum` → MySQL `ENUM`. SQLAlchemy's `Enum` defaults to `validate_strings=False`, so
+a value like `status="bogus"` is **not** validated in Python — it's bound straight
+to MySQL, which rejects it under strict mode (`STRICT_TRANS_TABLES`, error 1265)
+and raises a `DataError`. `POST /records` only catches `ValueError → 400`, and
+`PUT /records/{id}`, `POST`/`PUT /requirements` have no wrapper at all, so the
+result is a **500** on the four write paths (and a silent `''` insert under
+non-strict MySQL). Verified the bind behavior directly: the column's
+`bind_processor` passes `'bogus_status'` through unvalidated.
+
+**Why LOW/MED, not higher:** only a `medical_screening.manage` holder can reach
+these writes, and the frontend's `ScreeningType`-typed forms only ever send valid
+values — so this is a robustness/latent-500 gap on malformed privileged input, not
+an externally reachable fault. But a 500 (or silent bad enum) on a PHI write is
+worth closing, and the fix is the codebase's own documented pattern.
+
+**Fix:** a `_validate_enum` helper plus `@field_validator`s on the four **request**
+schemas (`ScreeningRecordCreate`/`Update`, `ScreeningRequirementCreate`/`Update`)
+validate the value against the enum's value set, normalizing to lowercase first (so
+`"PASSED"` → `"passed"`, absorbing the casing mismatch called out in the
+schema-contract pitfall) and raising `ValueError` → 422 for anything unknown. The
+validators live only on the request subclasses, so `ScreeningRecordResponse` /
+`ScreeningRequirementResponse` (built from the ORM enum via `from_attributes`) are
+untouched — no response-shape change. Valid callers and the existing test fixtures
+are unaffected. **7 tests added** (`TestRequestEnumValidation`): bad status/type
+rejected on create and update, case-normalization, omitted-fields-on-update pass.
+
+### Flagged / future (unchanged unless noted)
+
+- **MS-1 (MED, migration)** — PHI columns (`result_summary`/`result_data`/`notes`/
+  `provider_name`) remain plaintext, not `EncryptedType`; needs an Alembic data
+  migration. Still the highest-value follow-up.
+- **Unbounded record/requirement load (LOW, scale)** — `list_records` /
+  `list_requirements` `.all()` the org's full set and the endpoint slices in
+  memory; the compliance path also relies on the full set. Fine at current scale,
+  but a true SQL `LIMIT/OFFSET` (with a separate full-set path for compliance) is
+  the 10× fix. Future dev.
+- **Exactly-one-of `user_id`/`prospect_id` not enforced (LOW)** — the model
+  docstring says a record links to *either*, but `create_record` accepts both or
+  neither. Unchanged from pass 1 (a `@model_validator` on the create schema is the
+  fix); left flagged because it changes accept/reject behavior on a PHI write path.
+- **Compliance-by-id doesn't 404 an unknown subject (LOW)** — `GET
+  /compliance/{user_id}` returns an empty-ish summary for any id rather than 404;
+  not a leak (org-scoped, no data returned), but a clearer contract would validate
+  the subject in-org first. Future dev.
+
+**Completion gate (pass 3):** `flake8 app/ tests/` 0 · `black --check` clean ·
+`tsc --noEmit` 0 (no frontend change) · eslint unaffected (no frontend change) ·
+`tests/test_medical_screening_service.py` **29 passed** (22 + 7 new; all DB-free).
+DB-backed pytest remains the known no-MySQL sandbox limitation.
 
 ---
 
