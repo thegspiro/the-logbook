@@ -283,6 +283,24 @@ export function openStaffedShift(extraMatch) {
  * that just takes the first record lands on an election nobody has been
  * nominated for and every tab shows its empty state.
  */
+/**
+ * Open the prospective-members settings page with a pipeline selected.
+ *
+ * The page renders a "Select a pipeline" placeholder until one is chosen from
+ * the list on the left — every configuration panel the guides describe is
+ * behind that click.
+ */
+export function openPipelineSettings() {
+  return async (page) => {
+    await page
+      .getByText(/pipeline$/i)
+      .filter({ hasText: /pipeline/i })
+      .first()
+      .click({ timeout: 10_000 });
+    await page.waitForTimeout(500);
+  };
+}
+
 export const isNominatingElection = (election) =>
   (election.status ?? "") === "nominations";
 
@@ -1032,6 +1050,7 @@ export const SHOTS = [
       "Screenshot of the Inactivity Configuration panel showing the timeout preset dropdown, warning",
     alt: "Prospective members settings showing the inactivity configuration panel",
     route: "/prospective-members/settings",
+    prepare: openPipelineSettings(),
     fullPage: true,
   },
 
@@ -2360,6 +2379,89 @@ export const SHOTS = [
       await clickByName(/voter eligibility roster/i)(page);
     },
     fullPage: true,
+    allowEmptyState: true,
+  },
+
+  // ── Tenth batch: the applicant pipeline ────────────────────────────
+  {
+    id: "15-02-pipeline-builder",
+    doc: "15-prospective-members.md",
+    line: 68,
+    anchor:
+      "Screenshot of the Pipeline Builder showing stages in a vertical list",
+    alt: "Pipeline builder listing the stages with their drag handles and types",
+    route: "/prospective-members/settings",
+    // Renders inline on the settings page, well below the fold; clip to the
+    // card rather than shooting the whole page of unrelated configuration.
+    prepare: async (page) => {
+      await openPipelineSettings()(page);
+      await page
+        .getByText("Pipeline Stages", { exact: true })
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 10_000 });
+    },
+    selector: 'div:has(> h3:has-text("Pipeline Stages"))',
+  },
+  {
+    id: "15-04-kanban-board",
+    doc: "15-prospective-members.md",
+    line: 227,
+    anchor: "Screenshot of the kanban board showing 4-5 columns",
+    alt: "Kanban board with a column per pipeline stage and applicant cards",
+    route: "/prospective-members",
+    fullPage: true,
+  },
+  {
+    id: "15-12-pipeline-stats",
+    doc: "15-prospective-members.md",
+    line: 554,
+    anchor: "Screenshot of the pipeline statistics cards showing Total Active",
+    alt: "Pipeline statistics cards across the top of the applicant board",
+    route: "/prospective-members",
+    selector: '.grid:has(> div:has-text("Total Active"))',
+  },
+  {
+    id: "15-11-table-bulk-actions",
+    doc: "15-prospective-members.md",
+    line: 476,
+    anchor: "Screenshot of the pipeline table view with 3 applicants checked",
+    alt: "Pipeline table with applicants selected and the bulk action bar",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      await clickByName(/^table$/i)(page);
+      // The bulk action bar only appears once rows are selected. Row selection
+      // is an icon-only button in the first cell, not an <input type=checkbox>.
+      const boxes = page.locator("tbody tr td:first-child button");
+      await boxes.first().waitFor({ timeout: 10_000 });
+      const count = Math.min(3, await boxes.count());
+      for (let index = 0; index < count; index += 1) {
+        await boxes.nth(index).click({ timeout: 10_000 });
+      }
+    },
+    fullPage: true,
+  },
+  {
+    id: "15-07-interview-form",
+    doc: "15-prospective-members.md",
+    line: 337,
+    anchor:
+      "Screenshot of the Interview form showing the Your Role / Title field",
+    alt: "Interview form with its scheduling, interviewer and recommendation fields",
+    route: "/prospective-members",
+    // The collection is /prospects with limit/offset — /applicants does not
+    // exist, whatever the route naming suggests.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/prospective-members/prospects?limit=20",
+        (id) => `/prospective-members/${id}/interview`,
+        "items",
+      )(page);
+      // The page lists past interviews; the form is behind "New Interview".
+      await clickByName(/new interview/i)(page);
+    },
+    fullPage: true,
+    // "No interviews recorded yet" sits under the form — true of an applicant
+    // whose first interview is being written, and not what this pictures.
     allowEmptyState: true,
   },
 ];

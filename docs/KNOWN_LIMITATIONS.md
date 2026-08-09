@@ -491,6 +491,31 @@ branch, and a date-stamped sequence collides the moment two people work on the
 same day. Before merging a migration, re-check `revision` against the current
 main rather than against your merge-base.
 
+## Prospective Members — Two Bulk-Action Bars at Once (2026-08-09)
+
+Selecting applicants in the pipeline **table** view renders two selection bars
+stacked on top of each other, both reading "N selected":
+
+| Bar | Rendered by | Actions |
+| --- | --- | --- |
+| upper | `ProspectiveMembersPage` (line ~646) | Print Badges, Advance All, Reject All |
+| lower | `PipelineTable` (line ~188) | Advance, Hold, Reject |
+
+`PipelineTable` supports both controlled and uncontrolled selection —
+`selected = externalSelected ?? internalSelected` — but it renders its own bar
+whenever anything is selected, including when the parent is driving the
+selection and has already drawn one. The page passes `selectedApplicants` and
+`onToggleSelect`, so both fire.
+
+The overlap is not clean, which is why this is recorded rather than fixed here:
+"Advance All" and "Advance" do the same thing on the same selection, **Hold**
+exists only on the lower bar, and **Print Badges** only on the upper. Suppressing
+either one silently drops an action, so which bar survives — or what a merged
+bar should offer — is a product call.
+
+The guide screenshot (`15-11-table-bulk-actions.png`) shows both bars, because
+that is what the page does today.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked
