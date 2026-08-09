@@ -1788,7 +1788,7 @@ class ElectionService:
         counts_result = await self.db.execute(
             select(User.membership_type, func.count(User.id))
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active == True)  # noqa: E712
+            .where(User.is_active.is_(True))
             .group_by(User.membership_type)
         )
         total = 0
@@ -1807,7 +1807,7 @@ class ElectionService:
                 select(func.count(User.id))
                 .where(User.id.in_(list(override_ids)))
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)  # noqa: E712
+                .where(User.is_active.is_(True))
                 .where(User.membership_type.in_(list(ineligible_tier_ids)))
             )
             total += override_count.scalar() or 0
@@ -1870,7 +1870,7 @@ class ElectionService:
             select(Vote)
             .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
-            .where(Vote.is_test == False)  # noqa: E712
+            .where(Vote.is_test.is_(False))
         )
         all_votes = await self._exclude_unattested(
             election_id, votes_result.scalars().all()
@@ -2236,7 +2236,7 @@ class ElectionService:
             select(Vote)
             .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
-            .where(Vote.is_test == False)  # noqa: E712
+            .where(Vote.is_test.is_(False))
         )
         all_votes = await self._exclude_unattested(
             election_id, votes_result.scalars().all()
@@ -2313,7 +2313,7 @@ class ElectionService:
             users_result = await self.db.execute(
                 select(User)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)  # noqa: E712
+                .where(User.is_active.is_(True))
                 .options(selectinload(User.roles))
             )
         eligible_users = users_result.scalars().all()
@@ -2323,7 +2323,7 @@ class ElectionService:
             select(Vote)
             .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
-            .where(Vote.is_test == False)  # noqa: E712
+            .where(Vote.is_test.is_(False))
         )
         votes = votes_result.scalars().all()
 
@@ -2434,8 +2434,8 @@ class ElectionService:
             select(VotingToken.id, VotingToken.voter_hash)
             .where(VotingToken.election_id == str(election_id))
             .where(VotingToken.voter_hash.in_(list(hash_by_user.values())))
-            .where(VotingToken.used == False)  # noqa: E712
-            .where(VotingToken.is_test == False)  # noqa: E712
+            .where(VotingToken.used.is_(False))
+            .where(VotingToken.is_test.is_(False))
             .where(VotingToken.expires_at > now)
         )
         prior_token_ids_by_hash: Dict[str, List[str]] = {}
@@ -2548,7 +2548,7 @@ class ElectionService:
             members_result = await self.db.execute(
                 select(User)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)  # noqa: E712
+                .where(User.is_active.is_(True))
             )
             members = members_result.scalars().all()
             member_emails = [m.email for m in members if m.email]
@@ -2826,7 +2826,7 @@ class ElectionService:
                 select(func.count(Candidate.id))
                 .where(Candidate.election_id == str(election_id))
                 .where(Candidate.nominated_by == str(nominator_id))
-                .where(Candidate.accepted == False)  # noqa: E712
+                .where(Candidate.accepted.is_(False))
             )
             if (
                 pending_result.scalar() or 0
@@ -3035,7 +3035,7 @@ class ElectionService:
                     select(Vote.position, func.count(Vote.id))
                     .where(Vote.election_id == str(election_id))
                     .where(Vote.deleted_at.is_(None))
-                    .where(Vote.is_test == False)  # noqa: E712
+                    .where(Vote.is_test.is_(False))
                     .where(Vote.position.in_(list(new_by_position.keys())))
                     .group_by(Vote.position)
                 )
@@ -3047,7 +3047,7 @@ class ElectionService:
                             select(func.count(Candidate.id))
                             .where(Candidate.election_id == str(election_id))
                             .where(Candidate.position == pos)
-                            .where(Candidate.accepted == True)  # noqa: E712
+                            .where(Candidate.accepted.is_(True))
                         )
                         multiplier = max(cand_count_result.scalar() or 1, 1)
                     else:
@@ -3297,7 +3297,7 @@ class ElectionService:
             )
             .join(Candidate, Vote.candidate_id == Candidate.id)
             .where(Vote.election_id == str(election_id))
-            .where(Vote.is_manual == True)  # noqa: E712
+            .where(Vote.is_manual.is_(True))
             .where(Vote.manual_batch_id.in_([b.id for b in batches]))
             .group_by(Vote.manual_batch_id, Candidate.id)
         )
@@ -3375,7 +3375,7 @@ class ElectionService:
             .where(Election.organization_id == str(organization_id))
             .where(Vote.election_id == str(election_id))
             .where(Vote.manual_batch_id == batch_id)
-            .where(Vote.is_manual == True)  # noqa: E712
+            .where(Vote.is_manual.is_(True))
             .where(Vote.deleted_at.is_(None))
         )
         votes = list(result.scalars().all())
@@ -3482,7 +3482,7 @@ class ElectionService:
             cand_result = await self.db.execute(
                 select(Candidate)
                 .where(Candidate.election_id == str(election_id))
-                .where(Candidate.accepted == True)  # noqa: E712
+                .where(Candidate.accepted.is_(True))
                 .where(Candidate.merged_into_candidate_id.is_(None))
                 .order_by(Candidate.position, Candidate.display_order)
             )
@@ -3627,7 +3627,7 @@ class ElectionService:
         candidates_result = await self.db.execute(
             select(Candidate)
             .where(Candidate.election_id == str(election_id))
-            .where(Candidate.accepted == True)  # noqa: E712
+            .where(Candidate.accepted.is_(True))
             .where(Candidate.merged_into_candidate_id.is_(None))
             .order_by(Candidate.position, Candidate.display_order)
         )
@@ -3913,7 +3913,7 @@ class ElectionService:
         candidates_result = await self.db.execute(
             select(Candidate)
             .where(Candidate.election_id == election.id)
-            .where(Candidate.accepted == True)  # noqa: E712
+            .where(Candidate.accepted.is_(True))
         )
         all_candidates = list(candidates_result.scalars().all())
 
@@ -3926,7 +3926,7 @@ class ElectionService:
             select(Vote.candidate_id, func.count(Vote.id))
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
-            .where(Vote.is_test == False)  # noqa: E712
+            .where(Vote.is_test.is_(False))
             .group_by(Vote.candidate_id)
         )
         candidate_vote_counts = dict(vote_counts_result.all())
@@ -4227,7 +4227,7 @@ class ElectionService:
             select(Vote)
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
-            .where(Vote.is_test == False)  # noqa: E712
+            .where(Vote.is_test.is_(False))
         )
         all_votes = votes_result.scalars().all()
 
@@ -4305,7 +4305,7 @@ class ElectionService:
         candidates_result = await self.db.execute(
             select(func.count(Candidate.id))
             .where(Candidate.election_id == str(election_id))
-            .where(Candidate.accepted == True)  # noqa: E712
+            .where(Candidate.accepted.is_(True))
         )
         candidate_count = candidates_result.scalar() or 0
         ballot_items = election.ballot_items or []
@@ -4545,7 +4545,7 @@ class ElectionService:
             select(User)
             .join(User.roles)
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active == True)  # noqa: E712
+            .where(User.is_active.is_(True))
             .options(selectinload(User.roles))
         )
         all_users = users_result.scalars().all()
@@ -5405,7 +5405,7 @@ Best regards,
             users_result = await self.db.execute(
                 select(User)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)  # noqa: E712
+                .where(User.is_active.is_(True))
                 .options(selectinload(User.roles))
             )
             recipients = users_result.scalars().all()
@@ -5900,7 +5900,7 @@ Best regards,
             users_result = await self.db.execute(
                 select(User)
                 .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)  # noqa: E712
+                .where(User.is_active.is_(True))
                 .options(selectinload(User.roles))
                 .order_by(User.last_name, User.first_name)
             )
@@ -6039,7 +6039,7 @@ Best regards,
         candidates_result = await self.db.execute(
             select(Candidate)
             .where(Candidate.election_id == str(election_id))
-            .where(Candidate.accepted == True)  # noqa: E712
+            .where(Candidate.accepted.is_(True))
             .order_by(Candidate.position, Candidate.display_order)
         )
         candidates = [
@@ -6492,7 +6492,7 @@ Best regards,
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == organization_id)
-            .where(User.is_active == True)  # noqa: E712
+            .where(User.is_active.is_(True))
             .options(selectinload(User.roles))
         )
         all_active = users_result.scalars().all()
@@ -6915,7 +6915,7 @@ Best regards,
         candidate_result = await self.db.execute(
             select(Candidate)
             .where(Candidate.election_id == election.id)
-            .where(Candidate.accepted == True)  # noqa: E712
+            .where(Candidate.accepted.is_(True))
         )
         candidates = candidate_result.scalars().all()
         candidate_map = {str(c.id): c for c in candidates}
@@ -7096,7 +7096,7 @@ Best regards,
                     .where(Candidate.election_id == election.id)
                     .where(Candidate.position == position)
                     .where(Candidate.name == "Approve")
-                    .where(Candidate.is_write_in == False)  # noqa: E712
+                    .where(Candidate.is_write_in.is_(False))
                 )
                 approve_candidate = approve_result.scalar_one_or_none()
 
@@ -7121,7 +7121,7 @@ Best regards,
                     .where(Candidate.election_id == election.id)
                     .where(Candidate.position == position)
                     .where(Candidate.name == "Deny")
-                    .where(Candidate.is_write_in == False)  # noqa: E712
+                    .where(Candidate.is_write_in.is_(False))
                 )
                 deny_candidate = deny_result.scalar_one_or_none()
 
@@ -7231,7 +7231,7 @@ Best regards,
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active == True)  # noqa: E712
+            .where(User.is_active.is_(True))
             .options(selectinload(User.roles))
             .order_by(User.last_name, User.first_name)
         )
@@ -7263,7 +7263,7 @@ Best regards,
                     .where(Vote.election_id == str(election_id))
                     .where(Vote.voter_hash.in_(all_hashes))
                     .where(Vote.deleted_at.is_(None))
-                    .where(Vote.is_test == False)  # noqa: E712
+                    .where(Vote.is_test.is_(False))
                     .distinct()
                 )
                 for row in vote_result.all():
@@ -7277,7 +7277,7 @@ Best regards,
                 .where(Vote.election_id == str(election_id))
                 .where(Vote.voter_id.isnot(None))
                 .where(Vote.deleted_at.is_(None))
-                .where(Vote.is_test == False)  # noqa: E712
+                .where(Vote.is_test.is_(False))
             )
             voted_user_ids = {str(r[0]) for r in vote_result.all() if r[0]}
 

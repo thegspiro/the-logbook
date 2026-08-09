@@ -43,7 +43,7 @@ from its open list.
 | B2 | apparatus | AP2 | ✅ (p1, p2, p3) |
 | B3 | inventory | INV2 | ✅ (p1, p2, p3) |
 | B4 | facilities | FAC2 | ✅ (p1, p2, p3) |
-| B5 | elections | ELEC2 | ⬜ |
+| B5 | elections | ELEC2 | ✅ (p1, p2, p3) |
 | B6 | meetings & minutes | MM2 | ⬜ |
 | B7 | equipment-check | EC2 | ⬜ |
 | B8 | documents | DOC2 | ⬜ |
@@ -1432,3 +1432,16 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   unrequested API-surface change. No new tests (behavior-neutral sweep; the 9
   FAC2-1 service tests still pass). Gate: flake8/black/tsc clean. No CHANGELOG (no
   user-visible change). See facilities.md → Pass 3. Next: B5 elections.
+
+- **B5 elections ✅ (pass 3).** Re-verified the headline invariants on the
+  most-audited module: `create_candidate` user_id `assert_in_org` (endpoint 1716);
+  `CandidateUpdate` still has no FK fields (update-bypass closed); AXC-1 IP fix holds
+  (`get_client_ip` 6 sites / `request.client.host` 0); `/elections` uncacheable;
+  latent-500 clean (only `status` enum, properly typed). **Swept ELEC2-1** — the 31
+  `== True/False # noqa: E712` suppressions passes 1–2 deferred citing security-file
+  risk. On analysis the risk is churn not semantics: all 31 are boolean-flag WHERE
+  comparisons (`is_active`/`is_test`/`is_manual`/`used`/`accepted`/`is_write_in`);
+  `.is_()` changes only predicate syntax, never the matched set, so it can't touch
+  vote counting or the hash-chain. Swept all 31 → module free of E712 noqa. No new
+  tests (behavior-neutral); 82 non-DB election tests pass. Gate: flake8/black/tsc
+  clean. No CHANGELOG. See elections.md → Pass 3. Next: B6 meetings & minutes.
