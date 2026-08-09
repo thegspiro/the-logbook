@@ -79,6 +79,18 @@ const headed = args.includes("--headed");
 async function settle(page) {
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(700);
+  // Then wait out any spinner. A tab switch mounts its panel, which fetches on
+  // mount — the request has not been issued yet when networkidle resolves, so
+  // the wait above returns while the panel is still a spinner and the shot
+  // captures loading state instead of content. Bounded and best-effort: a page
+  // that legitimately spins forever should still produce an image to look at.
+  await page
+    .waitForFunction(
+      () => document.querySelectorAll(".animate-spin").length === 0,
+      undefined,
+      { timeout: 15_000 },
+    )
+    .catch(() => {});
 }
 
 /**

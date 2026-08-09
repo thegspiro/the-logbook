@@ -2663,4 +2663,14 @@ export const SHOTS = [
     prepare: clickByName(/subscribe to my shifts/i),
     fullPage: true,
   },
+  {
+    id: "13-06-expiring-screenings",
+    doc: "13-medical-screening.md",
+    line: 327,
+    anchor: "The expiring screenings section of the Compliance tab",
+    alt: "Compliance tab listing screenings approaching expiry with urgency badges",
+    route: "/medical-screening",
+    prepare: clickByName(/^compliance$/i),
+    fullPage: true,
+  },
 ];

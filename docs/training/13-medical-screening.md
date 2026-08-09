@@ -324,7 +324,7 @@ The expiring screenings section on the Compliance tab shows a **60-day lookahead
 | **Warning** | Amber | 8 to 30 days until expiration |
 | **Upcoming** | Blue | 31 to 60 days until expiration |
 
-> **[SCREENSHOT NEEDED]:** _The expiring screenings section of the Compliance tab showing a list of upcoming expirations with color-coded urgency badges (red for 3 days remaining, amber for 22 days, blue for 45 days), member names, screening types, and expiration dates._
+![Compliance tab listing screenings approaching expiry with urgency badges](./images/13-06-expiring-screenings.png)
 
 ### Expiring Screenings API
 

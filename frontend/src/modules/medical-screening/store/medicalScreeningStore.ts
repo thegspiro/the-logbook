@@ -27,6 +27,7 @@ interface MedicalScreeningState {
   compliance: ComplianceSummary | null;
   expiringScreenings: ExpiringScreening[];
   isLoading: boolean;
+  expiringLoading: boolean;
   error: string | null;
 
   // Requirements
@@ -58,6 +59,7 @@ export const useMedicalScreeningStore = create<MedicalScreeningState>((set) => (
   compliance: null,
   expiringScreenings: [],
   isLoading: false,
+  expiringLoading: false,
   error: null,
 
   // Requirements — fetch / CRUD
@@ -128,10 +130,16 @@ export const useMedicalScreeningStore = create<MedicalScreeningState>((set) => (
     'Failed to load compliance'
   ),
 
+  // Its own loading flag, not the shared isLoading. MedicalScreeningPage only
+  // renders the compliance panel while isLoading is false, so a fetch that
+  // raised the shared flag unmounted the very component that started it — and
+  // remounting re-ran the effect, so the tab span forever and never showed its
+  // content.
   fetchExpiringScreenings: createFetchAction(
     set,
     (days?: number) => medicalScreeningService.getExpiringScreenings(days),
     'expiringScreenings',
-    'Failed to load expiring screenings'
+    'Failed to load expiring screenings',
+    'expiringLoading'
   ),
 }));
