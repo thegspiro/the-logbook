@@ -50,7 +50,7 @@ from its open list.
 | B9 | membership pipeline | MP2 | ✅ (p1, p2, p3) |
 | B10 | messaging & communications | MSG2 | ✅ (p1, p2, p3) |
 | B11 | notifications | NOTIF2 | ✅ (p1, p2, p3) |
-| B12 | integrations | INT2 | ⬜ |
+| B12 | integrations | INT2 | ✅ (p1, p2, p3) |
 | B13 | forms | FORM2 | ⬜ |
 | B14 | grants & fundraising | GF2 | ⬜ |
 | B15 | admin-hours | AH2 | ⬜ |
@@ -1525,3 +1525,14 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   around the push test-harness (pass 2's reason) and the subscribe-vs-send rebinding
   window; not a batch drive-by. E712 already clean (pass 1). Gate: flake8/black clean;
   tsc n/a. CHANGELOG updated. See notifications.md → Pass 3. Next: B12 integrations.
+
+- **B12 integrations ✅ (pass 3) — verified clean, no code change.** INT-3 (the last
+  substantive open finding) was resolved earlier this session via the owner
+  read-permission decision (config list/get → integrations.manage + a status-only
+  `/connected` projection). Re-verified: INT-1 send-time SSRF holds
+  (`assert_outbound_url_safe` at every channel service's send boundary), INT-3 gate +
+  `/connected` route ordering hold, INT-4 config-merge (exclude_unset) holds.
+  Latent-500 lens **N/A** — the integration model has no enum columns (config is JSON
+  validated per-type). E712-free across the package. INT-5 (uninvoked
+  `KNOWN_WEBHOOK_DOMAINS` allowlist) stays flagged as an owner behavior decision. No
+  CHANGELOG. See integrations.md → Pass 3. Next: B13 forms.

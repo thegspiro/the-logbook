@@ -5,6 +5,38 @@
 
 ---
 
+## Pass 3 (2026-08-09) — verified clean; INT-3 resolved earlier this session
+
+No code change this pass — the module is clean and INT-3 (the last substantive open
+finding) was **resolved earlier this session** via the owner read-permission decision
+(full config `list`/`get` now require `integrations.manage`; a new
+`GET /integrations/connected` status-only projection keeps the cross-module
+`useConnectedIntegrations` flow working). Re-verified this pass:
+
+- **INT-1 send-time SSRF holds** — `assert_outbound_url_safe(...)` is called at the
+  outbound-send boundary in every channel service (teams/webhook/slack/discord/calcom),
+  not just at store time, so a stored URL is re-checked before each POST.
+- **INT-3 gate holds** — the config `list`/`get`/`connect`/`disconnect`/`update`/
+  `test-connection` endpoints are all `integrations.manage`; `/connected` is registered
+  before `/{integration_id}` (verified) and readable by any org member.
+- **INT-4 holds** — `_validate_config` emits only the caller-supplied keys
+  (`exclude_unset`), so a PATCH doesn't reset omitted config fields.
+- **Latent-500 lens N/A** — the integration model has **no** enum columns (config is
+  JSON validated per-type by `INTEGRATION_CONFIG_SCHEMAS`); no free-string→ENUM path.
+- **E712-free** across the `integration_services` package and the endpoints.
+
+### INT-5 — LOW — Uninvoked webhook allowlist + dead params — 🚩 FLAGGED (unchanged)
+
+`KNOWN_WEBHOOK_DOMAINS` + `validate_integration_url(..., allow_known_only=True)` remain
+uninvoked (no caller passes `allow_known_only=True`), so a chat `webhook_url` is checked
+only for "resolves to a public IP", not "is actually hooks.slack.com / discord.com /
+…". Enabling the allowlist would harden this but could reject legitimately-proxied
+setups — an owner behavior decision, not a drive-by. INT-1's send-time check covers the
+internal-IP case regardless. `allow_known_only` is a functional (not dead) param — the
+switch to turn the allowlist on — so it stays.
+
+---
+
 ## Pass 2 (2026-08-08, against freshly-merged main) — no code change
 
 Run after the 144-commit merge, which brought integration-relevant code to
