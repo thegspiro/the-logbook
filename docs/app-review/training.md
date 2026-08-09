@@ -1,7 +1,43 @@
 # Application Review — Training (Tier B)
 
 **Prefix:** `TR2` · **Iteration:** B18 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3)
+
+---
+
+## Pass 3 (2026-08-09) — TR-5 confirmed resolved; latent-500 clears; 26 E712 swept
+
+Re-verified: **TR-5 confirmed RESOLVED** — the auto-approve self-credit guard landed
+earlier this session (Decision 4): `create_submission` calls
+`_credits_certification_or_requirement(...)` and routes any certification/requirement-
+crediting submission to manual review regardless of auto-approve config (service
+120/167). TR-6/TR-7 (category-name leak fixes) and TR-1/2/3 hold.
+
+**Latent-500 lens clears — the module already validates its enums.** The lens flagged
+10 `training_type`/`status`/`frequency` fields across `TrainingCourse`/`Record`/
+`Requirement` Create/Update as free-`str`, but `schemas/training.py` already carries
+**11 `@field_validator`s** covering exactly those fields (verified: all three creates
+reject a bogus value with 422). A false positive the automated check produces because
+it doesn't see `field_validator`s — no fix needed.
+
+### TR2-1 — NIT — 26 `== True/False  # noqa: E712` swept across 6 services — ✅ FIXED
+
+The training services carried 26 boolean-column E712 suppressions
+(`training_enhancement_service.py` 13, `training_program_service.py`/
+`training_waiver_service.py` 4 each, `training_compliance.py`/`training_service.py` 2
+each, `external_training_service.py` 1) — passes 1–2 were security-focused and never
+swept them. All 26 are boolean-column comparisons (no JSON-value compares); converted
+to `.is_(...)`, removing every E712 noqa from the module. 95 training tests pass
+unchanged.
+
+### Still flagged (unchanged)
+
+- **TR-4** (`year` default in requirements-progress — compliance-semantics decision),
+  **TR-6 residual** (org-filter the backstopped enhancement/sync lookups; make
+  `_decrypt_field` fail closed) — both in the future-development list below.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · training tests **95 passed** (DB-free).
 
 **Backend:** the largest module — 8 endpoint files (~8,100 L, 154 endpoints) + ~13
 services (~9,300 L). Focus this pass: `external_training.py` +

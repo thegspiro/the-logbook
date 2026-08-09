@@ -48,7 +48,7 @@ class RecertificationService:
             RecertificationPathway.organization_id == organization_id
         )
         if active_only:
-            query = query.where(RecertificationPathway.active == True)  # noqa: E712
+            query = query.where(RecertificationPathway.active.is_(True))
         result = await self.db.execute(query.order_by(RecertificationPathway.name))
         return result.scalars().all()
 
@@ -192,7 +192,7 @@ class CompetencyService:
         """Get competency matrices, optionally filtered by position"""
         query = select(CompetencyMatrix).where(
             CompetencyMatrix.organization_id == organization_id,
-            CompetencyMatrix.active == True,  # noqa: E712
+            CompetencyMatrix.active.is_(True),
         )
         if position:
             query = query.where(CompetencyMatrix.position == position)
@@ -261,7 +261,7 @@ class InstructorQualificationService:
             InstructorQualification.organization_id == organization_id
         )
         if active_only:
-            query = query.where(InstructorQualification.active == True)  # noqa: E712
+            query = query.where(InstructorQualification.active.is_(True))
         if user_id:
             query = query.where(InstructorQualification.user_id == user_id)
         if course_id:
@@ -308,7 +308,7 @@ class InstructorQualificationService:
             select(InstructorQualification)
             .where(InstructorQualification.user_id == user_id)
             .where(InstructorQualification.organization_id == organization_id)
-            .where(InstructorQualification.active == True)  # noqa: E712
+            .where(InstructorQualification.active.is_(True))
             .where(InstructorQualification.course_id == course_id)
         )
         qual = result.scalar_one_or_none()
@@ -330,7 +330,7 @@ class InstructorQualificationService:
             select(InstructorQualification)
             .where(InstructorQualification.organization_id == organization_id)
             .where(InstructorQualification.course_id == course_id)
-            .where(InstructorQualification.active == True)  # noqa: E712
+            .where(InstructorQualification.active.is_(True))
             .where(
                 (InstructorQualification.expiration_date.is_(None))
                 | (InstructorQualification.expiration_date >= today)
@@ -630,9 +630,9 @@ class XAPIService:
         result = await self.db.execute(
             select(XAPIStatement)
             .where(XAPIStatement.organization_id == organization_id)
-            .where(XAPIStatement.processed == False)  # noqa: E712
+            .where(XAPIStatement.processed.is_(False))
             .where(XAPIStatement.user_id.isnot(None))
-            .where(XAPIStatement.completion == True)  # noqa: E712
+            .where(XAPIStatement.completion.is_(True))
             .limit(100)
         )
         statements = result.scalars().all()
@@ -714,7 +714,7 @@ class ReportExportService:
             select(User)
             .where(User.organization_id == organization_id)
             .where(User.status == UserStatus.ACTIVE)
-            .where(User.compliance_exempt == False)  # noqa: E712
+            .where(User.compliance_exempt.is_(False))
             .where(User.deleted_at.is_(None))
         )
         users = users_result.scalars().all()
@@ -723,7 +723,7 @@ class ReportExportService:
         req_result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == organization_id)
-            .where(TrainingRequirement.active == True)  # noqa: E712
+            .where(TrainingRequirement.active.is_(True))
         )
         requirements = req_result.scalars().all()
 
@@ -852,7 +852,7 @@ class ReportExportService:
             select(User).where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
-                User.compliance_exempt == False,  # noqa: E712
+                User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
         )
@@ -861,7 +861,7 @@ class ReportExportService:
         req_result = await self.db.execute(
             select(TrainingRequirement).where(
                 TrainingRequirement.organization_id == organization_id,
-                TrainingRequirement.active == True,  # noqa: E712
+                TrainingRequirement.active.is_(True),
             )
         )
         requirements = req_result.scalars().all()
@@ -970,7 +970,7 @@ class ReportExportService:
             select(User)
             .where(User.organization_id == organization_id)
             .where(User.status == UserStatus.ACTIVE)
-            .where(User.compliance_exempt == False)  # noqa: E712
+            .where(User.compliance_exempt.is_(False))
             .where(User.deleted_at.is_(None))
         )
         users = users_result.scalars().all()
@@ -978,7 +978,7 @@ class ReportExportService:
         req_result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == organization_id)
-            .where(TrainingRequirement.active == True)  # noqa: E712
+            .where(TrainingRequirement.active.is_(True))
         )
         requirements = req_result.scalars().all()
 

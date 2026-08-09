@@ -86,14 +86,14 @@ async def fetch_user_waivers(
         select(TrainingWaiver).where(
             TrainingWaiver.organization_id == org_id,
             TrainingWaiver.user_id == user_id,
-            TrainingWaiver.active == True,  # noqa: E712
+            TrainingWaiver.active.is_(True),
         )
     )
     ml_result = await db.execute(
         select(MemberLeaveOfAbsence).where(
             MemberLeaveOfAbsence.organization_id == org_id,
             MemberLeaveOfAbsence.user_id == user_id,
-            MemberLeaveOfAbsence.active == True,  # noqa: E712
+            MemberLeaveOfAbsence.active.is_(True),
         )
     )
 
@@ -117,13 +117,13 @@ async def fetch_org_waivers(
     tw_result = await db.execute(
         select(TrainingWaiver).where(
             TrainingWaiver.organization_id == org_id,
-            TrainingWaiver.active == True,  # noqa: E712
+            TrainingWaiver.active.is_(True),
         )
     )
     ml_result = await db.execute(
         select(MemberLeaveOfAbsence).where(
             MemberLeaveOfAbsence.organization_id == org_id,
-            MemberLeaveOfAbsence.active == True,  # noqa: E712
+            MemberLeaveOfAbsence.active.is_(True),
         )
     )
 

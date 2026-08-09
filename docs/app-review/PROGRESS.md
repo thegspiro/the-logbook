@@ -56,7 +56,7 @@ from its open list.
 | B15 | admin-hours | AH2 | ✅ (p1, p2, p3) |
 | B16 | reports & analytics | RPT2 | ✅ (p1, p2, p3) |
 | B17 | events | EV2 | ✅ (p1, p2, p3) |
-| B18 | training | TR2 | ⬜ |
+| B18 | training | TR2 | ✅ (p1, p2, p3) |
 | B19 | scheduling | SCH2 | ⬜ |
 | B20 | finance | FIN2 | ⬜ |
 | B21 | orgs, roles & users | ORU2 | ⬜ |
@@ -1590,3 +1590,14 @@ in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
   concrete request classes not the shared bases → responses untouched. **10 tests
   added**; 139 event tests pass. Gate: flake8/black clean; tsc n/a. CHANGELOG updated.
   See events.md → Pass 3. Next: B18 training.
+
+- **B18 training ✅ (pass 3).** **TR-5 confirmed resolved** (Decision 4 this session —
+  `_credits_certification_or_requirement` routes credited submissions to manual
+  review); TR-6/TR-7/TR-1/2/3 hold. **Latent-500 lens clears:** the 10 flagged
+  `training_type`/`status`/`frequency` fields are false positives — `schemas/training.py`
+  already has 11 `@field_validator`s covering them (verified all three creates reject
+  bad values). **Swept TR2-1** — 26 boolean-column E712 across 6 training services
+  (enhancement 13, program/waiver 4 each, compliance/service 2 each, external 1) that
+  passes 1–2 never swept; all boolean columns (no JSON compares) → `.is_()`. 95
+  training tests pass. Gate: flake8/black clean; tsc n/a. No CHANGELOG. See training.md
+  → Pass 3. Next: B19 scheduling.

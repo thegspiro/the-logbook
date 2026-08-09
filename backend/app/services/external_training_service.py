@@ -1139,7 +1139,7 @@ class ExternalTrainingSyncService:
                 select(TrainingCategory)
                 .where(TrainingCategory.organization_id == provider.organization_id)
                 .where(TrainingCategory.name == record_data["external_category_name"])
-                .where(TrainingCategory.active == True)  # noqa: E712
+                .where(TrainingCategory.active.is_(True))
             )
             category = category_result.scalar_one_or_none()
             if category:
