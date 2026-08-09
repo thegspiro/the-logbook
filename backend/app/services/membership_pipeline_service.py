@@ -2864,6 +2864,20 @@ class MembershipPipelineService:
     # Duplicate Detection
     # =========================================================================
 
+    async def find_active_prospect_by_email(
+        self, organization_id: str, email: str
+    ) -> Optional[ProspectiveMember]:
+        """Public wrapper over :meth:`_find_active_prospect_by_email`.
+
+        Callers that create prospects from a non-application context — a guest
+        signing in at a room kiosk, say — need to know whether one already
+        exists *before* calling :meth:`create_prospect`, whose duplicate path
+        emails the applicant a "we already have your application" notice. That
+        notice is right for a re-submitted application and wrong for someone
+        who merely walked into a second interest meeting.
+        """
+        return await self._find_active_prospect_by_email(organization_id, email)
+
     async def _find_active_prospect_by_email(
         self, organization_id: str, email: str
     ) -> Optional[ProspectiveMember]:
