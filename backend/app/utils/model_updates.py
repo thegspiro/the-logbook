@@ -26,6 +26,7 @@ while the old value stays in the database.
 from typing import Any, Iterable, Mapping
 
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import NoInspectionAvailable
 
 __all__ = ["apply_updates"]
 
@@ -36,8 +37,16 @@ def _nullable_columns(instance: Any) -> dict[str, bool]:
     Attributes that are not plain columns (relationships, association proxies,
     hybrids) are absent from the result; callers treat those as always
     settable since there is no NOT NULL constraint to violate.
+
+    An object with no mapper at all (a test double, a plain namespace) yields
+    an empty map. The NOT NULL check is a refinement available when the ORM
+    can describe the columns — the guarantee that matters here, that an
+    explicit null is never silently dropped, does not depend on it.
     """
-    mapper = sa_inspect(type(instance))
+    try:
+        mapper = sa_inspect(type(instance))
+    except NoInspectionAvailable:
+        return {}
     return {key: bool(column.nullable) for key, column in mapper.columns.items()}
 
 

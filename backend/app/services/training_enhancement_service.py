@@ -31,6 +31,7 @@ from app.models.training import (
 )
 from app.models.user import User, UserStatus
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.model_updates import apply_updates
 
 
 class RecertificationService:
@@ -80,9 +81,7 @@ class RecertificationService:
         pathway = await self.get_pathway(pathway_id, organization_id)
         if not pathway:
             raise ValueError("Pathway not found")
-        for key, value in data.items():
-            if value is not None:
-                setattr(pathway, key, value)
+        apply_updates(pathway, data)
         await self.db.flush()
         return pathway
 
@@ -229,9 +228,7 @@ class CompetencyService:
         matrix = await self.get_matrix(matrix_id, organization_id)
         if not matrix:
             raise ValueError("Matrix not found")
-        for key, value in data.items():
-            if value is not None:
-                setattr(matrix, key, value)
+        apply_updates(matrix, data)
         await self.db.flush()
         return matrix
 
@@ -299,9 +296,7 @@ class InstructorQualificationService:
         qual = result.scalar_one_or_none()
         if not qual:
             raise ValueError("Qualification not found")
-        for key, value in data.items():
-            if value is not None:
-                setattr(qual, key, value)
+        apply_updates(qual, data)
         await self.db.flush()
         return qual
 
@@ -509,9 +504,7 @@ class MultiAgencyService:
             if orgs and hasattr(orgs[0], "model_dump"):
                 data["participating_organizations"] = [o.model_dump() for o in orgs]
 
-        for key, value in data.items():
-            if value is not None:
-                setattr(exercise, key, value)
+        apply_updates(exercise, data)
         await self.db.flush()
         return exercise
 

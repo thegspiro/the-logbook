@@ -5,6 +5,7 @@ import { CourseLibraryPicker } from './CourseLibraryPicker';
 import { RecencyWindowField } from './RecencyWindowField';
 import { ChecklistItemsEditor } from './ChecklistItemsEditor';
 import { useCourseLibrary } from '../../hooks/useCourseLibrary';
+import { blankToNull } from '../../utils/formValues';
 import type {
   TrainingRequirement,
   TrainingRequirementCreate,
@@ -145,10 +146,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       const usesCalendarPeriod = !isOneTime && formData.due_date_type === 'calendar_period';
       const data = {
         name: formData.name,
-        ...(formData.description ? { description: formData.description } : {}),
+        description: blankToNull(formData.description),
         requirement_type: formData.requirement_type,
         ...(formData.training_type ? { training_type: formData.training_type as TrainingType } : {}),
-        ...(formData.required_hours ? { required_hours: formData.required_hours } : {}),
+        required_hours: formData.requirement_type === 'hours' ? (formData.required_hours ?? null) : null,
         // Always sent so switching a requirement off the course/certification
         // types clears stale links — a leftover course id silently narrows the
         // hours evaluator to only that course's records.
@@ -156,27 +157,18 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
           formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
             ? requiredCourses
             : [],
-        // Sent unconditionally (undefined when off) so lifting a freshness
-        // window persists rather than silently keeping the old value.
+        // Every target below is sent on every save, as an explicit null when
+        // it does not apply, so switching a requirement's type clears the old
+        // target instead of leaving it behind to be evaluated against.
         recency_days:
           formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
-            ? recencyDays
-            : undefined,
-        ...(formData.requirement_type === 'shifts' && formData.required_shifts
-          ? { required_shifts: formData.required_shifts }
-          : {}),
-        ...(formData.requirement_type === 'calls' && formData.required_calls
-          ? { required_calls: formData.required_calls }
-          : {}),
-        ...(formData.requirement_type === 'checklist' && checklistItems.length > 0
-          ? { checklist_items: checklistItems }
-          : {}),
-        ...(formData.requirement_type === 'knowledge_test' && formData.passing_score
-          ? { passing_score: formData.passing_score }
-          : {}),
-        ...(formData.requirement_type === 'knowledge_test' && formData.max_attempts
-          ? { max_attempts: formData.max_attempts }
-          : {}),
+            ? (recencyDays ?? null)
+            : null,
+        required_shifts: formData.requirement_type === 'shifts' ? (formData.required_shifts ?? null) : null,
+        required_calls: formData.requirement_type === 'calls' ? (formData.required_calls ?? null) : null,
+        checklist_items: formData.requirement_type === 'checklist' ? checklistItems : null,
+        passing_score: formData.requirement_type === 'knowledge_test' ? (formData.passing_score ?? null) : null,
+        max_attempts: formData.requirement_type === 'knowledge_test' ? (formData.max_attempts ?? null) : null,
         frequency: formData.frequency,
         ...(!isOneTime && formData.year ? { year: formData.year } : {}),
         allows_external_credit: formData.allows_external_credit,

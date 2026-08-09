@@ -12,6 +12,8 @@ No database needed: the helper works off the mapper's column metadata and
 plain attribute assignment.
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from app.models.finance import Budget
@@ -123,6 +125,24 @@ class TestLoudFailures:
             apply_updates(settings, {"not_a_real_column": "x"})
 
 
+class TestUnmappedObjects:
+    """The core guarantee holds without a mapper; NOT NULL is a refinement."""
+
+    def test_an_explicit_null_still_writes_through(self):
+        obj = SimpleNamespace(notes="old note", name="Engine 1")
+
+        written = apply_updates(obj, {"notes": None})
+
+        assert obj.notes is None
+        assert written == {"notes"}
+
+    def test_an_unknown_field_is_still_rejected(self):
+        obj = SimpleNamespace(name="Engine 1")
+
+        with pytest.raises(ValueError, match="unknown field"):
+            apply_updates(obj, {"nope": 1})
+
+
 class TestSkip:
     """Nested collections stay with the caller's bespoke replace logic."""
 
@@ -143,3 +163,28 @@ class TestSkip:
         settings = StoreSettings(organization_id="org1", store_name="Store")
 
         apply_updates(settings, {"variants": [1, 2]}, skip={"variants"})
+
+    def test_skip_protects_a_real_column_from_being_written(self):
+        """The pipeline services skip tenancy/identity columns this way."""
+        settings = StoreSettings(organization_id="org1", store_name="Store")
+
+        written = apply_updates(
+            settings,
+            {"organization_id": "org2", "store_name": "Company Store"},
+            skip=frozenset({"organization_id"}),
+        )
+
+        assert settings.organization_id == "org1"
+        assert written == {"store_name"}
+
+    def test_a_skipped_null_does_not_trip_the_not_null_check(self):
+        budget = Budget(
+            organization_id="org1",
+            fiscal_year_id="fy1",
+            category_id="cat1",
+            amount_budgeted=5000,
+        )
+
+        apply_updates(budget, {"fiscal_year_id": None}, skip={"fiscal_year_id"})
+
+        assert budget.fiscal_year_id == "fy1"

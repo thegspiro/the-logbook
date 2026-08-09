@@ -18,6 +18,7 @@ const mockGetCourses = vi.fn();
 const mockCreateProgramPhase = vi.fn();
 const mockUpdateProgramPhase = vi.fn();
 const mockUpdateProgram = vi.fn();
+const mockUpdateRequirementEnhanced = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -27,6 +28,7 @@ vi.mock('../services/api', () => ({
     createProgramPhase: (...a: unknown[]) => mockCreateProgramPhase(...a) as unknown,
     updateProgramPhase: (...a: unknown[]) => mockUpdateProgramPhase(...a) as unknown,
     updateProgram: (...a: unknown[]) => mockUpdateProgram(...a) as unknown,
+    updateRequirementEnhanced: (...a: unknown[]) => mockUpdateRequirementEnhanced(...a) as unknown,
   },
   trainingService: {
     getCourses: (...a: unknown[]) => mockGetCourses(...a) as unknown,
@@ -159,6 +161,45 @@ describe('RequirementFormModal', () => {
     expect(await screen.findByText(/apply everywhere it is used/)).toBeInTheDocument();
     // Editing never offers the link/create switch.
     expect(screen.queryByRole('tab', { name: 'Use an existing requirement' })).not.toBeInTheDocument();
+  });
+
+  it('clears the targets that no longer apply when the type changes', async () => {
+    // An hours requirement switched to shifts has to send required_hours as
+    // null. Omitting it reads as "leave alone" on the backend, which is how a
+    // shifts requirement kept evaluating against a stale hours target.
+    const user = userEvent.setup();
+    renderModal({
+      link: {
+        id: 'link-1',
+        program_id: 'prog-1',
+        phase_id: 'phase-1',
+        requirement_id: 'req-hours',
+        is_required: true,
+        is_prerequisite: false,
+        sort_order: 0,
+        owns_requirement: true,
+        created_at: '2026-01-01T00:00:00Z',
+        requirement: {
+          ...cprRequirement,
+          id: 'req-hours',
+          name: 'Ride-along hours',
+          requirement_type: 'hours' as const,
+          required_hours: 24,
+        },
+      },
+    });
+
+    await user.selectOptions(await screen.findByLabelText(/type/i), 'shifts');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    // objectContaining requires the key to be present and null; the old
+    // payload omitted it entirely, so this fails against that behavior.
+    await waitFor(() =>
+      expect(mockUpdateRequirementEnhanced).toHaveBeenCalledWith(
+        'req-hours',
+        expect.objectContaining({ required_hours: null, requirement_type: 'shifts' })
+      )
+    );
   });
 });
 
