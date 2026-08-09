@@ -14,6 +14,7 @@ import { Truck, Plus, Search, Pencil, Trash2, Loader2, X, Save, Shield, Users, W
 import toast from 'react-hot-toast';
 import { schedulingService } from '../modules/scheduling/services/api';
 
+import { useConfirm } from '../contexts/ConfirmContext';
 interface BasicApparatus {
   id: string;
   organization_id?: string;
@@ -73,6 +74,7 @@ const DEFAULT_POSITIONS_BY_TYPE: Record<string, string[]> = {
 };
 
 export default function ApparatusBasicPage() {
+  const { confirm } = useConfirm();
   const [apparatusList, setApparatusList] = useState<BasicApparatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -207,7 +209,15 @@ export default function ApparatusBasicPage() {
   };
 
   const handleDelete = async (apparatus: BasicApparatus) => {
-    if (!window.confirm(`Delete "${apparatus.name}" (${apparatus.unit_number})? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete apparatus',
+        message: `Delete "${apparatus.name}" (${apparatus.unit_number})? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await schedulingService.deleteBasicApparatus(apparatus.id);
       toast.success('Apparatus deleted');

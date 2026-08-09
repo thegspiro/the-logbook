@@ -41,6 +41,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
 import { checklistDoneIds } from '../utils/checklistItems';
+import { useConfirm } from '../contexts/ConfirmContext';
 import type {
   TrainingProgram,
   ProgramPhase,
@@ -861,6 +862,7 @@ const EnrollmentProgressModal: React.FC<{
   onClose: () => void;
   onSaved: () => void;
 }> = ({ isOpen, enrollmentId, memberName, phases, programReqs, structureType, onClose, onSaved }) => {
+  const { confirm } = useConfirm();
   const [data, setData] = useState<MemberProgramProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -922,9 +924,13 @@ const EnrollmentProgressModal: React.FC<{
 
   const handleReset = async (progressId: string, requirementName: string) => {
     if (
-      !window.confirm(
-        `Reset "${requirementName}" to not-started? This clears the accumulated progress for a new cycle.`
-      )
+      !(await confirm({
+        title: 'Reset this requirement?',
+        message: `"${requirementName}" goes back to not-started and the progress accumulated against it is cleared for a new cycle.`,
+        confirmLabel: 'Reset',
+        cancelLabel: 'Leave it',
+        variant: 'warning',
+      }))
     )
       return;
     setSavingId(progressId);
@@ -942,9 +948,13 @@ const EnrollmentProgressModal: React.FC<{
   const handleResetCycle = async () => {
     if (!enrollmentId) return;
     if (
-      !window.confirm(
-        `Start a new cycle for ${memberName}? Every requirement resets to not-started and they return to the first phase.`
-      )
+      !(await confirm({
+        title: 'Start a new cycle?',
+        message: `Every requirement resets to not-started for ${memberName} and they return to the first phase.`,
+        confirmLabel: 'Start new cycle',
+        cancelLabel: 'Leave it',
+        variant: 'warning',
+      }))
     )
       return;
     setResettingCycle(true);

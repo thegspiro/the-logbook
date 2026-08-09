@@ -12,11 +12,13 @@ import { enumLabel, ZONE_CLASSIFICATION_COLORS } from '../types';
 import { inputCls, labelCls, ROOM_TYPE_OPTIONS, ZONE_OPTIONS } from '../constants';
 import { formatNumber } from '../../../utils/dateFormatting';
 
+import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
 }
 
 export default function RoomsSection({ facilityId }: Props) {
+  const { confirm } = useConfirm();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -119,7 +121,15 @@ export default function RoomsSection({ facilityId }: Props) {
   };
 
   const handleDelete = async (room: Room) => {
-    if (!window.confirm(`Delete room "${room.name}"?`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete room',
+        message: `Delete "${room.name}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await facilitiesService.deleteRoom(room.id);
       toast.success('Room deleted');

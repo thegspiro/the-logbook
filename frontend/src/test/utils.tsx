@@ -1,6 +1,7 @@
 import React, { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { BrowserRouter } from 'react-router';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
 import { vi } from 'vitest';
 import type { RSVP, QRCheckInData } from '../types/event';
 
@@ -8,8 +9,15 @@ import type { RSVP, QRCheckInData } from '../types/event';
  * Custom render function that wraps components with common providers
  */
 export function renderWithRouter(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
+  // ConfirmProvider is part of the app shell in App.tsx, so anything under test
+  // that asks for a confirmation needs it here too — useConfirm throws without
+  // one rather than hanging on a promise nothing will settle.
   const Wrapper = ({ children }: { children: React.ReactNode }) => {
-    return <BrowserRouter>{children}</BrowserRouter>;
+    return (
+      <BrowserRouter>
+        <ConfirmProvider>{children}</ConfirmProvider>
+      </BrowserRouter>
+    );
   };
 
   return render(ui, { wrapper: Wrapper, ...options });

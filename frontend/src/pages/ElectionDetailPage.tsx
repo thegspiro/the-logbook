@@ -27,6 +27,7 @@ import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWo
 import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
+import { PromptDialog } from '../components/ux';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
@@ -44,6 +45,10 @@ import EditDatesModal from '../components/election-detail/EditDatesModal';
 import PreMeetingPackageModal from '../components/election-detail/PreMeetingPackageModal';
 import BallotPreviewModal from '../components/election-detail/BallotPreviewModal';
 import RollbackElectionModal from '../components/election-detail/RollbackElectionModal';
+
+/** Floor the void-reason prompt already enforced, now stated to the user
+ *  instead of silently rejecting anything shorter. */
+const MIN_VOID_REASON_LENGTH = 3;
 
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
@@ -122,6 +127,8 @@ export const ElectionDetailPage: React.FC = () => {
   const [paperCandidates, setPaperCandidates] = useState<Candidate[]>([]);
   const [paperBatches, setPaperBatches] = useState<ManualBallotBatch[]>([]);
   const [attestingBatchId, setAttestingBatchId] = useState<string | null>(null);
+  const [voidBatchId, setVoidBatchId] = useState<string | null>(null);
+  const [voidingBatch, setVoidingBatch] = useState(false);
 
   // Enhancement batch: turnout dashboard, clone, write-in merge
   const [showTurnout, setShowTurnout] = useState(false);
@@ -407,17 +414,27 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  const handleVoidPaperBatch = async (batchId: string) => {
-    if (!electionId) return;
-    const reason = window.prompt('Why is this paper-ballot batch being voided? (recorded in the audit log)');
-    if (!reason || reason.trim().length < 3) return;
+  /** Void a paper-ballot batch, with the reason the audit log will carry.
+   *
+   * Was a window.prompt, which a browser may suppress — and a suppressed
+   * prompt returns null, the same value Cancel returns, so voiding a batch
+   * could silently do nothing. A reason under the minimum length was dropped
+   * the same silent way, with no indication that anything had been rejected.
+   */
+  const handleVoidPaperBatch = async (reason: string) => {
+    if (!electionId || !voidBatchId) return;
+    const batchId = voidBatchId;
+    setVoidingBatch(true);
     try {
-      const result = await electionService.voidManualBallots(electionId, batchId, reason.trim());
+      const result = await electionService.voidManualBallots(electionId, batchId, reason);
       toast.success(result.message);
+      setVoidBatchId(null);
       await loadPaperBatches();
       await fetchElection();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to void paper ballots'));
+    } finally {
+      setVoidingBatch(false);
     }
   };
 
@@ -1464,9 +1481,7 @@ export const ElectionDetailPage: React.FC = () => {
             onAttest={(batchId) => {
               void handleAttestPaperBatch(batchId);
             }}
-            onVoid={(batchId) => {
-              void handleVoidPaperBatch(batchId);
-            }}
+            onVoid={(batchId) => setVoidBatchId(batchId)}
           />
         )}
 
@@ -2019,6 +2034,23 @@ export const ElectionDetailPage: React.FC = () => {
             timezone={tz}
           />
         )}
+
+        <PromptDialog
+          isOpen={voidBatchId !== null}
+          onClose={() => setVoidBatchId(null)}
+          onSubmit={(reason) => void handleVoidPaperBatch(reason)}
+          title="Void paper-ballot batch"
+          message="The batch stops counting toward the result. The record and this reason stay in the election's audit log."
+          label="Reason for voiding"
+          placeholder="e.g. Batch entered against the wrong election"
+          minLength={MIN_VOID_REASON_LENGTH}
+          multiline
+          hint={`At least ${String(MIN_VOID_REASON_LENGTH)} characters. Recorded in the audit log.`}
+          confirmLabel="Void batch"
+          cancelLabel="Keep it"
+          confirmVariant="warning"
+          loading={voidingBatch}
+        />
 
         {showCloneModal && election && (
           <CloneElectionModal

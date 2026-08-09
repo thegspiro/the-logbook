@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
@@ -54,6 +54,15 @@ const mockCompletedPracticeTest = {
   is_practice: true,
 };
 
+/** Abandoned mid-session. update_test rejects every write to it with a 400. */
+const mockCancelledTest = {
+  ...mockCompletedTest,
+  status: 'cancelled' as const,
+  result: 'incomplete' as const,
+  overall_score: undefined,
+  completed_at: undefined,
+};
+
 const mockVoidedTest = {
   ...mockCompletedTest,
   status: 'voided' as const,
@@ -80,12 +89,83 @@ const mockTestWithSections = {
   ] as unknown as Record<string, unknown>[],
 };
 
+/** A scorecard whose first section is a stopwatch step. */
+const mockTimedTest = {
+  ...mockInProgressPracticeTest,
+  template_sections: [
+    {
+      name: 'Hose advance',
+      criteria: [{ label: 'Advance to the door', type: 'time_limit', required: true, time_limit_seconds: 60 }],
+    },
+    {
+      name: 'Doffing',
+      criteria: [{ label: 'Mask stowed', type: 'pass_fail' }],
+    },
+  ] as unknown as Record<string, unknown>[],
+};
+
+/** A single checklist step — the type with no obvious way to record a failure. */
+const mockChecklistTest = {
+  ...mockInProgressPracticeTest,
+  template_sections: [
+    {
+      name: 'Tools',
+      criteria: [
+        { label: 'Carried the right tools', type: 'checklist', required: true, checklist_items: ['Halligan', 'Axe'] },
+      ],
+    },
+  ] as unknown as Record<string, unknown>[],
+};
+
+/** A single scored step, already given full marks. */
+const mockScoredStepTest = {
+  ...mockInProgressPracticeTest,
+  template_sections: [
+    {
+      name: 'Ladder',
+      criteria: [{ label: 'Climb angle', type: 'score', required: true, max_score: 3, passing_score: 2 }],
+    },
+  ] as unknown as Record<string, unknown>[],
+  section_results: [
+    {
+      section_id: 'section-0',
+      section_name: 'Ladder',
+      criteria_results: [{ criterion_id: 'criterion-0-0', passed: true, score: 3 }],
+    },
+  ],
+};
+
+/** The same scorecard with every scoreable step already marked. */
+const mockFullyScoredTest = {
+  ...mockTestWithSections,
+  section_results: [
+    {
+      section_id: 'section-0',
+      section_name: 'Donning',
+      criteria_results: [
+        { criterion_id: 'criterion-0-0', passed: true },
+        { criterion_id: 'criterion-0-1', passed: true },
+      ],
+    },
+    {
+      section_id: 'section-1',
+      section_name: 'Doffing',
+      criteria_results: [{ criterion_id: 'criterion-1-0', passed: false }],
+    },
+  ],
+};
+
 let currentMockTest:
   | typeof mockCompletedTest
   | typeof mockInProgressTest
   | typeof mockInProgressPracticeTest
   | typeof mockTestWithSections
+  | typeof mockTimedTest
+  | typeof mockChecklistTest
+  | typeof mockScoredStepTest
+  | typeof mockFullyScoredTest
   | typeof mockVoidedTest
+  | typeof mockCancelledTest
   | null = null;
 // The page reads the running flag through getState() as well as through the
 // hook, so the mock has to hold it like the real store does.
@@ -209,7 +289,7 @@ describe('ActiveSkillTestPage', () => {
       currentMockTest = mockVoidedTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.queryByRole('button', { name: /complete test/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /finish/i })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: /back to tests/i })).toBeInTheDocument();
     });
 
@@ -223,12 +303,44 @@ describe('ActiveSkillTestPage', () => {
     });
   });
 
+  // A cancelled test used to fall through to the live evaluation screen, for
+  // the same reason a voided one did — but that fix only covered voided. The
+  // API refuses every write to a cancelled test with a 400.
+  describe('Cancelled test view', () => {
+    it('should show the read-only result view, not the live evaluation screen', () => {
+      currentMockTest = mockCancelledTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.queryByRole('button', { name: /finish/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /back to tests/i })).toBeInTheDocument();
+    });
+
+    it('should state that nothing was decided rather than showing a pass or fail', () => {
+      currentMockTest = mockCancelledTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByText('Cancelled')).toBeInTheDocument();
+      expect(screen.getByText(/closed out before it finished/)).toBeInTheDocument();
+      expect(screen.queryByText('Passed')).not.toBeInTheDocument();
+      expect(screen.queryByText('Failed')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Draft test view', () => {
     it('should show section indicator for draft tests', () => {
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByText('Section 1 of 2')).toBeInTheDocument();
+    });
+
+    // A blank body under a running clock tells the examiner nothing. This is
+    // reachable whenever a template was published with no steps in it.
+    it('should explain itself when the template has no steps', () => {
       currentMockTest = mockInProgressTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
-      expect(screen.getByText(/Section 1 of/)).toBeInTheDocument();
+      expect(screen.getByText('Nothing to score on this test')).toBeInTheDocument();
     });
 
     it('should show template name in header', () => {
@@ -245,12 +357,12 @@ describe('ActiveSkillTestPage', () => {
       expect(screen.getByText('SCBA Evaluation')).toBeInTheDocument();
     });
 
-    it('should have Save and Complete Test buttons', () => {
+    it('should have Save and Finish buttons', () => {
       currentMockTest = mockInProgressTest;
       renderWithRouter(<ActiveSkillTestPage />);
 
       expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /complete test/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /finish & review/i })).toBeInTheDocument();
     });
 
     it('should show timer controls', () => {
@@ -260,7 +372,7 @@ describe('ActiveSkillTestPage', () => {
       // Timer display should show 00:00
       expect(screen.getByText('00:00')).toBeInTheDocument();
       // Should have play/pause button
-      expect(screen.getByRole('button', { name: /start timer/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^start timer$/i })).toBeInTheDocument();
     });
   });
 
@@ -379,7 +491,7 @@ describe('ActiveSkillTestPage', () => {
 
       renderWithRouter(<ActiveSkillTestPage />);
 
-      await user.click(screen.getByRole('button', { name: /complete test/i }));
+      await user.click(screen.getByRole('button', { name: /finish/i }));
 
       const viewResults = await screen.findByRole('button', { name: /view results/i });
       await user.click(viewResults);
@@ -400,7 +512,7 @@ describe('ActiveSkillTestPage', () => {
       mockUpdateTest.mockResolvedValue(mockInProgressPracticeTest);
 
       renderWithRouter(<ActiveSkillTestPage />);
-      await user.click(screen.getByRole('button', { name: /complete test/i }));
+      await user.click(screen.getByRole('button', { name: /finish/i }));
       await user.click(await screen.findByRole('button', { name: /view results/i }));
 
       await waitFor(() => expect(mockCompleteTest).toHaveBeenCalledWith('test-1'));
@@ -420,7 +532,7 @@ describe('ActiveSkillTestPage', () => {
       });
 
       renderWithRouter(<ActiveSkillTestPage />);
-      await user.click(screen.getByRole('button', { name: /complete test/i }));
+      await user.click(screen.getByRole('button', { name: /finish/i }));
       await user.click(await screen.findByRole('button', { name: /view results/i }));
 
       // Re-read from the server rather than trust the failed call.
@@ -444,7 +556,7 @@ describe('ActiveSkillTestPage', () => {
       });
 
       renderWithRouter(<ActiveSkillTestPage />);
-      await user.click(screen.getByRole('button', { name: /complete test/i }));
+      await user.click(screen.getByRole('button', { name: /finish/i }));
 
       const savesBeforeViewResults = mockUpdateTest.mock.calls.length;
       await user.click(await screen.findByRole('button', { name: /view results/i }));
@@ -465,7 +577,7 @@ describe('ActiveSkillTestPage', () => {
       );
 
       renderWithRouter(<ActiveSkillTestPage />);
-      await user.click(screen.getByRole('button', { name: /complete test/i }));
+      await user.click(screen.getByRole('button', { name: /finish/i }));
       await user.click(await screen.findByRole('button', { name: /view results/i }));
 
       await waitFor(() =>
@@ -479,9 +591,327 @@ describe('ActiveSkillTestPage', () => {
       mockUpdateTest.mockRejectedValue(Object.assign(new Error('conflict'), { status: 409 }));
 
       renderWithRouter(<ActiveSkillTestPage />);
-      await user.click(screen.getByRole('button', { name: /complete test/i }));
+      await user.click(screen.getByRole('button', { name: /finish/i }));
 
       await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Failed to save progress'));
+    });
+  });
+
+  // An examiner scoring a candidate in the field needs to know, without
+  // hunting, who they are scoring, how much is left, and which sections still
+  // have blanks in them.
+  describe('Orientation while scoring', () => {
+    it('should name the candidate on the scoring screen', () => {
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByText('John Smith')).toBeInTheDocument();
+    });
+
+    it('should count the steps still to be scored', () => {
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      // Two scoreable steps across the two sections; the statement is not one.
+      expect(screen.getByText('0/2')).toBeInTheDocument();
+    });
+
+    // The dots this replaced were 10px squares that said nothing about what was
+    // done — the only way to find an unscored step was to walk every section.
+    it('should label each section chip with what it still needs', () => {
+      currentMockTest = mockFullyScoredTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByRole('button', { name: /Section 2, Doffing: 1 of 1 steps scored/ })).toBeInTheDocument();
+      expect(screen.getByText('2/2')).toBeInTheDocument();
+    });
+
+    it('should jump to the section whose chip is tapped', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /Section 2, Doffing/ }));
+
+      expect(mockSetActiveSectionIndex).toHaveBeenCalledWith(1);
+    });
+  });
+
+  // The primary button used to be "Complete Test" on every section — the
+  // biggest, reddest control on screen ended the evaluation, while moving on
+  // was a small grey button beside it.
+  describe('Bottom bar emphasis', () => {
+    it('should offer Next, not Finish, as the main action mid-test', () => {
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByRole('button', { name: /^next$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^finish$/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /finish & review/i })).not.toBeInTheDocument();
+    });
+
+    it('should promote Finish once the last section is showing', () => {
+      currentMockTest = mockTestWithSections;
+      mockSectionIndex = 1;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.queryByRole('button', { name: /^next$/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /finish & review/i })).toBeInTheDocument();
+    });
+  });
+
+  // Finishing with blanks left is the failure mode with real consequences: the
+  // scorer treats an unscored critical step exactly like a failed one.
+  describe('Finishing with steps unscored', () => {
+    it('should say how many steps are blank and what the critical ones cost', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /^finish$/i }));
+
+      expect(await screen.findByText('Some steps have no score')).toBeInTheDocument();
+      expect(screen.getByText(/2 steps still have no Pass or Fail/)).toBeInTheDocument();
+      expect(screen.getByText(/1 of them is marked Critical, which scores the same as a fail/)).toBeInTheDocument();
+    });
+
+    it('should leave the examiner on the scoring screen when they choose to keep scoring', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /^finish$/i }));
+      await user.click(await screen.findByRole('button', { name: /keep scoring/i }));
+
+      expect(screen.queryByText('Some steps have no score')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^finish$/i })).toBeInTheDocument();
+      expect(mockUpdateTest).not.toHaveBeenCalled();
+    });
+
+    it('should go straight to review when every step has been scored', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockFullyScoredTest;
+      mockSectionIndex = 1;
+      mockUpdateTest.mockResolvedValue(mockFullyScoredTest);
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /finish & review/i }));
+
+      expect(await screen.findByText('Check the scorecard')).toBeInTheDocument();
+      expect(screen.queryByText('Some steps have no score')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Correcting a mark', () => {
+    // A checklist only counted as scored once a box was ticked, so the case an
+    // examiner most needs to record — the candidate did none of it — could only
+    // be entered by ticking a box and unticking it again.
+    it('should let a checklist be recorded as not done at all', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockChecklistTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /candidate did none of these/i }));
+
+      expect(mockUpdateCriterionResult).toHaveBeenCalledWith(
+        'section-0',
+        'criterion-0-0',
+        { checklist_completed: [false, false], passed: false },
+        'Tools',
+        'Carried the right tools'
+      );
+    });
+
+    it('should clear a score when the same number is tapped again', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockScoredStepTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: '3' }));
+
+      expect(mockUpdateCriterionResult).toHaveBeenCalledWith(
+        'section-0',
+        'criterion-0-0',
+        { score: undefined, passed: null },
+        'Ladder',
+        'Climb angle'
+      );
+    });
+
+    // Without this the only way out of a mis-tap is to record the opposite
+    // verdict on a candidate — there is no other route back to "not scored".
+    it('should clear a pass when the same button is tapped again', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockFullyScoredTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+
+      expect(mockUpdateCriterionResult).toHaveBeenCalledWith(
+        'section-0',
+        'criterion-0-1',
+        { passed: null },
+        'Donning',
+        'Straps tightened'
+      );
+    });
+  });
+
+  // The stopwatch on a timed step lives in that criterion's own component, and
+  // the whole section is torn down on Prev/Next. Only Stop used to write a
+  // value, so an examiner who timed an evolution and moved on lost the reading
+  // on the very step whose time limit is the pass/fail criterion.
+  describe('Timed steps', () => {
+    it('should record a running stopwatch when the step is torn down', async () => {
+      const user = userEvent.setup();
+      // A stopwatch part-way through an evolution: 42s on the clock, no verdict
+      // written yet, which is exactly the state Stop would have resolved.
+      currentMockTest = {
+        ...mockTimedTest,
+        section_results: [
+          {
+            section_id: 'section-0',
+            section_name: 'Hose advance',
+            criteria_results: [{ criterion_id: 'criterion-0-0', passed: null, time_seconds: 42 }],
+          },
+        ],
+      };
+      const { unmount } = renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /start timer for advance to the door/i }));
+      // Whatever removes the criterion — moving section, leaving the screen —
+      // runs the same cleanup, and until now none of them wrote the reading.
+      unmount();
+
+      expect(mockUpdateCriterionResult).toHaveBeenCalledWith(
+        'section-0',
+        'criterion-0-0',
+        { time_seconds: 42, passed: true },
+        'Hose advance',
+        'Advance to the door'
+      );
+    });
+
+    // Until Stop is pressed the parent hears nothing, and that can be minutes
+    // into an evolution that is already under way.
+    it('should start the test clock when the stopwatch starts', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTimedTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /start timer for advance to the door/i }));
+
+      expect(mockSetActiveTestRunning).toHaveBeenCalledWith(true);
+    });
+  });
+
+  // loadTest resets the section index, so returning to an interrupted
+  // evaluation dropped the examiner at section 1 to hunt for where they got to.
+  describe('Resuming an interrupted test', () => {
+    it('should open at the first section that still has blank steps', () => {
+      currentMockTest = {
+        ...mockFullyScoredTest,
+        status: 'in_progress' as const,
+        section_results: [
+          {
+            section_id: 'section-0',
+            section_name: 'Donning',
+            criteria_results: [
+              { criterion_id: 'criterion-0-0', passed: true },
+              { criterion_id: 'criterion-0-1', passed: true },
+            ],
+          },
+        ],
+      };
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(mockSetActiveSectionIndex).toHaveBeenCalledWith(1);
+    });
+
+    // A draft has not been started, so there is nothing to resume — and being
+    // dropped past section 1 on a fresh test would be baffling.
+    it('should leave a test that has not been started at the top', () => {
+      currentMockTest = { ...mockTestWithSections, status: 'draft' as const };
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(mockSetActiveSectionIndex).not.toHaveBeenCalled();
+    });
+  });
+
+  // The examiner's original complaint: the controls that change section sit at
+  // the bottom of the page, so without this the next section renders still
+  // scrolled down, below its own instructions. An examiner watching a candidate
+  // never looks up, so anything above the fold is simply missed.
+  //
+  // The content sits in its own `overflow-y-auto` container, so resetting the
+  // window alone was never enough — that container's offset is what these
+  // assert. jsdom has no layout, so scrollTop always reads 0 and a plain
+  // assertion would pass whether or not the code wrote anything; and entering
+  // review swaps in a different node, so watching one element would miss it.
+  // Recording writes on the prototype covers whichever node the effect targets.
+  describe('Landing at the top of each screen', () => {
+    let writes: number[] = [];
+    let restoreScrollTop: (() => void) | null = null;
+
+    const watchScrollTopWrites = () => {
+      writes = [];
+      const original = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop');
+      Object.defineProperty(Element.prototype, 'scrollTop', {
+        get: () => 400,
+        set: (value: number) => {
+          writes.push(value);
+        },
+        configurable: true,
+      });
+      restoreScrollTop = () => {
+        if (original) Object.defineProperty(Element.prototype, 'scrollTop', original);
+        else delete (Element.prototype as unknown as Record<string, unknown>)['scrollTop'];
+      };
+    };
+
+    afterEach(() => {
+      restoreScrollTop?.();
+      restoreScrollTop = null;
+    });
+
+    it('scrolls the section body back to the top when the section changes', () => {
+      currentMockTest = mockTestWithSections;
+      const { rerender } = renderWithRouter(<ActiveSkillTestPage />);
+
+      watchScrollTopWrites();
+      mockSectionIndex = 1;
+      rerender(<ActiveSkillTestPage />);
+
+      expect(writes).toContain(0);
+    });
+
+    it('scrolls back to the top on the way into review', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockFullyScoredTest;
+      mockSectionIndex = 1;
+      mockUpdateTest.mockResolvedValue(mockFullyScoredTest);
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      watchScrollTopWrites();
+      await user.click(screen.getByRole('button', { name: /finish & review/i }));
+      await screen.findByText('Check the scorecard');
+
+      expect(writes).toContain(0);
+    });
+  });
+
+  describe('Leaving the test', () => {
+    // Training Admin is officer-only. A member examiner, or anyone on a
+    // practice run, came from the member-facing list and has to be sent back
+    // to it — the header used to send everyone to the admin page.
+    it('should return a practice run to the member-facing list', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /leave this test/i }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/training/skills-testing');
     });
   });
 });

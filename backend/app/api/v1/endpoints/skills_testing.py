@@ -2876,6 +2876,9 @@ def _build_test_response(
         template_time_limit_seconds=(
             scored_against.time_limit_seconds if scored_against else None
         ),
+        template_require_all_critical=(
+            scored_against.require_all_critical if scored_against else None
+        ),
     )
 
     if view == ResultDisclosure.FULL.value:

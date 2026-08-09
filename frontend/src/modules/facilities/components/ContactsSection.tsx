@@ -10,11 +10,13 @@ import type { EmergencyContact, EmergencyContactCreate } from '../../../services
 import { enumLabel } from '../types';
 import { inputCls, labelCls, CONTACT_TYPE_OPTIONS } from '../constants';
 
+import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
 }
 
 export default function ContactsSection({ facilityId }: Props) {
+  const { confirm } = useConfirm();
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -114,7 +116,15 @@ export default function ContactsSection({ facilityId }: Props) {
   };
 
   const handleDelete = async (contact: EmergencyContact) => {
-    if (!window.confirm(`Delete contact "${contact.companyName || contact.contactName}"?`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete contact',
+        message: `Delete "${contact.companyName || contact.contactName}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await facilitiesService.deleteEmergencyContact(contact.id);
       toast.success('Contact deleted');

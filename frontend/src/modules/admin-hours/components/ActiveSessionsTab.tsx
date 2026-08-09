@@ -13,7 +13,9 @@ import { formatTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
+import { useConfirm } from '../../../contexts/ConfirmContext';
 const ActiveSessionsTab: React.FC = () => {
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const activeSessions = useAdminHoursStore((s) => s.activeSessions);
   const activeSessionsLoading = useAdminHoursStore((s) => s.activeSessionsLoading);
@@ -22,9 +24,13 @@ const ActiveSessionsTab: React.FC = () => {
 
   const handleForceClockOut = async (entryId: string, userName: string) => {
     if (
-      !window.confirm(
-        `Are you sure you want to end ${userName}'s active session? The entry will be moved to pending review.`
-      )
+      !(await confirm({
+        title: 'End this session?',
+        message: `Clocks ${userName} out now. The entry moves to pending review rather than being discarded.`,
+        confirmLabel: 'End session',
+        cancelLabel: 'Leave it running',
+        variant: 'warning',
+      }))
     )
       return;
     try {

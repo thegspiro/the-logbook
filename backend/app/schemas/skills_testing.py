@@ -324,6 +324,10 @@ class SkillTestResponse(UTCResponseBase):
     # Template structure for active test rendering
     template_sections: Optional[list] = None
     template_time_limit_seconds: Optional[int] = None
+    # Scoring rule the examiner screen has to state out loud: when this is on,
+    # a critical criterion left unscored counts as a failure (see
+    # calculate_test_result), so the UI warns before the test is submitted.
+    template_require_all_critical: Optional[bool] = None
 
     model_config = ConfigDict(from_attributes=True)
 

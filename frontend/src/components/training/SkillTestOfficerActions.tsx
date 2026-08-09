@@ -118,6 +118,22 @@ export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = (
     }
   };
 
+  // A cancelled test never reached a result, so there is nothing to accept,
+  // release or withdraw. Without this the panel fell through to its normal
+  // state and told the officer the result "counts toward the candidate's
+  // record" — of a test that was abandoned and counts toward nothing.
+  if (test.status === 'cancelled') {
+    return (
+      <div className="card">
+        <p className="text-theme-text-primary mb-1 text-sm font-medium">Test cancelled</p>
+        <p className="text-theme-text-muted text-sm">
+          This test was closed out before it finished, so there is no result to accept, release or withdraw. It counts
+          toward nothing on {test.candidate_name || 'the candidate'}&apos;s record and uses none of their attempts.
+        </p>
+      </div>
+    );
+  }
+
   // A voided result is closed. Nothing is left to accept or release, and the
   // trail of who withdrew it and why is the only thing worth showing.
   if (isVoided) {

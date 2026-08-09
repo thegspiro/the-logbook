@@ -126,7 +126,6 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     mockResetProgress.mockResolvedValue({ ...certProgress, status: 'not_started' });
     mockResetEnrollment.mockResolvedValue({ ...enrollment });
     mockAdvancePhase.mockResolvedValue({ ...enrollment, current_phase_id: 'ph-2' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mockGetEnrollmentEligibility.mockResolvedValue([
       { user_id: 'u1', first_name: 'Ava', last_name: 'Recruit', eligible: true, status: 'eligible', reason: null },
       {
@@ -591,6 +590,10 @@ describe('PipelineDetailPage — enrollment progress management', () => {
 
     await userEvent.click(within(dialog).getByRole('button', { name: /^Reset$/i }));
 
+    // Resetting clears accumulated progress, so it asks first.
+    const confirmDialog = await screen.findByRole('dialog', { name: /Reset this requirement/i });
+    await userEvent.click(within(confirmDialog).getByRole('button', { name: /^Reset$/i }));
+
     await waitFor(() => expect(mockResetProgress).toHaveBeenCalledWith('prog-rec-1'));
     // Progress is re-fetched so the row reflects the cleared state.
     await waitFor(() => expect(mockGetEnrollmentProgress).toHaveBeenCalledTimes(2));
@@ -603,6 +606,9 @@ describe('PipelineDetailPage — enrollment progress management', () => {
 
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: /Start new cycle/i }));
+
+    const confirmDialog = await screen.findByRole('dialog', { name: /Start a new cycle/i });
+    await userEvent.click(within(confirmDialog).getByRole('button', { name: /Start new cycle/i }));
 
     await waitFor(() => expect(mockResetEnrollment).toHaveBeenCalledWith('enr-1'));
   });
