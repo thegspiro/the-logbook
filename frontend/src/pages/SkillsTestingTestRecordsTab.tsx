@@ -13,7 +13,7 @@ import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTestListItem } from '../types/skillsTesting';
-import { EmptyState } from '../components/ux';
+import { ConfirmDialog, EmptyState } from '../components/ux';
 import { Modal } from '../components/Modal';
 import { getErrorMessage } from '../utils/errorHandling';
 import { MIN_VOID_REASON_LENGTH } from '../components/training/SkillTestOfficerActions';
@@ -198,6 +198,14 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
   const [voidTarget, setVoidTarget] = useState<SkillTestListItem | null>(null);
   const [voidReason, setVoidReason] = useState('');
   const [voiding, setVoiding] = useState(false);
+  // In-app dialogs rather than window.confirm / window.prompt. Beyond looking
+  // like the rest of the app, prompts are suppressible: a browser that blocks
+  // them returns null, which is indistinguishable from "cancelled" — so
+  // cancelling a test silently did nothing at all.
+  const [deleteTarget, setDeleteTarget] = useState<SkillTestListItem | null>(null);
+  const [validateTarget, setValidateTarget] = useState<SkillTestListItem | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<SkillTestListItem | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   // "Needs validation" is a filter over completed tests rather than another
   // status value, so it lives in the same dropdown but maps to its own param.
@@ -219,12 +227,10 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
       t.examiner_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleDelete = async (test: SkillTestListItem) => {
-    const confirmed = window.confirm(
-      `Delete the practice attempt for ${test.candidate_name} (${test.template_name})? This action cannot be undone.`
-    );
-    if (!confirmed) return;
-
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const test = deleteTarget;
+    setDeleteTarget(null);
     try {
       await deleteTest(test.id);
       toast.success('Practice attempt deleted');
@@ -233,34 +239,23 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
     }
   };
 
-  const handleCancel = async (test: SkillTestListItem) => {
-    // A plain confirm rather than the void modal: cancelling withdraws no
-    // result and makes no claim about the candidate, so the reason is optional
-    // and there is nothing for a reader to need explained.
-    const reason = window.prompt(
-      `Cancel the unfinished test for ${test.candidate_name} (${test.template_name})?\n\n` +
-        'Any partial results are kept, but the test is closed out. ' +
-        'Optionally note why:'
-    );
-    if (reason === null) return;
-
+  const handleCancel = async () => {
+    if (!cancelTarget) return;
+    const test = cancelTarget;
+    const reason = cancelReason.trim();
+    closeCancelModal();
     try {
-      await cancelTest(test.id, reason);
+      await cancelTest(test.id, reason || undefined);
       toast.success('Test cancelled');
     } catch {
       toast.error('Failed to cancel test');
     }
   };
 
-  const handleValidate = async (test: SkillTestListItem) => {
-    const confirmed = window.confirm(
-      `Validate ${test.examiner_name}'s evaluation of ${test.candidate_name} (${test.template_name})?\n\n` +
-        'The result will count against the candidate’s record: it credits any linked program ' +
-        'requirement, uses one of their attempts, and becomes visible to them. ' +
-        'To reject it instead, void it with a reason.'
-    );
-    if (!confirmed) return;
-
+  const handleValidate = async () => {
+    if (!validateTarget) return;
+    const test = validateTarget;
+    setValidateTarget(null);
     try {
       await validateTest(test.id);
       toast.success('Result validated');
@@ -281,6 +276,11 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
   const closeVoidModal = () => {
     setVoidTarget(null);
     setVoidReason('');
+  };
+
+  const closeCancelModal = () => {
+    setCancelTarget(null);
+    setCancelReason('');
   };
 
   const handleVoid = async () => {
@@ -371,11 +371,11 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               key={test.id}
               test={test}
               onClick={() => void navigate(`/training/skills-testing/test/${test.id}`)}
-              onDelete={() => void handleDelete(test)}
+              onDelete={() => setDeleteTarget(test)}
               onVoid={() => setVoidTarget(test)}
-              onCancel={() => void handleCancel(test)}
+              onCancel={() => setCancelTarget(test)}
               onRelease={() => void handleRelease(test)}
-              onValidate={() => void handleValidate(test)}
+              onValidate={() => setValidateTarget(test)}
             />
           ))}
         </div>
@@ -429,6 +429,73 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Cancelling withdraws no result and makes no claim about the candidate,
+          so unlike voiding the reason stays optional. */}
+      <Modal
+        isOpen={cancelTarget !== null}
+        onClose={closeCancelModal}
+        title="Cancel unfinished test"
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={closeCancelModal}
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
+            >
+              Keep it open
+            </button>
+            <button
+              onClick={() => void handleCancel()}
+              className="rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-700"
+            >
+              Cancel test
+            </button>
+          </div>
+        }
+      >
+        <div className="modal-body space-y-3">
+          <p className="text-theme-text-secondary text-sm">
+            Closes out the unfinished test for{' '}
+            <span className="text-theme-text-primary font-medium">{cancelTarget?.candidate_name}</span> (
+            {cancelTarget?.template_name}). Anything already scored is kept, but no result is recorded.
+          </p>
+          <div>
+            <label htmlFor="cancel-reason" className="form-label">
+              Reason (optional)
+            </label>
+            <textarea
+              id="cancel-reason"
+              rows={2}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="e.g. Drill called off for a run"
+              className="form-input"
+            />
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void handleDelete()}
+        title="Delete practice attempt?"
+        message={`The practice attempt for ${deleteTarget?.candidate_name ?? 'this member'} (${deleteTarget?.template_name ?? ''}) will be deleted for good. Practice attempts are never part of a member's record, so nothing else changes.`}
+        cancelLabel="Keep it"
+        confirmLabel="Delete"
+      />
+
+      <ConfirmDialog
+        isOpen={validateTarget !== null}
+        onClose={() => setValidateTarget(null)}
+        onConfirm={() => void handleValidate()}
+        title="Validate this result?"
+        message={`Accepting ${validateTarget?.examiner_name ?? 'the examiner'}'s evaluation of ${validateTarget?.candidate_name ?? 'this member'} makes it count: it credits any linked program requirement, uses one of their attempts, and becomes visible to them. To reject it instead, void it with a reason.`}
+        cancelLabel="Not yet"
+        confirmLabel="Validate"
+        variant="info"
+      />
     </div>
   );
 };

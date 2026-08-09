@@ -95,6 +95,37 @@ const mockTimedTest = {
   ] as unknown as Record<string, unknown>[],
 };
 
+/** A single checklist step — the type with no obvious way to record a failure. */
+const mockChecklistTest = {
+  ...mockInProgressPracticeTest,
+  template_sections: [
+    {
+      name: 'Tools',
+      criteria: [
+        { label: 'Carried the right tools', type: 'checklist', required: true, checklist_items: ['Halligan', 'Axe'] },
+      ],
+    },
+  ] as unknown as Record<string, unknown>[],
+};
+
+/** A single scored step, already given full marks. */
+const mockScoredStepTest = {
+  ...mockInProgressPracticeTest,
+  template_sections: [
+    {
+      name: 'Ladder',
+      criteria: [{ label: 'Climb angle', type: 'score', required: true, max_score: 3, passing_score: 2 }],
+    },
+  ] as unknown as Record<string, unknown>[],
+  section_results: [
+    {
+      section_id: 'section-0',
+      section_name: 'Ladder',
+      criteria_results: [{ criterion_id: 'criterion-0-0', passed: true, score: 3 }],
+    },
+  ],
+};
+
 /** The same scorecard with every scoreable step already marked. */
 const mockFullyScoredTest = {
   ...mockTestWithSections,
@@ -121,6 +152,8 @@ let currentMockTest:
   | typeof mockInProgressPracticeTest
   | typeof mockTestWithSections
   | typeof mockTimedTest
+  | typeof mockChecklistTest
+  | typeof mockScoredStepTest
   | typeof mockFullyScoredTest
   | typeof mockVoidedTest
   | null = null;
@@ -637,6 +670,41 @@ describe('ActiveSkillTestPage', () => {
   });
 
   describe('Correcting a mark', () => {
+    // A checklist only counted as scored once a box was ticked, so the case an
+    // examiner most needs to record — the candidate did none of it — could only
+    // be entered by ticking a box and unticking it again.
+    it('should let a checklist be recorded as not done at all', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockChecklistTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /candidate did none of these/i }));
+
+      expect(mockUpdateCriterionResult).toHaveBeenCalledWith(
+        'section-0',
+        'criterion-0-0',
+        { checklist_completed: [false, false], passed: false },
+        'Tools',
+        'Carried the right tools'
+      );
+    });
+
+    it('should clear a score when the same number is tapped again', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockScoredStepTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: '3' }));
+
+      expect(mockUpdateCriterionResult).toHaveBeenCalledWith(
+        'section-0',
+        'criterion-0-0',
+        { score: undefined, passed: null },
+        'Ladder',
+        'Climb angle'
+      );
+    });
+
     // Without this the only way out of a mis-tap is to record the opposite
     // verdict on a candidate — there is no other route back to "not scored".
     it('should clear a pass when the same button is tapped again', async () => {
@@ -701,6 +769,39 @@ describe('ActiveSkillTestPage', () => {
       await user.click(screen.getByRole('button', { name: /start timer for advance to the door/i }));
 
       expect(mockSetActiveTestRunning).toHaveBeenCalledWith(true);
+    });
+  });
+
+  // loadTest resets the section index, so returning to an interrupted
+  // evaluation dropped the examiner at section 1 to hunt for where they got to.
+  describe('Resuming an interrupted test', () => {
+    it('should open at the first section that still has blank steps', () => {
+      currentMockTest = {
+        ...mockFullyScoredTest,
+        status: 'in_progress' as const,
+        section_results: [
+          {
+            section_id: 'section-0',
+            section_name: 'Donning',
+            criteria_results: [
+              { criterion_id: 'criterion-0-0', passed: true },
+              { criterion_id: 'criterion-0-1', passed: true },
+            ],
+          },
+        ],
+      };
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(mockSetActiveSectionIndex).toHaveBeenCalledWith(1);
+    });
+
+    // A draft has not been started, so there is nothing to resume — and being
+    // dropped past section 1 on a fresh test would be baffling.
+    it('should leave a test that has not been started at the top', () => {
+      currentMockTest = { ...mockTestWithSections, status: 'draft' as const };
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(mockSetActiveSectionIndex).not.toHaveBeenCalled();
     });
   });
 

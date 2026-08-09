@@ -187,6 +187,18 @@ const ScoreCriterion: React.FC<{
     onChange({ score, passed });
   };
 
+  /** Tapping the selected number again clears it, as PASS/FAIL does. Without a
+   *  way back to "not scored", a mis-tap on a 0 is indistinguishable from a
+   *  deliberate zero — and on a critical step those score the same but mean
+   *  very different things to whoever reads the scorecard. */
+  const handlePointTap = (score: number) => {
+    if (scored && currentScore === score) {
+      onChange({ score: undefined, passed: null });
+      return;
+    }
+    handleScoreChange(score);
+  };
+
   // Non-critical uses neutral blue styling; critical uses green/red
   const scoreColor = !scored
     ? 'text-theme-text-muted'
@@ -215,7 +227,7 @@ const ScoreCriterion: React.FC<{
           {Array.from({ length: maxScore + 1 }, (_, i) => (
             <button
               key={i}
-              onClick={() => handleScoreChange(i)}
+              onClick={() => handlePointTap(i)}
               aria-pressed={scored && currentScore === i}
               className={`h-12 min-w-12 rounded-xl text-lg font-bold transition-all ${
                 scored && currentScore === i
@@ -233,7 +245,9 @@ const ScoreCriterion: React.FC<{
           {isCritical && passingScore > 0 && (
             <p className="text-theme-text-muted mt-1 w-full text-xs">Must score {passingScore}+ pts to pass</p>
           )}
-          {!scored && <p className="text-theme-text-muted mt-1 w-full text-xs">Tap a number to score this step.</p>}
+          <p className="text-theme-text-muted mt-1 w-full text-xs">
+            {scored ? 'Tap the same number again to clear it.' : 'Tap a number to score this step.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-1">
@@ -401,11 +415,14 @@ const ChecklistCriterion: React.FC<{
 }> = ({ criterion, result, onChange }) => {
   const items = criterion.checklist_items ?? [];
   const completed = result?.checklist_completed ?? items.map(() => false);
+  const recorded = result?.passed != null;
 
   const toggleItem = (index: number) => {
     const newCompleted = [...completed];
     newCompleted[index] = !newCompleted[index];
-    const allDone = newCompleted.every(Boolean);
+    // `items.length > 0` guards the empty case: [].every() is true, which would
+    // pass a checklist that has nothing in it.
+    const allDone = items.length > 0 && newCompleted.every(Boolean);
     onChange({ checklist_completed: newCompleted, passed: allDone });
   };
 
@@ -451,6 +468,25 @@ const ChecklistCriterion: React.FC<{
           </button>
         ))}
       </div>
+      {/* A checklist only counted as scored once a box was ticked, so the one
+          case an examiner most needs to record — the candidate did none of it —
+          was indistinguishable from a step they forgot, and could only be
+          entered by ticking a box and unticking it again. */}
+      {recorded ? (
+        <button
+          onClick={() => onChange({ checklist_completed: items.map(() => false), passed: null })}
+          className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target text-xs transition-colors"
+        >
+          Clear this step
+        </button>
+      ) : (
+        <button
+          onClick={() => onChange({ checklist_completed: items.map(() => false), passed: false })}
+          className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target text-xs transition-colors"
+        >
+          Candidate did none of these
+        </button>
+      )}
     </div>
   );
 };
@@ -503,26 +539,31 @@ const StatementCriterion: React.FC<{
 // ==================== Notes Input ====================
 
 const CriterionNotes: React.FC<{
+  criterionLabel: string;
   notes: string;
   onChange: (notes: string) => void;
-}> = ({ notes, onChange }) => {
+}> = ({ criterionLabel, notes, onChange }) => {
   const [isOpen, setIsOpen] = useState(Boolean(notes));
 
   return (
     <div className="mt-2">
       {!isOpen ? (
+        // A 12px text link was the control for the one thing that explains a
+        // fail to whoever reads the scorecard later, on a screen used outdoors
+        // with gloves on. Given a real touch target instead.
         <button
           onClick={() => setIsOpen(true)}
-          className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors"
+          className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target gap-1.5 text-xs transition-colors"
         >
-          <MessageSquare className="h-3 w-3" />
-          Add note
+          <MessageSquare className="h-4 w-4" />
+          Add a note
         </button>
       ) : (
         <textarea
           value={notes}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Notes for this criterion..."
+          aria-label={`Note for ${criterionLabel}`}
+          placeholder="What happened? This is what explains the mark later."
           rows={2}
           className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
           autoFocus
@@ -624,6 +665,7 @@ const SectionView: React.FC<{
               />
             )}
             <CriterionNotes
+              criterionLabel={criterion.label}
               notes={result?.notes ?? ''}
               onChange={(n) => onUpdateCriterion(criterion.id, { notes: n }, criterion.label)}
             />
@@ -1090,6 +1132,21 @@ export const ActiveSkillTestPage: React.FC = () => {
   const unscoredSteps = totalSteps - scoredSteps;
   const criticalUnscored = sectionProgress.reduce((sum, s) => sum + s.criticalUnscored, 0);
   const firstIncompleteIndex = sectionProgress.findIndex((s) => s.scored < s.total);
+
+  // Pick up where the examiner left off. loadTest resets the section index, so
+  // returning to an interrupted evaluation — a locked phone, a call, a walk
+  // back to the apparatus — dropped them at section 1 to hunt for the step they
+  // had reached. Runs once per test, and only for one already under way: a
+  // fresh draft has nothing to resume and belongs at the top.
+  const resumedTestRef = useRef<string | undefined>(undefined);
+  const loadedStatus = currentTest?.status;
+  useEffect(() => {
+    if (!loadedTestId || resumedTestRef.current === loadedTestId) return;
+    if (sectionProgress.length === 0) return;
+    resumedTestRef.current = loadedTestId;
+    if (loadedStatus !== 'in_progress' || firstIncompleteIndex <= 0) return;
+    setActiveSectionIndex(firstIncompleteIndex);
+  }, [loadedTestId, loadedStatus, sectionProgress.length, firstIncompleteIndex, setActiveSectionIndex]);
 
   // "Saves as you go" rather than a bare "Saved" before anything has been
   // written: the promise is what an examiner needs to read before they trust
