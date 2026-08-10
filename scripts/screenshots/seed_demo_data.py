@@ -408,6 +408,57 @@ APPARATUS = [
     ("U-1", "Utility 1", 2017, "Chevrolet", "Silverado 2500", "utility"),
 ]
 
+# Pump/tank/ladder/GVWR/fuel/seats per rig type. Without these every
+# apparatus form and detail page is a column of blank spec fields — the
+# screenshot reads as a half-filled record rather than as a fleet.
+# Values are ordinary for the class: a 1500 GPM engine on a 750-gallon tank,
+# a 95-foot tower, a medic with no pump at all.
+APPARATUS_SPECS = {
+    "engine": {
+        "pumpCapacityGpm": 1500,
+        "tankCapacityGallons": 750,
+        "gvwr": 46000,
+        "fuelCapacityGallons": 65,
+        "seatingCapacity": 6,
+        "minStaffing": 3,
+    },
+    "ladder": {
+        "pumpCapacityGpm": 1500,
+        "tankCapacityGallons": 300,
+        "ladderLengthFeet": 95,
+        "gvwr": 68000,
+        "fuelCapacityGallons": 80,
+        "seatingCapacity": 6,
+        "minStaffing": 4,
+    },
+    "ambulance": {
+        "gvwr": 16500,
+        "fuelCapacityGallons": 40,
+        "seatingCapacity": 4,
+        "minStaffing": 2,
+    },
+    "rescue": {
+        "gvwr": 52000,
+        "fuelCapacityGallons": 70,
+        "seatingCapacity": 6,
+        "minStaffing": 3,
+    },
+    "brush": {
+        "pumpCapacityGpm": 250,
+        "tankCapacityGallons": 300,
+        "gvwr": 19500,
+        "fuelCapacityGallons": 40,
+        "seatingCapacity": 3,
+        "minStaffing": 2,
+    },
+    "utility": {
+        "gvwr": 9600,
+        "fuelCapacityGallons": 36,
+        "seatingCapacity": 5,
+        "minStaffing": 1,
+    },
+}
+
 FACILITIES = [
     ("Station 1 - Headquarters", "410 Grand Avenue", 1962, 24000, 4),
     ("Station 2 - Westside", "1820 Prairie Road", 1988, 11500, 2),
@@ -697,8 +748,6 @@ class Seeder:
                 "make": make,
                 "model": model,
                 "fuelType": "diesel" if slug != "utility" else "gasoline",
-                "seatingCapacity": 4,
-                "minStaffing": 2,
                 "currentMileage": 18_000 + year % 100 * 250,
                 "inServiceDate": str(date(year, 5, 1)),
                 "vin": f"1FD{unit.replace('-', ''):<4.4}{year}XX{index:07d}"[:17],
@@ -707,8 +756,33 @@ class Seeder:
             }
             if station_ids:
                 payload["primaryStationId"] = station_ids[index % len(station_ids)]
+            payload.update(
+                APPARATUS_SPECS.get(slug, {"seatingCapacity": 4, "minStaffing": 2})
+            )
             created.append(self.api.post("/apparatus", payload))
+
+        self._fill_apparatus_specs(created)
         return created
+
+    def _fill_apparatus_specs(self, apparatus: list[dict]) -> None:
+        """Backfill specs onto rigs seeded before APPARATUS_SPECS existed.
+
+        Keyed on the spec being absent rather than on "did we create it this
+        run", so a demo database carrying the older blank-spec fleet is
+        repaired in place instead of needing a wipe.
+        """
+        by_unit = {unit: slug for unit, _name, _y, _mk, _md, slug in APPARATUS}
+        for rig in apparatus:
+            rig_id = pick(rig, "id")
+            unit = pick(rig, "unitNumber", "unit_number")
+            specs = APPARATUS_SPECS.get(by_unit.get(unit, ""))
+            if not rig_id or not specs:
+                continue
+            if pick(rig, "gvwr") or pick(
+                rig, "fuelCapacityGallons", "fuel_capacity_gallons"
+            ):
+                continue
+            self.api.patch(f"/apparatus/{rig_id}", specs)
 
     # -- apparatus: maintenance, fuel, equipment ---------------------
 
@@ -802,7 +876,53 @@ class Seeder:
                     payload["evoc_level_id"] = pick(level, "id")
                 created.append(self.api.post("/apparatus/operators", payload))
                 seeded.add((rig_id, user_id))
+
+        self._require_evoc_on_apparatus(apparatus, by_level)
         return created
+
+    def _require_evoc_on_apparatus(self, apparatus: list[dict], by_level: dict) -> None:
+        """Give the heavier rigs a minimum EVOC level to drive them.
+
+        Without a requirement on the apparatus the driver-eligibility check
+        returns "eligible" for everybody and never fires — the whole feature is
+        inert, and the apparatus form hides the value it is supposed to show.
+        Scaled by rig: an aerial asks more of a driver than a utility does.
+        """
+        wanted = {
+            "engine": 2,
+            "pumper": 2,
+            "ladder": 3,
+            "truck": 3,
+            "aerial": 3,
+            "tower": 3,
+            "rescue": 2,
+            "tanker": 2,
+            "ambulance": 1,
+            "brush": 1,
+        }
+        for rig in apparatus:
+            rig_id = pick(rig, "id")
+            if not rig_id:
+                continue
+            detail = self.api.get(f"/apparatus/{rig_id}")
+            if pick(detail, "required_evoc_level_id", "requiredEvocLevelId"):
+                continue
+            haystack = " ".join(
+                str(pick(detail, key) or "")
+                for key in ("unit_number", "unitNumber", "name", "make", "model")
+            ).lower()
+            number = next(
+                (value for word, value in wanted.items() if word in haystack), None
+            )
+            level = by_level.get(number) if number else None
+            if not level:
+                continue
+            # PATCH, not PUT: the apparatus update route is registered as a
+            # partial update and a PUT gets a bare 405.
+            self.api.patch(
+                f"/apparatus/{rig_id}",
+                {"required_evoc_level_id": pick(level, "id")},
+            )
 
     def seed_apparatus_activity(self, apparatus: list[dict]) -> dict[str, list[dict]]:
         if not apparatus:

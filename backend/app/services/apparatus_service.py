@@ -484,6 +484,13 @@ class ApparatusService:
                 selectinload(Apparatus.apparatus_type),
                 selectinload(Apparatus.status_record),
                 selectinload(Apparatus.primary_station),
+                # ApparatusResponse projects required_evoc_level too. It was
+                # missing here and went unnoticed because every apparatus had
+                # a NULL required_evoc_level_id — SQLAlchemy returns None for
+                # a null FK without touching the database. The moment one was
+                # set, serializing the response lazy-loaded on an async
+                # session and the detail endpoint returned 500.
+                selectinload(Apparatus.required_evoc_level),
             )
 
         result = await self.db.execute(query)
@@ -557,6 +564,10 @@ class ApparatusService:
             query = query.options(
                 selectinload(Apparatus.apparatus_type),
                 selectinload(Apparatus.status_record),
+                # ApparatusListItem projects required_evoc_level as well, and
+                # one apparatus with a requirement set was enough to take the
+                # whole fleet list down with a MissingGreenlet.
+                selectinload(Apparatus.required_evoc_level),
             )
 
         result = await self.db.execute(query)
@@ -682,9 +693,12 @@ class ApparatusService:
             setattr(apparatus, field, value)
 
         await self.db.commit()
-        await self.db.refresh(apparatus)
 
-        return apparatus
+        # Re-read with relationships rather than refresh(), which repopulates
+        # columns and leaves relationships unloaded — see get_apparatus above.
+        return await self.get_apparatus(
+            apparatus_id, organization_id, include_relations=True
+        )
 
     async def change_apparatus_status(
         self,

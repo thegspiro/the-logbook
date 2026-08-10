@@ -1326,13 +1326,24 @@ You can also click the **"Assign"** button directly on an open slot in the crew 
 
 ### Required/Optional Position Toggle
 
-In the shift template editor, each crew position now has a **required/optional toggle**:
+Open **Scheduling > Templates** and click **New Template** (or edit an
+existing one). Under **Crew Positions**, each row is a position dropdown with
+a badge beside it. The badge is the control: **click it to flip the position
+between required and optional.**
 
 - **Required** (violet badge) — the position must be filled for minimum staffing
-- **Optional** (muted) — position is available but not counted toward minimum staffing
+- **Optional** (muted badge) — position is available but not counted toward minimum staffing
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftTemplatesPage position editor showing 4 positions: "Officer" and "Driver" with violet required badges, "Firefighter" with a muted optional badge, and the toggle switch next to each]_
+The dropdown offers Officer, Driver/Operator, Firefighter, EMT, Probationary,
+Volunteer and Other, plus any custom positions your department has configured.
+**Add Position** adds a row, and the − removes one.
+
+> **Corrected 2026-08-10.** There is no toggle switch — the badge itself is
+> the button, and its label is its state. The in-app helper text said "Toggle
+> the switch to mark a position as optional" and has been corrected too. Note
+> also that the driver position is labelled **Driver/Operator**.
+
+![Template crew positions, each with a button reading Required or Optional](./images/03-53-template-position-required.png)
 
 > **Edge case:** Existing templates with bare string positions (created before this update) default to `required=true` automatically.
 
@@ -1496,17 +1507,32 @@ This replaces the need for external cron jobs. Tasks resume automatically on con
 
 EVOC (Emergency Vehicle Operations Course) certification levels are now integrated across training, apparatus, and scheduling:
 
-1. **Member profiles** track EVOC level (Basic, Intermediate, Advanced)
-2. **Apparatus records** specify required EVOC level for operators
-3. **Scheduling** validates EVOC certification when assigning members to driver/operator positions
+1. **Operator records** carry a member's EVOC level, one per apparatus, on the
+   rig's **Operators** tab — not on the member's profile. The levels
+   themselves are configured per organization rather than fixed. See
+   [Membership → EVOC Certification](./01-membership.md#evoc-certification)
+2. **Apparatus records** specify the EVOC level required to drive that rig
+3. **Scheduling** checks the two against each other when assigning a member to
+   a driver/operator position
 
-When assigning a member to a Driver/Operator position, the system checks the apparatus's required EVOC level against the member's certification. If the member's level is insufficient, a warning is displayed.
+When assigning a member to a Driver/Operator position, the system takes the
+highest level from the member's **current** operator records — active,
+certified and not past their expiration — and compares it against the
+apparatus's requirement. A member who falls short, or has no EVOC record at
+all, produces a warning naming the required level; the assignment is not
+blocked. An apparatus with no required level never warns.
 
-> **Screenshot needed:**
-> _[Screenshot of a member's profile showing EVOC certification level (e.g., "EVOC Level: Advanced") alongside other certifications]_
+> **Corrected 2026-08-10.** This said member profiles track an EVOC level of
+> Basic, Intermediate or Advanced. No profile has such a field, and those
+> three names are the demo department's configured levels rather than the
+> system's.
 
-> **Screenshot needed:**
-> _[Screenshot of the apparatus detail page showing the "Required EVOC Level" field set to "Intermediate"]_
+**Setting the requirement.** Edit the apparatus (**Operations > Apparatus >**
+_a rig_ **> Edit**) and choose from **Required EVOC Level**. The control is on
+the edit form rather than the detail page, and it only appears once your
+organization has EVOC levels configured.
+
+![The Required EVOC Level control on an apparatus, set to the level needed to drive it](./images/03-52-apparatus-required-evoc.png)
 
 ### Edge Cases
 

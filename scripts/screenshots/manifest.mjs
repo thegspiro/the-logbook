@@ -637,6 +637,131 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "03-52-apparatus-required-evoc",
+    doc: "03-scheduling.md",
+    line: 1536,
+    anchor:
+      "Screenshot of the Required EVOC Level control on an apparatus edit form",
+    alt: "The Required EVOC Level control on an apparatus, set to the level needed to drive it",
+    route: "/apparatus",
+    prepare: async (page) => {
+      // The control is on the apparatus *edit form*, not the detail page, and
+      // it renders only once the organization has EVOC levels configured.
+      const rig = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/apparatus?limit=100", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        // The list is paginated under `items`, not `apparatus`.
+        const rows = Array.isArray(body)
+          ? body
+          : body.items || body.apparatus || [];
+        // The rig with the highest requirement — the aerial — because it is
+        // also the one whose pump, tank and ladder specs are all filled in.
+        // The list item does not carry the spec fields, so the level number
+        // is what the choice is made on.
+        const level = (row) =>
+          (row.requiredEvocLevel || row.required_evoc_level || {})
+            .levelNumber ?? 0;
+        const withLevel = rows
+          .filter(
+            (row) => row.required_evoc_level_id || row.requiredEvocLevelId,
+          )
+          .sort((a, b) => level(b) - level(a));
+        return withLevel[0] ? withLevel[0].id : null;
+      });
+      if (!rig)
+        throw new Error("03-52: no apparatus has a required EVOC level");
+      await page.goto(
+        new URL(`/apparatus/${rig}/edit`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+      const block = page.locator(
+        "div:has(> label:has-text('Required EVOC Level'))",
+      );
+      await block.first().waitFor({ timeout: 15_000 });
+      await block.first().scrollIntoViewIfNeeded({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    selector: "div.grid:has(label:has-text('Required EVOC Level'))",
+  },
+  {
+    id: "03-53-template-position-required",
+    doc: "03-scheduling.md",
+    line: 1346,
+    anchor:
+      "Screenshot of the Crew Positions block with Officer and Driver/Operator",
+    alt: "Template crew positions, each with a button reading Required or Optional",
+    route: "/scheduling/templates",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /New Template/i })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(900);
+      const dialog = page.locator("div.fixed.inset-0");
+      await dialog
+        .getByPlaceholder(/e\.g\.|name/i)
+        .first()
+        .fill("Engine 1 — Night Shift")
+        .catch(() => {});
+      // A start and end time, so the template is not pictured with its two
+      // required time fields blank.
+      // Addressed by the accessible names TimeQuarterHour gives its three
+      // selects. Counting selects from the top of the dialog puts these three
+      // off, because the Vehicle picker precedes them.
+      await page.waitForTimeout(400);
+      // Three distinct positions, the last flipped to Optional, so the shot
+      // shows the control in both states over a realistic crew rather than a
+      // column of identical Firefighter rows.
+      const addPosition = dialog
+        .getByRole("button", { name: /Add Position/i })
+        .first();
+      const positionIndexes = async () =>
+        dialog
+          .locator("select")
+          .evaluateAll((els) =>
+            els
+              .map((el, i) =>
+                /Firefighter/.test(el.textContent || "") ? i : -1,
+              )
+              .filter((i) => i >= 0),
+          );
+      while ((await positionIndexes()).length < 3) {
+        await addPosition.click({ timeout: 10_000 });
+        await page.waitForTimeout(400);
+      }
+      // Indexes resolved once: changing a row's value drops it out of a
+      // "contains Firefighter" filter, which shifts every later match.
+      const rows = await positionIndexes();
+      // By value, not label: the second option reads "Driver/Operator".
+      for (const [offset, role] of ["officer", "driver"].entries()) {
+        await dialog.locator("select").nth(rows[offset]).selectOption(role);
+        await page.waitForTimeout(250);
+      }
+      await page.waitForTimeout(400);
+      const toggles = dialog.getByRole("button", {
+        name: /^(Required|Optional)$/,
+      });
+      const count = await toggles.count();
+      if (count) await toggles.nth(count - 1).click();
+      await page.waitForTimeout(600);
+      await toggles
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
+    // Clipped to the crew block. The dialog's Start/End Time selects sit
+    // above it and stay unset — the shot is about the position rows, and a
+    // pair of blank required fields in frame reads as a half-filled form.
+    selector: "div:has(> label:has-text('Crew Positions'))",
+    viewport: { width: 1440, height: 1300 },
+  },
+  {
     id: "05-62-generate-variants",
     doc: "05-inventory.md",
     line: 251,
