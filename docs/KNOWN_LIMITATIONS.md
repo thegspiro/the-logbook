@@ -658,6 +658,52 @@ Worth remembering when adding a field to a card: check whether the _list_
 endpoint sends it, not just the detail one. Two of these three failed silently
 for as long as they existed.
 
+## Events & Elections — Four Guide Sections With No Screen (2026-08-10)
+
+`docs/training/04-events-meetings.md` describes four features that have no
+frontend. Each is written in the present tense ("The election detail page now
+shows…"), so nothing in the guide signals they are aspirational.
+
+- **Attendance Dashboard.** A table of members with attendance percentage,
+  meetings on leave, and voting eligibility. The calculation is real and
+  `GET /meetings/attendance/dashboard` serves the data — `meetingsServices.ts`
+  even has a `getAttendanceDashboard` client method for it — but nothing in
+  `frontend/src` calls that method. The endpoint has no consumer.
+- **Send Report Email.** A button on the election detail page to mail
+  round-by-round results. The string appears nowhere in the frontend.
+- **Upcoming Business Meetings.** A section on the election detail page listing
+  meetings the election can be linked to, with **Link to Election** buttons.
+  Described three separate times in the guide; neither string exists.
+
+The election↔meeting link those last two describe _is_ real: an election
+carries `meeting_id` and `event_id`, and an event shows a **Linked Elections**
+card. What is missing is only the election-side UI for setting it — it is set
+at creation or through the API.
+
+Related bug found while confirming this, fixed 2026-08-10: `event_id` could
+not be set through `PATCH /elections/{id}` at all. See the update-allowlist
+note below.
+
+## Elections — An Update Allowlist That Dropped Five Fields (2026-08-10)
+
+Fixed 2026-08-10. `update_election` applies only fields named in
+`ALLOWED_ELECTION_UPDATE_FIELDS`, so a widened Pydantic schema can never reach
+a read-only column like `organization_id`. Sound guard, silent failure mode: a
+field the schema accepts but the list omits is dropped without complaint, and
+the endpoint still answers 200 with the old value.
+
+`event_id` was in that state — and worse, the handler validated it was in-org
+(the XC-1 cross-tenant check) immediately before discarding it. Linking an
+election to an event was impossible and looked like it had worked.
+
+A test asserting the allowlist covers every field `ElectionUpdate` accepts
+turned up four more: `auto_open`, `nomination_deadline`,
+`reminder_hours_before_close`, `tie_policy`. Two drive scheduled behaviour, so
+an election configured to open itself could not be told to stop.
+
+`tests/test_election_update_allowlist.py` now checks the invariant, since the
+pattern cannot report its own omissions.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

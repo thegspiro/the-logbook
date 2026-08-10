@@ -470,6 +470,12 @@ Where `eligible_meetings = total_meetings − per_meeting_waivers − meetings_d
 > **Screenshot placeholder:**
 > _[Screenshot of the Attendance Dashboard showing a table of members with their attendance percentage, number of meetings attended, meetings on leave, and voting eligibility status]_
 
+**Not yet built:** there is no Attendance Dashboard screen. The calculation
+above is real and the data is served by `GET /meetings/attendance/dashboard`,
+which the frontend even has a client method for — but nothing calls it, so no
+page renders the table. Per-meeting attendance is visible on each meeting's
+own record in the meantime. The placeholder stays open.
+
 ### Leave of Absence & Meeting Attendance
 
 When a member has an active **Leave of Absence** (created via **Members > Admin > Waivers**), any meetings whose date falls within the leave period are automatically excluded from the attendance denominator. This means:
@@ -981,17 +987,24 @@ The ballot email dispatch system has been significantly hardened:
 
 ### Election Report Email
 
-Officers can email election results as a formatted report directly from the election detail page using the **Send Report Email** button.
-
 > **Screenshot needed:**
 > _[Screenshot of the election detail page with the "Send Report Email" button visible in the actions area, and the report email preview showing round-by-round results]_
 
-### Upcoming Business Meetings
+**Not yet built.** There is no **Send Report Email** button on the election
+detail page. Results are shared by exporting them from the Results tab, or by
+generating the pre-meeting package. The placeholder stays open.
 
-The election detail page now shows a section listing **upcoming business meetings** that the election can be linked to for procedural compliance.
+### Upcoming Business Meetings
 
 > **Screenshot needed:**
 > _[Screenshot of the election detail page showing the "Upcoming Business Meetings" section with a list of upcoming meetings and "Link" buttons]_
+
+**Not yet built.** The election detail page has no **Upcoming Business
+Meetings** section and no **Link to Election** control. The link itself is
+real — an election carries `meeting_id` and `event_id`, and an event it is
+linked to shows a **Linked Elections** card (see below) — but it is set when
+the election is created, or through the API, not from a list of candidate
+meetings. Two placeholders stay open.
 
 ### Edge Cases — Elections (2026-03-19)
 
@@ -1156,10 +1169,10 @@ Voter eligibility now correctly uses `User.membership_type` instead of role slug
 
 ### Election Meeting Integration
 
-The election detail page now shows **upcoming business meetings** in a dedicated section, making it easy to link elections to meeting records for procedural compliance.
-
 > **Screenshot needed:**
 > _[Screenshot of the election detail page "Upcoming Business Meetings" section showing a list of upcoming meetings with dates and "Link to Election" buttons]_
+
+**Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings). An election does carry a meeting/event link, and the linked event shows a **Linked Elections** card; what is missing is the section on the election side that lists meetings to link to.
 
 | Troubleshooting                     | Solution                                                                                                                            |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -1205,10 +1218,10 @@ This streamlines the workflow for in-meeting elections where only present member
 
 ### Quick-Link Buttons on Upcoming Meetings
 
-The election detail page's Upcoming Meetings list now includes quick-action buttons for faster meeting-to-election association, eliminating the need to navigate to the meeting page separately.
-
 > **Screenshot needed:**
 > _[Screenshot of the Upcoming Meetings section on the election detail page showing meeting cards with "Link to Election" quick-action buttons]_
+
+**Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings) above. There is no Upcoming Meetings list on the election detail page and no quick-link button.
 
 ### Edge Cases
 
