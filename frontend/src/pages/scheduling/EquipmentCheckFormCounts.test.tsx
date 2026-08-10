@@ -10,6 +10,7 @@ import { renderWithRouter } from '../../test/utils';
 
 const mockGetLastCheckResults = vi.fn();
 const mockSubmitCheck = vi.fn();
+const mockUpdateDeployedLot = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -17,6 +18,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     submitEquipmentCheck: (...a: unknown[]) => mockSubmitCheck(...a) as unknown,
     submitStandaloneCheck: (...a: unknown[]) => mockSubmitCheck(...a) as unknown,
     getEquipmentCheck: vi.fn(),
+    updateDeployedLot: (...a: unknown[]) => mockUpdateDeployedLot(...a) as unknown,
     uploadCheckItemPhoto: vi.fn(),
     swapItemLot: vi.fn(),
   },
@@ -81,6 +83,12 @@ describe('EquipmentCheckForm quantity seeding', () => {
     localStorage.clear();
     mockGetLastCheckResults.mockResolvedValue({});
     mockSubmitCheck.mockResolvedValue({ id: 'check-1', items: [] });
+    mockUpdateDeployedLot.mockResolvedValue({
+      templateItemId: 'ti-1',
+      itemName: '4x4 Gauze',
+      isShort: false,
+      lots: [{ id: 'dl-1', lotNumber: 'NEW-9', expirationDate: '2028-01-31', quantity: 2, isExpired: false }],
+    });
   });
 
   const render = (itemOverrides = {}) =>
@@ -142,5 +150,61 @@ describe('EquipmentCheckForm quantity seeding', () => {
       expect(screen.getByText('1/1')).toBeInTheDocument();
     });
     expect(screen.getByDisplayValue('3')).toBeInTheDocument();
+  });
+
+  it('shows every lot aboard with its own date', async () => {
+    render({
+      hasExpiration: true,
+      expirationDate: '2028-01-01',
+      lotsAboard: [
+        { id: 'dl-1', lotNumber: 'LOT-A', expirationDate: '2026-11-30', quantity: 1, isExpired: false },
+        { id: 'dl-2', lotNumber: 'LOT-B', expirationDate: '2027-06-30', quantity: 1, isExpired: false },
+      ],
+    });
+
+    // A drug bag holding two boxes holds two dates; one line cannot say that.
+    expect(await screen.findByText('LOT-A')).toBeInTheDocument();
+    expect(screen.getByText('LOT-B')).toBeInTheDocument();
+    expect(screen.getByText(/Expires.*2026/)).toBeInTheDocument();
+    expect(screen.getByText(/Expires.*2027/)).toBeInTheDocument();
+  });
+
+  it('judges expiry on the soonest date aboard, not the position column', async () => {
+    render({
+      hasExpiration: true,
+      // The column says next decade; a box in the bag expired yesterday.
+      expirationDate: '2030-01-01',
+      lotsAboard: [
+        { id: 'dl-1', lotNumber: 'LOT-OLD', expirationDate: '2020-01-01', quantity: 1, isExpired: true },
+        { id: 'dl-2', lotNumber: 'LOT-NEW', expirationDate: '2030-01-01', quantity: 1, isExpired: false },
+      ],
+    });
+
+    expect(await screen.findByText('EXPIRED')).toBeInTheDocument();
+  });
+
+  it('records a corrected date without leaving the check', async () => {
+    const user = userEvent.setup();
+    render({
+      hasExpiration: true,
+      lotsAboard: [{ id: 'dl-1', lotNumber: 'LOT-A', expirationDate: '2026-11-30', quantity: 2, isExpired: false }],
+    });
+    await screen.findByText('LOT-A');
+
+    await user.click(screen.getByRole('button', { name: /Correct/ }));
+    const dateField = screen.getByLabelText('Expiration');
+    await user.clear(dateField);
+    await user.type(dateField, '2028-01-31');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    // The record follows the box the crew is holding, in the same act.
+    await waitFor(() => {
+      expect(mockUpdateDeployedLot).toHaveBeenCalledWith('ti-1', 'dl-1', {
+        quantity: 2,
+        lotNumber: 'LOT-A',
+        expirationDate: '2028-01-31',
+      });
+    });
+    expect(await screen.findByText('NEW-9')).toBeInTheDocument();
   });
 });

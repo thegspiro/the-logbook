@@ -41,6 +41,7 @@ import type {
 } from '../../modules/scheduling/types/equipmentCheck';
 import type { ApparatusListItem } from '../../modules/apparatus/types';
 import { PromptDialog } from '../../components/ux';
+import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatDate, formatDateTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -151,17 +152,22 @@ const ApparatusInventoryPage: React.FC = () => {
   };
 
   /**
-   * Correct one lot's count, or take it off the truck at zero.
+   * Correct one lot — count, number and date together.
    *
-   * Removal matters as much as the count: a lot counted to nothing would
-   * otherwise keep its expiration in the position's soonest-date reading and
-   * flag a truck for stock it no longer carries.
+   * The date matters as much as the count: a medication changed out has a new
+   * expiration, and recording only the quantity leaves the application
+   * asserting a date for a box that is no longer in the bag. Quantity zero
+   * takes the lot off the truck, so a spent lot stops contributing its date to
+   * the position's soonest-expiry reading.
    */
-  const setLotQuantity = async (lotId: string, quantity: number) => {
+  const updateLot = async (
+    lotId: string,
+    changes: { quantity: number; lotNumber?: string; expirationDate?: string }
+  ) => {
     if (!lotsTarget) return;
     setLotsBusy(true);
     try {
-      const updated = await schedulingService.setDeployedLotQuantity(lotsTarget.templateItemId, lotId, quantity);
+      const updated = await schedulingService.updateDeployedLot(lotsTarget.templateItemId, lotId, changes);
       setLotsTarget(updated);
       await load(selectedId);
     } catch (err: unknown) {
@@ -465,66 +471,13 @@ const ApparatusInventoryPage: React.FC = () => {
               </button>
             </div>
             <div className="space-y-2 overflow-auto px-4 py-3">
-              <p className="text-theme-text-muted text-xs">
-                Soonest to expire first — the order to draw from, and the order a reported use comes off.
-              </p>
-              {lotsTarget.lots.map((lot) => (
-                <div
-                  key={lot.id}
-                  className={`flex items-center justify-between gap-3 rounded-lg border p-3 ${
-                    lot.isExpired ? 'border-red-500/40 bg-red-500/5' : 'border-theme-surface-border'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <p className="text-theme-text-primary truncate text-sm font-medium">
-                      {lot.lotNumber || 'No lot #'}
-                    </p>
-                    <p
-                      className={`text-xs ${
-                        lot.isExpired ? 'font-medium text-red-600 dark:text-red-400' : 'text-theme-text-muted'
-                      }`}
-                    >
-                      {lot.expirationDate
-                        ? `${lot.isExpired ? 'Expired' : 'Exp'} ${formatDate(lot.expirationDate, tz)}`
-                        : 'No expiration'}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={lotsBusy}
-                      onClick={() => void setLotQuantity(lot.id, lot.quantity - 1)}
-                      className="btn-icon disabled:opacity-40"
-                      aria-label={`Remove one of lot ${lot.lotNumber || 'with no number'}`}
-                    >
-                      &minus;
-                    </button>
-                    <span className="text-theme-text-primary w-6 text-center text-sm font-semibold tabular-nums">
-                      {lot.quantity}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={lotsBusy}
-                      onClick={() => void setLotQuantity(lot.id, lot.quantity + 1)}
-                      className="btn-icon disabled:opacity-40"
-                      aria-label={`Add one of lot ${lot.lotNumber || 'with no number'}`}
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      disabled={lotsBusy}
-                      onClick={() => void setLotQuantity(lot.id, 0)}
-                      className="mobile-touch-target ml-1 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {lotsTarget.lots.length === 0 && (
-                <p className="text-theme-text-muted py-8 text-center text-sm">Nothing recorded aboard for this item.</p>
-              )}
+              <LotsAboardPanel
+                lots={lotsTarget.lots}
+                busy={lotsBusy}
+                heading="Soonest to expire first — the order to draw from, and the order a reported use comes off."
+                onSave={(lotId, changes) => updateLot(lotId, changes)}
+                onRemove={(lotId) => updateLot(lotId, { quantity: 0 })}
+              />
             </div>
           </div>
         </div>

@@ -95,6 +95,11 @@ class CheckTemplateItemResponse(UTCResponseBase):
     # Projected from the linked catalog item: "2/4" alone does not say whether
     # a crew is looking for two boxes or two gloves.
     unit_of_measure: Optional[str] = None
+    # The lots physically aboard, soonest first. A crew checking a drug bag is
+    # reading dates off boxes; without these the form can only show one date
+    # for a position that may hold three, and there is no way to tell whether
+    # what is in the bag is what the record says.
+    lots_aboard: List["DeployedLot"] = []
     has_expiration: bool
     expiration_date: Optional[date] = None
     expiration_warning_days: int
@@ -666,10 +671,18 @@ class ItemDeployedLots(BaseModel):
     lots: List[DeployedLot] = []
 
 
-class DeployedLotQuantityRequest(BaseModel):
-    """Correct how many of one lot are aboard. Zero removes it."""
+class DeployedLotUpdateRequest(BaseModel):
+    """Correct one lot aboard so the record matches what is in the bag.
+
+    ``lot_number`` and ``expiration_date`` are partial: omitted leaves them
+    alone, an explicit null clears them. A crew changing a drug out enters the
+    new date here, which is what keeps the application and the bag saying the
+    same thing.
+    """
 
     quantity: int = Field(..., ge=0)
+    lot_number: Optional[str] = Field(None, max_length=100)
+    expiration_date: Optional[date] = None
 
 
 class ApparatusInventoryItem(BaseModel):
@@ -802,3 +815,8 @@ class LotSwapResponse(BaseModel):
     # because the truck is still short.
     restock_needed: bool = False
     quantity_on_truck: Optional[int] = None
+
+
+# CheckTemplateItemResponse references DeployedLot, which is declared with the
+# supply schemas further down; bind the forward reference now that it exists.
+CheckTemplateItemResponse.model_rebuild()

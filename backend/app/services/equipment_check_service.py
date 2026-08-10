@@ -98,10 +98,14 @@ class EquipmentCheckService:
         )
         template = result.scalars().first()
         if template is not None:
-            await self._attach_unit_labels(
-                organization_id,
-                [i for c in template.compartments for i in c.items],
-            )
+            items = [i for c in template.compartments for i in c.items]
+            await self._attach_unit_labels(organization_id, items)
+            # Sorted and stripped of spent rows here rather than letting the
+            # response read the raw relationship: the crew needs them in the
+            # order they should be drawn from, and a schema field bound to the
+            # ORM collection could not carry the expired flag.
+            for item in items:
+                item.lots_aboard = self._deployed_lot_payload(item)
         return template
 
     async def _attach_unit_labels(
@@ -2012,21 +2016,28 @@ class EquipmentCheckService:
             "lots": self._deployed_lot_payload(item),
         }
 
-    async def set_deployed_lot_quantity(
+    async def update_deployed_lot(
         self,
         template_item_id: str,
         deployed_lot_id: str,
         organization_id: str,
         user: User,
-        quantity: int,
+        updates: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
-        """Correct how many of one lot are aboard, or remove it at zero.
+        """Correct one lot aboard so the record matches what is in the bag.
 
-        A lot counted down to nothing is not a lot the truck carries, and
-        leaving an empty row behind would keep its expiration in the position's
-        soonest-date calculation forever.
+        Quantity, lot number and date together, because they are one act: a
+        crew changing a drug out is reading a new box and telling the
+        application what it says. Recording the count without the date would
+        leave the application asserting an expiration for a unit that is no
+        longer there.
+
+        Zero quantity removes the lot. A lot counted down to nothing is not a
+        lot the truck carries, and an empty row would keep contributing its
+        date to the position's soonest-expiry reading forever.
         """
-        if quantity < 0:
+        quantity = updates.get("quantity")
+        if quantity is None or quantity < 0:
             raise ValueError("Quantity cannot be negative")
 
         item, template_id = await self._get_item_with_template(
@@ -2042,11 +2053,26 @@ class EquipmentCheckService:
         if target is None:
             return None
 
-        previous = target.quantity
+        before = {
+            "quantity": target.quantity,
+            "lot_number": target.lot_number,
+            "expiration_date": (
+                target.expiration_date.isoformat() if target.expiration_date else None
+            ),
+        }
+
         if quantity == 0:
             item.deployed_lots.remove(target)
         else:
             target.quantity = quantity
+            # Partial: an absent key leaves the field alone, an explicit null
+            # clears it. Sending a blank date as "unchanged" is how a corrected
+            # box silently keeps the old expiration.
+            if "lot_number" in updates:
+                lot_number = updates["lot_number"]
+                target.lot_number = (lot_number or "").strip() or None
+            if "expiration_date" in updates:
+                target.expiration_date = updates["expiration_date"]
 
         if self._target_quantity(item) is not None:
             item.quantity_on_truck = self._on_truck(item)
@@ -2059,9 +2085,20 @@ class EquipmentCheckService:
             user,
             action="counted",
             changes={
-                "lot_number": target.lot_number,
-                "from": previous,
-                "to": quantity,
+                "from": before,
+                "to": (
+                    None
+                    if quantity == 0
+                    else {
+                        "quantity": target.quantity,
+                        "lot_number": target.lot_number,
+                        "expiration_date": (
+                            target.expiration_date.isoformat()
+                            if target.expiration_date
+                            else None
+                        ),
+                    }
+                ),
             },
         )
         await self.db.commit()

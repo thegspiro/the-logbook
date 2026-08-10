@@ -33,7 +33,7 @@ from app.schemas.equipment_check import (
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
     ComplianceReportResponse,
-    DeployedLotQuantityRequest,
+    DeployedLotUpdateRequest,
     EquipmentCheckCompleteItems,
     EquipmentCheckTemplateCreate,
     EquipmentCheckTemplateResponse,
@@ -1385,10 +1385,10 @@ async def get_item_deployed_lots(
     "/items/{template_item_id}/deployed-lots/{deployed_lot_id}",
     response_model=ItemDeployedLots,
 )
-async def set_deployed_lot_quantity(
+async def update_deployed_lot(
     template_item_id: str,
     deployed_lot_id: str,
-    data: DeployedLotQuantityRequest,
+    data: DeployedLotUpdateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
@@ -1396,15 +1396,19 @@ async def set_deployed_lot_quantity(
         )
     ),
 ):
-    """Correct how many of one lot are aboard. Zero removes it from the truck."""
+    """Correct one lot aboard — count, lot number and expiration together.
+
+    This is how a crew that changed a drug out makes the application say what
+    the box in the bag says. Zero quantity removes the lot from the truck.
+    """
     service = EquipmentCheckService(db)
     try:
-        result = await service.set_deployed_lot_quantity(
+        result = await service.update_deployed_lot(
             template_item_id=template_item_id,
             deployed_lot_id=deployed_lot_id,
             organization_id=str(current_user.organization_id),
             user=current_user,
-            quantity=data.quantity,
+            updates=data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

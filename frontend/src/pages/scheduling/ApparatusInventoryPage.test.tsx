@@ -9,7 +9,7 @@ const mockClearItemRestock = vi.fn();
 const mockSwapItemLot = vi.fn();
 const mockSetItemQuantity = vi.fn();
 const mockGetItemDeployedLots = vi.fn();
-const mockSetDeployedLotQuantity = vi.fn();
+const mockUpdateDeployedLot = vi.fn();
 const mockGetApparatusList = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
@@ -20,7 +20,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     swapItemLot: (...a: unknown[]) => mockSwapItemLot(...a) as unknown,
     setItemQuantity: (...a: unknown[]) => mockSetItemQuantity(...a) as unknown,
     getItemDeployedLots: (...a: unknown[]) => mockGetItemDeployedLots(...a) as unknown,
-    setDeployedLotQuantity: (...a: unknown[]) => mockSetDeployedLotQuantity(...a) as unknown,
+    updateDeployedLot: (...a: unknown[]) => mockUpdateDeployedLot(...a) as unknown,
   },
 }));
 
@@ -90,7 +90,7 @@ describe('ApparatusInventoryPage', () => {
         { id: 'dl-2', lotNumber: 'LOT-B', expirationDate: '2027-06-30', quantity: 1, isExpired: false },
       ],
     });
-    mockSetDeployedLotQuantity.mockResolvedValue({
+    mockUpdateDeployedLot.mockResolvedValue({
       templateItemId: 'ti-1',
       itemName: 'Epinephrine',
       targetQuantity: 2,
@@ -363,11 +363,11 @@ describe('ApparatusInventoryPage', () => {
     // Zero is removal: a lot counted to nothing must stop contributing its
     // date to the position's soonest-expiry reading.
     await waitFor(() => {
-      expect(mockSetDeployedLotQuantity).toHaveBeenCalledWith('ti-1', 'dl-1', 0);
+      expect(mockUpdateDeployedLot).toHaveBeenCalledWith('ti-1', 'dl-1', { quantity: 0 });
     });
   });
 
-  it('adjusts one lot without touching the others', async () => {
+  it('corrects one lot\u2019s date so the record matches the box', async () => {
     mockGetApparatusInventory.mockResolvedValue(
       inventory([
         makeItem({
@@ -391,10 +391,21 @@ describe('ApparatusInventoryPage', () => {
     await selectApparatus(user);
 
     await user.click(screen.getByRole('button', { name: /1 lot/ }));
-    await user.click(await screen.findByRole('button', { name: /Remove one of lot LOT-A/ }));
+    await user.click(await screen.findByRole('button', { name: /Correct/ }));
 
+    const dateField = screen.getByLabelText('Expiration');
+    await user.clear(dateField);
+    await user.type(dateField, '2028-03-31');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    // Count, number and date travel together: a changed-out box has a new
+    // date, and sending the count alone would leave the old one asserted.
     await waitFor(() => {
-      expect(mockSetDeployedLotQuantity).toHaveBeenCalledWith('ti-1', 'dl-1', 0);
+      expect(mockUpdateDeployedLot).toHaveBeenCalledWith('ti-1', 'dl-1', {
+        quantity: 1,
+        lotNumber: 'LOT-A',
+        expirationDate: '2028-03-31',
+      });
     });
   });
 

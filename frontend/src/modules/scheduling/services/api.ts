@@ -71,6 +71,7 @@ import type {
   ItemRestockState,
   LotSwapResult,
 } from '../types/equipmentCheck';
+import { blankToNull } from '@/utils/formValues';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -797,14 +798,24 @@ export const schedulingService = {
     const response = await api.get<ItemDeployedLots>(`/equipment-checks/items/${templateItemId}/deployed-lots`);
     return response.data;
   },
-  async setDeployedLotQuantity(
+  /**
+   * Correct one lot aboard — count, lot number and date together.
+   *
+   * Update payload: `lotNumber` / `expirationDate` are omitted when not being
+   * changed and sent as an explicit null to clear, so a corrected box cannot
+   * silently keep the old expiration.
+   */
+  async updateDeployedLot(
     templateItemId: string,
     deployedLotId: string,
-    quantity: number
+    changes: { quantity: number; lotNumber?: string | null; expirationDate?: string | null }
   ): Promise<ItemDeployedLots> {
+    const body: Record<string, unknown> = { quantity: changes.quantity };
+    if (changes.lotNumber !== undefined) body.lot_number = blankToNull(changes.lotNumber);
+    if (changes.expirationDate !== undefined) body.expiration_date = blankToNull(changes.expirationDate);
     const response = await api.put<ItemDeployedLots>(
       `/equipment-checks/items/${templateItemId}/deployed-lots/${deployedLotId}`,
-      { quantity }
+      body
     );
     return response.data;
   },

@@ -61,9 +61,11 @@ import type {
   StandaloneEquipmentCheckCreate,
   CheckType,
   LastCheckItemResult,
+  DeployedLot,
 } from '../../modules/scheduling/types/equipmentCheck';
 import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
 import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
+import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
 
 import { useConfirm } from '../../contexts/ConfirmContext';
 // ============================================================================
@@ -106,10 +108,29 @@ interface ItemResult {
  * UTC midnight and call an item expired on its own expiry day in any timezone
  * behind UTC — the badge would say EXPIRED while the server passed it.
  */
-function getExpirationStatus(item: CheckTemplateItem, today: string): 'ok' | 'expiring_soon' | 'expired' | null {
-  if (!item.hasExpiration || !item.expirationDate) return null;
+/**
+ * The soonest date actually aboard, falling back to the position's own column.
+ *
+ * A position holding three boxes holds three dates, and the truck is exposed
+ * by its oldest. Reading the column instead would report the date of whichever
+ * lot was restocked last.
+ */
+function soonestExpiration(item: CheckTemplateItem): string | undefined {
+  const dated = (item.lotsAboard ?? []).filter((lot) => lot.expirationDate);
+  if (dated.length > 0) {
+    // The API sorts them, but a verdict that takes an apparatus out of service
+    // should not depend on the order a payload arrived in.
+    return dated.reduce((soonest, lot) => ((lot.expirationDate ?? '') < (soonest.expirationDate ?? '') ? lot : soonest))
+      .expirationDate;
+  }
+  return item.hasExpiration ? item.expirationDate : undefined;
+}
 
-  const expDate = item.expirationDate.slice(0, 10);
+function getExpirationStatus(item: CheckTemplateItem, today: string): 'ok' | 'expiring_soon' | 'expired' | null {
+  const soonest = soonestExpiration(item);
+  if (!soonest) return null;
+
+  const expDate = soonest.slice(0, 10);
   if (expDate < today) return 'expired';
 
   const warningMs = (item.expirationWarningDays ?? 30) * 24 * 60 * 60 * 1000;
@@ -194,6 +215,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     {}
   );
   const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
+  // Lots corrected during this check, so the row reflects the box the crew is
+  // holding without waiting for a template re-fetch.
+  const [lotEdits, setLotEdits] = useState<Record<string, DeployedLot[]>>({});
+  const [lotBusyId, setLotBusyId] = useState<string | null>(null);
   const [swapLots, setSwapLots] = useState<InventoryLot[]>([]);
   const [swapLoading, setSwapLoading] = useState(false);
   const [swapping, setSwapping] = useState(false);
@@ -346,15 +371,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     (item: CheckTemplateItem): CheckTemplateItem => {
       const o = swapOverrides[item.id];
       const typedExpiration = results[item.id]?.expirationFound;
-      if (!o && !typedExpiration) return item;
+      const corrected = lotEdits[item.id];
+      if (!o && !typedExpiration && !corrected) return item;
       return {
         ...item,
+        ...(corrected ? { lotsAboard: corrected } : {}),
         ...(o?.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
         ...(o?.expirationDate !== undefined ? { hasExpiration: true, expirationDate: o.expirationDate } : {}),
         ...(typedExpiration ? { hasExpiration: true, expirationDate: typedExpiration } : {}),
       };
     },
-    [swapOverrides, results]
+    [swapOverrides, results, lotEdits]
   );
 
   const openSwap = useCallback(
@@ -380,6 +407,31 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     },
     [today]
   );
+
+  /**
+   * Correct one lot aboard from inside the check.
+   *
+   * This is the reconciliation a check is for: a crew reading a date off a box
+   * that disagrees with the record fixes the record then and there, rather
+   * than passing an item whose stored expiration belongs to a unit no longer
+   * in the bag.
+   */
+  const correctLot = async (
+    item: CheckTemplateItem,
+    lotId: string,
+    changes: { quantity: number; lotNumber?: string; expirationDate?: string }
+  ) => {
+    setLotBusyId(item.id);
+    try {
+      const updated = await schedulingService.updateDeployedLot(item.id, lotId, changes);
+      setLotEdits((prev) => ({ ...prev, [item.id]: updated.lots }));
+      toast.success('Lot updated');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update the lot'));
+    } finally {
+      setLotBusyId(null);
+    }
+  };
 
   const doSwap = useCallback(
     async (lot: InventoryLot) => {
@@ -1536,6 +1588,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none sm:w-56"
               value={result?.expirationFound ?? ''}
               onChange={(e) => updateResult(item.id, { expirationFound: e.target.value })}
+            />
+          </div>
+        )}
+        {(item.lotsAboard?.length ?? 0) > 0 && (
+          <div className="border-theme-surface-border space-y-2 rounded-lg border p-3">
+            <p className="text-theme-text-secondary text-xs font-medium">
+              Lots aboard — check each date against the box
+            </p>
+            <LotsAboardPanel
+              lots={item.lotsAboard ?? []}
+              busy={lotBusyId === item.id}
+              onSave={(lotId, changes) => correctLot(item, lotId, changes)}
+              onRemove={(lotId) => correctLot(item, lotId, { quantity: 0 })}
             />
           </div>
         )}

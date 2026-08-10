@@ -654,6 +654,99 @@ class TestDeployedLots:
         assert (drawn, lot.quantity) == (1, 0)
 
 
+class TestUpdateDeployedLot:
+    """A crew changing a drug out records the new date in the same act, or the
+    application keeps asserting an expiration for a box that has left."""
+
+    def _wire(self, mock_db, item):
+        result = MagicMock()
+        result.first.return_value = (item, "tmpl-1")
+        mock_db.execute = AsyncMock(return_value=result)
+        mock_db.flush = AsyncMock()
+
+    async def test_a_new_date_and_lot_number_reach_the_record(self, service, mock_db):
+        item = _template_item(expected_quantity=2)
+        lot = _deployed("dl-1", 2, TOMORROW, lot_number="OLD-1")
+        item.deployed_lots = [lot]
+        self._wire(mock_db, item)
+
+        await service.update_deployed_lot(
+            "ti-1",
+            "dl-1",
+            "org-1",
+            MagicMock(id="u-1", first_name="A", last_name="B"),
+            {"quantity": 2, "lot_number": "NEW-9", "expiration_date": NEXT_YEAR},
+        )
+
+        assert lot.lot_number == "NEW-9"
+        assert lot.expiration_date == NEXT_YEAR
+        assert service._soonest_expiration(item) == NEXT_YEAR
+
+    async def test_an_omitted_field_is_left_alone(self, service, mock_db):
+        item = _template_item(expected_quantity=4)
+        lot = _deployed("dl-1", 4, TOMORROW, lot_number="KEEP-1")
+        item.deployed_lots = [lot]
+        self._wire(mock_db, item)
+
+        # Correcting only the count must not wipe the date the box carries.
+        await service.update_deployed_lot(
+            "ti-1",
+            "dl-1",
+            "org-1",
+            MagicMock(id="u-1", first_name="A", last_name="B"),
+            {"quantity": 3},
+        )
+
+        assert (lot.quantity, lot.lot_number) == (3, "KEEP-1")
+        assert lot.expiration_date == TOMORROW
+
+    async def test_an_explicit_null_clears_the_date(self, service, mock_db):
+        item = _template_item(expected_quantity=2)
+        lot = _deployed("dl-1", 2, TOMORROW)
+        item.deployed_lots = [lot]
+        self._wire(mock_db, item)
+
+        await service.update_deployed_lot(
+            "ti-1",
+            "dl-1",
+            "org-1",
+            MagicMock(id="u-1", first_name="A", last_name="B"),
+            {"quantity": 2, "expiration_date": None},
+        )
+
+        assert lot.expiration_date is None
+
+    async def test_zero_takes_the_lot_off_the_truck(self, service, mock_db):
+        item = _template_item(expected_quantity=2)
+        gone = _deployed("dl-1", 1, TOMORROW)
+        kept = _deployed("dl-2", 1, NEXT_YEAR)
+        item.deployed_lots = [gone, kept]
+        self._wire(mock_db, item)
+
+        await service.update_deployed_lot(
+            "ti-1",
+            "dl-1",
+            "org-1",
+            MagicMock(id="u-1", first_name="A", last_name="B"),
+            {"quantity": 0},
+        )
+
+        assert item.deployed_lots == [kept]
+        # The removed lot stops driving the position's exposure.
+        assert service._soonest_expiration(item) == NEXT_YEAR
+
+    async def test_an_unknown_lot_is_not_found(self, service, mock_db):
+        item = _template_item()
+        item.deployed_lots = []
+        self._wire(mock_db, item)
+
+        result = await service.update_deployed_lot(
+            "ti-1", "nope", "org-1", MagicMock(), {"quantity": 1}
+        )
+
+        assert result is None
+
+
 class TestUnitLabels:
     """ "2/4" does not say whether a crew is looking for boxes or gloves."""
 

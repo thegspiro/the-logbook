@@ -116,6 +116,14 @@ export interface CheckTemplateItem {
   quantityOnTruck?: number;
   /** Projected from the linked catalog item — "Each", "Box", "Lot". */
   unitOfMeasure?: string;
+  /**
+   * The lots physically aboard, soonest first.
+   *
+   * A position can hold three boxes with three dates. A crew checking a drug
+   * bag is reading those dates off the boxes, so the form has to show all of
+   * them — one date cannot describe what is in the bag.
+   */
+  lotsAboard?: DeployedLot[];
   hasExpiration: boolean;
   expirationDate?: string;
   expirationWarningDays: number;
