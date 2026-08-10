@@ -514,6 +514,21 @@ class QRCheckInData(BaseModel):
     )
 
 
+# A name must contain at least one character that is neither whitespace nor a
+# control code. Spelled as an explicit negated class rather than ``\S`` because
+# the validator below rejects names that ``str.strip()`` empties, and Python
+# treats more code points as whitespace than JSON Schema's ``\s`` does —
+# U+001C-001F and U+0085 among them. While the schema was the looser of the two,
+# it advertised a lone U+001D as a valid name and the endpoint answered 422,
+# which is the contract breach the API suite reports as rejected-valid-data.
+# Every code point matching this class survives ``strip()``, so schema-valid
+# input can no longer reach the blank branch.
+NAME_HAS_CONTENT = (
+    r"[^\s\x00-\x20\x7f-\xa0"
+    r"\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+)
+
+
 class GuestCheckInRequest(BaseModel):
     """Schema for an unauthenticated guest recording their own attendance.
 
@@ -522,8 +537,8 @@ class GuestCheckInRequest(BaseModel):
     belongs on the real application form the follow-up email links to.
     """
 
-    first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
+    first_name: str = Field(..., min_length=1, max_length=100, pattern=NAME_HAS_CONTENT)
+    last_name: str = Field(..., min_length=1, max_length=100, pattern=NAME_HAS_CONTENT)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(default=None, max_length=50)
     organization_name: Optional[str] = Field(default=None, max_length=255)

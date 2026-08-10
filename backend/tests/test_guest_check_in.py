@@ -474,6 +474,62 @@ class TestGuestCheckInSchema:
         assert payload.first_name == "Dana"
         assert payload.last_name == "Reyes"
 
+    @pytest.mark.parametrize("ctrl", ["\x1d", "\x1c", "\x1f", "\x85", "\x0b"])
+    def test_control_character_names_are_rejected(self, ctrl):
+        from pydantic import ValidationError
+
+        from app.schemas.event import GuestCheckInRequest
+
+        with pytest.raises(ValidationError):
+            GuestCheckInRequest(first_name=ctrl, last_name="Reyes")
+
+    @pytest.mark.parametrize("field", ["first_name", "last_name"])
+    def test_names_publish_their_content_constraint(self, field):
+        # The rejection above always happened — in the validator. What the
+        # published schema said was merely minLength=1, so a generated client
+        # (and the contract suite) believed a lone control character was a
+        # valid name. This is the assertion that distinguishes the two: the
+        # constraint has to be *in the schema*, which is all Schemathesis reads.
+        import re
+
+        from app.schemas.event import GuestCheckInRequest
+
+        prop = GuestCheckInRequest.model_json_schema()["properties"][field]
+
+        assert "pattern" in prop, f"{field} does not publish its content rule"
+        assert not re.search(prop["pattern"], "\x1d")
+        assert re.search(prop["pattern"], "Dana")
+
+    @pytest.mark.parametrize(
+        "name", ["José", "Müller", "李", "O'Brien", "J.R.", "Ng", "X"]
+    )
+    def test_real_names_still_accepted(self, name):
+        # The pattern must not be so strict that it rejects accented, CJK or
+        # punctuated names — it constrains "has content", not "is ASCII".
+        from app.schemas.event import GuestCheckInRequest
+
+        payload = GuestCheckInRequest(first_name=name, last_name="Reyes")
+
+        assert payload.first_name == name
+
+    def test_schema_valid_names_never_reach_the_blank_branch(self):
+        # The invariant the fix rests on: every code point the schema pattern
+        # admits survives str.strip(), so validation cannot reject data the
+        # published schema calls valid. Checked exhaustively rather than by
+        # reasoning about which definition of whitespace applies where.
+        import re
+
+        from app.schemas.event import NAME_HAS_CONTENT
+
+        pattern = re.compile(NAME_HAS_CONTENT)
+        offenders = [
+            cp
+            for cp in range(0x110000)
+            if pattern.fullmatch(chr(cp)) and chr(cp).strip() == ""
+        ]
+
+        assert offenders == []
+
     def test_email_is_optional(self):
         from app.schemas.event import GuestCheckInRequest
 
