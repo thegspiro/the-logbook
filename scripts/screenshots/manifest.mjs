@@ -529,6 +529,41 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "00-19-change-password",
+    doc: "00-getting-started.md",
+    line: 58,
+    anchor:
+      "Screenshot of the change password form showing the current password",
+    alt: "The change password form with its three fields and the strength requirements",
+    route: "/account",
+    prepare: async (page) => {
+      await clickByName(/^Password$/)(page);
+      await page.waitForTimeout(500);
+      // Typed rather than left blank: the requirement checklist only tells you
+      // anything once there is something to check it against.
+      await page
+        .locator('input[type="password"]')
+        .nth(1)
+        .fill("Oakville!2026")
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
+    fullPage: true,
+  },
+  {
+    id: "00-20-member-dashboard",
+    doc: "00-getting-started.md",
+    line: 288,
+    anchor: "A member's dashboard showing the hours row, department messages",
+    alt: "A member's dashboard with its hours, messages, shift, event and equipment panels",
+    // As a member: the administrator's dashboard leads with department-wide
+    // stat cards, and the personal panels this section is about sit under
+    // them or not at all.
+    auth: "member",
+    route: "/dashboard",
+    fullPage: true,
+  },
+  {
     id: "00-14-confirm-dialog",
     doc: "00-getting-started.md",
     line: 103,

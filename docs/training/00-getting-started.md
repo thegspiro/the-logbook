@@ -55,8 +55,7 @@ After your first login, you will be prompted to change your temporary password. 
 2. Enter your **new password** twice to confirm.
 3. Click **Change Password**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the change password form showing the current password field, new password field, confirm password field, and any password requirements displayed (length, complexity)]_
+![The change password form with its three fields and the strength requirements](./images/00-19-change-password.png)
 
 **Password Requirements:**
 
@@ -113,22 +112,28 @@ The sidebar is organized into sections based on your role. Not all sections are 
 
 These links are available to all active members:
 
-| Menu Item            | Description                                        |
-| -------------------- | -------------------------------------------------- |
-| **Dashboard**        | Your home page with quick stats and upcoming items |
-| **Members**          | Department roster and member profiles              |
-| **Events**           | Upcoming and past department events                |
-| **Documents**        | Shared files, SOPs, and policies                   |
-| **Training**         | Your training records, courses, and programs       |
-| **Shift Scheduling** | Duty roster, your shifts, and open shifts          |
-| **Inventory**        | Equipment and supplies                             |
-| **Apparatus**        | Vehicles and apparatus                             |
-| **Facilities**       | Stations and buildings                             |
-| **Elections**        | Active and past elections                          |
-| **Admin Hours**      | Log administrative work hours (if module enabled)  |
-| **Minutes**          | Meeting minutes and records                        |
-| **Action Items**     | Tasks assigned to you from meetings                |
-| **Notifications**    | Notification preferences and history               |
+Three of them are **groups** that expand when you click them, rather than links
+of their own — Training, Operations and Governance:
+
+| Menu Item            | Description                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------- |
+| **Dashboard**        | Your home page with quick stats and upcoming items                                             |
+| **Members**          | Department roster and member profiles                                                          |
+| **Events**           | Upcoming and past department events                                                            |
+| **Documents**        | Shared files, SOPs, and policies                                                               |
+| **Training** ▾       | My Training, Submit Training, Course Library, Programs, Skills Testing                         |
+| **Admin Hours**      | Log administrative work hours (if module enabled)                                              |
+| **Shift Scheduling** | Duty roster, your shifts, and open shifts                                                      |
+| **Operations** ▾     | My Equipment, Inventory, Department Store, Apparatus, Facilities                               |
+| **Governance** ▾     | Elections, Minutes, Action Items                                                               |
+| **Notifications**    | Your inbox, with an unread count on the item itself                                            |
+| **Messages**         | Department messages and announcements                                                          |
+| **My Account**       | Your own settings — account, password, security, emergency contacts, appearance, notifications |
+| **My ID Card**       | Your digital member ID, with its QR code and barcode                                           |
+
+Which of the grouped items appear depends on the modules your department has
+enabled: a department not running elections has no Elections link under
+Governance, and so on.
 
 ![The navigation sidebar with the member-facing sections expanded](./images/00-15-sidebar-member.png)
 
@@ -275,17 +280,20 @@ Because Oakville FD requires multi-factor authentication, Jake is redirected to 
 
 After completing setup, the dashboard loads with personalized widgets:
 
-- **My Upcoming Shifts** — shows Jake's next 3 shifts with dates, times, and assigned apparatus
-- **Open Shifts** — available shifts Jake can sign up for
-- **Upcoming Events** — events in the next 30 days
-- **Training Progress** — Jake's enrollment status in active training programs
-- **Notifications** — a bell icon in the header with an unread count badge
-
-Jake clicks a notification: "Welcome to Oakville FD! Complete your profile to get started." The notification card expands to show details and a link to his account settings.
+- **Hours this month** — four figures across the top: total, training, standby and administrative
+- **Department Messages** — anything the department has posted, urgent items first
+- **Notifications** — the most recent, with an unread count and Clear All
+- **My Upcoming Shifts** — his next five shifts with dates, times, and the officer on each
+- **Open Shifts** — shifts he can sign up for. **Five at a time**, with a line
+  underneath saying how many more there are in the next 30 days; **View
+  Schedule** opens the lot
+- **Upcoming Events** — events in the next 30 days, each showing his RSVP
+- **Recent Activity**, **My ID Card** and **My Equipment** — his last few
+  actions, a shortcut to his barcode, and what he has been issued
 
 > **Edge case:** If Jake hasn't been assigned to a platoon yet, the "My Upcoming Shifts" widget shows "No upcoming shifts" and the "Open Shifts" widget may still display shifts he can volunteer for.
 
-> **[SCREENSHOT NEEDED]:** _Dashboard after first login showing the personalized widgets (My Upcoming Shifts, Open Shifts, Upcoming Events, Training Progress) and the welcome notification expanded with a link to complete the profile_
+![A member's dashboard with its hours, messages, shift, event and equipment panels](./images/00-20-member-dashboard.png)
 
 ### Part 3: Completing Your Profile
 
