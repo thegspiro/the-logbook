@@ -8,7 +8,7 @@ check submissions, checklist resolution by position, and item history.
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1432,9 +1432,18 @@ class EquipmentCheckService:
             )
             .where(
                 EquipmentCheckTemplate.organization_id == organization_id,
-                CheckTemplateItem.has_expiration.is_(True),
-                CheckTemplateItem.expiration_date.isnot(None),
-                CheckTemplateItem.expiration_date <= cutoff,
+                # Two ways onto this worklist. A date the officer can see
+                # coming, and a crew's report that something was used or pulled
+                # — the second has no expiration to sort by and would otherwise
+                # sit unseen until someone ran a check.
+                or_(
+                    and_(
+                        CheckTemplateItem.has_expiration.is_(True),
+                        CheckTemplateItem.expiration_date.isnot(None),
+                        CheckTemplateItem.expiration_date <= cutoff,
+                    ),
+                    CheckTemplateItem.restock_needed.is_(True),
+                ),
             )
             .order_by(CheckTemplateItem.expiration_date.asc())
         )
@@ -1493,6 +1502,9 @@ class EquipmentCheckService:
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
+                    "restock_needed": bool(item.restock_needed),
+                    "restock_note": item.restock_note,
+                    "restock_reported_at": item.restock_reported_at,
                     "inventory_item_id": item.inventory_item_id,
                     "inventory_item_name": (
                         item_names.get(item.inventory_item_id)
@@ -1524,6 +1536,258 @@ class EquipmentCheckService:
             )
 
         return {"days_ahead": days_ahead, "total": len(items), "items": items}
+
+    async def get_apparatus_inventory(
+        self, apparatus_id: str, organization_id: str
+    ) -> Dict[str, Any]:
+        """What a given apparatus is carrying right now, compartment by
+        compartment, with the ready stock behind each tracked item.
+
+        Deliberately not a check. A check is a scheduled, signed, whole-truck
+        pass that produces a report; this is the standing view a member opens
+        at any hour to say "we used the last of these" or to put a fresh unit
+        in a bracket. Forcing that through a check submission is what left
+        mid-shift consumption unrecorded until the next morning.
+        """
+        today = date.today()
+
+        apparatus = await self.db.scalar(
+            select(Apparatus).where(
+                Apparatus.id == apparatus_id,
+                Apparatus.organization_id == organization_id,
+            )
+        )
+        if apparatus is None:
+            return {}
+
+        result = await self.db.execute(
+            select(
+                CheckTemplateItem,
+                CheckTemplateCompartment,
+                EquipmentCheckTemplate,
+            )
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.apparatus_id == apparatus_id,
+            )
+            .order_by(
+                CheckTemplateCompartment.sort_order.asc(),
+                CheckTemplateItem.sort_order.asc(),
+            )
+        )
+        rows = result.all()
+
+        inv_ids = [i.inventory_item_id for (i, _, _) in rows if i.inventory_item_id]
+        inventory_service = InventoryService(self.db)
+        lots_by_item = await inventory_service.get_lots_for_items(
+            organization_id, inv_ids
+        )
+        reporter_names = await self._get_user_name_map(
+            [i.restock_reported_by for (i, _, _) in rows if i.restock_reported_by]
+        )
+
+        compartments: List[Dict[str, Any]] = []
+        by_compartment: Dict[str, Dict[str, Any]] = {}
+        for item, compartment, _tmpl in rows:
+            # Headers and free-text lines are checklist scaffolding, not things
+            # anyone stocks; they would be dead rows in a supply view.
+            if item.check_type in ("header", "text"):
+                continue
+            entry = by_compartment.get(compartment.id)
+            if entry is None:
+                entry = {
+                    "compartment_id": compartment.id,
+                    "compartment_name": compartment.name,
+                    "items": [],
+                }
+                by_compartment[compartment.id] = entry
+                compartments.append(entry)
+
+            exp = item.expiration_date if item.has_expiration else None
+            lots = lots_by_item.get(item.inventory_item_id or "", [])
+            in_date = [
+                lot
+                for lot in lots
+                if not (lot.expiration_date and lot.expiration_date < today)
+            ]
+            entry["items"].append(
+                {
+                    "template_item_id": item.id,
+                    "item_name": item.name,
+                    "check_type": item.check_type,
+                    "expected_quantity": item.expected_quantity
+                    or item.required_quantity,
+                    "serial_number": item.serial_number,
+                    "lot_number": item.lot_number,
+                    "expiration_date": exp,
+                    "days_until_expiration": (exp - today).days if exp else None,
+                    "is_expired": bool(exp and exp < today),
+                    "restock_needed": bool(item.restock_needed),
+                    "restock_note": item.restock_note,
+                    "restock_reported_at": item.restock_reported_at,
+                    "restock_reported_by_name": (
+                        reporter_names.get(str(item.restock_reported_by))
+                        if item.restock_reported_by
+                        else None
+                    ),
+                    "inventory_item_id": item.inventory_item_id,
+                    "ready_stock": sum(lot.quantity for lot in in_date),
+                    "ready_lots": [
+                        {
+                            "id": lot.id,
+                            "lot_number": lot.lot_number,
+                            "expiration_date": lot.expiration_date,
+                            "quantity": lot.quantity,
+                            "is_expired": False,
+                        }
+                        for lot in in_date
+                    ],
+                }
+            )
+
+        return {
+            "apparatus_id": apparatus.id,
+            "apparatus_name": apparatus.name,
+            "compartments": compartments,
+        }
+
+    async def report_item_used(
+        self,
+        template_item_id: str,
+        organization_id: str,
+        user: User,
+        note: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Flag a checklist item as needing restock, from whoever used it.
+
+        Raised at the moment of use rather than discovered at the next check.
+        The flag puts the item on the supply worklist immediately, and a swap
+        of fresh stock clears it.
+        """
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
+        )
+        if item is None:
+            return None
+
+        item.restock_needed = True
+        item.restock_reported_at = datetime.now(timezone.utc)
+        item.restock_reported_by = str(user.id)
+        item.restock_note = (note or "").strip() or None
+
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            item,
+            user,
+            action="restock_needed",
+            changes={"note": item.restock_note},
+        )
+        await self.db.commit()
+        return self._restock_state(item)
+
+    async def clear_item_restock(
+        self,
+        template_item_id: str,
+        organization_id: str,
+        user: User,
+    ) -> Optional[Dict[str, Any]]:
+        """Withdraw a restock report — restocked by hand, or raised in error."""
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
+        )
+        if item is None:
+            return None
+
+        self._clear_restock(item)
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            item,
+            user,
+            action="restocked",
+            changes=None,
+        )
+        await self.db.commit()
+        return self._restock_state(item)
+
+    @staticmethod
+    def _clear_restock(item: CheckTemplateItem) -> None:
+        """Drop a restock report and everything that described it.
+
+        Leaving the reporter and note behind would attribute a stale report to
+        whoever raised the last one the next time the flag is set.
+        """
+        item.restock_needed = False
+        item.restock_reported_at = None
+        item.restock_reported_by = None
+        item.restock_note = None
+
+    @staticmethod
+    def _restock_state(item: CheckTemplateItem) -> Dict[str, Any]:
+        return {
+            "template_item_id": item.id,
+            "restock_needed": bool(item.restock_needed),
+            "restock_note": item.restock_note,
+            "restock_reported_at": item.restock_reported_at,
+        }
+
+    async def _get_item_with_template(
+        self, template_item_id: str, organization_id: str
+    ) -> tuple:
+        """Org-scoped item fetch that also yields its template id for the log."""
+        result = await self.db.execute(
+            select(CheckTemplateItem, EquipmentCheckTemplate.id)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.id == template_item_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+        )
+        row = result.first()
+        return (None, None) if not row else (row[0], row[1])
+
+    async def _log_item_action(
+        self,
+        template_id: Optional[str],
+        organization_id: str,
+        item: CheckTemplateItem,
+        user: Optional[User],
+        *,
+        action: str,
+        changes: Optional[Dict[str, Any]],
+    ) -> None:
+        """Record a mid-shift change to a checklist item in the template log."""
+        if user is None or template_id is None:
+            return
+        first = getattr(user, "first_name", "") or ""
+        last = getattr(user, "last_name", "") or ""
+        await self.log_template_change(
+            organization_id=organization_id,
+            template_id=str(template_id),
+            user_id=str(user.id),
+            user_name=f"{first} {last}".strip() or "Unknown",
+            action=action,
+            entity_type="item",
+            entity_id=str(item.id),
+            entity_name=item.name,
+            changes=changes,
+        )
 
     async def get_item_deployments(
         self, inventory_item_id: str, organization_id: str
@@ -1614,25 +1878,11 @@ class EquipmentCheckService:
         the truck now reflects the fresher unit. Raises ValueError on a
         mismatched or empty lot.
         """
-        result = await self.db.execute(
-            select(CheckTemplateItem, EquipmentCheckTemplate.id)
-            .join(
-                CheckTemplateCompartment,
-                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
-            )
-            .join(
-                EquipmentCheckTemplate,
-                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
-            )
-            .where(
-                CheckTemplateItem.id == template_item_id,
-                EquipmentCheckTemplate.organization_id == organization_id,
-            )
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
         )
-        row = result.first()
-        if not row:
+        if item is None:
             return None
-        item, template_id = row
 
         # Lock the lot row for the read-check-decrement so two concurrent
         # swaps of the same unit can't both pass the stock guard and
@@ -1673,6 +1923,11 @@ class EquipmentCheckService:
         if lot.expiration_date is not None:
             item.has_expiration = True
             item.expiration_date = lot.expiration_date
+        # Fresh stock is in the bracket, so whatever was reported used is no
+        # longer outstanding — leaving the flag up would keep the item on the
+        # supply worklist after it had been dealt with.
+        was_restock = bool(item.restock_needed)
+        self._clear_restock(item)
 
         # A swap rewrites the same safety-critical template row that every
         # manual edit logs, and it is the one change nobody typed — without an
@@ -1692,6 +1947,7 @@ class EquipmentCheckService:
                 entity_name=item.name,
                 changes={
                     "inventory_lot_id": inventory_lot_id,
+                    "cleared_restock": was_restock,
                     "from": previous,
                     "to": {
                         "lot_number": item.lot_number,
@@ -1711,6 +1967,7 @@ class EquipmentCheckService:
             "lot_number": item.lot_number,
             "expiration_date": item.expiration_date,
             "remaining_quantity": lot.quantity,
+            "restock_needed": False,
         }
 
     # ------------------------------------------------------------------

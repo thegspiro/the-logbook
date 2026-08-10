@@ -25,6 +25,7 @@ from app.core.utils import safe_error_detail
 from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
 from app.models.user import User
 from app.schemas.equipment_check import (
+    ApparatusInventoryResponse,
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
@@ -38,7 +39,9 @@ from app.schemas.equipment_check import (
     EquipmentCheckTemplateUpdate,
     FailureLogResponse,
     ItemDeployment,
+    ItemRestockStateResponse,
     ItemTrendResponse,
+    ItemUsedRequest,
     LotSwapRequest,
     LotSwapResponse,
     ReorderRequest,
@@ -1285,6 +1288,93 @@ async def get_supply_expiring_items(
 
 
 @router.get(
+    "/apparatus/{apparatus_id}/inventory",
+    response_model=ApparatusInventoryResponse,
+)
+async def get_apparatus_inventory(
+    apparatus_id: str,
+    db: AsyncSession = Depends(get_db),
+    # equipment_check.submit is the default member position: recording what you
+    # just used is crew work, not officer work, and gating it behind a manage
+    # permission is what leaves the gap for the next morning's check to find.
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.view", "equipment_check.submit", "inventory.view"
+        )
+    ),
+):
+    """What this apparatus is carrying right now, with the stock behind it.
+
+    Readable at any hour and outside any check — the standing view a crew opens
+    mid-shift rather than a scheduled, signed pass over the whole truck.
+    """
+    service = EquipmentCheckService(db)
+    result = await service.get_apparatus_inventory(
+        apparatus_id=apparatus_id,
+        organization_id=str(current_user.organization_id),
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Apparatus not found")
+    return result
+
+
+@router.post(
+    "/items/{template_item_id}/used",
+    response_model=ItemRestockStateResponse,
+)
+async def report_item_used(
+    template_item_id: str,
+    data: ItemUsedRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
+    ),
+):
+    """Report a checklist item used or pulled, at the time it happened.
+
+    Puts the item on the supply worklist immediately instead of leaving the
+    gap for the next crew's check to discover.
+    """
+    service = EquipmentCheckService(db)
+    result = await service.report_item_used(
+        template_item_id=template_item_id,
+        organization_id=str(current_user.organization_id),
+        user=current_user,
+        note=data.note,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result
+
+
+@router.delete(
+    "/items/{template_item_id}/used",
+    response_model=ItemRestockStateResponse,
+)
+async def clear_item_restock(
+    template_item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
+    ),
+):
+    """Withdraw a restock report — restocked by hand, or raised in error."""
+    service = EquipmentCheckService(db)
+    result = await service.clear_item_restock(
+        template_item_id=template_item_id,
+        organization_id=str(current_user.organization_id),
+        user=current_user,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result
+
+
+@router.get(
     "/supply/item-deployments/{inventory_item_id}",
     response_model=list[ItemDeployment],
 )
@@ -1316,8 +1406,13 @@ async def swap_item_lot(
     template_item_id: str,
     data: LotSwapRequest,
     db: AsyncSession = Depends(get_db),
+    # Includes equipment_check.submit: a member who has just taken a unit off
+    # the truck is the one holding the replacement, and requiring an officer to
+    # record it is how the bracket stays empty until morning.
     current_user: User = Depends(
-        require_permission("equipment_check.manage", "inventory.manage")
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
     ),
 ):
     """Swap a ready-stock lot onto the apparatus for a checklist item.

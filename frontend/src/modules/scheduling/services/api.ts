@@ -65,7 +65,9 @@ import type {
   ItemTrendResponse,
   TemplateChangeLogResponse,
   SupplyOverview,
+  ApparatusInventory,
   ItemDeployment,
+  ItemRestockState,
   LotSwapResult,
 } from '../types/equipmentCheck';
 
@@ -776,6 +778,21 @@ export const schedulingService = {
     const response = await api.get<SupplyOverview>('/equipment-checks/supply/expiring-items', {
       params: { days_ahead: daysAhead },
     });
+    return response.data;
+  },
+  async getApparatusInventory(apparatusId: string): Promise<ApparatusInventory> {
+    const response = await api.get<ApparatusInventory>(`/equipment-checks/apparatus/${apparatusId}/inventory`);
+    return response.data;
+  },
+  async reportItemUsed(templateItemId: string, note?: string): Promise<ItemRestockState> {
+    const response = await api.post<ItemRestockState>(`/equipment-checks/items/${templateItemId}/used`, {
+      // Create payload: a blank note is omitted rather than sent as "".
+      note: note?.trim() || undefined,
+    });
+    return response.data;
+  },
+  async clearItemRestock(templateItemId: string): Promise<ItemRestockState> {
+    const response = await api.delete<ItemRestockState>(`/equipment-checks/items/${templateItemId}/used`);
     return response.data;
   },
   async getItemDeployments(inventoryItemId: string): Promise<ItemDeployment[]> {

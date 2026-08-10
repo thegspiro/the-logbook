@@ -5,6 +5,9 @@ the camelCase supply-overview serialization, and the lot-swap request/response.
 """
 
 from app.schemas.equipment_check import (
+    ApparatusInventoryCompartment,
+    ApparatusInventoryItem,
+    ApparatusInventoryResponse,
     LotSwapRequest,
     LotSwapResponse,
     ReadyLot,
@@ -60,6 +63,40 @@ class TestInventoryLotSchemas:
         )
         assert resp.item_name == "4x4 Gauze"
         assert resp.days_until_expiration == 12
+
+
+class TestApparatusInventorySchemas:
+    def test_serializes_camel_case_for_the_crew_view(self):
+        payload = ApparatusInventoryResponse(
+            apparatus_id="app-1",
+            apparatus_name="Engine 1",
+            compartments=[
+                ApparatusInventoryCompartment(
+                    compartment_id="c-1",
+                    compartment_name="Front Bumper",
+                    items=[
+                        ApparatusInventoryItem(
+                            template_item_id="ti-1",
+                            item_name="4x4 Gauze",
+                            restock_needed=True,
+                            restock_note="used two",
+                            ready_stock=6,
+                        )
+                    ],
+                )
+            ],
+        ).model_dump(by_alias=True)
+
+        assert payload["apparatusName"] == "Engine 1"
+        item = payload["compartments"][0]["items"][0]
+        assert item["restockNeeded"] is True
+        assert item["restockNote"] == "used two"
+        assert item["readyStock"] == 6
+
+    def test_an_item_defaults_to_no_outstanding_report(self):
+        item = ApparatusInventoryItem(template_item_id="ti-1", item_name="Epi")
+        assert item.restock_needed is False
+        assert item.ready_stock == 0
 
 
 class TestBulkReceiveSchemas:

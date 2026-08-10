@@ -2161,6 +2161,16 @@ class CheckTemplateItem(Base):
     expiration_date = Column(Date, nullable=True)
     expiration_warning_days = Column(Integer, default=30, nullable=False)
 
+    # Raised by whoever used or pulled the unit, at the time they did it, so
+    # the gap is on the record rather than waiting to be discovered by the
+    # next crew's morning check. Cleared by swapping fresh stock in.
+    restock_needed = Column(Boolean, default=False, nullable=False, server_default="0")
+    restock_reported_at = Column(DateTime(timezone=True), nullable=True)
+    restock_reported_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    restock_note = Column(Text, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -2173,6 +2183,7 @@ class CheckTemplateItem(Base):
         Index("idx_check_item_compartment", "compartment_id"),
         Index("idx_check_item_equipment", "equipment_id"),
         Index("idx_check_item_inventory", "inventory_item_id"),
+        Index("idx_check_item_restock", "restock_needed"),
     )
 
 

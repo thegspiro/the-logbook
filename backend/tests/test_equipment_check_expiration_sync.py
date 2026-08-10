@@ -10,12 +10,13 @@ Mocked sessions — no DB — so they run in the sandbox.
 """
 
 from datetime import date, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.models.apparatus import CheckTemplateItem, TemplateChangeLog
 from app.services.equipment_check_service import EquipmentCheckService
+from app.services.inventory_service import InventoryService
 
 YESTERDAY = date.today() - timedelta(days=1)
 TOMORROW = date.today() + timedelta(days=1)
@@ -281,6 +282,29 @@ class TestSwapItemLot:
         assert entries[0].changes["to"]["lot_number"] == "LOT-NEW"
         assert entries[0].changes["inventory_lot_id"] == "lot-1"
 
+    async def test_swap_settles_an_outstanding_restock_report(self, service, mock_db):
+        item = _template_item(
+            inventory_item_id="inv-1",
+            restock_needed=True,
+            restock_note="used two",
+            restock_reported_by="u-9",
+        )
+        lot = MagicMock(
+            id="lot-1",
+            inventory_item_id="inv-1",
+            quantity=4,
+            lot_number="LOT-NEW",
+            expiration_date=NEXT_YEAR,
+        )
+        self._wire(mock_db, item, lot)
+
+        result = await service.swap_item_lot("ti-1", "lot-1", "org-1")
+
+        # Fresh stock is in the bracket, so the item must leave the worklist.
+        assert item.restock_needed is False
+        assert item.restock_note is None
+        assert result["restock_needed"] is False
+
     async def test_swap_without_a_user_still_succeeds(self, service, mock_db):
         item = _template_item(inventory_item_id="inv-1")
         lot = MagicMock(
@@ -299,6 +323,182 @@ class TestSwapItemLot:
             for call in mock_db.add.call_args_list
             if isinstance(call.args[0], TemplateChangeLog)
         ]
+
+
+class TestApparatusInventory:
+    """The standing view: what a truck carries, read at any hour, no check."""
+
+    def _wire(self, mock_db, rows, apparatus=MagicMock(id="app-1")):
+        rows_result = MagicMock()
+        rows_result.all.return_value = rows
+        mock_db.scalar = AsyncMock(return_value=apparatus)
+        mock_db.execute = AsyncMock(return_value=rows_result)
+
+    def _compartment(self, name="Compartment 1", cid="c-1"):
+        compartment = MagicMock(id=cid)
+        compartment.name = name
+        return compartment
+
+    async def test_unknown_apparatus_returns_empty(self, service, mock_db):
+        mock_db.scalar = AsyncMock(return_value=None)
+
+        assert await service.get_apparatus_inventory("app-1", "org-1") == {}
+
+    async def test_items_are_grouped_by_compartment(self, service, mock_db):
+        template = MagicMock(id="tmpl-1")
+        first = self._compartment("Front Bumper", "c-1")
+        second = self._compartment("Officer Side", "c-2")
+        self._wire(
+            mock_db,
+            [
+                (_template_item(id="ti-1"), first, template),
+                (_template_item(id="ti-2"), first, template),
+                (_template_item(id="ti-3"), second, template),
+            ],
+        )
+
+        result = await service.get_apparatus_inventory("app-1", "org-1")
+
+        assert [c["compartment_name"] for c in result["compartments"]] == [
+            "Front Bumper",
+            "Officer Side",
+        ]
+        assert len(result["compartments"][0]["items"]) == 2
+
+    async def test_headers_and_free_text_are_left_out(self, service, mock_db):
+        template = MagicMock(id="tmpl-1")
+        compartment = self._compartment()
+        self._wire(
+            mock_db,
+            [
+                (_template_item(id="ti-1", check_type="header"), compartment, template),
+                (_template_item(id="ti-2", check_type="text"), compartment, template),
+                (_template_item(id="ti-3"), compartment, template),
+            ],
+        )
+
+        result = await service.get_apparatus_inventory("app-1", "org-1")
+
+        # Checklist scaffolding is not something anyone stocks.
+        assert len(result["compartments"]) == 1
+        assert [i["template_item_id"] for i in result["compartments"][0]["items"]] == [
+            "ti-3"
+        ]
+
+    async def test_a_restock_report_is_carried_through(self, service, mock_db):
+        template = MagicMock(id="tmpl-1")
+        item = _template_item(restock_needed=True, restock_note="used two")
+        self._wire(mock_db, [(item, self._compartment(), template)])
+
+        result = await service.get_apparatus_inventory("app-1", "org-1")
+
+        row = result["compartments"][0]["items"][0]
+        assert row["restock_needed"] is True
+        assert row["restock_note"] == "used two"
+
+    async def test_expired_shelf_stock_is_not_offered_as_a_replacement(
+        self, service, mock_db
+    ):
+        template = MagicMock(id="tmpl-1")
+        item = _template_item(inventory_item_id="inv-1")
+        self._wire(mock_db, [(item, self._compartment(), template)])
+
+        fresh = MagicMock(id="lot-1", quantity=5, expiration_date=NEXT_YEAR)
+        stale = MagicMock(id="lot-2", quantity=9, expiration_date=YESTERDAY)
+        with patch.object(
+            InventoryService,
+            "get_lots_for_items",
+            new_callable=AsyncMock,
+            return_value={"inv-1": [fresh, stale]},
+        ):
+            result = await service.get_apparatus_inventory("app-1", "org-1")
+
+        row = result["compartments"][0]["items"][0]
+        # The swap refuses expired stock, so offering it here would only invite
+        # a swap that fails.
+        assert row["ready_stock"] == 5
+        assert [lot["id"] for lot in row["ready_lots"]] == ["lot-1"]
+
+
+class TestReportItemUsed:
+    """A crew records consumption when it happens, rather than leaving the gap
+    for the next morning's check to discover."""
+
+    def _wire(self, service, mock_db, item):
+        result = MagicMock()
+        result.first.return_value = (item, "tmpl-1")
+        mock_db.execute = AsyncMock(return_value=result)
+        mock_db.flush = AsyncMock()
+
+    async def test_report_records_who_what_and_when(self, service, mock_db):
+        item = _template_item()
+        self._wire(service, mock_db, item)
+        user = MagicMock(id="u-1", first_name="Dana", last_name="Reed")
+
+        result = await service.report_item_used(
+            "ti-1", "org-1", user, note="  used two on a call  "
+        )
+
+        assert item.restock_needed is True
+        assert item.restock_reported_by == "u-1"
+        assert item.restock_reported_at is not None
+        assert item.restock_note == "used two on a call"
+        assert result["restock_needed"] is True
+        mock_db.commit.assert_awaited_once()
+
+    async def test_a_blank_note_is_stored_as_null_not_empty(self, service, mock_db):
+        item = _template_item()
+        self._wire(service, mock_db, item)
+
+        await service.report_item_used(
+            "ti-1",
+            "org-1",
+            MagicMock(id="u-1", first_name="A", last_name="B"),
+            note="   ",
+        )
+
+        assert item.restock_note is None
+
+    async def test_report_is_logged_against_the_template(self, service, mock_db):
+        item = _template_item()
+        self._wire(service, mock_db, item)
+        user = MagicMock(id="u-1", first_name="Dana", last_name="Reed")
+
+        await service.report_item_used("ti-1", "org-1", user)
+
+        entries = [
+            call.args[0]
+            for call in mock_db.add.call_args_list
+            if isinstance(call.args[0], TemplateChangeLog)
+        ]
+        assert [e.action for e in entries] == ["restock_needed"]
+        assert entries[0].user_name == "Dana Reed"
+
+    async def test_a_foreign_item_is_not_found(self, service, mock_db):
+        result = MagicMock()
+        result.first.return_value = None
+        mock_db.execute = AsyncMock(return_value=result)
+
+        assert await service.report_item_used("ti-1", "org-1", MagicMock()) is None
+        mock_db.commit.assert_not_awaited()
+
+    async def test_clearing_drops_the_whole_report(self, service, mock_db):
+        item = _template_item(
+            restock_needed=True,
+            restock_note="used two",
+            restock_reported_by="u-9",
+        )
+        self._wire(service, mock_db, item)
+
+        await service.clear_item_restock(
+            "ti-1", "org-1", MagicMock(id="u-1", first_name="A", last_name="B")
+        )
+
+        # Leaving the reporter or note behind would misattribute the next report.
+        assert item.restock_needed is False
+        assert item.restock_note is None
+        assert item.restock_reported_by is None
+        assert item.restock_reported_at is None
 
 
 class TestItemDeployments:

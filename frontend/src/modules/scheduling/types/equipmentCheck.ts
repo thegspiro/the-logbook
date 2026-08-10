@@ -471,6 +471,9 @@ export interface SupplyExpiringItem {
   expirationDate?: string;
   daysUntilExpiration?: number;
   isExpired: boolean;
+  restockNeeded?: boolean;
+  restockNote?: string;
+  restockReportedAt?: string;
   inventoryItemId?: string;
   inventoryItemName?: string;
   readyStock: number;
@@ -481,6 +484,51 @@ export interface SupplyOverview {
   daysAhead: number;
   total: number;
   items: SupplyExpiringItem[];
+}
+
+/**
+ * A tracked position on an apparatus, with the ready stock behind it.
+ *
+ * Read outside any check: the standing view a crew opens mid-shift to record
+ * what they used and to put fresh stock in a bracket.
+ */
+export interface ApparatusInventoryItem {
+  templateItemId: string;
+  itemName: string;
+  checkType?: string;
+  expectedQuantity?: number;
+  serialNumber?: string;
+  lotNumber?: string;
+  expirationDate?: string;
+  daysUntilExpiration?: number;
+  isExpired: boolean;
+  restockNeeded: boolean;
+  restockNote?: string;
+  restockReportedAt?: string;
+  restockReportedByName?: string;
+  inventoryItemId?: string;
+  readyStock: number;
+  readyLots: ReadyLot[];
+}
+
+export interface ApparatusInventoryCompartment {
+  compartmentId: string;
+  compartmentName: string;
+  items: ApparatusInventoryItem[];
+}
+
+export interface ApparatusInventory {
+  apparatusId: string;
+  apparatusName?: string;
+  compartments: ApparatusInventoryCompartment[];
+}
+
+/** The restock report currently standing against a checklist item. */
+export interface ItemRestockState {
+  templateItemId: string;
+  restockNeeded: boolean;
+  restockNote?: string;
+  restockReportedAt?: string;
 }
 
 /**
@@ -509,6 +557,8 @@ export interface LotSwapResult {
   lotNumber?: string;
   expirationDate?: string;
   remainingQuantity: number;
+  /** Fresh stock in the bracket settles any outstanding restock report. */
+  restockNeeded?: boolean;
 }
 
 // ─── Template Change Log ────────────────────────────────────────────────────

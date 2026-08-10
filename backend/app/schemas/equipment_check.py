@@ -606,6 +606,12 @@ class SupplyExpiringItem(BaseModel):
     expiration_date: Optional[date] = None
     days_until_expiration: Optional[int] = None
     is_expired: bool = False
+    # An item reaches this worklist either by its date or by a crew reporting
+    # it used; without this the two are indistinguishable in the response, and
+    # a used item has no expiration to explain why it is listed.
+    restock_needed: bool = False
+    restock_note: Optional[str] = None
+    restock_reported_at: Optional[datetime] = None
     inventory_item_id: Optional[str] = None
     inventory_item_name: Optional[str] = None
     ready_stock: int = 0
@@ -620,6 +626,70 @@ class SupplyOverviewResponse(BaseModel):
     days_ahead: int
     total: int = 0
     items: List[SupplyExpiringItem] = []
+
+
+class ApparatusInventoryItem(BaseModel):
+    """One tracked position on an apparatus, with the stock behind it."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    item_name: str
+    check_type: Optional[str] = None
+    expected_quantity: Optional[int] = None
+    serial_number: Optional[str] = None
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    days_until_expiration: Optional[int] = None
+    is_expired: bool = False
+    restock_needed: bool = False
+    restock_note: Optional[str] = None
+    restock_reported_at: Optional[datetime] = None
+    restock_reported_by_name: Optional[str] = None
+    inventory_item_id: Optional[str] = None
+    ready_stock: int = 0
+    ready_lots: List[ReadyLot] = []
+
+
+class ApparatusInventoryCompartment(BaseModel):
+    """A compartment's worth of tracked positions."""
+
+    model_config = _camel_config
+
+    compartment_id: str
+    compartment_name: str
+    items: List[ApparatusInventoryItem] = []
+
+
+class ApparatusInventoryResponse(BaseModel):
+    """What an apparatus is carrying right now.
+
+    Read at any hour, outside any check — the standing view a crew uses to
+    record what they just used and to put fresh stock in a bracket.
+    """
+
+    model_config = _camel_config
+
+    apparatus_id: str
+    apparatus_name: Optional[str] = None
+    compartments: List[ApparatusInventoryCompartment] = []
+
+
+class ItemUsedRequest(BaseModel):
+    """Report that a checklist item was used or pulled off the truck."""
+
+    note: Optional[str] = Field(None, max_length=500)
+
+
+class ItemRestockStateResponse(BaseModel):
+    """The restock report currently standing against a checklist item."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    restock_needed: bool = False
+    restock_note: Optional[str] = None
+    restock_reported_at: Optional[datetime] = None
 
 
 class ItemDeployment(BaseModel):
@@ -662,3 +732,5 @@ class LotSwapResponse(BaseModel):
     lot_number: Optional[str] = None
     expiration_date: Optional[date] = None
     remaining_quantity: int = 0
+    # Fresh stock in the bracket settles any outstanding restock report.
+    restock_needed: bool = False

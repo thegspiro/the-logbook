@@ -31,12 +31,13 @@ import { useTimezone } from '../../hooks/useTimezone';
 
 const WINDOW_OPTIONS = [30, 60, 90];
 
-type Filter = 'all' | 'restock' | 'expired';
+type Filter = 'all' | 'restock' | 'reported' | 'expired';
 type SortBy = 'soonest' | 'apparatus';
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'restock', label: 'Needs restock' },
+  { key: 'reported', label: 'Reported used' },
   { key: 'expired', label: 'Expired' },
 ];
 
@@ -79,6 +80,7 @@ const SupplyExpiringPage: React.FC = () => {
   const visibleItems = useMemo(() => {
     let list = items;
     if (filter === 'restock') list = list.filter((i) => i.readyStock <= 0);
+    else if (filter === 'reported') list = list.filter((i) => i.restockNeeded);
     else if (filter === 'expired') list = list.filter((i) => i.isExpired);
 
     const sorted = [...list];
@@ -136,7 +138,8 @@ const SupplyExpiringPage: React.FC = () => {
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Expiring on Apparatus</h1>
           <p className="text-theme-text-muted mt-0.5 text-sm">
-            Items nearing expiration on the trucks, with ready replacement stock.
+            Items nearing expiration on the trucks, plus anything a crew has reported used, with the ready replacement
+            stock for each.
           </p>
         </div>
         <div className="border-theme-surface-border flex items-center gap-1 rounded-lg border p-1">
@@ -159,7 +162,7 @@ const SupplyExpiringPage: React.FC = () => {
         <>
           <div className="flex flex-wrap gap-3 text-sm">
             <span className="bg-theme-surface border-theme-surface-border text-theme-text-muted inline-flex items-center gap-1.5 rounded-full border px-3 py-1">
-              <Clock className="h-4 w-4" /> {items.length} expiring
+              <Clock className="h-4 w-4" /> {items.length} needing attention
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-green-700 dark:bg-green-900/30 dark:text-green-400">
               <PackageCheck className="h-4 w-4" /> {withStock} with ready stock
@@ -235,14 +238,22 @@ const SupplyExpiringPage: React.FC = () => {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-theme-text-primary font-semibold">{item.itemName}</span>
-                      {item.isExpired ? (
+                      {item.isExpired && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
                           <AlertTriangle className="h-3 w-3" /> Expired
                         </span>
-                      ) : (
+                      )}
+                      {!item.isExpired && days != null && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
                           <Clock className="h-3 w-3" />
-                          {days != null ? `${days}d left` : 'Expiring'}
+                          {days}d left
+                        </span>
+                      )}
+                      {/* A crew's report is the other way onto this list, and
+                          it has no date to explain why the row is here. */}
+                      {item.restockNeeded && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                          <PackageX className="h-3 w-3" /> Reported used
                         </span>
                       )}
                     </div>
@@ -256,6 +267,9 @@ const SupplyExpiringPage: React.FC = () => {
                       {item.expirationDate && <span>· Exp {formatDate(item.expirationDate, tz)}</span>}
                       {item.lotNumber && <span>· Lot {item.lotNumber}</span>}
                     </div>
+                    {item.restockNeeded && item.restockNote && (
+                      <p className="text-theme-text-muted mt-1 text-xs italic">&ldquo;{item.restockNote}&rdquo;</p>
+                    )}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
                     {item.readyStock > 0 ? (
