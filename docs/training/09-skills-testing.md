@@ -142,7 +142,7 @@ When building or editing a template, use the **Linked Training Requirement** fie
 
 See the [Training Pipelines](./02-training.md#training-pipelines) guide for how requirements and phases fit into a program.
 
-> **[SCREENSHOT NEEDED]:** _The Create/Edit Template form showing the "Linked Training Requirement" dropdown with a program requirement selected, below the passing percentage and critical criteria fields._
+![Template builder with its linked training requirement field](./images/09-12-template-linked-requirement.png)
 
 ---
 
@@ -871,10 +871,7 @@ page.
 Setting a field back to **Inherit** genuinely clears the override — it does not
 leave the last value quietly in place.
 
-> **[SCREENSHOT NEEDED]:** _The template builder's "Result Disclosure" group,
-> with "What the member sees" open and the first option reading "Inherit —
-> Scores only (pass/fail and points, no written notes)", the release control
-> visible below it, and a positions picker showing two selected positions._
+![Result disclosure options on the template builder](./images/09-13-result-disclosure.png)
 
 ### Releasing a withheld result
 

@@ -4,7 +4,7 @@ Which training-guide screenshot placeholders have been captured. Generated
 by `scripts/screenshots/status_report.py`; see that directory's README for
 how to capture more.
 
-**217 of 480 placeholders filled** (263 remaining).
+**219 of 480 placeholders filled** (261 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
@@ -17,7 +17,7 @@ how to capture more.
 | [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 13 | 7 |
 | [07-documents-forms.md](./07-documents-forms.md) | 13 | 0 |
 | [08-admin-reports.md](./08-admin-reports.md) | 17 | 25 |
-| [09-skills-testing.md](./09-skills-testing.md) | 7 | 14 |
+| [09-skills-testing.md](./09-skills-testing.md) | 9 | 12 |
 | [10-mobile-pwa.md](./10-mobile-pwa.md) | 3 | 13 |
 | [11-finance.md](./11-finance.md) | 11 | 6 |
 | [12-grants-fundraising.md](./12-grants-fundraising.md) | 10 | 4 |
@@ -27,5 +27,5 @@ how to capture more.
 | [16-integrations.md](./16-integrations.md) | 4 | 8 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 2 | 0 |
 | [18-storefront.md](./18-storefront.md) | 4 | 1 |
-| **Total** | **217** | **263** |
+| **Total** | **219** | **261** |
 

@@ -2945,6 +2945,38 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "09-12-template-linked-requirement",
+    doc: "09-skills-testing.md",
+    line: 145,
+    anchor: 'The Create/Edit Template form showing the "Linked Training Requirement" dropdown',
+    alt: "Template builder with its linked training requirement field",
+    route: "/training/skills-testing/templates/new",
+    prepare: async (page) => {
+      // Pick a real requirement — the field defaults to "None", which is not
+      // what the placeholder asks to show.
+      const select = page.locator("select").filter({ hasText: /not linked/ }).first();
+      const value = await select
+        .locator("option")
+        .nth(1)
+        .getAttribute("value")
+        .catch(() => null);
+      if (value) await select.selectOption(value);
+    },
+    // Not fullPage: the form's action bar is sticky, and a full-page render
+    // draws it partway down the page, slicing through the fields underneath.
+    fullPage: false,
+  },
+  {
+    id: "09-13-result-disclosure",
+    doc: "09-skills-testing.md",
+    line: 874,
+    anchor: 'The template builder\'s "Result Disclosure" group',
+    alt: "Result disclosure options on the template builder",
+    route: "/training/skills-testing/templates/new",
+    selector:
+      'div:has(> p:text-is("Result Disclosure")), div:has(> div > p:text-is("Result Disclosure"))',
+  },
+  {
     id: "04-12-linked-elections",
     doc: "04-events-meetings.md",
     line: 1184,
