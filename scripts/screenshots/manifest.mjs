@@ -871,6 +871,34 @@ export const SHOTS = [
     selector: "div.fixed.inset-0 > div",
   },
   {
+    id: "02-87-checklist-steps",
+    doc: "02-training.md",
+    line: 331,
+    anchor: "An officer's view of a checklist requirement on a",
+    alt: "A checklist requirement expanded to its steps, each with its own tick box",
+    route: "/training/programs",
+    prepare: async (page) => {
+      // The probationary pipeline is the one carrying a checklist
+      // requirement; the driver pipeline has none to expand.
+      await openFirstFromApi(
+        "/training/programs/programs",
+        (id) => `/training/programs/${id}?tab=enrollments`,
+        "programs",
+        (program) => /Probationary/i.test(program.name || ""),
+      )(page);
+      await page.waitForTimeout(1500);
+      // The member with real progress — two of the three enrolments sit at
+      // 0%, and a progress panel of empty rows shows nothing being tracked.
+      await page.getByText("Saoirse Nolan").first().click({ timeout: 15_000 });
+      await page.waitForTimeout(1500);
+      const checklist = page.getByText("Station Duties Checklist").first();
+      await checklist.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await checklist.click();
+      await page.waitForTimeout(900);
+    },
+    fullPage: false,
+  },
+  {
     id: "02-85-syllabus-builder",
     doc: "02-training.md",
     line: 153,

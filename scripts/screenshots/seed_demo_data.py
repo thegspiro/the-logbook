@@ -398,6 +398,25 @@ MEMBERS = [
 # from it silently enrolled nobody the moment the ranks were corrected.
 RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 
+# Steps behind a checklist requirement, keyed on the requirement name.
+CHECKLIST_ITEMS = {
+    "Station Duties Checklist": [
+        "Tour the apparatus bay and name every rig",
+        "Meet the duty officer and shift crew",
+        "Locate the SCBA fill station and spare bottles",
+        "Walk the station's evacuation route",
+        "Log in to The Logbook and set a photo",
+        "SCBA fit test on file",
+        "Turnout gear issued and sized",
+        "Emergency contacts recorded",
+    ],
+    "Officer Sign-Off": [
+        "Company officer has observed a full shift",
+        "Training officer has reviewed the progression",
+        "Chief's final sign-off recorded",
+    ],
+}
+
 APPARATUS = [
     ("E-1", "Engine 1", 2021, "Pierce", "Enforcer", "engine"),
     ("E-2", "Engine 2", 2015, "Pierce", "Saber", "engine"),
@@ -4038,10 +4057,17 @@ class Seeder:
                         requirement["passing_score"] = 70
                         requirement["max_attempts"] = 3
                     elif req_type == "checklist":
-                        requirement["checklist_items"] = [
-                            "Reviewed with company officer",
-                            "Signed off in station logbook",
-                        ]
+                        # A real list, not a pair. The whole point of the
+                        # checklist type is that the member can read what is
+                        # being asked of them, and "2 items" pictures the
+                        # feature without demonstrating it.
+                        requirement["checklist_items"] = CHECKLIST_ITEMS.get(
+                            name,
+                            [
+                                "Reviewed with company officer",
+                                "Signed off in station logbook",
+                            ],
+                        )
                     phase["requirements"].append(requirement)
                 payload["phases"].append(phase)
             programs.append(self.api.post("/training/programs/programs/build", payload))

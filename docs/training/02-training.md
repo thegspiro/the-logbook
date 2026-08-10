@@ -328,10 +328,7 @@ Both of you can now read the steps, and they are **signed off one at a time**.
 - Completion is **ticked ÷ total**, so the requirement fills up as the work
   happens instead of sitting at zero until the last step.
 
-> **[SCREENSHOT NEEDED]:** _An officer's view of a checklist requirement on a
-> member's progress detail, expanded to show the individual steps each with its
-> own checkbox, three of eight ticked, and the requirement's percentage showing
-> 38%._
+![A checklist requirement expanded to its steps, each with its own tick box](./images/02-87-checklist-steps.png)
 
 > **[SCREENSHOT NEEDED]:** _The member's view of the same checklist requirement
 > on their progress page, listing the steps they can see with their ticked/unticked
