@@ -1,7 +1,85 @@
 # Application Review — Training (Tier B)
 
 **Prefix:** `TR2` · **Iteration:** B18 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — TR-6: external-credential decrypt now fails closed
+
+The actionable half of the TR-6 residual — making the external-provider credential
+decrypt **fail closed** — is a clean, contained security fix, and pass 4 lands it.
+
+### TR-6 (decrypt) — LOW/MED — `_decrypt_field` swallowed a tamper/wrong-key failure — ✅ FIXED
+
+**What:** `ExternalTrainingSyncService._decrypt_field`
+(`external_training_service.py`) decrypts a provider's stored `api_key`/`api_secret`
+right before `_get_auth_headers` sends them to the external LMS. It caught
+`except Exception: return value` — the broadest possible catch — so a **genuine**
+GCM authentication failure (`InvalidTag` — tampered ciphertext or the wrong
+key) fell through and the **raw stored value was handed to the provider as a live
+credential**. That's the opposite of fail-closed: a corrupted/tampered secret
+should stop the call, not be sent unverified.
+
+**Fix:** narrow the catch to `except InvalidToken` — the one case that legitimately
+means "legacy pre-encryption plaintext, return as-is" per `decrypt_data`'s
+documented contract. `InvalidTag` now propagates, so a tamper/wrong-key failure
+aborts the sync/auth rather than emitting an unverified credential. This is exactly
+the posture the MS-1 `EncryptedText` column type uses (catch `InvalidToken`, let
+`InvalidTag` fail closed). **4 DB-free tests added** (`test_external_training_
+decrypt_failclosed.py`): valid ciphertext round-trips, legacy plaintext passes
+through, None/empty → None, and a tampered value (`InvalidTag`) propagates.
+
+### Still flagged (unchanged)
+
+- **TR-4** (`year` default in requirements-progress — compliance-semantics decision).
+- **TR-6 residual (dangling-FK batch)** — the LOW, **not-projected** client-FK stores
+  (session-create category/program/phase/requirement/instructor, recert
+  `source_requirement_id`, recurring `template_id`, waiver `requirement_ids`, and the
+  bulk_enroll/sync re-fetch backstops) remain a deliberate future FK-hardening batch:
+  none is read back into a response, so each is a dangling-reference correctness item
+  rather than a cross-org leak, and the doc has consistently batched them for their
+  own focused pass rather than a rotation tick.
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_external_training_decrypt_failclosed.py`
+**5 passed** + training tests unchanged (DB-free).
+
+---
+
+## Pass 3 (2026-08-09) — TR-5 confirmed resolved; latent-500 clears; 26 E712 swept
+
+Re-verified: **TR-5 confirmed RESOLVED** — the auto-approve self-credit guard landed
+earlier this session (Decision 4): `create_submission` calls
+`_credits_certification_or_requirement(...)` and routes any certification/requirement-
+crediting submission to manual review regardless of auto-approve config (service
+120/167). TR-6/TR-7 (category-name leak fixes) and TR-1/2/3 hold.
+
+**Latent-500 lens clears — the module already validates its enums.** The lens flagged
+10 `training_type`/`status`/`frequency` fields across `TrainingCourse`/`Record`/
+`Requirement` Create/Update as free-`str`, but `schemas/training.py` already carries
+**11 `@field_validator`s** covering exactly those fields (verified: all three creates
+reject a bogus value with 422). A false positive the automated check produces because
+it doesn't see `field_validator`s — no fix needed.
+
+### TR2-1 — NIT — 26 `== True/False  # noqa: E712` swept across 6 services — ✅ FIXED
+
+The training services carried 26 boolean-column E712 suppressions
+(`training_enhancement_service.py` 13, `training_program_service.py`/
+`training_waiver_service.py` 4 each, `training_compliance.py`/`training_service.py` 2
+each, `external_training_service.py` 1) — passes 1–2 were security-focused and never
+swept them. All 26 are boolean-column comparisons (no JSON-value compares); converted
+to `.is_(...)`, removing every E712 noqa from the module. 95 training tests pass
+unchanged.
+
+### Still flagged (unchanged)
+
+- **TR-4** (`year` default in requirements-progress — compliance-semantics decision),
+  **TR-6 residual** (org-filter the backstopped enhancement/sync lookups; make
+  `_decrypt_field` fail closed) — both in the future-development list below.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · training tests **95 passed** (DB-free).
 
 **Backend:** the largest module — 8 endpoint files (~8,100 L, 154 endpoints) + ~13
 services (~9,300 L). Focus this pass: `external_training.py` +
@@ -113,16 +191,22 @@ backfill — CI-5 — completes). These stay flagged.
 `get_matrix`, `update_qualification`, and the other by-id methods all filter
 `organization_id` alongside `id`.
 
-### TR-5 — LOW/MED — Auto-approved submissions bypass separation-of-duties — 🚩 FLAGGED (config/product decision)
+### TR-5 — LOW/MED — Auto-approved submissions bypass separation-of-duties — ✅ RESOLVED (owner decision, 2026-08-09)
 
-Unchanged, and re-confirmed as the OPS-4 clarification found: the *manual* review
-path uses the shared `assert_different_person` guard, but the **auto-approve**
-branch in `create_submission` (`require_approval=False` or
-`hours_completed <= auto_approve_under_hours`) spawns a COMPLETED record crediting
-the member's self-reported hours **with no reviewer at all** — so an actor≠subject
-check doesn't apply. The only limit on member self-credit is the org's auto-approve
-config. Closing it means bounding the auto-approve threshold or accepting it as
-documented config — a product decision. Recorded in `KNOWN_LIMITATIONS.md`.
+The *manual* review path already used the shared `assert_different_person` guard,
+but the **auto-approve** branch in `create_submission` (`require_approval=False` or
+`hours_completed <= auto_approve_under_hours`) spawned a COMPLETED record crediting
+the member's self-reported hours **with no reviewer at all**. Owner decision:
+*disable auto-approve when separation of duties applies.* `create_submission` now
+calls `_credits_certification_or_requirement(training_type, kwargs)` and routes any
+submission that would credit a certification/requirement — training_type
+`certification`, any certification credential field
+(`certification_number`/`issuing_agency`/`expiration_date`), or a linked
+`category_id` (the mechanism by which training counts toward a requirement) — to
+`PENDING_REVIEW` regardless of the org's auto-approve config. Only non-crediting
+submissions (plain logged hours, skills practice) still auto-approve, so no member
+can self-credit a credential. Covered by
+`tests/test_training_autoapprove_credit_guard.py` (7 tests).
 
 ### TR-4 — LOW — `year` default in requirements-progress — 🚩 FLAGGED (compliance-semantics)
 
@@ -151,10 +235,9 @@ severity note corrected — the mapping case was a live leak); TR-4/TR-5 stand.
 
 ## Future development
 
-1. **TR-5** — bound the auto-approve hours threshold or accept as documented config.
-2. **TR-6 residual** — org-filter the backstopped lookups; make `_decrypt_field`
+1. **TR-6 residual** — org-filter the backstopped lookups; make `_decrypt_field`
    fail closed after the CI-5 backfill.
-3. **TR-4** — decide the `year` default semantics.
+2. **TR-4** — decide the `year` default semantics.
 
 ## Completion gate
 

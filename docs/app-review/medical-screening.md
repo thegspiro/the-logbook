@@ -1,7 +1,137 @@
 # Application Review — Medical Screening (Tier B)
 
 **Prefix:** `MS2` · **Iteration:** B1 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — MS-1 closed: PHI encrypted at rest
+
+The pass-4 deliverable is closing **MS-1**, the highest-value follow-up flagged
+since pass 1: the four PHI columns on `screening_records` were stored in
+plaintext. They are now encrypted at rest.
+
+### MS-1 — MED — PHI columns stored in plaintext — ✅ FIXED
+
+**What:** `provider_name`, `result_summary`, `result_data`, and `notes` on
+`ScreeningRecord` carry protected health information (examining provider,
+free-text summaries, structured scores/measurements, reviewer notes) and were
+persisted as plaintext `VARCHAR`/`TEXT`/`JSON`.
+
+**Why it was deferred before:** it read as needing a data-migration with a
+backfill risk. Two things made it safely closeable this pass without that risk:
+(1) `EncryptedText` already exists and is **transparent** — it encrypts on write
+(AES-256-GCM) and, on read, returns legacy plaintext untouched when decryption
+raises `InvalidToken` — so existing rows keep reading correctly whether or not
+they've been re-encrypted; (2) the four fields are pure payload — a repo-wide
+search confirms none is used in a `WHERE`/`filter`/`ILIKE`/`==`, so encrypting
+them can't break a lookup.
+
+**Fix — three parts:**
+
+1. **New `EncryptedJSON` column type** (`app/core/encrypted_types.py`) — the same
+   transparent contract as `EncryptedText`, but `json.dumps`/`json.loads` around
+   the payload. Its legacy-read path also handles the `JSON`→`TEXT` alter: a
+   pre-encryption row is the JSON *text*, so an `InvalidToken` read falls back to
+   `json.loads` of that text (and to the raw string only if it isn't valid JSON).
+2. **Model** (`app/models/medical_screening.py`) — `provider_name`,
+   `result_summary`, `notes` → `EncryptedText`; `result_data` → `EncryptedJSON`.
+3. **Alembic migration**
+   (`20260809_0001_encrypt_medical_screening_phi.py`) — alters `provider_name`
+   `VARCHAR(255)`→`TEXT` and `result_data` `JSON`→`TEXT` (ciphertext exceeds 255
+   chars and isn't valid JSON), then encrypts existing rows in place. Reversible
+   `downgrade()` decrypts and restores the column types.
+
+**7 DB-free unit tests** (`tests/test_encrypted_types.py`) pin round-trip,
+ciphertext-at-rest, none/empty pass-through, and legacy-plaintext tolerance
+(including the JSON-text legacy shape) for both column types.
+
+**Migration caveat (must verify in CI/staging):** the sandbox has no MySQL, so
+the migration's `upgrade()`/`downgrade()` could not be executed here — only the
+Python-level encrypt/decrypt round-trips were unit-tested. The `ALTER`s and the
+in-place backfill must be verified against a real MySQL instance before deploy,
+and — as with any encryption-at-rest change — a database backup should be taken
+first. `EncryptedText`/`EncryptedJSON` tolerate un-backfilled legacy rows, so a
+partial run is safe to re-run.
+
+MS2-5 (pass-3 enum validators) re-verified intact: `screening_type`/`status`
+`@field_validator`s still present on all four request schemas.
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean (migration
+reformatted) · `tsc --noEmit` n/a (no frontend change) ·
+`tests/test_encrypted_types.py` **12 passed**.
+
+---
+
+## Pass 3 (2026-08-09) — six-lens sweep; 1 fix
+
+Re-verified every landed fix still holds: **MS-3** create-path FK validation
+(`assert_in_org` on `user_id`/`prospect_id`/`requirement_id`, fail-closed) intact
+and **still un-bypassable via update** — `ScreeningRecordUpdate` continues to omit
+all three FK fields, so the `setattr` loop in `update_record` can't reassign
+tenancy or subject. **MS-2 / MS2-4** name resolution intact — `_resolve_names` is
+org-scoped for all three entity types and `attach_record_names` folds the reviewer
+into the same user batch; all four record endpoints enrich only the paged slice.
+All 13 endpoints remain gated on `medical_screening.view` / `.manage`; the
+compliance-by-id reads are org-scoped through `list_records`, so a foreign
+`user_id`/`prospect_id` resolves to no data and no name (no IDOR). **MS-1** (PHI
+plaintext at rest) still stands, still migration-shaped.
+
+One new finding, fixed:
+
+### MS2-5 — LOW/MED — Out-of-enum `screening_type`/`status` on write 500s instead of 422 — ✅ FIXED
+
+**What:** the request schemas typed `screening_type` and `status` as free `str`
+(`schemas/medical_screening.py`), but the model columns are strict SQLAlchemy
+`Enum` → MySQL `ENUM`. SQLAlchemy's `Enum` defaults to `validate_strings=False`, so
+a value like `status="bogus"` is **not** validated in Python — it's bound straight
+to MySQL, which rejects it under strict mode (`STRICT_TRANS_TABLES`, error 1265)
+and raises a `DataError`. `POST /records` only catches `ValueError → 400`, and
+`PUT /records/{id}`, `POST`/`PUT /requirements` have no wrapper at all, so the
+result is a **500** on the four write paths (and a silent `''` insert under
+non-strict MySQL). Verified the bind behavior directly: the column's
+`bind_processor` passes `'bogus_status'` through unvalidated.
+
+**Why LOW/MED, not higher:** only a `medical_screening.manage` holder can reach
+these writes, and the frontend's `ScreeningType`-typed forms only ever send valid
+values — so this is a robustness/latent-500 gap on malformed privileged input, not
+an externally reachable fault. But a 500 (or silent bad enum) on a PHI write is
+worth closing, and the fix is the codebase's own documented pattern.
+
+**Fix:** a `_validate_enum` helper plus `@field_validator`s on the four **request**
+schemas (`ScreeningRecordCreate`/`Update`, `ScreeningRequirementCreate`/`Update`)
+validate the value against the enum's value set, normalizing to lowercase first (so
+`"PASSED"` → `"passed"`, absorbing the casing mismatch called out in the
+schema-contract pitfall) and raising `ValueError` → 422 for anything unknown. The
+validators live only on the request subclasses, so `ScreeningRecordResponse` /
+`ScreeningRequirementResponse` (built from the ORM enum via `from_attributes`) are
+untouched — no response-shape change. Valid callers and the existing test fixtures
+are unaffected. **7 tests added** (`TestRequestEnumValidation`): bad status/type
+rejected on create and update, case-normalization, omitted-fields-on-update pass.
+
+### Flagged / future (unchanged unless noted)
+
+- **MS-1 (MED, migration)** — PHI columns (`result_summary`/`result_data`/`notes`/
+  `provider_name`) remain plaintext, not `EncryptedType`; needs an Alembic data
+  migration. Still the highest-value follow-up.
+- **Unbounded record/requirement load (LOW, scale)** — `list_records` /
+  `list_requirements` `.all()` the org's full set and the endpoint slices in
+  memory; the compliance path also relies on the full set. Fine at current scale,
+  but a true SQL `LIMIT/OFFSET` (with a separate full-set path for compliance) is
+  the 10× fix. Future dev.
+- **Exactly-one-of `user_id`/`prospect_id` not enforced (LOW)** — the model
+  docstring says a record links to *either*, but `create_record` accepts both or
+  neither. Unchanged from pass 1 (a `@model_validator` on the create schema is the
+  fix); left flagged because it changes accept/reject behavior on a PHI write path.
+- **Compliance-by-id doesn't 404 an unknown subject (LOW)** — `GET
+  /compliance/{user_id}` returns an empty-ish summary for any id rather than 404;
+  not a leak (org-scoped, no data returned), but a clearer contract would validate
+  the subject in-org first. Future dev.
+
+**Completion gate (pass 3):** `flake8 app/ tests/` 0 · `black --check` clean ·
+`tsc --noEmit` 0 (no frontend change) · eslint unaffected (no frontend change) ·
+`tests/test_medical_screening_service.py` **29 passed** (22 + 7 new; all DB-free).
+DB-backed pytest remains the known no-MySQL sandbox limitation.
 
 ---
 

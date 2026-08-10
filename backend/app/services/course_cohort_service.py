@@ -41,8 +41,11 @@ from app.models.training import (
     CourseCohortClass,
     CourseCohortMember,
     ProgramEnrollment,
+    ProgramPhase,
+    TrainingCategory,
     TrainingCourse,
     TrainingProgram,
+    TrainingRequirement,
     TrainingSession,
 )
 from app.models.user import Organization, User
@@ -803,12 +806,32 @@ class CourseCohortService:
         class_course = await self._get_course(data.class_course_id, organization_id)
         if not class_course:
             raise ValueError("Invalid class course")
+        # Validate every client-supplied FK in-org (XC-1), mirroring the
+        # syllabus path's _validate_references — the ad-hoc path previously
+        # checked only instructor/location and stored category/requirement/phase
+        # (which flow into the generated TrainingSession) unvalidated.
         for value, model, label in (
             (data.instructor_id, User, "instructor"),
             (data.location_id, Location, "location"),
+            (data.category_id, TrainingCategory, "training category"),
+            (data.requirement_id, TrainingRequirement, "training requirement"),
         ):
             if value:
                 await assert_in_org(self.db, model, value, organization_id, label=label)
+
+        # ProgramPhase has no organization_id of its own; scope it through its
+        # program, exactly as _validate_references does.
+        if data.phase_id:
+            phase_result = await self.db.execute(
+                select(ProgramPhase.id)
+                .join(TrainingProgram, ProgramPhase.program_id == TrainingProgram.id)
+                .where(
+                    ProgramPhase.id == str(data.phase_id),
+                    TrainingProgram.organization_id == str(organization_id),
+                )
+            )
+            if phase_result.scalar_one_or_none() is None:
+                raise ValueError("Invalid program phase")
 
         count_result = await self.db.execute(
             select(func.count(CourseCohortClass.id)).where(

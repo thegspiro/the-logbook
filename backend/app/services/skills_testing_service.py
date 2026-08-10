@@ -363,7 +363,7 @@ async def assert_attempts_remaining(
                 SkillTest.organization_id == str(organization_id),
                 SkillTest.candidate_id == str(candidate_id),
                 SkillTest.requirement_id == str(requirement_id),
-                SkillTest.is_practice == False,  # noqa: E712
+                SkillTest.is_practice.is_(False),
                 SkillTest.status == SkillTestStatus.COMPLETED.value,
                 SkillTest.validated_at.isnot(None),
             )

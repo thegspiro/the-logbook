@@ -11,9 +11,44 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.forms import (
+    FieldType,
+    FormCategory,
+    FormStatus,
+    IntegrationTarget,
+    IntegrationType,
+)
 from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
+
+# category / status / field_type / target_module / integration_type map to strict
+# MySQL ENUM columns, but were typed as free str and inserted raw (create_form/
+# create_field's **data, update_* setattr loops) — an out-of-set value passed
+# Pydantic, reached MySQL, and 500'd (FORM2-1, the B1 latent-500 class). The prior
+# `category` validator normalized case but did NOT reject unknowns, so it didn't
+# actually prevent the 500. These helpers normalize AND validate → clean 422.
+_FORM_CATEGORIES = {e.value for e in FormCategory}
+_FORM_STATUSES = {e.value for e in FormStatus}
+_FIELD_TYPES = {e.value for e in FieldType}
+_INTEGRATION_TARGETS = {e.value for e in IntegrationTarget}
+_INTEGRATION_TYPES = {e.value for e in IntegrationType}
+
+
+def _enum_check(valid: set, field: str):
+    def _check(value):
+        if value is None:
+            return value
+        normalized = value.lower() if isinstance(value, str) else value
+        if normalized not in valid:
+            raise ValueError(
+                f"Invalid {field} '{value}'. Must be one of: "
+                f"{', '.join(sorted(valid))}"
+            )
+        return normalized
+
+    return _check
+
 
 # ============================================
 # Form Field Schemas
@@ -56,12 +91,22 @@ class FormFieldBase(BaseModel):
 class FormFieldCreate(FormFieldBase):
     """Schema for creating a form field"""
 
+    # Validator on the request subclass only, so FormFieldResponse (built from the
+    # ORM enum) is untouched.
+    _check_field_type = field_validator("field_type")(
+        _enum_check(_FIELD_TYPES, "field_type")
+    )
+
 
 class FormFieldUpdate(BaseModel):
     """Schema for updating a form field"""
 
     label: Optional[str] = Field(None, min_length=1, max_length=255)
     field_type: Optional[str] = None
+
+    _check_field_type = field_validator("field_type")(
+        _enum_check(_FIELD_TYPES, "field_type")
+    )
     placeholder: Optional[str] = Field(None, max_length=255)
     help_text: Optional[str] = None
     default_value: Optional[str] = None
@@ -102,6 +147,13 @@ class FormIntegrationCreate(BaseModel):
     integration_type: str  # "membership_interest" or "equipment_assignment"
     field_mappings: Dict[str, str]  # {form_field_id: target_field_name}
     is_active: bool = True
+
+    _check_target = field_validator("target_module")(
+        _enum_check(_INTEGRATION_TARGETS, "target_module")
+    )
+    _check_integration_type = field_validator("integration_type")(
+        _enum_check(_INTEGRATION_TYPES, "integration_type")
+    )
 
 
 class FormIntegrationUpdate(BaseModel):
@@ -144,12 +196,11 @@ class FormBase(BaseModel):
     notification_emails: Optional[List[str]] = None
     is_public: bool = False
 
-    @field_validator("category")
-    @classmethod
-    def _normalize_category(cls, v: str) -> str:
-        # FormCategory values are lowercase; tolerate legacy Title-case
-        # clients (e.g. "Operations") by normalizing at the boundary.
-        return v.lower() if isinstance(v, str) else v
+    # Normalize case (tolerate legacy "Operations") AND reject unknowns — the old
+    # normalize-only validator still let a bad category 500 at the ENUM column.
+    _check_category = field_validator("category")(
+        _enum_check(_FORM_CATEGORIES, "category")
+    )
 
 
 class FormCreate(FormBase):
@@ -179,11 +230,10 @@ class FormUpdate(BaseModel):
     is_public: Optional[bool] = None
     integration_type: Optional[str] = None
 
-    @field_validator("category")
-    @classmethod
-    def _normalize_category(cls, v: Optional[str]) -> Optional[str]:
-        # Mirror FormBase: tolerate legacy Title-case category values.
-        return v.lower() if isinstance(v, str) else v
+    _check_category = field_validator("category")(
+        _enum_check(_FORM_CATEGORIES, "category")
+    )
+    _check_status = field_validator("status")(_enum_check(_FORM_STATUSES, "status"))
 
 
 class FormResponse(FormBase):

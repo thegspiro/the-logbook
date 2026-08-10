@@ -1,7 +1,7 @@
 # Application Review — Events (Tier B)
 
 **Prefix:** `EV2` · **Iteration:** B17 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/events.py` (2,931 L, 53 endpoints), `endpoints/event_requests.py`
 (1,658 L, 18), `services/event_service.py` (3,097 L), model `models/event.py`
@@ -10,6 +10,95 @@
 location), EV-2 (email XSS), EV-3 (org-scope oracle), EV-4 (dead code) fixed;
 EV-5 (public-intake opt-in), EV-6 (RSVP to draft/past), EV-7 (rate-limit +
 TypeError) left open.
+
+---
+
+## Pass 4 (2026-08-09) — EV2-2: a cross-org read-leak + a dangling FK on the location paths
+
+A fresh, exhaustive client-FK audit of the whole events surface (a sub-agent traced
+every create/update/convert/attendee/rsvp/recurring writer across all three files)
+confirmed the EV-8/BXC-1 `location_id` fixes hold on every event-write path — and
+found **two** location FKs the prior passes missed on the *adjacent* surfaces.
+
+### EV2-2 — MED — Two unvalidated `location_id` FKs (one a live cross-org read-leak) — ✅ FIXED
+
+**GAP 1 — `schedule_request` (event-request → event conversion) — a real read-leak.**
+`POST /event-requests/{id}/schedule` stored `event_location_id = data.location_id`
+**unconditionally** (event_requests.py), but only validated the location in-org
+*inside* the `if data.create_calendar_event:` branch (which reaches the EV-8
+`create_event` check). With `create_calendar_event` **False — the default** — a
+foreign `location_id` was stored with no org check, and the response enrichment
+`_get_location_name` resolved it with **no org filter** — so a manager could
+`schedule` a request with another org's `location_id` and read that org's location
+name back in `event_location_name` on every subsequent GET. The exact XC-1
+name-projection leak shape (EC2-4 / TR-3 / TR-7 family). **Fix, two layers:** (1)
+org-scope `_get_location_name` (now takes `organization_id`, filters
+`Location.organization_id`) — the definitive guard, so any pre-existing foreign id
+resolves to no name; (2) validate `data.location_id` in-org on the write path via
+`assert_in_org` (surfaced as a clean 400, since `schedule_request` had no
+`ValueError` wrapper).
+
+**GAP 2 — `create_template` / `update_template` — a dangling FK.** Both stored the
+client `default_location_id` via a blind `**dict` / `setattr` with no check. This is
+**not** a read-leak today (`EventTemplateResponse` echoes the raw UUID, has no
+`location_name`, and no server-side "create event from template" path copies it into
+`Event.location_id`), but it's a genuine unvalidated org-scoped FK. **Fix:** a shared
+`_assert_template_location_in_org` (mirroring EV-8's `LocationService.get_location`
+check) on both paths, plus the module-standard `except ValueError → 400` on both
+template endpoints (they previously had none — the same latent-500 shape).
+
+**6 DB-free tests added** (`test_event_request_location_scoping.py`): template
+create/update reject a foreign `default_location_id` and skip when absent; the
+enrichment is org-scoped (no-match → None, in-org → name).
+
+### Still flagged (unchanged)
+
+- **EV-5** (public request intake: per-org opt-in + honeypot/daily-cap parity —
+  feature + config), **EV-7 logo** (exempt `organization_logo_img` from escaping if
+  the logo should render).
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_event_request_location_scoping.py` **6 passed** +
+`test_event_enum_validation.py` unchanged (all DB-free).
+
+---
+
+## Pass 3 (2026-08-09) — large latent-500 on event/RSVP enums
+
+Re-verified the landed fixes hold: EV-8 (`create_event`/`update_event` validate
+`location_id` in-org, service ~74/301), EV-9 (`end_event` audit signature), EV-10
+(draft events excluded from public feeds), EV-1/2/6/7. `event_service.py` is
+E712-free. The B1 enum lens then surfaced the module's largest latent-500 surface.
+
+### EV2-1 — LOW/MED — event/RSVP enum fields 500 on a bad value — ✅ FIXED
+
+**What:** four enum columns — `event_type`, `check_in_window_type` (Event),
+`recurrence_pattern` (RecurringEvent), and RSVP `status` — are **strict MySQL ENUMs**,
+but were typed as free `str` across **nine request schemas**
+(`EventCreate`/`EventUpdate`, `EventDefaultsUpdate`, `EventTemplateCreate`/`Update`,
+`RecurringEventCreate`, `RSVPCreate`, `ManagerAddAttendee`, `BulkAddAttendees`) and
+inserted **raw** (`create_event` via `Event(**dict)`, the update `setattr` loops, the
+RSVP/template creates). The schemas had **no** `field_validator`, so an out-of-set
+value passed Pydantic, reached MySQL, and 500'd. The B1 class, at the widest scale
+seen this pass.
+
+**Fix:** a shared `_enum_check(valid, field)` helper + `@field_validator`s on all nine
+request classes, each deriving its value set from the model enum (`EventType`,
+`CheckInWindowType`, `RecurrencePattern`, `RSVPStatus`), lowercase-normalizing and
+rejecting unknowns → 422. Validators live on the concrete **request** classes, not the
+shared `EventBase`/`RSVPBase` (which the response schemas inherit), so responses are
+untouched. **10 tests added.**
+
+### Still flagged (unchanged)
+
+- **EV-5** (public request intake: per-org opt-in + honeypot/daily-cap parity with
+  forms — feature + config), **EV-7 logo** (exempt `organization_logo_img` from
+  escaping in `send_template_email` if the logo should render).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · new enum tests **10 passed** + existing event tests
+**139 passed** (all DB-free; the `db_session` errors are unrelated files matched by
+the `-k` substring).
 
 ---
 

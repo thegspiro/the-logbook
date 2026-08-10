@@ -940,6 +940,14 @@ export interface SalesforcePreviewResult {
   skipped: number;
 }
 
+// Minimal connection-status shape returned by GET /integrations/connected — no
+// config/secrets, just enough for feature modules to gate integration-backed UI.
+export interface IntegrationStatus {
+  integration_type: string;
+  status: string;
+  enabled: boolean;
+}
+
 export const integrationsService = {
   async getIntegrations(): Promise<IntegrationConfig[]> {
     const response = await api.get<IntegrationConfig[]>('/integrations');
@@ -949,6 +957,15 @@ export const integrationsService = {
   async getIntegration(integrationId: string): Promise<IntegrationConfig> {
     const response = await api.get<IntegrationConfig>(`/integrations/${integrationId}`);
     return response.data;
+  },
+
+  // Connection-status projection (no config) for non-admin cross-module callers.
+  // The full list/detail endpoints require integrations.manage; this one is
+  // readable by any org member so feature modules can offer integration-backed
+  // options without holding the integrations-admin permission (INT-3).
+  async getConnectedIntegrationStatus(): Promise<IntegrationStatus[]> {
+    const response = await api.get<IntegrationStatus[]>('/integrations/connected');
+    return asArray(response.data);
   },
 
   async connectIntegration(integrationId: string, config: Record<string, unknown>): Promise<IntegrationConfig> {

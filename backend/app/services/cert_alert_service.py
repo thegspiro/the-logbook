@@ -511,7 +511,11 @@ async def run_daily_cert_alerts(db: AsyncSession) -> Dict[str, int]:
     Iterates over all organizations that have cert alerts enabled
     and processes alerts for each.
     """
-    result = await db.execute(select(Organization))
+    # Skip decommissioned departments (CRON-2), matching the _for_each_org
+    # helper the scheduled runners use.
+    result = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = result.scalars().all()
 
     total_results = {
@@ -535,6 +539,12 @@ async def run_daily_cert_alerts(db: AsyncSession) -> Dict[str, int]:
             total_results["orgs_processed"] += 1
         except Exception as e:
             logger.error(f"Failed to process cert alerts for org {org.id}: {e}")
+            # Orgs share one session — roll back a failed org so its poisoned
+            # state doesn't cascade into every later org (the CRON-1 class).
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             total_results["errors"] += 1
 
     logger.info(f"Daily cert alert run complete: {total_results}")

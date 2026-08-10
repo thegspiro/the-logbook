@@ -3756,10 +3756,19 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
                     }
                 )
 
+            # Commit per config so one org's failure can't poison the shared
+            # session for the orgs still to come, nor discard their reports
+            # (the CRON-1 class the pass-1 fix missed on this inline loop).
+            await db.commit()
+
         except Exception as e:
             logger.error(
                 f"Compliance auto-report failed for org {config.organization_id}: {e}"
             )
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             results.append(
                 {
                     "org_id": str(config.organization_id),
@@ -4310,6 +4319,13 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                         "auto_checkout_completed": True,
                     }
 
+            # Commit this org's checkouts/reminders before the next org. The
+            # deferred single commit meant the rollback below discarded EVERY
+            # earlier org's work when a later org threw (and re-sent their
+            # reminders next run) — the CRON-1 rollback turned into cross-org
+            # data loss.
+            await db.commit()
+
         except Exception as e:
             logger.error(
                 "shift_auto_checkout error for org {}: {}",
@@ -4335,9 +4351,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
         total_reminders += org_reminders
         total_auto_checkouts += org_checkouts
 
-    if total_reminders > 0 or total_auto_checkouts > 0:
-        await db.commit()
-
+    # Each org already committed its own work above.
     logger.info(
         "Shift auto-checkout: {} reminders, {} auto-checkouts " "across {} orgs",
         total_reminders,
@@ -4495,10 +4509,17 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
     for org_id in org_ids:
         try:
             await service.sync_directory(org_id)
+            # Commit per org so a later org's failure can't discard this one's
+            # work — and its rollback below can't poison the shared session for
+            # the orgs still to come (the CRON-1 class).
+            await db.commit()
             synced += 1
         except Exception as e:
             logger.warning("Officer directory sync failed for org {}: {}", org_id, e)
-    await db.commit()
+            try:
+                await db.rollback()
+            except Exception:
+                pass
     return {"task": "officer_directory_sync", "organizations": synced}
 
 

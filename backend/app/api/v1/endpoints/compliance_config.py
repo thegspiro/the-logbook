@@ -275,6 +275,7 @@ async def email_compliance_report(
             report_id=report_id,
             organization_id=current_user.organization_id,
             recipients=recipients,
+            sent_by=str(current_user.id),
         )
         await db.commit()
         return {"message": f"Report emailed to {len(recipients)} recipient(s)"}

@@ -183,20 +183,29 @@ class LocationService:
         organization_id: str,
     ) -> List[Event]:
         """
-        Get events at this location that are currently in their check-in window
-        (1 hour before start to end time, respecting actual_end_time if set)
+        Get events at this location whose check-in window is open right now.
+
+        The window is per-event — FLEXIBLE opens N minutes before start (default
+        30), STRICT opens at ``actual_start_time``, WINDOW opens N minutes either
+        side — so the exact boundaries are resolved via the canonical
+        ``EventService._get_check_in_window`` per candidate rather than assuming a
+        fixed 1-hour lead. The old hardcoded "1 hour before start" returned a
+        superset, so the kiosk showed an active check-in QR for STRICT and
+        early-FLEXIBLE events up to an hour before their window actually opened
+        (the scan was then rejected) — the LOC-1 drift, one layer down.
         """
+        from app.services.event_service import EventService
+
         now = datetime.now(timezone.utc)
-        check_in_start_threshold = now + timedelta(
-            hours=1
-        )  # Can check in up to 1 hour before
+        # Generous prefilter to bound the rows; the exact window is applied below.
+        prefilter_horizon = now + timedelta(hours=1)
 
         query = (
             select(Event)
             .where(Event.location_id == str(location_id))
             .where(Event.organization_id == str(organization_id))
-            .where(Event.is_cancelled == False)  # noqa: E712
-            .where(Event.start_datetime <= check_in_start_threshold)
+            .where(Event.is_cancelled.is_(False))
+            .where(Event.start_datetime <= prefilter_horizon)
             .where(
                 or_(
                     and_(Event.actual_end_time.is_(None), Event.end_datetime >= now),
@@ -208,7 +217,14 @@ class LocationService:
         )
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        candidates = list(result.scalars().all())
+
+        current: List[Event] = []
+        for event in candidates:
+            check_in_start, check_in_end = EventService._get_check_in_window(event)
+            if check_in_start <= now <= check_in_end:
+                current.append(event)
+        return current
 
     async def check_overlapping_events(
         self,

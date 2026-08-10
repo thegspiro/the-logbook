@@ -664,7 +664,7 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
         select(User).where(
             User.organization_id == org_id,
             User.status == UserStatus.ACTIVE,
-            User.compliance_exempt == False,  # noqa: E712
+            User.compliance_exempt.is_(False),
             User.deleted_at.is_(None),
         )
     )
@@ -677,7 +677,7 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     reqs_result = await db.execute(
         select(TrainingRequirement).where(
             TrainingRequirement.organization_id == org_id,
-            TrainingRequirement.active == True,  # noqa: E712
+            TrainingRequirement.active.is_(True),
         )
     )
     requirements = reqs_result.scalars().all()

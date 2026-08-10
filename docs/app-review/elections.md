@@ -1,7 +1,69 @@
 # Application Review — Elections (Tier B)
 
 **Prefix:** `ELEC2` · **Iteration:** B5 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; 2 E712 the pass-3 sweep missed
+
+Re-verified the headline invariants hold (`create_candidate` `user_id`
+`assert_in_org`; `CandidateUpdate` exposes no FK fields; `get_client_ip` at every
+site; `'/elections'` in `UNCACHEABLE_PREFIXES`; the `status` enum column is
+enum-typed in the schemas, so the latent-500 lens stays clean).
+
+### ELEC2-2 — NIT — 2 `== True  # noqa: E712` the pass-3 sweep missed — ✅ FIXED
+
+Pass 3's ELEC2-1 swept the 31 E712 comparisons in **`election_service.py`** and
+claimed "every E712 noqa from the module," but two survived in the **endpoint**
+file `api/v1/endpoints/elections.py` (`Candidate.accepted == True  # noqa: E712`
+at lines 409 and 3504 — the accepted-candidates filter in two list paths).
+`Candidate.accepted` is a plain `Boolean` column, so `.is_(True)` is the
+behavior-neutral conversion (Pitfall #10). Swept both; the module (service **and**
+endpoints) is now fully E712-free.
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · elections DB-free tests unaffected (the sweep changes
+only boolean-predicate SQL syntax, never which rows match).
+
+---
+
+## Pass 3 (2026-08-09) — invariants re-verified; the deferred E712 sweep, done
+
+Re-verified the module's headline invariants still hold, then swept the one
+standing style item passes 1–2 had deferred.
+
+**Re-verified:** `create_candidate`'s `user_id` validation via `assert_in_org`
+(elections.py:1716) intact; `CandidateUpdate` still exposes **no FK fields** (the
+update-bypass vector stays closed); the AXC-1 IP fix holds (`get_client_ip` at 6
+sites, `request.client.host` at 0); `'/elections'` remains in
+`UNCACHEABLE_PREFIXES`. Latent-500 lens clean: the module's only enum column
+(`status`) is properly enum-typed in the schemas (no free-string→ENUM 500 path).
+
+### ELEC2-1 — NIT — 31 `== True/False  # noqa: E712` suppressions swept — ✅ FIXED
+
+Passes 1–2 deferred this deliberately, citing churn/risk in the codebase's most
+security-critical file (hash-chained audit, ballot forensics). On closer analysis
+the risk is churn, not semantics: all 31 are `.where(<boolean flag> == True/False)`
+on `User.is_active` / `Vote.is_test` / `Vote.is_manual` / `VotingToken.used` /
+`Candidate.accepted` / `Candidate.is_write_in` — the `.is_(True)`/`.is_(False)`
+conversion changes only the SQL boolean-predicate syntax, never which rows match, so
+it cannot affect vote counting, dedup, or the hash-chain (which operate on data
+values, not on this WHERE syntax). Swept all 31 (Pitfall #10), removing every E712
+noqa from the module — now consistent with the B2/B3/B4 sweeps. flake8/black clean;
+82 non-DB election tests pass unchanged.
+
+### Future development (unchanged)
+
+The prior audits enumerated the remaining product/feature decisions; no further
+code work identified. The R-D2 audit-log-IP residual note stands (pre-change
+anonymous-election audit rows keep voter IPs by hash-chain design — tamper-evidence
+over scrubbing).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit` 0
+(no frontend change) · eslint unaffected · elections tests **82 passed** (all
+DB-free; the 121 `db_session` errors are the known no-MySQL fixture failures,
+unchanged by this behavior-neutral sweep).
 
 ---
 

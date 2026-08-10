@@ -48,6 +48,7 @@ from app.models.storefront import (
     StoreWindowStatus,
 )
 from app.models.user import Organization, User
+from app.services.separation_of_duties import assert_different_person
 from app.services.storefront_notification_service import StorefrontNotificationService
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
@@ -1750,6 +1751,12 @@ class StorefrontService:
             raise ValueError("Order not found")
         if order.status == StoreOrderStatus.CANCELLED:
             raise ValueError("A cancelled order cannot take a payment")
+        # SoD: a manager must not settle their own order (the storefront
+        # equivalent of the finance/admin-hours approve-your-own control). The
+        # reconciliation path passes actor_id=None and is exempt.
+        assert_different_person(
+            actor_id, order.user_id, action="mark paid", record="order"
+        )
 
         balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
         if balance <= 0:
@@ -1787,6 +1794,8 @@ class StorefrontService:
             raise ValueError("Order not found")
         if order.status == StoreOrderStatus.CANCELLED:
             raise ValueError("A cancelled order cannot be waived")
+        # SoD: a manager must not waive the balance on their own order.
+        assert_different_person(actor_id, order.user_id, action="waive", record="order")
 
         order.payment_status = StorePaymentStatus.WAIVED
         order.paid_at = _utcnow()
@@ -1922,6 +1931,10 @@ class StorefrontService:
         order = await self.get_order(order_id, organization_id)
         if not order:
             raise ValueError("Order not found")
+        # SoD: a manager must not refund their own order.
+        assert_different_person(
+            actor_id, order.user_id, action="refund", record="order"
+        )
         paid = _money(order.amount_paid)
         if paid <= 0:
             raise ValueError("There is nothing to refund on this order")

@@ -18,9 +18,41 @@ from pydantic import (
     model_validator,
 )
 
+from app.models.event import (
+    CheckInWindowType,
+    EventType,
+    RecurrencePattern,
+    RSVPStatus,
+)
 from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
+
+# event_type / check_in_window_type / recurrence_pattern / RSVP status map to strict
+# MySQL ENUM columns, but were typed as free str and inserted raw (create_event's
+# Event(**dict), the update setattr loops, RSVP/template creates) — an out-of-set
+# value passed Pydantic, reached MySQL, and 500'd (EV2-1, the B1 latent-500 class).
+# Validate at the request schema so a bad value is a clean 422.
+_EVENT_TYPES = {e.value for e in EventType}
+_CHECKIN_WINDOW_TYPES = {e.value for e in CheckInWindowType}
+_RECURRENCE_PATTERNS = {e.value for e in RecurrencePattern}
+_RSVP_STATUSES = {e.value for e in RSVPStatus}
+
+
+def _enum_check(valid: set, field: str):
+    def _check(value):
+        if value is None:
+            return value
+        normalized = value.lower() if isinstance(value, str) else value
+        if normalized not in valid:
+            raise ValueError(
+                f"Invalid {field} '{value}'. Must be one of: "
+                f"{', '.join(sorted(valid))}"
+            )
+        return normalized
+
+    return _check
+
 
 # ============================================================
 # Event Module Settings
@@ -56,6 +88,13 @@ class RequestPipelineUpdate(BaseModel):
 
 class EventDefaultsUpdate(BaseModel):
     """Default settings for new events."""
+
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
 
     event_type: Optional[str] = Field(None, max_length=100)
     check_in_window_type: Optional[str] = Field(None, max_length=50)
@@ -187,6 +226,13 @@ class EventBase(BaseModel):
 class EventCreate(EventBase):
     """Schema for creating a new event"""
 
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
+
     @model_validator(mode="after")
     def validate_dates(self) -> "EventCreate":
         if self.end_datetime <= self.start_datetime:
@@ -198,6 +244,13 @@ class EventCreate(EventBase):
 
 class EventUpdate(BaseModel):
     """Schema for updating an event"""
+
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -335,6 +388,8 @@ class RSVPBase(BaseModel):
 class RSVPCreate(RSVPBase):
     """Schema for creating/updating an RSVP"""
 
+    _check_status = field_validator("status")(_enum_check(_RSVP_STATUSES, "status"))
+
 
 class RSVPResponse(RSVPBase, UTCResponseBase):
     """Schema for RSVP response"""
@@ -383,6 +438,8 @@ class SelfCheckInRequest(BaseModel):
 class ManagerAddAttendee(BaseModel):
     """Schema for a manager adding someone to an event"""
 
+    _check_status = field_validator("status")(_enum_check(_RSVP_STATUSES, "status"))
+
     user_id: UUID
     status: str = Field(
         default="going", description="RSVP status: going, not_going, maybe"
@@ -395,6 +452,8 @@ class ManagerAddAttendee(BaseModel):
 
 class BulkAddAttendees(BaseModel):
     """Schema for bulk-adding multiple attendees to an event"""
+
+    _check_status = field_validator("status")(_enum_check(_RSVP_STATUSES, "status"))
 
     user_ids: List[UUID] = Field(..., max_length=200)
     status: str = Field(
@@ -573,6 +632,13 @@ class CheckInMonitoringStats(UTCResponseBase):
 class EventTemplateCreate(BaseModel):
     """Schema for creating an event template"""
 
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     event_type: str = Field(default="other")
@@ -597,6 +663,13 @@ class EventTemplateCreate(BaseModel):
 
 class EventTemplateUpdate(BaseModel):
     """Schema for updating an event template"""
+
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -728,6 +801,16 @@ class EventNotificationResponse(BaseModel):
 
 class RecurringEventCreate(BaseModel):
     """Schema for creating a recurring event series"""
+
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
+    _check_recurrence_pattern = field_validator("recurrence_pattern")(
+        _enum_check(_RECURRENCE_PATTERNS, "recurrence_pattern")
+    )
 
     # Base event data
     title: str = Field(..., min_length=1, max_length=200)

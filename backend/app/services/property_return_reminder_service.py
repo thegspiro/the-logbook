@@ -9,6 +9,7 @@ manual API call).
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from html import escape
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -40,7 +41,14 @@ class PropertyReturnReminderService:
         """Convert a UTC datetime to the organization's local timezone."""
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(ZoneInfo(tz_name))
+        # A malformed stored org.timezone must not abort the whole reminder run
+        # (process_reminders has no surrounding guard) — fall back like the
+        # scheduled runners do.
+        try:
+            tz = ZoneInfo(tz_name or "America/New_York")
+        except Exception:
+            tz = ZoneInfo("America/New_York")
+        return dt.astimezone(tz)
 
     async def process_reminders(
         self,
@@ -232,30 +240,35 @@ class PropertyReturnReminderService:
         checkouts = checkout_result.scalars().all()
 
         items = []
-        total_value = 0.0
+        # Accumulate as Decimal — this total is persisted to the Numeric
+        # total_value_outstanding column and shown to the member as the value of
+        # overdue property, so float accumulation drift must not reach it (the
+        # FIN-7 / LIFE-1 money class). Per-item output values stay float for the
+        # existing JSON shape.
+        total_value = Decimal("0")
 
         for a in assignments:
-            val = float(a.item.current_value or a.item.purchase_price or 0)
+            val = Decimal(str(a.item.current_value or a.item.purchase_price or 0))
             total_value += val
             items.append(
                 {
                     "name": a.item.name,
                     "serial_number": a.item.serial_number or "-",
                     "asset_tag": a.item.asset_tag or "-",
-                    "value": val,
+                    "value": float(val),
                     "type": "assigned",
                 }
             )
 
         for c in checkouts:
-            val = float(c.item.current_value or c.item.purchase_price or 0)
+            val = Decimal(str(c.item.current_value or c.item.purchase_price or 0))
             total_value += val
             items.append(
                 {
                     "name": c.item.name,
                     "serial_number": c.item.serial_number or "-",
                     "asset_tag": c.item.asset_tag or "-",
-                    "value": val,
+                    "value": float(val),
                     "type": "checked_out",
                 }
             )

@@ -26,6 +26,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.encrypted_types import EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
 
 # --- Enums ---
@@ -173,12 +174,16 @@ class ScreeningRecord(Base):
     scheduled_date = Column(Date, nullable=True)
     completed_date = Column(Date, nullable=True)
     expiration_date = Column(Date, nullable=True)
-    provider_name = Column(String(255), nullable=True)
-    result_summary = Column(Text, nullable=True)
+    # PHI (MS-1): provider identity, free-text summaries, structured results and
+    # reviewer notes are protected health information — stored encrypted at rest
+    # via the transparent EncryptedText/EncryptedJSON column types. Legacy
+    # plaintext rows continue to read cleanly during the migration window.
+    provider_name = Column(EncryptedText, nullable=True)
+    result_summary = Column(EncryptedText, nullable=True)
     result_data = Column(
-        JSON,
+        EncryptedJSON,
         nullable=True,
-        comment="Structured results (scores, measurements, etc.).",
+        comment="Structured results (scores, measurements, etc.). Encrypted at rest (MS-1).",
     )
     reviewed_by = Column(
         String(36),
@@ -186,7 +191,7 @@ class ScreeningRecord(Base):
         nullable=True,
     )
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    notes = Column(Text, nullable=True)
+    notes = Column(EncryptedText, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

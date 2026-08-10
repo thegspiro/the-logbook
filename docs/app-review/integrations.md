@@ -1,7 +1,68 @@
 # Application Review — Integrations (Tier B)
 
 **Prefix:** `INT2` · **Iteration:** B12 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; one cross-reference note updated
+
+No code change. Re-verified the module's guards hold:
+
+- **INT-1 send-time SSRF intact** — `assert_outbound_url_safe` appears at **2**
+  sites (store + send) in every channel service (slack/discord/teams/webhook/calcom),
+  re-resolving the host and asserting a public IP before each POST.
+- **INT-3 read-permission gate intact**; **INT-4** `exclude_unset` config merge
+  intact; **latent-500 lens N/A** (config is JSON, no enum columns);
+  **E712-free** across the package and endpoints.
+
+**Cross-reference correction (B11 has now converged):** pass 2 recorded INT-1's
+send-time guard as "more robust than B11's push fix," because at the time B11 could
+only flag DNS rebinding as a residual — it couldn't re-resolve at send without
+breaking its `127.0.0.1` delivery-test harness. **That gap closed in this
+session's B11 pass 4:** `PushService._send_one` now calls the same
+`assert_outbound_url_safe` at send time (gated to production/staging so the
+loopback wire-format tests still run). The two outbound surfaces now use the
+identical send-time SSRF re-check; the "more robust than push" note is superseded.
+
+**Still flagged (unchanged):** INT-5 (the `KNOWN_WEBHOOK_DOMAINS` allowlist stays
+uninvoked — an owner behavior decision; INT-1 covers the internal-IP case
+regardless).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
+
+---
+
+## Pass 3 (2026-08-09) — verified clean; INT-3 resolved earlier this session
+
+No code change this pass — the module is clean and INT-3 (the last substantive open
+finding) was **resolved earlier this session** via the owner read-permission decision
+(full config `list`/`get` now require `integrations.manage`; a new
+`GET /integrations/connected` status-only projection keeps the cross-module
+`useConnectedIntegrations` flow working). Re-verified this pass:
+
+- **INT-1 send-time SSRF holds** — `assert_outbound_url_safe(...)` is called at the
+  outbound-send boundary in every channel service (teams/webhook/slack/discord/calcom),
+  not just at store time, so a stored URL is re-checked before each POST.
+- **INT-3 gate holds** — the config `list`/`get`/`connect`/`disconnect`/`update`/
+  `test-connection` endpoints are all `integrations.manage`; `/connected` is registered
+  before `/{integration_id}` (verified) and readable by any org member.
+- **INT-4 holds** — `_validate_config` emits only the caller-supplied keys
+  (`exclude_unset`), so a PATCH doesn't reset omitted config fields.
+- **Latent-500 lens N/A** — the integration model has **no** enum columns (config is
+  JSON validated per-type by `INTEGRATION_CONFIG_SCHEMAS`); no free-string→ENUM path.
+- **E712-free** across the `integration_services` package and the endpoints.
+
+### INT-5 — LOW — Uninvoked webhook allowlist + dead params — 🚩 FLAGGED (unchanged)
+
+`KNOWN_WEBHOOK_DOMAINS` + `validate_integration_url(..., allow_known_only=True)` remain
+uninvoked (no caller passes `allow_known_only=True`), so a chat `webhook_url` is checked
+only for "resolves to a public IP", not "is actually hooks.slack.com / discord.com /
+…". Enabling the allowlist would harden this but could reject legitimately-proxied
+setups — an owner behavior decision, not a drive-by. INT-1's send-time check covers the
+internal-IP case regardless. `allow_known_only` is a functional (not dead) param — the
+switch to turn the allowlist on — so it stays.
 
 ---
 
@@ -106,18 +167,21 @@ unchanged. **1 regression test added** (`test_omitted_fields_not_reemitted`):
 a Salesforce partial config returns exactly its supplied keys, with
 `sync_direction`/`graceful_fields`/`client_secret` absent.
 
-### INT-3 — LOW-MED — `list`/`get` reads not gated by a manage/view permission — 🚩 FLAGGED (unchanged, needs a permission decision)
+### INT-3 — LOW-MED — `list`/`get` reads not gated by a manage/view permission — ✅ RESOLVED (owner decision, 2026-08-09)
 
-`list_integrations` / `get_integration` use bare `get_current_user`, so any
-authenticated member reads every integration's **non-secret** config
-(instance_url, field_mappings, api_base_url). Secrets stay redacted, so this is
-not credential exposure. Re-verified the reason it wasn't tightened: the
-integration **list is consumed cross-module** (prospective-members meeting-config,
-training-officer dashboard) gated on *those* permissions — so gating the read on
-`integrations.manage` would break those flows. The right fix is a dedicated
-`integrations.view` permission (seed + roles) or a minimal projection for the
-cross-module callers. A product/permission decision, not a drive-by; recorded in
-`KNOWN_LIMITATIONS.md`.
+`list_integrations` / `get_integration` used bare `get_current_user`, so any
+authenticated member read every integration's **non-secret** config (instance_url,
+field_mappings, api_base_url). The complication was that the integration list is
+consumed cross-module (`useConnectedIntegrations` in the membership-pipeline
+meeting-config) gated on *those* permissions — so a blanket `integrations.manage`
+gate on the read would silently break those flows. **Fix (the "minimal projection"
+option):** the full config `list`/`get` now require `integrations.manage`, and a new
+`GET /integrations/connected` returns only `integration_type`/`status`/`enabled`
+(no URLs, mappings, PHI flags, or secrets) for any authenticated org member. The
+`useConnectedIntegrations` hook was repointed to it (`getConnectedIntegrationStatus`),
+so cross-module callers keep working without the integrations-admin permission.
+`/connected` is registered before `/{integration_id}` so the literal path wins.
+Covered by `frontend/src/hooks/useConnectedIntegrations.test.ts`.
 
 ### INT-5 — LOW — Unused allowlist + dead params — 🚩 FLAGGED (unchanged)
 
@@ -146,9 +210,7 @@ cross-module callers. A product/permission decision, not a drive-by; recorded in
 
 ## Future development
 
-1. **INT-3** — a dedicated `integrations.view` permission (or minimal projection
-   for the cross-module reads).
-2. **INT-5** — enable the chat-webhook domain allowlist; batch-remove the unused
+1. **INT-5** — enable the chat-webhook domain allowlist; batch-remove the unused
    `request` params; drop `client_id` from `SECRET_CONFIG_KEYS`.
 
 ## Completion gate

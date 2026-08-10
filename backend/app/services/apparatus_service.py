@@ -415,6 +415,17 @@ class ApparatusService:
             allow_none=True,
             label="station",
         )
+        # AP2-2: required_evoc_level_id isn't projected into any response (integrity-
+        # only), but validate it in-org on both paths so a foreign/garbage id can't
+        # be stored as the driving-qualification requirement.
+        await assert_in_org(
+            self.db,
+            EvocLevel,
+            apparatus_data.required_evoc_level_id,
+            organization_id,
+            allow_none=True,
+            label="EVOC level",
+        )
 
         apparatus = Apparatus(
             organization_id=organization_id,
@@ -590,6 +601,16 @@ class ApparatusService:
             allow_none=True,
             label="station",
         )
+        # AP2-2: validate required_evoc_level_id in-org (integrity-only, same as
+        # create_apparatus) so update can't store a foreign/garbage EVOC-level id.
+        await assert_in_org(
+            self.db,
+            EvocLevel,
+            apparatus_data.required_evoc_level_id,
+            organization_id,
+            allow_none=True,
+            label="EVOC level",
+        )
 
         # Check unit number uniqueness if changing
         if (
@@ -748,8 +769,8 @@ class ApparatusService:
                     ApparatusStatus.organization_id.is_(None),
                 )
             )
-            .where(ApparatusStatus.is_archived_status == True)  # noqa: E712
-            .where(ApparatusStatus.is_active == True)  # noqa: E712
+            .where(ApparatusStatus.is_archived_status.is_(True))
+            .where(ApparatusStatus.is_active.is_(True))
         )
         archived_status = result.scalars().first()
 
@@ -1115,6 +1136,26 @@ class ApparatusService:
         if not maint_type:
             raise ValueError("Invalid maintenance type")
 
+        # AP2-2: component_id / service_provider_id are integrity-only FKs (the
+        # service report resolves provider names org-scoped, so no cross-tenant
+        # read), but validate them in-org so a foreign/garbage id can't be stored.
+        await assert_in_org(
+            self.db,
+            ApparatusComponent,
+            maintenance_data.component_id,
+            organization_id,
+            allow_none=True,
+            label="component",
+        )
+        await assert_in_org(
+            self.db,
+            ApparatusServiceProvider,
+            maintenance_data.service_provider_id,
+            organization_id,
+            allow_none=True,
+            label="service provider",
+        )
+
         # Validate historic entries
         if maintenance_data.is_historic and not maintenance_data.occurred_date:
             raise ValueError("occurred_date is required for historic entries")
@@ -1228,6 +1269,25 @@ class ApparatusService:
         ):
             raise ValueError("Invalid maintenance type")
 
+        # AP2-2: validate the integrity-only component / service-provider FKs in-org
+        # on update too, matching create_maintenance_record.
+        await assert_in_org(
+            self.db,
+            ApparatusComponent,
+            maintenance_data.component_id,
+            organization_id,
+            allow_none=True,
+            label="component",
+        )
+        await assert_in_org(
+            self.db,
+            ApparatusServiceProvider,
+            maintenance_data.service_provider_id,
+            organization_id,
+            allow_none=True,
+            label="service provider",
+        )
+
         update_data = maintenance_data.model_dump(exclude_unset=True)
 
         # Convert attachment models to dicts for JSON storage
@@ -1289,14 +1349,14 @@ class ApparatusService:
 
         conditions = [
             ApparatusMaintenance.organization_id == organization_id,
-            ApparatusMaintenance.is_completed == False,  # noqa: E712
+            ApparatusMaintenance.is_completed.is_(False),
         ]
 
         if include_overdue:
             conditions.append(
                 or_(
                     ApparatusMaintenance.due_date <= due_date_threshold,
-                    ApparatusMaintenance.is_overdue == True,  # noqa: E712
+                    ApparatusMaintenance.is_overdue.is_(True),
                 )
             )
         else:
@@ -1796,7 +1856,7 @@ class ApparatusService:
             select(ApparatusType.name, func.count(Apparatus.id).label("count"))
             .join(Apparatus, Apparatus.apparatus_type_id == ApparatusType.id)
             .where(Apparatus.organization_id == str(organization_id))
-            .where(Apparatus.is_archived == False)  # noqa: E712
+            .where(Apparatus.is_archived.is_(False))
             .group_by(ApparatusType.id)
         )
         type_result = await self.db.execute(type_counts_query)
@@ -1812,7 +1872,7 @@ class ApparatusService:
         # Archived count
         archived_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
-            Apparatus.is_archived == True,  # noqa: E712
+            Apparatus.is_archived.is_(True),
         )
         archived_result = await self.db.execute(archived_query)
         archived = archived_result.scalar()
@@ -1826,7 +1886,7 @@ class ApparatusService:
 
         reg_expiring_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
-            Apparatus.is_archived == False,  # noqa: E712
+            Apparatus.is_archived.is_(False),
             Apparatus.registration_expiration <= expiration_date,
             Apparatus.registration_expiration >= date.today(),
         )
@@ -1835,7 +1895,7 @@ class ApparatusService:
 
         insp_expiring_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
-            Apparatus.is_archived == False,  # noqa: E712
+            Apparatus.is_archived.is_(False),
             Apparatus.inspection_expiration <= expiration_date,
             Apparatus.inspection_expiration >= date.today(),
         )
@@ -1844,7 +1904,7 @@ class ApparatusService:
 
         ins_expiring_query = select(func.count(Apparatus.id)).where(
             Apparatus.organization_id == organization_id,
-            Apparatus.is_archived == False,  # noqa: E712
+            Apparatus.is_archived.is_(False),
             Apparatus.insurance_expiration <= expiration_date,
             Apparatus.insurance_expiration >= date.today(),
         )
@@ -2336,6 +2396,17 @@ class ApparatusService:
         if not component:
             raise ValueError("Component not found")
 
+        # AP2-2: service_provider_id is an integrity-only FK; validate it in-org so
+        # a note can't record a foreign/garbage service provider.
+        await assert_in_org(
+            self.db,
+            ApparatusServiceProvider,
+            note_data.service_provider_id,
+            organization_id,
+            allow_none=True,
+            label="service provider",
+        )
+
         dump = note_data.model_dump()
         # Convert attachment models to dicts for JSON storage
         if dump.get("attachments"):
@@ -2365,6 +2436,18 @@ class ApparatusService:
         note = await self.get_component_note(note_id, organization_id)
         if not note:
             return None
+
+        # AP2-2: validate the integrity-only service_provider_id in-org on update
+        # too. (ApparatusComponentNoteUpdate omits component_id, so the note can't
+        # be re-pointed to a foreign component via update.)
+        await assert_in_org(
+            self.db,
+            ApparatusServiceProvider,
+            getattr(note_data, "service_provider_id", None),
+            organization_id,
+            allow_none=True,
+            label="service provider",
+        )
 
         update_data = note_data.model_dump(exclude_unset=True)
 
@@ -2420,7 +2503,7 @@ class ApparatusService:
         components_query = select(ApparatusComponent).where(
             ApparatusComponent.organization_id == organization_id,
             ApparatusComponent.apparatus_id == apparatus_id,
-            ApparatusComponent.is_active == True,  # noqa: E712
+            ApparatusComponent.is_active.is_(True),
         )
         if component_ids:
             components_query = components_query.where(
@@ -2469,7 +2552,7 @@ class ApparatusService:
         maint_query = maint_query.where(
             or_(
                 ApparatusMaintenance.created_at >= cutoff,
-                ApparatusMaintenance.is_completed == False,  # noqa: E712
+                ApparatusMaintenance.is_completed.is_(False),
             )
         ).order_by(ApparatusMaintenance.created_at.desc())
         maint_result = await self.db.execute(maint_query)

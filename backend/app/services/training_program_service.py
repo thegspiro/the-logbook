@@ -598,7 +598,7 @@ class TrainingProgramService:
         """
         query = select(TrainingRequirement).where(
             TrainingRequirement.organization_id == organization_id,
-            TrainingRequirement.active == True,  # noqa: E712
+            TrainingRequirement.active.is_(True),
         )
 
         if source:
@@ -987,7 +987,7 @@ class TrainingProgramService:
         """
         query = select(TrainingProgram).where(
             TrainingProgram.organization_id == organization_id,
-            TrainingProgram.active == True,  # noqa: E712
+            TrainingProgram.active.is_(True),
         )
 
         if target_position:
@@ -3534,7 +3534,7 @@ class TrainingProgramService:
         so callers resolve the id set first and filter progress by it.
         """
         query = select(ProgramRequirement.requirement_id).where(
-            ProgramRequirement.is_required == True  # noqa: E712
+            ProgramRequirement.is_required.is_(True)
         )
         if program_id is not None:
             query = query.where(ProgramRequirement.program_id == str(program_id))

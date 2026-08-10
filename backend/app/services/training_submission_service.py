@@ -24,6 +24,7 @@ from app.models.training import (
     TrainingRecord,
     TrainingStatus,
     TrainingSubmission,
+    TrainingType,
 )
 from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
@@ -108,15 +109,24 @@ class TrainingSubmissionService:
                 f"Training type '{training_type}' is not allowed for self-reporting"
             )
 
-        # Determine initial status
+        # Determine initial status. Auto-approve is a convenience for low-stakes
+        # logged hours — it must never let a member self-credit a certification or
+        # a training requirement without a second person's sign-off (separation of
+        # duties, owner decision 2026-08-09). A submission that would credit a
+        # certification/requirement is always routed to manual review regardless of
+        # the org's auto-approve settings.
         status = SubmissionStatus.PENDING_REVIEW
-        if not config.require_approval:
-            status = SubmissionStatus.APPROVED
-        elif (
-            config.auto_approve_under_hours
-            and hours_completed <= config.auto_approve_under_hours
-        ):
-            status = SubmissionStatus.APPROVED
+        credits_cert_or_requirement = self._credits_certification_or_requirement(
+            training_type, kwargs
+        )
+        if not credits_cert_or_requirement:
+            if not config.require_approval:
+                status = SubmissionStatus.APPROVED
+            elif (
+                config.auto_approve_under_hours
+                and hours_completed <= config.auto_approve_under_hours
+            ):
+                status = SubmissionStatus.APPROVED
 
         submission = TrainingSubmission(
             id=generate_uuid(),
@@ -151,6 +161,32 @@ class TrainingSubmissionService:
             await self._create_record_from_submission(submission)
 
         return submission
+
+    @staticmethod
+    def _credits_certification_or_requirement(training_type: str, fields: dict) -> bool:
+        """Whether a self-reported submission would credit a certification or a
+        training requirement — the cases that must not auto-approve.
+
+        A submission credits a certification/requirement when it (a) is itself a
+        certification, (b) carries certification credential data (number, issuing
+        agency, expiration), or (c) is linked to a training category, which is the
+        mechanism by which completed training counts toward a requirement. Anything
+        else (plain logged hours, skills practice) is non-crediting and may
+        auto-approve.
+        """
+        # TrainingType is a str-Enum, so both the enum member and a plain
+        # "certification" string compare equal to the enum value here.
+        if training_type == TrainingType.CERTIFICATION.value:
+            return True
+        return any(
+            fields.get(key)
+            for key in (
+                "certification_number",
+                "issuing_agency",
+                "expiration_date",
+                "category_id",
+            )
+        )
 
     async def get_submission(
         self, submission_id: str, organization_id: str

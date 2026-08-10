@@ -18,6 +18,7 @@ import pytest
 
 from app.models.apparatus import ApparatusOperator
 from app.schemas.apparatus import (
+    ApparatusComponentNoteUpdate,
     ApparatusMaintenanceUpdate,
     ApparatusOperatorUpdate,
     ApparatusUpdate,
@@ -116,3 +117,49 @@ class TestUpdateMaintenanceFKValidation:
                 await service.update_maintenance_record(
                     str(uuid4()), data, org_id, "user"
                 )
+
+    async def test_foreign_component_rejected(self, service, mock_db, org_id):
+        # AP2-2: only component_id supplied → maintenance_type check skipped, the
+        # single execute is assert_in_org's component lookup (returns nothing).
+        mock_db.execute.side_effect = [_result(None)]
+        with patch.object(service, "get_maintenance_record", return_value=MagicMock()):
+            data = ApparatusMaintenanceUpdate(component_id=str(uuid4()))
+            with pytest.raises(ValueError, match="component"):
+                await service.update_maintenance_record(
+                    str(uuid4()), data, org_id, "user"
+                )
+
+    async def test_foreign_service_provider_rejected(self, service, mock_db, org_id):
+        # AP2-2: component_id is None (no query), so the single execute is the
+        # service-provider lookup.
+        mock_db.execute.side_effect = [_result(None)]
+        with patch.object(service, "get_maintenance_record", return_value=MagicMock()):
+            data = ApparatusMaintenanceUpdate(service_provider_id=str(uuid4()))
+            with pytest.raises(ValueError, match="service provider"):
+                await service.update_maintenance_record(
+                    str(uuid4()), data, org_id, "user"
+                )
+
+
+class TestUpdateApparatusEvocFKValidation:
+    """AP2-2: update_apparatus must validate a supplied required_evoc_level_id."""
+
+    async def test_foreign_required_evoc_level_rejected(self, service, mock_db, org_id):
+        # Only required_evoc_level_id supplied → type/status/station checks make no
+        # query, so the single execute is the EVOC-level lookup (returns nothing).
+        mock_db.execute.side_effect = [_result(None)]
+        with patch.object(service, "get_apparatus", return_value=MagicMock()):
+            data = ApparatusUpdate(required_evoc_level_id=str(uuid4()))
+            with pytest.raises(ValueError, match="EVOC level"):
+                await service.update_apparatus(str(uuid4()), data, org_id, "user")
+
+
+class TestUpdateComponentNoteFKValidation:
+    """AP2-2: update_component_note must validate a supplied service_provider_id."""
+
+    async def test_foreign_service_provider_rejected(self, service, mock_db, org_id):
+        mock_db.execute.side_effect = [_result(None)]
+        with patch.object(service, "get_component_note", return_value=MagicMock()):
+            data = ApparatusComponentNoteUpdate(service_provider_id=str(uuid4()))
+            with pytest.raises(ValueError, match="service provider"):
+                await service.update_component_note(str(uuid4()), data, org_id)
