@@ -10,8 +10,8 @@ restock_needed is that report, raised by whoever used the unit at the time they
 used it. It shows on the supply worklist beside the expiring items and is
 cleared when fresh stock is swapped in.
 
-Revision ID: 20260810_0004
-Revises: 20260810_0003
+Revision ID: 20260810_0006
+Revises: 20260810_0005
 Create Date: 2026-08-10 13:00:00.000000
 
 """
@@ -20,8 +20,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260810_0004"
-down_revision = "20260810_0003"
+revision = "20260810_0006"
+down_revision = "20260810_0005"
 branch_labels = None
 depends_on = None
 

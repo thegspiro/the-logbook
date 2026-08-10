@@ -14,8 +14,8 @@ Existing single-lot data is migrated across: any item carrying a lot number or
 expiration becomes one deployed-lot row, so nothing already recorded is lost
 and the derived count matches what the item reported before.
 
-Revision ID: 20260810_0006
-Revises: 20260810_0005
+Revision ID: 20260810_0008
+Revises: 20260810_0007
 Create Date: 2026-08-10 15:00:00.000000
 
 """
@@ -24,8 +24,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260810_0006"
-down_revision = "20260810_0005"
+revision = "20260810_0008"
+down_revision = "20260810_0007"
 branch_labels = None
 depends_on = None
 

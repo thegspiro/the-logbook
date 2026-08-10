@@ -11,8 +11,8 @@ expiration_found is the missing counterpart to serial_found / lot_found: what
 the crew read off the replacement unit. It is written back onto the template
 item on submit, exactly as the lot number already is.
 
-Revision ID: 20260810_0003
-Revises: 20260810_0002
+Revision ID: 20260810_0005
+Revises: 20260810_0004
 Create Date: 2026-08-10 12:00:00.000000
 
 """
@@ -21,8 +21,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260810_0003"
-down_revision = "20260810_0002"
+revision = "20260810_0005"
+down_revision = "20260810_0004"
 branch_labels = None
 depends_on = None
 
