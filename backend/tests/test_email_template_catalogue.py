@@ -19,6 +19,9 @@ import pytest
 from app.models.email_template import EmailTemplateType
 from app.services.email_service import inline_email_css
 from app.services.email_template_service import (
+    GLOBAL_VARIABLES,
+    ORGANIZATION_FIELD_VARIABLES,
+    ORGANIZATION_FIELDS_WITHOUT_VARIABLES,
     RENDERER_INJECTED_VARIABLES,
     SAMPLE_CONTEXT,
     EmailTemplateService,
@@ -95,6 +98,97 @@ class TestEveryVariableIsUsable:
             f"{defn['type'].value} injects {sorted(missing)} as markup but they "
             "are not in _RAW_HTML_VARIABLES, so they will be escaped"
         )
+
+
+class TestEveryOrganizationFieldIsAccountedFor:
+    """A department fills these in expecting them to be usable.
+
+    The gap this closes was invisible: fax, county, founded year, EIN and the
+    three department identifiers were all collected on the Organization
+    Settings screen and none of them could be put in an email. The two maps
+    below are a ledger — a column in neither is one nobody ruled on, and that
+    is what this reports.
+    """
+
+    @staticmethod
+    def _columns() -> set:
+        from app.models.user import Organization
+
+        return {column.name for column in Organization.__table__.columns}
+
+    def test_no_column_is_left_undecided(self):
+        decided = set(ORGANIZATION_FIELD_VARIABLES) | set(
+            ORGANIZATION_FIELDS_WITHOUT_VARIABLES
+        )
+        undecided = self._columns() - decided
+        assert not undecided, (
+            "these Organization columns are neither offered to templates nor "
+            "listed as deliberately withheld: "
+            f"{sorted(undecided)} — add them to one map or the other"
+        )
+
+    def test_the_ledger_does_not_name_columns_that_are_gone(self):
+        stale = (
+            set(ORGANIZATION_FIELD_VARIABLES)
+            | set(ORGANIZATION_FIELDS_WITHOUT_VARIABLES)
+        ) - self._columns()
+        assert not stale, sorted(stale)
+
+    def test_no_column_is_in_both_maps(self):
+        assert not set(ORGANIZATION_FIELD_VARIABLES) & set(
+            ORGANIZATION_FIELDS_WITHOUT_VARIABLES
+        )
+
+    def test_every_offered_field_is_documented_for_the_editor(self):
+        documented = {variable["name"] for variable in GLOBAL_VARIABLES}
+        missing = set(ORGANIZATION_FIELD_VARIABLES.values()) - documented
+        assert not missing, f"not in the editor's variable palette: {sorted(missing)}"
+
+    def test_every_offered_field_has_sample_data(self):
+        """Otherwise it previews blank and looks broken rather than empty."""
+        sample = set(SAMPLE_CONTEXT["welcome"])
+        missing = (
+            set(ORGANIZATION_FIELD_VARIABLES.values()) - sample - {"organization_logo"}
+        )
+        assert not missing, sorted(missing)
+
+    def test_a_populated_organization_fills_every_offered_variable(self):
+        from types import SimpleNamespace
+
+        organization = SimpleNamespace(
+            **{column: f"value-{column}" for column in ORGANIZATION_FIELD_VARIABLES},
+            identifier_type="fdid",
+            organization_type="fire_ems_combined",
+            settings={},
+            physical_address_same=True,
+            mailing_address_line1="1 Main",
+            mailing_address_line2=None,
+            mailing_city="Anytown",
+            mailing_state="CA",
+            mailing_zip="90210",
+            mailing_country="USA",
+        )
+        context = EmailTemplateService.build_context({}, organization)
+        for variable in ORGANIZATION_FIELD_VARIABLES.values():
+            assert context[variable], variable
+        assert context["organization_identifier"] == "value-fdid"
+        assert context["organization_identifier_label"] == "FDID"
+        assert context["organization_type_label"] == "Fire & EMS"
+
+
+class TestAddressComposition:
+    def test_the_country_is_dropped_when_it_is_the_implied_one(self):
+        """Every US department's own address would otherwise gain a 'USA' line."""
+        address = EmailTemplateService._format_address(
+            "1 Main", None, "Anytown", "CA", "90210", "USA"
+        )
+        assert address.splitlines() == ["1 Main", "Anytown, CA 90210"]
+
+    def test_a_country_that_is_not_the_implied_one_is_kept(self):
+        address = EmailTemplateService._format_address(
+            "1 King St", None, "Toronto", "ON", "M5H", "Canada"
+        )
+        assert address.splitlines()[-1] == "Canada"
 
 
 class TestTheStylesheetSurvivesInlining:

@@ -48,11 +48,22 @@ ORG_SETTINGS_FOOTER_KEY = "email_footers"
 FOOTER_VARIABLE_NAMES: frozenset = frozenset(
     {
         "organization_name",
+        "organization_description",
+        "organization_type_label",
         "organization_phone",
+        "organization_fax",
         "organization_email",
         "organization_website",
         "organization_mailing_address",
         "organization_physical_address",
+        "organization_county",
+        "organization_founded_year",
+        "organization_tax_id",
+        "organization_identifier",
+        "organization_identifier_label",
+        "organization_fdid",
+        "organization_state_id",
+        "organization_department_id",
         "login_url",
     }
 )

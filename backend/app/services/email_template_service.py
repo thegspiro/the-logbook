@@ -38,9 +38,81 @@ from app.services.email_theme import (  # noqa: F401  (re-exported: many service
     build_email_document,
 )
 
+# Organization columns that reach templates unchanged, as
+# {column: variable}. Driving the injection from a map rather than a run of
+# hand-written setdefaults is what lets the catalogue test assert that every
+# column on the model has been *decided about* — see
+# ORGANIZATION_FIELDS_WITHOUT_VARIABLES for the other half of that ledger.
+ORGANIZATION_FIELD_VARIABLES: Dict[str, str] = {
+    "name": "organization_name",
+    "description": "organization_description",
+    "phone": "organization_phone",
+    "fax": "organization_fax",
+    "email": "organization_email",
+    "website": "organization_website",
+    "county": "organization_county",
+    "founded_year": "organization_founded_year",
+    "tax_id": "organization_tax_id",
+    "fdid": "organization_fdid",
+    "state_id": "organization_state_id",
+    "department_id": "organization_department_id",
+    "logo": "organization_logo",
+}
+
+# Every other column on Organization, with the reason it is not a template
+# variable. A column in neither map is one nobody has ruled on, which the
+# catalogue test reports rather than letting it sit unnoticed.
+ORGANIZATION_FIELDS_WITHOUT_VARIABLES: Dict[str, str] = {
+    "id": "internal key",
+    "slug": "internal key, and it appears in URLs rather than in prose",
+    "type": "legacy duplicate of organization_type",
+    "organization_type": "surfaced in readable form as organization_type_label",
+    "identifier_type": "selects which identifier organization_identifier carries",
+    "timezone": "send sites format times before they reach a template",
+    "settings": "configuration, not content",
+    "active": "operational flag",
+    "created_at": "bookkeeping",
+    "updated_at": "bookkeeping",
+    "mailing_address_line1": "composed into organization_mailing_address",
+    "mailing_address_line2": "composed into organization_mailing_address",
+    "mailing_city": "composed into organization_mailing_address",
+    "mailing_state": "composed into organization_mailing_address",
+    "mailing_zip": "composed into organization_mailing_address",
+    "mailing_country": "composed into organization_mailing_address",
+    "physical_address_same": "decides whether the physical address is composed",
+    "physical_address_line1": "composed into organization_physical_address",
+    "physical_address_line2": "composed into organization_physical_address",
+    "physical_city": "composed into organization_physical_address",
+    "physical_state": "composed into organization_physical_address",
+    "physical_zip": "composed into organization_physical_address",
+    "physical_country": "composed into organization_physical_address",
+}
+
+_ORGANIZATION_TYPE_LABELS: Dict[str, str] = {
+    "fire_department": "Fire Department",
+    "ems_only": "EMS",
+    "fire_ems_combined": "Fire & EMS",
+}
+
+# The three identifiers a department may keep, and what to call the one it
+# nominated. A footer saying "FDID 12345" has to name the right scheme.
+_IDENTIFIER_LABELS: Dict[str, str] = {
+    "fdid": "FDID",
+    "state_id": "State ID",
+    "department_id": "Department ID",
+}
+
 # Variables available to ALL template types (injected automatically)
 GLOBAL_VARIABLES: List[Dict[str, str]] = [
     {"name": "organization_name", "description": "Organization name"},
+    {
+        "name": "organization_description",
+        "description": "The department's description, from Organization Settings",
+    },
+    {
+        "name": "organization_type_label",
+        "description": "Fire Department, EMS, or Fire & EMS",
+    },
     {
         "name": "organization_logo",
         "description": "Organization logo URL (use in an <img> tag)",
@@ -54,8 +126,38 @@ GLOBAL_VARIABLES: List[Dict[str, str]] = [
         "description": "Full physical/station address (multi-line)",
     },
     {"name": "organization_phone", "description": "Organization phone number"},
+    {"name": "organization_fax", "description": "Organization fax number"},
     {"name": "organization_email", "description": "Organization email address"},
     {"name": "organization_website", "description": "Organization website URL"},
+    {"name": "organization_county", "description": "County the department serves"},
+    {
+        "name": "organization_founded_year",
+        "description": "Year founded, e.g. for a 'Serving since 1923' line",
+    },
+    {
+        "name": "organization_tax_id",
+        "description": (
+            "EIN. A 501(c)(3) asking for money is expected to state this on "
+            "the message that asks."
+        ),
+    },
+    {
+        "name": "organization_identifier",
+        "description": (
+            "Whichever of FDID / state ID / department ID the department "
+            "nominated as its own in Organization Settings"
+        ),
+    },
+    {
+        "name": "organization_identifier_label",
+        "description": "What that identifier is called — FDID, State ID, Department ID",
+    },
+    {"name": "organization_fdid", "description": "Fire Department ID (NFIRS)"},
+    {
+        "name": "organization_state_id",
+        "description": "State license or certification number",
+    },
+    {"name": "organization_department_id", "description": "Internal department ID"},
     {
         "name": "login_url",
         "description": "URL to the application login page",
@@ -463,12 +565,23 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
 # Shared organization fields are merged from _SAMPLE_ORG_CONTEXT.
 _SAMPLE_ORG_CONTEXT: Dict[str, str] = {
     "organization_name": "Sample Fire Department",
+    "organization_description": "Serving Anytown and the surrounding county since 1923.",
+    "organization_type_label": "Fire & EMS",
     "organization_logo": "https://example.com/logo.png",
     "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
     "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
     "organization_phone": "(555) 555-1234",
+    "organization_fax": "(555) 555-1235",
     "organization_email": "info@samplefd.org",
     "organization_website": "https://www.samplefd.org",
+    "organization_county": "Sample County",
+    "organization_founded_year": "1923",
+    "organization_tax_id": "12-3456789",
+    "organization_identifier": "12345",
+    "organization_identifier_label": "FDID",
+    "organization_fdid": "12345",
+    "organization_state_id": "CA-FD-0042",
+    "organization_department_id": "SFD-01",
     "login_url": "https://example.com/login",
 }
 
@@ -2580,18 +2693,31 @@ class EmailTemplateService:
         """
         ctx = dict(context)
         if organization:
-            ctx.setdefault("organization_name", getattr(organization, "name", ""))
-            logo = getattr(organization, "logo", None) or ""
-            ctx.setdefault("organization_logo", logo)
+            for column, variable in ORGANIZATION_FIELD_VARIABLES.items():
+                value = getattr(organization, column, None)
+                ctx.setdefault(variable, "" if value is None else str(value))
+
+            # The department nominated one of its three identifiers as the one
+            # it goes by; a footer reading "FDID 12345" has to name the right
+            # scheme, so the label travels with the value.
+            identifier_type = getattr(organization, "identifier_type", None)
+            identifier_key = getattr(identifier_type, "value", identifier_type) or ""
             ctx.setdefault(
-                "organization_phone", getattr(organization, "phone", None) or ""
+                "organization_identifier",
+                str(getattr(organization, str(identifier_key), None) or ""),
             )
             ctx.setdefault(
-                "organization_email", getattr(organization, "email", None) or ""
+                "organization_identifier_label",
+                _IDENTIFIER_LABELS.get(str(identifier_key), ""),
             )
+
+            org_type = getattr(organization, "organization_type", None)
+            org_type_key = getattr(org_type, "value", org_type) or ""
             ctx.setdefault(
-                "organization_website", getattr(organization, "website", None) or ""
+                "organization_type_label",
+                _ORGANIZATION_TYPE_LABELS.get(str(org_type_key), ""),
             )
+
             # Build formatted mailing address
             ctx.setdefault(
                 "organization_mailing_address",
@@ -2601,6 +2727,7 @@ class EmailTemplateService:
                     getattr(organization, "mailing_city", None),
                     getattr(organization, "mailing_state", None),
                     getattr(organization, "mailing_zip", None),
+                    getattr(organization, "mailing_country", None),
                 ),
             )
             # Build formatted physical address (falls back to mailing if same)
@@ -2618,6 +2745,7 @@ class EmailTemplateService:
                         getattr(organization, "physical_city", None),
                         getattr(organization, "physical_state", None),
                         getattr(organization, "physical_zip", None),
+                        getattr(organization, "physical_country", None),
                     ),
                 )
             # Office signature variables ({{president_name}}, {{chief_title}},
@@ -2683,13 +2811,21 @@ class EmailTemplateService:
         instance = cls.__new__(cls)
         return instance.render(template, context, organization=organization)
 
-    @staticmethod
+    #: Country omitted from a formatted address when it is this one. A US
+    #: department's own mail does not say "USA" under every address, and the
+    #: column defaults to it, so printing it unconditionally would add a line
+    #: of noise to every footer that shows an address.
+    _IMPLIED_COUNTRY = "USA"
+
+    @classmethod
     def _format_address(
+        cls,
         line1: Optional[str],
         line2: Optional[str],
         city: Optional[str],
         state: Optional[str],
         zip_code: Optional[str],
+        country: Optional[str] = None,
     ) -> str:
         """Format address fields into a multi-line string."""
         parts: List[str] = []
@@ -2702,6 +2838,8 @@ class EmailTemplateService:
             city_state += f" {zip_code}"
         if city_state:
             parts.append(city_state)
+        if country and country.strip().upper() != cls._IMPLIED_COUNTRY:
+            parts.append(country.strip())
         return "\n".join(parts)
 
     # Variable names whose values contain pre-rendered, system-generated
