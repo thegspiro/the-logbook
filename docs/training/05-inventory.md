@@ -580,8 +580,17 @@ Both paths produce **actual-size** barcodes — the key to making them scannable
 
 > **Auto-rotate (roll-fed printers):** Rollo, Brother, and generic thermal printers feed labels narrow-edge first. For landscape labels, leave **Auto-rotate for roll-fed** on so the PDF content is pre-rotated and reads correctly. Dymo drivers rotate on their own, so their presets default to auto-rotate **off**.
 
-> **Screenshot needed:**
-> _[Screenshot of the thermal-label settings showing the "Print Test Label" button, the "Auto-rotate for roll-fed" toggle, the feed-direction diagram (portrait vs landscape page), and the blue "Set scaling to 100%" guidance banner]_
+**Settings** at the top right opens the panel these steps refer to. **Label
+Size** is a grid of nine clickable cards — four Dymo sizes, two Rollo, a 1"
+square thermal tag, Letter Paper (Grid) for Avery 5160 sheets, and **Custom
+size** — not a dropdown. Below them sit copies per item, the extra details to
+print under the barcode, and the orientation block.
+
+> **Corrected 2026-08-10.** The button is **Download Test Label**, not "Print
+> Test Label"; it produces a single-label PDF rather than sending anything to
+> a printer.
+
+![The label settings panel — size presets, auto-rotate, and the test-label download](./images/05-64-label-settings.png)
 
 ---
 

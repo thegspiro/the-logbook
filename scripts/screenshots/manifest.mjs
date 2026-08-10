@@ -762,6 +762,37 @@ export const SHOTS = [
     viewport: { width: 1440, height: 1300 },
   },
   {
+    id: "05-64-label-settings",
+    doc: "05-inventory.md",
+    line: 593,
+    anchor: "Screenshot of the label settings panel's orientation block",
+    alt: "The label settings panel — size presets, auto-rotate, and the test-label download",
+    route: "/inventory/print-labels",
+    prepare: async (page) => {
+      await withIdsFromApi("/inventory/items?limit=6", "items", 6)(page);
+      await page
+        .getByRole("button", { name: /^Settings$/ })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+      // A landscape preset, so the feed-direction diagram and the auto-rotate
+      // note render — on a portrait label there is nothing to rotate and the
+      // whole block the section is about stays hidden. The presets are
+      // clickable cards, not a dropdown.
+      await page
+        .getByText('Rollo / Thermal 2" x 1"', { exact: true })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(900);
+      // Scrolled to the test-label button at the foot of the panel, so the
+      // orientation block above it is in frame with it.
+      await page
+        .getByRole("button", { name: /Test Label/i })
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: false,
+  },
+  {
     id: "05-62-generate-variants",
     doc: "05-inventory.md",
     line: 251,
