@@ -46,7 +46,7 @@ class TestNamesAcceptRealInput:
     refused. A guest typing " Mary Anne " on a tablet is not an error."""
 
     @pytest.mark.parametrize(
-        "given,stored",
+        ("given", "stored"),
         [
             ("Dana", "Dana"),
             (" Dana", "Dana"),
