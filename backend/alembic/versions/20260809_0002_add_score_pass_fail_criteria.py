@@ -29,7 +29,21 @@ branch_labels = None
 depends_on = None
 
 
+def _columns(inspector, table: str) -> set[str]:
+    return {c["name"] for c in inspector.get_columns(table)}
+
+
 def upgrade() -> None:
+    # skill_templates is a model-only table on some deployments — create_all()
+    # materializes it with this column already present, so a fresh chain run has
+    # nothing to alter and must not assume the table is there. Same guard as
+    # 20260807_0009 and every skills-testing migration from 20260227_0300 on.
+    inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table("skill_templates"):
+        return
+    if "score_pass_fail_criteria" in _columns(inspector, "skill_templates"):
+        return
+
     op.add_column(
         "skill_templates",
         sa.Column(
@@ -48,4 +62,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table("skill_templates"):
+        return
+    if "score_pass_fail_criteria" not in _columns(inspector, "skill_templates"):
+        return
+
     op.drop_column("skill_templates", "score_pass_fail_criteria")
