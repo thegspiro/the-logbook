@@ -28,7 +28,7 @@ cryptography==49.0.0  # Required by PyMySQL for secure connections; fastapi-mail
 # ============================================
 # Redis & Caching
 # ============================================
-redis==5.2.1
+redis==8.1.0
 hiredis==3.4.0
 
 # ============================================
