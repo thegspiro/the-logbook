@@ -375,4 +375,88 @@ describe('SkillTemplateBuilderPage', () => {
       expect(screen.queryByText('Passing Points')).not.toBeInTheDocument();
     });
   });
+
+  // Where a statement sits relative to the clock is a property of the sheet:
+  // an opening brief is read before the candidate is in position, a
+  // mid-evolution prompt runs against the time limit.
+  describe('Statement timing', () => {
+    const makeCriterionAStatement = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.selectOptions(screen.getByDisplayValue('Pass / Fail'), 'statement');
+    };
+
+    const timingCheckbox = () => screen.getByRole('checkbox', { name: /read inside the time limit/i });
+
+    it('offers the timing choice only on a statement', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      expect(screen.queryByRole('checkbox', { name: /read inside the time limit/i })).not.toBeInTheDocument();
+
+      await makeCriterionAStatement(user);
+
+      expect(timingCheckbox()).toBeInTheDocument();
+    });
+
+    it('defaults to off, so a statement is read off the clock', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await makeCriterionAStatement(user);
+
+      expect(timingCheckbox()).not.toBeChecked();
+    });
+
+    it('sends starts_timer with the statement when ticked', async () => {
+      mockCreateTemplate.mockResolvedValue({ id: 'new-tpl-1', name: 'T', sections: [] });
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await user.type(screen.getByPlaceholderText(/SCBA Proficiency Evaluation/i), 'Timed Statement Template');
+      await user.type(screen.getByPlaceholderText(/section name/i), 'Section 1');
+      await user.type(screen.getByPlaceholderText(/dons scba/i), 'Opening statement');
+      await makeCriterionAStatement(user);
+      await user.type(screen.getByPlaceholderText(/statement the evaluator must read/i), 'Your time starts now.');
+      await user.click(timingCheckbox());
+
+      const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
+      await user.click(saveButtons[saveButtons.length - 1] as HTMLElement);
+
+      expect(mockCreateTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              criteria: [expect.objectContaining({ type: 'statement', starts_timer: true })],
+            }),
+          ],
+        })
+      );
+    });
+
+    it('does not carry the flag over to a step that is no longer a statement', async () => {
+      mockCreateTemplate.mockResolvedValue({ id: 'new-tpl-1', name: 'T', sections: [] });
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await user.type(screen.getByPlaceholderText(/SCBA Proficiency Evaluation/i), 'Switched Template');
+      await user.type(screen.getByPlaceholderText(/section name/i), 'Section 1');
+      await user.type(screen.getByPlaceholderText(/dons scba/i), 'Was a statement');
+      await makeCriterionAStatement(user);
+      await user.click(timingCheckbox());
+      // Author changes their mind: it becomes a scored step instead.
+      await user.selectOptions(screen.getByDisplayValue('Statement'), 'score');
+
+      const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
+      await user.click(saveButtons[saveButtons.length - 1] as HTMLElement);
+
+      expect(mockCreateTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              criteria: [expect.objectContaining({ type: 'score', starts_timer: false })],
+            }),
+          ],
+        })
+      );
+    });
+  });
 });

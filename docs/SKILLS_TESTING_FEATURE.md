@@ -79,6 +79,90 @@ Separate from scored steps, these are conditions that result in automatic failur
 
 If **any** critical criterion is checked, the overall result is **FAIL** regardless of the point total.
 
+### 1.5 What the Overall Percentage Is Actually Computed From (2026-08-09)
+
+The sections above describe the design intent — every line worth a point, as on
+a paper skill sheet. The implementation is narrower, and the difference matters
+enough to state plainly, because it decides what a number like "86%" means:
+
+| Criterion type | Counts toward the percentage?                                             |
+| -------------- | ------------------------------------------------------------------------- |
+| `score`        | Yes — earns 0…`max_score`                                                 |
+| `pass_fail`    | **Only if the template sets `score_pass_fail_criteria`** (off by default) |
+| `checklist`    | No                                                                        |
+| `time_limit`   | No                                                                        |
+| `statement`    | No — read aloud, marks itself, never scored                               |
+
+A template whose knowledge questions are written as `pass_fail` steps therefore
+produced a percentage that ignored every one of them: a candidate could miss
+half the questions on the sheet without the number moving. That is a defensible
+way to build a sheet — the questions still appear on the scorecard, and a
+critical one still fails the test outright — but it was invisible to anyone
+reading the result.
+
+Two things address it:
+
+- **`SkillTemplate.score_pass_fail_criteria`** — a per-template opt-in. When
+  on, a passed `pass_fail` step earns its points (its `max_score` if set,
+  otherwise 1) and a failed one earns none. **Off by default**, and frozen into
+  each test's `template_snapshot` at creation, so turning it on never re-scores
+  a result taken under the old rule.
+- **`build_score_breakdown()`** — returns the arithmetic (per-section point
+  totals, the threshold applied, and any critical step that decided the
+  outcome) on `SkillTestResponse.score_breakdown`. The scorecard renders it
+  directly rather than recomputing client-side, and flags any section that
+  contributed nothing to the percentage.
+
+`calculate_test_result()` is a thin wrapper over `build_score_breakdown()`, so
+there is exactly one implementation of these rules.
+
+Checklist and time-limit criteria stay out of the point pool deliberately: a
+checklist is partially completable and would need its own earned-fraction rule,
+and a time limit is a gate on the evolution rather than a measure of how well
+it was performed. Both are better expressed as critical criteria.
+
+### 1.6 When the Clock Starts (2026-08-09)
+
+The test clock starts on the examiner's first real action — recording any
+result, or moving between sections — because an examiner watching a candidate
+will not reliably remember to press play on a skill whose time limit is itself
+a pass/fail criterion.
+
+Statements are excluded from that rule by default: they mark themselves as a
+section renders, which is nobody's action, so merely opening a test whose first
+section leads with a statement must not begin timing before the candidate is in
+position.
+
+But sheets differ on where the opening statement sits. Some are read as a brief
+before the clock starts; others are read inside the time limit ("your time
+starts now"). A statement criterion therefore carries **`starts_timer`**:
+
+| `starts_timer`    | Examiner sees                                   | Effect                                    |
+| ----------------- | ----------------------------------------------- | ----------------------------------------- |
+| `false` (default) | The read-aloud box alone                        | Read off the clock; nothing starts timing |
+| `true`            | A **"Start clock & read"** button under the box | The examiner's tap starts the clock       |
+
+It is a button rather than an automatic start on render for the same reason
+statements are excluded by default: whether a statement is read on the clock is
+a property of the sheet, but _when_ it is read is not. An examiner opens a test
+to have it ready and reads the prompt when the candidate is in position, which
+may be minutes later — starting on render would time the wait.
+
+Tapping it clears a manual pause, as pressing play does. An examiner who paused
+the clock and then chose to read a timed prompt means to be timing again.
+
+#### Scorecard tallies
+
+The counts beside a section heading exclude two things that were previously
+inflating them:
+
+- **Statements**, which the scoring screen auto-marks passed — a section
+  holding one statement and one real criterion read "2 passed".
+- **Non-critical `score` steps**, which are stamped `passed: true` whatever
+  number they earn (only critical steps can fail on points) — so a step scored
+  0 of 1 was counted as a pass. Their contribution is the point total shown
+  alongside the heading, and nothing else.
+
 ### 1.5 Template Management
 
 - **CRUD operations** for templates, sections, steps, and critical criteria
@@ -153,7 +237,8 @@ When the test concludes:
    - Percentage score
    - Pass/Fail determination based on: (a) score meets passing threshold AND (b) no critical criteria triggered
 2. **Result summary screen**:
-   - Score breakdown by section
+   - Score breakdown by section — rendered from the backend's
+     `score_breakdown` (see §1.5), including which sections carried no points
    - List of missed steps
    - Critical criteria triggered (if any)
    - Time taken

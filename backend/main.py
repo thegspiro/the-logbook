@@ -627,10 +627,9 @@ def _run_migration_file(engine_or_conn, migration_path):
     """
     import importlib.util
 
-    from sqlalchemy.engine import Connection
-
     from alembic.operations import Operations
     from alembic.runtime.migration import MigrationContext
+    from sqlalchemy.engine import Connection
 
     spec = importlib.util.spec_from_file_location("migration", migration_path)
     module = importlib.util.module_from_spec(spec)
@@ -659,10 +658,9 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
 
     This reduces first-boot database setup from ~20 minutes to seconds.
     """
-    from sqlalchemy import text
-
     from alembic import command
     from alembic.script import ScriptDirectory
+    from sqlalchemy import text
 
     startup_status.set_phase(
         "migrations",
@@ -855,13 +853,12 @@ def run_migrations():
     """
     import os
 
-    from sqlalchemy import create_engine, text
-    from sqlalchemy.exc import DatabaseError, OperationalError, ProgrammingError
-    from sqlalchemy.pool import NullPool
-
     from alembic import command
     from alembic.config import Config
     from alembic.script import ScriptDirectory
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.exc import DatabaseError, OperationalError, ProgrammingError
+    from sqlalchemy.pool import NullPool
 
     startup_status.set_phase("migrations", "Preparing database migrations...")
 
@@ -2145,9 +2142,11 @@ app.include_router(
 )
 
 # Include public display API (no auth required - uses /api/public/v1/display)
-# BAD_REQUEST joined TOKEN_ADDRESSED when guest check-in landed (2026-08-09):
-# that route rejects a sign-in outside the organizer's check-in window with a
-# 400, which the read-only kiosk routes never had occasion to return.
+# BAD_REQUEST because guest check-in raises 400 in three places, and because a
+# JSON body FastAPI cannot decode answers 400 "There was an error parsing the
+# body" before validation runs at all — a 422 only covers a body that decoded.
+# Declaring 429/404 alone was right while this router was GET-only; the forms
+# and finance-approval routers, which also take bodies, already declare 400.
 app.include_router(
     public_display_router,
     prefix="/api",

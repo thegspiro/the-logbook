@@ -32,6 +32,14 @@ class SkillCriterionSchema(BaseModel):
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     checklist_items: Optional[List[str]] = None
     statement_text: Optional[str] = None
+    # Statements only. Whether reading this one aloud is inside the timed
+    # evolution. Sheets differ: an opening statement that briefs the candidate
+    # before they are in position is read off the clock, while a mid-evolution
+    # prompt ("the patient is now in the elevator") happens within the time
+    # limit and must be timed. Defaults off, which is how statements have always
+    # behaved — they mark themselves as a section renders, and that is nobody's
+    # action, so it must not start a clock on its own.
+    starts_timer: bool = False
 
 
 class SkillTemplateSectionSchema(BaseModel):
@@ -58,6 +66,9 @@ class SkillTemplateCreate(BaseModel):
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: bool = True
+    # Off by default so a template's percentage keeps the meaning it has
+    # everywhere else: points from score-type criteria only.
+    score_pass_fail_criteria: bool = False
     tags: Optional[List[str]] = None
     visibility: str = "all_members"
     # Optional pipeline requirement this template's tests satisfy (hybrid link:
@@ -81,6 +92,7 @@ class SkillTemplateUpdate(BaseModel):
     time_limit_seconds: Optional[int] = Field(None, ge=0)
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: Optional[bool] = None
+    score_pass_fail_criteria: Optional[bool] = None
     tags: Optional[List[str]] = None
     visibility: Optional[str] = None
     requirement_id: Optional[UUID] = None
@@ -107,6 +119,7 @@ class SkillTemplateResponse(UTCResponseBase):
     time_limit_seconds: Optional[int] = None
     passing_percentage: Optional[float] = None
     require_all_critical: bool
+    score_pass_fail_criteria: bool = False
     requirement_id: Optional[UUID] = None
     result_disclosure: Optional[str] = None
     result_release: Optional[str] = None
@@ -328,6 +341,18 @@ class SkillTestResponse(UTCResponseBase):
     # a critical criterion left unscored counts as a failure (see
     # calculate_test_result), so the UI warns before the test is submitted.
     template_require_all_critical: Optional[bool] = None
+    # Whether pass/fail steps carry points on this test's template. Drives the
+    # section tallies the examiner sees while scoring, which have to agree with
+    # the ones the finished record reports.
+    template_score_pass_fail_criteria: Optional[bool] = None
+
+    # How the overall percentage was arrived at — point totals per section, the
+    # threshold applied, and any critical step that decided the outcome. Sent
+    # rather than derived client-side so the figures a scorecard shows as its
+    # working cannot drift from the ones that actually scored the test. Shape
+    # is build_score_breakdown()'s return value; None while a test is in
+    # progress or its outcome is withheld.
+    score_breakdown: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)
 
