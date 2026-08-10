@@ -398,6 +398,11 @@ MEMBERS = [
 # from it silently enrolled nobody the moment the ranks were corrected.
 RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 
+# Riding positions in the order a crew fills them. Sliced to a shift's minimum
+# staffing, so a four-person engine asks for an officer, a driver and two
+# firefighters while a two-person brush truck asks for an officer and a driver.
+SHIFT_POSITIONS = ["officer", "driver", "firefighter", "firefighter", "ems"]
+
 # Steps behind a checklist requirement, keyed on the requirement name.
 CHECKLIST_ITEMS = {
     "Station Duties Checklist": [
@@ -1553,6 +1558,14 @@ class Seeder:
                     "apparatus_id": apparatus_id,
                     "color": color,
                     "min_staffing": staffing,
+                    # Riding positions, one slot per crew member. Without these
+                    # the shift panel's crew board never renders: it is gated on
+                    # apparatus_positions, which falls back to the shift's own
+                    # positions because the full Apparatus module deliberately
+                    # does not model riding assignments. Every seeded shift had
+                    # NULL positions, so the open-slot rows, the per-slot Assign
+                    # and the bulk "Fill All Open" action were unreachable.
+                    "positions": SHIFT_POSITIONS[:staffing],
                     "notes": f"{name} on {pick(unit, 'unit_number', 'unitNumber')}.",
                 }
                 if station_id:

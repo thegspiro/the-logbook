@@ -637,6 +637,51 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "03-54-crew-board-open-slots",
+    doc: "03-scheduling.md",
+    line: 987,
+    anchor: "Screenshot of a shift's Crew Board with one position filled",
+    alt: "A shift's crew board — one filled position and three open, each with Assign and Sign Up",
+    route: "/scheduling",
+    prepare: async (page) => {
+      // A shift with several slots still open: that is what puts open-position
+      // rows on the board and brings up the bulk "Fill All Open" action, which
+      // only appears once more than one slot is unfilled.
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/scheduling/shifts?limit=200", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body)
+          ? body
+          : body.shifts || body.items || [];
+        const today = new Date().toISOString().slice(0, 10);
+        for (const shift of rows) {
+          const day = shift.shift_date ?? shift.shiftDate ?? "";
+          if (day <= today) continue;
+          const detail = await fetch(
+            `/api/v1/scheduling/shifts/${shift.id}/assignments`,
+            { credentials: "include" },
+          );
+          if (!detail.ok) continue;
+          const crew = await detail.json();
+          const list = Array.isArray(crew) ? crew : crew.assignments || [];
+          const needed = shift.min_staffing ?? shift.minStaffing ?? 0;
+          if (list.length >= 1 && needed - list.length >= 2) return shift.id;
+        }
+        return null;
+      });
+      if (!id)
+        throw new Error("03-54: no future shift is part-staffed with 2+ open");
+      const url = new URL(page.url());
+      url.searchParams.set("shift", id);
+      await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(1500);
+    },
+    fullPage: false,
+  },
+  {
     id: "03-52-apparatus-required-evoc",
     doc: "03-scheduling.md",
     line: 1536,

@@ -968,14 +968,23 @@ When filing a report linked to a specific shift, the trainee dropdown automatica
 
 ### Structured Position Slots & Decline Handling
 
-Shifts now define required and optional position slots. When a member declines or is removed from a shift:
+A shift's riding positions are shown on the shift panel as a **Crew Board**,
+headed with the apparatus and a count of how many slots are still open. Each
+position is a row: a filled one names the member and their position with an
+**Assigned** badge and a remove control; an open one reads **Open position**
+and carries its own **Assign** and **Sign Up** buttons. When a member declines
+or is removed:
 
 - The system sends a decline notification
-- The open slot becomes visible on the shift card for re-assignment
-- Other eligible members can sign up for the vacated slot
+- Their position returns to the board as an open slot
+- Other eligible members can sign up for it, or an officer can assign somebody
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel showing position slots — some filled (with member name and green badge), one marked "Open" with a yellow badge, and an "Assign" button next to the open slot]_
+> **The board only appears once the shift has positions.** They come from the
+> apparatus's riding assignments plus any per-shift customizations — the panel
+> says so under the heading. A shift with none configured shows a plain Crew
+> Roster of whoever is assigned, with no open slots to fill.
+
+![A shift's crew board — one filled position and three open, each with Assign and Sign Up](./images/03-54-crew-board-open-slots.png)
 
 ### Additional Fixes (2026-03-19)
 
@@ -1317,10 +1326,17 @@ The crew board in the shift detail panel now uses a position-first workflow:
 
 You can also click the **"Assign"** button directly on an open slot in the crew board to pre-fill the position.
 
-**Bulk Assignment:** When 2+ positions are unfilled, a **"Fill All Open"** button appears. This shows a compact form with one member dropdown per open position, letting you fill all positions at once.
+**Bulk Assignment:** When more than one position is unfilled, a **Fill All
+Open** button appears at the foot of the board, next to **Assign Member**, with
+the open count on it. It shows a compact form with one member dropdown per open
+position, letting you fill them all at once.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel crew board showing two filled positions (with member names and green badges), one open slot with an "Assign" button, and the "Fill All Open" button at the bottom]_
+> **Corrected 2026-08-10.** The screenshot this section used to ask for —
+> two filled positions, _one_ open slot, and the Fill All Open button — cannot
+> exist: the button only renders while two or more slots are open. The board is
+> pictured under
+> [Structured Position Slots & Decline Handling](#structured-position-slots--decline-handling)
+> instead.
 
 > **Edge case:** Members on leave, with approved time-off covering the shift date, or already assigned to the shift are automatically excluded from the member dropdown.
 
