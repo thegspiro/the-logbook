@@ -15,7 +15,8 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { AlertCircle, BookOpen, Search, X } from 'lucide-react';
-import type { TrainingCourse, TrainingType } from '../../types/training';
+import type { TrainingCourse } from '../../types/training';
+import { TRAINING_TYPE_LABELS } from '../../constants/enums';
 
 /**
  * Which requirement type the picker is serving.
@@ -40,15 +41,6 @@ interface CourseLibraryPickerProps {
 }
 
 const COURSE_LIBRARY_PATH = '/training/admin?page=setup&tab=courses';
-
-const TRAINING_TYPE_LABELS: Record<TrainingType, string> = {
-  certification: 'Certification',
-  continuing_education: 'Continuing education',
-  skills_practice: 'Skills practice',
-  orientation: 'Orientation',
-  refresher: 'Refresher',
-  specialty: 'Specialty',
-};
 
 export const CourseLibraryPicker: React.FC<CourseLibraryPickerProps> = ({
   courses,

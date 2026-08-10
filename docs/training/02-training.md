@@ -1675,36 +1675,56 @@ Training sessions can now recur on a schedule, just like events. This eliminates
 
 ### Creating a Recurring Training Session
 
-1. Navigate to **Training > Admin > Create Session**
-2. Fill in the session details (title, training type, instructor, location)
-3. Select a **course** from the dropdown — the form auto-fills training type, credit hours, instructor, expiration months, and max participants from the course template
+Open **Training Administration > Records > Sessions**. The form is a
+**four-step wizard** — Event Details, Training Info, Settings, Review — with
+its steps shown across the top; **Next** moves forward and **Previous** back.
+Everything through step 5 below is on **Event Details**; the course is on
+**Training Info**.
 
-> **Screenshot needed:**
-> _[Screenshot of the Create Training Session form showing the course auto-populate feature with the details preview card below the course dropdown]_
+> **Corrected 2026-08-10.** This previously described a single form reached
+> from "Training > Admin > Create Session". There is no Create Session menu
+> item, and the fields are spread across four wizard steps — the course picker
+> in particular is not on the page the tab opens.
 
-4. Set the **start date/time** using the new quarter-hour time picker (restricted to `:00`, `:15`, `:30`, `:45`)
+1. Give the session a **Training Title** and, optionally, a description.
+2. Set the **Start Date & Time**. The time is three dropdowns — hour, minute
+   and AM/PM — with the minutes restricted to `:00`, `:15`, `:30` and `:45`.
 
-> **Screenshot needed:**
-> _[Screenshot of the DateTimeQuarterHour component showing the date picker and the quarter-hour dropdown side by side]_
+![The start date/time control — a date field beside hour, minute and AM/PM dropdowns](./images/02-81-session-quarter-hour.png)
 
-5. Use one of the **quick duration buttons** (1 hr, 2 hr, 4 hr, 8 hr) to auto-set the end time, or set it manually
+3. Use one of the **Quick Duration** buttons (1 hour, 2 hours, 4 hours,
+   8 hours) to fill in the end time, or set End Date & Time by hand. The row
+   only appears once a start time is set — there is nothing to add a duration
+   to before that.
 
-> **Screenshot needed:**
-> _[Screenshot of the quick duration buttons row (1 hr | 2 hr | 4 hr | 8 hr) appearing below the start date field]_
+![The Quick Duration row — 1 hour, 2 hours, 4 hours and 8 hours](./images/02-82-session-quick-duration.png)
 
-6. Enable **Recurrence** and choose a pattern:
-   - **Daily** — every N days
-   - **Weekly** — specific days of the week
-   - **Biweekly** — every two weeks
-   - **Monthly** — same day of month
-   - **Monthly by Weekday** — e.g., "2nd Tuesday of every month"
-   - **Annually** — same date each year
-   - **Custom** — user-defined interval
+4. Tick **Make this a recurring training session** and choose from the
+   **Repeats** dropdown:
+   - **Daily**
+   - **Weekly**
+   - **Every 2 Weeks**
+   - **Monthly (same date)**
+   - **Monthly (by weekday)** — adds **Which Occurrence** and **Day of Week**
+     dropdowns, so "2nd" + "Tue" gives the second Tuesday of each month
+   - **Annually**
+   - **Annually (by weekday)** — as above, plus a **Month** dropdown
+   - **Custom Days** — adds a row of weekday buttons to toggle
 
-> **Screenshot needed:**
-> _[Screenshot of the recurrence pattern selector showing radio buttons for each pattern type with the "Monthly by Weekday" option selected, displaying "2nd Tuesday of every month"]_
+   **Repeat Until** is required whenever recurrence is on.
 
-7. Set the series **end date** and click **Create**
+![The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers](./images/02-83-session-recurrence.png)
+
+5. Set the location, RSVP and participant limits, then click **Next**.
+6. On **Training Info**, choose **Use existing course template** and pick a
+   **course**. The form auto-fills training type, credit hours, instructor,
+   expiration months and max participants from the template, and shows a
+   preview card of what it took. The other radio, **Create new course for this
+   training**, is the default and asks for those fields directly instead.
+
+![The course picker with an existing course chosen and its details preview card underneath](./images/02-80-session-course-autopopulate.png)
+
+7. Work through **Settings**, then **Review**, and submit from the last step.
 
 The system creates one event per occurrence and links a `TrainingSession` record to each one. Each session inherits the training type, credit hours, and other fields from the parent configuration.
 
@@ -1746,21 +1766,35 @@ For a comprehensive guide with a realistic NREMT example walkthrough, see the de
 
 ### Training Record Categories
 
-Training records now include a **Category** field for classification. When submitting or reviewing training records, select the appropriate category:
+Training records carry a **Training Category**. It appears on the Submit
+External Training form and on the officer's review screen, and it is the field
+compliance calculations group hours by.
 
-| Category        | Description                                 |
-| --------------- | ------------------------------------------- |
-| Fire            | Fire suppression and prevention training    |
-| EMS             | Emergency Medical Services training         |
-| Hazmat          | Hazardous materials response training       |
-| Rescue          | Technical rescue training                   |
-| Driver/Operator | Apparatus operation and EVOC training       |
-| Leadership      | Officer development and leadership training |
+**The categories are your organization's**, configured in the training setup
+rather than fixed by the system, so the list on your department's form is
+whatever has been set up for it. The demo data defines six:
 
-Categories align with state reporting requirements and are used in compliance calculations for jurisdictions that require specific category hour minimums.
+| Category            | Code    | Covers                                      |
+| ------------------- | ------- | ------------------------------------------- |
+| Fire Suppression    | FIRE    | Fire suppression and prevention training    |
+| Emergency Medical   | EMS     | Emergency Medical Services training         |
+| Technical Rescue    | RESCUE  | Technical rescue training                   |
+| Hazardous Materials | HAZMAT  | Hazardous materials response training       |
+| Officer Development | OFFICER | Officer development and leadership training |
+| Driver/Operator     | DRIVER  | Apparatus operation and EVOC training       |
 
-> **Screenshot needed:**
-> _[Screenshot of the training record submission form showing the new "Category" dropdown field with options like Fire, EMS, Hazmat, Rescue, and the existing fields (course, date, hours)]_
+> **Corrected 2026-08-10.** This previously presented the six above as a fixed
+> system list under different names ("Fire", "EMS", "Leadership"). They are
+> per-organization records; the names here are the demo department's.
+
+Categories align with state reporting requirements and are used in compliance
+calculations for jurisdictions that require specific category hour minimums.
+Driver/Operator is deliberately its own category rather than a fold into fire
+training: ISO/FSRS scores driver/operator hours against NFPA 1002 separately,
+so a department filing pump training as fire training reads as having done
+none of it.
+
+![The Training Category dropdown on the submission form, listing the organization's categories](./images/02-84-record-category-field.png)
 
 ### Virginia NCCR Recertification Standards
 
@@ -1777,16 +1811,24 @@ The compliance dashboard shows progress toward NCCR requirements with category b
 
 ### EVOC Certification Levels
 
-EVOC (Emergency Vehicle Operations Course) certification levels are now tracked on member profiles:
+EVOC (Emergency Vehicle Operations Course) levels are recorded **per
+apparatus**, on a member's operator record for that rig — not as a field on
+their profile or anywhere in this module. Set them under **Operations >
+Apparatus > _(a rig)_ > Operators**.
 
-- **Basic** — Standard vehicle operation
-- **Intermediate** — Emergency vehicle operation with lights and sirens
-- **Advanced** — Specialized apparatus operation (aerials, heavy rescue)
+> **Corrected 2026-08-10.** This previously said levels were "tracked on
+> member profiles" and named Basic / Intermediate / Advanced as though they
+> were the system's. There is no EVOC field on any profile, and the levels are
+> configured per organization.
 
-EVOC levels integrate with the Apparatus module (required EVOC level per vehicle) and Scheduling module (validation on driver/operator assignments).
+The levels integrate with the Apparatus module (each apparatus can name a
+required EVOC level) and the Scheduling module (driver/operator assignments
+are checked against it, and warn rather than block).
 
-> **Screenshot needed:**
-> _[Screenshot of a member's training profile showing the EVOC certification level field with "Advanced" selected and the certification date]_
+Full detail, including how the check picks a member's level and what happens
+when it has expired, is in
+[Membership > EVOC Certification](./01-membership.md#evoc-certification) —
+this guide does not repeat the screenshot.
 
 ### Bulk Entry Improvements
 

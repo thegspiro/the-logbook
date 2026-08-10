@@ -340,6 +340,52 @@ export function withIdsFromApi(apiPath, listKey, limit = 6) {
   };
 }
 
+/**
+ * Fill the Create Training Session form's start date and time.
+ *
+ * Two controls below it are conditional on it: the Quick Duration row renders
+ * only once `start_datetime` is set, and the recurrence block's preview has
+ * nothing to describe without one. The date is fixed rather than computed from
+ * today so the shot does not change every day it is re-taken.
+ */
+export async function setSessionStart(page) {
+  const block = page
+    .locator("div")
+    .filter({ has: page.locator("label", { hasText: "Start Date & Time" }) })
+    .filter({ has: page.locator('input[type="date"]') })
+    .last();
+  await block.waitFor({ timeout: 15_000 });
+  await block.locator('input[type="date"]').first().fill("2026-09-15");
+  // Three selects, not one: hour (12-hour), minute (00/15/30/45) and AM/PM.
+  // They are addressed by index because their aria-labels are built from a
+  // placeholder the caller supplies, which this form leaves unset.
+  const times = block.locator("select");
+  await times.nth(0).selectOption("9");
+  await times.nth(1).selectOption("00");
+  await times.nth(2).selectOption("AM");
+  await page.waitForTimeout(600);
+}
+
+/**
+ * Advance the Create Training Session wizard to its Training Info step.
+ *
+ * The form is a four-step wizard — Event Details, Training Info, Settings,
+ * Review — and the course picker lives on step 2, not on the page the route
+ * opens. Step 1 needs a title and a start/end time before Next will move.
+ */
+export async function openSessionTrainingInfo(page) {
+  await page
+    .getByPlaceholder("e.g., CPR/AED Renewal Training")
+    .fill("Quarterly Pump Operations Refresher", { timeout: 15_000 });
+  await setSessionStart(page);
+  await page
+    .getByRole("button", { name: /^2 hours$/ })
+    .click({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: /^Next$/ }).click({ timeout: 10_000 });
+  await page.waitForTimeout(900);
+}
+
 /** True for a shift whose date has passed — where the logged runs are. */
 export const isPastShift = (shift) => {
   const day = shift.shift_date ?? shift.shiftDate ?? "";
@@ -589,6 +635,122 @@ export const SHOTS = [
       (item) => Boolean(item.asset_tag ?? item.assetTag),
     ),
     fullPage: false,
+  },
+  {
+    id: "02-80-session-course-autopopulate",
+    doc: "02-training.md",
+    line: 1728,
+    anchor: "Screenshot of the course picker with an existing course chosen",
+    alt: "The course picker with an existing course chosen and its details preview card underneath",
+    route: "/training/admin?tab=sessions",
+    prepare: async (page) => {
+      await openSessionTrainingInfo(page);
+      // Step 2 defaults to "Create new course for this training", which has
+      // no picker and no preview card — the section is about the other branch.
+      await page
+        .getByText("Use existing course template", { exact: true })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+      const picker = page
+        .locator("select")
+        .filter({ hasText: "Select a course" })
+        .first();
+      const options = await picker
+        .locator("option")
+        .evaluateAll((els) =>
+          els.map((e) => e.getAttribute("value")).filter(Boolean),
+        );
+      if (!options[0]) throw new Error("02-80: no course templates seeded");
+      await picker.selectOption(options[0]);
+      await page.waitForTimeout(600);
+    },
+    selector: "div:has(> select):has(> div.border-blue-500\\/30)",
+  },
+  {
+    id: "02-81-session-quarter-hour",
+    doc: "02-training.md",
+    line: 1693,
+    anchor: "Screenshot of the Start Date & Time control",
+    alt: "The start date/time control — a date field beside hour, minute and AM/PM dropdowns",
+    route: "/training/admin?tab=sessions",
+    prepare: setSessionStart,
+    // The start half only. The end field beside it is still blank at this
+    // point, and a shot of one filled control next to one empty one reads as
+    // a half-finished form rather than as the control being described.
+    selector: "div:has(> label:has-text('Start Date & Time'))",
+  },
+  {
+    id: "02-82-session-quick-duration",
+    doc: "02-training.md",
+    line: 1701,
+    anchor: "Screenshot of the Quick Duration row",
+    alt: "The Quick Duration row — 1 hour, 2 hours, 4 hours and 8 hours",
+    route: "/training/admin?tab=sessions",
+    prepare: async (page) => {
+      // The row is conditional on a start time being set: with the field
+      // empty there is nothing to add a duration to and nothing renders.
+      await setSessionStart(page);
+    },
+    selector: "div:has(> span:text-is('Quick Duration'))",
+    viewport: { width: 1440, height: 1100 },
+  },
+  {
+    id: "02-83-session-recurrence",
+    doc: "02-training.md",
+    line: 1718,
+    anchor: "Screenshot of the recurrence block with",
+    alt: "The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers",
+    route: "/training/admin?tab=sessions",
+    prepare: async (page) => {
+      await setSessionStart(page);
+      await page
+        .getByLabel(/Make this a recurring training session/i)
+        .check({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+      const block = page.locator("div.border-l-2").first();
+      await block
+        .locator("select")
+        .first()
+        .selectOption({ label: "Monthly (by weekday)" });
+      await page.waitForTimeout(600);
+      // Fill the whole block. Left at their defaults the two dropdowns read
+      // "1st"/"Mon" with an empty Repeat Until beside them, which pictures the
+      // controls without picturing a pattern.
+      await block.locator('input[type="date"]').first().fill("2027-09-15");
+      const pickers = block.locator("select");
+      await pickers.nth(1).selectOption({ label: "2nd" });
+      await pickers.nth(2).selectOption({ label: "Tue" });
+      await page.waitForTimeout(600);
+    },
+    selector: "div.border-l-2:has(select)",
+    viewport: { width: 1440, height: 1200 },
+  },
+  {
+    id: "02-84-record-category-field",
+    doc: "02-training.md",
+    line: 1801,
+    anchor:
+      "Screenshot of the Submit External Training form showing the Training Category dropdown",
+    alt: "The Training Category dropdown on the submission form, listing the organization's categories",
+    // A member filing their own record is who this field is described for.
+    auth: "member",
+    route: "/training/submit",
+    prepare: async (page) => {
+      const picker = page
+        .locator("select")
+        .filter({ hasText: "Select a category" })
+        .first();
+      await picker.waitFor({ timeout: 15_000 });
+      await picker.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+      const options = await picker
+        .locator("option")
+        .evaluateAll((els) =>
+          els.map((e) => e.getAttribute("value")).filter(Boolean),
+        );
+      if (!options[0]) throw new Error("02-84: no training categories seeded");
+      await picker.selectOption(options[0]);
+      await page.waitForTimeout(500);
+    },
   },
   {
     id: "02-79-training-attachments",
