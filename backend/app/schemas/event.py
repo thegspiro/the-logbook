@@ -522,8 +522,14 @@ class GuestCheckInRequest(BaseModel):
     belongs on the real application form the follow-up email links to.
     """
 
-    first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
+    # `pattern` carries what _strip_name enforces into the published schema.
+    # min_length=1 alone declares "\n" valid — it is one character — so a
+    # generated client, and the schemathesis contract suite, reads a
+    # whitespace-only name as acceptable input and the 422 below as the API
+    # breaking its own contract. \S is unanchored, so " Mary Anne " still
+    # passes and is stripped; only all-whitespace is refused.
+    first_name: str = Field(..., min_length=1, max_length=100, pattern=r"\S")
+    last_name: str = Field(..., min_length=1, max_length=100, pattern=r"\S")
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(default=None, max_length=50)
     organization_name: Optional[str] = Field(default=None, max_length=255)
