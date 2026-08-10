@@ -33,9 +33,7 @@ class TestOfficerDirectorySyncIsolation:
                 raise RuntimeError("boom on B")
 
         service = SimpleNamespace(sync_directory=AsyncMock(side_effect=_sync))
-        with patch(
-            "app.services.officer_service.OfficerService", return_value=service
-        ):
+        with patch("app.services.officer_service.OfficerService", return_value=service):
             out = await scheduled_tasks.run_officer_directory_sync(db)
 
         # A and C synced despite B failing.

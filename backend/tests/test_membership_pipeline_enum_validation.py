@@ -43,7 +43,8 @@ class TestStepEnumValidation:
 
     def test_update_allows_omitted(self):
         u = PipelineStepUpdate(name="Renamed")
-        assert u.step_type is None and u.action_type is None
+        assert u.step_type is None
+        assert u.action_type is None
 
 
 class TestProspectStatusValidation:

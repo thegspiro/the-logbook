@@ -40,7 +40,7 @@ class TestSendTimeRebindingGuard:
         guard = MagicMock(side_effect=ValueError("resolves to a private IP"))
         monkeypatch.setattr(push_module, "assert_outbound_url_safe", guard)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="private IP"):
             service._send_one(_SUB, "{}")
 
         guard.assert_called_once_with(_SUB["endpoint"])

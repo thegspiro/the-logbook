@@ -27,9 +27,7 @@ def _member_rows(pairs):
 class TestExternalRecipients:
     async def test_members_are_not_external(self):
         db = _member_rows([("chief@dept.gov", None), ("emt@dept.gov", "emt@gmail.com")])
-        out = await external_recipients(
-            db, "org1", ["chief@dept.gov", "emt@gmail.com"]
-        )
+        out = await external_recipients(db, "org1", ["chief@dept.gov", "emt@gmail.com"])
         assert out == []
 
     async def test_case_and_whitespace_insensitive(self):
@@ -58,9 +56,7 @@ class TestExternalRecipients:
 class TestAuditExternalRecipients:
     async def test_audits_only_when_external_present(self):
         db = _member_rows([("chief@dept.gov", None)])
-        with patch.object(
-            mod, "log_audit_event", new=AsyncMock()
-        ) as mock_log:
+        with patch.object(mod, "log_audit_event", new=AsyncMock()) as mock_log:
             out = await audit_external_recipients(
                 db,
                 organization_id="org1",
@@ -79,9 +75,7 @@ class TestAuditExternalRecipients:
 
     async def test_no_audit_when_all_members(self):
         db = _member_rows([("chief@dept.gov", None)])
-        with patch.object(
-            mod, "log_audit_event", new=AsyncMock()
-        ) as mock_log:
+        with patch.object(mod, "log_audit_event", new=AsyncMock()) as mock_log:
             out = await audit_external_recipients(
                 db,
                 organization_id="org1",

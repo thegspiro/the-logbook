@@ -146,4 +146,5 @@ class TestCreateCategoryParentScoping:
             str(uuid4()),
         )
         assert result is None
-        assert error is not None and "parent category" in error
+        assert error is not None
+        assert "parent category" in error

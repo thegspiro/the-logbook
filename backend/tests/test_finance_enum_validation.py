@@ -41,7 +41,8 @@ class TestApprovalStepEnumValidation:
 
     def test_update_allows_omitted(self):
         u = ApprovalChainStepUpdate(name="Renamed")
-        assert u.step_type is None and u.approver_type is None
+        assert u.step_type is None
+        assert u.approver_type is None
 
 
 class TestOtherFinanceEnums:

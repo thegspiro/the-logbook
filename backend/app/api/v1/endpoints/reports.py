@@ -8,11 +8,9 @@ and report export.
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from fastapi import status
 
 from app.api.dependencies import require_permission, user_has_permission
 from app.core.database import get_db

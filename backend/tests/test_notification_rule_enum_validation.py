@@ -40,7 +40,9 @@ class TestRuleEnumValidation:
 
     def test_update_allows_omitted(self):
         u = NotificationRuleUpdate(name="Renamed")
-        assert u.trigger is None and u.category is None and u.channel is None
+        assert u.trigger is None
+        assert u.category is None
+        assert u.channel is None
 
 
 if __name__ == "__main__":  # pragma: no cover
