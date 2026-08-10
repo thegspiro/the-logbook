@@ -681,7 +681,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   <div>
                     <label className="text-theme-text-primary mb-2 block text-sm font-semibold">RSVP Deadline</label>
                     <DateTimeQuarterHour
-                      value={formData.rsvp_deadline}
+                      value={formData.rsvp_deadline ?? ''}
                       onChange={(v) => updateField('rsvp_deadline', v)}
                       className="form-input py-3"
                     />

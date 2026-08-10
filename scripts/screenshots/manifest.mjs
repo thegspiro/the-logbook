@@ -912,6 +912,76 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "08-60-dashboard-notification-cards",
+    doc: "08-admin-reports.md",
+    line: 1153,
+    anchor:
+      "Screenshot of the dashboard Notifications panel showing the dismiss control",
+    alt: "The dashboard Notifications panel — a dismiss control on each card and Clear All in the header",
+    route: "/dashboard",
+    prepare: async (page) => {
+      const panel = page
+        .locator("div.card")
+        .filter({ hasText: "Notifications" })
+        .first();
+      await panel.waitFor({ timeout: 15_000 });
+      await panel.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+      await page.waitForTimeout(600);
+    },
+    selector: "div.card:has(button[title='Mark all as read'])",
+  },
+  {
+    id: "08-61-notification-channel-filter",
+    doc: "08-admin-reports.md",
+    line: 1196,
+    anchor: "Screenshot of the Send Log's channel filter with In-App selected",
+    alt: "The delivery-log channel filter — All, Email and In-App — with In-App selected",
+    route: "/notifications?tab=log",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "In-App", exact: true })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(700);
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+  },
+  {
+    id: "08-62-topnav-bell-badge",
+    doc: "08-admin-reports.md",
+    line: 1255,
+    anchor:
+      "Screenshot of the top navigation bar showing the bell icon with a red badge",
+    alt: "The top navigation bar with the bell icon carrying its unread-count badge",
+    route: "/dashboard",
+    prepare: async (page) => {
+      // The top bar is a per-user preference stored in localStorage; the
+      // default is the left sidebar, which has its own badge shot (08-31).
+      await page.evaluate(() =>
+        localStorage.setItem("navigationLayout", "top"),
+      );
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(1800);
+    },
+    selector: "header",
+  },
+  {
+    id: "08-63-inbox-show-read",
+    doc: "08-admin-reports.md",
+    line: 1283,
+    anchor:
+      "Screenshot of the Notifications inbox showing the Show read checkbox",
+    alt: "The notifications inbox with its Show read checkbox, unread count and Load more button",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      await page
+        .getByText("Show read", { exact: true })
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
     id: "04-36-description-markdown",
     doc: "04-events-meetings.md",
     line: 354,

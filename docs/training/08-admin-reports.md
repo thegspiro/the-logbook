@@ -1140,13 +1140,17 @@ All API response schemas now inherit from `UTCResponseBase`, which automatically
 
 ### Dashboard Notification Management
 
-Dashboard notification cards now include **clear** and **dismiss** buttons directly on each card:
+Each card in the dashboard's Notifications panel carries a **dismiss** control
+— the **✕** on the right — which marks that notification as read and removes it
+from the panel. The panel header carries **Clear All**, which marks every
+notification in it as read at once.
 
-- **Dismiss**: Hides the notification from the user's dashboard (personal action)
-- **Clear**: Marks the notification as read
+> **Corrected 2026-08-10.** This previously described two controls on each
+> card, a dismiss and a checkmark "clear", with different effects. There is one
+> control per card, the ✕, and it is the mark-as-read action; "Clear All" is a
+> header action, not a per-card one.
 
-> **Screenshot needed:**
-> _[Screenshot of the Dashboard notifications area showing notification cards with dismiss (X) and clear (checkmark) buttons visible on each card]_
+![The dashboard Notifications panel — a dismiss control on each card and Clear All in the header](./images/08-60-dashboard-notification-cards.png)
 
 ### Department Messages
 
@@ -1169,17 +1173,26 @@ member notification controls — see
 
 ### Notification Channel Filter
 
-The Notifications page now includes a **channel filter** to view notifications by delivery method:
+The **Send Log** tab on the Notifications page carries a **channel filter** for
+narrowing the delivery history by method:
 
-| Filter | Shows                                                  |
-| ------ | ------------------------------------------------------ |
-| All    | All notifications regardless of delivery channel       |
-| Email  | Only email-delivered notifications                     |
-| In-App | Only in-app notifications (bell icon)                  |
-| SMS    | Only SMS-delivered notifications (when Twilio enabled) |
+| Filter | Shows                                     |
+| ------ | ----------------------------------------- |
+| All    | Every send regardless of delivery channel |
+| Email  | Only email sends                          |
+| In-App | Only in-app notifications (the bell icon) |
 
-> **Screenshot needed:**
-> _[Screenshot of the Notifications page showing channel filter tabs (All, Email, In-App, SMS) at the top with the In-App filter active]_
+> **Corrected 2026-08-10.** An **SMS** filter was listed here. The log records
+> two channels, email and in-app; SMS sends are not written to it, so there is
+> no fourth button. The filter is also on the Send Log tab specifically rather
+> than the page as a whole — the inbox has its own Show read control instead.
+
+Each row shows the subject, recipient, channel, send time and a delivery
+status: a green check for delivered, a red mark with the error on hover when
+not. An in-app notification counts as delivered as soon as it is written,
+since the row is what the member reads.
+
+![The delivery-log channel filter — All, Email and In-App — with In-App selected](./images/08-61-notification-channel-filter.png)
 
 **Not yet built:** the channel filter. The Notifications page's tabs are
 **My Notifications**, **Notification Rules**, **Email Templates** and
@@ -1224,8 +1237,10 @@ The `TimeQuarterHour` component has been redesigned with three separate dropdown
 
 This replaces the previous single text input that was harder to use on mobile and didn't enforce quarter-hour increments visually.
 
-> **Screenshot needed:**
-> _[Screenshot of the redesigned TimeQuarterHour component showing three separate dropdown selectors (Hour: "2", Minute: "30", AM/PM: "PM") in a compact horizontal layout]_
+The control is pictured in context — beside the date field it is normally
+paired with — under
+[Training → Creating a Recurring Training Session](./02-training.md#creating-a-recurring-training-session);
+this guide does not repeat the screenshot.
 
 ---
 
@@ -1235,8 +1250,7 @@ This replaces the previous single text input that was harder to use on mobile an
 
 The bell icon in the top navigation bar and the Notifications link in the side navigation now show an **unread count badge**. The badge updates automatically via smart polling — polling pauses when the browser tab is hidden and refetches immediately when you return to the tab.
 
-> **Screenshot needed:**
-> _[Screenshot of the top navigation bar showing the bell icon with a red badge showing "5" (unread count), next to the user avatar and settings gear]_
+![The top navigation bar with the bell icon carrying its unread-count badge](./images/08-62-topnav-bell-badge.png)
 
 ![Sidebar navigation with the unread notification badge](./images/08-31-sidebar-notification-badge.png)
 
@@ -1248,13 +1262,22 @@ A new **"Mark All Read"** button on the Notifications inbox clears all unread no
 
 ### Read/Unread Filter and Pagination
 
-The Notifications inbox now includes:
+The Notifications inbox includes:
 
-- **"Show read" toggle** to filter between unread-only and all notifications
-- **"Load More" pagination** — notifications load 20 at a time with a "Load More" button at the bottom
+- a **Show read** checkbox beside the unread count, ticked by default, which
+  switches between all notifications and unread-only
+- **Load more** pagination — 20 at a time, with the button at the foot of the
+  list naming what is left ("Load more (18 remaining)"). It is absent once
+  everything is on screen
+- **Mark all as read**, top right, which appears only while something is unread
 
-> **Screenshot needed:**
-> _[Screenshot of the Notifications inbox showing the "Show read" toggle switch at the top, a list of 20 notifications with some read (lighter text) and some unread (bold), and a "Load More" button at the bottom]_
+Read notifications are drawn in muted text without the coloured left edge;
+unread ones keep both.
+
+> **Corrected 2026-08-10.** "Show read" is a checkbox, not a toggle switch, and
+> the button reads "Load more (N remaining)" rather than "Load More".
+
+![The notifications inbox with its Show read checkbox, unread count and Load more button](./images/08-63-inbox-show-read.png)
 
 ### Dashboard Notification Fixes
 
