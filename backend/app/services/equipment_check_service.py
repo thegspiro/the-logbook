@@ -694,6 +694,7 @@ class EquipmentCheckService:
         check_id: str,
         items_data: List[Dict[str, Any]],
         template_items_map: Dict[str, CheckTemplateItem],
+        organization_id: str,
     ) -> List[ShiftEquipmentCheckItem]:
         """Create ORM check item records, updating template serials as needed."""
         created: List[ShiftEquipmentCheckItem] = []
@@ -720,7 +721,15 @@ class EquipmentCheckService:
                 and found_qty is not None
                 and self._target_quantity(tmpl_item) is not None
             ):
-                tmpl_item.quantity_on_truck = max(0, int(found_qty))
+                counted = max(0, int(found_qty))
+                # Where lots are aboard the total has to be reconciled against
+                # them; writing the scalar alone would be discarded, since the
+                # lot sum is what every reader uses.
+                if self._deployed_lots(tmpl_item):
+                    self._reconcile_to_total(tmpl_item, counted, organization_id)
+                    tmpl_item.quantity_on_truck = self._on_truck(tmpl_item)
+                else:
+                    tmpl_item.quantity_on_truck = counted
                 self._sync_restock_after_restocking(tmpl_item)
 
             check_item = ShiftEquipmentCheckItem(
@@ -927,7 +936,9 @@ class EquipmentCheckService:
                     f"Items do not belong to template: " f"{', '.join(invalid)}"
                 )
 
-        await self._create_check_items(check.id, items_data, template_items_map)
+        await self._create_check_items(
+            check.id, items_data, template_items_map, organization_id
+        )
 
         await self._update_apparatus_deficiency(
             shift.apparatus_id, organization_id, overall_status
@@ -1044,7 +1055,9 @@ class EquipmentCheckService:
         self.db.add(check)
         await self.db.flush()
 
-        await self._create_check_items(check.id, items_data, template_items_map)
+        await self._create_check_items(
+            check.id, items_data, template_items_map, organization_id
+        )
 
         await self._update_apparatus_deficiency(
             apparatus_id, organization_id, overall_status
@@ -1492,6 +1505,19 @@ class EquipmentCheckService:
                         CheckTemplateItem.expiration_date.isnot(None),
                         CheckTemplateItem.expiration_date <= cutoff,
                     ),
+                    # The rows display the soonest date *aboard*, so the filter
+                    # has to see it too. An item whose column reads next year
+                    # while it carries a lot expiring this week belongs on this
+                    # list, and matching only the column would hide exactly the
+                    # case the deployed-lot table was added for.
+                    CheckTemplateItem.id.in_(
+                        select(CheckItemDeployedLot.template_item_id).where(
+                            CheckItemDeployedLot.organization_id == organization_id,
+                            CheckItemDeployedLot.quantity > 0,
+                            CheckItemDeployedLot.expiration_date.isnot(None),
+                            CheckItemDeployedLot.expiration_date <= cutoff,
+                        )
+                    ),
                     CheckTemplateItem.restock_needed.is_(True),
                     # A counted position below its target belongs here whether
                     # or not anyone filed a report — a check that recorded two
@@ -1805,7 +1831,11 @@ class EquipmentCheckService:
         for would vanish. They are recorded with the item's existing lot number
         and date, which is all that was ever known about them.
         """
-        if cls._deployed_lots(item):
+        # The raw collection, not the in-stock view: the question is whether
+        # this position has ever had a lot recorded, and a row sitting at zero
+        # still means yes. Asking the filtered view would add a second row
+        # describing the same units.
+        if item.deployed_lots:
             return
         existing_count = cls._on_truck(item)
         if not existing_count or existing_count < 1:
@@ -1822,6 +1852,41 @@ class EquipmentCheckService:
         )
 
     @classmethod
+    def _reconcile_to_total(
+        cls, item: CheckTemplateItem, total: int, organization_id: str
+    ) -> None:
+        """Make the lots aboard add up to a counted total.
+
+        A recount gives one number for a position that may hold several lots,
+        so the difference has to be placed somewhere. Writing it to
+        ``quantity_on_truck`` alone would be silently discarded: once lots
+        exist their sum is what every reader uses.
+
+        Fewer than recorded means units left, and they come off soonest-first
+        like any other consumption. More than recorded means the record was
+        incomplete; the surplus goes to an undated row, because the honest
+        answer to "when do these expire" is that nobody knows — and an undated
+        row neither flatters the position's soonest-date reading nor gets
+        drawn from before the dated stock.
+        """
+        current = cls._on_truck(item) or 0
+        if total == current:
+            return
+        if total < current:
+            cls._consume_deployed(item, current - total)
+            return
+        item.deployed_lots.append(
+            CheckItemDeployedLot(
+                id=generate_uuid(),
+                organization_id=organization_id,
+                template_item_id=item.id,
+                lot_number=None,
+                expiration_date=None,
+                quantity=total - current,
+            )
+        )
+
+    @classmethod
     def _consume_deployed(cls, item: CheckTemplateItem, quantity: int) -> int:
         """Draw units off the deployed lots, soonest to expire first.
 
@@ -1832,12 +1897,22 @@ class EquipmentCheckService:
         is a correction to the record, not a negative quantity.
         """
         remaining = quantity
+        emptied = []
+        # _deployed_lots returns a fresh sorted list, so removing from the
+        # collection below does not disturb this iteration.
         for lot in cls._deployed_lots(item):
             if remaining <= 0:
                 break
             take = min(lot.quantity, remaining)
             lot.quantity -= take
             remaining -= take
+            if lot.quantity == 0:
+                emptied.append(lot)
+        # A lot drawn down to nothing is no longer aboard. Leaving the row
+        # would accumulate dead records against every position a truck ever
+        # restocked, and keep a spent lot's foreign key alive for no reader.
+        for lot in emptied:
+            item.deployed_lots.remove(lot)
         return quantity - remaining
 
     @classmethod
@@ -2017,7 +2092,11 @@ class EquipmentCheckService:
             raise ValueError("This item does not carry a quantity")
 
         previous = self._on_truck(item)
-        item.quantity_on_truck = quantity
+        if self._deployed_lots(item):
+            self._reconcile_to_total(item, quantity, organization_id)
+            item.quantity_on_truck = self._on_truck(item)
+        else:
+            item.quantity_on_truck = quantity
         self._sync_restock_after_restocking(item)
 
         await self._log_item_action(
@@ -2266,6 +2345,15 @@ class EquipmentCheckService:
         }
 
         lot.quantity -= quantity
+        was_restock = bool(item.restock_needed)
+
+        # Before anything overwrites the item's own lot/date: whatever is
+        # already aboard gets a row carrying the values it was actually
+        # recorded with. Doing this after the write below would stamp the
+        # incoming lot's date onto the older units — the very substitution
+        # this table exists to prevent.
+        self._materialize_untracked_units(item, organization_id)
+
         # Establish the catalog link if this was the item's first swap.
         if not item.inventory_item_id:
             item.inventory_item_id = lot.inventory_item_id
@@ -2274,17 +2362,14 @@ class EquipmentCheckService:
         if lot.expiration_date is not None:
             item.has_expiration = True
             item.expiration_date = lot.expiration_date
+
         # Record the units as their own presence on the truck rather than
-        # overwriting the position's single lot/date. Restocking two of a
-        # four-slot bracket used to stamp the new date onto the two already
-        # there, hiding the older units behind a later expiration.
-        was_restock = bool(item.restock_needed)
-        self._materialize_untracked_units(item, organization_id)
+        # overwriting the position's single lot/date.
         existing = next(
             (
-                lot
-                for lot in (item.deployed_lots or [])
-                if lot.inventory_lot_id == lot_id_value
+                deployed
+                for deployed in (item.deployed_lots or [])
+                if deployed.inventory_lot_id == lot_id_value
             ),
             None,
         )

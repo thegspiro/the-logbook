@@ -195,7 +195,9 @@ class TestCreateCheckItems:
             }
         ]
 
-        await service._create_check_items("check-1", items_data, {"ti-1": tmpl_item})
+        await service._create_check_items(
+            "check-1", items_data, {"ti-1": tmpl_item}, "org-1"
+        )
 
         # A crew standing at the compartment counting outranks a running total
         # that has drifted.
@@ -217,7 +219,9 @@ class TestCreateCheckItems:
             }
         ]
 
-        await service._create_check_items("check-1", items_data, {"ti-1": tmpl_item})
+        await service._create_check_items(
+            "check-1", items_data, {"ti-1": tmpl_item}, "org-1"
+        )
 
         assert tmpl_item.quantity_on_truck == 4
         assert tmpl_item.restock_needed is False
@@ -233,7 +237,9 @@ class TestCreateCheckItems:
             }
         ]
 
-        await service._create_check_items("check-1", items_data, {"ti-1": tmpl_item})
+        await service._create_check_items(
+            "check-1", items_data, {"ti-1": tmpl_item}, "org-1"
+        )
 
         assert tmpl_item.quantity_on_truck is None
 
@@ -249,7 +255,7 @@ class TestCreateCheckItems:
             }
         ]
         created = await service._create_check_items(
-            "check-1", items_data, {"ti-1": tmpl_item}
+            "check-1", items_data, {"ti-1": tmpl_item}, "org-1"
         )
         assert tmpl_item.expiration_date == NEXT_YEAR
         assert created[0].expiration_found == NEXT_YEAR
@@ -439,6 +445,37 @@ class TestSwapItemLot:
         with pytest.raises(ValueError, match="at least 1"):
             await service.swap_item_lot("ti-1", "lot-1", "org-1", quantity=0)
 
+    async def test_units_already_aboard_keep_their_own_date_through_a_swap(
+        self, service, mock_db
+    ):
+        # Regression: the item's columns were overwritten before the existing
+        # units were given a row, so they inherited the incoming lot's date —
+        # the substitution the deployed-lot table exists to prevent.
+        item = _template_item(
+            inventory_item_id="inv-1",
+            expected_quantity=4,
+            quantity_on_truck=2,
+            lot_number="OLD-1",
+            expiration_date=TOMORROW,
+        )
+        lot = MagicMock(
+            id="lot-1",
+            inventory_item_id="inv-1",
+            quantity=9,
+            lot_number="NEW-1",
+            expiration_date=NEXT_YEAR,
+        )
+        self._wire(mock_db, item, lot)
+
+        await service.swap_item_lot("ti-1", "lot-1", "org-1", quantity=2)
+
+        by_number = {dl.lot_number: dl for dl in item.deployed_lots}
+        assert by_number["OLD-1"].expiration_date == TOMORROW
+        assert by_number["NEW-1"].expiration_date == NEXT_YEAR
+        assert service._on_truck(item) == 4
+        # The truck is exposed by its oldest units, not its newest.
+        assert service._soonest_expiration(item) == TOMORROW
+
     async def test_swap_without_a_user_still_succeeds(self, service, mock_db):
         item = _template_item(inventory_item_id="inv-1")
         lot = MagicMock(
@@ -560,6 +597,51 @@ class TestDeployedLots:
         service._materialize_untracked_units(item, "org-1")
 
         assert item.deployed_lots == []
+
+    def test_a_recount_below_the_record_comes_off_soonest_first(self, service):
+        item = _template_item(expected_quantity=4)
+        soon = _deployed("lot-a", 2, TOMORROW)
+        later = _deployed("lot-b", 2, NEXT_YEAR)
+        item.deployed_lots = [later, soon]
+
+        service._reconcile_to_total(item, 3, "org-1")
+
+        assert (soon.quantity, later.quantity) == (1, 2)
+
+    def test_a_recount_above_the_record_lands_in_an_undated_row(self, service):
+        item = _template_item(expected_quantity=4)
+        item.deployed_lots = [_deployed("lot-a", 2, TOMORROW)]
+
+        service._reconcile_to_total(item, 5, "org-1")
+
+        surplus = [lot for lot in item.deployed_lots if lot.lot_number is None]
+        assert len(surplus) == 1
+        assert surplus[0].quantity == 3
+        # Nobody knows when found stock expires; an undated row says so, and
+        # does not flatter the position's soonest-date reading.
+        assert surplus[0].expiration_date is None
+        assert service._soonest_expiration(item) == TOMORROW
+
+    def test_an_unchanged_recount_touches_nothing(self, service):
+        item = _template_item(expected_quantity=4)
+        lot = _deployed("lot-a", 2, TOMORROW)
+        item.deployed_lots = [lot]
+
+        service._reconcile_to_total(item, 2, "org-1")
+
+        assert (len(item.deployed_lots), lot.quantity) == (1, 2)
+
+    def test_a_lot_drawn_to_nothing_stops_being_aboard(self, service):
+        item = _template_item(expected_quantity=4)
+        soon = _deployed("lot-a", 2, TOMORROW)
+        later = _deployed("lot-b", 2, NEXT_YEAR)
+        item.deployed_lots = [soon, later]
+
+        service._consume_deployed(item, 2)
+
+        # Not merely zeroed: a spent lot is no longer on the truck, and the row
+        # would otherwise accumulate against every position ever restocked.
+        assert item.deployed_lots == [later]
 
     def test_consuming_more_than_is_aboard_takes_what_there_is(self, service):
         item = _template_item(expected_quantity=4)
@@ -881,6 +963,21 @@ class TestQuantityOnTruck:
 
         # Two of four back is still a truck that is short two.
         assert item.restock_needed is True
+
+    async def test_a_recount_reaches_a_lot_carrying_position(self, service, mock_db):
+        # Regression: the scalar was written and the lot sum kept being read,
+        # so a recount on a lot-carrying position vanished without a word.
+        item = _template_item(expected_quantity=4, restock_needed=True)
+        item.deployed_lots = [_deployed("lot-a", 4, TOMORROW)]
+        self._wire(mock_db, item)
+
+        result = await service.set_item_quantity(
+            "ti-1", "org-1", MagicMock(id="u-1", first_name="A", last_name="B"), 2
+        )
+
+        assert service._on_truck(item) == 2
+        assert result["quantity_on_truck"] == 2
+        assert result["is_short"] is True
 
     async def test_recount_rejects_a_negative(self, service, mock_db):
         with pytest.raises(ValueError, match="negative"):
