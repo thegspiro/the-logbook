@@ -156,8 +156,7 @@ application form is what your follow-up email links to.
 
 ![The guest sign-in form on a phone, with the event name above the name and contact fields](./images/04-32-guest-sign-in-form.png)
 
-> **[SCREENSHOT NEEDED]:** _The confirmation state after a guest signs in,
-> showing the "thanks for signing in" message with the event name._
+![The guest sign-in confirmation naming the event and the time signed in](./images/04-33-guest-sign-in-confirmation.png)
 
 ### Where the guest ends up
 
@@ -166,13 +165,15 @@ application form is what your follow-up email links to.
 | An entry on the event's **external attendee** list | Always                                                                     |
 | A card in the **prospective members** pipeline     | Only if the event has the second toggle on **and** the guest left an email |
 
-A prospect opened this way is linked back to the event it came from, and its
-referral source reads **"Attended: _event name_"** — so at the next pipeline
-review you can see which open house each lead walked in from.
+A prospect opened this way is linked back to the event it came from: the detail
+drawer's **Linked Events** panel names the open house, its date and its type, so
+at the next pipeline review you can see which one each lead walked in from.
 
-> **[SCREENSHOT NEEDED]:** _The prospective-members board showing a card created
-> by a guest sign-in, with the detail drawer open on the referral source reading
-> "Attended: Volunteer Interest Night" and the linked event visible._
+Its `referral_source` is also stamped **"Attended: _event name_"**. That is
+stored and returned by the API, but no screen shows it — read it from an export
+or the API if you need it in a report.
+
+![The prospect opened by a guest sign-in, its Linked Events panel naming the open house](./images/04-34-guest-prospect-card.png)
 
 ### Edge cases
 

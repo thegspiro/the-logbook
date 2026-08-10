@@ -704,6 +704,22 @@ an election configured to open itself could not be told to stop.
 `tests/test_election_update_allowlist.py` now checks the invariant, since the
 pattern cannot report its own omissions.
 
+## Prospects — `referral_source` Is Stored But Never Shown (2026-08-10)
+
+A guest sign-in stamps the prospect's `referral_source` with
+`"Attended: <event name>"`, and the detail endpoint returns it. No screen
+displays it: the applicant detail drawer renders contact details, membership
+type, current stage, linked events, progress and stage history, and the
+`referral_source` entry in its `FORM_FIELD_LABELS` map applies to _form
+submission_ answers, not to the prospect's own column. The list endpoint omits
+the field entirely.
+
+The provenance is not lost — the drawer's Linked Events panel names the event
+the guest walked in from, which is the same fact by a different route — so this
+is recorded rather than fixed. The training guide claimed the drawer showed the
+referral source; corrected 2026-08-10 to point at Linked Events, and to say the
+stamped text is reachable only through an export or the API.
+
 ## Events — Guest Check-In Switched Itself Off On Every Read (2026-08-10)
 
 Fixed 2026-08-10. `_build_event_response` names each field it passes rather

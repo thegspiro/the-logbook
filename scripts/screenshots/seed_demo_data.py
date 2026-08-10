@@ -85,6 +85,10 @@ DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 # account whose own records have to be worth picturing. Keep it in step with
 # DEMO_MEMBER_CREDENTIALS in manifest.mjs.
 DEMO_MEMBER_USERNAME = "nbelhaj"
+
+# The visitor the guest sign-in seeds. Matched on email rather than name so a
+# re-run recognises its own guest instead of adding another every time.
+GUEST_EMAIL = "rosa.delgado@example.com"
 # A second member, used as the *examiner* on the peer-run skills test. It has to
 # be someone other than the candidate: skills testing refuses a test whose
 # examiner is also its candidate.
@@ -137,6 +141,10 @@ class Api:
 
     def __init__(self, base_url: str) -> None:
         self.api = base_url.rstrip("/") + "/api/v1"
+        # The public tree is a sibling of /api/v1, not a path under it. Kept so
+        # a seeder step can exercise an unauthenticated flow the way a visitor
+        # meets it, rather than reaching for the admin equivalent.
+        self.public_api = base_url.rstrip("/") + "/api/public/v1"
         self.jar = CookieJar()
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.jar)
@@ -195,6 +203,22 @@ class Api:
 
     def post(self, path: str, payload: Any = None) -> Any:
         return self.call("POST", path, payload if payload is not None else {})
+
+    def post_public(self, path: str, payload: Any) -> Any:
+        """POST to /api/public/v1, signed out — no cookie, no CSRF header."""
+        request = urllib.request.Request(
+            f"{self.public_api}{path}",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                body = response.read()
+            return json.loads(body) if body else None
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")
+            raise ApiError("POST", path, exc.code, detail) from exc
 
     def patch(self, path: str, payload: Any) -> Any:
         return self.call("PATCH", path, payload)
@@ -918,9 +942,12 @@ class Seeder:
             if ends and ends < iso(NOW):
                 updates.update(window)
             self.api.patch(f"/events/{pick(existing, 'id')}", updates)
+            self._sign_a_guest_in(
+                pick(existing, "id"), pick(room, "display_code", "displayCode")
+            )
             return existing
 
-        return self.api.post(
+        created = self.api.post(
             "/events",
             {
                 "title": self.GUEST_EVENT_TITLE,
@@ -938,6 +965,43 @@ class Seeder:
                 **guest_settings,
             },
         )
+        self._sign_a_guest_in(
+            pick(created, "id"), pick(room, "display_code", "displayCode")
+        )
+        return created
+
+    def _sign_a_guest_in(self, event_id: str, display_code: str) -> None:
+        """Put one visitor through the public sign-in, as a visitor would.
+
+        Signed in through `/api/public/v1/...` with no session rather than
+        written through the admin external-attendee endpoint, because the
+        prospect record and its "Attended: <event>" referral source are made by
+        the guest path and by nothing else — an attendee added by an officer
+        gets no pipeline card, so the screenshot of one would be staged.
+        """
+        if not (event_id and display_code):
+            return
+        attendees = items(
+            self.api.get(f"/events/{event_id}/external-attendees"), "attendees"
+        )
+        if any(pick(a, "email") == GUEST_EMAIL for a in attendees):
+            return
+        try:
+            self.api.post_public(
+                f"/display/{display_code}/events/{event_id}/guest-check-in",
+                {
+                    "first_name": "Rosa",
+                    "last_name": "Delgado",
+                    "email": GUEST_EMAIL,
+                    "phone": "(703) 555-0184",
+                    "interest_reason": (
+                        "My neighbour is on the department and said to come "
+                        "and have a look. I work days but I'm free evenings."
+                    ),
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"guest sign-in: {exc}")
 
     # -- scheduling --------------------------------------------------
 

@@ -2146,6 +2146,53 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "04-33-guest-sign-in-confirmation",
+    doc: "04-events-meetings.md",
+    line: 159,
+    anchor: "The confirmation state after a guest signs in,",
+    alt: "The guest sign-in confirmation naming the event and the time signed in",
+    route: "/login",
+    auth: "anonymous",
+    viewport: "mobile",
+    // **This shot signs a guest in.** The confirmation is client state that no
+    // route reaches — the only way to it is to submit the form. It reuses the
+    // seeder's visitor rather than inventing a new one on each capture: a
+    // repeat sign-in is recognised and updates that attendee instead of adding
+    // another, so running this a hundred times leaves one Rosa Delgado.
+    prepare: async (page, ctx) => {
+      await withDisplayCode(
+        (code, eventId) => `/display/${code}/events/${eventId}/guest`,
+      )(page, ctx);
+      await page.getByLabel(/first name/i).fill("Rosa");
+      await page.getByLabel(/last name/i).fill("Delgado");
+      await page.getByLabel(/email/i).fill("rosa.delgado@example.com");
+      await page.getByRole("button", { name: /sign in/i }).click();
+      await page.getByText(/You're signed in!/i).waitFor({ timeout: 15_000 });
+    },
+    fullPage: true,
+  },
+  {
+    id: "04-34-guest-prospect-card",
+    doc: "04-events-meetings.md",
+    line: 177,
+    anchor: "The prospective-members board showing a card created",
+    alt: "The prospect opened by a guest sign-in, its Linked Events panel naming the open house",
+    route: "/prospective-members",
+    // Opened by clicking the card, not by a route: the drawer is component
+    // state and `/prospective-members/prospects/<id>` is an API path with no
+    // page behind it — navigating there lands on the dashboard.
+    prepare: async (page) => {
+      const card = page
+        .locator("[class*='cursor-pointer']")
+        .filter({ hasText: /Rosa Delgado/i })
+        .first();
+      await card.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+      await card.click({ timeout: 15_000 });
+      await page.waitForTimeout(1500);
+    },
+    fullPage: true,
+  },
+  {
     id: "04-20-event-requests",
     doc: "04-events-meetings.md",
     line: 633,
