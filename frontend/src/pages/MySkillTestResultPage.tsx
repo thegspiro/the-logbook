@@ -31,6 +31,7 @@ import toast from 'react-hot-toast';
 
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { ReadOnlySectionView } from './ActiveSkillTestPage';
+import { ScoreBreakdownPanel } from '../components/training/ScoreBreakdownPanel';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
@@ -223,6 +224,11 @@ export const MySkillTestResultPage: React.FC = () => {
         )}
       </div>
 
+      {/* A member reading their own result is the person most owed an
+          explanation of where the number came from — and the least able to ask
+          the examiner about it after the fact. */}
+      {currentTest.score_breakdown && <ScoreBreakdownPanel breakdown={currentTest.score_breakdown} />}
+
       <div className="space-y-4">
         {templateSections.map((section) => (
           <ReadOnlySectionView
@@ -231,6 +237,8 @@ export const MySkillTestResultPage: React.FC = () => {
             sectionResult={currentTest.section_results?.find(
               (sr) => sr.section_id === section.id || sr.section_name === section.name
             )}
+            breakdownSection={currentTest.score_breakdown?.sections.find((s) => s.section_id === section.id)}
+            scorePassFailCriteria={currentTest.template_score_pass_fail_criteria}
           />
         ))}
       </div>

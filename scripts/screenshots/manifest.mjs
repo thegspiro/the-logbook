@@ -14,7 +14,12 @@
  *            finds the placeholder once the line hint has gone stale
  *   alt      alt text written into the markdown image tag
  *   route    path to visit, relative to the dev server root
- *   auth     'anonymous' to shoot a signed-out page in a separate context
+ *   auth     'admin' (default), 'member' to shoot what an ordinary member sees,
+ *            or 'anonymous' for a signed-out page. Each runs in its own browser
+ *            context, created on first use
+ *   theme    'dark' to shoot in dark mode; default light. The app's theme
+ *            defaults to "system", so this is driven by the context's
+ *            colorScheme rather than by clicking the theme switcher
  *   prepare  optional async (page) => void that drives the UI into the pictured
  *            state (open a modal, switch a tab, expand a panel)
  *   selector optional CSS/locator to clip to instead of the full viewport
@@ -33,6 +38,25 @@
 export const DEMO_CREDENTIALS = {
   username: "chief",
   password: "DemoP@ssw0rd!2026",
+};
+
+/**
+ * An ordinary member — no `training.manage`, no officer position.
+ *
+ * Shots marked `auth: "member"` sign in as this account. It is not
+ * interchangeable with the administrator: several routes render a different
+ * page for a member than for an officer (`/training/skills-testing` is the
+ * member's Available Tests / My Results view, not the template library), so a
+ * placeholder describing what a member sees can only be filled from a member's
+ * session.
+ *
+ * Kept in step with DEMO_MEMBER_USERNAME / DEMO_MEMBER_PASSWORD in
+ * seed_demo_data.py, which also guarantees this account exists, is not an
+ * officer, and is not being forced to change its password.
+ */
+export const DEMO_MEMBER_CREDENTIALS = {
+  username: "nbelhaj",
+  password: "DemoMember!2026",
 };
 
 /**
@@ -62,6 +86,30 @@ export function clickByName(name) {
     // Playwright's actionability check times out on a control it cannot reach.
     await control.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
     await control.click({ timeout: 10_000 });
+  };
+}
+
+/**
+ * Select a section in the Shift Reports settings panel.
+ *
+ * The panel renders its section list *twice* — a label-only strip for phones
+ * and a label-plus-description sidebar for desktop — and hides whichever does
+ * not match the viewport. So the desktop button's accessible name is the label
+ * followed by its description ("Checklist Timing Start/end of shift checklist
+ * windows"), which an exact-label match never matches, while the label-only
+ * match resolves to the phone strip and times out clicking something hidden.
+ * Anchoring on the label text inside a *visible* button avoids both.
+ */
+export function clickSettingsSection(label) {
+  return async (page) => {
+    const button = page
+      .locator(
+        "nav[aria-label='Shift report settings sections'] button:visible",
+      )
+      .filter({ has: page.getByText(label, { exact: true }) })
+      .first();
+    await button.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+    await button.click({ timeout: 10_000 });
   };
 }
 
@@ -602,7 +650,60 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Skills Testing section within Training Admin, showing the template",
     alt: "Skills Testing section within Training Admin showing the template list",
-    route: "/training/skills-testing",
+    // Same trap 09-01 fell into: /training/skills-testing is the *member's*
+    // page (Available Tests / My Results), so this captured cleanly while
+    // picturing the wrong audience — and the placeholder says "within Training
+    // Admin" in as many words.
+    route: "/training/admin?tab=templates",
+  },
+  {
+    id: "02-66-compliance-thresholds",
+    doc: "02-training.md",
+    line: 628,
+    anchor: "Thresholds tab showing the",
+    alt: "Compliance thresholds configuration including the evaluation-period setting",
+    // Thresholds is the page's default tab, so no interaction is needed.
+    route: "/training/compliance-config",
+    fullPage: true,
+  },
+  {
+    id: "02-67-manual-entry-settings",
+    doc: "02-training.md",
+    line: 1002,
+    anchor: "manual entry settings panel",
+    alt: "Manual entry settings with its enable toggle, apparatus rules and shift defaults",
+    route: "/training/admin?page=setup&tab=manual-entry",
+    // Everything below the enable checkbox — the apparatus rules and the shift
+    // defaults the placeholder asks for — renders only while the feature is on,
+    // and it ships off. So the shot turns it on, which *is* a real change to
+    // the demo department: manual shift entry stays enabled afterwards.
+    prepare: async (page) => {
+      const toggle = page.getByRole("checkbox", {
+        name: /enable manual shift entry/i,
+      });
+      if (
+        !(await toggle
+          .first()
+          .isChecked()
+          .catch(() => false))
+      ) {
+        await toggle.first().click({ timeout: 10_000 });
+      }
+    },
+    fullPage: true,
+  },
+  {
+    id: "02-68-vector-category-mapping",
+    doc: "02-training.md",
+    line: 1067,
+    anchor: "Vector Solutions category mapping table",
+    alt: "External provider category mapping, pairing provider categories with internal ones",
+    route: "/training/admin?page=setup&tab=integrations",
+    fullPage: true,
+    // A department with no provider connected has nothing to map, and the
+    // mapping table is the subject — so an empty state here means the seed
+    // data cannot support the shot yet, which is worth surfacing rather than
+    // publishing an empty table under a placeholder describing a full one.
   },
 
   // ── 03 Scheduling ───────────────────────────────────────────────────
@@ -895,7 +996,12 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Skill Sheet Templates list page showing a table of",
     alt: "Skill sheet templates list with category and publication status",
-    route: "/training/skills-testing",
+    // Not /training/skills-testing. That route became the *member's* entry
+    // point when skills testing opened to non-officers — Available Tests and My
+    // Results — so it stopped showing the template library this placeholder is
+    // about, and kept capturing cleanly while picturing the wrong page. The
+    // officer-facing library lives under the Training Admin hub.
+    route: "/training/admin?tab=templates",
   },
   {
     id: "09-02-create-template",
@@ -907,8 +1013,205 @@ export const SHOTS = [
     route: "/training/skills-testing/templates/new",
     fullPage: true,
   },
+  {
+    id: "09-07-candidate-search",
+    doc: "09-skills-testing.md",
+    line: 221,
+    anchor: "The Start Skill Test page candidate field mid-search",
+    alt: "Candidate name search on the Start Skill Test page with matching members listed",
+    route: "/training/skills-testing/test/new",
+    fullPage: true,
+    // The candidate field is a server-side search, not a dropdown, so the
+    // populated state only exists mid-typing. Two characters is the documented
+    // minimum the endpoint accepts; anything shorter returns nothing and the
+    // shot would picture an empty list. The search is debounced, so the results
+    // are waited for rather than assumed.
+    prepare: async (page) => {
+      const search = page.getByPlaceholder("Type a name to search...");
+      await search.waitFor({ state: "visible", timeout: 10_000 });
+      await search.fill("a");
+      await search.fill("an");
+      await page.waitForTimeout(1200);
+    },
+  },
+  {
+    id: "09-08-template-result-disclosure",
+    doc: "09-skills-testing.md",
+    line: 863,
+    anchor: 'The template builder\'s "Result Disclosure" group',
+    alt: "Per-template Result Disclosure controls showing the inherited default",
+    route: "/training/skills-testing/templates/new",
+    // Clipped to the group rather than shot full-page: the placeholder is about
+    // three controls near the bottom of a long builder form, and a full-page
+    // capture renders them too small to read the inherit labels, which are the
+    // whole point of the picture.
+    selector: "div:has(> p:text-is('Result Disclosure'))",
+    prepare: async (page) => {
+      const group = page.getByText("Result Disclosure", { exact: true });
+      await group.waitFor({ state: "visible", timeout: 10_000 });
+      await group.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-09-member-skills-testing",
+    doc: "09-skills-testing.md",
+    line: 187,
+    anchor: "The Skills Testing landing page as seen by an",
+    alt: "Skills Testing as an ordinary member sees it — available tests and their own results",
+    // Same URL as 09-01, deliberately: this route renders an entirely different
+    // page depending on who is signed in, which is the point the placeholder
+    // makes. The officer's template library is under /training/admin.
+    route: "/training/skills-testing",
+    auth: "member",
+  },
+  {
+    id: "09-10-member-awaiting-validation",
+    doc: "09-skills-testing.md",
+    line: 389,
+    anchor: 'A member\'s "My Training → Skills Tests" list showing',
+    alt: "A member's own skills tests, one awaiting an officer's validation with its outcome withheld",
+    route: "/training/my-training",
+    auth: "member",
+    fullPage: true,
+    prepare: async (page) => {
+      // My Training renders its sections as collapsibles, and Skills Tests is
+      // collapsed by default — scrolling to the header alone captures a closed
+      // panel, which pictures none of what the placeholder describes.
+      const header = page.getByText("Skills Tests", { exact: true }).first();
+      await header.waitFor({ state: "visible", timeout: 15_000 });
+      await header.scrollIntoViewIfNeeded();
+      await header.click();
+      // Wait for the list this section fetches on expand, not a fixed delay.
+      await page
+        .getByText(/awaiting validation|practice|no skills tests/i)
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-11-validation-queue",
+    doc: "09-skills-testing.md",
+    line: 418,
+    anchor: 'The Test Records tab filtered to "Awaiting',
+    alt: "Officer review queue — completed results awaiting validation, with Validate and Void actions",
+    route: "/training/admin?tab=tests",
+    fullPage: true,
+    // The queue is a filter on the records tab rather than a page of its own,
+    // and it is an option in the status dropdown — not a button or a tab — so
+    // the shot has to select it. Without this the capture shows "All Statuses"
+    // and pictures the whole history instead of the queue.
+    prepare: async (page) => {
+      const status = page.locator("select").first();
+      await status.waitFor({ state: "visible", timeout: 15_000 });
+      await status.selectOption("pending_validation");
+      // Waits on the row badge, scoped to a span. The dropdown's own option
+      // reads "Needs Validation" too and comes first in the DOM, and an option
+      // inside a closed native select is never "visible" — so an unscoped text
+      // wait hangs on the wrong element until it times out.
+      await page
+        .locator('span:text-is("Needs validation")')
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-12-summary-pending-validation",
+    doc: "09-skills-testing.md",
+    line: 533,
+    anchor: "The Summary dashboard viewed by a training officer",
+    alt: "Skills testing summary with a non-zero Pending Validation count",
+    // The stat cards live on the Templates tab, not Test Records — and the card
+    // is labelled "Needs Validation", which it earns by *replacing* the pass
+    // rate while the queue is non-empty. Clipped to the card row so the swap is
+    // legible; a full-page shot of this tab is already 09-01.
+    route: "/training/admin?tab=templates",
+    selector: "div.grid:has(p:text-is('Needs Validation'))",
+    prepare: async (page) => {
+      await page
+        .getByText("Needs Validation", { exact: true })
+        .waitFor({ state: "visible", timeout: 15_000 });
+    },
+  },
+  {
+    id: "09-13-test-viewers-panel",
+    doc: "09-skills-testing.md",
+    line: 829,
+    anchor: "The Viewers panel on an open test, showing one",
+    alt: "Named viewers on a single test, with the note that a viewer never sees more than the candidate",
+    route: "/training/skills-testing",
+    // Clipped to the panel rather than shot full-page. The panel sits at the
+    // bottom of a long scorecard, so a full-page capture is mostly criteria
+    // rows — and the page's fixed sidebar renders twice down a tall fullPage
+    // image, which reads as a glitch in a published guide.
+    selector: 'div.card:has(p:text-is("Who else can see this result"))',
+    prepare: async (page, helpers) => {
+      // The panel renders only on the review view of a *completed*, official
+      // test, and only for an officer — so the match is not optional here: the
+      // seeder's draft tests come back first and none of them shows it.
+      await openFirstFromApi(
+        "/training/skills-testing/tests",
+        (id) => `/training/skills-testing/test/${id}`,
+        "tests",
+        (test) => test.status === "completed" && !test.is_practice,
+      )(page, helpers);
+      const viewers = page.getByText(/who else can see this result/i).first();
+      await viewers.waitFor({ state: "visible", timeout: 20_000 });
+      await viewers.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+  },
 
   // ── 10 Mobile & PWA ─────────────────────────────────────────────────
+  {
+    id: "10-10-mobile-minimum-text",
+    doc: "10-mobile-pwa.md",
+    line: 175,
+    anchor: "The dashboard on a phone showing the relative",
+    alt: "Dashboard on a phone with relative timestamps and navigation labels at the 12px minimum",
+    route: "/dashboard",
+    viewport: "mobile",
+    allowEmptyState: true,
+    // Not fullPage: the bottom navigation is fixed, and a full-page capture
+    // scrolls it out of frame — but its labels are one of the four things the
+    // 12px floor was introduced for, so the shot has to be the viewport.
+  },
+  {
+    id: "10-11-public-form-dark",
+    doc: "10-mobile-pwa.md",
+    line: 197,
+    anchor: "The public form page (`/f/<slug>`) in dark mode",
+    alt: "The public form page in dark mode, readable on the themed background",
+    // Resolved in prepare — the route is not known until capture time.
+    route: "/login",
+    auth: "anonymous",
+    theme: "dark",
+    fullPage: true,
+    prepare: async (page, helpers) => {
+      // The slug is minted per seed, and this shot is signed out, so the
+      // lookup borrows the administrator's session. `/f/{slug}` serves
+      // published public forms only — the seeder publishes one.
+      const admin = await helpers.lookupPage();
+      const slug = await admin.evaluate(async () => {
+        const response = await fetch("/api/v1/forms", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const forms = Array.isArray(body)
+          ? body
+          : body.forms || body.items || [];
+        const target = forms.find((f) => f.is_public && f.public_slug);
+        return target ? target.public_slug : null;
+      });
+      if (!slug) throw new Error("no published public form to capture");
+      await page.goto(`${new URL(page.url()).origin}/f/${slug}`, {
+        waitUntil: "domcontentloaded",
+      });
+    },
+  },
   {
     id: "10-04-mobile-dashboard",
     // same dashboard, phone width
@@ -1117,6 +1420,58 @@ export const SHOTS = [
       "Screenshot of the Prospective Members main page showing the kanban board view",
     alt: "Prospective members kanban board with a column per pipeline stage",
     route: "/prospective-members",
+  },
+  {
+    id: "15-02-board-truncated",
+    doc: "15-prospective-members.md",
+    line: 253,
+    anchor: "The kanban board for a pipeline with more than 200",
+    alt: "Kanban board reporting that it is showing only the first page of a larger pipeline",
+    route: "/prospective-members",
+    // Needs a pipeline larger than the board's 200-card ceiling, which the
+    // ordinary seed deliberately does not create:
+    //   python scripts/screenshots/seed_demo_data.py --bulk-prospects
+    // Without it the notice never renders and this shot is skipped rather than
+    // capturing an ordinary board under a placeholder describing a full one.
+    prepare: async (page) => {
+      const notice = page
+        .getByRole("status")
+        .filter({ hasText: /Showing \d+ of \d+ applicants/ });
+      await notice.first().waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "15-09-bulk-action-result",
+    doc: "15-prospective-members.md",
+    line: 495,
+    anchor: "The pair of notifications after a bulk advance that",
+    alt: "Bulk advance reporting how many moved and naming the applicants it skipped",
+    route: "/prospective-members",
+    // Runs a real bulk advance, so it *changes the seeded data* — which is why
+    // it sits last among the 15-* shots. Re-running the seeder restores a mixed
+    // page (it tops the pipeline up and re-parks two applicants at the final
+    // stage), so the shot is repeatable; it is just not idempotent on its own.
+    //
+    // The partial failure is the point. Page one is deliberately mixed: most
+    // rows are at intake and a few are at the final stage, where advancing is
+    // refused. Selecting the page produces both toasts — the count that moved,
+    // and the named applicants that could not.
+    prepare: async (page) => {
+      await clickByName("Table")(page);
+      const selectAll = page.locator("thead th:first-child button");
+      await selectAll.waitFor({ state: "visible", timeout: 15_000 });
+      await selectAll.click();
+      await clickByName("Advance All")(page);
+      // Both toasts, not just the first: the success one renders immediately
+      // and the skipped one follows the response, so waiting on either alone
+      // races the capture.
+      await page
+        .getByText(/Skipped \d+:/)
+        .first()
+        .waitFor({ state: "visible", timeout: 30_000 });
+      await page.waitForTimeout(600);
+    },
   },
   {
     id: "15-10-pipeline-settings",
@@ -1464,6 +1819,137 @@ export const SHOTS = [
     alt: "Scheduling settings with the platoons toggle and related options",
     route: "/scheduling/settings",
     fullPage: true,
+  },
+  // Scheduling settings deep-links by `?tab=`, and the shift-reports tab is
+  // itself a section navigator showing one section at a time. Both are why
+  // these are separate shots rather than one long fullPage capture: the guide
+  // discusses the sections individually, and only one is on screen at a time.
+  {
+    id: "03-32-settings-general-closeout",
+    doc: "03-scheduling.md",
+    line: 1728,
+    anchor: "showing the Close-out",
+    alt: "Scheduling settings General tab with the close-out rules, overtime cap and shift generation options",
+    route: "/scheduling/settings?tab=general",
+    fullPage: true,
+  },
+  {
+    id: "03-33-settings-eligibility",
+    doc: "03-scheduling.md",
+    line: 619,
+    anchor: "eligible shift positions each rank may fill",
+    alt: "Operational Ranks settings, listing each rank with the shift positions it may fill",
+    // Not the scheduling module's own Eligibility tab, which controls something
+    // else entirely: which *membership types* may self-sign-up, and which
+    // positions are open to everyone. Per-rank position eligibility is set on
+    // the ranks themselves, in the main settings area.
+    route: "/settings?tab=ranks",
+    fullPage: true,
+  },
+  {
+    id: "03-40-settings-position-eligibility",
+    doc: "03-scheduling.md",
+    line: 627,
+    anchor: "which membership types may sign themselves up",
+    alt: "Scheduling settings Eligibility tab, excluding membership types from self-signup and listing open positions",
+    route: "/scheduling/settings?tab=eligibility",
+    fullPage: true,
+  },
+  {
+    id: "03-34-settings-checklist-timing",
+    doc: "03-scheduling.md",
+    line: 802,
+    anchor: "Checklist Timing",
+    alt: "Shift Reports settings with the Checklist Timing section selected",
+    route: "/scheduling/settings?tab=shift-reports",
+    prepare: clickSettingsSection("Checklist Timing"),
+    fullPage: true,
+  },
+  {
+    id: "03-35-settings-form-sections",
+    doc: "03-scheduling.md",
+    line: 836,
+    anchor: "choosing which optional sections appear on the report form",
+    alt: "Shift Reports settings Form Sections, toggling which parts of the report form appear",
+    route: "/scheduling/settings?tab=shift-reports",
+    prepare: clickSettingsSection("Form Sections"),
+    fullPage: true,
+  },
+  {
+    id: "03-36-settings-apparatus-skills",
+    doc: "03-scheduling.md",
+    line: 859,
+    anchor: "per-apparatus skills/tasks selector",
+    alt: "Shift Reports settings Apparatus Skills, showing the skills and tasks tracked for Engine",
+    route: "/scheduling/settings?tab=shift-reports",
+    prepare: async (page) => {
+      await clickSettingsSection("Apparatus Skills")(page);
+      // The section opens on the first apparatus type alphabetically
+      // (Ambulance). The guide walks through Engine, so pick that one. The
+      // pill carries its skill count, and its text is the raw lowercase type —
+      // the initial capital is CSS `capitalize`, which never reaches the DOM —
+      // so the match is loose and case-insensitive on both counts.
+      await page
+        .getByRole("button", { name: /^engine( \(\d+\))?$/i })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-37-settings-rating-scale",
+    doc: "03-scheduling.md",
+    line: 882,
+    anchor: "rating scale section with Labeled Bubbles selected",
+    alt: "Shift Reports settings Rating Scale, choosing the scale style and its per-level labels",
+    route: "/scheduling/settings?tab=shift-reports",
+    // **This shot changes the setting it pictures.** The display-style buttons
+    // save on click — there is no separate confirm — so capturing the per-level
+    // labels leaves the demo department on Labeled Bubbles rather than the
+    // documented default of Stars (1-5). Anything picturing a rating input
+    // afterwards shows bubbles. Re-select Stars in the UI when the default
+    // matters; the seeder does not own this setting and will not restore it.
+    prepare: async (page) => {
+      await clickSettingsSection("Rating Scale")(page);
+      // The per-level label editor renders only for the labelled style — the
+      // default, Stars (1-5), hides it, and the placeholder is largely about
+      // those labels. Selecting the other style is what puts them on screen.
+      await page
+        .getByRole("button", { name: /labeled bubbles/i })
+        .first()
+        .click({ timeout: 10_000 });
+      // The save toast lands in the top-right corner and would otherwise sit
+      // in the frame as though it were part of the settings page.
+      await page
+        .getByText(/display style updated/i)
+        .first()
+        .waitFor({ state: "hidden", timeout: 15_000 })
+        .catch(() => {});
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-38-notifications-assignment",
+    doc: "03-scheduling.md",
+    line: 1289,
+    anchor: "notification settings showing the Shift Assignment Alerts section",
+    alt: "Scheduling notification settings showing the shift assignment alert options",
+    route: "/scheduling/settings?tab=notifications",
+    fullPage: true,
+  },
+  {
+    id: "03-39-notifications-reminders",
+    doc: "03-scheduling.md",
+    line: 1302,
+    anchor: "Start-of-Shift Reminders section with its enable toggle",
+    alt: "Scheduling notification settings showing the start-of-shift reminder options",
+    route: "/scheduling/settings?tab=notifications",
+    // Same page as 03-38; this clips to the reminders block so the two shots
+    // are not the same image under two placeholders. The heading sits in its
+    // own flex row inside the section, so `:has(> h4)` selects that row and
+    // clips to the title alone — the section is its grandparent.
+    selector:
+      'div:has(> div > h4:text-is("Start-of-Shift Reminders")):not(:has(div:has(> div > h4:text-is("Start-of-Shift Reminders"))))',
   },
   {
     id: "03-22-equipment-check-builder",
@@ -2073,6 +2559,15 @@ export const SHOTS = [
     alt: "Applicant detail drawer with contact details and current stage",
     route: "/prospective-members",
     prepare: async (page) => {
+      // Search first, then click. The board shows the newest 200 applicants,
+      // so on a pipeline padded by `--bulk-prospects` these named ones are not
+      // on screen at all and a bare click times out. Narrowing the list makes
+      // the shot work at either size.
+      const search = page.getByPlaceholder(/search applicants/i);
+      if (await search.isVisible().catch(() => false)) {
+        await search.fill("Rivera");
+        await page.waitForTimeout(900);
+      }
       await page
         .locator("[class*='cursor-pointer']")
         .filter({ hasText: /Rivera|Fields|Okafor/ })
@@ -2865,61 +3360,6 @@ export const SHOTS = [
     fullPage: true,
   },
   {
-    id: "03-35-eligibility-matrix",
-    doc: "03-scheduling.md",
-    line: 616,
-    anchor:
-      "Screenshot of the Settings > Operational Ranks page showing the eligible positions matrix",
-    alt: "Ranks settings with the eligible positions each rank may fill",
-    // Not the scheduling module's own Eligibility tab, which is a pair of chip
-    // pickers for self-signup. The rank × position grid the guide describes
-    // lives on the ranks settings section, one per rank.
-    route: "/settings?tab=ranks",
-    fullPage: true,
-  },
-  {
-    id: "03-36-scheduling-general-settings",
-    doc: "03-scheduling.md",
-    line: 1692,
-    anchor: "Scheduling Settings → General showing the Close-out",
-    alt: "Scheduling general settings with close-out rules and overtime cap",
-    route: "/scheduling/settings?tab=general",
-    fullPage: true,
-  },
-  {
-    id: "03-37-scheduling-notifications",
-    doc: "03-scheduling.md",
-    line: 1255,
-    anchor:
-      "Screenshot of the SchedulingNotificationsPanel showing the \"Shift Assignment Alerts\" section",
-    alt: "Scheduling notification settings for assignment alerts",
-    route: "/scheduling/settings?tab=notifications",
-    // Clipped to its own section: the notifications tab stacks six of these and
-    // a full-page shot would picture all of them for a placeholder that names
-    // one. The panel has no ids, so the section is addressed by its heading.
-    selector: 'div.mt-5:has(> div > h4:text-is("Shift Assignment Alerts"))',
-  },
-  {
-    id: "03-39-start-of-shift-reminders",
-    doc: "03-scheduling.md",
-    line: 1268,
-    anchor:
-      "Screenshot of the SchedulingNotificationsPanel showing the \"Start-of-Shift Reminders\" section",
-    alt: "Start-of-shift reminder settings with the lookahead dropdown",
-    route: "/scheduling/settings?tab=notifications",
-    selector: 'div.mt-5:has(> div > h4:text-is("Start-of-Shift Reminders"))',
-  },
-  {
-    id: "03-38-shift-report-settings",
-    doc: "03-scheduling.md",
-    line: 784,
-    anchor:
-      "Screenshot of the Shift Reports Settings tab showing three cards",
-    alt: "Shift report settings with checklist timing, validation and form sections",
-    route: "/scheduling/settings?tab=shift-reports",
-    fullPage: true,
-  },
-  {
     id: "01-11-create-waiver",
     doc: "01-membership.md",
     line: 573,
@@ -2965,16 +3405,6 @@ export const SHOTS = [
     // Not fullPage: the form's action bar is sticky, and a full-page render
     // draws it partway down the page, slicing through the fields underneath.
     fullPage: false,
-  },
-  {
-    id: "09-13-result-disclosure",
-    doc: "09-skills-testing.md",
-    line: 874,
-    anchor: 'The template builder\'s "Result Disclosure" group',
-    alt: "Result disclosure options on the template builder",
-    route: "/training/skills-testing/templates/new",
-    selector:
-      'div:has(> p:text-is("Result Disclosure")), div:has(> div > p:text-is("Result Disclosure"))',
   },
   {
     id: "04-12-linked-elections",
@@ -3242,50 +3672,5 @@ export const SHOTS = [
     route: "/scheduling?tab=my-shifts",
     prepare: clickByName(/^Request Time Off$/),
     fullPage: false,
-  },
-  {
-    id: "03-40-report-form-sections",
-    doc: "03-scheduling.md",
-    line: 815,
-    anchor: "Screenshot showing the \"Report Form Sections\" card with 7 toggle switches",
-    alt: "Report form sections with a toggle for each part of the report",
-    route: "/scheduling/settings?tab=shift-reports",
-    prepare: clickByName(/^Form Sections/),
-    fullPage: true,
-  },
-  {
-    id: "03-41-apparatus-skills",
-    doc: "03-scheduling.md",
-    line: 834,
-    anchor: "Screenshot of the per-apparatus skills/tasks accordion",
-    alt: "Per-apparatus skills and tasks with the engine type selected",
-    route: "/scheduling/settings?tab=shift-reports",
-    prepare: async (page) => {
-      await clickByName(/^Apparatus Skills/)(page);
-      await clickByName(/^engine/i)(page);
-    },
-    fullPage: true,
-  },
-  {
-    id: "03-42-rating-scale",
-    doc: "03-scheduling.md",
-    line: 852,
-    anchor: "Screenshot showing the rating scale customization section",
-    alt: "Rating scale settings with the scale type and per-level labels",
-    route: "/scheduling/settings?tab=shift-reports",
-    prepare: async (page) => {
-      await clickByName(/^Rating Scale/)(page);
-      // The per-level label list only renders for the labelled scale; under
-      // Stars the panel is just the style picker and the field label, which is
-      // not what the placeholder asks to see.
-      await clickByName(/^Labeled Bubbles$/)(page);
-      // The switch saves immediately and raises a toast, which would otherwise
-      // sit in the corner of the screenshot. Wait it out.
-      await page
-        .getByText(/display style updated/i)
-        .waitFor({ state: "detached", timeout: 15_000 })
-        .catch(() => {});
-    },
-    fullPage: true,
   },
 ];

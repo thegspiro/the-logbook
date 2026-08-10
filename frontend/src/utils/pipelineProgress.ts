@@ -29,8 +29,8 @@ function fmtValue(value: number): string {
 /**
  * Short, student-facing description of what a requirement needs and where the
  * member stands against it — e.g. "12 / 24 hrs", "2 / 3 shifts",
- * "1 / 4 courses", "Pass ≥ 70%". Returns null for status-only requirement types
- * (skills evaluation, certification, checklist) where there is no numeric target
+ * "1 / 4 courses", "3 / 5 steps", "Pass ≥ 70%". Returns null for status-only
+ * requirement types (skills evaluation, certification) where there is no target
  * to count toward — the status label already tells the whole story there.
  */
 export function requirementTarget(record: RequirementProgressRecord): string | null {
@@ -46,6 +46,13 @@ export function requirementTarget(record: RequirementProgressRecord): string | n
       return req.required_calls ? `${done} / ${req.required_calls} calls` : null;
     case 'courses':
       return req.required_courses?.length ? `${done} / ${req.required_courses.length} courses` : null;
+    case 'checklist': {
+      // Counts every step, including the officer-only ones. Hiding a step's
+      // text is not the same as pretending it isn't work: excluding them would
+      // let the bar read 100% while a background check was still outstanding.
+      const total = req.checklist_items?.length ?? 0;
+      return total ? `${record.progress_notes?.checklist_done?.length ?? 0} / ${total} steps` : null;
+    }
     case 'knowledge_test': {
       const pass = req.passing_score ?? record.progress_notes?.passing_score;
       return pass ? `Pass ≥ ${pass}%` : null;

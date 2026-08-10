@@ -1,7 +1,7 @@
 # Application Review — Scheduling (Tier B)
 
 **Prefix:** `SCH2` · **Iteration:** B19 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/scheduling.py` (~1,900 L), `services/scheduling_service.py`
 (~5,000 L)
@@ -10,6 +10,55 @@
 escalation), SCH-2 (self-signup guards), SCH-3 (DoS), SCH-4 (`shift_officer_id` +
 hours-report join) fixed; SCH-5 (swap accept-path), SCH-6 (`manual_hours` + FKs)
 left open.
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified, no code change
+
+Re-verified: **SCH-7** `create_template`/`update_template` validate the client
+`apparatus_id` in-org (`apparatus_ref_exists`); **SCH-8** `_get_apparatus_map`
+called with both args (no `TypeError` 500); SCH-1/2/3/4/6 hold; update-bypass clean
+(`model_dump(exclude_unset=True)`, FK re-validation on `update_shift`);
+`scheduling_service.py` E712-free; latent-500 lens clear (shift enum fields typed
+in the request schemas).
+
+Open items unchanged: **SCH-5** (swap accept-path re-validation + approver identity
+— a swap-workflow design change, not a drive-by) and **SCH-6 residual** (validate
+`station_id`/`template_id` *if/when* the station link is wired — conditional on a
+feature not yet built).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
+
+---
+
+## Pass 3 (2026-08-09) — verified clean; latent-500 clears; 7 E712 swept
+
+Re-verified: **SCH-7** — `create_template` validates the client `apparatus_id` in-org
+via `apparatus_ref_exists` → "Apparatus not found" (service 1704; `update_template`
+mirrors it); **SCH-8** — `get_active_shift_for_apparatus` returns `Optional[Shift]`
+(no 500). SCH-1/2/3/4/6 hold; SCH-5 stays flagged.
+
+**Latent-500 lens clears:** the shift enum columns (`assignment_status`,
+`pattern_type`, `position`, `status`) are all properly typed / validated in the
+`scheduling.py` request schemas — **0** free-string→ENUM fields.
+
+### SCH2-1 — NIT — 7 boolean-column E712 swept — ✅ FIXED
+
+`scheduling_service.py` carried 7 `== True/False  # noqa: E712` comparisons
+(`Shift.is_finalized` ×3, `ShiftPattern.is_active`, `MemberLeaveOfAbsence.active` ×2,
+`TrainingRequirement.active`) — all boolean columns; converted to `.is_(...)`, now
+E712-free.
+
+### Still flagged (unchanged)
+
+- **SCH-5** — swap accept-path re-validation + approver identity (a design change to
+  the swap workflow, not a drive-by). **SCH-6 residual** — validate `station_id`/
+  `template_id` if/when the station link is wired.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · scheduling tests **109 passed** (DB-free; the `db_session`
+errors are the known no-MySQL fixture failures — this module is DB-heavy).
 
 ---
 

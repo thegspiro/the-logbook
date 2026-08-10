@@ -40,8 +40,8 @@ const inputClass =
   'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
 const selectClass =
   'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
-const labelClass = 'block text-sm font-medium text-theme-text-primary mb-1';
-const checkboxClass = 'h-4 w-4 rounded border-theme-input-border text-red-600 focus:ring-theme-focus-ring';
+const labelClass = 'form-label';
+const checkboxClass = 'form-checkbox';
 
 export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
   initialData,

@@ -183,10 +183,7 @@ decide that the result stands. That decision is a second, separate step:
 
 Template authoring is unchanged — writing the standard is still an officer act.
 
-> **[SCREENSHOT NEEDED]:** _The Skills Testing landing page as seen by an
-> ordinary member (no training.manage). Show the Tests tab present and the
-> "New Test" button available, with the Templates tab either absent or
-> read-only, so the difference from the officer view is visible._
+![Skills Testing as an ordinary member sees it — available tests and their own results](./images/09-09-member-skills-testing.png)
 
 ### Setting Up a Test Session
 
@@ -217,9 +214,7 @@ The search deliberately carries **only a name and an internal id** — no phone
 number, no email, no address. That is why every member can use it without
 opening up the member directory.
 
-> **[SCREENSHOT NEEDED]:** _The Start Skill Test page candidate field mid-search
-> — "smi" typed into the box with three matching members listed beneath it, and
-> the "Change" button visible next to an already-selected template above._
+![Candidate name search on the Start Skill Test page with matching members listed](./images/09-07-candidate-search.png)
 
 The system creates a new test session with:
 
@@ -285,19 +280,98 @@ Wall clock is now only a fallback for a test completed with no measured value.
 Reopening an in-progress test also **restores the timer** rather than restarting
 it at 00:00.
 
+#### Moving on no longer loses the reading _(2026-08-09)_
+
+The stopwatch reading used to be recorded **only when you pressed Stop**. Sections
+are torn down when you move between them, so timing an evolution and tapping
+**Next** lost the reading entirely — on the one step whose time limit _is_ the
+pass/fail criterion.
+
+The value is now committed when the step is torn down, whether or not you pressed
+Stop. Starting a stopwatch also starts the test clock, so the two cannot disagree.
+
+#### Coming back to an interrupted test _(2026-08-09)_
+
+Reopening a test in progress now **opens at the first section with blank steps**,
+rather than dropping you back at section 1 to hunt for where you had got to. In
+the officer's **Test Records** tab an unfinished test says **Tap to resume** and
+opens on the scoring screen; a finished one still opens on its scorecard.
+
+> **[SCREENSHOT NEEDED]:** _The officer's Test Records tab showing a mix of rows —
+> an unfinished test with its "Tap to resume" affordance, a completed test, and a
+> cancelled test with its distinct status — so the three read differently at a
+> glance._
+
+#### A cancelled test is read-only _(2026-08-09)_
+
+A cancelled test used to render as a **live evaluation**: editable criteria, a
+running clock, and a **Finish** button that the server rejects. It now renders
+read-only and says plainly that **nothing was decided** — it does not show a pass
+or a fail, because there was neither. The officer panel no longer describes an
+abandoned test as counting toward the candidate's record, because it counts
+toward nothing.
+
+Cancelling a test from the Test Records tab now asks for its optional reason in a
+proper dialog. It used to use the browser's own prompt, which some browsers
+suppress — and a suppressed prompt is indistinguishable from pressing Cancel, so
+the cancellation silently did nothing.
+
 ---
 
 ## Scoring & Critical Criteria
 
 During the test, the examiner scores each criterion as the candidate performs the procedure.
 
-### Per-Section Scoring
+### The scoring screen _(rebuilt 2026-08-09)_
 
-Each section displays its criteria as a checklist. The examiner:
+The screen is built for someone standing outdoors, in gloves, watching a
+candidate rather than the tablet.
 
-- **Checks off** each step the candidate completes correctly
-- **Leaves unchecked** any steps the candidate misses or performs incorrectly
-- Notes which criteria are marked as **Required** (critical) — indicated by a red asterisk
+- **The candidate's name is on the screen.** Confirm you have the right person
+  open before you start — nothing on the old screen told you.
+- **Section chips across the top**, 44px and showing their own state, replace the
+  10px progress dots that were unhittable with a glove and silent about what was
+  left.
+- **A running "scored / total" count and a save-status line** sit with them, so
+  "am I finished?" and "did that save?" are both answerable at a glance.
+- **The primary bottom-bar button is Next**, not Finish. On the old screen the
+  biggest, reddest button on every section ended the evaluation while moving on
+  was a small grey one.
+- **Moving between sections returns you to the top of the screen**, rather than
+  dropping you halfway down the new one.
+
+> **[SCREENSHOT NEEDED]:** _The active scoring screen mid-test, showing the
+> candidate's name in the header, the 44px section chips across the top with one
+> active and two showing complete, the running "scored / total" count and
+> save-status line, a scored criterion and an unscored one below, and the bottom
+> bar with Prev and a primary Next button._
+
+### Recording a mark
+
+Each criterion type is scored differently, and each can be **undone**:
+
+| Criterion type | How you mark it                                                                | Clearing it               |
+| -------------- | ------------------------------------------------------------------------------ | ------------------------- |
+| **Pass/Fail**  | Tap Pass or Fail                                                               | Tap the same one again    |
+| **Score**      | Tap the number                                                                 | Tap the same number again |
+| **Checklist**  | Tick the boxes the candidate completed, or tap **Candidate did none of these** | **Clear this step**       |
+| **Statement**  | Marks itself — nothing to do                                                   | n/a                       |
+| **Timed**      | Start and stop the stopwatch                                                   | Re-run it                 |
+
+> **A mis-tap used to be uncorrectable.** The only way out of tapping the wrong
+> verdict was to record the opposite one on a candidate. Tapping the same value
+> again now clears it. This matters most on a critical step, where a mis-tapped
+> **0** and a deliberate **0** score identically but mean completely different
+> things.
+
+> **"Candidate did none of these" is not the same as an unscored step.** A
+> checklist used to count as scored only once a box was ticked — so the case an
+> examiner most needs to record was indistinguishable from a step they forgot,
+> and could only be entered by ticking a box and unticking it.
+
+**Add note** is a full-size labelled control, not a 12px text link. It is what
+explains a mark to whoever reads the scorecard weeks later; it should not be the
+hardest thing on the screen to hit.
 
 ### Running Score
 
@@ -307,6 +381,91 @@ As the examiner scores criteria, the interface displays:
 - **Overall running score** — total points earned / total possible points across all sections
 - **Percentage** — running percentage updated in real-time (based on points, not simple criterion count)
 
+> **Unscored steps read "—/N" in neutral type, not a red "0/N".** A red zero
+> reads as a fail the examiner never recorded.
+
+### What the percentage is actually made of _(2026-08-09)_
+
+A scorecard once read **86%** over a sheet whose visible sections included four
+knowledge questions, two of them failed — and nothing on the page explained how
+those two could be wrong without moving the number.
+
+They could because **not every criterion type feeds the percentage**:
+
+| Criterion type | Counts toward the percentage?                                |
+| -------------- | ------------------------------------------------------------ |
+| **Score**      | Yes — earns 0…max                                            |
+| **Pass/Fail**  | **Only if the template opts in** (see below); off by default |
+| **Checklist**  | No                                                           |
+| **Timed**      | No                                                           |
+| **Statement**  | No — read aloud, marks itself, never scored                  |
+
+This is a defensible way to build a sheet — the questions still appear on the
+scorecard, and a **critical** one still fails the test outright regardless of
+points. It was simply invisible to whoever read the result.
+
+Two things fixed that:
+
+- **The scorecard now shows its working.** A breakdown panel above the sections
+  gives the per-section point totals, the passing threshold applied, and any
+  critical step that decided the outcome on its own. It **flags any section that
+  contributed nothing** to the percentage, which is exactly the case that made
+  "86%" unreadable. Both the officer's and the candidate's result pages show it.
+- **Pass/Fail steps can be made to carry points**, with a per-template setting.
+  A passed step earns its points (its max score, or 1 if none is set); a failed
+  one earns none.
+
+> **[SCREENSHOT NEEDED]:** _The score breakdown panel at the top of a completed
+> scorecard, showing per-section point totals with one section flagged as
+> contributing no points, the passing threshold, and the final percentage._
+
+> **Turning the setting on never re-scores an old result.** The rule is frozen
+> into each test at the moment it is created, so a test taken under the old
+> behaviour keeps the number it was given. Change it and only new tests follow
+> the new rule.
+
+> **Checklist and timed steps stay out of the point pool deliberately.** A
+> checklist is partly completable and would need its own earned-fraction rule; a
+> time limit is a gate on the evolution, not a measure of how well it was
+> performed. If either must decide the outcome, make it a **critical** criterion.
+
+### A statement that is read on the clock _(2026-08-09)_
+
+The test clock starts on the examiner's first real action — recording a result,
+or moving between sections — because an examiner watching a candidate will not
+reliably remember to press play on a skill whose time limit is itself the
+pass/fail criterion.
+
+**Statements are excluded from that by default.** They mark themselves as a
+section renders, which is nobody's action, so opening a test whose first section
+leads with a statement must not start timing before the candidate is even in
+position.
+
+But sheets differ. Some read the opening statement as a brief _before_ the clock;
+others read it _inside_ the limit — "your time starts now." So a statement can be
+marked **starts the timer**:
+
+| Setting           | What the examiner sees                          | Effect                                    |
+| ----------------- | ----------------------------------------------- | ----------------------------------------- |
+| **Off** (default) | The read-aloud box alone                        | Read off the clock; nothing starts timing |
+| **On**            | A **"Start clock & read"** button under the box | The examiner's tap starts the clock       |
+
+> **[SCREENSHOT NEEDED]:** _A statement criterion on the scoring screen with
+> "starts the timer" enabled, showing the "Start clock & read" button beneath the
+> read-aloud box, and the same statement after tapping it — the button replaced
+> by the note that the statement falls inside the time limit and the clock is
+> running._
+
+> **It is a button, not an automatic start.** Whether a statement is read on the
+> clock is a property of the sheet; _when_ it is read is not. An examiner opens a
+> test to have it ready and reads the prompt once the candidate is in position,
+> which may be minutes later — starting on render would time the wait. Tapping it
+> also clears a manual pause, the way pressing play does.
+
+> **Statement criteria are excluded from every count.** They mark themselves, so
+> counting them showed progress on a section nobody had touched — and a section
+> could read "3 / 3" with a real step still blank.
+
 ### Critical Criteria
 
 If "Require All Critical" is enabled on the template:
@@ -314,8 +473,11 @@ If "Require All Critical" is enabled on the template:
 - Any **required** criterion that is left unchecked (not passed) will result in an **automatic FAIL**
 - This is true even if the candidate's percentage score exceeds the passing threshold
 
-> **Screenshot placeholder:**
-> _[Screenshot of the active test scoring interface showing: a top bar with candidate name, template name, timer counting up (showing "04:32"), and running score "14/18 (78%)". Below, sections are shown as accordion panels — one expanded showing criteria with checkboxes. Required criteria have a red asterisk. A completed section shows "5/5" in green. The bottom shows a prominent "Complete Test" button]_
+> **[SCREENSHOT NEEDED]:** _The active scoring screen's criteria area, showing a
+> critical criterion with its red asterisk scored Pass, an unscored score-type
+> criterion reading "—/5" in neutral type, a checklist criterion with two of four
+> boxes ticked and the "Candidate did none of these" option beneath, and the
+> timer running in the header._
 
 ---
 
@@ -324,6 +486,16 @@ If "Require All Critical" is enabled on the template:
 When the candidate finishes the procedure:
 
 1. Click **Complete Test**. The timer automatically stops.
+
+   > **If any steps are still blank, a dialog names the count** and reminds you
+   > that **an unscored critical step scores the same as a fail** — which is what
+   > actually happens. The review screen repeats it, with a button that takes you
+   > straight back to the first unfinished section.
+
+   > **[SCREENSHOT NEEDED]:** _The "finish with unscored steps" dialog naming the
+   > number of blank steps and stating that an unscored critical step counts as a
+   > fail, with its keep-scoring and finish-anyway buttons._
+
 2. The system shows a **post-completion review screen** where the examiner can:
    - Review each section's criteria and scores
    - Add **section-level notes** with feedback for specific areas
@@ -386,10 +558,7 @@ The outcome is withheld from the candidate on purpose. Nobody has yet decided
 that the result stands, so showing a PASS or a FAIL would be asserting something
 no officer has agreed to.
 
-> **[SCREENSHOT NEEDED]:** _A member's "My Training → Skills Tests" list showing
-> one row badged "Awaiting validation" with the score and PASS/FAIL columns
-> visibly empty, alongside a normal validated result showing a green PASS badge
-> for contrast._
+![A member's own skills tests, one awaiting an officer's validation with its outcome withheld](./images/09-10-member-awaiting-validation.png)
 
 ### If you are a training officer
 
@@ -399,11 +568,13 @@ obtain, so there is no queue of your own tests to approve afterward.
 
 What is new is the **review queue** of tests other members ran:
 
-1. Go to **Training Admin > Skills Testing > Tests**.
-2. Filter for results **awaiting validation**. The count also appears on the
-   Skills Testing summary dashboard.
+1. Go to **Training Admin > Skills Testing > Test Records**.
+2. Set the status dropdown to **Needs Validation**. A **Needs validation** badge
+   also marks these rows in the unfiltered list, so you can spot them without
+   filtering.
 3. Open a result and read the scorecard — every criterion, the notes, and the
-   measured time are all there.
+   measured time are all there. A banner at the top states plainly that the
+   result does not yet count toward the candidate's record.
 4. **Accept result** to validate it, or **Void result** to reject it. Both sit
    at the bottom of the scorecard you have just read, under **Officer actions**,
    so the decision is made on the record rather than on a list row _(2026-08-08)_.
@@ -416,6 +587,12 @@ skill you administer often: a template can override the department, and a single
 test can override the template. See
 [Who Sees a Result](#who-sees-a-result--disclosure-settings-2026-08-08).
 
+> **Where the count lives.** The **Templates** tab carries a **Needs
+> Validation** stat card, which appears only while the queue is non-empty — it
+> takes the Pass Rate card's place, on the reasoning that a queue nobody clears
+> is blocking candidates from getting credit and so outranks the pass rate for
+> attention.
+
 **Validate** is the moment the result becomes real: the pipeline requirement is
 credited if it passed, one attempt is spent, the department statistics move, and
 the candidate can see the outcome under the template's normal disclosure rules.
@@ -425,14 +602,7 @@ is deliberate — voiding keeps the submission and records the reason it was
 refused, rather than deleting an evaluation somebody actually sat for. The
 candidate sees the reason.
 
-> **[SCREENSHOT NEEDED]:** _The Test Records tab filtered to "Awaiting
-> validation", showing three rows with candidate name, examiner name, template
-> and date, and a row-level action group containing both **Validate** and
-> **Void** buttons._
-
-> **[SCREENSHOT NEEDED]:** _The Skills Testing summary dashboard with the
-> "Pending validation" stat card showing a non-zero count, so the badge that
-> drives officers to the queue is visible._
+![Officer review queue — completed results awaiting validation, with Validate and Void actions](./images/09-11-validation-queue.png)
 
 ### Edge cases
 
@@ -518,15 +688,15 @@ name.)_
 
 Navigate to **Training Admin > Skills Testing > Summary** for a department-wide overview:
 
-| Metric                  | Description                                                                                         |
-| ----------------------- | --------------------------------------------------------------------------------------------------- |
-| **Total Templates**     | Number of skill sheet templates (archived excluded)                                                 |
-| **Published Templates** | Templates available for testing                                                                     |
-| **Total Tests**         | All-time official test sessions. Practice attempts and **voided** results are excluded              |
-| **Tests This Month**    | Official test sessions created in the current month, on the same exclusions                         |
-| **Pass Rate**           | Percentage of **validated** completed tests that resulted in a pass                                 |
-| **Average Score**       | Mean percentage score across **validated** completed tests                                          |
-| **Pending Validation**  | Official results awaiting an officer's sign-off. **Officers only** — it reads `0` for everyone else |
+| Metric                  | Description                                                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Total Templates**     | Number of skill sheet templates (archived excluded)                                                                                             |
+| **Published Templates** | Templates available for testing                                                                                                                 |
+| **Total Tests**         | All-time official test sessions. Practice attempts and **voided** results are excluded                                                          |
+| **Tests This Month**    | Official test sessions created in the current month, on the same exclusions                                                                     |
+| **Pass Rate**           | Percentage of **validated** completed tests that resulted in a pass                                                                             |
+| **Average Score**       | Mean percentage score across **validated** completed tests                                                                                      |
+| **Needs Validation**    | Official results awaiting an officer's sign-off. It **replaces the Pass Rate card** while the queue is non-empty, and appears for officers only |
 
 > **Pass rate and average score count only validated results** _(2026-08-08)_.
 > A member-run result nobody has signed off is a submission, not yet the
@@ -534,16 +704,16 @@ Navigate to **Training Admin > Skills Testing > Summary** for a department-wide 
 > evaluations an officer may still reject. Expect these two figures to lag the
 > raw test count while a review queue is outstanding.
 
-> **Pending Validation is deliberately officer-only.** It is an org-wide count of
+> **Needs Validation is deliberately officer-only.** It is an org-wide count of
 > _other people's_ outstanding evaluations, which is not a member's to see, and
 > it is only actionable by someone who can validate. Members receive `0` rather
 > than a hidden card.
 
 > **[SCREENSHOT NEEDED]:** _The Summary dashboard viewed by a training officer
-> with a non-zero **Pending Validation** card visible, so the review-queue badge
+> with a non-zero **Needs Validation** card visible, so the review-queue badge
 > that drives officers to the queue can be seen alongside the other stats._
 
-![Skills testing summary with its stat cards](./images/09-10-templates-tab.png)
+![Skills testing summary with a non-zero Pending Validation count](./images/09-12-summary-pending-validation.png)
 
 ---
 
@@ -834,10 +1004,7 @@ _other_ candidate's results too.
 | Adding someone to a **withheld** result | They see exactly what the candidate sees, which for "Nothing" is nothing at all                               |
 | Removing a viewer                       | Takes effect immediately; the result disappears from their list                                               |
 
-> **[SCREENSHOT NEEDED]:** _The Viewers panel on an open test, showing one
-> already-granted viewer with their name and the date granted plus a remove
-> (trash) button, and the "Add viewer" search box below it with the note that a
-> viewer sees the result at the candidate's disclosure level._
+![Named viewers on a single test, with the note that a viewer never sees more than the candidate](./images/09-13-test-viewers-panel.png)
 
 ### Setting the department default
 
@@ -871,7 +1038,7 @@ page.
 Setting a field back to **Inherit** genuinely clears the override — it does not
 leave the last value quietly in place.
 
-![Result disclosure options on the template builder](./images/09-13-result-disclosure.png)
+![Per-template Result Disclosure controls showing the inherited default](./images/09-08-template-result-disclosure.png)
 
 ### Releasing a withheld result
 
@@ -1065,7 +1232,7 @@ Competency Matrix reflects new scores
 | Test shows FAIL but score is above passing percentage            | Check if "Require All Critical" is enabled. If any required criterion was not passed, the result is an automatic FAIL regardless of the score.                                                                                                                                                                                                                    |
 | Candidate doesn't appear in the search                           | Type at least **two characters** of their name — nothing is shown before that, and there is no "browse everyone" option by design. Only the first 15 matches appear and the list does not say it was cut short, so type more of the name rather than scrolling. The candidate must also be an **active** member of your organization; check their account status. |
 | The candidate field is missing entirely                          | Looking up a candidate needs `training.view` or `training.manage`. A position with no training access cannot search for test candidates. Ask an administrator to add the permission to your position.                                                                                                                                                             |
-| A member ran a test but nothing shows on the candidate's record  | Expected. An official test run by a member who is not a training officer is a **submission** until an officer validates it — it credits no requirement and shows no outcome. Open **Skills Testing > Tests**, filter for results awaiting validation, and Validate or Void it.                                                                                    |
+| A member ran a test but nothing shows on the candidate's record  | Expected. An official test run by a member who is not a training officer is a **submission** until an officer validates it — it credits no requirement and shows no outcome. Open **Training Admin > Skills Testing > Test Records**, set the status dropdown to **Needs Validation**, and Validate or Void it.                                                   |
 | "You cannot validate a test you are the candidate in"            | Separation of duties. An officer cannot sign off their own evaluation, even when someone else examined them — another officer has to validate it.                                                                                                                                                                                                                 |
 | Validate is refused — "nothing to validate"                      | Practice attempts are never recorded, so there is nothing to sign off. Voided results and tests still in progress are refused for the same reason: only a completed, official, non-voided test has a result to validate.                                                                                                                                          |
 | Old results appeared in the review queue                         | They should not. Every official result predating 2026-08-08 was backfilled as validated by its examiner — under the old rules only officers could run them. If you see historical results queued, report it rather than mass-validating.                                                                                                                          |

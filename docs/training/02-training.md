@@ -310,6 +310,52 @@ Completing any requirement — of **any** type — counts toward the member's **
 
 > **[SCREENSHOT NEEDED]:** _A member's enrollment progress detail showing requirements grouped by phase, each with a status control (Complete / In Progress / Reopen), an officer "Verify" action, and inputs for logging hours, shifts, calls, or courses._
 
+### Working Through a Checklist Requirement _(2026-08-09)_
+
+A **checklist** requirement holds the actual list of things a member has to do —
+"tour the apparatus bay", "meet the duty officer", "SCBA fit test on file". Until
+2026-08-09 nobody could see that list: the member read the requirement's title and
+had to guess, and the officer signing it off saw "8 items" rather than the items.
+
+Both of you can now read the steps, and they are **signed off one at a time**.
+
+- The officer's progress row shows a **checkbox per step**.
+- The member's page **lists the steps with their state**.
+- Completion is **ticked ÷ total**, so the requirement fills up as the work
+  happens instead of sitting at zero until the last step.
+
+> **[SCREENSHOT NEEDED]:** _An officer's view of a checklist requirement on a
+> member's progress detail, expanded to show the individual steps each with its
+> own checkbox, three of eight ticked, and the requirement's percentage showing
+> 38%._
+
+> **[SCREENSHOT NEEDED]:** _The member's view of the same checklist requirement
+> on their progress page, listing the steps they can see with their ticked/unticked
+> state and the "+2 more steps your officer records" line beneath them._
+
+#### Steps only the officer sees
+
+Some steps are not the member's business — **references called**, **background
+check returned**. In the requirement editor, the **eye toggle** on a step hides it
+from the member's view.
+
+**Hidden steps still count toward the total.** If they did not, a requirement
+could read 100% complete while the background check was still outstanding. So the
+member is told **"+2 more steps your officer records"** rather than being shown a
+denominator that does not match what is on their screen.
+
+> **[SCREENSHOT NEEDED]:** _The requirement editor's checklist steps editor
+> showing several steps with the eye toggle, one step toggled to officer-only
+> (eye closed) with its greyed-out treatment._
+
+#### Edge cases
+
+| What happens                                                                                                    | Why                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Renaming a step, or dragging it to a new position, keeps the ticks already recorded against it**              | Each step carries its own id. Reordering and rewording move the step; they do not reset it                                             |
+| **Older checklists written before this change still work**                                                      | Steps that were stored as plain text are converted the first time they are read. Nothing needs migrating and nothing needs re-entering |
+| **A checklist with every step hidden shows the member 0 visible steps and a "your officer records these" line** | Correct, though usually a sign the requirement should not be member-facing at all                                                      |
+
 ### Recording a Knowledge Test
 
 For a **knowledge test** requirement, the officer records the result:
@@ -333,6 +379,106 @@ A **phase completes** when all of its required items are done. What happens next
 When a member advances, both the **member** and their **mentor(s)** are notified.
 
 > **[SCREENSHOT NEEDED]:** _A member's progress detail showing a completed phase marked ready to advance, with an officer-only "Advance to next phase" button because the phase requires approval._
+
+#### Phase prerequisites _(2026-08-09)_
+
+A phase can name **other phases in the same program that must be finished first**.
+This is not the same thing as the phase order:
+
+|                         | What it answers                                   |
+| ----------------------- | ------------------------------------------------- |
+| **Phase number**        | The order phases are walked in                    |
+| **Phase prerequisites** | What must be **finished** before this phase opens |
+
+They are the same thing right up until a program has an optional or parallel
+track, or until somebody was force-advanced past a phase — at which point the
+order says "next" and the prerequisite says "not yet".
+
+Prerequisites are enforced on both **manual** and **automatic** advancement. An
+officer using **Advance to next phase** with **force** still overrides them —
+that is what force is for.
+
+> **[SCREENSHOT NEEDED]:** _The phase editor showing the prerequisite picker with
+> two earlier phases selected, and the helper text distinguishing phase order from
+> prerequisites._
+
+**Edge cases**
+
+| What happens                                                                                            | Why                                                                                            |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **A phase cannot require itself, a phase in another program, or a loop of phases requiring each other** | Rejected when you save, with the reason                                                        |
+| **Deleting a phase removes it from the prerequisites of the phases that referenced it**                 | Otherwise every member behind it would be permanently blocked by a phase that no longer exists |
+| **A prerequisite pointing at a phase that has since gone is ignored**                                   | Belt and braces for the case above — a member is never stranded by a dangling reference        |
+| **Prerequisites survive export/import into another department**                                         | They are carried by phase **number**, not by id, so they land correctly in the copy            |
+
+#### Requirement prerequisites _(2026-08-09)_
+
+Inside a phase — or inside the program-level list, for a program with no phases —
+a requirement can be flagged **prerequisite**. The rest of the requirements in
+that same scope are then **locked** until it is done. Toggle the flag per
+requirement on the pipeline detail page.
+
+- An officer trying to sign off a locked requirement is **refused, with the
+  blocking requirement named**.
+- The member sees the step **greyed out with the same wording** rather than hidden
+  — a step you cannot see yet is indistinguishable from a step that does not
+  exist.
+
+> **[SCREENSHOT NEEDED]:** _The pipeline detail page showing a requirement with
+> its "prerequisite" toggle on, and the sibling requirements beneath it rendered
+> greyed-out with the "locked until … is complete" note._
+
+**Edge cases**
+
+| What happens                                                                                  | Why                                                                                                                         |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **A requirement used in several phases is locked only when every one of its links is locked** | Otherwise a requirement shared with an unrelated phase would block work that has nothing to do with it                      |
+| **Credit that arrives automatically from logged training is _not_ blocked**                   | The hours actually happened. Discarding them because a prerequisite is outstanding would be worse than crediting them early |
+
+### When an Enrollment Runs Out of Time _(2026-08-09)_
+
+A program can carry a **target completion date**. Members are warned as it
+approaches — and, until 2026-08-09, that was all that ever happened: the date
+arrived, the warnings stopped, and the enrollment sat at **Active** while the
+member's page read "42 days overdue".
+
+An enrollment past its target completion date now moves to **Expired**.
+
+- It happens **the moment anyone opens the enrollment**, and again in a **daily
+  sweep** for the ones nobody opens.
+- Both the **member** and the **training officers** are told.
+- Officers can now **filter for expired enrollments**, which was impossible while
+  the status was never written.
+
+#### Reopening an expired enrollment
+
+Expired is not a dead end. An officer can **reopen** an enrollment, optionally on
+a new deadline — the ordinary case of granting an extension to a member who ran
+out of time.
+
+- **Nothing the member finished is lost.** Their completed requirements are
+  untouched.
+- The overall progress is **recalculated on reopen**, so a member who quietly
+  finished the work while expired comes back marked complete rather than waiting
+  for the next edit to notice.
+
+> **[SCREENSHOT NEEDED]:** _An officer's Enrollments tab filtered to Expired,
+> showing an expired enrollment row with the Reopen action, and the reopen dialog
+> with its optional new target completion date._
+
+#### Deadline reminders, per program _(2026-08-09)_
+
+Each program sets its **own** warning schedule in the pipeline editor:
+
+| Setting                     | Effect                                                                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Days before deadline**    | One number or several — the days on which a warning is sent. Left unset, it uses the program's warning-days value plus 14- and 7-day follow-ups |
+| **Only warn if below _N_%** | Suppresses the warning for members already on track, so a reminder means something when it does arrive                                          |
+
+> **This used to be ignored.** The sweep sent warnings at a fixed 30, 14 and 7
+> days regardless of what the program said — so a department that configured a
+> 90-day warning got one at 30. If you set a schedule before 2026-08-09 and
+> thought it was not working, it was not.
 
 ### What Automatically Updates Progress
 
@@ -624,7 +770,7 @@ Departments that hold drills late in the month often saw members flagged non-com
 2. Find the **Evaluation Period** option.
 3. Leave **Count the current (in-progress) month in compliance calculations** checked to measure members against this month's training (the default), or uncheck it so calculations stop at the end of last month.
 
-> **[SCREENSHOT NEEDED]:** _The Compliance Requirements > Thresholds tab showing the "Evaluation Period" checkbox and its helper text describing each mode and noting that individual requirements can override it._
+![Compliance thresholds configuration including the evaluation-period setting](./images/02-66-compliance-thresholds.png)
 
 ### Per-Requirement Override
 
@@ -998,7 +1144,12 @@ Administrators can configure manual shift entry via the **ManualEntrySettingsPan
 | **Default Start Time**  | Pre-fill the start time field (e.g., "07:00")                      |
 | **Default Duration**    | Pre-fill the shift duration, auto-calculating the end time         |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ManualEntrySettingsPanel showing the enable toggle, apparatus requirement checkbox, apparatus multi-select, default start time input, and default duration input._
+**Everything except the enable checkbox is hidden while the feature is off**,
+which is how it ships — the apparatus rules and the shift defaults appear only
+once **Enable Manual Shift Entry** is ticked. A panel showing nothing but a
+single unticked checkbox is the feature disabled, not a broken page.
+
+![Manual entry settings with its enable toggle, apparatus rules and shift defaults](./images/02-67-manual-entry-settings.png)
 
 ### Edge Cases
 
@@ -1077,12 +1228,25 @@ Training categories can now be linked to **NREMT National Continued Competency R
 
 **How it works:**
 
-1. Navigate to **Training Admin > Requirements** and edit a training category
-2. In the **Registry Code** field, enter the NCCR code (e.g., `NCCR-CARDIOLOGY`, `NCCR-TRAUMA`)
-3. Training records filed under categories with a registry code automatically count toward the corresponding NCCR requirement
-4. The compliance matrix shows NCCR progress alongside department-specific requirements
+Registry codes are **not typed in by hand.** They arrive attached to the
+requirements you import from a standards registry, and the code travels with the
+requirement from then on:
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the training category edit form showing the new "Registry Code" field with an NCCR code entered, and a tooltip explaining that this links the category to national standards._
+1. Open a program pipeline and add a requirement from the **requirement library**
+2. Pick a registry-sourced requirement — the library shows its registry code in
+   brackets after the name, and the search box matches on that code, so
+   `NCCR` narrows the list to registry entries
+3. The imported requirement keeps its `registry_code`, `registry_name` and
+   `source` attribution
+4. The compliance matrix shows NCCR progress alongside department-specific
+   requirements
+
+> **There is no category edit form.** `registry_code` exists on the training
+> category model and its API accepts it, but no screen in the application
+> creates or edits training categories — categories appear only as selectors on
+> other forms. A previous version of this section described editing a category
+> and typing a code into a **Registry Code** field; neither the screen nor the
+> field exists. Setting a code on a category is an API-only operation today.
 
 **NREMT terminology updates:**
 
@@ -1650,7 +1814,7 @@ The printed record includes:
 
 The printed program includes:
 
-- Program name, description, type (Flexible/Sequential/Phase-based), and status
+- Program name, description, type (Phase-based or one-list), and status
 - Phase breakdown with all requirements listed under each phase
 - Milestone checkpoints with completion criteria
 - Enrollment roster with per-member progress percentages
@@ -1699,14 +1863,14 @@ This walkthrough follows **FF Alex Rivera**, a probationary firefighter at Oakvi
 
 ### Part 1: Enrollment (March 25)
 
-Capt. Davis navigates to **Training > Programs** and opens the "Probationary Firefighter Program." This is a **Sequential** program with 4 phases and 15 total requirements. He clicks **Enroll Member**, searches for Alex Rivera, and confirms the enrollment.
+Capt. Davis navigates to **Training > Programs** and opens the "Probationary Firefighter Program." This is a **Phase-based** program with 4 phases and 15 total requirements. He clicks **Enroll Member**, searches for Alex Rivera, and confirms the enrollment.
 
 After enrollment, the program dashboard for Alex shows:
 
 | Field            | Value                                   |
 | ---------------- | --------------------------------------- |
 | Program          | Probationary Firefighter Program        |
-| Type             | Sequential                              |
+| Type             | Phase-based                             |
 | Enrolled         | March 25, 2026                          |
 | Overall Progress | 0%                                      |
 | Phases           | 4 (Phase 1 unlocked, Phases 2-4 locked) |
@@ -1748,7 +1912,7 @@ After all 4 requirements are approved:
 | Phase 2 Status   | Unlocked (auto-triggered by Phase 1 completion) |
 | Total Hours      | 7                                               |
 
-Phase 2 (Basic Skills) automatically unlocks because the program type is Sequential — no officer action is needed to advance phases.
+Phase 2 (Basic Skills) opens automatically because Phase 1's required items are all complete — no officer action is needed unless the phase is flagged "Require officer approval to advance."
 
 ### Part 3: Phase 2 — Basic Skills via Shift Reports (April - June)
 

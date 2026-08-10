@@ -8,9 +8,41 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.membership_pipeline import (
+    ActionType,
+    PipelineStepType,
+    ProspectStatus,
+)
 from app.schemas.base import UTCResponseBase
+
+# step_type / action_type / status map to strict MySQL ENUM columns, but were
+# typed as free str and inserted raw (create_step/update_step, update_prospect's
+# setattr loop) — an out-of-set value passed Pydantic, reached MySQL, and 500'd
+# (MP2-3, the B1 latent-500 class). Validate at the request schema so a bad value
+# is a clean 422. (Interview `recommendation` is not here — it goes through an
+# InterviewRecommendation(...) coercion the endpoints already convert to 400; and
+# ProspectElectionPackage.status is a plain String column, not an ENUM.)
+_STEP_TYPES = {e.value for e in PipelineStepType}
+_ACTION_TYPES = {e.value for e in ActionType}
+_PROSPECT_STATUSES = {e.value for e in ProspectStatus}
+
+
+def _enum_validator(valid: set, field: str):
+    def _check(value):
+        if value is None:
+            return value
+        normalized = value.lower() if isinstance(value, str) else value
+        if normalized not in valid:
+            raise ValueError(
+                f"Invalid {field} '{value}'. Must be one of: "
+                f"{', '.join(sorted(valid))}"
+            )
+        return normalized
+
+    return _check
+
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -74,6 +106,13 @@ class PipelineStepBase(BaseModel):
 class PipelineStepCreate(PipelineStepBase):
     """Schema for creating a pipeline step"""
 
+    _check_step_type = field_validator("step_type")(
+        _enum_validator(_STEP_TYPES, "step_type")
+    )
+    _check_action_type = field_validator("action_type")(
+        _enum_validator(_ACTION_TYPES, "action_type")
+    )
+
 
 class PipelineStepUpdate(BaseModel):
     """Schema for updating a pipeline step"""
@@ -83,6 +122,13 @@ class PipelineStepUpdate(BaseModel):
     step_type: Optional[str] = None
     action_type: Optional[str] = None
     is_first_step: Optional[bool] = None
+
+    _check_step_type = field_validator("step_type")(
+        _enum_validator(_STEP_TYPES, "step_type")
+    )
+    _check_action_type = field_validator("action_type")(
+        _enum_validator(_ACTION_TYPES, "action_type")
+    )
     is_final_step: Optional[bool] = None
     sort_order: Optional[int] = Field(None, ge=0)
     email_template_id: Optional[UUID] = None
@@ -284,7 +330,12 @@ class ProspectUpdate(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = Field(
         None,
-        description="Status: active, on_hold, approved, rejected, withdrawn, inactive",
+        description="Status: active, on_hold, approved, rejected, withdrawn, "
+        "inactive, transferred",
+    )
+
+    _check_status = field_validator("status")(
+        _enum_validator(_PROSPECT_STATUSES, "status")
     )
 
 

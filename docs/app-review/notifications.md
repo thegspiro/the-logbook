@@ -1,7 +1,106 @@
 # Application Review — Notifications (Tier B)
 
 **Prefix:** `NOTIF2` · **Iteration:** B11 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — NOTIF2-3 DNS-rebinding residual closed at send time
+
+The one substantive standing item on this module was the DNS-rebinding residual
+on Web Push. Pass 4 closes it — in the place pass 3 identified as the right one
+(send time, not subscribe time), which is also why it no longer collides with the
+test harness pass 3 flagged as the blocker.
+
+### NOTIF2-3 (residual) — MED — Public push host re-pointed at an internal IP after subscribe — ✅ FIXED
+
+**What:** `validate_push_endpoint` blocks IP-literal / localhost / `.internal`
+hosts at subscribe time, but a **public hostname that resolves to a private IP**
+(DNS rebinding) slipped through — and `PushService._send_one` later hands the
+stored endpoint to `webpush`, which POSTs to it. So a member could register a
+public host, flip its DNS to `169.254.169.254` / `127.0.0.1` / an intranet host,
+and turn each push to themselves into a blind SSRF.
+
+**Why it stayed flagged until now:** pass 3 recorded that adding real DNS
+resolution *at subscribe time* would break the delivery integration tests (they
+call `service.subscribe` directly with a `127.0.0.1` endpoint) and the 17
+endpoint-validation unit tests (non-resolving fake hosts). The insight this pass:
+the rebinding window is *between subscribe and send*, so the correct guard is at
+**send time**, which sidesteps the subscribe-time harness entirely.
+
+**Fix:** `_send_one` now calls the shared `assert_outbound_url_safe(endpoint)`
+(the same send-time re-resolution the Slack/Discord/Teams/webhook integrations
+use) immediately before `webpush`, and `send_to_user` gained an `except ValueError`
+that **skips** an endpoint that now resolves non-public (logs a warning, keeps the
+row — a transient mis-resolution shouldn't permanently drop a device). The check
+runs inside the `asyncio.to_thread` worker, so the blocking `getaddrinfo` stays
+off the event loop. It is **gated to `ENVIRONMENT in ("production", "staging")`**,
+so the loopback push emulator the wire-format tests (and local dev) point at still
+works — mirroring the `http`-in-development allowance already baked into the URL
+validator. In prod/staging the rebinding window shrinks to the resolve→connect
+interval, the same guarantee the outbound integrations already have. The
+subscribe-time `validate_push_endpoint` (IP-literals/localhost/`.internal`) still
+runs in **all** environments, so the obvious-internal endpoints are blocked
+everywhere regardless.
+
+**4 DB-free tests added** (`test_push_rebinding_guard.py`): production blocks a
+private-resolving endpoint (webpush never called) and allows a public one; staging
+also guards; development skips the guard so a loopback endpoint still dispatches.
+
+### Still flagged (unchanged)
+
+- Unused frontend `markLogRead` (frontend-shared cleanup); `get_logs` pagination
+  (build-query-then-subquery-count, fine at scale).
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_push_rebinding_guard.py` **4 passed** +
+`test_push_endpoint_validation.py` **17 passed** (all DB-free). The push
+wire-format `TestSend` tests are DB-backed (`db_session`) and unaffected — they run
+under the default `development` env, where the new guard is intentionally skipped.
+
+---
+
+## Pass 3 (2026-08-09) — latent-500 on rule enums; push SSRF re-verified
+
+Re-verified NOTIF2-3 (`validate_push_endpoint` at the API boundary, `push_service.py`
++ `notifications.py:380`) and the push scoping/fail-safe delivery hold. The B1
+latent-500 lens surfaced a genuine recurrence on the rule schemas.
+
+### NOTIF2-4 — LOW/MED — Rule `trigger`/`category`/`channel` 500 on a bad value — ✅ FIXED
+
+**What:** `trigger`, `category`, and `channel` on `NotificationRuleCreate`/`Update`
+were typed as free `str` but map to **strict MySQL ENUM** columns
+(`NotificationTrigger` / `NotificationCategory` / `NotificationChannel`), and are
+stored **raw** — `create_rule` via `**rule_data`, `update_rule` via its `setattr`
+loop. So an out-of-set value passed Pydantic, reached MySQL, and 500'd. The B1 class
+(pass 1's "mass-assignment not reachable" note confirmed these fields flow straight
+into the row, which is exactly the raw-insert path).
+
+**Fix:** `@field_validator`s on all three fields on both request classes, each
+deriving its value set from the model enum, lowercase-normalizing and rejecting
+unknowns → 422. Request-only, so `NotificationRuleResponse` (built from the ORM enum)
+is untouched; the rule editor sends only valid values. **7 tests added.**
+
+### NOTIF2-3 residual (DNS rebinding) — 🚩 STILL FLAGGED (deliberately)
+
+The push-endpoint validator blocks IP-literal/localhost/private-suffix hosts at
+subscribe time, but a public hostname that *resolves* to a private IP still isn't
+caught. A shared `assert_outbound_url_safe` (with `_assert_hostname_resolves_public`)
+exists in `app/utils/url_validator.py` and would close it — **but** pass 2 put the
+validator at the API boundary precisely because the delivery integration tests call
+`service.subscribe` directly with a `127.0.0.1` endpoint, and the 17 endpoint-validation
+unit tests use non-resolving fake hosts. Adding real DNS resolution (subscribe-time
+vs the send-time rebinding window, plus the test-harness interaction) is a careful
+change, not a batch drive-by; kept as the recorded hardening follow-up.
+
+### Still flagged (unchanged)
+
+- Unused frontend `markLogRead` (frontend-shared cleanup); `get_logs` pagination
+  (build-query-then-subquery-count pattern, fine at scale).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · new rule-enum tests **7 passed** + notification-service
+tests pass (DB-free).
 
 ---
 

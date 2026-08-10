@@ -1,7 +1,45 @@
 # Application Review — Compliance / Skills (Tier B)
 
 **Prefix:** `CS2` · **Iteration:** B22 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — full FK re-audit: zero gaps; no code change
+
+Ran a fresh, exhaustive client-FK audit across every `create_*`/`update_*` writer
+in all four services plus the three endpoint files (a sub-agent traced each against
+its request schema and model). **No missed client-FK write** — every FK that
+reaches a persisted column is validated in-org before the write:
+
+- **Skill tests** — `create_test`/`update_test` validate `template_id` and
+  `candidate_id` via org-scoped selects (404 if not in org), `requirement_id` via
+  `_validate_requirement_link`, and `examiner_id` is server-set; `SkillTestUpdate`
+  exposes no `candidate_id`/`examiner_id`/`template_id`, so the `setattr` loop can't
+  rebind tenancy. `add_test_viewer` proves its `user_id` in-org before storing
+  (Pitfall #14c, quoted in-code). CS-10 (examiner≠candidate) and CS-8
+  (`assert_different_person`) both hold.
+- **Compliance config/profiles** — `create_profile`/`update_profile` route every
+  client FK (`required/optional_requirement_ids`→`TrainingRequirement`,
+  `role_ids`→`Position`, `admin_hours_requirements[].category_id`→
+  `AdminHoursCategory`) through `_validate_profile_fks` (org-scoped, raises on any
+  `wanted − found`); `config_id` is server-derived and `ComplianceProfileUpdate` has
+  no `config_id`, so the parent can't be rebound. This is the "config/profile FK
+  re-validation on update" the prior pass added — re-confirmed covering both paths.
+- Attestation/report writers persist only server-derived actor/org ids;
+  `training_compliance.py` is read/evaluate-only.
+
+**Latent-500 lens N/A** (no strict enum columns — statuses are validated strings /
+config-driven); **E712-free** (CS2-1 swept both in pass 3).
+
+Open items unchanged, both product/feature: **CS-8 attestation** (server-side
+recompute / dual-control — a workflow change) and **CS-9 monthly windowing** (a
+data-layer feature).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a · `test_skill_test_update_guard.py` **2 passed** (DB-free).
+
+---
 
 **Backend:** `endpoints/skills_testing.py` + `skills_testing_service.py`,
 `endpoints/compliance_officer.py` + `compliance_officer_service.py` +
@@ -10,6 +48,38 @@
 **Prior audit:** `docs/module-audit/compliance-skills.md` (iteration 22) — CS-1–7
 fixed; CS-8 (skills self-cert fixed; attestation SoD open); CS-9 (injection +
 input-validation fixed; monthly-window + recipient allow-list + officer #6 open).
+
+---
+
+## Pass 3 (2026-08-09) — verified clean; CS-9 recipient audit confirmed; 2 E712 swept
+
+Re-verified: **CS-10** — `_authorize_test_write` (`skills_testing.py:111`) still
+refuses `examiner == candidate` ("You cannot score or complete your own evaluation",
+wired at 1234/1376); `test_skill_test_update_guard.py` 2/2 pass. **CS-9 recipient
+audit CONFIRMED** — the recipient allow-list was resolved earlier this session
+(Decision 2): `_email_report` now calls `audit_external_recipients`
+(`compliance_config_service.py:354`), logging every send to a non-member address.
+CS-1..CS-7, CS-11 hold.
+
+**Latent-500 lens N/A:** the compliance-config and skills-testing models have **no**
+strict enum columns (statuses are stored as validated strings / driven by config),
+so there's no free-string→ENUM path.
+
+### CS2-1 — NIT — 2 boolean-column E712 swept — ✅ FIXED
+
+`compliance_config_service.py:196` (`TrainingRequirement.active`) and
+`skills_testing_service.py:366` (`SkillTest.is_practice`, in the attempt-limit
+count) carried `== True/False  # noqa: E712`; converted to `.is_(...)`. Both files
+now E712-free.
+
+### Still flagged (unchanged)
+
+- **CS-8 attestation** — self-attestation has no server-side recompute / dual-control
+  (a workflow change). **CS-9 monthly windowing** — monthly reports still return the
+  annual dataset relabeled (data-layer feature).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_skill_test_update_guard.py` **2 passed** (DB-free).
 
 ---
 
@@ -98,10 +168,17 @@ dual-control — a workflow change. Already in `KNOWN_LIMITATIONS.md` (CS-8).
 - **Monthly windowing** — monthly reports still return the annual dataset
   relabeled; a real monthly view needs `generate_annual_report` to accept a month
   window (data-layer feature). Deferred.
-- **Recipient allow-list** — report emailing accepts client-supplied
-  `additional_recipients` with no allow-list; restricting to org-member emails
-  would close an exfiltration path but breaks legitimate external auditors (owner
-  decision). Deferred.
+- **Recipient allow-list** — ✅ RESOLVED (owner decision, 2026-08-09). Restricting
+  recipients to org-member emails would break legitimate external auditors, so the
+  owner chose *allow any recipient, but audit-log each external send.*
+  `_email_report` now calls the shared `audit_external_recipients`
+  (`app/utils/external_recipients.py`), which classifies recipients against org
+  membership (work + personal email, case-insensitive) and writes one
+  `external_recipient_send` audit event listing every out-of-org address, with the
+  acting user threaded through `generate_report`/`email_existing_report`. Covered by
+  `tests/test_external_recipient_audit.py` (7 tests). (The saved-report
+  `email_recipients` on the reports module is stored schedule config with no live
+  send path yet; when that path is built it should call the same helper.)
 - `records_with_certification` mislabel (ambiguous-intent) left as-is.
 
 ## Cleanup applied

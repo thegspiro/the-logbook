@@ -96,7 +96,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
               placeholder="e.g., Website Integration Key"
               required
               aria-required="true"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             />
             <p className="text-theme-text-muted mt-1 text-xs">A descriptive name to identify this API key</p>
           </div>
@@ -118,7 +118,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                 })
               }
               placeholder="Leave blank for default (1000)"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             />
             <p className="text-theme-text-muted mt-1 text-xs">Optional: Override the default rate limit for this key</p>
           </div>
@@ -136,7 +136,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                   expires_at: val || undefined,
                 })
               }
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             />
             <p className="text-theme-text-muted mt-1 text-xs">Optional: Set when this key should expire</p>
           </div>

@@ -412,7 +412,112 @@ END:VCALENDAR
 
 ---
 
+### 8. Guest Event Check-In _(2026-08-09)_
+
+Two unauthenticated endpoints reached by scanning the **guest** QR code on a room
+display. They exist so a non-member at an outreach event can record their own
+attendance. **No API key.**
+
+```
+GET  /api/public/v1/display/{display_code}/events/{event_id}/guest
+POST /api/public/v1/display/{display_code}/events/{event_id}/guest-check-in
+```
+
+They resolve only when the event has **opted in** (`allow_guest_check_in`) and is
+**held in the room** the display code belongs to. Anything else is a `404`.
+
+**Why the display code is in the path.** The organization is derived from the
+room's display code, never from the request body — an anonymous caller must not be
+able to name the tenant it writes to.
+
+#### `GET …/guest` — event detail for the sign-in page
+
+Returns only what a visitor standing in the room can already see. **The event
+description is withheld**, matching the kiosk display.
+
+```json
+{
+  "eventId": "…",
+  "eventName": "Volunteer Interest Night",
+  "eventType": "community_event",
+  "startDatetime": "2026-08-14T23:00:00+00:00",
+  "endDatetime": "2026-08-15T01:00:00+00:00",
+  "locationName": "Station 1 — Community Room",
+  "organizationName": "Example Volunteer Fire Department",
+  "isOpen": true,
+  "closedReason": null,
+  "collectsProspectDetails": true,
+  "timezone": "America/New_York"
+}
+```
+
+`timezone` is returned so an unauthenticated tablet renders department-local times
+rather than falling back to whatever zone the device is set to.
+
+#### `POST …/guest-check-in` — record attendance
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `first_name` | string | yes | 1–100, must contain a non-whitespace character (`\S`), trimmed |
+| `last_name` | string | yes | Same |
+| `email` | string | no | Required for a prospect to be created |
+| `phone` | string | no | ≤ 50 |
+| `organization_name` | string | no | ≤ 255 |
+| `interest_reason` | string | no | ≤ 2000 |
+| `hp_website` | string | no | **Honeypot** — hidden in the real form |
+
+**`201 Created`:**
+
+```json
+{
+  "status": "checked_in",
+  "attendeeId": "…",
+  "eventName": "Volunteer Interest Night",
+  "checkedInAt": "2026-08-14T23:07:11+00:00",
+  "prospectCreated": true,
+  "message": "Thanks for signing in!"
+}
+```
+
+`status` is `checked_in` or `already_checked_in`.
+
+| Condition | Response |
+| --- | --- |
+| Per-IP rate limit exceeded | `429` |
+| Per-event daily cap exceeded (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300; `0` disables) | `429` |
+| Honeypot populated | **`201` with a plausible success body**, nothing written |
+| Outside the check-in window | `400` with the reason |
+| Event not in that room, or guest check-in not enabled | `404` |
+
+**Notes:**
+- **Guests do not get the member early-arrival grace.** A member checking in early
+  is identifiable and correctable; an anonymous early write is neither, so guests
+  are held to the window the organizer configured.
+- **A repeat sign-in does not create a second row** — matched on email where one
+  was given, on name where it was not, and answered `already_checked_in`.
+- **A guest pre-registered by staff keeps the details staff entered**; a kiosk
+  sign-in only fills blanks.
+- **A prospect is opened only when the event sets `guest_check_in_creates_prospect`
+  and the guest supplied an email.** An existing active prospect with that email is
+  reused and linked to the event rather than duplicated. **A pipeline failure is
+  logged and swallowed** — it never costs a guest their attendance.
+
+---
+
 ### Security Notes
+
+#### Guest Check-In Protection _(2026-08-09)_
+
+1. **Tenant resolution from the display code**, never from the request — and the
+   event must be held in that room
+2. **Opt-in per event**, off by default, because enabling it exposes an
+   unauthenticated write path
+3. **Rate limiting**: per-IP on both endpoints, plus a per-event daily ceiling
+   (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300)
+4. **Honeypot detection**: a populated `hp_website` receives a plausible success
+   and writes nothing
+5. **Window enforcement** without the member early-arrival grace
+6. **Minimal disclosure**: the event description is never exposed
 
 #### Public Form Protection
 

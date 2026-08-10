@@ -248,11 +248,14 @@ async def add_compartment(
 ):
     """Add a compartment to a template."""
     service = EquipmentCheckService(db)
-    compartment = await service.add_compartment(
-        template_id,
-        current_user.organization_id,
-        data.model_dump(exclude_unset=True),
-    )
+    try:
+        compartment = await service.add_compartment(
+            template_id,
+            current_user.organization_id,
+            data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if not compartment:
         raise HTTPException(status_code=404, detail="Template not found")
     await service.log_template_change(
@@ -282,11 +285,14 @@ async def update_compartment(
     """Update a compartment."""
     service = EquipmentCheckService(db)
     changes = data.model_dump(exclude_unset=True)
-    compartment = await service.update_compartment(
-        compartment_id,
-        current_user.organization_id,
-        changes,
-    )
+    try:
+        compartment = await service.update_compartment(
+            compartment_id,
+            current_user.organization_id,
+            changes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if not compartment:
         raise HTTPException(status_code=404, detail="Compartment not found")
     await service.log_template_change(
@@ -376,11 +382,14 @@ async def add_item(
     from app.models.apparatus import CheckTemplateCompartment as CTC
 
     service = EquipmentCheckService(db)
-    item = await service.add_item(
-        compartment_id,
-        current_user.organization_id,
-        data.model_dump(exclude_unset=True),
-    )
+    try:
+        item = await service.add_item(
+            compartment_id,
+            current_user.organization_id,
+            data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if not item:
         raise HTTPException(status_code=404, detail="Compartment not found")
     comp_result = await db.execute(

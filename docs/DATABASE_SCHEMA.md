@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**238 tables · 4106 columns · 773 foreign keys**
+**238 tables · 4110 columns · 773 foreign keys**
 
 ---
 
@@ -177,10 +177,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 16 | External (non-member) attendee at an event. |
+| [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 20 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 27 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 46 | Event model for managing department events |
+| [`events`](#events) | `Event` | 48 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
 
 ### Facilities
@@ -472,7 +472,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`program_enrollments`](#program_enrollments) | `ProgramEnrollment` | 22 | Program Enrollment model |
 | [`program_milestones`](#program_milestones) | `ProgramMilestone` | 10 | Program Milestone model |
 | [`program_phases`](#program_phases) | `ProgramPhase` | 10 | Program Phase model |
-| [`program_requirements`](#program_requirements) | `ProgramRequirement` | 11 | Program Requirement model |
+| [`program_requirements`](#program_requirements) | `ProgramRequirement` | 12 | Program Requirement model |
 | [`recertification_pathways`](#recertification_pathways) | `RecertificationPathway` | 21 | Recertification Pathway model |
 | [`renewal_tasks`](#renewal_tasks) | `RenewalTask` | 18 | Renewal Task model |
 | [`requirement_progress`](#requirement_progress) | `RequirementProgress` | 14 | Requirement Progress model |
@@ -2227,6 +2227,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `source` | VARCHAR(50) | yes |  |  |  |
 | `source_id` | VARCHAR(36) | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
+| `prospect_id` | VARCHAR(36) | yes | FK, IDX |  | → `prospective_members.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -2237,6 +2238,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_ext_attendees_email` (`email`)
 - `ix_ext_attendees_event_id` (`event_id`)
 - `ix_ext_attendees_org_id` (`organization_id`)
+- `ix_ext_attendees_prospect_id` (`prospect_id`)
 
 ### `event_rsvps`
 
@@ -2346,6 +2348,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `check_in_minutes_before` | INTEGER | yes |  | `30` |  |
 | `check_in_minutes_after` | INTEGER | yes |  | `15` |  |
 | `require_checkout` | BOOL | no |  | `0` |  |
+| `allow_guest_check_in` | BOOL | no |  | `0` |  |
+| `guest_check_in_creates_prospect` | BOOL | no |  | `0` |  |
 | `is_recurring` | BOOL | no |  | `0` |  |
 | `recurrence_pattern` | ENUM(`daily`, `weekly`, `biweekly`, `monthly`, `monthly_weekday`, `annually`, `annually_weekday`, `custom`) | yes |  |  |  |
 | `recurrence_end_date` | DATETIME | yes |  |  |  |
@@ -5058,9 +5062,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `scheduled_date` | DATE | yes |  |  |  |
 | `completed_date` | DATE | yes |  |  |  |
 | `expiration_date` | DATE | yes |  |  |  |
-| `provider_name` | VARCHAR(255) | yes |  |  |  |
+| `provider_name` | TEXT | yes |  |  |  |
 | `result_summary` | TEXT | yes |  |  |  |
-| `result_data` | JSON | yes |  |  |  |
+| `result_data` | TEXT | yes |  |  |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reviewed_at` | DATETIME | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
@@ -7032,6 +7036,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_required` | BOOL | yes |  | `True` |  |
 | `is_prerequisite` | BOOL | yes |  | `False` |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
+| `owns_requirement` | BOOL | no |  | `true` |  |
 | `program_specific_description` | TEXT | yes |  |  |  |
 | `custom_deadline_days` | INTEGER | yes |  |  |  |
 | `notification_message` | TEXT | yes |  |  |  |
@@ -7370,7 +7375,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `shift_id` | VARCHAR(36) | yes | FK, IDX |  | → `shifts.id` ON DELETE SET NULL |
 | `template_id` | VARCHAR(36) | yes | FK, IDX |  | → `equipment_check_templates.id` ON DELETE SET NULL |
-| `apparatus_id` | VARCHAR(36) | yes | FK |  | → `apparatus.id` ON DELETE SET NULL |
+| `apparatus_id` | VARCHAR(36) | yes |  |  |  |
 | `checked_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `checked_at` | DATETIME | yes |  | `now()` |  |
 | `check_timing` | VARCHAR(30) | no |  |  |  |
@@ -8885,28 +8890,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
 
-### → `apparatus` (17 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
-| `apparatus_components` | `apparatus_id` | CASCADE | no |
-| `apparatus_documents` | `apparatus_id` | CASCADE | no |
-| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
-| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
-| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
-| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
-| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
-| `apparatus_operators` | `apparatus_id` | CASCADE | no |
-| `apparatus_photos` | `apparatus_id` | CASCADE | no |
-| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
-| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
-| `purchase_requests` | `apparatus_id` | SET NULL | yes |
-| `shift_equipment_checks` | `apparatus_id` | SET NULL | yes |
-| `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
-| `training_records` | `apparatus_id` | SET NULL | yes |
-| `training_sessions` | `apparatus_id` | SET NULL | yes |
-
 ### → `facilities` (17 references)
 
 | From table | Column | On delete | Nullable |
@@ -8928,6 +8911,27 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_utility_accounts` | `facility_id` | CASCADE | no |
 | `locations` | `facility_id` | SET NULL | yes |
 | `purchase_requests` | `facility_id` | SET NULL | yes |
+
+### → `apparatus` (16 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
+| `apparatus_components` | `apparatus_id` | CASCADE | no |
+| `apparatus_documents` | `apparatus_id` | CASCADE | no |
+| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
+| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
+| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
+| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
+| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
+| `apparatus_operators` | `apparatus_id` | CASCADE | no |
+| `apparatus_photos` | `apparatus_id` | CASCADE | no |
+| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
+| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
+| `purchase_requests` | `apparatus_id` | SET NULL | yes |
+| `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
+| `training_records` | `apparatus_id` | SET NULL | yes |
+| `training_sessions` | `apparatus_id` | SET NULL | yes |
 
 ### → `inventory_items` (16 references)
 
@@ -9029,6 +9033,19 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_courses` | `program_id` | SET NULL | yes |
 | `training_sessions` | `program_id` | SET NULL | yes |
 
+### → `prospective_members` (8 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `event_external_attendees` | `prospect_id` | SET NULL | yes |
+| `prospect_activity_log` | `prospect_id` | CASCADE | no |
+| `prospect_documents` | `prospect_id` | CASCADE | no |
+| `prospect_election_packages` | `prospect_id` | CASCADE | no |
+| `prospect_event_links` | `prospect_id` | CASCADE | no |
+| `prospect_interviews` | `prospect_id` | CASCADE | no |
+| `prospect_step_progress` | `prospect_id` | CASCADE | no |
+| `screening_records` | `prospect_id` | CASCADE | yes |
+
 ### → `training_requirements` (8 references)
 
 | From table | Column | On delete | Nullable |
@@ -9053,18 +9070,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `issuance_allowances` | `category_id` | CASCADE | no |
 | `item_variant_groups` | `category_id` | SET NULL | yes |
 | `reorder_requests` | `category_id` | SET NULL | yes |
-
-### → `prospective_members` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `prospect_activity_log` | `prospect_id` | CASCADE | no |
-| `prospect_documents` | `prospect_id` | CASCADE | no |
-| `prospect_election_packages` | `prospect_id` | CASCADE | no |
-| `prospect_event_links` | `prospect_id` | CASCADE | no |
-| `prospect_interviews` | `prospect_id` | CASCADE | no |
-| `prospect_step_progress` | `prospect_id` | CASCADE | no |
-| `screening_records` | `prospect_id` | CASCADE | yes |
 
 ### → `shifts` (7 references)
 

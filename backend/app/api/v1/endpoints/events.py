@@ -2057,11 +2057,16 @@ async def create_event_template(
     """
     service = EventService(db)
     data = template_data.model_dump(exclude_unset=True)
-    template = await service.create_template(
-        template_data=data,
-        organization_id=current_user.organization_id,
-        created_by=current_user.id,
-    )
+    try:
+        template = await service.create_template(
+            template_data=data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     return EventTemplateResponse.model_validate(template)
 
 
@@ -2104,12 +2109,17 @@ async def update_event_template(
     """
     service = EventService(db)
     data = update_data.model_dump(exclude_unset=True)
-    template = await service.update_template(
-        template_id=template_id,
-        organization_id=current_user.organization_id,
-        update_data=data,
-        updated_by=current_user.id,
-    )
+    try:
+        template = await service.update_template(
+            template_id=template_id,
+            organization_id=current_user.organization_id,
+            update_data=data,
+            updated_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
@@ -2511,6 +2521,7 @@ class ExternalAttendeeResponse(BaseModel):
     checked_in_at: str | None = None
     source: str | None = None
     notes: str | None = None
+    prospect_id: str | None = None
     created_at: str
 
 
@@ -2544,6 +2555,7 @@ async def list_external_attendees(
             checked_in_at=a.checked_in_at.isoformat() if a.checked_in_at else None,
             source=a.source,
             notes=a.notes,
+            prospect_id=a.prospect_id,
             created_at=a.created_at.isoformat() if a.created_at else "",
         )
         for a in attendees
@@ -2598,6 +2610,7 @@ async def add_external_attendee(
         checked_in_at=None,
         source=attendee.source,
         notes=attendee.notes,
+        prospect_id=attendee.prospect_id,
         created_at=attendee.created_at.isoformat() if attendee.created_at else "",
     )
 
@@ -2655,6 +2668,7 @@ async def update_external_attendee(
         ),
         source=attendee.source,
         notes=attendee.notes,
+        prospect_id=attendee.prospect_id,
         created_at=attendee.created_at.isoformat() if attendee.created_at else "",
     )
 

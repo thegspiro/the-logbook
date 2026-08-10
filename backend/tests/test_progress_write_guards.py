@@ -36,6 +36,9 @@ class RecordingSession:
         self.refresh = AsyncMock()
 
     async def execute(self, statement, *args, **kwargs):
+        # Compile before answering: a mocked session never exercises the ORM,
+        # and a select with no inferable ON clause only raises at compile time.
+        str(statement)
         self.statements.append(statement)
         return self._results.pop(0) if self._results else MagicMock()
 
@@ -44,7 +47,8 @@ def _progress(user_id="u1"):
     return SimpleNamespace(
         id=str(uuid4()),
         enrollment_id="enr-1",
-        enrollment=SimpleNamespace(user_id=user_id),
+        requirement_id="req-1",
+        enrollment=SimpleNamespace(user_id=user_id, program_id="prog-1"),
         requirement=SimpleNamespace(passing_score=70, max_attempts=None),
         status=RequirementProgressStatus.NOT_STARTED,
         progress_value=0.0,
@@ -152,17 +156,26 @@ def _update_count(db):
 class TestRecalcNeverResurrects:
     async def _recalc(self, status, avg_percentage):
         enrollment = SimpleNamespace(
-            id="enr-1", program_id="prog-1", user_id="u1", status=status
+            id="enr-1",
+            organization_id="org-1",
+            program_id="prog-1",
+            user_id="u1",
+            status=status,
+            progress_percentage=0.0,
         )
-        rows = [SimpleNamespace(progress_percentage=avg_percentage)]
+        rows = [
+            SimpleNamespace(progress_percentage=avg_percentage, requirement_id="r1")
+        ]
         program = SimpleNamespace(id="prog-1", organization_id=str(uuid4()))
         user = SimpleNamespace(id="u1")
         db = RecordingSession(
             [
                 _one(enrollment),  # load enrollment
+                _scalars(["r1"]),  # required requirement ids
                 _scalars(rows),  # load required progress rows
                 MagicMock(),  # UPDATE progress_percentage
                 MagicMock(),  # possible UPDATE status
+                _scalars([]),  # milestone lookup
                 _one(program),  # notification: load program (if completed)
                 _one(user),  # notification: load user
             ]

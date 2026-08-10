@@ -317,7 +317,8 @@ backend/app/
 - **Toast notifications:** `react-hot-toast` — use `toast.success()`, `toast.error()` for user feedback. `<Toaster>` is mounted in `App.tsx`
 - **Styling:** Tailwind CSS with `theme-*` CSS variable classes defined in `styles/index.css` (e.g., `bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`). Dark mode via `class` strategy. High-contrast mode also supported (`ThemeContext` handles `'light' | 'dark' | 'system' | 'high-contrast'`). Size variants as objects (`{ sm: 'max-w-md', md: 'max-w-lg' }`)
 - **Shared component/mobile utilities:** `styles/index.css` defines reusable `@utility` classes (grouped and documented in that file) — prefer these over repeating inline class strings or hand-rolling arbitrary values. Component utilities: `form-input`/`form-label`, `card`/`card-secondary`, `btn-primary`/`btn-icon` (44px touch target), `alert-*`, `badge`, `modal-body`. Mobile utilities: `tab-scroll` (scrollable bordered tab bar) and `hscroll` (scrollable strip) for tab/pill rows that would overflow a phone; `mobile-touch-target` (44px); `pb-safe` / `action-bar-safe` for bottom bars that must clear the iPhone home indicator; `rwd-table` for tables that reflow to stacked cards under 768px. When adding a new shared pattern, define it as an `@utility` under the matching group header rather than scattering arbitrary values
-- **UX component library:** Reusable components in `components/ux/` — use these before building custom UI: `Skeleton`/`SkeletonCard`/`SkeletonPage` (loading states), `Pagination`, `EmptyState`, `ConfirmDialog`, `Tooltip`, `CommandPalette`, `SortableHeader`, `Breadcrumbs`, `ProgressSteps`, `Collapsible`, `DateRangePicker`, `FileDropzone`, `InlineEdit`, `PageTransition`, `ScanSuccessFlash`/`FlashlightToggle` (barcode-scanner overlays)
+- **UX component library:** Reusable components in `components/ux/` — use these before building custom UI: `Skeleton`/`SkeletonCard`/`SkeletonPage` (loading states), `Pagination`, `EmptyState`, `ConfirmDialog`, `PromptDialog` (single typed value), `Tooltip`, `CommandPalette`, `SortableHeader`, `Breadcrumbs`, `ProgressSteps`, `Collapsible`, `DateRangePicker`, `FileDropzone`, `InlineEdit`, `PageTransition`, `ScanSuccessFlash`/`FlashlightToggle` (barcode-scanner overlays). **Confirmations go through `useConfirm()`**, whose dialog is mounted once by `ConfirmProvider` at the app root — see Pitfall #16
+- **Settings screens:** All three (Organization, Events, Scheduling) render through `components/settings/SettingsLayout.tsx` — section sidebar with descriptions on desktop, scrollable tab strip on phones, body in a surface card, `aria-current` on the active section, and the selected section mirrored into `?tab=`. A new settings screen uses this rather than a fourth design; the section list is a `SettingsSection[]` declared beside the screen (see `modules/scheduling/components/schedulingSettingsSections.ts`). Show a Save/Reset footer **only** on sections the footer actually writes
 - **Barcode scanning & pull-to-refresh:** Camera scanning goes through the `useHtml5Scanner` hook (rear-camera constraint, secure-context guard, responsive scan box, flashlight support); pair it with `useScanFeedback` + `ScanSuccessFlash` for capture confirmation. App-wide pull-to-refresh is layout-level: a page opts in by calling `useRegisterPullToRefresh(handler)` (the gesture + indicator are mounted once in `AppLayout` via `PullToRefreshProvider`)
 - **Form input classes:** Forms define shared Tailwind class constants (`inputClass`, `selectClass`, `labelClass`, `checkboxClass`) for consistency. Reuse these patterns in new forms
 - **Types:** Defined as `interface` (not `type`) for domain objects. One file per domain in `types/`. Enums use `as const` objects with an extracted type of the same name (value union pattern):
@@ -417,6 +418,58 @@ const phone = formData.phone?.trim() || undefined;   // '' || undefined === unde
 ```
 
 **Rule:** When converting form values to send to the API, always use `||` (logical OR), never `??` (nullish coalescing), to coerce empty strings to `undefined` so they are omitted from the JSON payload. This applies to all optional string fields in forms, onboarding flows, modals, and CSV exports.
+
+#### …on **create**. On **update**, omitting the key is the bug _(2026-08-09)_
+
+`|| undefined` is right on a create payload and **wrong on an update payload**.
+Update payloads are `model_dump(exclude_unset=True)` on the backend, so an
+**omitted key means "leave this alone"** — the user emptied the box, the key
+never left the browser, and the old value survives behind a success toast.
+
+Three states, three distinct wire values:
+
+| Intent | Send | Backend reads it as |
+| ------ | ---- | ------------------- |
+| Leave the field alone | **omit the key** | untouched |
+| Clear the field | **`null`** | write NULL |
+| Set a value | the value | write the value |
+
+```typescript
+// CREATE — omit blanks so "" never reaches a Pydantic validator
+const phone = formData.phone?.trim() || undefined;
+
+// UPDATE — send an explicit null so the clear actually persists
+import { blankToNull, numberOrNull } from '@/utils/formValues';
+const phone = blankToNull(formData.phone);          // '' -> null
+const hours = numberOrNull(formData.requiredHours); // '' -> null
+```
+
+On the backend, never write the mirror-image bug:
+
+```python
+# WRONG — drops the explicit null; acknowledges the write with a 200 and
+# leaves the old value in the database
+for key, value in updates.items():
+    if value is not None:
+        setattr(instance, key, value)
+
+# CORRECT
+from app.utils.model_updates import apply_updates
+apply_updates(instance, updates, skip={"organization_id", "id"})
+```
+
+`apply_updates` clears on an explicit null, raises `ValueError` (→ 400) for a
+null against a `NOT NULL` column rather than failing at flush time, and reports
+a field the model does not have instead of dropping it. Protected columns —
+tenancy and identity — go in `skip`, not in a hand-rolled per-field guard. Also
+do not dump update payloads with `exclude_none`: it strips the nulls a layer
+earlier, for the same result.
+
+**Rule:** On an update path, use `blankToNull` / `numberOrNull` on the frontend
+and `apply_updates` on the backend. Send **every** field the form owns on every
+save — a requirement switched from hours to shifts kept grading against its stale
+`required_hours` precisely because the payload omitted the field it no longer
+used.
 
 ### 2. Database Models: `ondelete="SET NULL"` Requires `nullable=True`
 
@@ -661,6 +714,70 @@ finance/QuickBooks exports, audit hand-offs) MUST be written with
 `SafeCsvWriter` from `app/utils/csv_export.py` — never bare `csv.writer`. It
 prefixes formula-trigger cells with a `'`, transparent to the reader. The same
 applies to any other spreadsheet-bound output.
+
+### 16. Never Use `window.confirm` / `window.alert` / `window.prompt` _(2026-08-09)_
+
+**A browser may suppress them, and a suppressed dialog is indistinguishable from
+Cancel.** Chrome suppresses repeated dialogs and dialogs inside cross-origin
+frames; iOS and Firefox offer the user a "prevent this page from creating further
+dialogs" checkbox. `window.confirm` then returns `false` and `window.prompt`
+returns `null` — the same values as pressing Cancel — so the action silently does
+nothing, with no error and no clue as to why.
+
+```typescript
+// WRONG — suppressible, and indistinguishable from Cancel when it is
+if (!window.confirm('Delete this?')) return;
+const reason = window.prompt('Reason?');
+
+// CORRECT — same control flow, promise-based
+const confirm = useConfirm();
+if (!(await confirm({ message: 'Delete this?', confirmLabel: 'Delete' }))) return;
+```
+
+- `useConfirm()` returns **only** `confirm()`. The dialog is rendered once by
+  `ConfirmProvider` at the app root, above the router so public routes get one
+  too — there is nothing for a consumer to render and so nothing to forget.
+- **Without a provider the hook throws.** Neither default is safe: `true` carries
+  out a deletion nobody agreed to, `false` swallows the action without a word. A
+  missing provider is a wiring mistake and should fail loudly at the call, not
+  quietly at the consequence. `renderWithRouter` wraps in the provider, matching
+  the app shell.
+- For a single typed value, use `PromptDialog` from `components/ux` — validation
+  is shown rather than swallowed, and the field resets on each open so a reason
+  typed for one record cannot be filed against the next.
+- **Name the decision on the buttons** ("Keep it" / "Delete", "Stay here" /
+  "Discard changes"), and state the consequence a native one-liner had no room
+  for.
+
+**Rule:** No new `window.confirm` / `window.alert` / `window.prompt` anywhere in
+the frontend. A `.ts` hook that cannot render JSX does not need to — it calls
+`useConfirm()` like everything else.
+
+### 17. Form Controls: Use the `form-*` Utilities, Not a Hand-Rolled Box _(2026-08-10)_
+
+`form-input`, `form-input-sm`, `form-checkbox`, `form-label`, `toggle-track` /
+`toggle-track-sm` / `toggle-track-md` and `toggle-knob` are defined in
+`styles/index.css` and are the app's standard at 800+ call sites. A hand-typed
+class string drifts: the 2026-08-10 sweep found **169 distinct strings for what
+is one control**, several of which had lost the 44px touch minimum or replaced
+the theme focus-ring token with a raw palette colour.
+
+```tsx
+// WRONG — re-typed box; drifts, and loses the mobile touch minimum
+<input className="w-full rounded-md border border-theme-surface-border px-3 py-2 focus:ring-1 focus:ring-violet-500" />
+
+// CORRECT — width and other per-call-site concerns still go on the element
+<input className="form-input w-28" />
+```
+
+Widths, icon padding, alignment, responsive sizes, disabled states and shadows
+stay at the call site — their standalone rules are emitted **after** the
+composite utility, so they still win.
+
+**Rule:** Reach for the utility first. If a new shared pattern is needed, define
+it as an `@utility` under the matching group header in `styles/index.css` rather
+than assembling it at the call site — that is what left `toggle-knob` in the
+sheet with no matching track and fifteen hand-built switches around it.
 
 ## Environment Variables
 

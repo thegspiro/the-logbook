@@ -908,6 +908,48 @@ Frontend:
   Navigation items gated by checkPermission() + isModuleOn()
 ```
 
+### Partial-Update Flow _(2026-08-09)_
+
+```
+Edit form → blankToNull(value) / numberOrNull(value)   [utils/formValues.ts]
+  → PATCH body carries: omitted key | null | value
+  → Pydantic {Resource}Update, dumped model_dump(exclude_unset=True)
+     (NOT exclude_none — that strips the clears a layer early)
+  → service: apply_updates(instance, updates, skip={tenancy/identity columns})
+       omitted  -> untouched
+       value    -> written
+       null     -> cleared, or ValueError -> 400 if the column is NOT NULL
+       unknown  -> ValueError, rather than silently dropped
+```
+
+The three states are distinct end to end. On **create** the opposite coercion
+applies — `|| undefined` omits blanks so `""` never reaches a validator. Getting
+this backwards is what let a cleared field return after a reload behind a success
+toast, and what left a requirement grading against a stale `required_hours` after
+being switched from hours to shifts. See CLAUDE.md pitfall #1.
+
+### Guest Check-In Flow _(2026-08-09)_
+
+```
+Visitor scans the guest QR on a room display
+  → GET  /api/public/v1/display/{code}/events/{id}/guest        (no auth)
+       resolve org FROM THE DISPLAY CODE, never from the request
+       require event.allow_guest_check_in AND event held in that room
+       → event name/type/time/room + is_open (description withheld)
+  → POST /api/public/v1/display/{code}/events/{id}/guest-check-in
+       per-IP limiter · per-event daily cap · honeypot (fake 201)
+       organizer's check-in window, minus the member early-arrival grace
+       → EventExternalAttendee (source='kiosk_qr')                [always]
+       → ProspectiveMember + ProspectEventLink                    [if opted in
+         and an email was supplied; failures logged and swallowed]
+       → attendee.prospect_id (SET NULL, so purging a prospect
+         never destroys the attendance)
+```
+
+Cross-module: this is the one path where **Events writes into the Membership
+Pipeline**, and it is the reason `event_external_attendees` carries a
+`prospect_id` at all.
+
 ### Module Availability Flow
 
 ```
@@ -1254,6 +1296,11 @@ All permissions follow dot notation: `resource.action`
 | `utils/lazyWithRetry.ts` | Retry-capable `React.lazy()` for chunk loading |
 | `utils/simpleMarkdown.ts` | React-based safe markdown renderer (bold, italic, links, lists) — replaces dangerouslySetInnerHTML |
 | `utils/colorContrast.ts` | WCAG AA contrast ratio calculation, accessible text color generation |
+| `utils/formValues.ts` | `blankToNull()`, `numberOrNull()` — **update**-path coercions. Create payloads omit blanks (`\|\| undefined`); update payloads must send an explicit `null`, because the backend's `exclude_unset` dump reads an omitted key as "leave alone" |
+| `utils/checklistItems.ts` | Normalizes a checklist requirement's steps between the legacy bare-string shape and `{id, text, member_visible}` |
+| `contexts/ConfirmContext.tsx` | `ConfirmProvider` + `useConfirm()` — the promise-based replacement for `window.confirm`. Mounted **once** at the app root, above the router so public routes get one too; the hook **throws** without a provider rather than returning an unsafe default |
+| `components/settings/SettingsLayout.tsx` | The shared settings shell — section sidebar on desktop, tab strip on phones, `aria-current`, `?tab=` mirroring. Used by Organization, Events and Scheduling settings |
+| `components/ux/PromptDialog.tsx` | Single-value in-app prompt replacing `window.prompt`, with validation shown rather than swallowed |
 | `hooks/useEmailListInput.ts` | Shared email list input hook with validation, add/remove, and state management |
 | `hooks/useHtml5Scanner.ts` | Reusable HTML5 QR/barcode scanner hook with camera fallback logic |
 | `hooks/useNotificationPoller.ts` | Smart notification polling with Page Visibility API pause/resume |

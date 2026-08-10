@@ -13,11 +13,13 @@ import { inputCls, labelCls, CONDITION_OPTIONS, CONDITION_COLORS } from '../cons
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 
+import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
   facilityId: string;
 }
 
 export default function SystemsSection({ facilityId }: Props) {
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const [systems, setSystems] = useState<FacilitySystem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -129,7 +131,15 @@ export default function SystemsSection({ facilityId }: Props) {
   };
 
   const handleDelete = async (sys: FacilitySystem) => {
-    if (!window.confirm(`Delete system "${sys.name}"?`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete system',
+        message: `Delete "${sys.name}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await facilitiesService.deleteSystem(sys.id);
       toast.success('System deleted');

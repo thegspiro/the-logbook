@@ -51,9 +51,31 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 ### What Is Encrypted
 
 - Sensitive personal information (SSN, medical data when applicable)
+- **Medical-screening PHI** _(2026-08-09)_ — see below
 - API keys and integration credentials (including Cloudflare API tokens, Google/Microsoft OAuth secrets, SMTP passwords)
 - MFA secrets
 - Backup encryption keys
+
+> **Medical-screening PHI at rest** _(2026-08-09, app-review MS-1)_. Four columns
+> on `screening_records` now use the transparent `EncryptedText` /
+> `EncryptedJSON` column types rather than plain text:
+>
+> | Column | Type | Holds |
+> | --- | --- | --- |
+> | `provider_name` | `EncryptedText` | The clinic or physician who performed the screening |
+> | `result_summary` | `EncryptedText` | Free-text outcome |
+> | `result_data` | `EncryptedJSON` | Structured results — scores, measurements |
+> | `notes` | `EncryptedText` | Free-text notes |
+>
+> The column types decrypt on read and encrypt on write, so service and endpoint
+> code is unchanged. **Legacy plaintext values remain readable** — a value that
+> does not carry the ciphertext marker is returned as-is — so no backfill is
+> required for correctness; `backend/scripts/reencrypt_to_aesgcm.py` covers
+> re-encrypting them as a background task.
+>
+> **Decryption failures fail closed.** A value that cannot be decrypted raises
+> rather than being returned as ciphertext or silently as empty — the same rule
+> applied to external-training credentials on the same day.
 
 > **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_client_secret`, `google_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are AES-256-GCM encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
 

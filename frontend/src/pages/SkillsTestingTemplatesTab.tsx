@@ -25,6 +25,7 @@ import {
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type { SkillTemplateListItem } from '../types/skillsTesting';
 import { FormStatus } from '../constants/enums';
+import { ConfirmDialog } from '../components/ux';
 
 // ── Shared sub-components ──────────────────────────────────────
 
@@ -156,6 +157,12 @@ const SkillsTestingTemplatesTab: React.FC = () => {
   } = useSkillsTestingStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  // Held as the whole row, not just an id, so the confirmation can name the
+  // template the officer is about to publish or archive. A bare "this template"
+  // is no help on a screen listing a dozen of them.
+  const [publishTarget, setPublishTarget] = useState<SkillTemplateListItem | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<SkillTemplateListItem | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
@@ -168,15 +175,17 @@ const SkillsTestingTemplatesTab: React.FC = () => {
       (t.category ?? '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handlePublish = useCallback(
-    async (id: string) => {
-      if (window.confirm('Publish this template? It will be available for use in tests.')) {
-        await publishTemplate(id);
-        void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
-      }
-    },
-    [publishTemplate, loadTemplates, statusFilter]
-  );
+  const handlePublish = useCallback(async () => {
+    if (!publishTarget) return;
+    setBusy(true);
+    try {
+      await publishTemplate(publishTarget.id);
+      setPublishTarget(null);
+      void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
+    } finally {
+      setBusy(false);
+    }
+  }, [publishTarget, publishTemplate, loadTemplates, statusFilter]);
 
   const handleDuplicate = useCallback(
     async (id: string) => {
@@ -186,14 +195,16 @@ const SkillsTestingTemplatesTab: React.FC = () => {
     [duplicateTemplate, navigate]
   );
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      if (window.confirm('Are you sure you want to archive this template?')) {
-        await deleteTemplate(id);
-      }
-    },
-    [deleteTemplate]
-  );
+  const handleArchive = useCallback(async () => {
+    if (!archiveTarget) return;
+    setBusy(true);
+    try {
+      await deleteTemplate(archiveTarget.id);
+      setArchiveTarget(null);
+    } finally {
+      setBusy(false);
+    }
+  }, [archiveTarget, deleteTemplate]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -344,9 +355,9 @@ const SkillsTestingTemplatesTab: React.FC = () => {
                     template={template}
                     onEdit={() => void navigate(`/training/skills-testing/templates/${template.id}/edit`)}
                     onView={() => void navigate(`/training/skills-testing/templates/${template.id}`)}
-                    onPublish={() => void handlePublish(template.id)}
+                    onPublish={() => setPublishTarget(template)}
                     onDuplicate={() => void handleDuplicate(template.id)}
-                    onDelete={() => void handleDelete(template.id)}
+                    onDelete={() => setArchiveTarget(template)}
                   />
                 ))}
               </tbody>
@@ -354,6 +365,30 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={publishTarget !== null}
+        onClose={() => setPublishTarget(null)}
+        onConfirm={() => void handlePublish()}
+        title="Publish this template?"
+        message={`"${publishTarget?.name ?? ''}" becomes available to start tests from. Each test keeps a copy of the template it was taken against, so later edits never re-score a test already run.`}
+        cancelLabel="Not yet"
+        confirmLabel="Publish"
+        variant="info"
+        loading={busy}
+      />
+
+      <ConfirmDialog
+        isOpen={archiveTarget !== null}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={() => void handleArchive()}
+        title="Archive this template?"
+        message={`"${archiveTarget?.name ?? ''}" stops appearing when starting a new test. It is not deleted — tests already taken against it keep their scorecards, and you can still find it under the Archived filter.`}
+        cancelLabel="Keep it"
+        confirmLabel="Archive"
+        variant="warning"
+        loading={busy}
+      />
     </div>
   );
 };

@@ -26,15 +26,75 @@ import urllib.request
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from http.cookiejar import CookieJar
-from time import sleep
+from time import monotonic, sleep
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from bootstrap_demo import DEMO_ADMIN_PASSWORD, DEMO_ADMIN_USERNAME
 
+
+class Throttle:
+    """Keep a rate-limited route *below* its ceiling instead of tripping it.
+
+    The generic 429 backoff in ``Api.call`` recovers from a limiter that has
+    already fired, which is the wrong trade for the routes that punish it. The
+    admin password-reset route allows 5 requests per 5 minutes and answers the
+    sixth with a **15-minute lockout** — so a seeder that sprints into the limit
+    pays 15 minutes per remaining account, and a run that needs eight sessions
+    spends over an hour asleep. Spacing the calls one window-slot apart costs
+    about a minute each and never triggers the lockout at all.
+
+    Not a substitute for the 429 handling: another client sharing this IP can
+    still trip the limiter, and that path stays.
+    """
+
+    def __init__(self, max_calls: int, window_seconds: float, margin: float = 2.0):
+        self.max_calls = max_calls
+        self.window = window_seconds
+        self.margin = margin
+        self._calls: list[float] = []
+
+    def wait(self) -> None:
+        now = monotonic()
+        self._calls = [t for t in self._calls if now - t < self.window]
+        if len(self._calls) >= self.max_calls:
+            # Sleep until the oldest call in the window ages out of it.
+            delay = self.window - (now - self._calls[0]) + self.margin
+            if delay > 0:
+                print(f"    pacing: waiting {delay:.0f}s to stay under the limit")
+                sleep(delay)
+            now = monotonic()
+            self._calls = [t for t in self._calls if now - t < self.window]
+        self._calls.append(monotonic())
+
+
+# `_rate_limit_admin_reset` in app/api/v1/endpoints/users.py: 5 per 300s.
+ADMIN_RESET_THROTTLE = Throttle(max_calls=5, window_seconds=300)
+
 # Shared password given to the seeded member accounts so the seeder can act as
 # them where the API has no admin-on-behalf-of route (event RSVPs). Demo-only.
 DEMO_MEMBER_PASSWORD = "DemoMember!2026"
+
+# The two ordinary members the screenshot harness signs in as. Both are plain
+# firefighters in MEMBERS below — no officer position, no training.manage —
+# which is the point: a placeholder describing what a *member* sees cannot be
+# filled from the administrator's session, because several routes render an
+# entirely different page for the two.
+#
+# DEMO_MEMBER_USERNAME is the one `auth: "member"` shots use, so it is the
+# account whose own records have to be worth picturing. Keep it in step with
+# DEMO_MEMBER_CREDENTIALS in manifest.mjs.
+DEMO_MEMBER_USERNAME = "nbelhaj"
+# A second member, used as the *examiner* on the peer-run skills test. It has to
+# be someone other than the candidate: skills testing refuses a test whose
+# examiner is also its candidate.
+DEMO_PEER_EXAMINER_USERNAME = "cfrazier"
+
+# How many active applicants `--bulk-prospects` tops the pipeline up to.
+# Comfortably past the board's 200-card ceiling, so the truncation notice reads
+# as a real overflow rather than an off-by-one, while staying small enough to
+# seed in well under a minute.
+BULK_PROSPECT_TARGET = 247
 
 # Screenshots must not look stale, so dated records are generated relative to
 # the run date rather than hard-coded.
@@ -243,10 +303,14 @@ def _demo_pdf(title: str, subtitle: str) -> bytes:
 
 # ── Seed steps ────────────────────────────────────────────────────────
 
-# `User.rank` stores the operational rank's *code*, not its display name — the
-# settings page validates it against the configured codes and lists every
-# mismatch as "active members with unrecognised ranks". Seeding display names
-# put all 22 demo members in that warning box.
+# `User.rank` holds a rank **code**, not a display name. Settings > Ranks
+# validates every active member's rank against the configured codes
+# (`DEFAULT_RANKS` in app/services/operational_rank_service.py) and banners
+# every mismatch as "N active members with unrecognised ranks" — so seeding
+# "Lieutenant" rather than "lieutenant", or inventing a rank the organization
+# does not have ("Paramedic", "Firefighter/EMT"), leaves the demo department
+# permanently displaying a warning about its own seed data. The codes below are
+# the eight an organization is created with.
 MEMBERS = [
     ("Dana", "Ruiz", "chief", "fire_chief"),
     ("Marcus", "Bell", "mbell", "deputy_chief"),
@@ -255,7 +319,7 @@ MEMBERS = [
     ("Sofia", "Marchetti", "smarchetti", "captain"),
     ("Tobias", "Lindqvist", "tlindqvist", "lieutenant"),
     ("Amara", "Osei", "aosei", "lieutenant"),
-    ("Henrik", "Vance", "hvance", "engineer"),
+    ("Henrik", "Vance", "hvance", "lieutenant"),
     ("Nadia", "Belhaj", "nbelhaj", "firefighter"),
     ("Callum", "Frazier", "cfrazier", "firefighter"),
     ("Ingrid", "Solberg", "isolberg", "firefighter"),
@@ -266,19 +330,19 @@ MEMBERS = [
     ("Esme", "Caldwell", "ecaldwell", "emt"),
     ("Jonah", "Whitfield", "jwhitfield", "emt"),
     ("Lila", "Nakamura", "lnakamura", "emt"),
-    ("Viktor", "Brennan", "vbrennan", "probationary"),
-    ("Saoirse", "Nolan", "snolan", "probationary"),
-    ("Emeka", "Adeyemi", "eadeyemi", "probationary"),
-    ("Wren", "Halloway", "whalloway", "administrative"),
+    # The three recruits start at EMT so the seeded promotions below are real
+    # rank changes with an audit trail, not no-ops.
+    ("Viktor", "Brennan", "vbrennan", "emt"),
+    ("Saoirse", "Nolan", "snolan", "emt"),
+    ("Emeka", "Adeyemi", "eadeyemi", "emt"),
+    ("Wren", "Halloway", "whalloway", "engineer"),
 ]
 
-# The default rank set covers the operational ladder but not these two, and the
-# demo roster needs both — a probationary member is the whole point of several
-# training and eligibility screens.
-EXTRA_RANKS = [
-    ("probationary", "Probationary", 90, ["probationary", "firefighter"]),
-    ("administrative", "Administrative", 95, ["other"]),
-]
+# The recruits the training programs enrol. Named explicitly rather than
+# derived from rank: rank is now a configured department code, and no
+# organization is created with a "probationary" one — deriving recruit status
+# from it silently enrolled nobody the moment the ranks were corrected.
+RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 
 APPARATUS = [
     ("E-1", "Engine 1", 2021, "Pierce", "Enforcer", "engine"),
@@ -298,9 +362,10 @@ FACILITIES = [
 
 
 class Seeder:
-    def __init__(self, api: Api, base_url: str) -> None:
+    def __init__(self, api: Api, base_url: str, bulk_prospects: int = 0) -> None:
         self.api = api
         self.base_url = base_url
+        self.bulk_prospects = bulk_prospects
         self.failures: list[str] = []
         self.blocked: list[str] = []
         self.created: dict[str, list[dict]] = {}
@@ -346,25 +411,6 @@ class Seeder:
         )
 
     # -- people ------------------------------------------------------
-
-    def seed_ranks(self) -> None:
-        """Add the ranks the demo roster uses that the defaults do not carry."""
-        existing = {
-            pick(r, "rank_code", "rankCode")
-            for r in items(self.api.get("/operational-ranks"), "ranks")
-        }
-        for code, name, order, positions in EXTRA_RANKS:
-            if code in existing:
-                continue
-            self.api.post(
-                "/operational-ranks",
-                {
-                    "rank_code": code,
-                    "display_name": name,
-                    "sort_order": order,
-                    "eligible_positions": positions,
-                },
-            )
 
     def seed_members(self) -> list[dict]:
         existing = items(self.api.get("/users?limit=200"), "users")
@@ -426,9 +472,11 @@ class Seeder:
         generates on every capture run — and the guide's example of "Rank changed
         from X to Y" has nothing behind it.
         """
+        # Rank codes, matching MEMBERS — a promotion to a display name would
+        # re-introduce the unrecognised-rank warning one member at a time.
         promotions = [
             ("vbrennan", "firefighter"),
-            ("snolan", "emt"),
+            ("snolan", "firefighter"),
             ("cfrazier", "lieutenant"),
         ]
         by_username = {m.get("username"): m for m in members}
@@ -2691,7 +2739,7 @@ class Seeder:
         probationary = [
             pick(m, "id")
             for m in members
-            if str(m.get("rank") or "").lower().startswith("probation")
+            if str(pick(m, "username") or "") in RECRUIT_USERNAMES
         ]
         for program in programs:
             program_id = pick(program, "id")
@@ -3192,6 +3240,49 @@ class Seeder:
 
     # -- event RSVPs --------------------------------------------------
 
+    def member_session(self, base_url: str, user_id: str, username: str) -> Api:
+        """A signed-in session for an ordinary member, usable for API calls.
+
+        Signing in is not enough on its own. An account an administrator
+        created carries a must-change-password flag, and while the login
+        succeeds, every authenticated call afterwards is refused with a 403
+        until the flag clears — so the session looks established and then
+        refuses the very next request.
+
+        The flag is read from ``/auth/me`` rather than probed for with a 403,
+        because ``/auth/me`` is one of the handful of paths deliberately exempt
+        from that gate (``_MUST_CHANGE_PW_ALLOWED_SUFFIXES`` in
+        ``app/api/dependencies.py``) — precisely so a blocked user can still
+        discover their own state. Probing it would always come back clean.
+        """
+
+        def clear_forced_change() -> Api:
+            # Every member reaches this, not just the ones seeded before the
+            # demo password existed: `POST /users` sets must_change_password
+            # unconditionally, so the password supplied at creation is correct
+            # and still flagged. Paced rather than raced — see ADMIN_RESET_THROTTLE.
+            ADMIN_RESET_THROTTLE.wait()
+            self.api.post(
+                f"/users/{user_id}/reset-password",
+                {"new_password": DEMO_MEMBER_PASSWORD, "force_change": False},
+            )
+            fresh = Api(base_url)
+            fresh.login_as(username, DEMO_MEMBER_PASSWORD)
+            return fresh
+
+        session = Api(base_url)
+        try:
+            session.login_as(username, DEMO_MEMBER_PASSWORD)
+        except ApiError:
+            # Members seeded before the demo password was set at creation
+            # need one.
+            return clear_forced_change()
+
+        me = session.get("/auth/me") or {}
+        if pick(me, "must_change_password", "mustChangePassword"):
+            return clear_forced_change()
+        return session
+
     def seed_event_rsvps(
         self, base_url: str, events: list[dict], members: list[dict]
     ) -> None:
@@ -3222,19 +3313,8 @@ class Seeder:
             username = member.get("username")
             if not user_id or username == DEMO_ADMIN_USERNAME:
                 continue
-            member_api = Api(base_url)
-            try:
-                member_api.login_as(username, DEMO_MEMBER_PASSWORD)
-            except ApiError:
-                # Members seeded before the demo password was set at creation
-                # need one; the admin reset route is heavily rate limited, so
-                # this path is slow by design and only runs once per member.
-                self.api.post(
-                    f"/users/{user_id}/reset-password",
-                    {"new_password": DEMO_MEMBER_PASSWORD, "force_change": False},
-                )
-                member_api = Api(base_url)
-                member_api.login_as(username, DEMO_MEMBER_PASSWORD)
+
+            member_api = self.member_session(base_url, user_id, username)
             for event_index, event_id in enumerate(event_ids):
                 try:
                     member_api.post(
@@ -3262,7 +3342,26 @@ class Seeder:
         tests = items(self.api.get("/training/skills-testing/tests"), "tests")
         if tests or not templates or not members:
             return tests
-        for index, member in enumerate(members[:6]):
+
+        # The seeder posts as the demo administrator, so that account is the
+        # examiner on every test it creates. Skills testing refuses a test where
+        # the examiner is also the candidate — separation of duties, since a
+        # passing test credits a training requirement — and the administrator is
+        # in the member list like anyone else. Without this filter the step
+        # raised on whichever iteration reached them and no skills tests were
+        # seeded at all, leaving the skills-testing guide's screenshots to be
+        # captured against an empty module.
+        examiner_id = next(
+            (
+                pick(m, "id")
+                for m in members
+                if pick(m, "username") == DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        candidates = [m for m in members if pick(m, "id") != examiner_id]
+
+        for index, member in enumerate(candidates[:6]):
             candidate_id = pick(member, "id")
             template_id = pick(templates[index % len(templates)], "id")
             if not candidate_id or not template_id:
@@ -3278,6 +3377,169 @@ class Seeder:
                 )
             )
         return tests
+
+    def seed_pending_validation_test(
+        self, base_url: str, templates: list[dict], members: list[dict]
+    ) -> dict | None:
+        """One official result sitting in the officer's review queue.
+
+        This is the state the whole validation feature is about, and nothing
+        else in the seeder can produce it: the seeder acts as the administrator,
+        and an officer's own completion validates in the same step, so every
+        test it creates lands already signed off. The queue, the badge on the
+        summary dashboard, and the candidate's "awaiting validation" row all
+        need a test run by somebody *without* ``training.manage``.
+
+        So this signs in as an ordinary member, has them examine a second
+        member, scores the sheet and submits it. The result is complete and
+        scored but unvalidated, which is exactly what an officer sees.
+        """
+        pending = items(
+            self.api.get("/training/skills-testing/tests?pending_validation=true"),
+            "tests",
+        )
+        if pending:
+            return pending[0]
+
+        by_username = {m.get("username"): m for m in members}
+        candidate = by_username.get(DEMO_MEMBER_USERNAME)
+        examiner = by_username.get(DEMO_PEER_EXAMINER_USERNAME)
+        published = [t for t in templates if pick(t, "status") == "published"]
+        if not candidate or not examiner or not published:
+            return None
+
+        peer = self.member_session(
+            base_url,
+            pick(examiner, "id"),
+            DEMO_PEER_EXAMINER_USERNAME,
+        )
+
+        test = peer.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": pick(published[0], "id"),
+                "candidate_id": pick(candidate, "id"),
+                "notes": "Run at the Saturday drill; sending up for sign-off.",
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        # The sections come back on the test rather than being fetched from the
+        # template, because a test is scored against the snapshot frozen at its
+        # creation — which is what the scorer and the emailed scorecard both
+        # read. Building results from the live template would drift the moment
+        # anyone edited it.
+        detail = peer.get(f"/training/skills-testing/tests/{test_id}")
+        sections = detail.get("template_sections") or []
+
+        # Criterion identity is positional — `section-{si}` / `criterion-{si}-{ci}`
+        # is the convention the API, the scorer and the scorecard renderer all
+        # share. Statement criteria are skipped for the same reason the scorer
+        # skips them: they carry prose, not a score.
+        section_results = []
+        for si, section in enumerate(sections):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if (
+                    not isinstance(criterion, dict)
+                    or criterion.get("type") == "statement"
+                ):
+                    continue
+                # One deliberate miss, so the scorecard shows a mixed result
+                # rather than a uniform wall of passes. It is a non-critical
+                # criterion, so the test still passes overall.
+                missed = si == 1 and ci == 2 and not criterion.get("required")
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": criterion.get("label", ""),
+                        "passed": not missed,
+                        "score": 0 if missed else criterion.get("max_score", 1),
+                        "notes": "Prompted once before continuing." if missed else None,
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+
+        peer.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                # A plausible stopwatch reading. Wall clock is only a fallback,
+                # and a seeded test would otherwise record the seconds between
+                # two API calls.
+                "elapsed_seconds": 372,
+            },
+        )
+        return peer.post(f"/training/skills-testing/tests/{test_id}/complete")
+
+    def seed_test_viewer(self, members: list[dict]) -> dict | None:
+        """One named viewer on one test, so the Viewers panel is not empty.
+
+        A grant is per test rather than per template, so there is no way to
+        produce this by configuring a template — it has to be attached to a
+        specific evaluation.
+        """
+        # Fetched here rather than taken from the caller: the completed test
+        # this needs is created by the step above, so a list captured earlier
+        # holds only the drafts.
+        tests = items(self.api.get("/training/skills-testing/tests"), "tests")
+
+        # A completed, non-practice test specifically. The panel only renders on
+        # the review view of a finished official test, so granting on a draft
+        # produces a row in the database that no screen ever shows.
+        target = next(
+            (
+                t
+                for t in tests
+                if pick(t, "id")
+                and pick(t, "status") == "completed"
+                and not pick(t, "is_practice")
+            ),
+            None,
+        )
+        if not target:
+            return None
+
+        test_id = pick(target, "id")
+        existing = items(
+            self.api.get(f"/training/skills-testing/tests/{test_id}/viewers"),
+            "viewers",
+        )
+        if existing:
+            return existing[0]
+
+        # Anyone but the two people already party to the test: the API rejects
+        # granting to the candidate, and the examiner always sees what they
+        # recorded, so either would be a no-op.
+        excluded = {pick(target, "candidate_id"), pick(target, "examiner_id")}
+        viewer = next(
+            (
+                m
+                for m in members
+                if pick(m, "id") not in excluded
+                and m.get("username") != DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        if not viewer:
+            return None
+
+        # user_id is the whole payload — the grant carries no note of its own.
+        return self.api.post(
+            f"/training/skills-testing/tests/{test_id}/viewers",
+            {"user_id": pick(viewer, "id")},
+        )
 
     # -- dues ---------------------------------------------------------
 
@@ -3393,6 +3655,26 @@ class Seeder:
                         ],
                     },
                 )
+            )
+
+        # Publish the public one. `/f/{public_slug}` serves published forms with
+        # public access only, so a draft renders as "not found" — which is the
+        # page the public-form screenshots would otherwise capture, and the page
+        # a reader following the guide would hit if they copied the link before
+        # publishing.
+        for form in forms:
+            if not form.get("is_public") or form.get("status") == "published":
+                continue
+            form_id = pick(form, "id")
+            if not form_id:
+                continue
+            published = self.api.post(f"/forms/{form_id}/publish")
+            form.update(
+                {
+                    "status": pick(published, "status") or "published",
+                    "public_slug": pick(published, "public_slug")
+                    or form.get("public_slug"),
+                }
             )
         return forms
 
@@ -3758,9 +4040,29 @@ class Seeder:
             self.api.get("/prospective-members/prospects?limit=100"), "prospects"
         )
         emails = {p.get("email") for p in prospects}
+
+        def already_exists(email: str) -> bool:
+            """Is this applicant on file?
+
+            The first page is enough on an ordinary seed, but the list caps at
+            200 and ``--bulk-prospects`` pushes the pipeline well past that —
+            at which point the named applicants fall off the page and this
+            re-created every one of them on each run. Falls back to a search
+            when the page does not settle it.
+            """
+            if email in emails:
+                return True
+            if len(prospects) < 100:
+                return False
+            found = items(
+                self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+                "prospects",
+            )
+            return any(p.get("email") == email for p in found)
+
         for index, (first, last, reason) in enumerate(self.PROSPECTS):
             email = f"{first.lower()}.{last.lower()}@example.org"
-            if email in emails:
+            if already_exists(email):
                 continue
             payload = {
                 "first_name": first,
@@ -3849,6 +4151,109 @@ class Seeder:
                 if exc.code not in (400, 409):
                     raise
                 self.blocked.append(f"election package: {exc}")
+
+    def seed_bulk_prospects(self, pipeline_id: str | None, target: int) -> int:
+        """Pad the pipeline out past the board's card ceiling. Opt-in only.
+
+        The kanban groups applicants into columns client-side, so it asks for
+        ``KANBAN_PAGE_SIZE`` (200) applicants and says plainly when there are
+        more than that — "Showing 200 of 247 applicants". Picturing that notice
+        needs a pipeline genuinely larger than the ceiling, and a department
+        with 200+ live applicants is not the demo data anyone else wants: it
+        would bury the twelve named applicants the other prospective-member
+        screenshots are composed around, and cost a few hundred requests on
+        every ordinary seed.
+
+        Hence the flag. It tops the pipeline up to ``target`` **active**
+        applicants and returns how many it created.
+
+        Most of the filler stays at intake, which is what a real pipeline
+        mid-recruitment looks like, but a slice of it is advanced so the later
+        columns are not empty. That matters for the picture: the board loads the
+        *newest* 200 applicants, so filler created after the twelve named
+        applicants pushes them out of the fetched page entirely — leaving three
+        columns reading "No applicants" under a notice about having too many.
+        Advancing every fourth one keeps the board legible without paying a
+        request per stage per applicant.
+        """
+        if target <= 0:
+            return 0
+
+        existing = self.api.get("/prospective-members/prospects?limit=1&status=active")
+        current = (
+            existing.get("total", 0) if isinstance(existing, dict) else len(existing)
+        )
+        missing = target - current
+        if missing <= 0:
+            print(f"    pipeline already holds {current} active applicants")
+            return 0
+
+        print(f"    creating {missing} filler applicants ({current} -> {target})")
+        created = 0
+        created_ids: list[str] = []
+        for index in range(missing):
+            # Deterministic addresses so a re-run recognises its own filler and
+            # tops up rather than duplicating it.
+            email = f"applicant.{current + index:04d}@intake.example.org"
+            payload = {
+                "first_name": "Applicant",
+                "last_name": f"{current + index:04d}",
+                "email": email,
+                "phone": f"(703) 555-{6000 + (current + index) % 4000:04d}",
+                "address_city": "Oakville",
+                "address_state": "VA",
+                "address_zip": "22046",
+                "interest_reason": "Applied through the open-house drive.",
+                "referral_source": "Open house",
+                "desired_membership_type": "active",
+            }
+            if pipeline_id:
+                payload["pipeline_id"] = pipeline_id
+            try:
+                prospect = self.api.post("/prospective-members/prospects", payload)
+                created += 1
+            except ApiError as exc:
+                # A duplicate-email refusal means this one already exists, which
+                # is fine; anything else is worth stopping for rather than
+                # grinding through several hundred identical failures.
+                if exc.code not in (400, 409):
+                    raise
+                continue
+
+            created_ids.append(pick(prospect, "id"))
+
+            # Every fourth one moves down the board. Advancing past the final
+            # stage is refused with a 409, so the count is bounded by the
+            # pipeline length rather than relying on the API to absorb it.
+            if index % 4:
+                continue
+            for _ in range(1 + (index // 4) % (len(self.PIPELINE_STAGES) - 1)):
+                self.api.post(
+                    f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
+                )
+
+        # Park the two most recently created at the *final* stage.
+        #
+        # The table lists newest first, so these land on page one — which is
+        # what makes a select-all there a genuinely mixed batch: most advance,
+        # these two cannot. That partial failure is the whole subject of the
+        # bulk-action screenshot, and without it a bulk advance from page one
+        # succeeds uniformly and pictures nothing.
+        for prospect_id in created_ids[-2:]:
+            if not prospect_id:
+                continue
+            for _ in range(len(self.PIPELINE_STAGES)):
+                try:
+                    self.api.post(
+                        f"/prospective-members/prospects/{prospect_id}/advance"
+                    )
+                except ApiError as exc:
+                    # 409 is the pipeline saying "already at the end", which is
+                    # exactly where this is trying to get to.
+                    if exc.code != 409:
+                        raise
+                    break
+        return created
 
     # -- grants & fundraising ----------------------------------------
 
@@ -4502,7 +4907,6 @@ class Seeder:
     def run(self) -> int:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
-        self.step("ranks", self.seed_ranks)
         members = self.step("members", self.seed_members) or []
         self.step("member changes", lambda: self.seed_member_changes(members))
         facilities = self.step("facilities", self.seed_facilities) or []
@@ -4534,6 +4938,13 @@ class Seeder:
         )
         templates = self.step("skills testing", self.seed_skills_testing) or []
         self.step("skills tests", lambda: self.seed_skills_tests(templates, members))
+        self.step(
+            "skills test awaiting validation",
+            lambda: self.seed_pending_validation_test(
+                self.base_url, templates, members
+            ),
+        )
+        self.step("skills test viewer", lambda: self.seed_test_viewer(members))
         inventory = self.step("inventory", lambda: self.seed_inventory(stations)) or {}
         self.step(
             "inventory operations",
@@ -4562,7 +4973,18 @@ class Seeder:
         )
         self.step("event templates", self.seed_event_templates)
         self.step("elections", self.seed_elections)
-        self.step("prospective members", self.seed_prospective_members)
+        prospect_data = (
+            self.step("prospective members", self.seed_prospective_members) or {}
+        )
+        if self.bulk_prospects:
+            pipelines = prospect_data.get("pipelines") or []
+            self.step(
+                "bulk applicants (kanban truncation)",
+                lambda: self.seed_bulk_prospects(
+                    pick(pipelines[0], "id") if pipelines else None,
+                    self.bulk_prospects,
+                ),
+            )
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("facility activity", lambda: self.seed_facility_activity(facilities))
@@ -4592,11 +5014,27 @@ class Seeder:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:3001")
+    parser.add_argument(
+        "--bulk-prospects",
+        nargs="?",
+        type=int,
+        const=BULK_PROSPECT_TARGET,
+        default=0,
+        metavar="N",
+        help=(
+            "Pad the membership pipeline out to N active applicants so the "
+            "kanban board exceeds its card ceiling and renders the "
+            f"'Showing 200 of N' notice. Defaults to {BULK_PROSPECT_TARGET} "
+            "when the flag is given without a number. Off by default: it "
+            "costs a few hundred requests and buries the named applicants the "
+            "other prospective-member screenshots are built around."
+        ),
+    )
     args = parser.parse_args()
 
     api = Api(args.base_url)
     api.login()
-    return Seeder(api, args.base_url).run()
+    return Seeder(api, args.base_url, bulk_prospects=args.bulk_prospects).run()
 
 
 if __name__ == "__main__":

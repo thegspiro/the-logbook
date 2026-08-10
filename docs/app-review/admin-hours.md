@@ -1,7 +1,7 @@
 # Application Review — Admin Hours (Tier B)
 
 **Prefix:** `AH2` · **Iteration:** B15 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/admin_hours.py` (1,042 L, 27 endpoints),
 `services/admin_hours_service.py` (1,545 L), model `models/admin_hours.py`
@@ -9,6 +9,53 @@
 **Prior audit:** `docs/module-audit/admin-hours.md` (iteration 15) — AH-1 (HIGH
 self-credit), AH-2 (cross-tenant stale-session mutation), AH-3, AH-4 (SoD) fixed;
 AH-5 (minor scoping omissions, flagged not-exploitable) left open.
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified, no code change
+
+Re-verified this HIGH-sensitivity self-credit / SoD module holds:
+
+- **AH-4 / AH-6 separation-of-duties intact** — `assert_different_person` guards
+  the single-entry approve path, and `bulk_approve` skips approver-owned entries
+  (both approval paths covered; 2 refs).
+- **AH-1** manual entries start `PENDING`; **AH-5** internal queries org-scoped;
+  **latent-500 lens clean** (`entry_method`/`status` enum-typed in the request
+  schemas); **E712-free**.
+
+Open item unchanged: the per-org SoD toggle (only for a genuine sole-officer
+department) — a deliberate product/config decision.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
+
+---
+
+## Pass 3 (2026-08-09) — verified clean, no code change
+
+Re-verified this HIGH-sensitivity (self-credit / SoD) module's guards all hold:
+
+- **AH-4 single-entry self-approval** — `review_entry`'s approve path calls
+  `assert_different_person(approver_id, entry.user_id, …)` (service ~750).
+- **AH-6 bulk-approve** — `bulk_approve` (service 889) iterates and **skips**
+  self-owned entries (`if entry.user_id == approver_id: skipped_self += 1; continue`,
+  ~917), so the bulk path can't self-approve; it returns a `skipped_self` count. The
+  AH-1+AH-4 control is intact on both approval paths.
+- **AH-1** — manual entries still start `PENDING`; **AH-5** internal queries stay
+  org-scoped.
+
+**Latent-500 lens clean:** the only enum columns (`entry_method`, `status`) are
+properly typed in the request schemas — no free-string→ENUM path. **E712-free.** The
+FIN-7 float-money concern doesn't map here — admin hours are *time*, not currency,
+bounded by AH-1's 24h-per-entry cap.
+
+### Still flagged (unchanged)
+
+- **Per-org SoD toggle** (AH-4 refinement) — only if a genuine sole-officer department
+  needs to self-approve; a deliberate product/config decision, unchanged.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · no tests changed (no code change).
 
 ---
 

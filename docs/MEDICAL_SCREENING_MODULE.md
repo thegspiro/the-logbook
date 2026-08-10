@@ -89,12 +89,35 @@ frontend/src/modules/medical-screening/
 | `scheduled_date` | `DateTime` | When screening is scheduled |
 | `completed_date` | `DateTime` | When screening was completed |
 | `expiration_date` | `DateTime` | When this screening expires |
-| `provider_name` | `String(200)` | Name of medical provider |
-| `result_summary` | `Text` | Brief result description |
-| `result_data` | `JSON` | Structured result data |
+| `provider_name` | `EncryptedText` 🔒 | Name of medical provider |
+| `result_summary` | `EncryptedText` 🔒 | Brief result description |
+| `result_data` | `EncryptedJSON` 🔒 | Structured result data (scores, measurements) |
 | `reviewed_by` | `String(36)` | FK to users (reviewer) |
 | `reviewed_at` | `DateTime` | When review occurred |
-| `notes` | `Text` | Additional notes |
+| `notes` | `EncryptedText` 🔒 | Additional notes |
+
+> 🔒 **Encrypted at rest** _(2026-08-09, app-review MS-1)_. These four columns
+> carry the module's PHI and use the transparent `EncryptedText` /
+> `EncryptedJSON` column types from `app/core/encrypted_types.py` — AES-256-GCM,
+> decrypting on read and encrypting on write, so service and endpoint code did
+> not change.
+>
+> **Legacy plaintext rows stay readable.** A stored value without the ciphertext
+> marker is returned as-is, so no backfill is needed for correctness;
+> `backend/scripts/reencrypt_to_aesgcm.py` re-encrypts them as a background task.
+> A value that *is* marked as ciphertext and fails to decrypt **raises** rather
+> than being returned as ciphertext or as empty — it fails closed.
+>
+> The remaining columns are deliberately **not** encrypted: dates, status and the
+> foreign keys are what every query filters, sorts and joins on, and encrypting
+> them would make the module's compliance views unimplementable without buying
+> meaningful protection — the sensitive content is the result, not the fact that a
+> screening is on file. Cross-reference:
+> [wiki/Security-Encryption](../wiki/Security-Encryption.md#what-is-encrypted).
+
+> **Schema note.** [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) is the generated,
+> authoritative column-level reference for `screening_requirements` and
+> `screening_records`.
 
 ---
 

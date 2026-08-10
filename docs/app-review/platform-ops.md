@@ -1,6 +1,45 @@
 # Application Review — Platform Ops & Data Lifecycle
 
-**Prefix:** `OPS` · **Iteration:** A9 · **Reviewed:** 2026-08-05 · **last of Tier A**
+**Prefix:** `OPS` · **Iteration:** A9 · **Reviewed:** 2026-08-05 (pass 1),
+2026-08-08 (pass 2) · **last of Tier A**
+
+## Pass 2 (2026-08-08) — six-lens sweep — no code change
+
+Re-verified the four services (SoD guard, admin-continuity, data-export,
+audit-shipping) against the six lenses. **All clean, no code change:**
+
+- **`assert_different_person`** is well-built (no-ops on missing ids, approve-only,
+  `ValueError`→400) and wired into all four SoD call sites (finance approve,
+  admin-hours approve, training-submission review, skills-test examine + validate).
+- **Admin-continuity (ORU-7)** is wired across all five paths with the role-edit guard
+  at the **service** layer so it covers every caller; org is always caller-derived,
+  never client-supplied — a foreign target id merely no-ops.
+- **Data-export** is self-scoped by construction (every `_EXPORT_SECTIONS` row filters
+  the member's own FK; `export_user_data` takes the authenticated user only), rate-
+  limited (3/hr), audited. `_serialize_value` covers datetime/date/enum/Decimal and
+  the one `LargeBinary` column isn't exported — no latent-500.
+- **Audit-shipping** POSTs to an **env-only** URL (no SSRF), HMAC-signed, watermark
+  advances only on a 2xx ack.
+
+### Flagged (caller-side, needs a product/config decision) — OPS-6
+
+The sweep surfaced one MED **outside these four services**, in the finance module's
+public approval path: **`finance_service.approve_by_token`** (reached by the
+unauthenticated `POST /public/finance/approvals/...`) sets a step `APPROVED` with
+**no `assert_different_person` guard and no approver attribution** (`acted_by` never
+set) — a twin of the FIN-4-guarded `approve_step`. The token is issued only to a
+chain step whose `approver_type=="email"`, sent to that step's configured
+`approver_value`. Whether this bypasses FIN-4 hinges on **whether a check requester
+can end up as an "email" approver on their own chain** — a chain-config question for
+the owner. If external-approver-by-design is accepted, at minimum record
+`acted_by`/`approver_value` on the token path for audit parity. Recorded, not fixed.
+Also confirmed: OPS-4 (TR-5 auto-approve self-credit) and the AH-4 bulk-approve inline
+`==` (fail-closed, but bypasses the shared helper) stand as previously flagged.
+
+**No code changed** in the four A9 services — the verifications and the one new
+caller-side flag are the deliverable.
+
+---
 
 **Backend:** `app/services/separation_of_duties.py` (70 L),
 `admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L),

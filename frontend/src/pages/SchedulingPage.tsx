@@ -44,6 +44,10 @@ const MyChecklistsPage = lazyWithRetry(() => import('./scheduling/MyChecklistsPa
 type TabId = 'schedule' | 'my-shifts' | 'open-shifts' | 'requests' | 'equipment-checks' | 'shift-reports';
 type ViewMode = 'week' | 'month';
 
+const TAB_IDS: TabId[] = ['schedule', 'my-shifts', 'open-shifts', 'requests', 'equipment-checks', 'shift-reports'];
+
+const isTabId = (value: string | null): value is TabId => value !== null && (TAB_IDS as string[]).includes(value);
+
 // Fallback templates when no backend templates are configured
 const FALLBACK_TEMPLATES: ShiftTemplateRecord[] = [
   {
@@ -192,28 +196,37 @@ const SchedulingPage: React.FC = () => {
   );
 
   // Tab state — honour ?tab= query param for deep-linking
-  const initialTab = (searchParams.get('tab') || 'schedule') as TabId;
-  const [activeTab, setActiveTab] = useState<TabId>(
-    ['schedule', 'my-shifts', 'open-shifts', 'requests', 'equipment-checks', 'shift-reports'].includes(initialTab)
-      ? initialTab
-      : 'schedule'
+  const initialTabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<TabId>(isTabId(initialTabParam) ? initialTabParam : 'schedule');
+
+  // Clicking a tab writes the choice to the URL as well as to state, so the
+  // sync effect below reads back the tab the user just picked. An earlier
+  // version only set state; the effect then saw no ?tab= (i.e. "schedule"),
+  // decided state had drifted, and snapped every tab straight back to Schedule
+  // — no tab but Schedule could be opened at all.
+  const handleTabChange = useCallback(
+    (tabId: TabId) => {
+      setActiveTab(tabId);
+      const next = new URLSearchParams(searchParams);
+      if (tabId === 'schedule') {
+        next.delete('tab');
+      } else {
+        next.set('tab', tabId);
+      }
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams]
   );
 
-  // Sync tab state when URL query param changes
+  // Sync tab state when the URL changes underneath us (deep link, back button).
+  // A missing ?tab= is not a request to reset — it is the Schedule default that
+  // handleTabChange writes, and re-asserting it here would fight local state.
   useEffect(() => {
-    const tabParam = (searchParams.get('tab') || 'schedule') as TabId;
-    const validTabs: TabId[] = [
-      'schedule',
-      'my-shifts',
-      'open-shifts',
-      'requests',
-      'equipment-checks',
-      'shift-reports',
-    ];
-    if (validTabs.includes(tabParam) && tabParam !== activeTab) {
+    const tabParam = searchParams.get('tab');
+    if (isTabId(tabParam)) {
       setActiveTab(tabParam);
     }
-  }, [searchParams, activeTab]);
+  }, [searchParams]);
 
   // Load shift reports feature flag. Failure here must not blank the page —
   // a single config-endpoint regression should leave the rest of scheduling
@@ -548,7 +561,7 @@ const SchedulingPage: React.FC = () => {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabChange(tab.id)}
                   className={`flex min-h-[44px] items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors sm:px-4 ${
                     isActive
                       ? 'border-violet-600 text-violet-600 dark:text-violet-400'
@@ -1342,7 +1355,7 @@ const SchedulingPage: React.FC = () => {
                                       defaultTemplate;
                                     return tmpl?.start_time_of_day || '';
                                   })()}
-                                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-violet-500 focus:outline-hidden"
+                                  className="form-input"
                                 />
                               </div>
                               <div>
@@ -1350,7 +1363,7 @@ const SchedulingPage: React.FC = () => {
                                 <TimeQuarterHour
                                   value={shiftForm.customEndTime}
                                   onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
-                                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-violet-500 focus:outline-hidden"
+                                  className="form-input"
                                 />
                               </div>
                             </div>

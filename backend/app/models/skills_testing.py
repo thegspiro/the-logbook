@@ -134,6 +134,16 @@ class SkillTemplate(Base):
     passing_percentage = Column(Float, nullable=True)
     require_all_critical = Column(Boolean, default=True)
 
+    # Whether pass/fail steps contribute points to the overall percentage.
+    # Off by default, and deliberately so: the percentage has always been
+    # computed from score-type criteria alone, so switching this on for
+    # existing templates would change what every historical result means. A
+    # department whose knowledge questions are written as pass/fail steps turns
+    # it on so a wrong answer costs points instead of nothing.
+    score_pass_fail_criteria = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+
     # Optional pipeline linkage — the training requirement this template's tests
     # satisfy. Tests inherit it at creation (overridable per test), and a passing
     # test marks that requirement complete on the candidate's active enrollment.

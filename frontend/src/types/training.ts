@@ -654,6 +654,21 @@ export interface ComplianceSummary {
   is_exempt?: boolean | undefined;
 }
 
+/**
+ * One step of a CHECKLIST requirement.
+ *
+ * Steps used to be bare strings. They carry an id so ticking one survives the
+ * list being reordered or a neighbour reworded, and `member_visible` so a
+ * department can keep some steps officer-only — a background check coming back,
+ * references being called — without hiding the whole requirement from the
+ * member it applies to.
+ */
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  member_visible: boolean;
+}
+
 export interface TrainingRequirement {
   id: string;
   organization_id: string;
@@ -675,7 +690,7 @@ export interface TrainingRequirement {
   required_calls?: number;
   required_call_types?: string[];
   required_skills?: string[];
-  checklist_items?: string[];
+  checklist_items?: ChecklistItem[];
   passing_score?: number;
   max_attempts?: number;
   frequency: RequirementFrequency;
@@ -712,7 +727,7 @@ export interface TrainingRequirement {
 
 export interface TrainingRequirementCreate {
   name: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   requirement_type: RequirementType;
   source?: RequirementSource | undefined;
   registry_name?: string | undefined;
@@ -720,15 +735,15 @@ export interface TrainingRequirementCreate {
   is_editable?: boolean | undefined;
   allows_external_credit?: boolean | undefined;
   training_type?: TrainingType | undefined;
-  required_hours?: number | undefined;
+  required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;
-  required_shifts?: number | undefined;
-  required_calls?: number | undefined;
+  required_shifts?: number | null | undefined;
+  required_calls?: number | null | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
-  checklist_items?: string[] | undefined;
-  passing_score?: number | undefined;
-  max_attempts?: number | undefined;
+  checklist_items?: ChecklistItem[] | null | undefined;
+  passing_score?: number | null | undefined;
+  max_attempts?: number | null | undefined;
   frequency: RequirementFrequency;
   year?: number | undefined;
   applies_to_all?: boolean | undefined;
@@ -747,13 +762,13 @@ export interface TrainingRequirementCreate {
   period_end_day?: number | undefined;
   include_current_month?: boolean | null | undefined;
   // Freshness window: a completion older than this many days doesn't count
-  recency_days?: number | undefined;
+  recency_days?: number | null | undefined;
   category_ids?: string[] | undefined;
 }
 
 export interface TrainingRequirementUpdate {
   name?: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   requirement_type?: RequirementType;
   source?: RequirementSource | undefined;
   registry_name?: string | undefined;
@@ -761,15 +776,15 @@ export interface TrainingRequirementUpdate {
   is_editable?: boolean | undefined;
   allows_external_credit?: boolean | undefined;
   training_type?: TrainingType | undefined;
-  required_hours?: number | undefined;
+  required_hours?: number | null | undefined;
   required_courses?: string[] | undefined;
-  required_shifts?: number | undefined;
-  required_calls?: number | undefined;
+  required_shifts?: number | null | undefined;
+  required_calls?: number | null | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
-  checklist_items?: string[] | undefined;
-  passing_score?: number | undefined;
-  max_attempts?: number | undefined;
+  checklist_items?: ChecklistItem[] | null | undefined;
+  passing_score?: number | null | undefined;
+  max_attempts?: number | null | undefined;
   frequency?: RequirementFrequency;
   year?: number | undefined;
   applies_to_all?: boolean | undefined;
@@ -788,7 +803,7 @@ export interface TrainingRequirementUpdate {
   period_end_day?: number | undefined;
   include_current_month?: boolean | null | undefined;
   // Freshness window: a completion older than this many days doesn't count
-  recency_days?: number | undefined;
+  recency_days?: number | null | undefined;
   category_ids?: string[] | undefined;
   active?: boolean;
 }
@@ -854,6 +869,17 @@ export type TrainingRequirementEnhanced = TrainingRequirement;
 
 export type TrainingRequirementEnhancedCreate = TrainingRequirementCreate;
 
+/**
+ * When a program warns an enrolled member about their completion deadline.
+ * `days_before_deadline` defaults to the program's own `warning_days_before`
+ * plus 14- and 7-day follow-ups; `send_if_below_percentage` suppresses the
+ * warning for members already at or above that completion mark.
+ */
+export interface ReminderConditions {
+  days_before_deadline?: number[] | undefined;
+  send_if_below_percentage?: number | undefined;
+}
+
 // Training Program
 export interface TrainingProgram {
   id: string;
@@ -869,11 +895,7 @@ export interface TrainingProgram {
   allows_concurrent_enrollment: boolean;
   time_limit_days?: number;
   warning_days_before: number;
-  reminder_conditions?: {
-    milestone_threshold?: number;
-    days_before_deadline?: number;
-    send_if_below_percentage?: number;
-  };
+  reminder_conditions?: ReminderConditions;
   is_template: boolean;
   active: boolean;
   recert_enabled: boolean;
@@ -896,13 +918,7 @@ export interface TrainingProgramCreate {
   allows_concurrent_enrollment?: boolean | undefined;
   time_limit_days?: number | undefined;
   warning_days_before?: number | undefined;
-  reminder_conditions?:
-    | {
-        milestone_threshold?: number | undefined;
-        days_before_deadline?: number | undefined;
-        send_if_below_percentage?: number | undefined;
-      }
-    | undefined;
+  reminder_conditions?: ReminderConditions | undefined;
   is_template?: boolean | undefined;
   recert_enabled?: boolean | undefined;
   recert_interval_months?: number | undefined;
@@ -982,6 +998,7 @@ export interface TrainingProgramUpdate {
   structure_type?: ProgramStructureType | undefined;
   time_limit_days?: number | undefined;
   warning_days_before?: number | undefined;
+  reminder_conditions?: ReminderConditions | undefined;
   is_template?: boolean | undefined;
   active?: boolean | undefined;
   recert_enabled?: boolean | undefined;
@@ -995,6 +1012,8 @@ export interface ProgramPhaseUpdate {
   description?: string | undefined;
   time_limit_days?: number | undefined;
   requires_manual_advancement?: boolean | undefined;
+  /** Phases in the same program that must be finished before this one opens. */
+  prerequisite_phase_ids?: string[] | undefined;
 }
 
 export interface ProgramMilestoneUpdate {
@@ -1089,6 +1108,8 @@ export interface RequirementProgressNotes {
     recorded_at: string;
     recorded_by?: string | null;
   }>;
+  /** Ids of the checklist steps an officer has ticked off */
+  checklist_done?: string[];
   [key: string]: unknown;
 }
 
@@ -1116,6 +1137,11 @@ export interface RequirementProgressUpdate {
   verified_by?: string;
   /** Officer-entered knowledge/skills test score (0-100); pass/fail derived */
   test_score?: number;
+  /**
+   * The full set of ticked checklist step ids. Sent whole rather than as a
+   * single toggle so a retry cannot leave a step half-applied.
+   */
+  checklist_done?: string[];
 }
 
 export interface ProgramWithDetails extends TrainingProgram {
@@ -1136,6 +1162,12 @@ export interface MemberProgramProgress {
   next_milestones: ProgramMilestone[];
   time_remaining_days?: number;
   is_behind_schedule: boolean;
+  /**
+   * Requirement id -> names of the prerequisites still blocking it. Present so
+   * a gated step can be greyed out with the reason instead of being offered and
+   * then refused by the API.
+   */
+  locked_requirements?: Record<string, string[]>;
 }
 
 export interface RegistryImportResult {
@@ -1206,7 +1238,7 @@ export interface ProgramBuildRequirementInput {
   required_calls?: number | undefined;
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
-  checklist_items?: string[] | undefined;
+  checklist_items?: ChecklistItem[] | undefined;
   // Course-library ids satisfying a `courses` or `certification` requirement.
   required_courses?: string[] | undefined;
   // Freshness window: a completion older than this many days doesn't count.
@@ -1238,6 +1270,10 @@ export interface ProgramBuildPhaseInput {
 export interface ProgramBuildRequest {
   program: TrainingProgramCreate;
   phases: ProgramBuildPhaseInput[];
+  // Requirements and milestones that belong to the program itself rather than
+  // to a phase — what a flexible (no-phase) program is made of.
+  requirements?: (ProgramBuildRequirementInput | ProgramBuildRequirementLink)[];
+  milestones?: ProgramBuildMilestoneInput[];
 }
 
 // ==================== External Training Integration Types ====================

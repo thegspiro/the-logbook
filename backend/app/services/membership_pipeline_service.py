@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.election import Election, ElectionStatus
+from app.models.email_template import EmailTemplate
 from app.models.event import Event
 from app.models.membership_pipeline import (
     ActionType,
@@ -40,6 +41,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
 from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
@@ -80,7 +82,7 @@ class MembershipPipelineService:
             )
         )
         if not include_templates:
-            query = query.where(MembershipPipeline.is_template == False)  # noqa: E712
+            query = query.where(MembershipPipeline.is_template.is_(False))
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -140,6 +142,9 @@ class MembershipPipelineService:
 
         if steps:
             for i, step_data in enumerate(steps):
+                await self._assert_email_template_in_org(
+                    step_data.get("email_template_id"), organization_id
+                )
                 step = MembershipPipelineStep(
                     id=generate_uuid(),
                     pipeline_id=pipeline.id,
@@ -184,11 +189,7 @@ class MembershipPipelineService:
         if data.get("is_default") and not pipeline.is_default:
             await self._unset_default_pipeline(organization_id)
 
-        for key, value in data.items():
-            if key in self._PIPELINE_PROTECTED_FIELDS:
-                continue
-            if value is not None and hasattr(pipeline, key):
-                setattr(pipeline, key, value)
+        apply_updates(pipeline, data, skip=self._PIPELINE_PROTECTED_FIELDS)
 
         await self.db.commit()
         return await self.get_pipeline(pipeline_id, organization_id)
@@ -285,7 +286,7 @@ class MembershipPipelineService:
             .where(
                 and_(
                     MembershipPipeline.organization_id == organization_id,
-                    MembershipPipeline.is_default == True,  # noqa: E712
+                    MembershipPipeline.is_default.is_(True),
                 )
             )
             .values(is_default=False)
@@ -295,6 +296,21 @@ class MembershipPipelineService:
     # Step CRUD
     # =========================================================================
 
+    async def _assert_email_template_in_org(
+        self, email_template_id: Any, organization_id: str
+    ) -> None:
+        # MP-5 (XC-1): a step's email_template_id is a client-supplied FK to the
+        # org-scoped EmailTemplate used when the stage email fires. Validate it
+        # belongs to the caller's org (optional — a step need not send email).
+        await assert_in_org(
+            self.db,
+            EmailTemplate,
+            email_template_id,
+            organization_id,
+            allow_none=True,
+            label="email template",
+        )
+
     async def add_step(
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
     ) -> Optional[MembershipPipelineStep]:
@@ -302,6 +318,10 @@ class MembershipPipelineService:
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return None
+
+        await self._assert_email_template_in_org(
+            data.get("email_template_id"), organization_id
+        )
 
         # Determine sort_order if not provided
         if "sort_order" not in data or data["sort_order"] is None:
@@ -363,16 +383,17 @@ class MembershipPipelineService:
         if not step:
             return None
 
+        if "email_template_id" in data:
+            await self._assert_email_template_in_org(
+                data.get("email_template_id"), organization_id
+            )
+
         # Capture the old form_id before applying updates so we can clean up
         # the integration if the step is being reassigned to a different form.
         old_config = step.config if isinstance(step.config, dict) else {}
         old_form_id = old_config.get("form_id")
 
-        for key, value in data.items():
-            if key in self._STEP_PROTECTED_FIELDS:
-                continue
-            if value is not None and hasattr(step, key):
-                setattr(step, key, value)
+        apply_updates(step, data, skip=self._STEP_PROTECTED_FIELDS)
 
         await self.db.commit()
         await self.db.refresh(step)
@@ -1908,7 +1929,7 @@ class MembershipPipelineService:
                     .where(
                         TrainingProgram.organization_id == organization_id,
                         TrainingProgram.name.ilike("%probationary%"),
-                        TrainingProgram.active == True,  # noqa: E712
+                        TrainingProgram.active.is_(True),
                     )
                     .limit(1)
                 )
@@ -2814,7 +2835,7 @@ class MembershipPipelineService:
             .where(
                 and_(
                     MembershipPipeline.organization_id == organization_id,
-                    MembershipPipeline.is_default == True,  # noqa: E712
+                    MembershipPipeline.is_default.is_(True),
                 )
             )
             .options(selectinload(MembershipPipeline.steps))
@@ -2864,10 +2885,33 @@ class MembershipPipelineService:
     # Duplicate Detection
     # =========================================================================
 
+    async def find_active_prospect_by_email(
+        self, organization_id: str, email: str
+    ) -> Optional[ProspectiveMember]:
+        """Public wrapper over :meth:`_find_active_prospect_by_email`.
+
+        Callers that create prospects from a non-application context — a guest
+        signing in at a room kiosk, say — need to know whether one already
+        exists *before* calling :meth:`create_prospect`, whose duplicate path
+        emails the applicant a "we already have your application" notice. That
+        notice is right for a re-submitted application and wrong for someone
+        who merely walked into a second interest meeting.
+        """
+        return await self._find_active_prospect_by_email(organization_id, email)
+
     async def _find_active_prospect_by_email(
         self, organization_id: str, email: str
     ) -> Optional[ProspectiveMember]:
-        """Return an existing active/pending prospect with the given email."""
+        """Return an existing active/pending prospect with the given email.
+
+        Eager-loads the same relationships :meth:`get_prospect` does, because
+        ``create_prospect`` returns this instance straight to the client when it
+        detects a duplicate. ``ProspectResponse`` reads ``current_step`` and
+        ``step_progress``, and resolving those lazily from the async response
+        path raises ``MissingGreenlet`` rather than merely being slow — so
+        without this the duplicate path answered **500** instead of returning
+        the existing applicant, which is the whole point of detecting one.
+        """
         result = await self.db.execute(
             select(ProspectiveMember)
             .where(
@@ -2880,6 +2924,15 @@ class MembershipPipelineService:
                         ]
                     ),
                 )
+            )
+            .options(
+                selectinload(ProspectiveMember.current_step),
+                selectinload(ProspectiveMember.pipeline).selectinload(
+                    MembershipPipeline.steps
+                ),
+                selectinload(ProspectiveMember.step_progress).selectinload(
+                    ProspectStepProgress.step
+                ),
             )
             .order_by(ProspectiveMember.created_at)
             .limit(1)
@@ -3415,6 +3468,16 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
+        # MP-5 (XC-1): a client-supplied step_id must belong to this prospect's
+        # own (org-scoped) pipeline — the same guard create_interview /
+        # create_election_package apply. Without it a foreign/other-pipeline
+        # step id persists as a dangling FK on the document (and would drive the
+        # auto-advance below off a step that isn't the prospect's).
+        if step_id:
+            steps = prospect.pipeline.steps if prospect.pipeline else []
+            if not any(str(s.id) == str(step_id) for s in steps):
+                raise ValueError("Step does not belong to this prospect's pipeline")
+
         # Validate file_path: must resolve to a location under the uploads
         # volume (mounted at /app/uploads in docker-compose) to prevent path
         # traversal via symlinks or unicode tricks.
@@ -3670,19 +3733,17 @@ class MembershipPipelineService:
         if not pkg:
             return None
 
-        for key, value in updates.items():
-            if key in self._ELECTION_PKG_PROTECTED_FIELDS:
-                continue
-            if not hasattr(pkg, key) or value is None:
-                continue
-            if key == "package_config":
-                # Merge into existing config to avoid wiping previously
-                # stored keys (documents, stage_summary, etc.).
-                merged = copy.deepcopy(pkg.package_config or {})
-                merged.update(value)
-                pkg.package_config = merged
-            else:
-                setattr(pkg, key, value)
+        applied = dict(updates)
+        if isinstance(applied.get("package_config"), dict):
+            # Merge into existing config to avoid wiping previously stored
+            # keys (documents, stage_summary, etc.) — a partial config dict
+            # adds to what is there rather than replacing it. An explicit
+            # null still falls through to apply_updates and clears the column.
+            merged = copy.deepcopy(pkg.package_config or {})
+            merged.update(applied["package_config"])
+            applied["package_config"] = merged
+
+        apply_updates(pkg, applied, skip=self._ELECTION_PKG_PROTECTED_FIELDS)
 
         await self._log_activity(
             prospect_id=prospect_id,

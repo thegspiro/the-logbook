@@ -52,6 +52,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
@@ -94,7 +95,7 @@ const selectClass = 'form-input';
 
 const labelClass = 'form-label';
 
-const checkboxClass = 'h-4 w-4 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500';
+const checkboxClass = 'form-checkbox';
 
 // ============================================================================
 // Item Form State
@@ -273,6 +274,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const isEditing = Boolean(templateId);
 
   // State
@@ -524,7 +526,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       itemCount > 0
         ? `Delete "${label}" and its ${itemCount} item${itemCount !== 1 ? 's' : ''}? This cannot be undone.`
         : `Delete "${label}"? This cannot be undone.`;
-    if (!window.confirm(msg)) return;
+    if (!(await confirm({ title: 'Delete compartment', message: msg, confirmLabel: 'Delete', cancelLabel: 'Keep it' })))
+      return;
 
     if (comp.id) {
       try {
@@ -632,7 +635,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!item) return;
 
     const label = item.name || 'Untitled Item';
-    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete item',
+        message: `Delete "${label}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
 
     if (item.id) {
       try {
@@ -809,7 +820,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!selected || selected.size === 0) return;
 
     const count = selected.size;
-    if (!window.confirm(`Delete ${count} selected item${count !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete selected items',
+        message: `Delete ${count} selected item${count !== 1 ? 's' : ''}? This cannot be undone.`,
+        confirmLabel: `Delete ${String(count)}`,
+        cancelLabel: 'Keep them',
+      }))
+    )
+      return;
 
     const toDelete = [...selected].sort((a, b) => b - a);
     const deletePromises: Promise<void>[] = [];
@@ -1256,7 +1275,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     if (warnings.length > 0) {
-      const proceed = window.confirm(`Save with warnings?\n\n${warnings.join('\n')}\n\nContinue anyway?`);
+      const proceed = await confirm({
+        title: 'Save with warnings?',
+        message: `${warnings.join('\n\n')}\n\nYou can save anyway and fix these later.`,
+        confirmLabel: 'Save anyway',
+        cancelLabel: 'Go back',
+        variant: 'warning',
+      });
       if (!proceed) return;
     }
 
@@ -1454,7 +1479,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
   }, [templateId]);
 
-  const loadVehiclePreset = (presetKey: string) => {
+  const loadVehiclePreset = async (presetKey: string) => {
     const preset = VEHICLE_PRESETS[presetKey];
     if (!preset) return;
 
@@ -1473,7 +1498,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }));
 
     if (compartments.length > 0) {
-      if (!window.confirm('Loading a preset will replace all existing compartments. Continue?')) return;
+      if (
+        !(await confirm({
+          title: 'Replace this template\u2019s contents?',
+          message: 'Loading a preset discards every compartment and item currently on this template.',
+          confirmLabel: 'Load preset',
+          cancelLabel: 'Keep what I have',
+          variant: 'warning',
+        }))
+      )
+        return;
     }
 
     setCompartments(newCompartments);
@@ -1556,7 +1590,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const data = JSON.parse(ev.target?.result as string) as {
           name?: string;
@@ -1579,7 +1613,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }
 
         if (compartments.length > 0) {
-          if (!window.confirm('Importing will replace all current compartments. Continue?')) return;
+          if (
+            !(await confirm({
+              title: 'Replace this template\u2019s contents?',
+              message: 'Importing discards every compartment and item currently on this template.',
+              confirmLabel: 'Import',
+              cancelLabel: 'Keep what I have',
+              variant: 'warning',
+            }))
+          )
+            return;
         }
 
         if (data.name)
@@ -1683,11 +1726,36 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (csvImportRef.current) csvImportRef.current.value = '';
   };
 
-  const applyCsvImport = () => {
+  /** Back out of the builder, checking first if there is unsaved work. */
+  const handleLeave = async () => {
+    if (
+      isDirty &&
+      !(await confirm({
+        title: 'Leave without saving?',
+        message: 'This template has changes that have not been saved. Leaving now discards them.',
+        confirmLabel: 'Discard changes',
+        cancelLabel: 'Stay here',
+        variant: 'warning',
+      }))
+    )
+      return;
+    void navigate(-1);
+  };
+
+  const applyCsvImport = async () => {
     if (!csvPreview) return;
 
     if (compartments.length > 0) {
-      if (!window.confirm('Importing CSV will replace all current compartments. Continue?')) return;
+      if (
+        !(await confirm({
+          title: 'Replace this template\u2019s contents?',
+          message: 'Importing this CSV discards every compartment and item currently on this template.',
+          confirmLabel: 'Import CSV',
+          cancelLabel: 'Keep what I have',
+          variant: 'warning',
+        }))
+      )
+        return;
     }
 
     const compMap = new Map<string, ItemFormState[]>();
@@ -3203,10 +3271,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
-            onClick={() => {
-              if (isDirty && !window.confirm('You have unsaved changes. Leave anyway?')) return;
-              void navigate(-1);
-            }}
+            onClick={() => void handleLeave()}
             className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface flex-shrink-0 rounded-md p-2 transition-colors"
             title="Go back"
           >
@@ -3402,7 +3467,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <button
                     key={key}
                     type="button"
-                    onClick={() => loadVehiclePreset(key)}
+                    onClick={() => void loadVehiclePreset(key)}
                     className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:border-orange-500/40 hover:bg-orange-500/10"
                   >
                     <span className="font-medium">{preset.label}</span>
@@ -3651,7 +3716,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={applyCsvImport}
+                onClick={() => void applyCsvImport()}
                 className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
               >
                 Import {csvPreview.length} Items

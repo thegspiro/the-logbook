@@ -50,7 +50,7 @@ const EventSaveTemplateModal: React.FC<EventSaveTemplateModalProps> = ({
                     required
                     value={templateName}
                     onChange={(e) => onTemplateNameChange(e.target.value)}
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                     placeholder="e.g., Weekly Business Meeting"
                   />
                 </div>
@@ -62,7 +62,7 @@ const EventSaveTemplateModal: React.FC<EventSaveTemplateModalProps> = ({
                     value={templateDescription}
                     onChange={(e) => onTemplateDescriptionChange(e.target.value)}
                     rows={3}
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                     placeholder="Brief description of this template..."
                   />
                 </div>

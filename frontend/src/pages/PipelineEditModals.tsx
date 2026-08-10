@@ -11,11 +11,14 @@ import { trainingProgramService } from '../services/api';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
+import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
 import { REQUIREMENT_TYPE_OPTIONS } from '../constants/enums';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import { getErrorMessage } from '../utils/errorHandling';
+import { blankToNull } from '../utils/formValues';
 import type {
+  ChecklistItem,
   ProgramMilestone,
   ProgramPhase,
   ProgramRequirement,
@@ -23,10 +26,14 @@ import type {
   TrainingProgram,
 } from '../types/training';
 
+// "Sequential" is deliberately absent: nothing in the system ever enforced an
+// order between requirements, so it behaved exactly like Flexible while telling
+// the officer otherwise. Programs already saved as sequential keep the value —
+// it is added back to this list below when one is being edited — but it is not
+// offered as a new choice.
 const STRUCTURE_TYPES: { value: ProgramStructureType; label: string }[] = [
-  { value: 'phases', label: 'Phases (staged)' },
-  { value: 'sequential', label: 'Sequential (in order)' },
-  { value: 'flexible', label: 'Flexible (any order)' },
+  { value: 'phases', label: 'Phases — stages, in order' },
+  { value: 'flexible', label: 'One list — any order' },
 ];
 
 const MONTHS: { value: number; label: string }[] = [
@@ -115,6 +122,12 @@ export const EditProgramModal: React.FC<{
   const [targetPosition, setTargetPosition] = useState(program.target_position ?? '');
   const [timeLimit, setTimeLimit] = useState(program.time_limit_days?.toString() ?? '');
   const [warnDays, setWarnDays] = useState(program.warning_days_before?.toString() ?? '');
+  const [extraWarnDays, setExtraWarnDays] = useState(
+    (program.reminder_conditions?.days_before_deadline ?? []).join(', ')
+  );
+  const [remindBelow, setRemindBelow] = useState(
+    program.reminder_conditions?.send_if_below_percentage?.toString() ?? ''
+  );
   const [isTemplate, setIsTemplate] = useState(!!program.is_template);
   const [active, setActive] = useState(program.active !== false);
   const [recertEnabled, setRecertEnabled] = useState(!!program.recert_enabled);
@@ -134,6 +147,16 @@ export const EditProgramModal: React.FC<{
       toast.error('Set both the reset month and day, or leave both blank');
       return;
     }
+    // "30, 14, 7" -> [30, 14, 7]. A non-numeric entry is a typo worth naming
+    // rather than silently dropping a reminder the department expects.
+    const parsedWarnDays = extraWarnDays
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (parsedWarnDays.some((part) => !/^\d+$/.test(part))) {
+      toast.error('Reminder days must be whole numbers separated by commas, e.g. 30, 14, 7');
+      return;
+    }
     setSubmitting(true);
     try {
       await trainingProgramService.updateProgram(program.id, {
@@ -144,6 +167,12 @@ export const EditProgramModal: React.FC<{
         target_position: targetPosition.trim() || undefined,
         time_limit_days: timeLimit ? Number(timeLimit) : undefined,
         warning_days_before: warnDays ? Number(warnDays) : undefined,
+        reminder_conditions: {
+          days_before_deadline: parsedWarnDays.map(Number),
+          // `|| undefined` not `??`: an emptied field must clear the setting,
+          // and '' is not null.
+          send_if_below_percentage: remindBelow ? Number(remindBelow) : undefined,
+        },
         is_template: isTemplate,
         active,
         recert_enabled: recertEnabled,
@@ -203,7 +232,10 @@ export const EditProgramModal: React.FC<{
             value={structureType}
             onChange={(e) => setStructureType(e.target.value as ProgramStructureType)}
           >
-            {STRUCTURE_TYPES.map((s) => (
+            {(STRUCTURE_TYPES.some((s) => s.value === structureType)
+              ? STRUCTURE_TYPES
+              : [...STRUCTURE_TYPES, { value: structureType, label: 'Sequential (legacy)' }]
+            ).map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
               </option>
@@ -238,18 +270,54 @@ export const EditProgramModal: React.FC<{
           />
         </div>
       </div>
-      <div>
-        <label className="form-label" htmlFor="ep-warn">
-          Warn days before deadline
-        </label>
-        <input
-          id="ep-warn"
-          type="number"
-          min={0}
-          className="form-input"
-          value={warnDays}
-          onChange={(e) => setWarnDays(e.target.value)}
-        />
+      <div className="border-theme-surface-border space-y-3 rounded-md border p-3">
+        <p className="text-theme-text-primary text-sm font-medium">Deadline reminders</p>
+        <div>
+          <label className="form-label" htmlFor="ep-warn">
+            First warning (days before the due date)
+          </label>
+          <input
+            id="ep-warn"
+            type="number"
+            min={0}
+            className="form-input"
+            value={warnDays}
+            onChange={(e) => setWarnDays(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="ep-warn-extra">
+            All reminder days (optional)
+          </label>
+          <input
+            id="ep-warn-extra"
+            className="form-input"
+            value={extraWarnDays}
+            onChange={(e) => setExtraWarnDays(e.target.value)}
+            placeholder="e.g. 30, 14, 7"
+          />
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Leave blank to use the first warning above plus follow-ups 14 and 7 days out.
+          </p>
+        </div>
+        <div>
+          <label className="form-label" htmlFor="ep-warn-below">
+            Only remind members below this percent complete (optional)
+          </label>
+          <input
+            id="ep-warn-below"
+            type="number"
+            min={0}
+            max={100}
+            className="form-input"
+            value={remindBelow}
+            onChange={(e) => setRemindBelow(e.target.value)}
+            placeholder="e.g. 40"
+          />
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Leave blank to remind everyone. Set it to stop nagging members who are already on track.
+          </p>
+        </div>
       </div>
       <div className="flex items-center gap-6">
         <label className="text-theme-text-secondary inline-flex items-center gap-2 text-sm">
@@ -339,14 +407,25 @@ export const PhaseFormModal: React.FC<{
   programId: string;
   phase?: ProgramPhase | undefined;
   nextPhaseNumber: number;
+  /** Every phase in the program, so this one can be gated behind others. */
+  allPhases?: ProgramPhase[];
   onClose: () => void;
   onSaved: () => void;
-}> = ({ programId, phase, nextPhaseNumber, onClose, onSaved }) => {
+}> = ({ programId, phase, nextPhaseNumber, allPhases = [], onClose, onSaved }) => {
   const [name, setName] = useState(phase?.name ?? '');
   const [description, setDescription] = useState(phase?.description ?? '');
   const [timeLimit, setTimeLimit] = useState(phase?.time_limit_days?.toString() ?? '');
   const [manual, setManual] = useState(!!phase?.requires_manual_advancement);
+  const [prerequisites, setPrerequisites] = useState<string[]>(phase?.prerequisite_phase_ids ?? []);
   const [submitting, setSubmitting] = useState(false);
+
+  // A phase can't be gated behind itself, and there is nothing to pick from
+  // until the program has more than one phase.
+  const selectablePhases = allPhases.filter((p) => p.id !== phase?.id);
+
+  const togglePrerequisite = (id: string) => {
+    setPrerequisites((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
+  };
 
   const submit = async () => {
     if (!name.trim()) {
@@ -361,6 +440,7 @@ export const PhaseFormModal: React.FC<{
           description: description.trim() || undefined,
           time_limit_days: timeLimit ? Number(timeLimit) : undefined,
           requires_manual_advancement: manual,
+          prerequisite_phase_ids: prerequisites,
         });
         toast.success('Phase updated');
       } else {
@@ -371,6 +451,7 @@ export const PhaseFormModal: React.FC<{
           description: description.trim() || undefined,
           time_limit_days: timeLimit ? Number(timeLimit) : undefined,
           requires_manual_advancement: manual,
+          prerequisite_phase_ids: prerequisites.length ? prerequisites : undefined,
         });
         toast.success('Phase added');
       }
@@ -424,6 +505,27 @@ export const PhaseFormModal: React.FC<{
         <input type="checkbox" checked={manual} onChange={(e) => setManual(e.target.checked)} />
         Require officer approval to advance out of this phase
       </label>
+      {selectablePhases.length > 0 && (
+        <div>
+          <span className="form-label">Finish these phases first</span>
+          <p className="text-theme-text-muted mb-2 text-xs">
+            Leave all unchecked to let members reach this phase in the normal order. Tick a phase to hold them back
+            until it is finished.
+          </p>
+          <div className="space-y-1">
+            {selectablePhases.map((p) => (
+              <label key={p.id} className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={prerequisites.includes(p.id)}
+                  onChange={() => togglePrerequisite(p.id)}
+                />
+                Phase {p.phase_number}: {p.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </ModalShell>
   );
 };
@@ -451,7 +553,7 @@ export const RequirementFormModal: React.FC<{
   const [calls, setCalls] = useState(req?.required_calls?.toString() ?? '');
   const [passing, setPassing] = useState(req?.passing_score?.toString() ?? '');
   const [attempts, setAttempts] = useState(req?.max_attempts?.toString() ?? '');
-  const [checklist, setChecklist] = useState((req?.checklist_items ?? []).join('\n'));
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(req?.checklist_items ?? []);
   const [requiredCourses, setRequiredCourses] = useState<string[]>(req?.required_courses ?? []);
   const [recencyDays, setRecencyDays] = useState<number | undefined>(req?.recency_days ?? undefined);
   const [isRequired, setIsRequired] = useState(link?.is_required !== false);
@@ -508,29 +610,26 @@ export const RequirementFormModal: React.FC<{
     }
     setSubmitting(true);
     try {
+      // Every optional field is sent on every save, as an explicit null when
+      // it does not apply. Omitting reads as "leave alone", which is how a
+      // requirement switched from hours to shifts kept its old hours target
+      // and went on evaluating against it. The same reasoning already applied
+      // to required_courses below; it applies to all of them.
       const payload = {
         name: name.trim(),
-        description: description.trim() || undefined,
+        description: blankToNull(description),
         requirement_type: type as never,
-        required_hours: type === 'hours' && hours ? Number(hours) : undefined,
-        required_shifts: type === 'shifts' && shifts ? Number(shifts) : undefined,
-        required_calls: type === 'calls' && calls ? Number(calls) : undefined,
-        passing_score: type === 'knowledge_test' && passing ? Number(passing) : undefined,
-        max_attempts: type === 'knowledge_test' && attempts ? Number(attempts) : undefined,
-        checklist_items:
-          type === 'checklist'
-            ? checklist
-                .split('\n')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : undefined,
-        // Always sent (as [] for other types) so switching a requirement away
-        // from courses/certification clears stale links — a leftover course id
-        // narrows the hours evaluator to only that course's records.
+        required_hours: type === 'hours' && hours ? Number(hours) : null,
+        required_shifts: type === 'shifts' && shifts ? Number(shifts) : null,
+        required_calls: type === 'calls' && calls ? Number(calls) : null,
+        passing_score: type === 'knowledge_test' && passing ? Number(passing) : null,
+        max_attempts: type === 'knowledge_test' && attempts ? Number(attempts) : null,
+        checklist_items: type === 'checklist' ? checklist.filter((i) => i.text.trim()) : null,
+        // A leftover course id narrows the hours evaluator to only that
+        // course's records, so switching away has to clear the links.
         required_courses: linksCourses ? requiredCourses : [],
-        // Sent even when null so an officer can lift a freshness window they
-        // previously set; the service treats recency_days as clearable.
-        recency_days: linksCourses ? recencyDays : undefined,
+        // Null lifts a freshness window the officer previously set.
+        recency_days: linksCourses ? (recencyDays ?? null) : null,
         allows_external_credit: allowsExternal,
       };
       if (link) {
@@ -728,20 +827,7 @@ export const RequirementFormModal: React.FC<{
               </div>
             </div>
           )}
-          {type === 'checklist' && (
-            <div>
-              <label className="form-label" htmlFor="rq-check">
-                Checklist items (one per line)
-              </label>
-              <textarea
-                id="rq-check"
-                className="form-input"
-                rows={4}
-                value={checklist}
-                onChange={(e) => setChecklist(e.target.value)}
-              />
-            </div>
-          )}
+          {type === 'checklist' && <ChecklistItemsEditor idPrefix="rq" items={checklist} onChange={setChecklist} />}
           {linksCourses && (
             <CourseLibraryPicker
               idPrefix="rq"

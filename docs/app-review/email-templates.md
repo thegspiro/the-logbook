@@ -1,6 +1,35 @@
 # Application Review — Email Templates & Delivery
 
-**Prefix:** `MAIL` · **Iteration:** A4 · **Reviewed:** 2026-08-05
+**Prefix:** `MAIL` · **Iteration:** A4 · **Reviewed:** 2026-08-05 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified pass-1: 11 endpoints gated; every `_RAW_HTML_VARIABLES` member escapes
+at construction; `_sanitize_header` defends SMTP header injection; `run_scheduled_emails`
+holds the Redis overlap lock; MAIL-1 (subject/text not escaped in the primary
+`render()`) and MAIL-2 (schedule `template_id` org-scoped both ends) hold. Lenses 1–6
+clean on the primary paths (no update-bypass — `update_template` uses an
+`allowed_fields` whitelist; no cross-org read/write — every mutation resolves the
+target `id + organization_id`; no latent-500 — variable substitution is regex, not
+Jinja, so missing vars can't `KeyError`). **1 fix.**
+
+### MAIL-5 — LOW — The code-default fallback render re-introduced the MAIL-1 over-escaping — ✅ FIXED
+
+MAIL-1 fixed `render()` so the subject line and text/plain body aren't HTML-escaped
+(only the HTML body is). But the sibling **`_render_with_fallback`** path (reached
+when no DB template loads) used an inline `_replace()` with **no `escape` flag** and
+always escaped — so on that path a member `O'Brien` mailed as `O&#x27;Brien` and
+`Fire & Rescue` as `Fire &amp; Rescue` in the `Subject:` header and text alternative.
+**Fix:** gave the inline `_replace` the same `escape` flag, off for subject + text,
+on for HTML — the XSS boundary on the HTML body is untouched (verified an `O'Brien`
+apostrophe still escapes there). 1 DB-free regression test (`test_email_fallback_render.py`).
+
+**Flagged (unchanged, policy):** MAIL-3 (`upload_attachment` now does magic-byte
+validation; residual is the `except ImportError: pass` extension-only degrade and
+`.svg` allowance — policy), MAIL-4 (arbitrary recipients — the CS-9 policy call).
+
+---
 
 **Backend:** `app/api/v1/endpoints/email_templates.py` (671 L, 11 endpoints),
 `app/services/email_template_service.py` (2739 L),

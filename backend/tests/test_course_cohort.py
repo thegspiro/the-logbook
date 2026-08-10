@@ -1059,3 +1059,29 @@ class TestAdHocClass:
                 ORG,
                 ACTOR,
             )
+
+    async def test_rejects_a_training_category_from_another_org(self):
+        # XC-1: category_id/requirement_id/phase_id flow into the generated
+        # TrainingSession, so the ad-hoc path must validate them in-org like the
+        # syllabus path — not just instructor/location.
+        cohort = _cohort(str(uuid4()))
+        subject = _course("Make-up SCBA")
+        # cohort fetch, _get_course, then the category in-org lookup -> None.
+        db = RecordingSession([_one(cohort), _one(subject), _one(None)])
+        svc = CourseCohortService(db)
+        start = datetime(2026, 11, 2, 23, 0, tzinfo=timezone.utc)
+
+        with pytest.raises(ValueError, match="Invalid training category"):
+            await svc.add_ad_hoc_class(
+                cohort.id,
+                CohortAdHocClassCreate(
+                    title="Make-up SCBA",
+                    class_course_id=subject.id,
+                    scheduled_start=start,
+                    scheduled_end=start + timedelta(hours=2),
+                    category_id=uuid4(),
+                ),
+                ORG,
+                ACTOR,
+            )
+        assert not db.added  # nothing persisted

@@ -15,7 +15,7 @@ interface DepartmentDefaultsCardProps {
 
 export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ settings, onSettingsChange }) => {
   return (
-    <div className="bg-theme-surface border-theme-surface-border space-y-5 rounded-xl border p-5">
+    <div className="card-secondary space-y-5 p-5">
       <h3 className="text-theme-text-primary text-base font-semibold">Department Defaults</h3>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

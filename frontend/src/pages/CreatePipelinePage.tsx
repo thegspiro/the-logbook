@@ -23,9 +23,11 @@ import { trainingProgramService } from '../services/api';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
+import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import type {
+  ChecklistItem,
   ProgramStructureType,
   RequirementType,
   RequirementFrequency,
@@ -64,7 +66,7 @@ interface RequirementFormData {
   required_calls: string;
   passing_score: string;
   max_attempts: string;
-  checklist_items: string[];
+  checklist_items: ChecklistItem[];
   // Course-library ids backing a `courses` or `certification` requirement.
   required_courses: string[];
   // Freshness window in days, or undefined for no window.
@@ -82,9 +84,27 @@ interface MilestoneFormData {
   notification_message: string;
 }
 
+/**
+ * One bucket of requirements/milestones in the Requirements and Milestones
+ * steps: a phase in a phased program, or the program itself when the program is
+ * a single flat list. Modelling both the same way is what lets a non-phased
+ * program be built at all — requirements used to hang only off phases, so
+ * choosing "one list" left the officer with a wizard that could not accept a
+ * single requirement.
+ */
+interface RequirementGroup {
+  key: string;
+  title: string;
+  requirements: RequirementFormData[];
+  milestones: MilestoneFormData[];
+}
+
+/** Group key for the program-level bucket (no phase). */
+const PROGRAM_GROUP = 'program';
+
 type WizardStep = 'info' | 'phases' | 'requirements' | 'milestones' | 'review';
 
-const WIZARD_STEPS: { key: WizardStep; label: string; icon: React.ElementType }[] = [
+const ALL_WIZARD_STEPS: { key: WizardStep; label: string; icon: React.ElementType }[] = [
   { key: 'info', label: 'Program Info', icon: Info },
   { key: 'phases', label: 'Phases', icon: Layers },
   { key: 'requirements', label: 'Requirements', icon: ListChecks },
@@ -138,6 +158,43 @@ const emptyMilestone = (): MilestoneFormData => ({
   notification_message: '',
 });
 
+// A linked entry sends only the id and the Required toggle. The build payload
+// rejects a requirement carrying both an id and a name, so the two shapes stay
+// strictly separate.
+const toRequirementPayload = (reqData: RequirementFormData) =>
+  reqData.source === 'library'
+    ? {
+        requirement_id: reqData.requirement_id,
+        is_required: reqData.is_required,
+        sort_order: reqData.sort_order,
+      }
+    : {
+        name: reqData.name,
+        description: reqData.description || undefined,
+        requirement_type: reqData.requirement_type,
+        frequency: reqData.frequency,
+        required_hours: reqData.required_hours ? parseFloat(reqData.required_hours) : undefined,
+        required_shifts: reqData.required_shifts ? parseInt(reqData.required_shifts) : undefined,
+        required_calls: reqData.required_calls ? parseInt(reqData.required_calls) : undefined,
+        passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
+        max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
+        checklist_items: reqData.checklist_items.filter((i) => i.text.trim()),
+        required_courses: reqData.required_courses.length > 0 ? reqData.required_courses : undefined,
+        recency_days: reqData.recency_days,
+        allows_external_credit: reqData.allows_external_credit,
+        is_required: reqData.is_required,
+        sort_order: reqData.sort_order,
+      };
+
+const toMilestonePayload = (msData: MilestoneFormData) => ({
+  name: msData.name,
+  description: msData.description || undefined,
+  completion_percentage_threshold: msData.completion_percentage_threshold
+    ? parseFloat(msData.completion_percentage_threshold)
+    : 100,
+  notification_message: msData.notification_message || undefined,
+});
+
 // ==================== Help Components ====================
 
 // Small muted hint shown beneath a field.
@@ -160,7 +217,7 @@ const REQUIREMENT_TYPE_HELP: Record<string, string> = {
     'Training hours. Fill in automatically from linked training sessions and approved shift reports, or an officer can log them.',
   courses: 'Completion of specific courses from the library — pick them below; progress fills in as each is recorded.',
   skills_evaluation:
-    'A hands-on skill. Completed by passing a linked skills test in the Skills Testing module, or marked by an officer.',
+    'A hands-on skill an officer signs off on. Link it to a skills test from the requirement library if you want it to complete automatically.',
   knowledge_test: 'A written test. An officer records a pass/fail or score; reaching the passing score completes it.',
   checklist: 'A list of items an officer checks off. Completed when marked done.',
   certification:
@@ -193,11 +250,11 @@ const StepInfo: React.FC<{
     <InfoCallout>
       <p className="text-theme-text-primary font-medium">How a training pipeline works</p>
       <p>
-        A pipeline tracks a member&apos;s progression through a training program. You&apos;ll build it in four parts:{' '}
+        A pipeline tracks a member&apos;s progression through a training program. You build it in three parts:{' '}
         <strong>Phases</strong> (the stages a member moves through), <strong>Requirements</strong> (what they must
-        complete in each phase), and optional <strong>Milestones</strong> (progress notifications). After you create it,
-        enroll members from the program&apos;s page — their progress then updates automatically from training sessions,
-        shifts, and skills tests, or by an officer.
+        complete), and optional <strong>Milestones</strong> (progress notifications). After you create it, enroll
+        members from the program&apos;s page — their progress then updates automatically from training sessions, shifts,
+        and skills tests, or by an officer.
       </p>
       <p>
         Only a <strong>Program Name</strong> is required; you can add phases and requirements now or later.
@@ -283,13 +340,13 @@ const StepInfo: React.FC<{
           onChange={(e) => onChange('structure_type', e.target.value)}
           className="form-input"
         >
-          <option value="phases">Phases (stages in order)</option>
-          <option value="sequential">Sequential (strict order)</option>
-          <option value="flexible">Flexible (any order)</option>
+          <option value="phases">Phases — stages the member moves through in order</option>
+          <option value="flexible">One list — everything in any order</option>
         </select>
         <HelpText>
-          <strong>Phases</strong>: members move through ordered stages. <strong>Sequential</strong>: requirements done
-          in strict order. <strong>Flexible</strong>: any order. Most recruit programs use Phases.
+          Pick <strong>Phases</strong> for a recruit school or driver program, where a member finishes one stage before
+          starting the next. Pick <strong>One list</strong> for something like annual continuing education, where the
+          order doesn&apos;t matter.
         </HelpText>
       </div>
 
@@ -481,23 +538,25 @@ const StepPhases: React.FC<{
 );
 
 const StepRequirements: React.FC<{
-  phases: PhaseFormData[];
+  groups: RequirementGroup[];
+  usesPhases: boolean;
   courses: TrainingCourse[];
   coursesLoading: boolean;
   coursesError: string;
   requirementLibrary: TrainingRequirementEnhanced[];
   requirementLibraryLoading: boolean;
   requirementLibraryError: string;
-  onAddRequirement: (phaseId: string, source: 'library' | 'new') => void;
-  onRemoveRequirement: (phaseId: string, reqId: string) => void;
+  onAddRequirement: (groupKey: string, source: 'library' | 'new') => void;
+  onRemoveRequirement: (groupKey: string, reqId: string) => void;
   onUpdateRequirement: (
-    phaseId: string,
+    groupKey: string,
     reqId: string,
     field: string,
-    value: string | boolean | string[] | number | undefined
+    value: string | boolean | string[] | ChecklistItem[] | number | undefined
   ) => void;
 }> = ({
-  phases,
+  groups,
+  usesPhases,
   courses,
   coursesLoading,
   coursesError,
@@ -511,52 +570,54 @@ const StepRequirements: React.FC<{
   <div className="space-y-6">
     <div>
       <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Requirements</h2>
-      <p className="text-theme-text-muted text-sm">Define the requirements members must complete within each phase.</p>
+      <p className="text-theme-text-muted text-sm">
+        {usesPhases
+          ? 'Define the requirements members must complete within each phase.'
+          : 'Define everything a member must complete in this program.'}
+      </p>
     </div>
 
-    {phases.length > 0 && (
+    {groups.length > 0 && (
       <InfoCallout>
         <p>
-          Requirements are what a member must complete in each phase. Choose a <strong>type</strong> for each — the help
-          under the selector explains how it&apos;s completed. Some fill in
+          Requirements are what a member must complete. Choose a <strong>type</strong> for each — the help under the
+          selector explains how it&apos;s completed. Some fill in
           <strong> automatically</strong> (hours, shifts, calls from sessions and shift reports; skills from skills
           tests); others an <strong>officer marks off</strong> (checklist, certification, knowledge test).
         </p>
         <p>
-          A phase is finished when its <strong>required</strong> items are done. Uncheck
-          <strong> &ldquo;Required&rdquo;</strong> for optional items that shouldn&apos;t hold up advancement.
+          {usesPhases ? 'A phase is finished' : 'The program is finished'} when its <strong>required</strong> items are
+          done. Uncheck
+          <strong> &ldquo;Required&rdquo;</strong> for optional items that shouldn&apos;t hold anyone up.
         </p>
         <p>
           For something the department already tracks — CPR, HIPAA, an imported NFPA item — use
-          <strong> Link existing</strong> rather than retyping it. The phase then reads the same records the department
-          does, so a member who already holds it starts out credited.
+          <strong> Link existing</strong> rather than retyping it. The program then reads the same records the
+          department does, so a member who already holds it starts out credited.
         </p>
       </InfoCallout>
     )}
 
-    {phases.length === 0 ? (
+    {groups.length === 0 ? (
       <div className="card-secondary border-dashed py-12 text-center">
         <ListChecks className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
         <p className="text-theme-text-muted">Add phases first before defining requirements.</p>
       </div>
     ) : (
-      phases.map((phase) => (
-        <div key={phase.id} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+      groups.map((phase) => (
+        <div key={phase.key} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-theme-text-primary font-medium">
-              <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span>{' '}
-              {phase.name || 'Untitled'}
-            </h3>
+            <h3 className="text-theme-text-primary font-medium">{phase.title}</h3>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => onAddRequirement(phase.id, 'library')}
+                onClick={() => onAddRequirement(phase.key, 'library')}
                 className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-sm px-2 py-1 text-xs"
               >
                 <Link2 className="h-3 w-3" />
                 <span>Link Existing</span>
               </button>
               <button
-                onClick={() => onAddRequirement(phase.id, 'new')}
+                onClick={() => onAddRequirement(phase.key, 'new')}
                 className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-sm px-2 py-1 text-xs"
               >
                 <Plus className="h-3 w-3" />
@@ -566,7 +627,7 @@ const StepRequirements: React.FC<{
           </div>
 
           {phase.requirements.length === 0 ? (
-            <p className="text-theme-text-muted py-4 text-center text-sm">No requirements yet for this phase.</p>
+            <p className="text-theme-text-muted py-4 text-center text-sm">No requirements yet.</p>
           ) : (
             <div className="space-y-3">
               {phase.requirements.map((req) =>
@@ -585,11 +646,11 @@ const StepRequirements: React.FC<{
                             .filter((r) => r.id !== req.id && r.requirement_id)
                             .map((r) => r.requirement_id)}
                           selectedId={req.requirement_id}
-                          onChange={(id) => onUpdateRequirement(phase.id, req.id, 'requirement_id', id)}
+                          onChange={(id) => onUpdateRequirement(phase.key, req.id, 'requirement_id', id)}
                         />
                       </div>
                       <button
-                        onClick={() => onRemoveRequirement(phase.id, req.id)}
+                        onClick={() => onRemoveRequirement(phase.key, req.id)}
                         className="text-theme-text-muted p-1 hover:text-red-800 dark:hover:text-red-400"
                         aria-label="Remove requirement"
                       >
@@ -601,8 +662,8 @@ const StepRequirements: React.FC<{
                         <input
                           type="checkbox"
                           checked={req.is_required}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
-                          className="bg-theme-input-bg border-theme-input-border h-3 w-3 rounded-sm text-red-500"
+                          onChange={(e) => onUpdateRequirement(phase.key, req.id, 'is_required', e.target.checked)}
+                          className="form-checkbox"
                         />
                         <span>Required to complete the phase</span>
                       </label>
@@ -623,7 +684,7 @@ const StepRequirements: React.FC<{
                           <input
                             type="text"
                             value={req.name}
-                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'name', e.target.value)}
+                            onChange={(e) => onUpdateRequirement(phase.key, req.id, 'name', e.target.value)}
                             className="form-input-sm"
                             placeholder="e.g., Hose Operations Skills"
                           />
@@ -632,7 +693,7 @@ const StepRequirements: React.FC<{
                           <label className="text-theme-text-muted mb-1 block text-xs font-medium">Type</label>
                           <select
                             value={req.requirement_type}
-                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'requirement_type', e.target.value)}
+                            onChange={(e) => onUpdateRequirement(phase.key, req.id, 'requirement_type', e.target.value)}
                             className="form-input-sm"
                           >
                             <option value="hours">Training Hours</option>
@@ -641,7 +702,7 @@ const StepRequirements: React.FC<{
                             <option value="knowledge_test">Knowledge Test</option>
                             <option value="checklist">Checklist</option>
                             <option value="certification">Certification</option>
-                            <option value="shifts">Shift Hours</option>
+                            <option value="shifts">Shifts Completed</option>
                             <option value="calls">Call Responses</option>
                           </select>
                           {REQUIREMENT_TYPE_HELP[req.requirement_type] && (
@@ -650,7 +711,7 @@ const StepRequirements: React.FC<{
                         </div>
                       </div>
                       <button
-                        onClick={() => onRemoveRequirement(phase.id, req.id)}
+                        onClick={() => onRemoveRequirement(phase.key, req.id)}
                         className="text-theme-text-muted ml-2 p-1 hover:text-red-800 dark:hover:text-red-400"
                         aria-label="Remove requirement"
                       >
@@ -662,7 +723,7 @@ const StepRequirements: React.FC<{
                       <label className="text-theme-text-muted mb-1 block text-xs font-medium">Description</label>
                       <textarea
                         value={req.description}
-                        onChange={(e) => onUpdateRequirement(phase.id, req.id, 'description', e.target.value)}
+                        onChange={(e) => onUpdateRequirement(phase.key, req.id, 'description', e.target.value)}
                         rows={2}
                         className="form-input-sm"
                         placeholder="Describe what this requirement entails..."
@@ -675,8 +736,8 @@ const StepRequirements: React.FC<{
                         <input
                           type="checkbox"
                           checked={req.is_required}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
-                          className="bg-theme-input-bg border-theme-input-border h-3 w-3 rounded-sm text-red-500"
+                          onChange={(e) => onUpdateRequirement(phase.key, req.id, 'is_required', e.target.checked)}
+                          className="form-checkbox"
                         />
                         <span>Required to complete the phase</span>
                       </label>
@@ -699,9 +760,9 @@ const StepRequirements: React.FC<{
                               type="checkbox"
                               checked={req.allows_external_credit}
                               onChange={(e) =>
-                                onUpdateRequirement(phase.id, req.id, 'allows_external_credit', e.target.checked)
+                                onUpdateRequirement(phase.key, req.id, 'allows_external_credit', e.target.checked)
                               }
-                              className="bg-theme-input-bg border-theme-input-border mt-0.5 h-3 w-3 rounded-sm text-red-500"
+                              className="form-checkbox mt-0.5"
                             />
                             <span>Accept external / imported training credit</span>
                           </label>
@@ -724,7 +785,7 @@ const StepRequirements: React.FC<{
                         error={coursesError}
                         variant={req.requirement_type === 'certification' ? 'certification' : 'courses'}
                         selectedIds={req.required_courses}
-                        onChange={(ids) => onUpdateRequirement(phase.id, req.id, 'required_courses', ids)}
+                        onChange={(ids) => onUpdateRequirement(phase.key, req.id, 'required_courses', ids)}
                       />
                     )}
 
@@ -737,7 +798,7 @@ const StepRequirements: React.FC<{
                       <RecencyWindowField
                         idPrefix={`wizard-${req.id}`}
                         value={req.recency_days}
-                        onChange={(days) => onUpdateRequirement(phase.id, req.id, 'recency_days', days)}
+                        onChange={(days) => onUpdateRequirement(phase.key, req.id, 'recency_days', days)}
                       />
                     )}
 
@@ -748,7 +809,7 @@ const StepRequirements: React.FC<{
                         <input
                           type="number"
                           value={req.required_hours}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_hours', e.target.value)}
+                          onChange={(e) => onUpdateRequirement(phase.key, req.id, 'required_hours', e.target.value)}
                           className="form-input-sm"
                           placeholder="e.g., 40"
                           min={0}
@@ -763,7 +824,7 @@ const StepRequirements: React.FC<{
                         <input
                           type="number"
                           value={req.required_shifts}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_shifts', e.target.value)}
+                          onChange={(e) => onUpdateRequirement(phase.key, req.id, 'required_shifts', e.target.value)}
                           className="form-input-sm"
                           placeholder="e.g., 10"
                           min={1}
@@ -777,7 +838,7 @@ const StepRequirements: React.FC<{
                         <input
                           type="number"
                           value={req.required_calls}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_calls', e.target.value)}
+                          onChange={(e) => onUpdateRequirement(phase.key, req.id, 'required_calls', e.target.value)}
                           className="form-input-sm"
                           placeholder="e.g., 20"
                           min={1}
@@ -786,20 +847,11 @@ const StepRequirements: React.FC<{
                     )}
 
                     {req.requirement_type === 'checklist' && (
-                      <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">
-                          Checklist Items (one per line)
-                        </label>
-                        <textarea
-                          value={req.checklist_items.join('\n')}
-                          onChange={(e) =>
-                            onUpdateRequirement(phase.id, req.id, 'checklist_items', e.target.value.split('\n'))
-                          }
-                          rows={4}
-                          className="form-input-sm"
-                          placeholder="Enter each checklist item on a new line..."
-                        />
-                      </div>
+                      <ChecklistItemsEditor
+                        idPrefix={`wizard-${req.id}`}
+                        items={req.checklist_items}
+                        onChange={(items) => onUpdateRequirement(phase.key, req.id, 'checklist_items', items)}
+                      />
                     )}
 
                     {req.requirement_type === 'knowledge_test' && (
@@ -811,7 +863,7 @@ const StepRequirements: React.FC<{
                           <input
                             type="number"
                             value={req.passing_score}
-                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'passing_score', e.target.value)}
+                            onChange={(e) => onUpdateRequirement(phase.key, req.id, 'passing_score', e.target.value)}
                             className="form-input-sm"
                             placeholder="e.g., 70"
                             min={0}
@@ -824,7 +876,7 @@ const StepRequirements: React.FC<{
                           <input
                             type="number"
                             value={req.max_attempts}
-                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'max_attempts', e.target.value)}
+                            onChange={(e) => onUpdateRequirement(phase.key, req.id, 'max_attempts', e.target.value)}
                             className="form-input-sm"
                             placeholder="Unlimited"
                             min={1}
@@ -845,12 +897,12 @@ const StepRequirements: React.FC<{
 );
 
 const StepMilestones: React.FC<{
-  phases: PhaseFormData[];
-  onAddMilestone: (phaseId: string) => void;
-  onRemoveMilestone: (phaseId: string, msId: string) => void;
-  onUpdateMilestone: (phaseId: string, msId: string, field: string, value: string) => void;
-  onMoveMilestone: (phaseId: string, msId: string, direction: 'up' | 'down') => void;
-}> = ({ phases, onAddMilestone, onRemoveMilestone, onUpdateMilestone, onMoveMilestone }) => (
+  groups: RequirementGroup[];
+  onAddMilestone: (groupKey: string) => void;
+  onRemoveMilestone: (groupKey: string, msId: string) => void;
+  onUpdateMilestone: (groupKey: string, msId: string, field: string, value: string) => void;
+  onMoveMilestone: (groupKey: string, msId: string, direction: 'up' | 'down') => void;
+}> = ({ groups, onAddMilestone, onRemoveMilestone, onUpdateMilestone, onMoveMilestone }) => (
   <div className="space-y-6">
     <div>
       <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">
@@ -861,32 +913,29 @@ const StepMilestones: React.FC<{
       </p>
     </div>
 
-    {phases.length > 0 && (
+    {groups.length > 0 && (
       <InfoCallout>
         <p>
-          Milestones are optional check-ins. When a member&apos;s progress in a phase reaches the percentage you set,
-          they (and their mentor) get a notification with your message — a nice way to mark &ldquo;halfway there&rdquo;
-          moments. Milestones <strong>don&apos;t gate advancement</strong>; they&apos;re purely encouragement. Skip this
-          step entirely if you don&apos;t need them.
+          Milestones are optional check-ins. When a member&apos;s <strong>overall progress in this program</strong>{' '}
+          reaches the percentage you set, they get a notification with your message — a nice way to mark &ldquo;halfway
+          there&rdquo; moments. Milestones <strong>don&apos;t gate advancement</strong>; they&apos;re purely
+          encouragement. Skip this step entirely if you don&apos;t need them.
         </p>
       </InfoCallout>
     )}
 
-    {phases.length === 0 ? (
+    {groups.length === 0 ? (
       <div className="card-secondary border-dashed py-12 text-center">
         <Flag className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
         <p className="text-theme-text-muted">Add phases first before defining milestones.</p>
       </div>
     ) : (
-      phases.map((phase) => (
-        <div key={phase.id} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+      groups.map((phase) => (
+        <div key={phase.key} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-theme-text-primary font-medium">
-              <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span>{' '}
-              {phase.name || 'Untitled'}
-            </h3>
+            <h3 className="text-theme-text-primary font-medium">{phase.title}</h3>
             <button
-              onClick={() => onAddMilestone(phase.id)}
+              onClick={() => onAddMilestone(phase.key)}
               className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-sm px-2 py-1 text-xs"
             >
               <Plus className="h-3 w-3" />
@@ -905,7 +954,7 @@ const StepMilestones: React.FC<{
                       {/* Reorder buttons */}
                       <div className="flex flex-col space-y-0.5 pt-1">
                         <button
-                          onClick={() => onMoveMilestone(phase.id, ms.id, 'up')}
+                          onClick={() => onMoveMilestone(phase.key, ms.id, 'up')}
                           disabled={msIndex === 0}
                           className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="Move milestone up"
@@ -913,7 +962,7 @@ const StepMilestones: React.FC<{
                           <ChevronUp className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          onClick={() => onMoveMilestone(phase.id, ms.id, 'down')}
+                          onClick={() => onMoveMilestone(phase.key, ms.id, 'down')}
                           disabled={msIndex === phase.milestones.length - 1}
                           className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="Move milestone down"
@@ -929,7 +978,7 @@ const StepMilestones: React.FC<{
                           <input
                             type="text"
                             value={ms.name}
-                            onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'name', e.target.value)}
+                            onChange={(e) => onUpdateMilestone(phase.key, ms.id, 'name', e.target.value)}
                             className="form-input-sm"
                             placeholder="e.g., Halfway Complete"
                           />
@@ -942,7 +991,7 @@ const StepMilestones: React.FC<{
                             type="number"
                             value={ms.completion_percentage_threshold}
                             onChange={(e) =>
-                              onUpdateMilestone(phase.id, ms.id, 'completion_percentage_threshold', e.target.value)
+                              onUpdateMilestone(phase.key, ms.id, 'completion_percentage_threshold', e.target.value)
                             }
                             className="form-input-sm"
                             placeholder="e.g., 50"
@@ -953,7 +1002,7 @@ const StepMilestones: React.FC<{
                       </div>
                     </div>
                     <button
-                      onClick={() => onRemoveMilestone(phase.id, ms.id)}
+                      onClick={() => onRemoveMilestone(phase.key, ms.id)}
                       className="text-theme-text-muted ml-2 p-1 hover:text-red-800 dark:hover:text-red-400"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -964,7 +1013,7 @@ const StepMilestones: React.FC<{
                     <input
                       type="text"
                       value={ms.notification_message}
-                      onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'notification_message', e.target.value)}
+                      onChange={(e) => onUpdateMilestone(phase.key, ms.id, 'notification_message', e.target.value)}
                       className="form-input-sm"
                       placeholder="Message sent when this milestone is reached..."
                     />
@@ -990,14 +1039,16 @@ const StepReview: React.FC<{
     warning_days_before: string;
     is_template: boolean;
   };
+  groups: RequirementGroup[];
   phases: PhaseFormData[];
   courses: TrainingCourse[];
   requirementLibrary: TrainingRequirementEnhanced[];
-}> = ({ info, phases, courses, requirementLibrary }) => {
-  const totalReqs = phases.reduce((sum, p) => sum + p.requirements.length, 0);
-  const totalMs = phases.reduce((sum, p) => sum + p.milestones.length, 0);
+}> = ({ info, groups, phases, courses, requirementLibrary }) => {
+  const totalReqs = groups.reduce((sum, g) => sum + g.requirements.length, 0);
+  const totalMs = groups.reduce((sum, g) => sum + g.milestones.length, 0);
   const courseNameById = new Map(courses.map((c) => [c.id, c.name]));
   const libraryById = new Map(requirementLibrary.map((r) => [r.id, r]));
+  const phaseByKey = new Map(phases.map((p) => [p.id, p]));
 
   return (
     <div className="space-y-6">
@@ -1048,7 +1099,7 @@ const StepReview: React.FC<{
             </span>
           )}
           <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-blue-700 dark:text-blue-400">
-            {info.structure_type}
+            {info.structure_type === 'phases' ? 'Phases, in order' : 'One list, any order'}
           </span>
           {info.is_template && (
             <span className="rounded-sm bg-green-500/20 px-2 py-1 text-green-700 dark:text-green-400">Template</span>
@@ -1056,92 +1107,92 @@ const StepReview: React.FC<{
         </div>
       </div>
 
-      {/* Phase details */}
-      {phases.map((phase) => (
-        <div key={phase.id} className="bg-theme-surface rounded-lg p-4">
-          <h4 className="text-theme-text-primary mb-2 font-medium">
-            <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span>{' '}
-            {phase.name || 'Untitled'}
-          </h4>
-          {phase.description && <p className="text-theme-text-muted mb-3 text-sm">{phase.description}</p>}
-          <div className="mb-3 flex flex-wrap gap-2 text-xs">
-            {phase.time_limit_days && (
-              <span className="bg-theme-surface-hover text-theme-text-secondary rounded-sm px-2 py-1">
-                {phase.time_limit_days} day limit
-              </span>
+      {/* Phase (or program-level) details */}
+      {groups.map((group) => {
+        const phase = phaseByKey.get(group.key);
+        return (
+          <div key={group.key} className="bg-theme-surface rounded-lg p-4">
+            <h4 className="text-theme-text-primary mb-2 font-medium">{group.title}</h4>
+            {phase?.description && <p className="text-theme-text-muted mb-3 text-sm">{phase.description}</p>}
+            <div className="mb-3 flex flex-wrap gap-2 text-xs">
+              {phase?.time_limit_days && (
+                <span className="bg-theme-surface-hover text-theme-text-secondary rounded-sm px-2 py-1">
+                  {phase.time_limit_days} day limit
+                </span>
+              )}
+              {phase?.requires_manual_advancement && (
+                <span className="rounded-sm bg-yellow-500/20 px-2 py-1 text-yellow-700 dark:text-yellow-400">
+                  Officer must approve advancement
+                </span>
+              )}
+            </div>
+
+            {group.requirements.length > 0 && (
+              <div className="mb-2 space-y-1">
+                <p className="text-theme-text-muted text-xs font-medium uppercase">Requirements:</p>
+                {group.requirements.map((req) => (
+                  <div key={req.id} className="text-theme-text-secondary text-sm">
+                    {req.source === 'library' ? (
+                      <div className="flex items-center space-x-2">
+                        <Link2 className="h-3 w-3 text-blue-700 dark:text-blue-400" />
+                        {req.requirement_id ? (
+                          <>
+                            <span>{libraryById.get(req.requirement_id)?.name ?? 'Unknown requirement'}</span>
+                            <span className="text-theme-text-muted text-xs">(linked from the department)</span>
+                          </>
+                        ) : (
+                          <span className="text-amber-700 dark:text-amber-400">
+                            No requirement picked — go back and choose one, or remove the entry.
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <ListChecks className="h-3 w-3 text-blue-700 dark:text-blue-400" />
+                        <span>{req.name || 'Untitled'}</span>
+                        <span className="text-theme-text-muted text-xs">({req.requirement_type})</span>
+                        {req.required_hours && (
+                          <span className="text-theme-text-muted text-xs">- {req.required_hours}h</span>
+                        )}
+                      </div>
+                    )}
+                    {req.required_courses.length > 0 && (
+                      <p className="text-theme-text-muted pl-5 text-xs">
+                        {req.required_courses.map((id) => courseNameById.get(id) ?? 'Unknown course').join(', ')}
+                      </p>
+                    )}
+                    {req.required_courses.length === 0 && req.requirement_type === 'courses' && (
+                      <p className="pl-5 text-xs text-amber-700 dark:text-amber-400">
+                        No course linked — members can&apos;t earn credit for this yet.
+                      </p>
+                    )}
+                    {req.recency_days != null && (
+                      <p className="text-theme-text-muted pl-5 text-xs">
+                        Must be completed within the last {req.recency_days} days
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
-            {phase.requires_manual_advancement && (
-              <span className="rounded-sm bg-yellow-500/20 px-2 py-1 text-yellow-700 dark:text-yellow-400">
-                Manual advancement
-              </span>
+
+            {group.milestones.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-theme-text-muted text-xs font-medium uppercase">Milestones:</p>
+                {group.milestones.map((ms) => (
+                  <div key={ms.id} className="text-theme-text-secondary flex items-center space-x-2 text-sm">
+                    <Flag className="h-3 w-3 text-yellow-700 dark:text-yellow-400" />
+                    <span>{ms.name || 'Untitled'}</span>
+                    {ms.completion_percentage_threshold && (
+                      <span className="text-theme-text-muted text-xs">at {ms.completion_percentage_threshold}%</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-
-          {phase.requirements.length > 0 && (
-            <div className="mb-2 space-y-1">
-              <p className="text-theme-text-muted text-xs font-medium uppercase">Requirements:</p>
-              {phase.requirements.map((req) => (
-                <div key={req.id} className="text-theme-text-secondary text-sm">
-                  {req.source === 'library' ? (
-                    <div className="flex items-center space-x-2">
-                      <Link2 className="h-3 w-3 text-blue-700 dark:text-blue-400" />
-                      {req.requirement_id ? (
-                        <>
-                          <span>{libraryById.get(req.requirement_id)?.name ?? 'Unknown requirement'}</span>
-                          <span className="text-theme-text-muted text-xs">(linked from the department)</span>
-                        </>
-                      ) : (
-                        <span className="text-amber-700 dark:text-amber-400">
-                          No requirement picked — go back and choose one, or remove the entry.
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <ListChecks className="h-3 w-3 text-blue-700 dark:text-blue-400" />
-                      <span>{req.name || 'Untitled'}</span>
-                      <span className="text-theme-text-muted text-xs">({req.requirement_type})</span>
-                      {req.required_hours && (
-                        <span className="text-theme-text-muted text-xs">- {req.required_hours}h</span>
-                      )}
-                    </div>
-                  )}
-                  {req.required_courses.length > 0 && (
-                    <p className="text-theme-text-muted pl-5 text-xs">
-                      {req.required_courses.map((id) => courseNameById.get(id) ?? 'Unknown course').join(', ')}
-                    </p>
-                  )}
-                  {req.required_courses.length === 0 && req.requirement_type === 'courses' && (
-                    <p className="pl-5 text-xs text-amber-700 dark:text-amber-400">
-                      No course linked — members can&apos;t earn credit for this yet.
-                    </p>
-                  )}
-                  {req.recency_days != null && (
-                    <p className="text-theme-text-muted pl-5 text-xs">
-                      Must be completed within the last {req.recency_days} days
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {phase.milestones.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-theme-text-muted text-xs font-medium uppercase">Milestones:</p>
-              {phase.milestones.map((ms) => (
-                <div key={ms.id} className="text-theme-text-secondary flex items-center space-x-2 text-sm">
-                  <Flag className="h-3 w-3 text-yellow-700 dark:text-yellow-400" />
-                  <span>{ms.name || 'Untitled'}</span>
-                  {ms.completion_percentage_threshold && (
-                    <span className="text-theme-text-muted text-xs">at {ms.completion_percentage_threshold}%</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
@@ -1168,6 +1219,9 @@ const CreatePipelinePage: React.FC = () => {
 
   // Phases state
   const [phases, setPhases] = useState<PhaseFormData[]>([]);
+  // Requirements/milestones for a program that isn't split into phases.
+  const [programRequirements, setProgramRequirements] = useState<RequirementFormData[]>([]);
+  const [programMilestones, setProgramMilestones] = useState<MilestoneFormData[]>([]);
 
   // Course catalog backing the course/certification requirement pickers.
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
@@ -1178,8 +1232,31 @@ const CreatePipelinePage: React.FC = () => {
     error: requirementLibraryError,
   } = useRequirementLibrary();
 
+  const usesPhases = info.structure_type === 'phases';
+
+  // A one-list program has no phases, so the Phases step is skipped entirely
+  // rather than shown as a step the officer must pass through and leave empty.
+  const wizardSteps = usesPhases ? ALL_WIZARD_STEPS : ALL_WIZARD_STEPS.filter((s) => s.key !== 'phases');
+
+  // The buckets the Requirements/Milestones steps work on.
+  const groups: RequirementGroup[] = usesPhases
+    ? phases.map((p) => ({
+        key: p.id,
+        title: `Phase ${p.phase_number}: ${p.name || 'Untitled'}`,
+        requirements: p.requirements,
+        milestones: p.milestones,
+      }))
+    : [
+        {
+          key: PROGRAM_GROUP,
+          title: 'Requirements for this program',
+          requirements: programRequirements,
+          milestones: programMilestones,
+        },
+      ];
+
   // ---- Step navigation ----
-  const stepIndex = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
+  const stepIndex = wizardSteps.findIndex((s) => s.key === currentStep);
 
   const canGoNext = () => {
     if (currentStep === 'info') return info.name.trim().length > 0;
@@ -1187,20 +1264,25 @@ const CreatePipelinePage: React.FC = () => {
   };
 
   const goNext = () => {
-    const idx = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
-    const next = WIZARD_STEPS[idx + 1];
-    if (idx < WIZARD_STEPS.length - 1 && next) setCurrentStep(next.key);
+    const idx = wizardSteps.findIndex((s) => s.key === currentStep);
+    const next = wizardSteps[idx + 1];
+    if (idx < wizardSteps.length - 1 && next) setCurrentStep(next.key);
   };
 
   const goBack = () => {
-    const idx = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
-    const prev = WIZARD_STEPS[idx - 1];
+    const idx = wizardSteps.findIndex((s) => s.key === currentStep);
+    const prev = wizardSteps[idx - 1];
     if (idx > 0 && prev) setCurrentStep(prev.key);
   };
 
   // ---- Info handlers ----
   const handleInfoChange = (field: string, value: string | boolean) => {
     setInfo((prev) => ({ ...prev, [field]: value }));
+    // Switching to a one-list program while sitting on the Phases step would
+    // leave the wizard showing a step that no longer exists.
+    if (field === 'structure_type' && value !== 'phases' && currentStep === 'phases') {
+      setCurrentStep('requirements');
+    }
   };
 
   // ---- Phase handlers ----
@@ -1224,96 +1306,120 @@ const CreatePipelinePage: React.FC = () => {
   };
 
   // ---- Requirement handlers ----
-  const addRequirement = (phaseId: string, source: 'library' | 'new') => {
-    setPhases((prev) =>
-      prev.map((p) =>
-        p.id === phaseId
-          ? { ...p, requirements: [...p.requirements, emptyRequirement(p.requirements.length + 1, source)] }
-          : p
-      )
-    );
+  // Each handler edits either one phase's list or the program-level list,
+  // depending on the group key the step passed back.
+  const editRequirements = (
+    groupKey: string,
+    transform: (requirements: RequirementFormData[]) => RequirementFormData[]
+  ) => {
+    if (groupKey === PROGRAM_GROUP) {
+      setProgramRequirements(transform);
+      return;
+    }
+    setPhases((prev) => prev.map((p) => (p.id === groupKey ? { ...p, requirements: transform(p.requirements) } : p)));
   };
 
-  const removeRequirement = (phaseId: string, reqId: string) => {
-    setPhases((prev) =>
-      prev.map((p) => (p.id === phaseId ? { ...p, requirements: p.requirements.filter((r) => r.id !== reqId) } : p))
-    );
+  const addRequirement = (groupKey: string, source: 'library' | 'new') => {
+    editRequirements(groupKey, (reqs) => [...reqs, emptyRequirement(reqs.length, source)]);
+  };
+
+  const removeRequirement = (groupKey: string, reqId: string) => {
+    editRequirements(groupKey, (reqs) => reqs.filter((r) => r.id !== reqId));
   };
 
   const updateRequirement = (
-    phaseId: string,
+    groupKey: string,
     reqId: string,
     field: string,
-    value: string | boolean | string[] | number | undefined
+    value: string | boolean | string[] | ChecklistItem[] | number | undefined
   ) => {
-    setPhases((prev) =>
-      prev.map((p) =>
-        p.id === phaseId
-          ? {
-              ...p,
-              requirements: p.requirements.map((r) => (r.id === reqId ? { ...r, [field]: value } : r)),
-            }
-          : p
-      )
-    );
+    editRequirements(groupKey, (reqs) => reqs.map((r) => (r.id === reqId ? { ...r, [field]: value } : r)));
   };
 
   // ---- Milestone handlers ----
-  const addMilestone = (phaseId: string) => {
-    setPhases((prev) =>
-      prev.map((p) => (p.id === phaseId ? { ...p, milestones: [...p.milestones, emptyMilestone()] } : p))
-    );
+  const editMilestones = (groupKey: string, transform: (milestones: MilestoneFormData[]) => MilestoneFormData[]) => {
+    if (groupKey === PROGRAM_GROUP) {
+      setProgramMilestones(transform);
+      return;
+    }
+    setPhases((prev) => prev.map((p) => (p.id === groupKey ? { ...p, milestones: transform(p.milestones) } : p)));
   };
 
-  const removeMilestone = (phaseId: string, msId: string) => {
-    setPhases((prev) =>
-      prev.map((p) => (p.id === phaseId ? { ...p, milestones: p.milestones.filter((m) => m.id !== msId) } : p))
-    );
+  const addMilestone = (groupKey: string) => {
+    editMilestones(groupKey, (ms) => [...ms, emptyMilestone()]);
   };
 
-  const updateMilestone = (phaseId: string, msId: string, field: string, value: string) => {
-    setPhases((prev) =>
-      prev.map((p) =>
-        p.id === phaseId
-          ? {
-              ...p,
-              milestones: p.milestones.map((m) => (m.id === msId ? { ...m, [field]: value } : m)),
-            }
-          : p
-      )
-    );
+  const removeMilestone = (groupKey: string, msId: string) => {
+    editMilestones(groupKey, (ms) => ms.filter((m) => m.id !== msId));
   };
 
-  const moveMilestone = (phaseId: string, msId: string, direction: 'up' | 'down') => {
-    setPhases((prev) =>
-      prev.map((p) => {
-        if (p.id !== phaseId) return p;
-        const idx = p.milestones.findIndex((m) => m.id === msId);
-        if (idx < 0) return p;
-        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-        if (swapIdx < 0 || swapIdx >= p.milestones.length) return p;
-        const updated = [...p.milestones];
-        const a = updated[idx];
-        const b = updated[swapIdx];
-        if (a && b) {
-          updated[idx] = b;
-          updated[swapIdx] = a;
+  const updateMilestone = (groupKey: string, msId: string, field: string, value: string) => {
+    editMilestones(groupKey, (ms) => ms.map((m) => (m.id === msId ? { ...m, [field]: value } : m)));
+  };
+
+  const moveMilestone = (groupKey: string, msId: string, direction: 'up' | 'down') => {
+    editMilestones(groupKey, (ms) => {
+      const idx = ms.findIndex((m) => m.id === msId);
+      if (idx < 0) return ms;
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= ms.length) return ms;
+      const updated = [...ms];
+      const a = updated[idx];
+      const b = updated[swapIdx];
+      if (a && b) {
+        updated[idx] = b;
+        updated[swapIdx] = a;
+      }
+      return updated;
+    });
+  };
+
+  /**
+   * Everything the server would reject, checked here first so the message names
+   * the phase and the field. A 422 from the build endpoint identifies the
+   * offending item only by its position in a nested payload, which tells the
+   * officer nothing about which card on screen to go and fix.
+   */
+  const firstProblem = (): string | null => {
+    if (usesPhases) {
+      const unnamedPhase = phases.find((p) => !p.name.trim());
+      if (unnamedPhase) {
+        return `Phase ${unnamedPhase.phase_number} needs a name.`;
+      }
+    }
+    for (const group of groups) {
+      for (const req of group.requirements) {
+        if (req.source === 'library' && !req.requirement_id) {
+          return `${group.title} has a linked requirement with nothing picked. Choose one or remove it.`;
         }
-        return { ...p, milestones: updated };
-      })
-    );
+        if (req.source === 'new' && !req.name.trim()) {
+          return `${group.title} has a requirement with no name. Name it or remove it.`;
+        }
+        // A count-based requirement with no target can never reach 100%, so the
+        // member would be stuck on it forever with no way to finish the program.
+        const missingTarget =
+          (req.requirement_type === 'hours' && !req.required_hours.trim()) ||
+          (req.requirement_type === 'shifts' && !req.required_shifts.trim()) ||
+          (req.requirement_type === 'calls' && !req.required_calls.trim());
+        if (req.source === 'new' && missingTarget) {
+          return `"${req.name.trim()}" in ${group.title} needs a number to count toward, or nobody can ever complete it.`;
+        }
+      }
+      for (const ms of group.milestones) {
+        if (!ms.name.trim()) {
+          return `${group.title} has a milestone with no name. Name it or remove it.`;
+        }
+      }
+    }
+    return null;
   };
 
   // ---- Submit ----
   const handleSubmit = async () => {
-    // Caught here rather than server-side so the message names the phase — the
-    // build payload would otherwise reject the whole program over one empty
-    // picker with no clue which one.
-    const emptyLink = phases.find((p) => p.requirements.some((r) => r.source === 'library' && !r.requirement_id));
-    if (emptyLink) {
-      const message = `Phase ${emptyLink.phase_number} has a linked requirement with nothing picked. Choose one or remove it.`;
-      setError(message);
-      toast.error(message);
+    const problem = firstProblem();
+    if (problem) {
+      setError(problem);
+      toast.error(problem);
       return;
     }
 
@@ -1336,49 +1442,20 @@ const CreatePipelinePage: React.FC = () => {
           warning_days_before: info.warning_days_before ? parseInt(info.warning_days_before) : undefined,
           is_template: info.is_template,
         },
-        phases: phases.map((phaseData) => ({
-          phase_number: phaseData.phase_number,
-          name: phaseData.name,
-          description: phaseData.description || undefined,
-          time_limit_days: phaseData.time_limit_days ? parseInt(phaseData.time_limit_days) : undefined,
-          requires_manual_advancement: phaseData.requires_manual_advancement,
-          // A linked entry sends only the id and the phase-level toggle. The
-          // payload rejects a requirement carrying both an id and a name, so
-          // the two shapes stay strictly separate.
-          requirements: phaseData.requirements.map((reqData) =>
-            reqData.source === 'library'
-              ? {
-                  requirement_id: reqData.requirement_id,
-                  is_required: reqData.is_required,
-                  sort_order: reqData.sort_order,
-                }
-              : {
-                  name: reqData.name,
-                  description: reqData.description || undefined,
-                  requirement_type: reqData.requirement_type,
-                  frequency: reqData.frequency,
-                  required_hours: reqData.required_hours ? parseFloat(reqData.required_hours) : undefined,
-                  required_shifts: reqData.required_shifts ? parseInt(reqData.required_shifts) : undefined,
-                  required_calls: reqData.required_calls ? parseInt(reqData.required_calls) : undefined,
-                  passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
-                  max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
-                  checklist_items: reqData.checklist_items.filter((i) => i.trim()),
-                  required_courses: reqData.required_courses.length > 0 ? reqData.required_courses : undefined,
-                  recency_days: reqData.recency_days,
-                  allows_external_credit: reqData.allows_external_credit,
-                  is_required: reqData.is_required,
-                  sort_order: reqData.sort_order,
-                }
-          ),
-          milestones: phaseData.milestones.map((msData) => ({
-            name: msData.name,
-            description: msData.description || undefined,
-            completion_percentage_threshold: msData.completion_percentage_threshold
-              ? parseFloat(msData.completion_percentage_threshold)
-              : 100,
-            notification_message: msData.notification_message || undefined,
-          })),
-        })),
+        phases: usesPhases
+          ? phases.map((phaseData) => ({
+              phase_number: phaseData.phase_number,
+              name: phaseData.name,
+              description: phaseData.description || undefined,
+              time_limit_days: phaseData.time_limit_days ? parseInt(phaseData.time_limit_days) : undefined,
+              requires_manual_advancement: phaseData.requires_manual_advancement,
+              requirements: phaseData.requirements.map(toRequirementPayload),
+              milestones: phaseData.milestones.map(toMilestonePayload),
+            }))
+          : [],
+        // A one-list program hangs its requirements off the program itself.
+        requirements: usesPhases ? [] : programRequirements.map(toRequirementPayload),
+        milestones: usesPhases ? [] : programMilestones.map(toMilestonePayload),
       };
 
       const program = await trainingProgramService.buildProgram(payload);
@@ -1418,7 +1495,7 @@ const CreatePipelinePage: React.FC = () => {
 
         {/* Step indicator */}
         <div className="bg-theme-surface mb-8 flex items-center rounded-lg p-3">
-          {WIZARD_STEPS.map((step, i) => {
+          {wizardSteps.map((step, i) => {
             const StepIcon = step.icon;
             const isActive = step.key === currentStep;
             const isComplete = i < stepIndex;
@@ -1468,7 +1545,8 @@ const CreatePipelinePage: React.FC = () => {
           )}
           {currentStep === 'requirements' && (
             <StepRequirements
-              phases={phases}
+              groups={groups}
+              usesPhases={usesPhases}
               courses={courses}
               coursesLoading={coursesLoading}
               coursesError={coursesError}
@@ -1482,7 +1560,7 @@ const CreatePipelinePage: React.FC = () => {
           )}
           {currentStep === 'milestones' && (
             <StepMilestones
-              phases={phases}
+              groups={groups}
               onAddMilestone={addMilestone}
               onRemoveMilestone={removeMilestone}
               onUpdateMilestone={updateMilestone}
@@ -1490,7 +1568,13 @@ const CreatePipelinePage: React.FC = () => {
             />
           )}
           {currentStep === 'review' && (
-            <StepReview info={info} phases={phases} courses={courses} requirementLibrary={requirementLibrary} />
+            <StepReview
+              info={info}
+              groups={groups}
+              phases={phases}
+              courses={courses}
+              requirementLibrary={requirementLibrary}
+            />
           )}
         </div>
 

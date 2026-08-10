@@ -134,9 +134,7 @@ class OnboardingService:
         try:
             # First, check if onboarding is explicitly marked as completed
             result = await self.db.execute(
-                select(OnboardingStatus).where(
-                    OnboardingStatus.is_completed == True  # noqa: E712
-                )
+                select(OnboardingStatus).where(OnboardingStatus.is_completed.is_(True))
             )
             completed = result.scalar_one_or_none()
 
@@ -145,9 +143,7 @@ class OnboardingService:
 
             # Check if there's an onboarding in progress (not completed)
             result = await self.db.execute(
-                select(OnboardingStatus).where(
-                    OnboardingStatus.is_completed == False  # noqa: E712
-                )
+                select(OnboardingStatus).where(OnboardingStatus.is_completed.is_(False))
             )
             in_progress = result.scalar_one_or_none()
 

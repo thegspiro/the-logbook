@@ -141,7 +141,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 type="text"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
                 placeholder="Enter the member's user ID..."
               />
             </div>
@@ -154,7 +154,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={2}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
                 placeholder="Reason for granting voting eligibility override..."
               />
               {reason.trim().length > 0 && reason.trim().length < 10 && (

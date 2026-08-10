@@ -4,28 +4,33 @@ Which training-guide screenshot placeholders have been captured. Generated
 by `scripts/screenshots/status_report.py`; see that directory's README for
 how to capture more.
 
-**219 of 480 placeholders filled** (261 remaining).
+Counts what is **filled**, not what is still **true**. Whether a captured
+image still matches the application is tracked by hand in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
+regenerated wholesale, so that audit cannot live here.
+
+**231 of 496 placeholders filled** (265 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
-| [00-getting-started.md](./00-getting-started.md) | 4 | 8 |
+| [00-getting-started.md](./00-getting-started.md) | 4 | 9 |
 | [01-membership.md](./01-membership.md) | 9 | 20 |
-| [02-training.md](./02-training.md) | 27 | 51 |
-| [03-scheduling.md](./03-scheduling.md) | 28 | 40 |
-| [04-events-meetings.md](./04-events-meetings.md) | 15 | 23 |
+| [02-training.md](./02-training.md) | 29 | 54 |
+| [03-scheduling.md](./03-scheduling.md) | 29 | 42 |
+| [04-events-meetings.md](./04-events-meetings.md) | 15 | 28 |
 | [05-inventory.md](./05-inventory.md) | 25 | 28 |
 | [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 13 | 7 |
 | [07-documents-forms.md](./07-documents-forms.md) | 13 | 0 |
 | [08-admin-reports.md](./08-admin-reports.md) | 17 | 25 |
-| [09-skills-testing.md](./09-skills-testing.md) | 9 | 12 |
-| [10-mobile-pwa.md](./10-mobile-pwa.md) | 3 | 13 |
+| [09-skills-testing.md](./09-skills-testing.md) | 14 | 10 |
+| [10-mobile-pwa.md](./10-mobile-pwa.md) | 5 | 10 |
 | [11-finance.md](./11-finance.md) | 11 | 6 |
 | [12-grants-fundraising.md](./12-grants-fundraising.md) | 10 | 4 |
 | [13-medical-screening.md](./13-medical-screening.md) | 6 | 4 |
 | [14-elections.md](./14-elections.md) | 7 | 8 |
-| [15-prospective-members.md](./15-prospective-members.md) | 12 | 3 |
+| [15-prospective-members.md](./15-prospective-members.md) | 14 | 1 |
 | [16-integrations.md](./16-integrations.md) | 4 | 8 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 2 | 0 |
 | [18-storefront.md](./18-storefront.md) | 4 | 1 |
-| **Total** | **219** | **261** |
+| **Total** | **231** | **265** |
 

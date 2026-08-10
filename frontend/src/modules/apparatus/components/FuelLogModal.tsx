@@ -59,7 +59,7 @@ const FUEL_TYPES: { value: FuelType; label: string }[] = [
 
 const inputClass =
   'w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500';
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const labelClass = 'form-label';
 const selectClass = inputClass;
 
 export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onSaved, apparatusId }) => {

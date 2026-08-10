@@ -360,22 +360,27 @@ class EmailService:
 
         context["organization_logo_img"] = self._build_logo_img()
 
-        def _replace(text: str) -> str:
+        def _replace(text: str, escape: bool = True) -> str:
             def replacer(match: re.Match) -> str:
                 var = match.group(1).strip()
                 value = str(context.get(var, match.group(0)))
-                if var in EmailTemplateService._RAW_HTML_VARIABLES:
+                if not escape or var in EmailTemplateService._RAW_HTML_VARIABLES:
                     return value
                 return _html.escape(value)
 
             return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
 
-        subject = _replace(default_subject)
+        # Only the HTML body is an escaping destination. The subject line and the
+        # text/plain body must NOT be HTML-escaped (matches the primary render()
+        # path — MAIL-1): otherwise "O'Brien" mails as "O&#x27;Brien" and
+        # "Fire & Rescue" as "Fire &amp; Rescue". CR/LF in the subject is stripped
+        # by _sanitize_header at the send layer.
+        subject = _replace(default_subject, escape=False)
         html_body = (
             f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style>"
             f"</head><body>{_replace(default_html)}</body></html>"
         )
-        text_body = _replace(default_text)
+        text_body = _replace(default_text, escape=False)
         return subject, html_body, text_body
 
     def _get_smtp_config(self) -> Dict[str, Any]:

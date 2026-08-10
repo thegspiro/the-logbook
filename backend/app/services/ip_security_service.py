@@ -633,7 +633,7 @@ class IPSecurityService:
         """Get all blocked country rules."""
         result = await db.execute(
             select(CountryBlockRule)
-            .where(CountryBlockRule.is_blocked == True)  # noqa: E712
+            .where(CountryBlockRule.is_blocked.is_(True))
             .order_by(CountryBlockRule.country_code)
         )
         return list(result.scalars().all())

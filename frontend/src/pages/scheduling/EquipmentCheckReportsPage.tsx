@@ -385,7 +385,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
             placeholder="Search by item name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+            className="form-input pr-3 pl-9"
           />
         </div>
         <button

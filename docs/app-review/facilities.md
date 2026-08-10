@@ -1,7 +1,75 @@
 # Application Review — Facilities (Tier B)
 
 **Prefix:** `FAC2` · **Iteration:** B4 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; no code change
+
+Pass 3 closed the FK-validation class (create + all update paths), swept the last
+E712, and cleared the latent-500 lens. Pass 4 re-verified the landed state:
+
+- **FK validation intact** — `_assert_facility_in_org` is wired at **10** sites
+  in `facilities_service.py` (all 9 `facility_id` sub-entity update paths plus
+  `update_compliance_item`'s `checklist_id`), each guarding "only when supplied."
+  The create-path (FAC-3) validation is unchanged; 95/95 endpoints
+  permission-gated.
+- **E712-free** — 0 `# noqa: E712` in `facilities_service.py`.
+- **Latent-500 lens clean** — the 16 facilities enum columns are all enum-typed in
+  their `*Create`/`*Update` schemas; no free-string→ENUM write path.
+
+The one open item stays **FAC-4** (the `list_facilities` `search` arg is wired in
+the service but `GET /facilities` forwards no `search` param) — an owner call on
+an unrequested API-surface change, not a bug.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
+
+---
+
+## Pass 3 (2026-08-09) — one residual E712; FK class re-verified closed; latent-500 clean
+
+The FK-validation class is fully closed across create **and** update; pass 3
+re-verified it and swept the last remaining E712.
+
+**Re-verified:** `_assert_facility_in_org` (FAC2-1) is wired into all **9**
+`facility_id` update paths (utility-account, access-key, room, emergency-contact,
+shutoff-location, capital-project, insurance-policy, occupant, compliance-checklist)
+and `update_compliance_item` validates its `checklist_id` — each guarding "only when
+the field is supplied" (None leaves the parent unchanged). FAC-3 create-path
+validation intact; 95/95 endpoints permission-gated.
+
+### FAC2-2 — NIT — Last `== True  # noqa: E712` swept — ✅ FIXED
+
+Pass 1's FAC-2b swept the E712 in **`create_photo`**; a second, distinct occurrence
+survived in **`update_photo`**'s set-as-primary path
+(`FacilityPhoto.is_primary == True`, unsetting other primaries). Converted to
+`.is_(True)` — behavior-neutral for a boolean column — leaving the module free of
+every `# noqa: E712`.
+
+### Latent-500 lens (the B1 finding) — checked, clean
+
+The B1 class (a request field typed as free `str` mapping to a strict `Enum` column)
+does **not** recur. Facilities has 16 enum columns
+(`utility_type`/`key_type`/`room_type`/`project_status`/`policy_type`/… ), and an
+automated sweep of every `*Create`/`*Update` schema field mapping to one found **0**
+typed as free `str` — all properly enum-typed, so an out-of-range value is rejected
+at the schema (422), never reaching MySQL.
+
+### FAC-4 — LOW — `list_facilities` search wired but not exposed — 🚩 FLAGGED (unchanged)
+
+Still the one open item and still an owner call: the service's `list_facilities`
+accepts a correctly-LIKE-escaped `search` arg, but `GET /facilities` forwards no
+`search` query param. Wiring it is a one-line API addition, but it's an unrequested
+API-surface change (pagination interaction? which fields are searchable?) that the
+owner should sign off on rather than a review auto-applying it. Correct
+dead-reachability, not a bug.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit` 0
+(no frontend change) · eslint unaffected (no frontend change) ·
+`test_facilities_service.py` **9 passed** (all DB-free). DB-backed pytest remains the
+known no-MySQL sandbox limitation.
 
 ---
 

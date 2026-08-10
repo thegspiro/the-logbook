@@ -9,6 +9,7 @@ import { Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { storefrontService } from '../services/api';
 import { StoreProductStatus, type StoreProduct, type StoreProductInput, type StoreProductVariantInput } from '../types';
 
@@ -182,27 +183,30 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
         sortOrder: index,
       }));
 
+    // Blank optional fields go as an explicit null, not omitted: on update
+    // that is what clears them, and on create it is equivalent to omitting
+    // since each of these defaults to None server-side.
     const payload: StoreProductInput = {
       name: form.name.trim(),
-      sku: form.sku.trim() || undefined,
-      description: form.description.trim() || undefined,
-      imageUrl: form.imageUrl.trim() || undefined,
-      category: form.category.trim() || undefined,
+      sku: blankToNull(form.sku),
+      description: blankToNull(form.description),
+      imageUrl: blankToNull(form.imageUrl),
+      category: blankToNull(form.category),
       price: Number(form.price || 0),
-      cost: form.cost ? Number(form.cost) : undefined,
+      cost: numberOrNull(form.cost),
       isTaxable: form.isTaxable,
       status: form.status,
-      maxPerMember: form.maxPerMember ? Number(form.maxPerMember) : undefined,
+      maxPerMember: numberOrNull(form.maxPerMember),
       trackStock: form.trackStock,
-      stockQuantity: form.stockQuantity ? Number(form.stockQuantity) : undefined,
+      stockQuantity: numberOrNull(form.stockQuantity),
       requiresVariant: form.requiresVariant,
       personalizationEnabled: form.personalizationEnabled,
       personalizationRequired: form.personalizationEnabled && form.personalizationRequired,
-      personalizationLabel: form.personalizationLabel.trim() || undefined,
+      personalizationLabel: blankToNull(form.personalizationLabel),
       personalizationMaxLength: Number(form.personalizationMaxLength || 30),
       personalizationPrice: Number(form.personalizationPrice || 0),
       sortOrder: Number(form.sortOrder || 0),
-      internalNotes: form.internalNotes.trim() || undefined,
+      internalNotes: blankToNull(form.internalNotes),
       variants: variantPayload,
     };
 

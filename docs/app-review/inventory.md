@@ -1,7 +1,124 @@
 # Application Review — Inventory (Tier B)
 
 **Prefix:** `INV2` · **Iteration:** B3 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — INV-4 closed: the dedicated XC-1 FK-scoping sweep
+
+Pass 4 did the one substantive item the prior three passes deliberately deferred:
+the mechanical-but-real `assert_in_org` sweep across every inventory create/update
+method that persists a client-supplied FK without an in-org check.
+
+### INV-4 — LOW/MED — Client-supplied FKs stored without an in-org check — ✅ FIXED
+
+**What:** ~13 methods stored a client-supplied FK id straight onto an org-stamped
+row without verifying the referenced row is in the caller's org. Each is a
+dangling/mis-attributed cross-tenant reference (XC-1). A full map (via a
+sub-agent) confirmed every FK target *is* org-scoped and validatable, and that the
+read-leak subset (member `user_id` via listings) was already closed in INV2-1 —
+so these were integrity-only, which is why they were safe to leave flagged until a
+focused pass. Now fixed:
+
+| Method | FK(s) now validated in-org | Target model |
+|---|---|---|
+| `create_category` / `update_category` | `parent_category_id` | `InventoryCategory` |
+| `create_item` / `update_item` | `location_id`, `storage_area_id`, `variant_group_id`, `assigned_to_user_id` | `Location`, `StorageArea`, `ItemVariantGroup`, `User` |
+| `create_maintenance_record` / `update_maintenance_record` | `performed_by` | `User` |
+| `create_write_off_request` | `clearance_id` | `DepartureClearance` |
+| `create_size_variants` | `category_id`, `location_id`, `storage_area_id` | `InventoryCategory`, `Location`, `StorageArea` |
+| `create_return_request` | `assignment_id`, `issuance_id`, `checkout_id` | `ItemAssignment`, `ItemIssuance`, `CheckOutRecord` |
+| `create_reorder_request` / `update_reorder_request` | `item_id`, `category_id` | `InventoryItem`, `InventoryCategory` |
+| `create_equipment_kit` | line-item `item_id`, `category_id` | `InventoryItem`, `InventoryCategory` |
+| `create_reorder_from_plan` | `stock_category_id` | `InventoryCategory` |
+
+**How:** every check reuses the shared `assert_in_org(..., allow_none=True,
+label=…)` (all these FKs are nullable), matching the existing `create_variant_group`
+precedent already in this file. Two small helpers keep it DRY where a method group
+shares the same FK set — `_assert_item_fks_in_org` (item location/storage/
+variant-group/assignee, present-key-only so a partial update doesn't touch
+unmentioned FKs) and `_assert_reorder_fks_in_org`. `category_id` on items was
+already validated via `_validate_category_requirements`, so it's not re-checked.
+`EquipmentKitItem` has no `organization_id` (org-scoped only through its parent
+kit), so its child FKs (`item_id`/`category_id`) are validated directly.
+`create_reorder_from_plan` now **fails closed** on a foreign/missing stock category
+(it previously stamped the client id onto generated reorders even when the
+org-scoped lookup returned nothing — a dangling FK relying on a zero-shortfall side
+effect to be harmless). Added `DepartureClearance`, `StorageArea`, and a top-level
+`Location` import (the latter replacing a redundant in-method import).
+
+No behavior change for valid callers (the frontend selects these ids from
+org-scoped dropdowns); a foreign/garbage id that previously stored a dangling
+reference is now a clean `ValueError → 400`. **10 DB-free tests added**
+(`test_inventory_inv4_fk_scoping.py`): foreign FK rejected per model, all-in-org
+passes, partial-update touches only present keys, explicit-None allowed, plus
+method-level checks on `create_return_request` and `create_category`.
+
+**This closes INV-4 — the biggest standing item on the module.** The remaining
+flagged items are the equipment-kit `optional` feature (INV-6 half — a
+column+migration) and the `_escape_like` DRY cleanup, both smaller and unchanged.
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_inventory_inv4_fk_scoping.py` **10 passed** +
+`test_inventory_service.py` DB-free suite unchanged. The `test_inventory.py`
+`db_session` errors remain the known no-MySQL fixture failures.
+
+---
+
+## Pass 3 (2026-08-09) — closed INV2-2 (E712 sweep); latent-500 lens clean
+
+Re-verified the landed fixes hold: **INV2-1** member-in-org validation intact at
+all four member-facing mutation sites (`is_in_org(self.db, User, user_id, org)` →
+`"Member not found"` at service lines 929, 1124, 1359, 4408); **INV-3** maintenance
+item-in-org guard intact (the `"Item not found"` early return); INV-1/INV-2/INV-5/
+INV-6-safe-half unchanged.
+
+### INV2-2 — NIT — 55 `== True/False  # noqa: E712` suppressions swept — ✅ FIXED
+
+Pass 2 recorded these as a standalone cleanup to do in "one focused commit, no
+behavior change" — deliberately not mixed into the INV2-1 security fix. Done here as
+that focused commit: all 55 boolean-column comparisons in `inventory_service.py`
+(`.is_returned == False`, `.active == True`, `.is_overdue == True`, etc. — including
+the ternary at the assignment/issuance branch and the list-context conditions) were
+converted to `.is_(True)` / `.is_(False)` (Pitfall #10), removing **every**
+`# noqa: E712` from the file. Behavior-neutral for boolean columns; flake8 stays
+clean and the file needs no black reformat.
+
+### Latent-500 lens (the B1 finding) — checked, clean
+
+The B1 class (a request field typed as free `str` that maps to a strict `Enum`
+column) does **not** recur here. Inventory has a large enum surface (17 models with
+enum columns — `condition`/`status`/`tracking_type`, `request_type`/`priority`,
+`maintenance_type`, `checkout_condition`, `storage_type`, …), and an automated
+sweep of every `*Create`/`*Update` schema field that maps to an enum column found
+**0** typed as free `str` — all are properly enum-typed, so an out-of-range value
+is rejected at the schema (422) rather than reaching MySQL and 500-ing.
+
+### INV-4 remainder — LOW — dangling-only FK sweep — 🚩 OPEN (unchanged)
+
+Still the one substantive open item: the ~15 create/update methods that persist
+client-supplied `category_id`/`location_id`/`storage_id`/assignment-issuance-checkout
+ids without an in-org check. Pass 2 established (and re-confirmed here) that these are
+**integrity-only** — the read-leak subset (member `user_id` via listings) was already
+closed in INV2-1, and these remaining FKs are not projected by name into any
+response. As pass 1/2 both concluded, this is a genuine ~15-method mechanical
+`assert_in_org` sweep that "deserves a dedicated focused pass" rather than a rushed
+half-sweep in a rotation tick; kept flagged. No disclosure risk in the interim.
+
+### Future development (unchanged)
+
+1. **INV-4 dedicated XC-1 sweep** — the ~15 create/update methods, mechanical with
+   `assert_in_org`; the biggest remaining item.
+2. **Equipment-kit `optional` feature** — column + migration + `create_equipment_kit`
+   wiring (INV-6 flagged half).
+3. **`_escape_like` helper** — small DRY cleanup across the search methods.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit` 0
+(no frontend change) · eslint unaffected (no frontend change) · inventory tests
+**142 passed** (all DB-free); the 75 `test_inventory_gaps.py` errors are the known
+`db_session`/no-MySQL fixture failures (`pymysql` connection refused at setup),
+unchanged by this behavior-neutral sweep.
 
 ---
 

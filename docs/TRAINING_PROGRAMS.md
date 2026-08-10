@@ -192,10 +192,47 @@ re-derives enrolled members' progress-row percentages against the new target.
 #### Phase Management
 
 - Multi-phase program structures
-- Phase prerequisites
 - Manual vs. automatic advancement (auto-advance stops at any phase flagged `requires_manual_advancement`)
 - Manual advance endpoint with optional `force` override
 - Phase-specific time limits
+- **Phase prerequisites (`prerequisite_phase_ids`).** Phase _order_ and phase
+  _prerequisites_ answer different questions: `phase_number` is the order phases
+  are shown and walked in, while `prerequisite_phase_ids` says which phases must
+  be **finished** first. They matter when a program isn't a straight line — e.g.
+  Ride-Along (phase 3) requires Skills (phase 2), but Classroom (phase 4) doesn't,
+  so a member force-advanced past Skills is caught before reaching Ride-Along.
+  - Both advancement paths honor them: the manual advance endpoint refuses with
+    the names of the unfinished phases, and auto-advance simply stops. `force`
+    overrides both — an officer can always make the call.
+  - Prerequisites are validated when set: an id must belong to the same program,
+    a phase can't require itself, and a cycle ("2 needs 3, 3 needs 2") is refused
+    rather than stranding every enrolled member.
+  - Deleting a phase strips it from every other phase's prerequisite list, and a
+    prerequisite pointing at a phase that no longer exists is ignored — nothing
+    can complete a phase that isn't there.
+  - Export/import carries them by **phase number**, not id, so they survive the
+    trip into another department.
+
+#### Requirement Prerequisites ("Do this first")
+
+A program↔requirement link flagged `is_prerequisite` gates the _other_
+requirements sharing its scope — its phase, or the program-level pool for links
+with no phase. Until every gate in a scope is satisfied, the rest of that scope
+is locked.
+
+- The member's progress page lists a locked step greyed out with the reason
+  ("Locked until you finish Orientation") rather than hiding it — a step that
+  vanishes reads as a bug, and a step offered without explanation gets attempted
+  and refused.
+- Officer sign-off on a locked requirement is refused with the same wording.
+- A requirement linked into more than one scope is locked only when _every_ one
+  of its links is locked, so an unrelated phase's gate can't block work the
+  member is cleared for.
+- **Credit that flows in automatically from logged training is not blocked.** The
+  hours happened; dropping them would be worse than crediting them early. The
+  gate governs sign-off and what the member is told to work on.
+- Toggle it per requirement on the pipeline detail page ("Do this first" /
+  "Any order").
 
 #### Progress Tracking
 
@@ -371,11 +408,27 @@ every confusion below comes from that one distinction.
 - Milestone notifications
 - Officer verification requirements
 
-#### Conditional Reminders
+#### Deadline Reminders
 
-- Send reminders based on progress thresholds
-- Configure days before deadline
-- Only send if member is behind schedule (e.g., only remind if < 40% complete 90 days before deadline)
+Each program sets its own reminder policy — a 12-week recruit academy and a
+two-year recert cycle do not want the same ramp. The weekly
+`enrollment_deadline_warnings` sweep reads it per enrollment.
+
+- `warning_days_before` (int, default 30) — the first warning.
+- `reminder_conditions.days_before_deadline` (int or list of ints) — the full
+  schedule. Leave it unset and the sweep uses `warning_days_before` plus
+  follow-ups at 14 and 7 days.
+- `reminder_conditions.send_if_below_percentage` (0–100) — only warn members
+  below this completion mark. Leave it unset to warn everybody; set it to stop
+  pestering recruits who are already on track.
+
+Set both on the pipeline's "Edit pipeline details" modal, under **Deadline
+reminders**.
+
+> `milestone_threshold` appeared in an early sketch of `reminder_conditions` and
+> is **not** honored. `ProgramMilestone` rows already fire progress-based
+> notifications, and two mechanisms for one job is how the two drift apart. Old
+> values stay in the column and are ignored; new writes drop the key.
 
 #### Member Dashboard Widget
 
@@ -944,18 +997,46 @@ Require demonstrating skills with officer evaluation.
 
 #### 7. Checklist Requirements
 
-Require completing a checklist of tasks.
+Require completing a checklist of tasks. Steps are **signed off one at a time**,
+and the requirement's completion is `ticked / total` — so a member six steps into
+eight reads 75%, not 0%.
 
 ```json
 {
   "requirement_type": "checklist",
   "checklist_items": [
-    "Complete station tour",
-    "Review SOPs",
-    "Equipment familiarization"
+    { "id": "…", "text": "Complete station tour", "member_visible": true },
+    { "id": "…", "text": "Review SOPs", "member_visible": true },
+    { "id": "…", "text": "References called", "member_visible": false }
   ]
 }
 ```
+
+| Field            | Meaning                                                                                                                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | Assigned server-side when a step is created. Send it back on edit so the step keeps its identity — and the ticks recorded against it — through a rename or a reorder         |
+| `text`           | 1–500 chars, trimmed                                                                                                                                                         |
+| `member_visible` | `true` by default. `false` keeps the step off the member's view — background check returned, references called. **Hiding a step is the deliberate choice, not the fallback** |
+
+**Both shapes are accepted on input.** A bare string, an object, or a mix
+normalizes to the object form (`app/utils/checklist.py` → `app/schemas/checklist.py`),
+which is why the built-in sample templates still declare their steps as plain
+strings. **Legacy string rows normalize on read** rather than through a
+migration: it costs no lock on a JSON column, and every write goes through the
+one helper, so the rest of the codebase sees a single shape.
+
+Progress is recorded by `PATCH /progress/{progress_id}` with
+`checklist_done: [step_id, …]`.
+
+> **Hidden steps still count toward the denominator.** Excluding them would let a
+> requirement read 100% while the background check was outstanding. The member is
+> shown `+N more steps your officer records` instead of a total that does not
+> match what is on their screen.
+
+> **Before 2026-08-09 none of this was visible to anyone.** The requirement stored
+> the list, and nothing rendered it: the member saw the requirement's title and had
+> to guess, the officer signing it off saw "8 items" and not the items, and the
+> whole thing was one all-or-nothing tick.
 
 #### 8. Knowledge Test Requirements
 
@@ -1044,9 +1125,8 @@ const program = {
   prerequisite_program_ids: [], // No prerequisites for entry-level
   allows_concurrent_enrollment: false, // Only one at a time
   reminder_conditions: {
-    milestone_threshold: 50,
-    days_before_deadline: 90,
-    send_if_below_percentage: 40,
+    days_before_deadline: [90, 30, 7],
+    send_if_below_percentage: 40, // leave the on-track recruits alone
   },
 };
 ```
@@ -1069,7 +1149,7 @@ const phase2 = {
   phase_number: 2,
   name: "Skills Development",
   description: "Hands-on skills training and evaluation",
-  prerequisite_phase_ids: [phase1.id],
+  prerequisite_phase_ids: [phase1.id], // can't start until Orientation is finished
   requires_manual_advancement: true, // Officer must approve
   time_limit_days: 180,
 };
@@ -1083,7 +1163,7 @@ const programRequirement = {
   phase_id: phase1Id, // Or null for program-level
   requirement_id: requirementId,
   is_required: true,
-  is_prerequisite: false,
+  is_prerequisite: false, // true = the rest of this phase stays locked until it's done
   sort_order: 1,
   program_specific_description: "Complete within first 30 days",
   custom_deadline_days: 30,
@@ -1288,7 +1368,7 @@ may read their own enrollment) and shows:
 
 **Flexible Programs**: Shows any incomplete required requirements
 
-**Sequential Programs**: Shows the next requirement in sequence
+**One-list programs**: Shows the outstanding requirements
 
 **Phase-Based Programs**: Shows incomplete requirements in current phase
 
@@ -1297,6 +1377,24 @@ may read their own enrollment) and shows:
 - **Green** (90+ days): On track
 - **Yellow** (30-89 days): Attention needed
 - **Red** (< 30 days): Urgent
+
+A weekly sweep (`enrollment_deadline_warnings`) messages members at 30, 14 and 7
+days out.
+
+### Past the Deadline
+
+An enrollment that passes its completion date without finishing moves to
+**Expired**. The member and the training officers are both notified. Expiry
+happens when a coordinator opens the member's progress, and a daily 5:15 AM
+sweep (`enrollment_expiry`) catches the enrollments nobody is watching — daily
+rather than weekly, since an expired member reading "active, 6 days overdue" is
+the state this is meant to eliminate.
+
+Nothing is lost: every completed requirement stays completed. From the member's
+progress dialog an officer can **Reopen enrollment**, optionally on a new
+deadline, which returns it to Active and re-runs the completion check (so a
+member who finished the work while expired is marked complete rather than
+waiting for the next edit). Reopening requires `training.manage`.
 
 ---
 
@@ -1812,15 +1910,26 @@ regeneration possible.
 
 **Q: Reminder not sent**
 
-- Check reminder_conditions configuration
-- Verify member is below threshold percentage
-- Check days_before_deadline setting
+- Reminders fire only on an exact day in the schedule — `days_before_deadline`,
+  or `warning_days_before` plus 14 and 7 when it isn't set. 29 days out is not
+  30 days out.
+- If `send_if_below_percentage` is set, a member at or above that mark is
+  skipped on purpose.
+- A member warned in the last 5 days is not warned again.
+- Only ACTIVE enrollments with a `target_completion_date` are considered.
 
 **Q: Can't advance to next phase**
 
-- Check if phase requires manual advancement
-- Verify all prerequisites completed
-- Ensure previous phase is 100% complete
+- Check if the phase requires manual advancement
+- Ensure the current phase's required requirements are all satisfied
+- Check the _next_ phase's `prerequisite_phase_ids` — the error names the
+  unfinished phases. `force` overrides it.
+
+**Q: A requirement says it's locked**
+
+- Something in the same phase (or the program-level pool) is flagged
+  `is_prerequisite` and isn't finished. The message names it. Clear it, or turn
+  the flag off on the pipeline detail page.
 
 ### Category Issues
 

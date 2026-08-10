@@ -1,6 +1,39 @@
 # Application Review — Course Cohorts & Syllabus
 
-**Prefix:** `CC` · **Iteration:** A5 · **Reviewed:** 2026-08-05
+**Prefix:** `CC` · **Iteration:** A5 · **Reviewed:** 2026-08-05 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified the module rated cleanest in pass 1: XC-3 clean (sub-resource ops resolve
+via `_get_cohort_class(id, org)`); generation bounded `MAX_GENERATED_CLASSES=200` at
+four points; `cancel_event`/`update_event` carry org; CC-1 catalog-course JOIN
+predicate holds; DST handled; no latent-500 in generation/preview/zero-class paths.
+**1 fix.**
+
+### CC-4 — MED — `add_ad_hoc_class` stored `category_id`/`requirement_id`/`phase_id` unvalidated (XC-1) — ✅ FIXED
+
+The ad-hoc class path validated only `instructor_id` + `location_id` in-org, but
+persisted `category_id`, `requirement_id`, and `phase_id` straight from client input
+— and these flow into `_create_session_for_class` → `TrainingSessionCreate`. The
+syllabus path's `_validate_references` validates exactly these three (Pitfall #14c),
+so the ad-hoc path diverged: a same-permission officer could persist a cohort class
+referencing another org's category/requirement/phase (dangling/mis-attributed FK).
+**Fix:** extended the in-org validation loop to cover `category_id` (TrainingCategory)
+and `requirement_id` (TrainingRequirement) via `assert_in_org`, and validated
+`phase_id` through the `TrainingProgram` join (ProgramPhase has no org column) —
+mirroring `_validate_references` exactly. 1 DB-free regression test (foreign category
+→ `ValueError`, nothing persisted).
+
+**Flagged (LOW, unchanged/new):** CC-2 (`location_id` backend-only, no UI — feature),
+CC-3 (spring-forward `fold=0` NIT); new: the three catalog-course JOINs in
+`list_cohorts`/`get_cohort_detail`/`list_member_cohorts` lack the CC-1 org predicate
+(not live — the FK is org-validated at write and never repointed — but the CC-1
+remediation should extend to them for consistency); and `reschedule_class`/
+`cancel_class` commit before the endpoint's `cohort_id`-match check (within-org
+cosmetic-integrity, no cross-tenant escalation).
+
+---
 
 **Backend:** `app/api/v1/endpoints/course_cohorts.py` (697 L, 14 endpoints),
 `course_syllabus.py` (273 L, 6 endpoints),

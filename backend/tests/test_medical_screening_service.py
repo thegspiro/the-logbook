@@ -520,3 +520,62 @@ class TestCRUD:
         with patch.object(service, "get_record", return_value=None):
             result = await service.update_record("bad-id", org_id, data)
         assert result is None
+
+
+class TestRequestEnumValidation:
+    """MS2-5: request schemas reject out-of-enum screening_type/status before the
+    value can reach the strict MySQL ENUM column and 500 there."""
+
+    def test_record_create_rejects_bad_status(self):
+        from pydantic import ValidationError
+
+        from app.schemas.medical_screening import ScreeningRecordCreate
+
+        with pytest.raises(ValidationError):
+            ScreeningRecordCreate(screening_type="physical_exam", status="bogus")
+
+    def test_record_create_rejects_bad_screening_type(self):
+        from pydantic import ValidationError
+
+        from app.schemas.medical_screening import ScreeningRecordCreate
+
+        with pytest.raises(ValidationError):
+            ScreeningRecordCreate(screening_type="not_a_type", status="passed")
+
+    def test_record_create_normalizes_case(self):
+        from app.schemas.medical_screening import ScreeningRecordCreate
+
+        data = ScreeningRecordCreate(screening_type="PHYSICAL_EXAM", status="Passed")
+        assert data.screening_type == "physical_exam"
+        assert data.status == "passed"
+
+    def test_record_update_allows_omitted_fields(self):
+        from app.schemas.medical_screening import ScreeningRecordUpdate
+
+        data = ScreeningRecordUpdate(notes="follow-up")
+        assert data.screening_type is None
+        assert data.status is None
+
+    def test_record_update_rejects_bad_status(self):
+        from pydantic import ValidationError
+
+        from app.schemas.medical_screening import ScreeningRecordUpdate
+
+        with pytest.raises(ValidationError):
+            ScreeningRecordUpdate(status="definitely_not_valid")
+
+    def test_requirement_create_rejects_bad_type(self):
+        from pydantic import ValidationError
+
+        from app.schemas.medical_screening import ScreeningRequirementCreate
+
+        with pytest.raises(ValidationError):
+            ScreeningRequirementCreate(name="X", screening_type="bad_type")
+
+    def test_requirement_update_rejects_bad_type(self):
+        from pydantic import ValidationError
+
+        from app.schemas.medical_screening import ScreeningRequirementUpdate
+
+        with pytest.raises(ValidationError):
+            ScreeningRequirementUpdate(screening_type="bad_type")

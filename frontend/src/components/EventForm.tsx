@@ -110,6 +110,8 @@ const DEFAULT_FORM_DATA: EventCreate = {
   check_in_minutes_before: 15,
   check_in_minutes_after: 15,
   require_checkout: false,
+  allow_guest_check_in: false,
+  guest_check_in_creates_prospect: false,
   is_draft: false,
 };
 
@@ -1230,6 +1232,48 @@ export const EventForm: React.FC<EventFormProps> = ({
               Require manual check-out
             </label>
           </div>
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="allow-guest-check-in"
+              checked={formData.allow_guest_check_in ?? false}
+              onChange={(e) =>
+                update({
+                  allow_guest_check_in: e.target.checked,
+                  // Turning guest sign-in off must also clear the pipeline
+                  // follow-up, or the event keeps a setting that can no longer
+                  // fire and reads as enabled next time someone opens the form.
+                  ...(e.target.checked ? {} : { guest_check_in_creates_prospect: false }),
+                })
+              }
+              className={checkboxClass}
+            />
+            <label htmlFor="allow-guest-check-in" className="text-theme-text-secondary text-sm">
+              Allow guest (non-member) sign-in
+            </label>
+          </div>
+
+          {formData.allow_guest_check_in && (
+            <div className="space-y-3 border-l-2 border-red-500/30 pl-4">
+              <p className="text-theme-text-muted text-xs">
+                A second QR code appears on room displays for this event. Anyone who scans it can record their
+                attendance without an account — use this for interest nights and open houses, not internal meetings.
+              </p>
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="guest-creates-prospect"
+                  checked={formData.guest_check_in_creates_prospect ?? false}
+                  onChange={(e) => update({ guest_check_in_creates_prospect: e.target.checked })}
+                  className={checkboxClass}
+                />
+                <label htmlFor="guest-creates-prospect" className="text-theme-text-secondary text-sm">
+                  Add guests to the prospective members pipeline
+                </label>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Notifications */}

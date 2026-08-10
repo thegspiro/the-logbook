@@ -22,6 +22,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 5:00 AM — reset training-program enrollments past their recert deadline
 0 5 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=recert_resets
 
+# Daily at 5:15 AM — expire training-program enrollments past their deadline
+15 5 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=enrollment_expiry
+
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
 
@@ -125,6 +128,12 @@ SCHEDULE = {
         "frequency": "weekly",
         "recommended_time": "Monday 07:30",
         "cron": "30 7 * * 1",
+    },
+    "enrollment_expiry": {
+        "description": "Expire training-program enrollments whose completion deadline has passed",
+        "frequency": "daily",
+        "recommended_time": "05:15",
+        "cron": "15 5 * * *",
     },
     "recert_resets": {
         "description": "Reset training-program enrollments whose recertification deadline has passed, starting each a fresh certification cycle",
@@ -468,6 +477,24 @@ async def run_enrollment_deadline_warnings(db: AsyncSession) -> Dict[str, Any]:
         return result.get("warnings_sent", 0)
 
     return await _for_each_org(db, "enrollment_deadline_warnings", _process)
+
+
+async def run_enrollment_expiry(db: AsyncSession) -> Dict[str, Any]:
+    """Expire every enrollment whose completion deadline has passed.
+
+    Daily rather than folded into the weekly warning sweep: an expiry is a
+    state change the member and their officers act on, and running it weekly
+    would leave someone reading "active, 6 days overdue" for most of a week.
+    The read-time check in the progress endpoint only catches enrollments
+    somebody opens; this covers the rest.
+    """
+    from app.services.training_program_service import TrainingProgramService
+
+    async def _process(db_session, org):
+        count, _ = await TrainingProgramService(db_session).run_due_expirations(org.id)
+        return count
+
+    return await _for_each_org(db, "enrollment_expiry", _process)
 
 
 async def run_shift_pattern_generation(db: AsyncSession) -> Dict[str, Any]:
@@ -3729,10 +3756,19 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
                     }
                 )
 
+            # Commit per config so one org's failure can't poison the shared
+            # session for the orgs still to come, nor discard their reports
+            # (the CRON-1 class the pass-1 fix missed on this inline loop).
+            await db.commit()
+
         except Exception as e:
             logger.error(
                 f"Compliance auto-report failed for org {config.organization_id}: {e}"
             )
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             results.append(
                 {
                     "org_id": str(config.organization_id),
@@ -4283,6 +4319,13 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                         "auto_checkout_completed": True,
                     }
 
+            # Commit this org's checkouts/reminders before the next org. The
+            # deferred single commit meant the rollback below discarded EVERY
+            # earlier org's work when a later org threw (and re-sent their
+            # reminders next run) — the CRON-1 rollback turned into cross-org
+            # data loss.
+            await db.commit()
+
         except Exception as e:
             logger.error(
                 "shift_auto_checkout error for org {}: {}",
@@ -4308,9 +4351,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
         total_reminders += org_reminders
         total_auto_checkouts += org_checkouts
 
-    if total_reminders > 0 or total_auto_checkouts > 0:
-        await db.commit()
-
+    # Each org already committed its own work above.
     logger.info(
         "Shift auto-checkout: {} reminders, {} auto-checkouts " "across {} orgs",
         total_reminders,
@@ -4468,10 +4509,17 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
     for org_id in org_ids:
         try:
             await service.sync_directory(org_id)
+            # Commit per org so a later org's failure can't discard this one's
+            # work — and its rollback below can't poison the shared session for
+            # the orgs still to come (the CRON-1 class).
+            await db.commit()
             synced += 1
         except Exception as e:
             logger.warning("Officer directory sync failed for org {}: {}", org_id, e)
-    await db.commit()
+            try:
+                await db.rollback()
+            except Exception:
+                pass
     return {"task": "officer_directory_sync", "organizations": synced}
 
 
@@ -4605,6 +4653,7 @@ TASK_RUNNERS = {
     "election_lifecycle": run_election_lifecycle,
     "struggling_member_check": run_struggling_member_check,
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
+    "enrollment_expiry": run_enrollment_expiry,
     "recert_resets": run_recert_resets,
     "membership_tier_advance": run_membership_tier_advance,
     "action_item_reminders": run_action_item_reminders,
@@ -4685,6 +4734,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "expire_ip_exceptions": 86400,
     "membership_inactivity_warnings": 86400,
     "recert_resets": 86400,
+    "enrollment_expiry": 86400,
     "shift_pattern_generation": 86400,
     "officer_directory_sync": 86400,
     # Weekly

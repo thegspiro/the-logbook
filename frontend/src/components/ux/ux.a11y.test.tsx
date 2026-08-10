@@ -13,6 +13,7 @@ import { axe } from 'vitest-axe';
 import { Users } from 'lucide-react';
 
 import { ConfirmDialog } from './ConfirmDialog';
+import { PromptDialog } from './PromptDialog';
 import { EmptyState } from './EmptyState';
 import { Pagination } from './Pagination';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -31,6 +32,23 @@ describe('UX component accessibility', () => {
         title="Delete record"
         message="This cannot be undone."
         variant="danger"
+      />
+    );
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('PromptDialog has no axe violations', async () => {
+    const { container } = render(
+      <PromptDialog
+        isOpen={true}
+        onClose={() => {}}
+        onSubmit={() => {}}
+        title="Void batch"
+        message="The batch stops counting toward the result."
+        label="Reason for voiding"
+        hint="Recorded in the audit log."
+        minLength={3}
+        multiline
       />
     );
     expect(await axe(container)).toHaveNoViolations();

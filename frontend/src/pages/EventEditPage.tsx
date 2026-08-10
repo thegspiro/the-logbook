@@ -136,6 +136,8 @@ export const EventEditPage: React.FC = () => {
     check_in_minutes_before: event.check_in_minutes_before ?? 30,
     check_in_minutes_after: event.check_in_minutes_after ?? 15,
     require_checkout: event.require_checkout ?? false,
+    allow_guest_check_in: event.allow_guest_check_in ?? false,
+    guest_check_in_creates_prospect: event.guest_check_in_creates_prospect ?? false,
     custom_fields: event.custom_fields ?? undefined,
     attachments: event.attachments ?? undefined,
   };

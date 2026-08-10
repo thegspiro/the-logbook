@@ -149,18 +149,23 @@ async def create_pipeline(
     if data.steps:
         steps = [s.model_dump() for s in data.steps]
 
-    pipeline = await service.create_pipeline(
-        organization_id=current_user.organization_id,
-        name=data.name,
-        description=data.description,
-        is_template=data.is_template,
-        is_default=data.is_default,
-        is_active=data.is_active,
-        auto_transfer_on_approval=data.auto_transfer_on_approval,
-        inactivity_config=data.inactivity_config,
-        steps=steps,
-        created_by=current_user.id,
-    )
+    try:
+        pipeline = await service.create_pipeline(
+            organization_id=current_user.organization_id,
+            name=data.name,
+            description=data.description,
+            is_template=data.is_template,
+            is_default=data.is_default,
+            is_active=data.is_active,
+            auto_transfer_on_approval=data.auto_transfer_on_approval,
+            inactivity_config=data.inactivity_config,
+            steps=steps,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     await log_audit_event(
         db=db,
         event_type="membership_pipeline.pipeline_created",
@@ -445,11 +450,16 @@ async def add_step(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    step = await service.add_step(
-        str(pipeline_id),
-        current_user.organization_id,
-        data.model_dump(),
-    )
+    try:
+        step = await service.add_step(
+            str(pipeline_id),
+            current_user.organization_id,
+            data.model_dump(),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not step:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
@@ -514,12 +524,17 @@ async def update_step(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    step = await service.update_step(
-        str(step_id),
-        str(pipeline_id),
-        current_user.organization_id,
-        data.model_dump(exclude_unset=True),
-    )
+    try:
+        step = await service.update_step(
+            str(step_id),
+            str(pipeline_id),
+            current_user.organization_id,
+            data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not step:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Step or pipeline not found"

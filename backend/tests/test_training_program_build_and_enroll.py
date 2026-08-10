@@ -213,6 +213,63 @@ class TestBuildProgram:
         assert "Phase 2 links the same requirement more than once" in error
         db.commit.assert_not_awaited()
 
+    async def test_builds_a_flexible_program_with_no_phases(self):
+        """
+        A flexible program has no phases, so its requirements hang off the
+        program itself. Without program-level requirements the wizard could only
+        ever produce an empty flexible program — a dead end for the officer.
+        """
+        db = RecordingSession()
+        svc = TrainingProgramService(db)
+
+        payload = ProgramBuildRequest(
+            program=TrainingProgramCreate(name="Annual CE", structure_type="flexible"),
+            requirements=[
+                ProgramBuildRequirementInput(
+                    name="CE Hours",
+                    requirement_type="hours",
+                    required_hours=24,
+                    is_required=True,
+                )
+            ],
+            milestones=[
+                ProgramBuildMilestoneInput(
+                    name="Halfway", completion_percentage_threshold=50
+                )
+            ],
+        )
+
+        program, error = await svc.build_program(payload, uuid4(), uuid4())
+
+        assert error is None
+        assert not any(isinstance(o, ProgramPhase) for o in db.added)
+        links = [o for o in db.added if isinstance(o, ProgramRequirement)]
+        assert len(links) == 1
+        assert links[0].phase_id is None
+        milestones = [o for o in db.added if isinstance(o, ProgramMilestone)]
+        assert len(milestones) == 1
+        assert milestones[0].phase_id is None
+        assert db.commit.await_count == 1
+
+    async def test_rejects_the_same_program_level_requirement_twice(self):
+        req_id = uuid4()
+        db = RecordingSession()
+        svc = TrainingProgramService(db)
+
+        payload = ProgramBuildRequest(
+            program=TrainingProgramCreate(name="Annual CE", structure_type="flexible"),
+            requirements=[
+                ProgramBuildRequirementInput(requirement_id=req_id),
+                ProgramBuildRequirementInput(requirement_id=req_id),
+            ],
+        )
+
+        program, error = await svc.build_program(payload, uuid4(), uuid4())
+
+        assert program is None
+        assert "The program links the same requirement more than once" in error
+        db.commit.assert_not_awaited()
+
     async def test_requirement_input_rejects_both_forms_at_once(self):
         with pytest.raises(ValueError, match="not both"):
             ProgramBuildRequirementInput(requirement_id=uuid4(), name="CPR")
@@ -318,7 +375,8 @@ class TestNonNumericCompletion:
         progress = SimpleNamespace(
             id="p1",
             enrollment_id="enr-1",
-            enrollment=SimpleNamespace(user_id="me"),
+            requirement_id="req-1",
+            enrollment=SimpleNamespace(user_id="me", program_id="prog-1"),
             status=RequirementProgressStatus.NOT_STARTED,
             progress_percentage=0.0,
             started_at=None,
@@ -347,14 +405,19 @@ class TestCompletionRevert:
     async def test_revert_completed_to_active(self):
         enrollment = SimpleNamespace(
             id="enr-1",
+            organization_id="org-1",
             program_id="prog-1",
             status=EnrollmentStatus.COMPLETED,
             user_id="u1",
+            progress_percentage=100.0,
         )
         db = RecordingSession(
             [
                 _one(enrollment),  # enrollment fetch
-                _scalars([SimpleNamespace(progress_percentage=40.0)]),  # required rows
+                _scalars(["r1"]),  # required requirement ids
+                _scalars(  # required rows
+                    [SimpleNamespace(progress_percentage=40.0, requirement_id="r1")]
+                ),
             ]
         )
         await TrainingProgramService(db)._recalculate_enrollment_progress("enr-1")

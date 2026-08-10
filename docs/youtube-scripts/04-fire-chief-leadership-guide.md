@@ -133,6 +133,42 @@ event participation, member activity]**
 
 **[CALLOUT: "QR Check-In = no more paper sign-in sheets"]**
 
+### GUEST CHECK-IN FOR AN OPEN HOUSE (added 2026-08-09)
+
+**[SCREEN: The Check-In Settings section of the event form, ticking "Allow guest
+check-in" and "Create a prospective member from each guest".]**
+
+> "That QR code is for **members**. Scan it without an account and you land on the
+> login page — which is exactly the wrong thing to hand a visitor at a volunteer
+> interest night."
+
+> "So there's a second one. Tick **Allow guest check-in** and the room display
+> shows a **guest QR code** beside the member one. A visitor scans it, types their
+> name, and they're signed in. No account, no login."
+
+**[SCREEN: The room display showing both QR codes side by side.]**
+
+> "And the second toggle is the one I'd actually pay for. **Create a prospective
+> member from each guest** — every visitor who leaves an email address gets a card
+> in your recruitment pipeline, linked back to the event, with a referral source
+> reading 'Attended: Volunteer Interest Night'. Your open-house sign-in sheet
+> becomes your recruiting list, automatically."
+
+**[CALLOUT: "Sign-in sheet → recruiting pipeline, automatically"]**
+
+**[SCREEN: The two toggles, both off, on a business meeting event.]**
+
+> "One warning, and it's the reason both of these are **off by default**. Turning
+> guest check-in on means anyone who can reach that QR code can write to your
+> attendance list without logging in. That's the right trade for an open house. It
+> is the **wrong** trade for a business meeting or a training session, where
+> attendance drives member records. Leave it off there."
+
+> "It's protected — rate limits, a cap of three hundred sign-ins per event per
+> day, and the department is worked out from the room's own display code rather
+> than from anything the visitor sends. But the judgment about which events get it
+> is yours."
+
 ### EVENT TEMPLATES (7:00 – 8:00)
 
 **[SCREEN: Navigate to Events → Templates (EventTemplatesPage)]**

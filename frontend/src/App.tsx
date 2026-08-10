@@ -17,6 +17,7 @@ import { UpdateNotification } from './components/UpdateNotification';
 // Theme
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PullToRefreshProvider } from './contexts/PullToRefreshContext';
+import { ConfirmProvider } from './contexts/ConfirmContext';
 
 // Protected Route & Layout
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -99,129 +100,133 @@ function App() {
   return (
     <ThemeProvider>
       <ErrorBoundary>
-        <BrowserRouter>
-          <div className="App">
-            <UpdateNotification />
-            <Suspense fallback={<PageLoadingFallback />}>
-              <Routes>
-                {/* ============================================
+        {/* Above the router so any screen can ask for a confirmation, and
+            outside AppLayout so public pages (login, onboarding) get one too. */}
+        <ConfirmProvider>
+          <BrowserRouter>
+            <div className="App">
+              <UpdateNotification />
+              <Suspense fallback={<PageLoadingFallback />}>
+                <Routes>
+                  {/* ============================================
                 ONBOARDING MODULE
                 Comment out the line below to disable onboarding
                 ============================================ */}
-                {getOnboardingRoutes()}
+                  {getOnboardingRoutes()}
 
-                {/* ============================================
+                  {/* ============================================
                 PROTECTED ROUTES WITH APP LAYOUT
                 All routes below get the sidebar/top navigation
                 ============================================ */}
-                <Route
-                  element={
-                    <ProtectedRoute>
-                      <PullToRefreshProvider>
-                        <AppLayout />
-                      </PullToRefreshProvider>
-                    </ProtectedRoute>
-                  }
-                >
-                  {/* Main Dashboard */}
-                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route
+                    element={
+                      <ProtectedRoute>
+                        <PullToRefreshProvider>
+                          <AppLayout />
+                        </PullToRefreshProvider>
+                      </ProtectedRoute>
+                    }
+                  >
+                    {/* Main Dashboard */}
+                    <Route path="/dashboard" element={<Dashboard />} />
 
-                  {/* Feature Modules */}
-                  {getApparatusRoutes()}
-                  {getMembershipRoutes()}
-                  {getProspectiveMembersRoutes()}
-                  {getAdminHoursRoutes()}
-                  {getCommunicationsRoutes()}
-                  {getEventsRoutes()}
-                  {getDocumentsRoutes()}
-                  {getTrainingRoutes()}
-                  {getInventoryRoutes()}
-                  {getStorefrontRoutes()}
-                  {getSchedulingRoutes()}
-                  {getFacilitiesRoutes()}
-                  {getElectionsRoutes()}
-                  {getMinutesRoutes()}
-                  {getActionItemsRoutes()}
-                  {getNotificationsRoutes()}
-                  {getFormsRoutes()}
-                  {getIntegrationsRoutes()}
-                  {getMedicalScreeningRoutes()}
+                    {/* Feature Modules */}
+                    {getApparatusRoutes()}
+                    {getMembershipRoutes()}
+                    {getProspectiveMembersRoutes()}
+                    {getAdminHoursRoutes()}
+                    {getCommunicationsRoutes()}
+                    {getEventsRoutes()}
+                    {getDocumentsRoutes()}
+                    {getTrainingRoutes()}
+                    {getInventoryRoutes()}
+                    {getStorefrontRoutes()}
+                    {getSchedulingRoutes()}
+                    {getFacilitiesRoutes()}
+                    {getElectionsRoutes()}
+                    {getMinutesRoutes()}
+                    {getActionItemsRoutes()}
+                    {getNotificationsRoutes()}
+                    {getFormsRoutes()}
+                    {getIntegrationsRoutes()}
+                    {getMedicalScreeningRoutes()}
 
-                  {/* Finance */}
-                  {getFinanceRoutes()}
+                    {/* Finance */}
+                    {getFinanceRoutes()}
 
-                  {/* Grants & Fundraising */}
-                  {getGrantsFundraisingRoutes()}
+                    {/* Grants & Fundraising */}
+                    {getGrantsFundraisingRoutes()}
 
-                  {/* Reports */}
-                  {getReportsRoutes()}
+                    {/* Reports */}
+                    {getReportsRoutes()}
 
-                  {/* IP Security */}
-                  {getIPSecurityRoutes()}
+                    {/* IP Security */}
+                    {getIPSecurityRoutes()}
 
-                  {/* Admin & Settings */}
-                  {getAdminRoutes()}
-                  {getPublicPortalRoutes()}
-                  {getSettingsRoutes()}
-                </Route>
+                    {/* Admin & Settings */}
+                    {getAdminRoutes()}
+                    {getPublicPortalRoutes()}
+                    {getSettingsRoutes()}
+                  </Route>
 
-                {/* ============================================
+                  {/* ============================================
                 PUBLIC ROUTES (no auth required)
                 ============================================ */}
-                {getProspectiveMembersPublicRoutes()}
-                {getFormsPublicRoutes()}
-                {getEventsPublicRoutes()}
-                {getElectionsPublicRoutes()}
-                {getFacilitiesPublicRoutes()}
+                  {getProspectiveMembersPublicRoutes()}
+                  {getFormsPublicRoutes()}
+                  {getEventsPublicRoutes()}
+                  {getElectionsPublicRoutes()}
+                  {getFacilitiesPublicRoutes()}
 
-                {/* Login Page */}
-                <Route path="/login" element={<LoginPage />} />
+                  {/* Login Page */}
+                  <Route path="/login" element={<LoginPage />} />
 
-                {/* OAuth (Google) redirect landing page */}
-                <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+                  {/* OAuth (Google) redirect landing page */}
+                  <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 
-                {/* Password Reset Pages */}
-                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                  {/* Password Reset Pages */}
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-                {/* Legal pages (public) */}
-                <Route path="/privacy" element={<LegalPage />} />
-                <Route path="/terms" element={<LegalPage />} />
-                {/* Public external-approver page (token-authenticated) */}
-                <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
+                  {/* Legal pages (public) */}
+                  <Route path="/privacy" element={<LegalPage />} />
+                  <Route path="/terms" element={<LegalPage />} />
+                  {/* Public external-approver page (token-authenticated) */}
+                  <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
 
-                {/* Catch all - redirect to welcome */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Suspense>
+                  {/* Catch all - redirect to welcome */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
 
-            {/* Toast notifications */}
-            <Toaster
-              position="top-right"
-              containerStyle={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
-              toastOptions={{
-                duration: 4000,
-                style: {
-                  background: 'var(--surface-bg)',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--surface-border)',
-                },
-                success: {
-                  iconTheme: {
-                    primary: 'var(--toast-success)',
-                    secondary: 'var(--toast-icon-secondary)',
+              {/* Toast notifications */}
+              <Toaster
+                position="top-right"
+                containerStyle={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
+                toastOptions={{
+                  duration: 4000,
+                  style: {
+                    background: 'var(--surface-bg)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--surface-border)',
                   },
-                },
-                error: {
-                  iconTheme: {
-                    primary: 'var(--toast-error)',
-                    secondary: 'var(--toast-icon-secondary)',
+                  success: {
+                    iconTheme: {
+                      primary: 'var(--toast-success)',
+                      secondary: 'var(--toast-icon-secondary)',
+                    },
                   },
-                },
-              }}
-            />
-          </div>
-        </BrowserRouter>
+                  error: {
+                    iconTheme: {
+                      primary: 'var(--toast-error)',
+                      secondary: 'var(--toast-icon-secondary)',
+                    },
+                  },
+                }}
+              />
+            </div>
+          </BrowserRouter>
+        </ConfirmProvider>
       </ErrorBoundary>
     </ThemeProvider>
   );

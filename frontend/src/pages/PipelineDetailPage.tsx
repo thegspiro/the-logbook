@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -29,6 +29,8 @@ import {
   ArrowDown,
   Flag,
   RotateCcw,
+  EyeOff,
+  Lock,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -38,6 +40,8 @@ import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormMo
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
+import { checklistDoneIds } from '../utils/checklistItems';
+import { useConfirm } from '../contexts/ConfirmContext';
 import type {
   TrainingProgram,
   ProgramPhase,
@@ -125,6 +129,7 @@ const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
     hours: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
     courses: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
     skills_evaluation: 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400',
+    knowledge_test: 'bg-indigo-500/10 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400',
     checklist: 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
     certification: 'bg-pink-500/10 text-pink-700 dark:bg-pink-500/20 dark:text-pink-400',
     shifts: 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
@@ -135,6 +140,7 @@ const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
     hours: 'Hours',
     courses: 'Courses',
     skills_evaluation: 'Skills',
+    knowledge_test: 'Written test',
     checklist: 'Checklist',
     certification: 'Certification',
     shifts: 'Shifts',
@@ -149,6 +155,180 @@ const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
     </span>
   );
 };
+
+// ==================== Requirement List ====================
+
+/**
+ * The requirements attached to one bucket of a pipeline — a phase, or the
+ * program itself. Program-level requirements had no home in this page at all:
+ * only phase requirements were rendered, so a flexible (phase-less) program
+ * showed nothing and offered no way to add anything.
+ */
+const RequirementList: React.FC<{
+  links: ProgramRequirement[];
+  emptyLabel: string;
+  canManage: boolean;
+  savingReqId: string | null;
+  onToggleRequired: (pr: ProgramRequirement) => Promise<void>;
+  onTogglePrerequisite: (pr: ProgramRequirement) => Promise<void>;
+  onMove: (pr: ProgramRequirement, dir: -1 | 1) => Promise<void>;
+  onEdit: (pr: ProgramRequirement) => void;
+  onRemove: (pr: ProgramRequirement) => void;
+  onAdd: () => void;
+}> = ({
+  links,
+  emptyLabel,
+  canManage,
+  savingReqId,
+  onToggleRequired,
+  onTogglePrerequisite,
+  onMove,
+  onEdit,
+  onRemove,
+  onAdd,
+}) => (
+  <>
+    {links.length === 0 ? (
+      <p className="text-theme-text-muted py-4 text-center text-sm">{emptyLabel}</p>
+    ) : (
+      <div className="space-y-2">
+        {links.map((pr, reqIndex) => (
+          <div key={pr.id} className="bg-theme-surface-secondary flex items-start justify-between gap-2 rounded-lg p-3">
+            <div className="flex min-w-0 items-start space-x-3">
+              <CheckCircle2 className="text-theme-text-muted mt-0.5 h-5 w-5" />
+              <div>
+                <div className="mb-1 flex items-center space-x-2">
+                  <span className="text-theme-text-primary text-sm font-medium">
+                    {pr.requirement?.name || `Requirement ${pr.requirement_id.slice(0, 8)}`}
+                  </span>
+                  {pr.requirement?.requirement_type && <ReqTypeBadge type={pr.requirement.requirement_type} />}
+                  {canManage ? (
+                    <button
+                      type="button"
+                      onClick={() => void onToggleRequired(pr)}
+                      disabled={savingReqId === pr.id}
+                      title={
+                        pr.is_required
+                          ? 'Required to finish — click to make optional'
+                          : 'Optional — click to make it required to finish'
+                      }
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                        pr.is_required
+                          ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-400'
+                          : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
+                      }`}
+                    >
+                      {savingReqId === pr.id && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+                      {pr.is_required ? 'Required' : 'Optional'}
+                    </button>
+                  ) : (
+                    pr.is_required && <span className="text-xs text-red-700 dark:text-red-400">Required</span>
+                  )}
+                  {canManage ? (
+                    <button
+                      type="button"
+                      onClick={() => void onTogglePrerequisite(pr)}
+                      disabled={savingReqId === pr.id}
+                      title={
+                        pr.is_prerequisite
+                          ? 'Must be finished before the other items in this stage — click to unlock them'
+                          : 'Click to make members finish this before the other items in this stage'
+                      }
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                        pr.is_prerequisite
+                          ? 'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-400'
+                          : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
+                      }`}
+                    >
+                      <Lock className="h-3 w-3" aria-hidden="true" />
+                      {pr.is_prerequisite ? 'Do this first' : 'Any order'}
+                    </button>
+                  ) : (
+                    pr.is_prerequisite && (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+                        <Lock className="h-3 w-3" aria-hidden="true" />
+                        Do this first
+                      </span>
+                    )
+                  )}
+                </div>
+                {pr.requirement?.description && (
+                  <p className="text-theme-text-muted text-xs">{pr.requirement.description}</p>
+                )}
+                {pr.program_specific_description && (
+                  <p className="text-theme-text-secondary mt-1 text-xs italic">{pr.program_specific_description}</p>
+                )}
+                <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
+                  {pr.requirement?.required_hours && <span>{pr.requirement.required_hours}h required</span>}
+                  {pr.requirement?.required_shifts && <span>{pr.requirement.required_shifts} shifts</span>}
+                  {pr.requirement?.checklist_items && <span>{pr.requirement.checklist_items.length} items</span>}
+                  {pr.requirement?.recency_days != null && <span>within last {pr.requirement.recency_days}d</span>}
+                  {pr.requirement?.required_courses?.length ? (
+                    <span>
+                      {pr.requirement.required_courses.length} course
+                      {pr.requirement.required_courses.length === 1 ? '' : 's'} linked
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            {canManage && (
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => void onMove(pr, -1)}
+                  disabled={reqIndex === 0}
+                  title="Move up"
+                  aria-label="Move requirement up"
+                  className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1 disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onMove(pr, 1)}
+                  disabled={reqIndex === links.length - 1}
+                  title="Move down"
+                  aria-label="Move requirement down"
+                  className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1 disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onEdit(pr)}
+                  title="Edit requirement"
+                  aria-label="Edit requirement"
+                  className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRemove(pr)}
+                  title="Remove requirement"
+                  aria-label="Remove requirement"
+                  className="text-theme-text-muted hover:bg-theme-surface rounded p-1 hover:text-red-600 dark:hover:text-red-400"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+    {canManage && (
+      <button
+        type="button"
+        onClick={onAdd}
+        className="mt-3 inline-flex items-center gap-1 text-sm text-red-700 hover:underline dark:text-red-400"
+      >
+        <Plus className="h-4 w-4" /> Add requirement
+      </button>
+    )}
+  </>
+);
 
 // ==================== Enroll Modal ====================
 
@@ -467,6 +647,16 @@ const RequirementProgressRow: React.FC<{
     setValue(record.progress_value ? String(record.progress_value) : '');
   }, [record.progress_value]);
 
+  const checklistItems = req?.requirement_type === 'checklist' ? (req.checklist_items ?? []) : [];
+  const doneIds = checklistDoneIds(record);
+
+  const toggleChecklistItem = (itemId: string) => {
+    // The whole set goes back, not a single toggle — a retry or a second
+    // officer on the same record then cannot leave a step half-applied.
+    const next = doneIds.includes(itemId) ? doneIds.filter((id) => id !== itemId) : [...doneIds, itemId];
+    void onUpdate(record.id, { checklist_done: next });
+  };
+
   const isDone = record.status === 'completed' || record.status === 'verified';
   const statusMeta = STATUS_META[record.status];
   const passThreshold = req?.passing_score ?? 70;
@@ -533,6 +723,36 @@ const RequirementProgressRow: React.FC<{
           >
             <Save className="h-3.5 w-3.5" /> Save
           </button>
+        </div>
+      )}
+
+      {/* Checklist steps: signed off one at a time, so the member watches the
+          requirement fill up instead of waiting on a single all-or-nothing tick. */}
+      {checklistItems.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {checklistItems.map((item) => {
+            const checked = doneIds.includes(item.id);
+            return (
+              <label key={item.id} className="text-theme-text-secondary flex cursor-pointer items-start gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={saving}
+                  onChange={() => toggleChecklistItem(item.id)}
+                  className="form-checkbox mt-0.5 shrink-0"
+                />
+                <span className={checked ? 'text-theme-text-muted line-through' : ''}>{item.text}</span>
+                {!item.member_visible && (
+                  <span
+                    title="Officer-only — the member does not see this step"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-400"
+                  >
+                    <EyeOff className="h-3 w-3" aria-hidden="true" /> Officer only
+                  </span>
+                )}
+              </label>
+            );
+          })}
         </div>
       )}
 
@@ -642,12 +862,15 @@ const EnrollmentProgressModal: React.FC<{
   onClose: () => void;
   onSaved: () => void;
 }> = ({ isOpen, enrollmentId, memberName, phases, programReqs, structureType, onClose, onSaved }) => {
+  const { confirm } = useConfirm();
   const [data, setData] = useState<MemberProgramProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
   const [resettingCycle, setResettingCycle] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [newDeadline, setNewDeadline] = useState('');
 
   const load = useCallback(async () => {
     if (!enrollmentId) return;
@@ -701,9 +924,13 @@ const EnrollmentProgressModal: React.FC<{
 
   const handleReset = async (progressId: string, requirementName: string) => {
     if (
-      !window.confirm(
-        `Reset "${requirementName}" to not-started? This clears the accumulated progress for a new cycle.`
-      )
+      !(await confirm({
+        title: 'Reset this requirement?',
+        message: `"${requirementName}" goes back to not-started and the progress accumulated against it is cleared for a new cycle.`,
+        confirmLabel: 'Reset',
+        cancelLabel: 'Leave it',
+        variant: 'warning',
+      }))
     )
       return;
     setSavingId(progressId);
@@ -721,9 +948,13 @@ const EnrollmentProgressModal: React.FC<{
   const handleResetCycle = async () => {
     if (!enrollmentId) return;
     if (
-      !window.confirm(
-        `Start a new cycle for ${memberName}? Every requirement resets to not-started and they return to the first phase.`
-      )
+      !(await confirm({
+        title: 'Start a new cycle?',
+        message: `Every requirement resets to not-started for ${memberName} and they return to the first phase.`,
+        confirmLabel: 'Start new cycle',
+        cancelLabel: 'Leave it',
+        variant: 'warning',
+      }))
     )
       return;
     setResettingCycle(true);
@@ -736,6 +967,22 @@ const EnrollmentProgressModal: React.FC<{
       toast.error(getErrorMessage(err, 'Failed to reset enrollment'));
     } finally {
       setResettingCycle(false);
+    }
+  };
+
+  const handleReopen = async () => {
+    if (!enrollmentId) return;
+    setReopening(true);
+    try {
+      await trainingProgramService.reopenEnrollment(enrollmentId, newDeadline);
+      toast.success(newDeadline ? 'Reopened with a new deadline' : 'Enrollment reopened');
+      setNewDeadline('');
+      await load();
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reopen this enrollment'));
+    } finally {
+      setReopening(false);
     }
   };
 
@@ -794,6 +1041,45 @@ const EnrollmentProgressModal: React.FC<{
               <X className="h-5 w-5" />
             </button>
           </div>
+          {/* An expired enrollment is a dead end without a way back: the member
+              cannot make progress and the officer has nothing to act on. */}
+          {data?.enrollment.status === 'expired' && (
+            <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Deadline passed — this enrollment expired at {overall}% complete.
+              </p>
+              <p className="text-theme-text-secondary mt-1 text-xs">
+                Reopening keeps everything {memberName} has already finished. Give them a new deadline, or reopen on the
+                old one.
+              </p>
+              <div className="mt-2 flex flex-wrap items-end gap-2">
+                <div>
+                  <label htmlFor="reopen-deadline" className="text-theme-text-muted mb-1 block text-xs">
+                    New deadline (optional)
+                  </label>
+                  <input
+                    id="reopen-deadline"
+                    type="date"
+                    value={newDeadline}
+                    onChange={(e) => setNewDeadline(e.target.value)}
+                    className="form-input-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleReopen();
+                  }}
+                  disabled={reopening}
+                  className="btn-primary px-3 text-xs disabled:opacity-50"
+                >
+                  {reopening ? 'Reopening...' : 'Reopen enrollment'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-3 flex flex-wrap gap-2">
             {phased && (
               <button
@@ -918,7 +1204,12 @@ const PipelineDetailPage: React.FC = () => {
   const [programReqs, setProgramReqs] = useState<ProgramRequirement[]>([]);
   const [enrollments, setEnrollments] = useState<ProgramEnrollmentWithUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<DetailTab>('overview');
+  // ?tab=enrollments is what the training notifications sent to a mentor link
+  // to, so the tab has to be selectable from the URL.
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<DetailTab>(
+    searchParams.get('tab') === 'enrollments' ? 'enrollments' : 'overview'
+  );
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [progressEnrollment, setProgressEnrollment] = useState<ProgramEnrollmentWithUser | null>(null);
@@ -1015,9 +1306,12 @@ const PipelineDetailPage: React.FC = () => {
     });
   };
 
-  // Get requirements for a specific phase
-  const getPhaseReqs = (phaseId: string) =>
-    programReqs.filter((r) => r.phase_id === phaseId).sort((a, b) => a.sort_order - b.sort_order);
+  // Requirements for one phase, or — with null — the ones attached to the
+  // program itself rather than to any phase.
+  const getPhaseReqs = (phaseId: string | null) =>
+    programReqs.filter((r) => (r.phase_id ?? null) === phaseId).sort((a, b) => a.sort_order - b.sort_order);
+
+  const programLevelReqs = getPhaseReqs(null);
 
   const afterEdit = () => {
     setShowEditProgram(false);
@@ -1068,8 +1362,8 @@ const PipelineDetailPage: React.FC = () => {
   };
 
   const moveRequirement = async (link: ProgramRequirement, dir: -1 | 1) => {
-    if (!programId || !link.phase_id) return;
-    const ordered = getPhaseReqs(link.phase_id);
+    if (!programId) return;
+    const ordered = getPhaseReqs(link.phase_id ?? null);
     const i = ordered.findIndex((r) => r.id === link.id);
     const j = i + dir;
     const a = ordered[i];
@@ -1149,6 +1443,25 @@ const PipelineDetailPage: React.FC = () => {
       });
       setProgramReqs((prev) => prev.map((r) => (r.id === pr.id ? { ...r, is_required: updated.is_required } : r)));
       toast.success(next ? 'Marked as required' : 'Marked as optional');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update requirement'));
+    } finally {
+      setSavingReqId(null);
+    }
+  };
+
+  const handleTogglePrerequisite = async (pr: ProgramRequirement) => {
+    if (!programId) return;
+    const next = !pr.is_prerequisite;
+    setSavingReqId(pr.id);
+    try {
+      const updated = await trainingProgramService.updateProgramRequirement(programId, pr.id, {
+        is_prerequisite: next,
+      });
+      setProgramReqs((prev) =>
+        prev.map((r) => (r.id === pr.id ? { ...r, is_prerequisite: updated.is_prerequisite } : r))
+      );
+      toast.success(next ? 'Members must finish this before the rest of this stage' : 'No longer a prerequisite');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update requirement'));
     } finally {
@@ -1242,13 +1555,15 @@ const PipelineDetailPage: React.FC = () => {
                 <span>Edit</span>
               </button>
             )}
-            <button
-              onClick={() => setShowEnrollModal(true)}
-              className="btn-success flex items-center space-x-1 px-3 text-sm"
-            >
-              <UserPlus className="h-4 w-4" />
-              <span>Enroll</span>
-            </button>
+            {canManage && (
+              <button
+                onClick={() => setShowEnrollModal(true)}
+                className="btn-success flex items-center space-x-1 px-3 text-sm"
+              >
+                <UserPlus className="h-4 w-4" />
+                <span>Enroll</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 void handleDuplicate();
@@ -1336,10 +1651,10 @@ const PipelineDetailPage: React.FC = () => {
         {/* Content */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
-            {phases.length === 0 ? (
+            {phases.length === 0 && programLevelReqs.length === 0 && !canManage ? (
               <div className="bg-theme-surface rounded-lg py-12 text-center">
                 <Layers className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
-                <p className="text-theme-text-muted">No phases defined for this pipeline</p>
+                <p className="text-theme-text-muted">Nothing has been added to this pipeline yet</p>
               </div>
             ) : (
               phases
@@ -1443,140 +1758,30 @@ const PipelineDetailPage: React.FC = () => {
                           {phase.description && (
                             <p className="text-theme-text-muted mb-4 text-sm">{phase.description}</p>
                           )}
-
-                          {phaseReqs.length === 0 ? (
-                            <p className="text-theme-text-muted py-4 text-center text-sm">
-                              No requirements assigned to this phase.
+                          {phase.prerequisite_phase_ids && phase.prerequisite_phase_ids.length > 0 && (
+                            <p className="mb-4 flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+                              <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+                              Members can't start this phase until they finish{' '}
+                              {phase.prerequisite_phase_ids
+                                .map((id) => phases.find((p) => p.id === id)?.name)
+                                .filter((n): n is string => !!n)
+                                .join(', ')}
+                              .
                             </p>
-                          ) : (
-                            <div className="space-y-2">
-                              {phaseReqs.map((pr, reqIndex) => (
-                                <div
-                                  key={pr.id}
-                                  className="bg-theme-surface-secondary flex items-start justify-between gap-2 rounded-lg p-3"
-                                >
-                                  <div className="flex min-w-0 items-start space-x-3">
-                                    <CheckCircle2 className="text-theme-text-muted mt-0.5 h-5 w-5" />
-                                    <div>
-                                      <div className="mb-1 flex items-center space-x-2">
-                                        <span className="text-theme-text-primary text-sm font-medium">
-                                          {pr.requirement?.name || `Requirement ${pr.requirement_id.slice(0, 8)}`}
-                                        </span>
-                                        {pr.requirement?.requirement_type && (
-                                          <ReqTypeBadge type={pr.requirement.requirement_type} />
-                                        )}
-                                        {canManage ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => void handleToggleRequired(pr)}
-                                            disabled={savingReqId === pr.id}
-                                            title={
-                                              pr.is_required
-                                                ? 'Required to complete the phase — click to make optional'
-                                                : 'Optional — click to make it required to complete the phase'
-                                            }
-                                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
-                                              pr.is_required
-                                                ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-400'
-                                                : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
-                                            }`}
-                                          >
-                                            {savingReqId === pr.id && (
-                                              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                                            )}
-                                            {pr.is_required ? 'Required' : 'Optional'}
-                                          </button>
-                                        ) : (
-                                          pr.is_required && (
-                                            <span className="text-xs text-red-700 dark:text-red-400">Required</span>
-                                          )
-                                        )}
-                                      </div>
-                                      {pr.requirement?.description && (
-                                        <p className="text-theme-text-muted text-xs">{pr.requirement.description}</p>
-                                      )}
-                                      {pr.program_specific_description && (
-                                        <p className="text-theme-text-secondary mt-1 text-xs italic">
-                                          {pr.program_specific_description}
-                                        </p>
-                                      )}
-                                      <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
-                                        {pr.requirement?.required_hours && (
-                                          <span>{pr.requirement.required_hours}h required</span>
-                                        )}
-                                        {pr.requirement?.required_shifts && (
-                                          <span>{pr.requirement.required_shifts} shifts</span>
-                                        )}
-                                        {pr.requirement?.checklist_items && (
-                                          <span>{pr.requirement.checklist_items.length} items</span>
-                                        )}
-                                        {pr.requirement?.recency_days != null && (
-                                          <span>within last {pr.requirement.recency_days}d</span>
-                                        )}
-                                        {pr.requirement?.required_courses?.length ? (
-                                          <span>
-                                            {pr.requirement.required_courses.length} course
-                                            {pr.requirement.required_courses.length === 1 ? '' : 's'} linked
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  {canManage && (
-                                    <div className="flex shrink-0 items-center gap-0.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => void moveRequirement(pr, -1)}
-                                        disabled={reqIndex === 0}
-                                        title="Move up"
-                                        aria-label="Move requirement up"
-                                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1 disabled:opacity-30 disabled:hover:bg-transparent"
-                                      >
-                                        <ArrowUp className="h-4 w-4" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => void moveRequirement(pr, 1)}
-                                        disabled={reqIndex === phaseReqs.length - 1}
-                                        title="Move down"
-                                        aria-label="Move requirement down"
-                                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1 disabled:opacity-30 disabled:hover:bg-transparent"
-                                      >
-                                        <ArrowDown className="h-4 w-4" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setReqModal({ phaseId: phase.id, link: pr })}
-                                        title="Edit requirement"
-                                        aria-label="Edit requirement"
-                                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1"
-                                      >
-                                        <Pencil className="h-4 w-4" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => confirmRemoveRequirement(pr)}
-                                        title="Remove requirement"
-                                        aria-label="Remove requirement"
-                                        className="text-theme-text-muted hover:bg-theme-surface rounded p-1 hover:text-red-600 dark:hover:text-red-400"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
                           )}
-                          {canManage && (
-                            <button
-                              type="button"
-                              onClick={() => setReqModal({ phaseId: phase.id })}
-                              className="mt-3 inline-flex items-center gap-1 text-sm text-red-700 hover:underline dark:text-red-400"
-                            >
-                              <Plus className="h-4 w-4" /> Add requirement
-                            </button>
-                          )}
+
+                          <RequirementList
+                            links={phaseReqs}
+                            emptyLabel="No requirements assigned to this phase."
+                            canManage={canManage}
+                            savingReqId={savingReqId}
+                            onToggleRequired={handleToggleRequired}
+                            onTogglePrerequisite={handleTogglePrerequisite}
+                            onMove={moveRequirement}
+                            onEdit={(pr) => setReqModal({ phaseId: phase.id, link: pr })}
+                            onRemove={confirmRemoveRequirement}
+                            onAdd={() => setReqModal({ phaseId: phase.id })}
+                          />
                         </div>
                       )}
                     </div>
@@ -1591,6 +1796,34 @@ const PipelineDetailPage: React.FC = () => {
               >
                 <Plus className="h-4 w-4" /> Add phase
               </button>
+            )}
+
+            {/* Requirements that belong to the program rather than a phase.
+                Always shown to an officer so a phase-less pipeline is editable;
+                shown to everyone else only when it actually has some. */}
+            {(canManage || programLevelReqs.length > 0) && (
+              <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+                <div className="mb-3">
+                  <h3 className="text-theme-text-primary flex items-center gap-2 font-medium">
+                    <ListChecks className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Requirements outside any phase
+                  </h3>
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    Every enrolled member has to complete these, whichever phase they are in.
+                  </p>
+                </div>
+                <RequirementList
+                  links={programLevelReqs}
+                  emptyLabel="None yet."
+                  canManage={canManage}
+                  savingReqId={savingReqId}
+                  onToggleRequired={handleToggleRequired}
+                  onTogglePrerequisite={handleTogglePrerequisite}
+                  onMove={moveRequirement}
+                  onEdit={(pr) => setReqModal({ phaseId: null, link: pr })}
+                  onRemove={confirmRemoveRequirement}
+                  onAdd={() => setReqModal({ phaseId: null })}
+                />
+              </div>
             )}
 
             {/* Milestones */}
@@ -1663,12 +1896,16 @@ const PipelineDetailPage: React.FC = () => {
               <div className="bg-theme-surface rounded-lg py-12 text-center">
                 <Users className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <p className="text-theme-text-muted mb-2">No members enrolled yet</p>
-                <p className="text-theme-text-muted mb-4 text-sm">
-                  Use the Enroll button to add members to this pipeline
-                </p>
-                <button onClick={() => setShowEnrollModal(true)} className="btn-primary text-sm">
-                  Enroll Members
-                </button>
+                {canManage && (
+                  <>
+                    <p className="text-theme-text-muted mb-4 text-sm">
+                      Use the Enroll button to add members to this pipeline
+                    </p>
+                    <button onClick={() => setShowEnrollModal(true)} className="btn-primary text-sm">
+                      Enroll Members
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <div className="space-y-3">
@@ -1734,6 +1971,7 @@ const PipelineDetailPage: React.FC = () => {
         <PhaseFormModal
           programId={programId}
           phase={phaseModal.phase}
+          allPhases={phases}
           nextPhaseNumber={phases.reduce((max, p) => Math.max(max, p.phase_number), 0) + 1}
           onClose={() => setPhaseModal(null)}
           onSaved={afterEdit}
@@ -1744,7 +1982,7 @@ const PipelineDetailPage: React.FC = () => {
           programId={programId}
           phaseId={reqModal.phaseId}
           link={reqModal.link}
-          sortOrder={reqModal.phaseId ? getPhaseReqs(reqModal.phaseId).length : programReqs.length}
+          sortOrder={getPhaseReqs(reqModal.phaseId).length}
           linkedRequirementIds={programReqs.map((pr) => pr.requirement_id)}
           onClose={() => setReqModal(null)}
           onSaved={afterEdit}

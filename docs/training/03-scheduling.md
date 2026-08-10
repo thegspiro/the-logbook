@@ -538,6 +538,59 @@ FF Schmidt was on a 2-week Leave of Absence (April 1-14), so his requirement was
 
 ---
 
+## Finding Your Way Around Scheduling Settings (2026-08-09)
+
+**Required Permission:** `scheduling.manage`
+
+Scheduling settings were rebuilt on **2026-08-09** to use the same layout as
+Organization Settings and Event Settings: a **section list down the left** on a
+computer, a **scrollable tab strip across the top** on a phone, and one heading
+rather than the two stacked titles it used to show.
+
+Seven sections:
+
+| Section           | What it holds                                             |
+| ----------------- | --------------------------------------------------------- |
+| **General**       | Shift defaults, overtime cap, and close-out rules         |
+| **Apparatus**     | Apparatus and resource type defaults                      |
+| **Platoons**      | Platoon rosters and assignments                           |
+| **Eligibility**   | Which membership types may sign themselves up for a shift |
+| **Notifications** | Shift reminders and alerts                                |
+| **Equipment**     | Check requirements and templates                          |
+| **Shift Reports** | End-of-shift reporting options                            |
+
+> **[SCREENSHOT NEEDED]:** _The rebuilt Scheduling Settings screen on a desktop
+> browser, showing the left-hand section list with all seven sections and their
+> descriptions, "General" selected and marked as current, and the General
+> section's content in the card to its right under the single page heading._
+
+> **[SCREENSHOT NEEDED]:** _The same screen at phone width, showing the
+> horizontally scrollable section tab strip across the top in place of the
+> sidebar._
+
+### Two things that changed with it
+
+**The Save button only appears where it saves something.** General, Apparatus and
+Equipment have the Save/Reset footer. The other four sections each have their own
+save control. Until this change the footer was shown on all seven while saving
+only three — so on Notifications and Shift Reports you could press **Save**, see
+"Settings saved", and have changed nothing.
+
+**A section can now be linked to.** Selecting a section puts it in the address
+bar, so you can bookmark it, refresh into it, and go **back** to the section you
+came from. It previously read the address on load but never wrote it.
+
+> **Eligibility here is not the same screen as rank eligibility.** This section
+> governs which **membership types** may sign themselves up for a shift. Which
+> **positions** a given **rank** may fill is set on **Settings → Ranks**, on the
+> other side of the app. The two are easy to confuse and neither one is the other.
+
+> **A section for a feature your department has switched off** — Platoons, most
+> commonly — falls back to General rather than showing you an empty panel. A
+> saved link to it still works if the feature is turned back on.
+
+---
+
 ## Platoon Management (2026-06-19)
 
 Platoon membership is now a **person-level attribute** — each member belongs to a platoon (A, B, C, etc.) and the schedule is built from that membership.
@@ -609,15 +662,21 @@ Operational ranks define which shift positions each rank is eligible for. When m
 
 **Setting up eligible positions:**
 
-1. Navigate to **Settings > Ranks** (Organization Settings → Operational Ranks).
-2. For each rank, click the position chips to toggle which positions that rank may fill. A filled chip is eligible.
-3. Changes save as you click. Existing ranks are backfilled with default eligible positions.
+1. Navigate to **Settings > Ranks** (listed as _Operational rank configuration_).
+2. Edit a rank and click **Configure eligible positions**, then click the
+   position chips to toggle them on and off. It is a per-rank list rather than
+   a single grid of every rank against every position — you set one rank at a
+   time.
+3. Save. Existing ranks are backfilled with default eligible positions.
 
-![Ranks settings with the eligible positions each rank may fill](./images/03-35-eligibility-matrix.png)
+![Operational Ranks settings, listing each rank with the shift positions it may fill](./images/03-33-settings-eligibility.png)
 
-A member whose rank is not one of the configured ranks is flagged on this page under **active members with unrecognised ranks** — the rank stored on a profile is the rank's _code_, so a profile carrying a free-text title will not match.
+**Do not confuse this with Scheduling > Settings > Eligibility**, which is a
+different control: it governs which _membership types_ (Prospective, Retired,
+Honorary, Administrative…) are barred from signing themselves up at all, and
+which positions are open to everyone regardless of rank.
 
-**Department-wide signup rules** are separate, under **Shift Scheduling > Settings > Eligibility**: which membership types may not sign themselves up at all, and which positions are open to any eligible member regardless of rank.
+![Scheduling settings Eligibility tab, excluding membership types from self-signup and listing open positions](./images/03-40-settings-position-eligibility.png)
 
 **How it affects shift signup:**
 
@@ -784,9 +843,14 @@ After finalization, a green badge shows "Shift finalized on [date]".
 
 Navigate to **Scheduling > Settings > Shift Reports** to configure the shift completion report workflow. This settings tab connects the scheduling module to the training module and controls how officers file post-shift reports.
 
-The tab is a sidebar of eight sections — Feature Toggles, Checklist Timing, Post-Shift Validation, Feedback Defaults, Apparatus Skills, Form Sections, Review Workflow and Rating Scale — with one panel open at a time. The sections below follow that order.
+The tab is a **section navigator, not a page of cards** — you pick one section
+at a time from the list and it fills the panel. There are eight: Feature
+Toggles, Checklist Timing, Post-Shift Validation, Feedback Defaults, Apparatus
+Skills, Form Sections, Review Workflow and Rating Scale. (The section is
+labelled **Form Sections**; earlier versions of this guide called it "Report
+Form Sections".)
 
-![Shift report settings with checklist timing, validation and form sections](./images/03-38-shift-report-settings.png)
+![Shift Reports settings with the Checklist Timing section selected](./images/03-34-settings-checklist-timing.png)
 
 #### Checklist Timing
 
@@ -817,7 +881,10 @@ Controls which optional sections appear on the shift completion report form when
 | Tasks Performed       | On      | Checklist of completed tasks                |
 | Call Types            | On      | Multi-select of incident types responded to |
 
-![Report form sections with a toggle for each part of the report](./images/03-40-report-form-sections.png)
+All seven are on by default, and each is a checkbox rather than a switch. Core
+fields — trainee, date and hours — are always shown and are not listed here.
+
+![Shift Reports settings Form Sections, toggling which parts of the report form appear](./images/03-35-settings-form-sections.png)
 
 **When to toggle sections off:**
 
@@ -828,15 +895,19 @@ Controls which optional sections appear on the shift completion report form when
 
 #### Per-Apparatus-Type Skills and Tasks
 
-Below the toggles, the settings panel shows apparatus-type-specific skill and task mappings. These determine which skills and tasks appear in the report form based on the shift's assigned apparatus.
+The **Apparatus Skills** section holds apparatus-type-specific skill and task mappings. These determine which skills and tasks appear in the report form based on the shift's assigned apparatus, overriding the general defaults.
 
-1. Expand an apparatus type accordion (Engine, Ladder, Ambulance, Rescue, etc.)
+1. Pick an apparatus type from the row of pills (Ambulance, Boat, Brush, Chief,
+   Engine, Hazmat, Ladder, Rescue, Tanker). Each pill carries the number of
+   skills mapped to it, and the section opens on the first type alphabetically
+   — it is a selector, not an accordion, so exactly one type is shown at a time
 2. View the current skills and tasks mapped to that type
-3. Add new skills/tasks using the text input and "+" button
-4. Remove skills/tasks by clicking the "×" button
-5. Changes save when you click **Save** at the bottom of the settings panel
+3. Add new skills/tasks using the text input and "+ Add" button
+4. Rename with the pencil icon, or remove with the "×" button
+5. Click **Save Apparatus Skills & Tasks** — this section saves on its own
+   button, not the panel's **Save Settings** at the bottom
 
-![Per-apparatus skills and tasks with the engine type selected](./images/03-41-apparatus-skills.png)
+![Shift Reports settings Apparatus Skills, showing the skills and tasks tracked for Engine](./images/03-36-settings-apparatus-skills.png)
 
 **How this connects to the report form:**
 
@@ -848,13 +919,18 @@ Below the toggles, the settings panel shows apparatus-type-specific skill and ta
 
 #### Rating Scale Customization
 
-| Setting      | Default              | Description                                                            |
-| ------------ | -------------------- | ---------------------------------------------------------------------- |
-| Rating Label | "Performance Rating" | Text shown above the rating input                                      |
-| Scale Type   | Stars                | "Stars" (1-5 star icons) or "Descriptive" (labeled buttons)            |
-| Scale Labels | (none)               | Custom labels per level (e.g., 1="Needs Improvement", 5="Exceptional") |
+| Setting       | Default                                  | Description                                                                           |
+| ------------- | ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| Field label   | "Performance Rating"                     | Text shown above the rating input                                                     |
+| Display style | Stars (1-5)                              | **Stars (1-5)** or **Labeled Bubbles** — a two-button toggle, not a dropdown          |
+| Rating levels | Needs Improvement → Exceeds Expectations | Editable label per level; add, remove, rename and reorder, each level numbered from 1 |
 
-![Rating scale settings with the scale type and per-level labels](./images/03-42-rating-scale.png)
+**The level labels only appear under Labeled Bubbles.** With the default Stars
+style the section shows just the display-style toggle and the field label —
+selecting Labeled Bubbles is what reveals the level editor. This section saves
+on its own **Save Rating Scale** button.
+
+![Shift Reports settings Rating Scale, choosing the scale style and its per-level labels](./images/03-37-settings-rating-scale.png)
 
 #### Save as Draft
 
@@ -1093,38 +1169,41 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 
 ## Troubleshooting
 
-| Issue                                               | Solution                                                                                                                                                                                                                   |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cannot sign up for an open shift                    | Check that you are logged in as an active member and the shift has not already been filled.                                                                                                                                |
-| Shift assignment shows "Member is on leave"         | The member has an active leave of absence covering the shift date. The leave must be deactivated before assigning.                                                                                                         |
-| Attendance hours not calculating                    | Ensure both check-in and check-out times are recorded. Duration is calculated automatically.                                                                                                                               |
-| Generated shifts not appearing on calendar          | Check the date range filter on the calendar. Generated shifts appear for the pattern's date range.                                                                                                                         |
-| Swap request stuck in pending                       | Both the other member and an officer must act. Check with the other member first, then the reviewing officer.                                                                                                              |
-| Compliance report shows incorrect hours             | Verify that attendance records have accurate check-in/out times. Only shifts with recorded attendance count.                                                                                                               |
-| Platoon rotation seems off by a day                 | Check the "Starting Platoon" setting when generating the pattern. If the wrong platoon is set for day 1, the entire rotation shifts.                                                                                       |
-| Minimum staffing warning on a fully staffed shift   | Verify all assigned members have confirmed their assignment. Pending assignments may not count toward the staffing total depending on your department's settings.                                                          |
-| Shift hours not appearing in Training compliance    | Attendance must be recorded (check-in and check-out). Shifts without attendance data contribute zero hours to training requirements.                                                                                       |
-| Scheduling data not updating across tabs            | The module uses a centralized Zustand store. Try refreshing the page. If the issue persists, clear browser cache.                                                                                                          |
-| Settings tab not showing                            | The Settings tab requires `scheduling.manage` permission. Contact your administrator.                                                                                                                                      |
-| "Too many attempts" on shift signup                 | Rate limiting may be active. Wait a few seconds and try again.                                                                                                                                                             |
-| Cannot edit shift times after creation              | Officers with `scheduling.manage` can now edit shift start/end times, apparatus, color, notes, and custom creation times from the shift detail panel.                                                                      |
-| Position change requires opening a modal            | Use the new inline position change UI directly on the shift card to change a member's assigned position without navigating away.                                                                                           |
-| Shift signup shows no positions                     | Your rank may not have eligible positions configured, or your membership type may be excluded from self-signup. Ask an administrator to check the rank's eligible positions and Shift Scheduling > Settings > Eligibility. |
-| Dashboard still shows cancelled shifts              | Fixed 2026-03-19 — declined and cancelled assignments are now filtered from "My Upcoming Shifts". Pull latest.                                                                                                             |
-| Sign Up button not appearing for open shifts        | Your rank may not be eligible for the remaining open positions. Check with your administrator.                                                                                                                             |
-| Can see assignment controls but get 403 error       | The shift detail panel now uses separate permissions: `scheduling.manage` for shift editing and `scheduling.assign` for member assignments. Ask your administrator to grant the appropriate permission.                    |
-| Self-signup form missing on shift detail            | Fixed 2026-03-23 — the self-signup form on non-apparatus shifts is no longer hidden behind a permission gate. All members can self-sign up for open shifts.                                                                |
-| "Calls/Incidents" section missing from shift detail | Removed 2026-03-23 — the placeholder section was removed because there is no CAD integration to populate it. Call data will appear once ePCR/NEMSIS integration is implemented.                                            |
-| Equipment check template not appearing for shift    | Template must be assigned to the shift's apparatus (or apparatus type) and your position must match the template's assigned positions.                                                                                     |
-| Equipment check shows auto-fail on a working item   | Check the item's expiration date — items past their expiration auto-fail regardless of submitted result.                                                                                                                   |
-| Apparatus shows deficiency badge but check passed   | A subsequent full check must pass ALL items to clear the deficiency flag. Partial checks don't clear it.                                                                                                                   |
-| Equipment check photo won't upload                  | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item.                                                                                                                                                  |
-| Equipment check reports showing no data             | Ensure at least one equipment check has been submitted. Check the date range filter.                                                                                                                                       |
-| Shift times showing in wrong timezone               | Fixed 2026-03-19 — shift creation now converts local times to UTC using org timezone. Template-generated shifts also inherit correct timezone.                                                                             |
-| Cannot assign members to shifts                     | Fixed 2026-03-22 — assignment UI was gated by `scheduling.manage_assignments`; now works with `scheduling.manage`.                                                                                                         |
-| Sign Up button not appearing despite eligible rank  | Fixed 2026-03-22 — Open Shifts tab fallback permission and self-signup visibility corrected.                                                                                                                               |
-| Dashboard shows cancelled/declined shifts           | Fixed 2026-03-22 — "My Upcoming Shifts" now filters out declined and cancelled assignments.                                                                                                                                |
-| Barcode/QR scan not working on desktop              | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers.                                                                                                                                      |
+| Issue                                                                                     | Solution                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cannot sign up for an open shift                                                          | Check that you are logged in as an active member and the shift has not already been filled.                                                                                                                            |
+| Shift assignment shows "Member is on leave"                                               | The member has an active leave of absence covering the shift date. The leave must be deactivated before assigning.                                                                                                     |
+| Attendance hours not calculating                                                          | Ensure both check-in and check-out times are recorded. Duration is calculated automatically.                                                                                                                           |
+| Generated shifts not appearing on calendar                                                | Check the date range filter on the calendar. Generated shifts appear for the pattern's date range.                                                                                                                     |
+| Swap request stuck in pending                                                             | Both the other member and an officer must act. Check with the other member first, then the reviewing officer.                                                                                                          |
+| Compliance report shows incorrect hours                                                   | Verify that attendance records have accurate check-in/out times. Only shifts with recorded attendance count.                                                                                                           |
+| Platoon rotation seems off by a day                                                       | Check the "Starting Platoon" setting when generating the pattern. If the wrong platoon is set for day 1, the entire rotation shifts.                                                                                   |
+| Minimum staffing warning on a fully staffed shift                                         | Verify all assigned members have confirmed their assignment. Pending assignments may not count toward the staffing total depending on your department's settings.                                                      |
+| Shift hours not appearing in Training compliance                                          | Attendance must be recorded (check-in and check-out). Shifts without attendance data contribute zero hours to training requirements.                                                                                   |
+| Scheduling data not updating across tabs                                                  | The module uses a centralized Zustand store. Try refreshing the page. If the issue persists, clear browser cache.                                                                                                      |
+| Settings tab not showing                                                                  | The Settings tab requires `scheduling.manage` permission. Contact your administrator.                                                                                                                                  |
+| Clicking a tab snaps straight back to Schedule                                            | Fixed 2026-08-09. Every tab except Schedule could previously only be reached by a direct link — the click selected the tab and the page immediately reset it. Tab clicks now also update the address bar. Pull latest. |
+| Pressing Save on Notifications or Shift Reports said "Settings saved" but changed nothing | Fixed 2026-08-09. Those sections were showing the page-level Save footer, which only ever saved three other sections. Each section now has its own save control and the footer appears only where it applies.          |
+| A saved link to a scheduling settings section opens the wrong section                     | Fixed 2026-08-09 — the section is now written into the address bar when you select it, so links, refresh and the back button all land where you expect.                                                                |
+| "Too many attempts" on shift signup                                                       | Rate limiting may be active. Wait a few seconds and try again.                                                                                                                                                         |
+| Cannot edit shift times after creation                                                    | Officers with `scheduling.manage` can now edit shift start/end times, apparatus, color, notes, and custom creation times from the shift detail panel.                                                                  |
+| Position change requires opening a modal                                                  | Use the new inline position change UI directly on the shift card to change a member's assigned position without navigating away.                                                                                       |
+| Shift signup shows no positions                                                           | Your rank may not have eligible positions configured, or your membership type may be excluded from self-signup. Check both Settings > Ranks and Scheduling > Settings > Eligibility.                                   |
+| Dashboard still shows cancelled shifts                                                    | Fixed 2026-03-19 — declined and cancelled assignments are now filtered from "My Upcoming Shifts". Pull latest.                                                                                                         |
+| Sign Up button not appearing for open shifts                                              | Your rank may not be eligible for the remaining open positions. Check with your administrator.                                                                                                                         |
+| Can see assignment controls but get 403 error                                             | The shift detail panel now uses separate permissions: `scheduling.manage` for shift editing and `scheduling.assign` for member assignments. Ask your administrator to grant the appropriate permission.                |
+| Self-signup form missing on shift detail                                                  | Fixed 2026-03-23 — the self-signup form on non-apparatus shifts is no longer hidden behind a permission gate. All members can self-sign up for open shifts.                                                            |
+| "Calls/Incidents" section missing from shift detail                                       | Removed 2026-03-23 — the placeholder section was removed because there is no CAD integration to populate it. Call data will appear once ePCR/NEMSIS integration is implemented.                                        |
+| Equipment check template not appearing for shift                                          | Template must be assigned to the shift's apparatus (or apparatus type) and your position must match the template's assigned positions.                                                                                 |
+| Equipment check shows auto-fail on a working item                                         | Check the item's expiration date — items past their expiration auto-fail regardless of submitted result.                                                                                                               |
+| Apparatus shows deficiency badge but check passed                                         | A subsequent full check must pass ALL items to clear the deficiency flag. Partial checks don't clear it.                                                                                                               |
+| Equipment check photo won't upload                                                        | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item.                                                                                                                                              |
+| Equipment check reports showing no data                                                   | Ensure at least one equipment check has been submitted. Check the date range filter.                                                                                                                                   |
+| Shift times showing in wrong timezone                                                     | Fixed 2026-03-19 — shift creation now converts local times to UTC using org timezone. Template-generated shifts also inherit correct timezone.                                                                         |
+| Cannot assign members to shifts                                                           | Fixed 2026-03-22 — assignment UI was gated by `scheduling.manage_assignments`; now works with `scheduling.manage`.                                                                                                     |
+| Sign Up button not appearing despite eligible rank                                        | Fixed 2026-03-22 — Open Shifts tab fallback permission and self-signup visibility corrected.                                                                                                                           |
+| Dashboard shows cancelled/declined shifts                                                 | Fixed 2026-03-22 — "My Upcoming Shifts" now filters out declined and cancelled assignments.                                                                                                                            |
+| Barcode/QR scan not working on desktop                                                    | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers.                                                                                                                                  |
 
 ---
 
@@ -1257,7 +1336,11 @@ When an officer assigns you to a shift, you now receive:
 
 Officers can configure these in **Settings > Scheduling > Notifications > Shift Assignment Alerts**.
 
-![Scheduling notification settings for assignment alerts](./images/03-37-scheduling-notifications.png)
+There is no CC-recipient field. Email is a single **Also send email
+notification** checkbox alongside the in-app notification, and who receives it
+is decided by the alert's own role chips, not by an address typed in here.
+
+![Scheduling notification settings showing the shift assignment alert options](./images/03-38-notifications-assignment.png)
 
 ### Start-of-Shift Reminders
 
@@ -1269,7 +1352,7 @@ A scheduled task runs every 30 minutes to send reminders to members assigned to 
 
 Department settings for reminders are under **Settings > Scheduling > Notifications > Start-of-Shift Reminders**.
 
-![Start-of-shift reminder settings with the lookahead dropdown](./images/03-39-start-of-shift-reminders.png)
+![Scheduling notification settings showing the start-of-shift reminder options](./images/03-39-notifications-reminders.png)
 
 > **Edge case:** A shift that has already started is skipped. Reminders are sent only once per shift (tracked via `activities.start_reminder_sent`).
 
@@ -1692,7 +1775,7 @@ Under **Scheduling → Settings**, a department can turn on **automatic shift
 generation** so active patterns keep producing shifts a chosen number of weeks
 ahead — no need to press "Generate" each cycle.
 
-![Scheduling general settings with close-out rules and overtime cap](./images/03-36-scheduling-general-settings.png)
+![Scheduling settings General tab with the close-out rules, overtime cap and shift generation options](./images/03-32-settings-general-closeout.png)
 
 ### Edge Cases
 

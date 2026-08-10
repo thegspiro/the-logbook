@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.utils import generate_uuid
 from app.models.training import TrainingWaiver, TrainingWaiverType
 from app.models.user import LeaveType, MemberLeaveOfAbsence, User
+from app.utils.model_updates import apply_updates
 
 
 class MemberLeaveService:
@@ -70,9 +71,7 @@ class MemberLeaveService:
         waiver = result.scalar_one_or_none()
         if not waiver:
             return
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(waiver, key, value)
+        apply_updates(waiver, kwargs)
         waiver.updated_at = datetime.now(timezone.utc)
 
     async def _deactivate_linked_waiver(self, waiver_id: str) -> None:
@@ -209,9 +208,7 @@ class MemberLeaveService:
             except ValueError:
                 kwargs["leave_type"] = LeaveType.OTHER
 
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(leave, key, value)
+        apply_updates(leave, kwargs)
 
         # Validate date order on the resulting record — the create path enforces
         # this but the update path previously did not, allowing an inverted range.
@@ -251,10 +248,14 @@ class MemberLeaveService:
 
         # Sync date changes to linked waiver
         if leave.linked_training_waiver_id and not leave.exempt_from_training_waiver:
+            # Presence in kwargs is the test, not truthiness: kwargs is an
+            # exclude_unset dump, so clearing the end date (an open-ended
+            # leave) has to propagate too, or the waiver keeps expiring on a
+            # date the leave no longer has.
             waiver_updates = {}
-            if "start_date" in kwargs and kwargs["start_date"] is not None:
+            if "start_date" in kwargs:
                 waiver_updates["start_date"] = leave.start_date
-            if "end_date" in kwargs and kwargs["end_date"] is not None:
+            if "end_date" in kwargs:
                 waiver_updates["end_date"] = leave.end_date
             if waiver_updates:
                 await self._update_linked_waiver(

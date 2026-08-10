@@ -1,6 +1,55 @@
 # Application Review — Scheduled Tasks & Cron
 
-**Prefix:** `CRON` · **Iteration:** A3 · **Reviewed:** 2026-08-05
+**Prefix:** `CRON` · **Iteration:** A3 · **Reviewed:** 2026-08-05 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified pass-1 (endpoints gated; SCHEDULE/TASK_RUNNERS in sync — now 39/39;
+Pitfall-#12 dedup writes assign fresh dicts; the 8 CRON-1 inline runners roll back).
+The sweep found the **pass-1 CRON-1 fix was incomplete** — three sibling org-loops
+were never covered — plus a money-precision gap. **6 fixes.**
+
+### CRON-5 — MED — Three more org-loops could poison the shared session / lose cross-org work — ✅ FIXED
+
+CRON-1 established that a per-org loop over a shared `AsyncSession` must commit each
+org and roll back a failed one, or one org's failed flush poisons the session and
+every *later* org fails too (self-concealing as "many orgs broken"). Pass-1 fixed 8
+runners but missed:
+- **`run_shift_auto_checkout`** — the worst: it *had* a rollback but **deferred its
+  commit** to a single tail commit, so a late org's rollback discarded **every
+  earlier org's** checkouts + reminders (and re-sent them next run). Now commits
+  per org; tail commit removed.
+- **`run_compliance_auto_reports`** and **`run_officer_directory_sync`** — inline
+  loops with no per-org commit and no rollback. Both now commit per org + roll back
+  a failed one.
+- **`cert_alert_service.run_daily_cert_alerts`** (endpoint-invoked, not a registered
+  runner) — added the rollback.
+1 DB-free regression test pins the isolation (`test_cron_org_loop_isolation.py`).
+
+### CRON-2b — LOW — `run_daily_cert_alerts` didn't skip inactive orgs — ✅ FIXED
+
+The registered `_for_each_org` path filters `Organization.active.isnot(False)`; this
+endpoint-invoked sibling selected *all* orgs, so a decommissioned department would
+still be mailed. Aligned to the same filter.
+
+### CRON-6 — LOW-MED (money) — Overdue-property reminder totalled chargeable value as float — ✅ FIXED
+
+`property_return_reminder_service` summed the outstanding-property value (shown to
+the member and persisted to the `Numeric` `total_value_outstanding`) as `float` —
+the FIN-7 / LIFE-1 class. Now accumulated as `Decimal` (per-item output values kept
+`float` for the existing JSON shape). Also guarded the bare `ZoneInfo(org.timezone)`
+in `_to_local` with the same fallback the runners use — `process_reminders` has no
+surrounding try, so a malformed stored zone would have aborted the whole run.
+
+**Flagged (not fixed):** the naive `datetime.now()` in `run_rolling_recurrence_extend`
+(line 4019) — converting to `timezone.utc` risks a naive-vs-aware `TypeError` against
+the DB datetime it's compared to (aiomysql return-type dependent), so it needs a
+verified-against-DB change, not a drive-by; the `run_rolling_recurrence_extend`
+rollback (SELECT-only body, low risk); and the `cert_alert_service` per-record N+1
+(perf). CRON-4 (raw `str(e)` to the System Owner) stands.
+
+---
 
 **Backend:** `app/api/v1/endpoints/scheduled.py` (60 L, 2 endpoints),
 `app/services/scheduled_tasks.py` (4570 L, **38 task runners**),

@@ -7,7 +7,7 @@
 **Chapters:** 8 (each designed as a standalone clip)
 **Requires permission:** `training.manage`
 
-> **Companion videos:** Script 9 is the officer's operating manual for a *running*
+> **Companion videos:** Script 9 is the officer's operating manual for a _running_
 > pipeline; Script 10 shows the member's side. This video is purely about
 > **building** one — from an empty screen to an enrolled recruit class.
 
@@ -61,14 +61,14 @@ step.]**
 
 ### CHOOSING A STRUCTURE (2:15 – 3:00)
 
-**[SCREEN: The structure-type selector — Sequential / Phases / Flexible.]**
+**[SCREEN: The structure-type selector — Phases / One list.]**
 
-> "Then pick a **structure**. **Sequential** is a straight ordered list.
-> **Phases** groups requirements into stages that unlock in order — this is what
-> most recruit schools want. **Flexible** lets members work requirements in any
-> order. We'll choose **Phases**."
+> "Then pick a **structure**. **Phases** groups requirements into stages the
+> member works through in order — this is what most recruit schools want.
+> **One list** is everything in any order, which suits something like annual
+> continuing education. We'll choose **Phases**."
 
-**[CALLOUT: "Phases = stages that unlock in order (best for recruit schools)"]**
+**[CALLOUT: "Phases = stages, in order (best for recruit schools)"]**
 
 **[TRANSITION: Adding phases]**
 
@@ -126,9 +126,33 @@ all eight types.]**
 
 **[SCREEN: The Required ↔ Optional toggle on a requirement.]**
 
-> "Each requirement has a **Required or Optional** toggle. Only *required*
+> "Each requirement has a **Required or Optional** toggle. Only _required_
 > requirements count toward advancing a phase and toward the overall percentage.
 > Optional ones are there for enrichment without blocking progress."
+
+### WRITING OUT A CHECKLIST (6:30 – 7:00) _(added 2026-08-09)_
+
+**[SCREEN: Add a checklist requirement; type the individual steps into the
+steps editor; toggle the eye icon closed on one of them.]**
+
+> "A **checklist** requirement holds the actual steps — 'tour the apparatus bay',
+> 'meet the duty officer', 'SCBA fit test on file'. Write them out here, one per
+> step. Your recruits read them, and they get signed off **one at a time**, so a
+> recruit six steps into eight sees a progress bar that says so."
+
+**[SCREEN: The eye toggle closing on the 'references called' step.]**
+
+> "Some steps aren't the recruit's business — references called, background check
+> returned. Close the **eye** on those and they stay on your side of the screen.
+> They still count toward the total, though, so the requirement can't read a
+> hundred percent while the background check is outstanding. The recruit just sees
+> 'plus two more steps your officer records'."
+
+**[CALLOUT: "Hidden steps still count — no false 100%"]**
+
+> "And renaming a step or dragging it somewhere else keeps the sign-offs already
+> recorded against it. You can tidy a checklist mid-course without resetting
+> anybody."
 
 ### LINKING REQUIREMENTS SO THEY AUTO-UPDATE (6:30 – 8:00)
 
@@ -205,12 +229,59 @@ enrollment option.]**
 > enrollment until it's met. That's a hard gate."
 
 > "Then the **concurrent enrollment** option. If you want members in only one
-> program at a time, set it — but know it's a *soft advisory*, not a hard block.
+> program at a time, set it — but know it's a _soft advisory_, not a hard block.
 > A member can absolutely be in several programs at once, which is normal for a
 > new recruit juggling onboarding paths. The picker just flags it so you're
 > aware."
 
 **[CALLOUT: "Prerequisite = hard block · Concurrent = soft advisory"]**
+
+### ORDER INSIDE THE PROGRAM (11:15 – 11:45) _(added 2026-08-09)_
+
+**[SCREEN: The phase editor's prerequisite picker — Phase 3 requires Phase 1 and
+Phase 2 finished.]**
+
+> "There's a second kind of prerequisite, and it works _inside_ the program.
+> **Phase prerequisites** name the phases that have to be **finished** before this
+> one opens."
+
+**[CALLOUT: "Phase number = the order you walk them · Phase prerequisites = what
+must be done first"]**
+
+> "Those sound like the same thing, and in a simple program they are. They come
+> apart the moment you've got an optional track running alongside the main one —
+> or the moment you force-advance somebody past a phase. The number says 'next';
+> the prerequisite says 'not yet'. Force still overrides it, because that's what
+> force is for."
+
+**[SCREEN: Toggling a requirement's 'prerequisite' flag on the pipeline detail
+page; the sibling requirements grey out.]**
+
+> "And you can do the same thing one level down. Flag a **requirement** as a
+> prerequisite and the rest of the requirements in that phase lock until it's
+> done. Your recruits still _see_ them, greyed out with the reason — a step you
+> can't see is indistinguishable from a step that doesn't exist."
+
+> "One deliberate exception: credit that lands automatically from a logged shift
+> or an approved course isn't blocked. The hours actually happened. Throwing them
+> away because a prerequisite is outstanding would be worse than crediting them
+> early."
+
+### YOUR OWN REMINDER SCHEDULE (added 2026-08-09)
+
+**[SCREEN: The pipeline editor's reminder settings — days before deadline, and
+the 'only warn if below N%' field.]**
+
+> "Last thing on this screen: **deadline reminders**. Set the days you want
+> warnings to go out — ninety, thirty, seven, whatever fits your program — and
+> optionally tell it to only warn members who are **below** a percentage, so a
+> reminder means something when it arrives."
+
+**[CALLOUT: "Before 2026-08-09 this field was ignored — everyone got 30/14/7"]**
+
+> "If you set this up before August ninth and thought it wasn't doing anything —
+> it wasn't. Everyone got thirty, fourteen and seven days regardless. That's
+> fixed; your schedule is honoured now."
 
 **[TRANSITION: Publish and enroll]**
 
@@ -251,7 +322,7 @@ quickly through Course → Schedule → Preview → Roster → Generate.]**
 
 > "Build the course's class list once under Course Library, then generate a
 > **cohort** for each intake. Pick your recruits on the roster step, and
-> generating schedules every class *and* enrolls them in this pipeline in the
+> generating schedules every class _and_ enrolls them in this pipeline in the
 > same action."
 
 **[CALLOUT: "Pipeline = what they must achieve · Cohort = when the classes are"]**
@@ -276,12 +347,12 @@ climb.]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Start From a Sample Template | 0:30–1:30 | "The Fastest Way to Build a Pipeline" |
-| Creating the Program | 1:30–3:00 | "Create-Pipeline Wizard: The Basics" |
-| Building Phases | 3:00–4:30 | "Setting Up Phases and Advancement Gates" |
-| Adding & Linking Requirements | 4:30–8:00 | "Requirement Types and How to Link Them" |
-| Recertification Setup | 9:00–10:30 | "Setting Up an Automatic Recert Cycle" |
-| Prerequisites & Enrollment Rules | 10:30–11:45 | "Prerequisites vs. Concurrent Enrollment" |
-| Publish & Enroll | 11:45–14:00 | "Go Live: Enroll Your First Recruit Class" |
+| Clip                             | Timecode    | Standalone Title                           |
+| -------------------------------- | ----------- | ------------------------------------------ |
+| Start From a Sample Template     | 0:30–1:30   | "The Fastest Way to Build a Pipeline"      |
+| Creating the Program             | 1:30–3:00   | "Create-Pipeline Wizard: The Basics"       |
+| Building Phases                  | 3:00–4:30   | "Setting Up Phases and Advancement Gates"  |
+| Adding & Linking Requirements    | 4:30–8:00   | "Requirement Types and How to Link Them"   |
+| Recertification Setup            | 9:00–10:30  | "Setting Up an Automatic Recert Cycle"     |
+| Prerequisites & Enrollment Rules | 10:30–11:45 | "Prerequisites vs. Concurrent Enrollment"  |
+| Publish & Enroll                 | 11:45–14:00 | "Go Live: Enroll Your First Recruit Class" |

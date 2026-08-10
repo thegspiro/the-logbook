@@ -79,7 +79,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                 value={storageSettings.google_drive_client_id || ''}
                 onChange={(e) => onStorageSettingsChange((s) => ({ ...s, google_drive_client_id: e.target.value }))}
                 placeholder="123456789-abc.apps.googleusercontent.com"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -91,7 +91,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                   onChange={(e) =>
                     onStorageSettingsChange((s) => ({ ...s, google_drive_client_secret: e.target.value }))
                   }
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input pr-10"
                 />
                 <button
                   type="button"
@@ -110,7 +110,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
               value={storageSettings.google_drive_folder_id || ''}
               onChange={(e) => onStorageSettingsChange((s) => ({ ...s, google_drive_folder_id: e.target.value }))}
               placeholder="Root folder ID for department files"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden sm:w-1/2"
+              className="form-input sm:w-1/2"
             />
           </div>
         </div>
@@ -128,7 +128,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                 value={storageSettings.onedrive_tenant_id || ''}
                 onChange={(e) => onStorageSettingsChange((s) => ({ ...s, onedrive_tenant_id: e.target.value }))}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -138,7 +138,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                 value={storageSettings.onedrive_client_id || ''}
                 onChange={(e) => onStorageSettingsChange((s) => ({ ...s, onedrive_client_id: e.target.value }))}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
           </div>
@@ -150,7 +150,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                   type={storageSecretVisible ? 'text' : 'password'}
                   value={storageSettings.onedrive_client_secret || ''}
                   onChange={(e) => onStorageSettingsChange((s) => ({ ...s, onedrive_client_secret: e.target.value }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input pr-10"
                 />
                 <button
                   type="button"
@@ -168,7 +168,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                 value={storageSettings.sharepoint_site_url || ''}
                 onChange={(e) => onStorageSettingsChange((s) => ({ ...s, sharepoint_site_url: e.target.value }))}
                 placeholder="https://your-org.sharepoint.com/sites/..."
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
           </div>
@@ -187,7 +187,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                 value={storageSettings.s3_access_key_id || ''}
                 onChange={(e) => onStorageSettingsChange((s) => ({ ...s, s3_access_key_id: e.target.value }))}
                 placeholder="AKIAIOSFODNN7EXAMPLE"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -197,7 +197,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                   type={storageSecretVisible ? 'text' : 'password'}
                   value={storageSettings.s3_secret_access_key || ''}
                   onChange={(e) => onStorageSettingsChange((s) => ({ ...s, s3_secret_access_key: e.target.value }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input pr-10"
                 />
                 <button
                   type="button"
@@ -217,7 +217,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                 value={storageSettings.s3_bucket_name || ''}
                 onChange={(e) => onStorageSettingsChange((s) => ({ ...s, s3_bucket_name: e.target.value }))}
                 placeholder="my-department-files"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -227,7 +227,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                 value={storageSettings.s3_region || ''}
                 onChange={(e) => onStorageSettingsChange((s) => ({ ...s, s3_region: e.target.value }))}
                 placeholder="us-east-1"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -237,7 +237,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                 value={storageSettings.s3_endpoint_url || ''}
                 onChange={(e) => onStorageSettingsChange((s) => ({ ...s, s3_endpoint_url: e.target.value }))}
                 placeholder="https://minio.example.com"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
           </div>
@@ -255,7 +255,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
               value={storageSettings.local_storage_path || ''}
               onChange={(e) => onStorageSettingsChange((s) => ({ ...s, local_storage_path: e.target.value }))}
               placeholder="/var/data/uploads (defaults to server upload directory)"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+              className="form-input"
             />
             <p className="text-theme-text-muted mt-1 text-xs">
               Files are stored on the server. Ensure adequate disk space and a backup strategy.

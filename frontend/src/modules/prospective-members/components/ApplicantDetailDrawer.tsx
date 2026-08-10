@@ -361,7 +361,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, first_name: e.target.value }))}
                         placeholder="First name"
                         aria-label="First name"
-                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input-sm"
                       />
                       <input
                         type="text"
@@ -369,7 +369,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, last_name: e.target.value }))}
                         placeholder="Last name"
                         aria-label="Last name"
-                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input-sm"
                       />
                     </div>
                     <input
@@ -378,7 +378,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setEditFields((f) => ({ ...f, email: e.target.value }))}
                       placeholder="Email"
                       aria-label="Email address"
-                      className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input-sm"
                     />
                     <input
                       type="text"
@@ -386,14 +386,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setEditFields((f) => ({ ...f, phone: e.target.value }))}
                       placeholder="Phone"
                       aria-label="Phone number"
-                      className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input-sm"
                     />
                     <input
                       type="date"
                       value={editFields.date_of_birth}
                       onChange={(e) => setEditFields((f) => ({ ...f, date_of_birth: e.target.value }))}
                       aria-label="Date of birth"
-                      className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input-sm"
                     />
                     <input
                       type="text"
@@ -401,7 +401,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setEditFields((f) => ({ ...f, address_street: e.target.value }))}
                       placeholder="Street address"
                       aria-label="Street address"
-                      className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input-sm"
                     />
                     <div className="form-grid-3">
                       <input
@@ -410,7 +410,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, address_city: e.target.value }))}
                         placeholder="City"
                         aria-label="City"
-                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input-sm"
                       />
                       <input
                         type="text"
@@ -418,7 +418,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, address_state: e.target.value }))}
                         placeholder="State"
                         aria-label="State"
-                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input-sm"
                       />
                       <input
                         type="text"
@@ -426,7 +426,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, address_zip: e.target.value }))}
                         placeholder="ZIP"
                         aria-label="ZIP code"
-                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input-sm"
                       />
                     </div>
                   </div>

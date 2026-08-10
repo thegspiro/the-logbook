@@ -860,6 +860,21 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  /**
+   * Put an expired enrollment back to active, optionally on a new deadline —
+   * an officer granting an extension. The member's finished requirements are
+   * untouched.
+   */
+  async reopenEnrollment(enrollmentId: string, targetCompletionDate?: string): Promise<ProgramEnrollment> {
+    const response = await api.post<ProgramEnrollment>(
+      `/training/programs/enrollments/${enrollmentId}/reopen`,
+      // `||` not `??`: a cleared date input is '', which must be omitted, not
+      // sent as an empty string for the API to reject.
+      { target_completion_date: targetCompletionDate || undefined }
+    );
+    return response.data;
+  },
+
   /** Auto-reset every enrollment whose stored recert deadline has passed. */
   async runDueRecertResets(): Promise<{ reset_count: number }> {
     const response = await api.post<{ reset_count: number }>('/training/programs/recert/run-due');

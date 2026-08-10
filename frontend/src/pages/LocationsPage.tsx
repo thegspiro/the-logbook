@@ -35,6 +35,7 @@ import toast from 'react-hot-toast';
 import { locationsService, organizationService } from '../services/api';
 import type { Location, LocationCreate } from '../services/api';
 
+import { useConfirm } from '../contexts/ConfirmContext';
 /** Copy text to clipboard with fallback for non-HTTPS contexts */
 async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard) {
@@ -158,7 +159,7 @@ function LocationSetupWizard({
 
   const inputCls =
     'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
+  const labelCls = 'form-label';
 
   /* ── Step navigation ── */
   const totalSteps = 4;
@@ -921,6 +922,7 @@ function RoomCard({
 }
 
 export default function LocationsPage() {
+  const { confirm } = useConfirm();
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1089,7 +1091,15 @@ export default function LocationsPage() {
   };
 
   const handleDeleteStation = async (station: Location) => {
-    if (!window.confirm(`Delete "${station.name}" and all its rooms? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete station',
+        message: `Delete "${station.name}" and every room in it? This cannot be undone.`,
+        confirmLabel: 'Delete station',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       // Delete rooms first
       const stationRooms = rooms.get(station.name) || [];
@@ -1158,7 +1168,15 @@ export default function LocationsPage() {
   };
 
   const handleDeleteRoom = async (room: Location) => {
-    if (!window.confirm(`Delete room "${room.name}"?`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete room',
+        message: `Delete "${room.name}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await locationsService.deleteLocation(room.id);
       toast.success('Room deleted');
@@ -1170,7 +1188,7 @@ export default function LocationsPage() {
 
   const inputCls =
     'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
+  const labelCls = 'form-label';
 
   const isSingleStation = stationMode === 'single_station';
 

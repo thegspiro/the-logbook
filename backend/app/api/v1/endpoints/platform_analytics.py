@@ -198,7 +198,7 @@ async def get_platform_analytics(
         result = await db.execute(
             select(func.count(Event.id)).where(
                 Event.organization_id == org_id,
-                Event.is_cancelled == False,  # noqa: E712
+                Event.is_cancelled.is_(False),
             )
         )
         total_events = result.scalar() or 0
@@ -206,7 +206,7 @@ async def get_platform_analytics(
         result = await db.execute(
             select(func.count(Event.id)).where(
                 Event.organization_id == org_id,
-                Event.is_cancelled == False,  # noqa: E712
+                Event.is_cancelled.is_(False),
                 Event.created_at >= thirty_days_ago,
             )
         )
@@ -218,7 +218,7 @@ async def get_platform_analytics(
         result = await db.execute(
             select(func.count(EventRSVP.id)).where(
                 EventRSVP.organization_id == org_id,
-                EventRSVP.checked_in == True,  # noqa: E712
+                EventRSVP.checked_in.is_(True),
             )
         )
         total_check_ins = result.scalar() or 0

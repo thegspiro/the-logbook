@@ -420,7 +420,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             >
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
@@ -438,7 +438,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 setSortField(field as SortField);
                 setSortOrder(order as SortOrder);
               }}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             >
               <option value="date-desc">Newest First</option>
               <option value="date-asc">Oldest First</option>

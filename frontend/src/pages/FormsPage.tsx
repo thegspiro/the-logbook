@@ -1193,7 +1193,7 @@ const FormsPage: React.FC = () => {
                                   id="share-public-url"
                                   readOnly
                                   value={getPublicUrl(form.public_slug)}
-                                  className="bg-theme-input-bg border-theme-input-border flex-1 rounded-lg border px-3 py-2 text-sm text-cyan-700 dark:text-cyan-300"
+                                  className="form-input flex-1 text-cyan-700 dark:text-cyan-300"
                                   aria-label="Public URL"
                                 />
                                 <button

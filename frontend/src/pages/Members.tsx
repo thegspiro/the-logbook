@@ -330,11 +330,7 @@ const Members: React.FC = () => {
             {/* Filter */}
             <div className="flex items-center space-x-2">
               <Filter className="text-theme-text-muted h-5 w-5" />
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden max-md:min-h-[44px]"
-              >
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="form-input">
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>

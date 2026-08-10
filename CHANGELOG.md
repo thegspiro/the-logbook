@@ -7,6 +7,905 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: visitors can sign themselves in at an open house (2026-08-09)
+
+**Added**
+
+- **A guest QR code on the room display, for people who have no account.** A
+  room display previously showed one QR code, pointing at
+  `/events/{id}/check-in` — a member route behind authentication. A visitor at a
+  volunteer interest night who scanned it was sent to the login page, so their
+  attendance was recorded by hand or not at all.
+
+  An event can now opt in to a **second, guest-specific** QR code. The two codes
+  sit side by side on the display and stay separate: the member flow, including
+  check-out, is untouched, and check-out is meaningless for a walk-in.
+
+  Two switches on the event, both off by default, under **Check-In Settings**:
+
+  | Setting                                  | Effect                                                                                |
+  | ---------------------------------------- | ------------------------------------------------------------------------------------- |
+  | **Allow guest check-in**                 | Shows the guest QR code and opens the public sign-in page for this event               |
+  | **Create a prospective member from each guest** | Additionally opens a pipeline record for every guest who supplies an email address |
+
+  Off by default is deliberate: turning the first one on exposes an
+  **unauthenticated write path**. It belongs on outreach events — interest
+  nights, open houses — and should stay off for business meetings and training
+  sessions, whose attendance drives records that only apply to members.
+
+  The guest fills in first and last name (required), and optionally email, phone,
+  the organization they are with, and why they came. Nothing more: a walk-in
+  should be asked for the minimum needed to follow up, not for a membership
+  application. The real application form is what the follow-up email links to.
+
+  **How it is protected.** The public endpoints live under
+  `/api/public/v1/display/{code}/events/{id}/...`. The department is resolved
+  from the **room's display code**, never from anything in the request, and the
+  event must actually be held in that room. They carry the same defences as the
+  public forms API: per-IP rate limiting, a per-event daily ceiling
+  (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300 — sized for an open house, not a
+  stadium; `0` disables it), and a honeypot field that answers a bot with a
+  plausible success rather than an error it can adapt to.
+
+  **Edge cases worth knowing:**
+
+  - **Guests get the organizer's check-in window, minus the early-arrival
+    grace.** A member may check in before a flexible window opens because a
+    member checking in early is identifiable and correctable. An anonymous early
+    write is neither, so for guests the gate stays shut until the window the
+    organizer actually chose.
+  - **Tapping the QR code twice does not create two rows.** A repeat sign-in is
+    matched on email when one was given, and on name when it was not. Name
+    matching is the weaker fallback — two different Chris Smiths at one open
+    house collapse into a single row — but a duplicate on every double-tap is
+    the far more common problem at a kiosk.
+  - **A guest pre-registered by staff keeps what staff entered.** A sign-in fills
+    the blanks on an existing record rather than overwriting fields somebody
+    deliberately typed.
+  - **A pipeline failure never costs a guest their attendance.** If the prospect
+    cannot be opened, the error is logged, the attendance is still recorded, and
+    the confirmation still says they are signed in.
+  - **A guest already in the pipeline is reused, not duplicated** — the existing
+    active prospect is linked to the event instead.
+  - **Purging a prospect does not erase the attendance.**
+    `event_external_attendees.prospect_id` is `SET NULL`: who was in the room is
+    the event's history, not the prospect's.
+
+**Data**
+
+- `events.allow_guest_check_in`, `events.guest_check_in_creates_prospect` —
+  both `NOT NULL DEFAULT 0`.
+- `event_external_attendees.prospect_id` → `prospective_members.id`
+  (`ON DELETE SET NULL`, nullable, indexed).
+- Guest-created rows carry `source = 'kiosk_qr'`, which distinguishes a
+  self-recorded kiosk sign-in from one a staff member typed in.
+- Prospects opened this way are linked to the event through
+  `prospect_event_links`, with `referral_source = "Attended: {event title}"`.
+
+---
+
+### Saving: emptying a field and saving it now actually clears the value (2026-08-09)
+
+**Fixed**
+
+- **A cleared field came back after a reload, with a success toast in between.**
+  Both ends of the request dropped the clear, independently:
+
+  - **Backend.** Every update method guarded its writes with
+    `if value is not None: setattr(...)`. Update payloads are `exclude_unset`
+    dumps, so a null arriving at the service is an _explicit_ null — the user
+    emptied the box — and skipping it acknowledged the write with a `200` while
+    leaving the old value in the database. The finance endpoints compounded it by
+    dumping with `exclude_none`, stripping the nulls a layer earlier.
+  - **Frontend.** The `|| undefined` idiom is right on **create**, where it keeps
+    `""` away from Pydantic validators, but on **update** it omits the key
+    entirely — which reads as "leave this alone". The clear never left the
+    browser.
+
+  Three cases are now distinct everywhere: **absent** means leave alone, **null**
+  means clear, and a null against a `NOT NULL` column is a `400` rather than a
+  silent no-op. An update naming a field the model does not have is reported
+  rather than dropped.
+
+  Covers 10 finance and 3 storefront update methods, plus 12 more across member
+  leave, membership pipeline, training enhancement, training module config,
+  training program and training submission.
+
+- **A requirement switched from hours to shifts went on grading against its old
+  hours target.** The requirement forms omitted the targets that no longer
+  applied, the service read the omission as "leave alone", and the stale
+  `required_hours` stayed in place and kept being evaluated. Every target is now
+  sent on every save, as an explicit null where it does not apply. This is a
+  behaviour fix, not plumbing.
+
+- **`include_current_month: null` — the "inherit the department default" choice
+  on a training requirement — had never once taken effect.** It was being sent
+  correctly and dropped on arrival.
+
+- **A pipeline description and an election package's notes and statement could
+  not be emptied**, for the same reason.
+
+- **`training_program` carried the tell.** Someone had hit this with the
+  freshness window and patched exactly that one field
+  (`clearable_fields = {"recency_days"}`), leaving every other nullable column
+  silently undroppable. The hand-list is gone.
+
+- **A purchase-request edit failed silently.** It called the service directly
+  rather than through the store, so nothing was surfacing its failure.
+
+- **Clearing a member's leave end date now propagates to the linked training
+  waiver.** Newly reachable now that the clear itself works: without it, an
+  open-ended leave would leave the waiver expiring on a date the leave no longer
+  has.
+
+**Developer note**
+
+- `apply_updates` (`backend/app/utils/model_updates.py`) and `blankToNull` /
+  `numberOrNull` (`frontend/src/utils/formValues.ts`) are how this is expressed.
+  Protected columns — tenancy and identity — are passed as `apply_updates`'
+  `skip` set rather than guarded field by field. The election package still
+  _merges_ a partial `package_config` rather than replacing it.
+
+---
+
+### Interface: native browser confirms and prompts are gone (2026-08-09)
+
+**Fixed**
+
+- **A browser may suppress `window.prompt` and `window.confirm`, and a
+  suppressed dialog is indistinguishable from Cancel.** Chrome suppresses
+  repeated dialogs and dialogs inside cross-origin frames; iOS and Firefox offer
+  the user a "prevent this page from creating further dialogs" checkbox. Both
+  return the same value as pressing Cancel, so the action silently did nothing —
+  no error, no clue.
+
+  All 33 `window.confirm` call sites across 23 files, and all four
+  `window.prompt` call sites, now use in-app dialogs. Notably:
+
+  - **Voiding a paper-ballot batch** also dropped any reason shorter than three
+    characters the same silent way — a secretary who typed "PM" got no batch
+    voided and no message.
+  - **Issuing a check** against an approved request, **cloning an equipment-check
+    template**, and **cancelling a skills test** were the other three.
+
+- **What the dialogs say has changed too.** Buttons name the decision rather than
+  reading OK/Cancel — "Keep it" / "Delete", "Stay here" / "Discard changes",
+  "Leave it running" / "End session" — and several messages now state the
+  consequence a native one-liner had no room for: that deactivating an
+  admin-hours category leaves already-logged hours alone, that force-ending a
+  session moves the entry to pending review rather than discarding it, that
+  leaving a checklist keeps a draft.
+
+**Developer note**
+
+- `useConfirm()` is promise-based and keeps the shape of the call it replaces
+  (`if (!(await confirm({ message: 'Delete this?' }))) return;`), which is why
+  each conversion is a one-line change. The dialog is rendered **once** by
+  `ConfirmProvider` at the app root, above the router so public pages get one
+  too — there is nothing for a consumer to render and so nothing to forget.
+  Without a provider the hook **throws**: `true` would carry out a deletion
+  nobody agreed to and `false` would swallow the action without a word, so a
+  wiring mistake fails loudly at the call rather than quietly at the consequence.
+  `PromptDialog` (`components/ux`) covers the single-value case, with validation
+  shown rather than swallowed and the field reset on each open.
+
+---
+
+### Background saves: a failure is shown instead of written to the console
+(2026-08-09)
+
+**Fixed**
+
+- **The scheduling notification presets slid back and said nothing.** The preset
+  toggles caught their failure into `console.warn` while the four settings
+  handlers beside them all raised a toast. Because the switch only moves when the
+  save succeeds, a failed save was indistinguishable from a dead control.
+  Failures now toast; success stays quiet, because the switch moving is the
+  confirmation.
+- **A failed _load_ of those rules was worse than confusing.** With no rules
+  loaded every switch read as off, so an already-enabled notification looked
+  disabled — and toggling it posted a **second rule with the same name** instead
+  of flipping the one that existed. The panel now says the settings could not be
+  loaded and hides the switches rather than showing six lies.
+- **The preset toggles had no accessible name** — a bare button wrapping a knob.
+  They are now labelled switches.
+- **`useAutoSave` swallowed its failure into `console.error`.** A background save
+  has no promise to await and no click to answer, so the error had nowhere else
+  to go: an examiner kept scoring into a form they believed was saving. The hook
+  now returns `status`, `error`, `lastSavedAt` and `failureCount`. Retry
+  behaviour is unchanged — a failed snapshot is not marked saved, so the next
+  tick tries again and nothing is lost while the tab is open.
+
+---
+
+### Skills testing: the examiner screen is safe to use in the field (2026-08-09)
+
+**Fixed**
+
+- **A stopwatch reading was lost by moving to the next step.** The time was only
+  recorded when **Stop** was pressed, and the section unmounts on Prev/Next — so
+  timing an evolution and moving on lost the reading entirely, on the step whose
+  time limit _is_ the pass/fail criterion. The value is now committed when the
+  step is torn down, and starting a stopwatch starts the test clock.
+- **Back from the live scoring screen always went to Training Admin**, an
+  officer-only page, so a member examiner hit a permission wall leaving their own
+  evaluation. Both **Back** and the footer **Back to Tests** now go to the
+  member-facing list.
+- **An unscored step displayed a red "0/N"**, which reads as a fail the examiner
+  never recorded. It now reads "—/N" in neutral type until a score exists.
+- **Section counters included statement criteria**, which mark themselves — so a
+  section showed progress before it was touched and could read "3 / 3" with a
+  real step still blank. Statements are now excluded from every count, and they
+  no longer rewrite their mark (and trigger an autosave) on every revisit.
+- **A checklist step could not record "the candidate did none of it."** It only
+  counted as scored once a box was ticked, so the case an examiner most needs to
+  record was indistinguishable from a step they forgot. There is now an explicit
+  **Candidate did none of these**, and a **Clear this step** to undo. An empty
+  checklist no longer passes itself.
+- **A mis-tap could only be corrected by recording the opposite verdict.** A
+  pass, a fail, or a score can now be cleared by tapping it again — a mis-tapped
+  `0` and a deliberate `0` score the same but mean very different things on a
+  critical step.
+- **A cancelled test rendered as a live evaluation** — editable criteria, a
+  running clock, and a **Finish** button the API answers with a `400`. It now
+  renders read-only and states that nothing was decided rather than showing a
+  pass or a fail. The officer panel no longer tells an officer that an abandoned
+  test "counts toward the candidate's record".
+- **Autosave is now genuinely suspended once a concurrent edit is detected**, as
+  the conflict banner already claimed. Every retry could only `409` again.
+- **Resuming an interrupted evaluation opened at section 1**, so the examiner had
+  to hunt for the step they had reached. It now opens at the first section with
+  blank steps.
+
+**Changed**
+
+- **10px progress dots** — unhittable with a glove, and silent about what was
+  left — are replaced by **44px section chips** that show their own state, plus a
+  running "scored / total" count and a save-status line.
+- **The candidate's name is on the scoring screen.** Nothing there previously
+  confirmed the examiner had the right person open.
+- **The primary bottom-bar button is Next**, not Finish. Previously the biggest,
+  reddest button on every section ended the evaluation while moving on was a
+  small grey one.
+- **Finishing with blanks left** opens a dialog naming the count and stating that
+  an unscored critical step scores the same as a fail — which is what the backend
+  does. The review screen repeats it with a button back to the first unfinished
+  section.
+- **"Add note" gets a 44px target, a label and a placeholder.** It was a 12px
+  text link, for the one control that explains a mark to whoever reads the
+  scorecard later, on a screen used outdoors in gloves.
+- An unfinished test in the officer's Test Records tab now says **Tap to resume**
+  and opens on the scoring screen; finished tests still open on their scorecard.
+- Publishing and archiving a template say what actually happens — that a
+  published template can be started from and that each test keeps its own copy,
+  and that archiving hides it from new tests without deleting anything.
+- Wording throughout is "scored" rather than "evaluated" / "criteria".
+- A template with no steps explains itself instead of rendering blank under a
+  live timer.
+- `SkillTestResponse` now carries `template_require_all_critical`, so the
+  examiner screen can state the critical-step rule accurately.
+
+---
+
+### Training: checklist requirements are signed off step by step, and an
+enrollment can finally expire (2026-08-09)
+
+**Fixed**
+
+- **Checklists were invisible to everyone.** A checklist requirement stores the
+  exact list of what a member has to do — the built-in sample templates define
+  eight of them — and nothing rendered it. The recruit saw "Station Orientation
+  Checklist · Work through the checklist with your officer" and had to guess what
+  was on it; the officer signing it off saw "8 items" and not the items.
+- **It was also all-or-nothing** — one tick for the whole thing, so a member
+  could work through six of eight steps and watch their progress bar sit at zero.
+  Steps are now signed off one at a time, both parties can read them, and the
+  percentage is ticked/total so the requirement fills up as the work happens.
+- **A step can be kept off the member's view** — background check returned,
+  references called — with the eye toggle in the editor. Hidden steps still count
+  toward the denominator, because excluding them would let a requirement read
+  100% while the background check was outstanding. The member is told "+2 more
+  steps your officer records" rather than shown a total that does not match their
+  screen.
+- **Nothing ever expired.** `EnrollmentStatus.EXPIRED` was read — recert treats it
+  as a renewable state — but never written. A member past
+  `target_completion_date` stayed ACTIVE indefinitely: the sweep warned them at
+  30, 14 and 7 days, the date arrived, and then nothing. Their page read "42 days
+  overdue" against a status claiming otherwise, and no officer view could filter
+  for it.
+
+  Overdue enrollments now expire **on read** (so an enrollment nobody has swept
+  reports its true state the moment someone opens it) and in a **daily** sweep.
+  Both the member and the training officers are told.
+
+- **EXPIRED needed a way out**, or it would just be a new dead end. Officers get a
+  **reopen** action with an optional new deadline. Progress rows are untouched —
+  the member keeps everything they finished — and the rollup runs on reopen, so
+  someone who quietly completed the work while expired is marked complete rather
+  than waiting for the next edit.
+
+**Changed**
+
+- **Expiry is its own daily task** (`enrollment_expiry`, 05:15, alongside the
+  existing daily `recert_resets` at 05:00). It had been folded into the weekly
+  `enrollment_deadline_warnings`, which left up to six days where an enrollment
+  nobody had opened still read "active, N days overdue" — the exact state the
+  work was meant to eliminate — and put a member-visible state change on the
+  cadence of a reminder. The warning sweep goes back to sending warnings.
+
+**Data**
+
+- `checklist_items` held bare strings; it now holds
+  `{id, text, member_visible}`. The `id` is what makes a tick survive a step
+  being reordered or a neighbour reworded. **Legacy string rows normalize on
+  read** rather than through a migration — it costs no lock on a JSON column, and
+  every write goes through one helper (`backend/app/utils/checklist.py`), so the
+  rest of the codebase sees a single shape.
+
+---
+
+### Training: three pipeline settings that were stored but never acted on
+(2026-08-09)
+
+**Fixed**
+
+- **Phase prerequisites (`prerequisite_phase_ids`) were a 500, not a feature.**
+  The column is JSON but the schema parsed the ids as UUIDs, so `json.dumps`
+  raised `TypeError` at commit — setting the field at all failed, which is why
+  nothing downstream had ever seen a value.
+
+  Ids are coerced to strings on every write, and the field is now validated
+  (same-program, non-self, acyclic) and **enforced** on both manual and automatic
+  advancement, with force still overriding. Export/import carries them by phase
+  number so they survive the trip into another department.
+
+  > **Phase order and phase prerequisites answer different questions.**
+  > `phase_number` is the order phases are walked in; `prerequisite_phase_ids` is
+  > what must be finished first. They diverge as soon as a program has an
+  > optional or parallel track, or when someone was force-advanced past a phase.
+
+  Edge cases: deleting a phase strips it from the siblings that referenced it,
+  and a prerequisite pointing at a phase that no longer exists is **ignored**
+  rather than stranding the member.
+
+- **Requirement prerequisites (`is_prerequisite`) gated nothing, and could not be
+  set in the UI at all.** A link flagged as a prerequisite now gates the other
+  requirements in its scope — its phase, or the program-level pool. Officer
+  sign-off on a gated requirement is refused with the blocker named, and the
+  member's page greys the step out with the same wording instead of hiding it.
+  The pipeline detail page now toggles the flag per requirement.
+
+  Edge cases: a requirement linked into several scopes is locked only when
+  **every** one of its links is locked. Credit that flows in automatically from
+  logged training is deliberately **not** blocked — the hours happened, and
+  discarding them would be worse than crediting them early.
+
+- **A department that configured a 90-day deadline warning got one at 30.** The
+  sweep used a hardcoded `[30, 14, 7]` and read neither `reminder_conditions` nor
+  `warning_days_before`. Both are honoured per program now:
+  `days_before_deadline` sets the schedule (defaulting to `warning_days_before`
+  plus 14- and 7-day follow-ups), and `send_if_below_percentage` suppresses the
+  warning for members already on track. `reminder_conditions` was also absent
+  from the create/update schema, so it could only be set by import — it is
+  accepted on both now, and editable in the pipeline editor.
+
+  `milestone_threshold` is deliberately **not** implemented: `ProgramMilestone`
+  rows already fire progress-based notifications, and two mechanisms for one job
+  is how the two drift apart. Old values validate and are ignored.
+
+- **`target_roles` had the same UUID-into-a-JSON-column defect** and is fixed with
+  it.
+
+---
+
+### Training: the pipeline progress rollup never ran (2026-08-09)
+
+**Fixed**
+
+- **Every real progress update, phase advance, requirement add/remove and recert
+  reset `500`'d after writing.** `_recalculate_enrollment_progress` and
+  `_is_phase_complete` both issued
+  `select(RequirementProgress).join(ProgramRequirement)`. There is no foreign key
+  between those tables, so SQLAlchemy cannot infer an `ON` clause and raises
+  `InvalidRequestError` — at _compile_ time, which is why the mocked-session
+  tests passed while production failed. Both now resolve the required requirement
+  ids first and filter progress by that set, scoped to the program so a
+  requirement shared with another program cannot skew the average.
+
+  The fake sessions in five test modules now compile each statement, so this
+  class of bug fails the suite instead of production.
+
+- **A requirement linked to two phases produced two progress rows per
+  enrollment** (deduped at enroll and on backfill, and defended against in the
+  average), and **unlinking one of those two links deleted the progress for
+  both**.
+- **Milestones did nothing.** They were created, stored, duplicated and exported,
+  but nothing ever compared progress to a threshold — `notification_message` was
+  dead code. Crossing a threshold now notifies the member once, on the band
+  `(previous, new]`.
+- **Every training notification linked to a 404.** All eight `action_url`s pointed
+  at `/training/programs/{id}/progress` or `.../enrollments`; neither route
+  exists, so the router's catch-all bounced the member to the dashboard. They now
+  point at `/training/my-progress/{enrollment}` and `?tab=enrollments`.
+- **"3/5 complete · 100%".** The progress endpoint counted only the literal
+  `completed` status (not verified or waived) over _all_ requirements (including
+  optional ones), while the percentage averaged the required ones. Both now use
+  the percentage's definition.
+- **A one-list program could not be built.** Requirements hung only off phases in
+  the wizard, the build payload and the detail page, so choosing Flexible left an
+  officer with no way to add a single requirement — and program-level
+  requirements, which import/duplicate can create, were invisible. All three now
+  carry them.
+- The wizard now **names the phase and the field** for an unnamed phase, an
+  unnamed requirement, or an hours/shifts/calls target left blank, each of which
+  the server had been rejecting with an unattributable `422`.
+
+**Changed**
+
+- **"Sequential" is retired from the structure pickers.** Nothing ever enforced an
+  order, so it behaved exactly like Flexible while saying otherwise. The two
+  remaining choices are named for what they do, and picking a single list skips
+  the Phases step rather than showing a step to leave empty.
+- **Enroll is behind `training.manage`**, like the other officer actions.
+- `knowledge_test` has a badge; "Shift Hours" no longer labels a shift count.
+
+---
+
+### Scheduling: a tab click opens the tab, and settings match the rest of the app
+(2026-08-09)
+
+**Fixed**
+
+- **Clicking any tab on `/scheduling` snapped straight back to Schedule**, so
+  Equipment Checks — and every other tab — could only be reached by deep link.
+  The tab button set React state but never the URL; the effect that syncs state
+  from `?tab=` listed `activeTab` in its dependencies, so the click's own state
+  change re-ran it, found no `?tab=`, read the default `schedule`, and reset.
+  Tab clicks now mirror the choice into `?tab=` (removing it for Schedule, so the
+  default URL stays clean), and the sync effect ignores a missing param instead of
+  treating it as a request to reset.
+
+  > The existing test asserted only that the tab's **label** was still on screen,
+  > which is true either way. The new tests assert on the tab's content and on
+  > the URL.
+
+- **Scheduling settings offered a Save button on four sections it never saved.**
+  The footer was shown on all seven while only writing three, so Notifications and
+  Shift Reports flashed "Settings saved" without touching their values. It now
+  appears only on the sections it writes (General, Apparatus, Equipment); every
+  other section owns its own save control.
+- **A scheduling settings section could not be linked to, refreshed into, or
+  reached with the back button.** The page read `?tab=` on mount but never wrote
+  it. It now writes it, as the other settings screens do.
+- **A deep link to Platoons no longer dumps you on a blank section** when the
+  department has that feature switched off — it falls back to General by
+  derivation rather than by resetting state, so the link still lands once the
+  feature flag loads.
+
+**Changed**
+
+- **All three settings screens now share one layout.** Organization Settings and
+  Event Settings already shared a design — section sidebar with descriptions on
+  desktop, scrollable tab strip on phones, content in a surface card — but by
+  copy-paste, in two places. Scheduling settings used a third design: a
+  pill/segmented tab bar in an unlabelled div, content capped at `max-w-3xl`
+  inside a `max-w-7xl` shell, under two stacked titles ("Scheduling Settings"
+  from the page, then "Shift Settings" from the panel).
+
+  The shared shell is extracted as `SettingsLayout`. The two existing screens are
+  a like-for-like swap; scheduling gains the sidebar, labelled nav landmarks,
+  `aria-current` on the active section, and a single header. Its seven sections
+  are **General, Apparatus, Platoons, Eligibility, Notifications, Equipment,
+  Shift Reports**.
+
+---
+
+### Interface: 283 hand-rolled form controls now use the shared utilities
+(2026-08-10)
+
+**Changed**
+
+- **169 distinct class strings for what is one control.** 283 inputs, selects and
+  checkboxes across 103 files spelled out their own box instead of using
+  `form-input`, `form-input-sm` or `form-checkbox` — already the app's standard at
+  490 other call sites. These were the holdouts, and they had drifted apart.
+
+  Normalised rather than preserved: the dominant hand-rolled box was
+  `px-3 py-2 rounded-md`, so ~175 controls move to the utility's
+  `px-4 py-2 rounded-lg`, gain the **44px minimum height below `md`** for touch,
+  and pick up the themed focus ring in place of a raw palette colour. Checkboxes
+  normalise from `h-3`/`h-3.5`/`h-4`/`h-5` to `h-4 w-4`, and from
+  red/blue to the utility's checked colour. 23 local
+  `inputClass`/`labelClass`/`checkboxClass` constants now point at the utilities.
+
+  The three scheduling modals (`PatternFormModal`, `TemplateFormModal`,
+  `GenerateShiftsModal`) went the same way — 19 fields and 24 labels — picking up
+  `px-4` over `px-3`, a 2px focus ring over 1px, the placeholder colour and the
+  focus transition.
+
+  **Deliberately untouched:** template-literal classNames, which carry the
+  conditional validation borders this sweep must not flatten; one radio, which
+  `form-checkbox` would square off; two `px-1.5 py-0.5` micro-controls in a dense
+  row, the only two at that density in the app; and 68 non-control elements that
+  use the input background as a surface. Widths, icon padding, alignment,
+  responsive sizes, disabled states and shadows are kept at the call site — their
+  standalone rules are emitted after the composite utility, so they still win.
+
+  > **One visible difference:** the ~50 inputs that carried `block w-full` are now
+  > inline-block via the utility's `w-full`. No existing `form-input` call site
+  > pairs with `block`, so this matches all 490 of them.
+
+- **Two new utilities, three adopted.** `settings-nav-item` / `-active` (the
+  settings section buttons, inlined at the call site when `SettingsLayout` was
+  extracted) and `toggle-track` / `-sm` / `-md` join the stylesheet:
+  `styles/index.css` defined `toggle-knob` but no matching track, so all 15
+  switches were hand-assembled and had drifted into four class strings — some
+  carrying the disabled treatment, some not, some missing the focus classes the
+  app's other controls state. `ShiftSettingsPanel` and `ShiftReportsSettingsPanel`
+  also move to `form-checkbox` / `form-input-sm`, replacing re-typed box classes
+  whose `focus:ring-violet-500` bypassed the theme focus-ring token.
+
+  Behaviour is unchanged except where the drift **was** the inconsistency:
+  switches that lacked the disabled treatment now have it.
+
+---
+
+### Migrations: two migrations claimed the same revision (2026-08-09)
+
+**Fixed**
+
+- **The training pipeline's `owns_requirement` migration and the
+  shift-equipment-check FK drop both claimed `20260808_0002` off
+  `20260808_0001`**, leaving Alembic with two heads and a startup that stales one
+  of them at random. The FK drop is renumbered to `20260808_0003`; the head is
+  linear again. `docs/KNOWN_LIMITATIONS.md` records how to repair a database that
+  applied one head and skipped the other.
+- **The medical-screening PHI migration was re-pointed onto main's head** after
+  the branch rebase renumbered around it.
+
+---
+
+### Demo seeder: every member was flagged with an unrecognised rank (2026-08-09)
+
+**Fixed (tooling)**
+
+- **`User.rank` holds a rank _code_, not a display name.** The screenshot
+  seeder wrote labels ("Lieutenant", "Firefighter/EMT", "Paramedic"), so
+  Settings → Ranks — which validates every active member against the
+  configured codes — bannered the demo department with "21 active members with
+  unrecognised ranks", listing its own seed data. Members now seed with the
+  eight codes an organization is created with, the three recruits start at
+  `emt` so the seeded promotions remain real rank changes, and the recruits the
+  training programs enrol are named explicitly rather than derived from a
+  "probationary" rank that no organization has.
+- **The seeder raced the admin password-reset limiter instead of pacing under
+  it.** That route allows 5 requests per 5 minutes and answers the sixth with a
+  **15-minute lockout**, so a run needing several member sessions spent over an
+  hour asleep in backoff. Resets are now spaced to stay below the ceiling. The
+  429 handling stays for the case where another client shares the IP.
+- **`dev_env.sh` hardcoded `backend/.venv/bin/python`**, which is exactly what a
+  container reclaim removes — the situation the script exists for. It now
+  prefers the virtualenv where one exists and falls back to the system
+  interpreter, and imports the app before backgrounding it so a missing
+  dependency is reported immediately instead of surfacing as a seven-minute
+  readiness timeout.
+
+**Fixed (documentation)**
+
+- **A "Registry Code" field on a training-category edit form.** The column and
+  its API exist; the screen does not — no page in the application creates or
+  edits training categories. The guide now describes how registry codes
+  actually arrive: attached to requirements imported from a standards registry.
+- **Scheduling settings, four corrections.** Shift Reports is a section
+  navigator of eight sections, not a page of three cards, and the section is
+  labelled **Form Sections**. Apparatus skills are chosen from a pill selector,
+  one type at a time, not an accordion. The rating scale is a two-button
+  toggle whose per-level labels appear only under **Labeled Bubbles**. The
+  notification panels have no CC-address field.
+- **Two different eligibility screens were conflated.** Per-rank shift-position
+  eligibility is set on **Settings → Ranks**; **Scheduling → Settings →
+  Eligibility** governs which _membership types_ may self-sign-up. The guide
+  described the first and pointed at the second.
+- **Manual entry settings look empty when the feature is off** — everything
+  below the enable checkbox is conditional on it. Now stated, so a
+  single-checkbox panel is not read as a broken page.
+
+---
+
+### Documentation: the prospective-members bulk actions are pictured, and the list of them corrected (2026-08-09)
+
+**Fixed (documentation)**
+
+- **The bulk-actions list named a `Delete` button that does not exist.**
+  Applicants are withdrawn, rejected, or purged by the inactivity policy —
+  there is no bulk delete anywhere in the module. The list also omitted **Print
+  Badges**, and did not say that **Reactivate** appears on the Inactive
+  Applications tab rather than alongside the others.
+
+**Known cosmetic issue, now documented**
+
+- **Table view shows two selection bars.** The page renders one (Print Badges /
+  Advance All / Reject All) and the table component renders its own (Advance /
+  Hold / Reject), so selecting an applicant produces two bars reading
+  "_N_ selected". Both work. The guide's screenshot shows them as they are
+  rather than cropping to one, since that is what a reader will see.
+
+---
+
+### Prospective members: adding an applicant who is already on file returned a server error (2026-08-09)
+
+**Fixed**
+
+- **`POST /prospective-members/prospects` answered `500` for a duplicate
+  email.** Creating an applicant whose address is already on file is not meant
+  to fail: the module notifies the applicant, logs the collision, and returns
+  the **existing** record so the coordinator can see who it is — which is what
+  the guide describes and what the duplicate-detection warning in the UI is
+  built on.
+
+  The lookup that finds the existing applicant did not eager-load
+  `current_step` or `step_progress`, and the prospect response reads both — so
+  serializing the reply triggered a lazy load from the async response path,
+  which raises `MissingGreenlet` rather than merely being slow. The feature
+  worked right up to the moment it tried to answer.
+
+  It now loads the same relationships the ordinary fetch does. This is the same
+  failure mode as the kanban endpoint's, in the one path that had been missed.
+
+**Added**
+
+- **`seed_demo_data.py --bulk-prospects [N]`** pads the demo pipeline out past
+  the kanban board's 200-card ceiling (247 by default) so the truncation notice
+  can be screenshotted. Opt-in: a few hundred filler applicants would otherwise
+  bury the named ones the other prospective-member screenshots are composed
+  around. It tops up rather than duplicating on a re-run, and advances a slice
+  of the filler so the later columns are not empty.
+
+---
+
+### Skills testing: the validation queue was empty for the officers it exists for (2026-08-09)
+
+**Fixed**
+
+- **`GET /tests?pending_validation=true` returned nothing while the dashboard
+  said results were waiting.** Skills testing has two checks for "is this user
+  an officer": one gates what they may _do_, the other what they may _see_. The
+  write-side check asks the real permission resolver; the read-side one only
+  recognised a legacy `user.role` string or a literal `user.permissions` list —
+  and a training officer normally holds `training.manage` through a **position**,
+  which neither of those sees.
+
+  So the same officer read as an officer to `GET /summary`, which counted the
+  results awaiting validation, and as an ordinary member to `GET /tests`, which
+  filtered every one of them away as somebody else's test. The **Needs
+  Validation** card showed a number, the queue behind it was empty, and the
+  officer had no route to the results it was counting. The org-wide test list
+  was truncated to the officer's own tests for the same reason.
+
+  Both checks now resolve the real permission. The older role-name heuristics
+  are kept — this widened the check rather than swapping it — and a test pins
+  the two to agree, since their disagreeing is the whole defect.
+
+> **Found by building the demo data for the documentation screenshots**, which
+> is the first time anything exercised the queue as a real officer rather than
+> as a fixture holding a literal permission list.
+
+---
+### Fixed
+
+- **Medical screening: saving a record with an unrecognized screening type or
+  status now shows a clear validation error instead of failing with a server
+  error (2026-08-09).** The medical-screening create/update forms already send
+  valid values, so this only affects malformed API requests, but those now return
+  a 422 with the list of allowed values rather than a 500.
+
+- **Meetings & minutes: saving a meeting, minutes, or template with an
+  unrecognized meeting type now returns a clear validation error instead of a
+  server error (2026-08-09).** Same class as the medical-screening fix; the forms
+  already send valid types, so only malformed API requests are affected. Valid
+  minutes types (including executive-session minutes) are unchanged.
+
+- **Meetings: updating a meeting's or an action item's status with an
+  unrecognized value now returns a clear validation error instead of a server
+  error (or silently storing a blank status) (2026-08-09).** Same class as the
+  fixes above; the meeting screens already send valid statuses, so only malformed
+  API requests are affected.
+
+- **Membership pipeline: saving a pipeline step or prospect status with an
+  unrecognized type/status now returns a clear validation error instead of a
+  server error (2026-08-09).** Same class as the fixes above — the pipeline
+  builder and applicant forms already send valid values, so only malformed API
+  requests are affected.
+
+- **Notification rules: saving a rule with an unrecognized trigger, category, or
+  channel now returns a clear validation error instead of a server error
+  (2026-08-09).** Same class as the fixes above; the rule editor already sends
+  valid values, so only malformed API requests are affected.
+
+- **Forms: saving a form, field, or integration with an unrecognized category,
+  status, field type, or target now returns a clear validation error instead of a
+  server error (2026-08-09).** Same class as the fixes above; the form builder
+  already sends valid values, so only malformed API requests are affected.
+
+- **Events: saving an event, template, or RSVP with an unrecognized event type,
+  check-in window, recurrence pattern, or RSVP status now returns a clear
+  validation error instead of a server error (2026-08-09).** Same class as the
+  fixes above; the event forms already send valid values, so only malformed API
+  requests are affected.
+
+- **Finance: saving an approval-chain step, purchase-request priority, dues
+  frequency, expense type, or export mapping with an unrecognized value now returns
+  a clear validation error instead of a server error (2026-08-09).** Same class as
+  the fixes above — input validation only; amounts and money handling are unchanged.
+  The finance forms already send valid values, so only malformed API requests are
+  affected.
+
+### Security: event-request scheduling can't reference another department's location (2026-08-09)
+
+**Security**
+
+- When an outreach event request is scheduled, the location assigned to it is now
+  verified to belong to your own department before it is saved, and the location
+  name shown on the request is looked up within your department only. Previously a
+  hand-crafted API request could attach another department's location id (when no
+  calendar event was created), and its name would then appear on the request. No
+  change for normal use — the scheduling screen only offers your own department's
+  locations.
+
+### Security: external-training credentials fail closed on a decryption error (2026-08-09)
+
+**Security**
+
+- API credentials for an external training provider (e.g. Vector Solutions) are
+  stored encrypted and decrypted just before the platform contacts the provider.
+  If decryption now fails because the stored value has been tampered with or the
+  encryption key is wrong, the sync is stopped instead of sending the unverified
+  value to the provider. Legitimate credentials, and older values saved before
+  encryption was added, are unaffected.
+
+### Security: membership-pipeline references are scoped to your department (2026-08-09)
+
+**Security**
+
+- Setting up a membership pipeline now verifies that the department stays inside
+  its own data. A pipeline step's email template, and the step a prospect's
+  uploaded document is filed under, are checked to belong to your department (and
+  the prospect's own pipeline) before they are saved — previously a hand-crafted
+  API request could attach another department's template or an unrelated step id.
+  No change for normal use; the pipeline builder already offers only your own
+  department's templates and steps. Saving a pipeline or step with an invalid
+  reference now returns a clear validation error instead of a server error.
+
+### Security: Web Push can no longer be aimed at an internal server (2026-08-09)
+
+**Security**
+
+- Browser push notifications are delivered by the server POSTing to a URL the
+  browser supplied when the device subscribed. That URL was screened at
+  subscribe time, but a public address could later be re-pointed at an internal
+  host (a DNS-rebinding trick) to make the server issue a request to an internal
+  target. The server now re-checks the destination immediately before each push
+  in production and staging, and skips any that resolves to a private/internal
+  address. No effect on real push delivery; this only closes an internal-request
+  vector.
+
+### Security: inventory records can no longer reference another department's data (2026-08-09)
+
+**Security**
+
+- Creating or editing inventory records — items, categories, maintenance records,
+  reorder and return requests, write-offs, size-variant batches, and equipment
+  kits — accepts several optional references (a parent category, a location, a
+  storage area, a variant group, an assigned member, the person who performed
+  maintenance, the assignment/issuance/checkout a return is against, etc.). These
+  references are now verified to belong to your own department before they are
+  saved. Previously a hand-crafted API request could attach the id of another
+  department's record; that record was never exposed in a response, but the stray
+  reference is now rejected outright with a clear error. No change for normal use —
+  the app already offers only your own department's records in these pickers.
+
+### Security: medical-screening health information is now encrypted at rest (2026-08-09)
+
+**Security**
+
+- Medical screening records store protected health information — the examining
+  provider's name, the result summary, structured results (scores/measurements),
+  and reviewer notes. These fields were previously held in the database as plain
+  text; they are now encrypted at rest with AES-256-GCM, matching how shift-report
+  narratives are already protected. Decryption is transparent, so the screening
+  screens behave exactly as before — nothing changes for users, but a database or
+  backup file no longer exposes the underlying health details.
+- Applied by a database migration that converts existing records in place. As with
+  any encryption-at-rest change, take a database backup before upgrading; the
+  migration is safe to re-run.
+
+### Money: you can no longer approve/record and pay out the same item yourself (2026-08-09)
+
+**Security**
+
+- **Separation of duties now covers the payout step.** A finance manager can no
+  longer mark their own purchase request or expense report paid, issue a check for
+  their own request, or waive their own dues; a store manager can no longer mark
+  their own order paid, waive its balance, or refund it. The action is refused with
+  a message asking for a second authorized person — matching how approvals already
+  worked. Automatic payment reconciliation (from the payment provider) is unaffected.
+
+- **Self-reported training that earns a certification can no longer auto-approve.**
+  A member submitting their own training toward a certification or a tracked
+  requirement (a certification course, a submission carrying a certification
+  number/expiration, or one linked to a training category) is now always routed to
+  an officer for review, even where the department had auto-approve turned on.
+  Auto-approve still applies to plain logged hours and skills practice, so nobody
+  can grant themselves a credential without a second person signing off.
+
+- **Emailing a compliance report to someone outside the department is now
+  recorded.** You can still send reports to any address (an outside auditor, a
+  state office), but each send to a recipient who isn't a member of your
+  organization is written to the audit log — who sent it, when, and to which
+  external addresses — so there's a trail whenever member/compliance data leaves
+  the department. Sending to fellow members is unaffected and creates no such entry.
+
+- **Reading personal data now needs the matching permission, not just report
+  access.** Three places where sensitive records sat behind a broad grant are
+  tightened: the member-roster and applicant-pipeline reports now require member /
+  prospective-member viewing access on top of report access (aggregate reports are
+  unchanged, and reports you can't run no longer appear in the list); expense-report
+  reimbursements are now visible only to their submitter unless you're a finance
+  manager; and an integration's configuration now requires integrations-admin access
+  to view. Features that only need to know whether an integration is *connected*
+  (such as meeting setup) keep working through a new status-only view that carries no
+  configuration.
+
+### Dashboard: action items are now shown only to members allowed to see them (2026-08-08)
+
+**Security**
+
+- **The dashboard's combined action-items list didn't check permissions**, so any
+  signed-in member could see the descriptions of meeting and minutes action items —
+  including items tied to executive-session minutes (disciplinary or legal matters).
+  Each half of the list is now gated the same way its own module is: meeting items
+  require meeting or minutes viewing access, and minutes items require minutes
+  viewing access.
+
+### Kiosk: check-in no longer shows as active before the window actually opens (2026-08-09)
+
+**Fixed**
+
+- **A location wall-display could show an event's check-in as "active" (with a
+  scannable QR) up to an hour before check-in actually opened**, and the scan would
+  then be rejected. The kiosk now shows check-in as active only during each event's
+  real check-in window (which varies by event).
+
+### Property return: the total value owed is now calculated precisely (2026-08-08)
+
+**Fixed**
+
+- **The "total assessed value" on a member's property-return letter and overdue
+  reminder was summed using floating-point math**, which can drift by fractions of a
+  cent. Because that figure is a charge a departing member can be billed for, it is
+  now computed with exact decimal math (matching how the clearance summary already
+  worked).
+
+### Scheduled jobs: one department's error no longer stops the rest (2026-08-08)
+
+**Fixed**
+
+- **Several nightly jobs (shift auto-checkout, compliance reports, officer-directory
+  refresh, certification alerts) processed every department in one shared database
+  transaction.** If one department hit an error partway through, it could cause the
+  remaining departments to fail too — and shift auto-checkout could even discard the
+  work already done for earlier departments. Each department's work is now saved and
+  isolated, so one failure no longer cascades.
+
+### Emails: department names and member names with an apostrophe or "&" render correctly (2026-08-08)
+
+**Fixed**
+
+- **On the built-in fallback email layout, a subject line or plain-text body could
+  show a name like "O'Brien" as "O&#x27;Brien" or "Fire & Rescue" as "Fire &amp;
+  Rescue."** The fallback path now matches the main templates, which already rendered
+  these correctly.
+
 ### Storefront: a payment in the wrong currency is no longer auto-applied (2026-08-08)
 
 **Fixed**
@@ -125,7 +1024,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **An applicant's detail/interview view never showed which pipeline they're in.**
   The "Pipeline:" label is meant to show the applicant's pipeline name, but it was
-  only filled in on the applicant *list* — on the detail and interview views it was
+  only filled in on the applicant _list_ — on the detail and interview views it was
   blank, so the line didn't appear. It now shows on those views too.
 
 ### Notifications: the notification log list no longer errors when a rule-triggered entry is present (2026-08-06)
@@ -4999,13 +5898,14 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Conflict resolution**: When records are modified on both sides between syncs, configurable strategies (Salesforce wins, Logbook wins, most recent wins) prevent data loss
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Salesforce API rate limit exceeded during sync | Sync pauses, retries with exponential backoff, logs partial progress |
-| Webhook received for unmapped Salesforce object | Event logged and skipped; no error returned to Salesforce |
-| Member deleted in Logbook but exists in Salesforce | Configurable: soft-delete in Salesforce or unlink without delete |
-| Salesforce field mapping references nonexistent field | Mapping validation on save rejects invalid field references |
-| OAuth token expires mid-sync | Auto-refresh token and retry from the failed record |
+
+| Scenario                                              | Behavior                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Salesforce API rate limit exceeded during sync        | Sync pauses, retries with exponential backoff, logs partial progress |
+| Webhook received for unmapped Salesforce object       | Event logged and skipped; no error returned to Salesforce            |
+| Member deleted in Logbook but exists in Salesforce    | Configurable: soft-delete in Salesforce or unlink without delete     |
+| Salesforce field mapping references nonexistent field | Mapping validation on save rejects invalid field references          |
+| OAuth token expires mid-sync                          | Auto-refresh token and retry from the failed record                  |
 
 #### Vector Solutions Integration Enhancements
 
@@ -5015,11 +5915,12 @@ resolved a set of schema/data-integrity inconsistencies.
 - **API spec compliance**: Fixed Vector Solutions API client to match their actual authentication flow (API key in header, not query parameter) and pagination format (offset-based, not cursor-based)
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Vector Solutions category has no internal mapping | Record imported with a "Unmapped" category flag; officer prompted to map |
-| Credit hours differ from clock hours | Both values stored; `credit_hours` used for CE credit, `hours` for compliance |
-| Duplicate record detected during import | Skipped with duplicate reason logged; deduplication uses member + course + date |
+
+| Scenario                                          | Behavior                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Vector Solutions category has no internal mapping | Record imported with a "Unmapped" category flag; officer prompted to map        |
+| Credit hours differ from clock hours              | Both values stored; `credit_hours` used for CE credit, `hours` for compliance   |
+| Duplicate record detected during import           | Skipped with duplicate reason logged; deduplication uses member + course + date |
 
 #### National Registry (NREMT) Standard Linkage
 
@@ -5029,10 +5930,11 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Compliance auto-tracking**: Training records filed under categories with `registry_code` set automatically count toward the corresponding NCCR requirement, eliminating manual cross-referencing
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Category has registry_code but no matching NCCR requirement exists | Hours counted in category but not toward NCCR compliance; warning shown on compliance report |
-| NREMT hour distribution updated after records already filed | Existing records retain original credit; re-calculation available via compliance matrix refresh |
+
+| Scenario                                                           | Behavior                                                                                        |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Category has registry_code but no matching NCCR requirement exists | Hours counted in category but not toward NCCR compliance; warning shown on compliance report    |
+| NREMT hour distribution updated after records already filed        | Existing records retain original credit; re-calculation available via compliance matrix refresh |
 
 #### Training Program Export/Import
 
@@ -5041,11 +5943,12 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Cross-department sharing**: Enables mutual aid training programs and standardized curricula across departments
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Imported program references a course that already exists | Existing course reused; no duplicate created |
-| Imported program has a phase name matching an existing phase | New phase created with " (Imported)" suffix to avoid collision |
-| Export includes category registry codes | Registry codes included; importing department maps them to their own categories |
+
+| Scenario                                                     | Behavior                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Imported program references a course that already exists     | Existing course reused; no duplicate created                                    |
+| Imported program has a phase name matching an existing phase | New phase created with " (Imported)" suffix to avoid collision                  |
+| Export includes category registry codes                      | Registry codes included; importing department maps them to their own categories |
 
 #### Training Category Tracking Improvements
 
@@ -5061,11 +5964,12 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Route**: Added to training module routes, accessible to users with `training.manage` permission
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Manual report filed for a date that has a scheduled shift | Warning shown; officer can proceed (reports are independent) |
-| Apparatus type has no skill/task mappings configured | Form shows empty skills/tasks sections; officer can manually add entries |
-| Manual report with zero hours (same start/end time) | Validation prevents submission; minimum 15-minute shift required |
+
+| Scenario                                                  | Behavior                                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Manual report filed for a date that has a scheduled shift | Warning shown; officer can proceed (reports are independent)             |
+| Apparatus type has no skill/task mappings configured      | Form shows empty skills/tasks sections; officer can manually add entries |
+| Manual report with zero hours (same start/end time)       | Validation prevents submission; minimum 15-minute shift required         |
 
 #### Shift Completion Service Hardening
 
@@ -5101,11 +6005,12 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Membership tier service**: Fixed edge cases in tier advancement logic for members transitioning from prospect to active status
 
 **Edge Cases:**
-| Scenario | Behavior |
-|----------|----------|
-| Applicant linked to an election that is deleted | Election reference cleared; "Election Removed" placeholder shown |
+
+| Scenario                                              | Behavior                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------- |
+| Applicant linked to an election that is deleted       | Election reference cleared; "Election Removed" placeholder shown           |
 | Pipeline stage reorder while applicants are in-flight | Applicants retain their current stage; reorder only affects visual display |
-| Applicant has linked events from a disabled module | Events section hidden; data preserved for when module is re-enabled |
+| Applicant has linked events from a disabled module    | Events section hidden; data preserved for when module is re-enabled        |
 
 #### Test Coverage Expansion
 
@@ -5967,16 +6872,16 @@ Large-page components decomposed into focused, maintainable sub-components:
 
 **Edge Cases:**
 
-| Scenario                                      | Behavior                                                                         |
+| Scenario | Behavior |
 | --------------------------------------------- | -------------------------------------------------------------------------------- | --- | ---------------- |
-| Bulk confirm with API failure                 | Optimistic UI reverts; toast shows error                                         |
-| Template with bare string positions           | Backward-compatible: defaults to `required=true`                                 |
-| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only                                     |
-| Reminder for shift already started            | Skipped — only shifts starting within lookahead window                           |
-| All positions filled via bulk assign          | "Fill All Open" button hidden                                                    |
-| Member on leave assigned via API              | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
-| Notes cleared to empty string                 | Converted to `undefined` via `                                                   |     | ` to prevent 422 |
-| Dark mode with light template color           | Text auto-darkened to maintain 4.5:1 contrast ratio                              |
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `                                                  |     |` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
 
 ### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
 

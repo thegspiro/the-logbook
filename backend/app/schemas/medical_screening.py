@@ -7,9 +7,35 @@ Request and response schemas for the medical screening endpoints.
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.medical_screening import ScreeningStatus, ScreeningType
 from app.schemas.base import UTCResponseBase
+
+_SCREENING_TYPES = {e.value for e in ScreeningType}
+_SCREENING_STATUSES = {e.value for e in ScreeningStatus}
+
+
+def _validate_enum(value: Optional[str], valid: set, field: str) -> Optional[str]:
+    """Reject request values the DB's ENUM column can't store.
+
+    ``screening_type``/``status`` map to strict MySQL ENUM columns, but the
+    request schemas type them as free strings. Without this check an out-of-enum
+    value passes Pydantic, reaches MySQL, and fails there with a truncation error
+    that surfaces as a 500 (the endpoints only convert ``ValueError`` to 400).
+    Normalizing to lowercase first also absorbs the casing mismatch called out in
+    the schema-contract pitfall. ``None``/unset is left for the field's own
+    optionality to handle.
+    """
+    if value is None:
+        return value
+    normalized = value.lower() if isinstance(value, str) else value
+    if normalized not in valid:
+        raise ValueError(
+            f"Invalid {field} '{value}'. Must be one of: {', '.join(sorted(valid))}"
+        )
+    return normalized
+
 
 # --- Screening Requirement Schemas ---
 
@@ -39,7 +65,10 @@ class ScreeningRequirementBase(BaseModel):
 class ScreeningRequirementCreate(ScreeningRequirementBase):
     """Schema for creating a screening requirement."""
 
-    pass
+    @field_validator("screening_type")
+    @classmethod
+    def _valid_screening_type(cls, v: str) -> str:
+        return _validate_enum(v, _SCREENING_TYPES, "screening_type")
 
 
 class ScreeningRequirementUpdate(BaseModel):
@@ -52,6 +81,11 @@ class ScreeningRequirementUpdate(BaseModel):
     applies_to_roles: Optional[List[str]] = None
     is_active: Optional[bool] = None
     grace_period_days: Optional[int] = Field(None, ge=0)
+
+    @field_validator("screening_type")
+    @classmethod
+    def _valid_screening_type(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_enum(v, _SCREENING_TYPES, "screening_type")
 
 
 class ScreeningRequirementResponse(ScreeningRequirementBase, UTCResponseBase):
@@ -93,6 +127,16 @@ class ScreeningRecordCreate(ScreeningRecordBase):
     user_id: Optional[str] = None
     prospect_id: Optional[str] = None
 
+    @field_validator("screening_type")
+    @classmethod
+    def _valid_screening_type(cls, v: str) -> str:
+        return _validate_enum(v, _SCREENING_TYPES, "screening_type")
+
+    @field_validator("status")
+    @classmethod
+    def _valid_status(cls, v: str) -> str:
+        return _validate_enum(v, _SCREENING_STATUSES, "status")
+
 
 class ScreeningRecordUpdate(BaseModel):
     """Schema for updating a screening record."""
@@ -106,6 +150,16 @@ class ScreeningRecordUpdate(BaseModel):
     result_summary: Optional[str] = None
     result_data: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
+
+    @field_validator("screening_type")
+    @classmethod
+    def _valid_screening_type(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_enum(v, _SCREENING_TYPES, "screening_type")
+
+    @field_validator("status")
+    @classmethod
+    def _valid_status(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_enum(v, _SCREENING_STATUSES, "status")
 
 
 class ScreeningRecordResponse(ScreeningRecordBase, UTCResponseBase):

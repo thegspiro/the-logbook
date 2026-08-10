@@ -14,6 +14,7 @@ import { Truck, Plus, Search, Pencil, Trash2, Loader2, X, Save, Shield, Users, W
 import toast from 'react-hot-toast';
 import { schedulingService } from '../modules/scheduling/services/api';
 
+import { useConfirm } from '../contexts/ConfirmContext';
 interface BasicApparatus {
   id: string;
   organization_id?: string;
@@ -73,6 +74,7 @@ const DEFAULT_POSITIONS_BY_TYPE: Record<string, string[]> = {
 };
 
 export default function ApparatusBasicPage() {
+  const { confirm } = useConfirm();
   const [apparatusList, setApparatusList] = useState<BasicApparatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -207,7 +209,15 @@ export default function ApparatusBasicPage() {
   };
 
   const handleDelete = async (apparatus: BasicApparatus) => {
-    if (!window.confirm(`Delete "${apparatus.name}" (${apparatus.unit_number})? This cannot be undone.`)) return;
+    if (
+      !(await confirm({
+        title: 'Delete apparatus',
+        message: `Delete "${apparatus.name}" (${apparatus.unit_number})? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await schedulingService.deleteBasicApparatus(apparatus.id);
       toast.success('Apparatus deleted');
@@ -221,7 +231,7 @@ export default function ApparatusBasicPage() {
     APPARATUS_TYPES.find((t) => t.value === type) || APPARATUS_TYPES[APPARATUS_TYPES.length - 1];
   const inputCls =
     'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
+  const labelCls = 'form-label';
 
   return (
     <div className="space-y-6">
@@ -443,7 +453,7 @@ export default function ApparatusBasicPage() {
                       <select
                         value={pos}
                         onChange={(e) => updatePosition(i, e.target.value)}
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input flex-1"
                       >
                         {POSITION_OPTIONS.map((o) => (
                           <option key={o} value={o}>

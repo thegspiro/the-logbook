@@ -299,11 +299,11 @@ export interface PurchaseRequest {
   organizationId: string;
   requestNumber: string;
   fiscalYearId: string;
-  budgetId?: string;
+  budgetId?: string | null;
   requestedBy: string;
   title: string;
-  description?: string;
-  vendor?: string;
+  description?: string | null;
+  vendor?: string | null;
   estimatedAmount: number;
   actualAmount?: number;
   status: PurchaseRequestStatus;

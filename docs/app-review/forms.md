@@ -1,7 +1,7 @@
 # Application Review — Forms (Tier B)
 
 **Prefix:** `FORM2` · **Iteration:** B13 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/forms.py` (752 L, 21 endpoints), `public/forms.py` (209 L),
 `services/forms_service.py` (2,290 L), models `models/forms.py`
@@ -10,6 +10,99 @@
 cross-org integration writes) and FORM-3 fixed; FORM-4 (definition text unescaped),
 FORM-5 (require_authentication not enforced), FORM-6 (required = presence-only)
 left open.
+
+---
+
+## Pass 4 (2026-08-09) — full FK re-audit; the one residual re-confirmed non-security
+
+Pass 4 ran a fresh, exhaustive client-FK audit across every `create_*`/`update_*`
+path in the module (a sub-agent traced each writer against its request schema).
+Everything the FORM-1/FORM-2 fixes covered holds, and the sweep found **no new
+cross-org write gap**:
+
+- `create_form`/`update_form`/`add_integration`/`update_integration` — the only
+  FKs are server-derived (`organization_id`/`created_by`) or the server-set,
+  org-verified `form_id`; `field_mappings` is validated to reference only the
+  form's own field ids (`_validate_field_mappings`); `target_module`/
+  `integration_type` are enums, not resource FKs.
+- `submit_form`/`submit_public_form` — `form_id` is org-scoped via
+  `get_form_by_id`/`get_form_by_slug`; the submitter-mapped integration FKs
+  (`member_id`/`item_id`/`event_id`) are validated in-org via `_entity_in_org`;
+  submission `data` keys are filtered to known field ids.
+
+The audit's only finding is the **already-flagged BXC-1 residual**:
+`FormField.condition_field_id` is written through `create_form`/`add_field`/
+`update_field` without a same-form/org check. Re-confirmed this pass that it is
+**not a security gap**: the column is a *soft* reference (`String(36)`, **no** DB
+`ForeignKey`), it has **no** `organization_id` of its own (org-scoped only via the
+parent `Form`), and — decisively — it is **never dereferenced server-side**. It
+drives only client-side conditional-visibility rendering, which matches against
+fields of the *current* form, so a foreign/garbage value is a dangling,
+never-matching reference (a broken visibility rule), never cross-org data reach.
+
+**Left flagged, not fixed.** The one worthwhile hardening would be a *same-form*
+validation (reject a `condition_field_id` not among this form's fields) — a
+correctness guard, not a security one. It's deferred deliberately: the semantics
+are builder-specific (a field's visibility can depend on another field created in
+the same `create_form` call, whose id is server-generated), so scoping the check
+wrong would reject legitimate cross-field rules — exactly the kind of change that
+wants its own DB-backed verification rather than a rotation-tick guess. Recorded
+as the BXC-1 correctness follow-up.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
+
+---
+
+## Pass 3 (2026-08-09) — latent-500 on form/field/integration enums; E712 swept
+
+Re-verified FORM-1/2/3/6/7 hold. The B1 latent-500 enum lens — which pass 2's
+error-handling latent-500 check didn't cover — surfaced a genuine gap, plus two
+false positives a read cleared.
+
+### FORM2-1 — LOW/MED — Enum fields 500 on a bad value (incl. an *incomplete* prior guard) — ✅ FIXED
+
+**What:** `category`/`status` (Form), `field_type` (FormField), and
+`target_module`/`integration_type` (FormIntegration) map to **strict MySQL ENUM**
+columns but were typed as free `str` and inserted raw (`create_form`/`create_field`
+via `**data`, the `update_*` `setattr` loops, `create_integration` via explicit
+kwargs). An out-of-set value 500'd at MySQL. Notably `category` **already had a
+`@field_validator`, but it only lowercase-*normalized* — it did not reject
+unknowns**, so `category="bogus"` still reached MySQL and 500'd; the guard looked
+present but didn't prevent the fault.
+
+**Fix:** a shared `_enum_check(valid, field)` that normalizes case **and** validates
+membership, replacing the two normalize-only `category` validators and added to
+`FormUpdate.status`, `FormField{Create,Update}.field_type`, and
+`FormIntegrationCreate.{target_module,integration_type}` — each deriving its set from
+the model enum, → 422. Request-only, so the response schemas are untouched.
+**10 tests added.**
+
+**Two lens false positives, cleared by reading (no change):**
+- `Form.integration_type` (`FormCreate`/`FormUpdate.integration_type`) is a plain
+  **String** column, not an ENUM — no 500 path (distinct from
+  `FormIntegration.integration_type`, which *is* an ENUM and *was* fixed).
+- `FormIntegrationUpdate` exposes no enum field (only `field_mappings`/`is_active`).
+
+### FORM2-2 — NIT — 6 boolean-column E712 swept; 1 JSON compare kept — ✅ FIXED
+
+Swept 6 `is_public`/`is_template == True/False  # noqa: E712` boolean-column
+comparisons to `.is_(...)`. **Kept** the one at `forms_service.py:1337` —
+`func.json_extract(config, "$.auto_advance") == True` — as an explicit `# noqa: E712`
+(a JSON-value compare, not a boolean column; `.is_(True)` would change MySQL
+semantics), now with a comment saying so.
+
+### Still flagged (unchanged)
+
+- **FORM-4** (definition text stored unescaped — escaped at *render*, not storage, by
+  design), **FORM-5** (`require_authentication`/`allow_multiple_submissions`
+  semantics — product decision), and the BXC-1 `condition_field_id` residual
+  (client-only conditional visibility, degrades to a no-op, never dereferenced
+  server-side).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · new enum tests **10 passed** + existing forms tests pass
+(DB-free).
 
 ---
 

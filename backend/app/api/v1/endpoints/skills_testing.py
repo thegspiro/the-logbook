@@ -55,6 +55,7 @@ from app.services.skills_testing_service import (
     AttemptLimitReached,
     apply_test_pass_to_pipeline,
     assert_attempts_remaining,
+    build_score_breakdown,
     build_template_snapshot,
     calculate_test_result,
     is_pending_validation,
@@ -77,6 +78,16 @@ router = APIRouter()
 CANDIDATE_SEARCH_MIN_CHARS = 2
 CANDIDATE_SEARCH_MAX_RESULTS = 15
 
+# Statuses whose scorecard is final, and so has a score breakdown to explain.
+# A voided test keeps its arithmetic: the record survives the withdrawal, and a
+# reader asking why it was voided still needs to see what it said.
+_SCORED_TEST_STATUSES = ("completed", "voided")
+
+
+def _format_points(value: float) -> str:
+    """Point totals without float noise: 12.0 -> "12", 12.5 -> "12.5"."""
+    return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
+
 
 # ============================================
 # Skill Templates
@@ -84,7 +95,24 @@ CANDIDATE_SEARCH_MAX_RESULTS = 15
 
 
 def _user_has_officer_role(user: User) -> bool:
-    """Check if the user has a role typically associated with officers/admins."""
+    """Check if the user has a role typically associated with officers/admins.
+
+    Governs *read* visibility: an officer sees every test in the organization,
+    everyone else sees only the ones they are party to or have been granted.
+
+    The real permission is checked first, and that is not a refinement — it is
+    the case that matters. The name and attribute checks below only recognise a
+    legacy ``user.role`` string or a literal ``user.permissions`` list, and a
+    department's training officer normally holds ``training.manage`` through a
+    *position* instead, which neither of those sees. Such an officer therefore
+    read as a non-officer here while ``_can_manage_tests`` (same authority, real
+    resolver) read as one — so the validation queue was permanently empty for
+    them: ``GET /summary`` counted the pending results, and the list endpoint
+    that is supposed to show them filtered every one away as somebody else's
+    test. The two checks have to agree on who an officer is.
+    """
+    if user_has_permission(user, "training.manage"):
+        return True
     if hasattr(user, "role") and user.role in (
         "admin",
         "owner",
@@ -335,6 +363,7 @@ async def create_template(
         time_limit_seconds=template_data.time_limit_seconds,
         passing_percentage=template_data.passing_percentage,
         require_all_critical=template_data.require_all_critical,
+        score_pass_fail_criteria=template_data.score_pass_fail_criteria,
         requirement_id=requirement_id,
         tags=template_data.tags,
         visibility=template_data.visibility,
@@ -450,6 +479,7 @@ async def update_template(
         "sections",
         "passing_percentage",
         "require_all_critical",
+        "score_pass_fail_criteria",
         "time_limit_seconds",
     }
     if template.status == "published" and structural_fields & set(update_data.keys()):
@@ -641,6 +671,7 @@ async def duplicate_template(
         time_limit_seconds=source.time_limit_seconds,
         passing_percentage=source.passing_percentage,
         require_all_critical=source.require_all_critical,
+        score_pass_fail_criteria=source.score_pass_fail_criteria,
         tags=source.tags,
         visibility=source.visibility,
     )
@@ -2464,9 +2495,27 @@ async def email_test_results(
     template_name = template.name if template else "Unknown Template"
     test_type = "Practice" if test.is_practice else "Official"
     result_text = (test.result or "incomplete").upper()
-    score_text = (
-        f"{round(test.overall_score)}%" if test.overall_score is not None else "N/A"
+
+    # Same rule as the API response: the emailed scorecard must reflect the
+    # structure the test was taken under, not the template's current state.
+    scored_against = resolve_test_template(test, template)
+    email_breakdown = (
+        build_score_breakdown(test, scored_against)
+        if scored_against and test.status in _SCORED_TEST_STATUSES
+        else None
     )
+
+    # A bare percentage in an email invites exactly the question this endpoint
+    # cannot answer: which of the steps below it it was computed from. The point
+    # total at least says how much of the sheet carried points.
+    if test.overall_score is None:
+        score_text = "N/A"
+    elif email_breakdown and email_breakdown["method"] == "points":
+        earned = _format_points(email_breakdown["earned"])
+        available = _format_points(email_breakdown["available"])
+        score_text = f"{round(test.overall_score)}% ({earned} of {available} points)"
+    else:
+        score_text = f"{round(test.overall_score)}%"
 
     # The email is another way for the candidate to read their result, so it
     # obeys the same disclosure policy the API does — otherwise "email results"
@@ -2492,9 +2541,6 @@ async def email_test_results(
 
     # Build section summaries
     sections_html = ""
-    # Same rule as the API response: the emailed scorecard must reflect the
-    # structure the test was taken under, not the template's current state.
-    scored_against = resolve_test_template(test, template)
     template_sections = scored_against.sections or [] if scored_against else []
     section_results = redact_test_for_view(
         {"notes": test.notes, "section_results": test.section_results or []},
@@ -2858,6 +2904,22 @@ def _build_test_response(
         template_sections=scored_against.sections if scored_against else None,
         template_time_limit_seconds=(
             scored_against.time_limit_seconds if scored_against else None
+        ),
+        template_require_all_critical=(
+            scored_against.require_all_critical if scored_against else None
+        ),
+        template_score_pass_fail_criteria=(
+            bool(getattr(scored_against, "score_pass_fail_criteria", False))
+            if scored_against
+            else None
+        ),
+        # Only a finished test has arithmetic worth explaining. A breakdown of a
+        # half-scored sheet would report every step the examiner has not reached
+        # yet as points not earned.
+        score_breakdown=(
+            build_score_breakdown(test, scored_against)
+            if scored_against and test.status in _SCORED_TEST_STATUSES
+            else None
         ),
     )
 

@@ -98,3 +98,88 @@ class TestReferredByValidation:
             # main's update guard is `if "referred_by" in data:` — absent key skips.
             await svc.update_prospect("p1", "org1", {})
         mock_assert.assert_not_awaited()
+
+
+class TestStepEmailTemplateValidation:
+    """MP2-5 (pass 4): a step's client-supplied email_template_id (a FK to the
+    org-scoped EmailTemplate) is validated in-org on every step writer."""
+
+    async def test_add_step_rejects_foreign_template(self):
+        svc = MembershipPipelineService(AsyncMock())
+        with patch.object(
+            svc,
+            "get_pipeline",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(steps=[]),
+        ), patch(
+            "app.services.membership_pipeline_service.assert_in_org",
+            new_callable=AsyncMock,
+            side_effect=ValueError("Invalid email template"),
+        ):
+            with pytest.raises(ValueError, match="email template"):
+                await svc.add_step(
+                    "pipe1",
+                    "org1",
+                    {"name": "Welcome", "email_template_id": "foreign-template"},
+                )
+
+    async def test_create_pipeline_rejects_foreign_step_template(self):
+        db = AsyncMock()
+        db.add = MagicMock()  # add() is sync; AsyncMock would leave a coroutine
+        svc = MembershipPipelineService(db)
+        with patch.object(
+            svc, "_unset_default_pipeline", new_callable=AsyncMock
+        ), patch(
+            "app.services.membership_pipeline_service.assert_in_org",
+            new_callable=AsyncMock,
+            side_effect=ValueError("Invalid email template"),
+        ):
+            with pytest.raises(ValueError, match="email template"):
+                await svc.create_pipeline(
+                    "org1",
+                    name="Recruits",
+                    steps=[
+                        {"name": "Welcome", "email_template_id": "foreign-template"}
+                    ],
+                )
+
+    async def test_update_step_without_template_skips_validation(self):
+        svc = MembershipPipelineService(AsyncMock())
+        # config={} on both old and new so the form-integration reconciliation
+        # at the tail of update_step is a no-op (no form method to patch).
+        step = SimpleNamespace(id="s1", name="Old", config={})
+        with patch.object(
+            svc,
+            "get_pipeline",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(steps=[step]),
+        ), patch(
+            "app.services.membership_pipeline_service.assert_in_org",
+            new_callable=AsyncMock,
+        ) as mock_assert:
+            # The update guard is `if "email_template_id" in data:` — absent skips.
+            await svc.update_step("s1", "pipe1", "org1", {"name": "Renamed"})
+        mock_assert.assert_not_awaited()
+
+
+class TestProspectDocumentStepValidation:
+    """MP2-5 (pass 4): add_prospect_document rejects a client-supplied step_id
+    that isn't in the prospect's own pipeline (the MP-5 sibling that was missed)."""
+
+    async def test_foreign_step_rejected(self):
+        svc = MembershipPipelineService(AsyncMock())
+        prospect = SimpleNamespace(
+            pipeline=SimpleNamespace(steps=[SimpleNamespace(id="real-step")])
+        )
+        with patch.object(
+            svc, "get_prospect", new_callable=AsyncMock, return_value=prospect
+        ):
+            with pytest.raises(ValueError, match="Step does not belong"):
+                await svc.add_prospect_document(
+                    prospect_id="p1",
+                    organization_id="org1",
+                    document_type="waiver",
+                    file_name="w.pdf",
+                    file_path="/app/uploads/w.pdf",
+                    step_id="foreign-step",
+                )

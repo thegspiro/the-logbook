@@ -32,6 +32,7 @@ from app.models.training import (
 )
 from app.models.user import User, UserStatus
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.model_updates import apply_updates
 
 
 class RecertificationService:
@@ -48,7 +49,7 @@ class RecertificationService:
             RecertificationPathway.organization_id == organization_id
         )
         if active_only:
-            query = query.where(RecertificationPathway.active == True)  # noqa: E712
+            query = query.where(RecertificationPathway.active.is_(True))
         result = await self.db.execute(query.order_by(RecertificationPathway.name))
         return result.scalars().all()
 
@@ -81,9 +82,7 @@ class RecertificationService:
         pathway = await self.get_pathway(pathway_id, organization_id)
         if not pathway:
             raise ValueError("Pathway not found")
-        for key, value in data.items():
-            if value is not None:
-                setattr(pathway, key, value)
+        apply_updates(pathway, data)
         await self.db.flush()
         # `updated_at` is server-side (onupdate=func.now()), so the flush leaves
         # it expired rather than fetching the new value back. The endpoint
@@ -200,7 +199,7 @@ class CompetencyService:
         """Get competency matrices, optionally filtered by position"""
         query = select(CompetencyMatrix).where(
             CompetencyMatrix.organization_id == organization_id,
-            CompetencyMatrix.active == True,  # noqa: E712
+            CompetencyMatrix.active.is_(True),
         )
         if position:
             query = query.where(CompetencyMatrix.position == position)
@@ -236,9 +235,7 @@ class CompetencyService:
         matrix = await self.get_matrix(matrix_id, organization_id)
         if not matrix:
             raise ValueError("Matrix not found")
-        for key, value in data.items():
-            if value is not None:
-                setattr(matrix, key, value)
+        apply_updates(matrix, data)
         await self.db.flush()
         # See update_pathway: server-side `updated_at` stays expired after a
         # flush and cannot be lazy-loaded during response serialisation.
@@ -286,7 +283,7 @@ class InstructorQualificationService:
             .where(InstructorQualification.organization_id == organization_id)
         )
         if active_only:
-            query = query.where(InstructorQualification.active == True)  # noqa: E712
+            query = query.where(InstructorQualification.active.is_(True))
         if user_id:
             query = query.where(InstructorQualification.user_id == user_id)
         if course_id:
@@ -326,9 +323,7 @@ class InstructorQualificationService:
         qual = result.scalar_one_or_none()
         if not qual:
             raise ValueError("Qualification not found")
-        for key, value in data.items():
-            if value is not None:
-                setattr(qual, key, value)
+        apply_updates(qual, data)
         await self.db.flush()
         # See update_pathway: server-side `updated_at` stays expired after a
         # flush and cannot be lazy-loaded during response serialisation.
@@ -343,7 +338,7 @@ class InstructorQualificationService:
             select(InstructorQualification)
             .where(InstructorQualification.user_id == user_id)
             .where(InstructorQualification.organization_id == organization_id)
-            .where(InstructorQualification.active == True)  # noqa: E712
+            .where(InstructorQualification.active.is_(True))
             .where(InstructorQualification.course_id == course_id)
         )
         qual = result.scalar_one_or_none()
@@ -365,7 +360,7 @@ class InstructorQualificationService:
             select(InstructorQualification)
             .where(InstructorQualification.organization_id == organization_id)
             .where(InstructorQualification.course_id == course_id)
-            .where(InstructorQualification.active == True)  # noqa: E712
+            .where(InstructorQualification.active.is_(True))
             .where(
                 (InstructorQualification.expiration_date.is_(None))
                 | (InstructorQualification.expiration_date >= today)
@@ -539,9 +534,7 @@ class MultiAgencyService:
             if orgs and hasattr(orgs[0], "model_dump"):
                 data["participating_organizations"] = [o.model_dump() for o in orgs]
 
-        for key, value in data.items():
-            if value is not None:
-                setattr(exercise, key, value)
+        apply_updates(exercise, data)
         await self.db.flush()
         # See update_pathway: server-side `updated_at` stays expired after a
         # flush and cannot be lazy-loaded during response serialisation.
@@ -670,9 +663,9 @@ class XAPIService:
         result = await self.db.execute(
             select(XAPIStatement)
             .where(XAPIStatement.organization_id == organization_id)
-            .where(XAPIStatement.processed == False)  # noqa: E712
+            .where(XAPIStatement.processed.is_(False))
             .where(XAPIStatement.user_id.isnot(None))
-            .where(XAPIStatement.completion == True)  # noqa: E712
+            .where(XAPIStatement.completion.is_(True))
             .limit(100)
         )
         statements = result.scalars().all()
@@ -754,7 +747,7 @@ class ReportExportService:
             select(User)
             .where(User.organization_id == organization_id)
             .where(User.status == UserStatus.ACTIVE)
-            .where(User.compliance_exempt == False)  # noqa: E712
+            .where(User.compliance_exempt.is_(False))
             .where(User.deleted_at.is_(None))
         )
         users = users_result.scalars().all()
@@ -763,7 +756,7 @@ class ReportExportService:
         req_result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == organization_id)
-            .where(TrainingRequirement.active == True)  # noqa: E712
+            .where(TrainingRequirement.active.is_(True))
         )
         requirements = req_result.scalars().all()
 
@@ -892,7 +885,7 @@ class ReportExportService:
             select(User).where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
-                User.compliance_exempt == False,  # noqa: E712
+                User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
         )
@@ -901,7 +894,7 @@ class ReportExportService:
         req_result = await self.db.execute(
             select(TrainingRequirement).where(
                 TrainingRequirement.organization_id == organization_id,
-                TrainingRequirement.active == True,  # noqa: E712
+                TrainingRequirement.active.is_(True),
             )
         )
         requirements = req_result.scalars().all()
@@ -1010,7 +1003,7 @@ class ReportExportService:
             select(User)
             .where(User.organization_id == organization_id)
             .where(User.status == UserStatus.ACTIVE)
-            .where(User.compliance_exempt == False)  # noqa: E712
+            .where(User.compliance_exempt.is_(False))
             .where(User.deleted_at.is_(None))
         )
         users = users_result.scalars().all()
@@ -1018,7 +1011,7 @@ class ReportExportService:
         req_result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == organization_id)
-            .where(TrainingRequirement.active == True)  # noqa: E712
+            .where(TrainingRequirement.active.is_(True))
         )
         requirements = req_result.scalars().all()
 

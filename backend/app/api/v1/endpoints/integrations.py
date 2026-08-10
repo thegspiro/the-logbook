@@ -376,9 +376,15 @@ async def ensure_catalog(db: AsyncSession, organization_id: str) -> None:
 @router.get("")
 async def list_integrations(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("integrations.manage")),
 ):
-    """List all integrations for the organization"""
+    """List all integrations for the organization.
+
+    Integration config exposes sync targets, endpoint URLs, and PHI flags for the
+    org's third-party connections — admin-tier configuration, not member data — so
+    reads require the same permission as management (INT-3, owner decision
+    2026-08-09). Secret values are still redacted by `_sanitize_config`.
+    """
     await ensure_catalog(db, current_user.organization_id)
     result = await db.execute(
         select(Integration)
@@ -389,13 +395,47 @@ async def list_integrations(
     return [_integration_to_dict(i) for i in integrations]
 
 
+@router.get("/connected")
+async def list_connected_integration_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Connection-status projection for cross-module callers.
+
+    The full integration list is admin-gated (INT-3), but feature modules — e.g.
+    the membership pipeline's meeting-config, via `useConnectedIntegrations` — only
+    need to know *which* integration types are connected, not their config. This
+    endpoint returns just `integration_type`/`status`/`enabled` (no URLs, mappings,
+    PHI flags, or secrets) so a non-admin module holder keeps its optional
+    integration-backed affordances without being handed the configuration. Any
+    authenticated member of the org may read it. Registered before
+    `/{integration_id}` so the literal path wins the route match.
+    """
+    await ensure_catalog(db, current_user.organization_id)
+    result = await db.execute(
+        select(
+            Integration.integration_type,
+            Integration.status,
+            Integration.enabled,
+        ).where(Integration.organization_id == str(current_user.organization_id))
+    )
+    return [
+        {
+            "integration_type": integration_type,
+            "status": row_status,
+            "enabled": enabled,
+        }
+        for integration_type, row_status, enabled in result.all()
+    ]
+
+
 @router.get("/{integration_id}")
 async def get_integration(
     integration_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("integrations.manage")),
 ):
-    """Get a specific integration"""
+    """Get a specific integration (see `list_integrations` for the access rationale)."""
     result = await db.execute(
         select(Integration).where(
             Integration.id == integration_id,

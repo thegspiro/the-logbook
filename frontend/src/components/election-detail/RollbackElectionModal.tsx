@@ -112,7 +112,7 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
                 onChange={(e) => setRollbackReason(e.target.value)}
                 rows={4}
                 placeholder="Example: Vote counting error discovered, need to recount all ballots..."
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
                 required
                 aria-required="true"
               />

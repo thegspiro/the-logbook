@@ -3,7 +3,9 @@ import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CourseLibraryPicker } from './CourseLibraryPicker';
 import { RecencyWindowField } from './RecencyWindowField';
+import { ChecklistItemsEditor } from './ChecklistItemsEditor';
 import { useCourseLibrary } from '../../hooks/useCourseLibrary';
+import { blankToNull } from '../../utils/formValues';
 import type {
   TrainingRequirement,
   TrainingRequirementCreate,
@@ -57,7 +59,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     required_hours: seed?.required_hours || undefined,
     required_shifts: seed?.required_shifts || undefined,
     required_calls: seed?.required_calls || undefined,
-    checklist_items: (seed?.checklist_items || []).join('\n'),
+    checklist_items: seed?.checklist_items ?? [],
     passing_score: seed?.passing_score || undefined,
     max_attempts: seed?.max_attempts || undefined,
     frequency: seedFrequency,
@@ -96,12 +98,6 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   // as annual.
   const isOneTime = formData.frequency === 'one_time';
 
-  const splitLines = (value: string): string[] =>
-    value
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -111,7 +107,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
 
     // Mirror the backend TrainingRequirementCreate validator so users get a
     // specific message instead of a generic 422 failure
-    const checklistItems = splitLines(formData.checklist_items);
+    const checklistItems = formData.checklist_items.filter((i) => i.text.trim());
     if (formData.requirement_type === 'hours' && !formData.required_hours) {
       toast.error('Required hours must be set for an hours requirement');
       return;
@@ -150,10 +146,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       const usesCalendarPeriod = !isOneTime && formData.due_date_type === 'calendar_period';
       const data = {
         name: formData.name,
-        ...(formData.description ? { description: formData.description } : {}),
+        description: blankToNull(formData.description),
         requirement_type: formData.requirement_type,
         ...(formData.training_type ? { training_type: formData.training_type as TrainingType } : {}),
-        ...(formData.required_hours ? { required_hours: formData.required_hours } : {}),
+        required_hours: formData.requirement_type === 'hours' ? (formData.required_hours ?? null) : null,
         // Always sent so switching a requirement off the course/certification
         // types clears stale links — a leftover course id silently narrows the
         // hours evaluator to only that course's records.
@@ -161,27 +157,18 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
           formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
             ? requiredCourses
             : [],
-        // Sent unconditionally (undefined when off) so lifting a freshness
-        // window persists rather than silently keeping the old value.
+        // Every target below is sent on every save, as an explicit null when
+        // it does not apply, so switching a requirement's type clears the old
+        // target instead of leaving it behind to be evaluated against.
         recency_days:
           formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
-            ? recencyDays
-            : undefined,
-        ...(formData.requirement_type === 'shifts' && formData.required_shifts
-          ? { required_shifts: formData.required_shifts }
-          : {}),
-        ...(formData.requirement_type === 'calls' && formData.required_calls
-          ? { required_calls: formData.required_calls }
-          : {}),
-        ...(formData.requirement_type === 'checklist' && checklistItems.length > 0
-          ? { checklist_items: checklistItems }
-          : {}),
-        ...(formData.requirement_type === 'knowledge_test' && formData.passing_score
-          ? { passing_score: formData.passing_score }
-          : {}),
-        ...(formData.requirement_type === 'knowledge_test' && formData.max_attempts
-          ? { max_attempts: formData.max_attempts }
-          : {}),
+            ? (recencyDays ?? null)
+            : null,
+        required_shifts: formData.requirement_type === 'shifts' ? (formData.required_shifts ?? null) : null,
+        required_calls: formData.requirement_type === 'calls' ? (formData.required_calls ?? null) : null,
+        checklist_items: formData.requirement_type === 'checklist' ? checklistItems : null,
+        passing_score: formData.requirement_type === 'knowledge_test' ? (formData.passing_score ?? null) : null,
+        max_attempts: formData.requirement_type === 'knowledge_test' ? (formData.max_attempts ?? null) : null,
         frequency: formData.frequency,
         ...(!isOneTime && formData.year ? { year: formData.year } : {}),
         allows_external_credit: formData.allows_external_credit,
@@ -452,23 +439,11 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
             )}
 
             {formData.requirement_type === 'checklist' && (
-              <div>
-                <label
-                  htmlFor="req-checklist-items"
-                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                >
-                  Checklist Items
-                </label>
-                <textarea
-                  id="req-checklist-items"
-                  value={formData.checklist_items}
-                  onChange={(e) => setFormData({ ...formData, checklist_items: e.target.value })}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder={'One item per line, e.g.\nStation tour completed\nSCBA fit test'}
-                  rows={5}
-                />
-                <p className="text-theme-text-muted mt-1 text-sm">Each line becomes an item members must check off.</p>
-              </div>
+              <ChecklistItemsEditor
+                idPrefix="req"
+                items={formData.checklist_items}
+                onChange={(items) => setFormData({ ...formData, checklist_items: items })}
+              />
             )}
 
             {formData.requirement_type === 'knowledge_test' && (
@@ -878,7 +853,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       type="checkbox"
                       checked={formData.allows_external_credit}
                       onChange={(e) => setFormData({ ...formData, allows_external_credit: e.target.checked })}
-                      className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring mt-0.5 h-5 w-5 rounded-sm text-red-700 dark:text-red-500"
+                      className="form-checkbox mt-0.5"
                     />
                     <span className="text-theme-text-secondary text-sm">
                       Accept external / imported training credit for this requirement
@@ -907,7 +882,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       ...(e.target.checked ? { required_membership_types: [] } : {}),
                     })
                   }
-                  className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring h-5 w-5 rounded-sm text-red-700 dark:text-red-500"
+                  className="form-checkbox"
                 />
                 <span className="text-theme-text-secondary">Applies to all members</span>
               </label>
@@ -944,7 +919,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                               : [...prev.required_membership_types, memberType.value],
                           }));
                         }}
-                        className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring h-4 w-4 rounded-sm text-red-700 dark:text-red-500"
+                        className="form-checkbox"
                       />
                       <span className="text-sm">{memberType.label}</span>
                     </label>

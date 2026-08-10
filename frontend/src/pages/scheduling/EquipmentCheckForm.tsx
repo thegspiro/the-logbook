@@ -65,6 +65,7 @@ import type {
 import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
 import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
 
+import { useConfirm } from '../../contexts/ConfirmContext';
 // ============================================================================
 // Types
 // ============================================================================
@@ -171,6 +172,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   previewMode,
   existingCheckId,
 }) => {
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const [results, setResults] = useState<Record<string, ItemResult>>({});
   // Lot swaps performed during this check: override the deployed item's lot /
@@ -707,10 +709,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const handleSubmit = async () => {
     if (checkedItems < totalItems) {
       const uncheckedCount = totalItems - checkedItems;
-      const confirmed = window.confirm(
-        `${uncheckedCount} of ${totalItems} item${uncheckedCount === 1 ? '' : 's'} ha${uncheckedCount === 1 ? 's' : 've'} not been checked. ` +
-          `The report will be marked as incomplete.\n\nAre you sure you want to submit?`
-      );
+      const confirmed = await confirm({
+        title: 'Submit an incomplete check?',
+        message: `${String(uncheckedCount)} of ${String(totalItems)} item${uncheckedCount === 1 ? '' : 's'} ${uncheckedCount === 1 ? 'has' : 'have'} not been checked. The report will be filed as incomplete.`,
+        confirmLabel: 'Submit anyway',
+        cancelLabel: 'Go back',
+        variant: 'warning',
+      });
       if (!confirmed) return;
     }
 

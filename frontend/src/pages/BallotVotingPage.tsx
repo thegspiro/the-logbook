@@ -458,7 +458,7 @@ export const BallotVotingPage: React.FC = () => {
                                 setCandidateRank(item.id, candidate.id, e.target.value ? Number(e.target.value) : null)
                               }
                               aria-label={`Rank for ${candidate.name}`}
-                              className="border-theme-surface-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-16 rounded-md border px-2 py-1 text-sm"
+                              className="form-input-sm w-16"
                             >
                               <option value="">—</option>
                               {itemCandidates.map((_, rankIdx) => (
@@ -566,7 +566,7 @@ export const BallotVotingPage: React.FC = () => {
                           onChange={(e) => updateWriteInName(item.id, e.target.value)}
                           placeholder="Enter name or option..."
                           aria-label="Enter name or option"
-                          className="border-theme-surface-border focus:ring-theme-focus-ring focus:border-theme-focus-ring bg-theme-input-bg text-theme-text-primary mt-2 ml-7 block w-[calc(100%-1.75rem)] rounded-md border px-3 py-2 text-sm shadow-xs"
+                          className="form-input mt-2 ml-7 w-[calc(100%-1.75rem)] shadow-xs"
                           autoFocus
                         />
                       )}

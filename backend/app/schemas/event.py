@@ -9,11 +9,50 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
+from app.models.event import (
+    CheckInWindowType,
+    EventType,
+    RecurrencePattern,
+    RSVPStatus,
+)
 from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
+
+# event_type / check_in_window_type / recurrence_pattern / RSVP status map to strict
+# MySQL ENUM columns, but were typed as free str and inserted raw (create_event's
+# Event(**dict), the update setattr loops, RSVP/template creates) — an out-of-set
+# value passed Pydantic, reached MySQL, and 500'd (EV2-1, the B1 latent-500 class).
+# Validate at the request schema so a bad value is a clean 422.
+_EVENT_TYPES = {e.value for e in EventType}
+_CHECKIN_WINDOW_TYPES = {e.value for e in CheckInWindowType}
+_RECURRENCE_PATTERNS = {e.value for e in RecurrencePattern}
+_RSVP_STATUSES = {e.value for e in RSVPStatus}
+
+
+def _enum_check(valid: set, field: str):
+    def _check(value):
+        if value is None:
+            return value
+        normalized = value.lower() if isinstance(value, str) else value
+        if normalized not in valid:
+            raise ValueError(
+                f"Invalid {field} '{value}'. Must be one of: "
+                f"{', '.join(sorted(valid))}"
+            )
+        return normalized
+
+    return _check
+
 
 # ============================================================
 # Event Module Settings
@@ -49,6 +88,13 @@ class RequestPipelineUpdate(BaseModel):
 
 class EventDefaultsUpdate(BaseModel):
     """Default settings for new events."""
+
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
 
     event_type: Optional[str] = Field(None, max_length=100)
     check_in_window_type: Optional[str] = Field(None, max_length=50)
@@ -153,6 +199,20 @@ class EventBase(BaseModel):
     require_checkout: bool = Field(
         default=False, description="Require manual check-out"
     )
+    allow_guest_check_in: bool = Field(
+        default=False,
+        description=(
+            "Show a guest QR code on room displays so non-members can record "
+            "their attendance without an account"
+        ),
+    )
+    guest_check_in_creates_prospect: bool = Field(
+        default=False,
+        description=(
+            "Also open a prospective-member record for each guest who "
+            "supplies an email address"
+        ),
+    )
     custom_category: Optional[str] = Field(
         None,
         max_length=100,
@@ -166,6 +226,13 @@ class EventBase(BaseModel):
 class EventCreate(EventBase):
     """Schema for creating a new event"""
 
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
+
     @model_validator(mode="after")
     def validate_dates(self) -> "EventCreate":
         if self.end_datetime <= self.start_datetime:
@@ -177,6 +244,13 @@ class EventCreate(EventBase):
 
 class EventUpdate(BaseModel):
     """Schema for updating an event"""
+
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -204,6 +278,8 @@ class EventUpdate(BaseModel):
     check_in_minutes_before: Optional[int] = None
     check_in_minutes_after: Optional[int] = None
     require_checkout: Optional[bool] = None
+    allow_guest_check_in: Optional[bool] = None
+    guest_check_in_creates_prospect: Optional[bool] = None
     custom_category: Optional[str] = Field(
         None,
         max_length=100,
@@ -312,6 +388,8 @@ class RSVPBase(BaseModel):
 class RSVPCreate(RSVPBase):
     """Schema for creating/updating an RSVP"""
 
+    _check_status = field_validator("status")(_enum_check(_RSVP_STATUSES, "status"))
+
 
 class RSVPResponse(RSVPBase, UTCResponseBase):
     """Schema for RSVP response"""
@@ -360,6 +438,8 @@ class SelfCheckInRequest(BaseModel):
 class ManagerAddAttendee(BaseModel):
     """Schema for a manager adding someone to an event"""
 
+    _check_status = field_validator("status")(_enum_check(_RSVP_STATUSES, "status"))
+
     user_id: UUID
     status: str = Field(
         default="going", description="RSVP status: going, not_going, maybe"
@@ -372,6 +452,8 @@ class ManagerAddAttendee(BaseModel):
 
 class BulkAddAttendees(BaseModel):
     """Schema for bulk-adding multiple attendees to an event"""
+
+    _check_status = field_validator("status")(_enum_check(_RSVP_STATUSES, "status"))
 
     user_ids: List[UUID] = Field(..., max_length=200)
     status: str = Field(
@@ -426,6 +508,76 @@ class QRCheckInData(BaseModel):
     timezone: Optional[str] = Field(
         default=None, description="Organization IANA timezone for display"
     )
+    allow_guest_check_in: bool = Field(
+        default=False,
+        description="Whether non-members may self-record attendance",
+    )
+
+
+class GuestCheckInRequest(BaseModel):
+    """Schema for an unauthenticated guest recording their own attendance.
+
+    Deliberately narrow: a walk-in at an interest night should be asked for the
+    minimum needed to follow up, not a membership application. Anything richer
+    belongs on the real application form the follow-up email links to.
+    """
+
+    # `pattern` carries what _strip_name enforces into the published schema.
+    # min_length=1 alone declares "\n" valid — it is one character — so a
+    # generated client, and the schemathesis contract suite, reads a
+    # whitespace-only name as acceptable input and the 422 below as the API
+    # breaking its own contract. \S is unanchored, so " Mary Anne " still
+    # passes and is stripped; only all-whitespace is refused.
+    first_name: str = Field(..., min_length=1, max_length=100, pattern=r"\S")
+    last_name: str = Field(..., min_length=1, max_length=100, pattern=r"\S")
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(default=None, max_length=50)
+    organization_name: Optional[str] = Field(default=None, max_length=255)
+    interest_reason: Optional[str] = Field(default=None, max_length=2000)
+    # Honeypot: real browsers leave it empty because the field is hidden. Named
+    # to look attractive to a form-filling bot, matching the public forms API.
+    hp_website: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def _strip_name(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Name cannot be blank")
+        return stripped
+
+
+class GuestCheckInResponse(BaseModel):
+    """Confirmation returned to a guest after a kiosk sign-in."""
+
+    status: str = Field(description="'checked_in' or 'already_checked_in'")
+    attendee_id: str
+    event_name: str
+    checked_in_at: str
+    prospect_created: bool = Field(
+        default=False,
+        description="Whether a prospective-member record was opened",
+    )
+    message: str
+
+
+class GuestCheckInEventInfo(BaseModel):
+    """Minimal public event detail for the guest sign-in page."""
+
+    event_id: str
+    event_name: str
+    event_type: Optional[str] = None
+    start_datetime: str
+    end_datetime: str
+    location_name: Optional[str] = None
+    organization_name: Optional[str] = None
+    is_open: bool = Field(description="Whether the check-in window is currently open")
+    closed_reason: Optional[str] = None
+    collects_prospect_details: bool = Field(
+        default=False,
+        description="Whether sign-in opens a membership-pipeline record",
+    )
+    timezone: Optional[str] = None
 
 
 class EventStats(BaseModel):
@@ -486,6 +638,13 @@ class CheckInMonitoringStats(UTCResponseBase):
 class EventTemplateCreate(BaseModel):
     """Schema for creating an event template"""
 
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     event_type: str = Field(default="other")
@@ -510,6 +669,13 @@ class EventTemplateCreate(BaseModel):
 
 class EventTemplateUpdate(BaseModel):
     """Schema for updating an event template"""
+
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -641,6 +807,16 @@ class EventNotificationResponse(BaseModel):
 
 class RecurringEventCreate(BaseModel):
     """Schema for creating a recurring event series"""
+
+    _check_event_type = field_validator("event_type")(
+        _enum_check(_EVENT_TYPES, "event_type")
+    )
+    _check_check_in_window_type = field_validator("check_in_window_type")(
+        _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
+    _check_recurrence_pattern = field_validator("recurrence_pattern")(
+        _enum_check(_RECURRENCE_PATTERNS, "recurrence_pattern")
+    )
 
     # Base event data
     title: str = Field(..., min_length=1, max_length=200)

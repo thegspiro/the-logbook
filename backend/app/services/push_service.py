@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.notification import PushSubscription
+from app.utils.url_validator import assert_outbound_url_safe
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,19 @@ class PushService:
 
     def _send_one(self, sub_info: Dict[str, Any], payload: str) -> None:
         """Blocking pywebpush call, run off the event loop by the caller."""
+        # NOTIF2-3 (DNS-rebinding guard): validate_push_endpoint screened the
+        # host at subscribe time, but a public hostname can be re-pointed at an
+        # internal IP afterward (169.254.169.254, 127.x, an intranet host), so a
+        # push would fire a server-side request at that target. Re-resolve
+        # immediately before dispatch and fail closed if the host now resolves
+        # to a private/internal IP — the same send-time SSRF re-check the
+        # outbound integrations use. Runs here, inside the to_thread worker, so
+        # the blocking DNS lookup stays off the event loop. Gated to
+        # production/staging so the loopback push emulator the wire-format tests
+        # (and local dev) point at still works — mirroring the HTTP-in-dev
+        # allowance already baked into the URL validator.
+        if settings.ENVIRONMENT in ("production", "staging"):
+            assert_outbound_url_safe(sub_info["endpoint"])
         webpush(
             subscription_info=sub_info,
             data=payload,
@@ -227,6 +241,16 @@ class PushService:
                 # inline would block the event loop for every device.
                 await asyncio.to_thread(self._send_one, sub_info, payload)
                 sent += 1
+            except ValueError as e:
+                # NOTIF2-3: the endpoint now resolves to a non-public host
+                # (DNS rebinding, or a subscription that has gone bad). Skip it
+                # — never dispatch to an internal target — but keep the row: a
+                # transient mis-resolution shouldn't permanently drop a device.
+                logger.warning(
+                    "Skipping web push to a non-public endpoint (subscription %s): %s",
+                    sub.id,
+                    e,
+                )
             except WebPushException as e:
                 status = getattr(getattr(e, "response", None), "status_code", None)
                 # 404/410 mean the browser dropped the subscription — the app

@@ -15,6 +15,7 @@ from app.models.training import RequirementFrequency as ModelRequirementFrequenc
 from app.models.training import TrainingStatus as ModelTrainingStatus
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
+from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.enum_validation import validate_enum_value
 
 _response_config = ConfigDict(from_attributes=True)
@@ -293,7 +294,15 @@ class TrainingRequirementBase(BaseModel):
     required_calls: Optional[int] = Field(None, ge=0)
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
-    checklist_items: Optional[List[str]] = None
+    checklist_items: Optional[List[ChecklistItem]] = None
+
+    @field_validator("checklist_items", mode="before")
+    @classmethod
+    def _coerce_checklist_items(cls, v):
+        # Accepts the legacy bare-string form as well as objects, so older
+        # clients and the built-in sample templates keep working.
+        return coerce_checklist_items(v)
+
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
     frequency: str
@@ -403,7 +412,15 @@ class TrainingRequirementUpdate(BaseModel):
     required_calls: Optional[int] = Field(None, ge=0)
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
-    checklist_items: Optional[List[str]] = None
+    checklist_items: Optional[List[ChecklistItem]] = None
+
+    @field_validator("checklist_items", mode="before")
+    @classmethod
+    def _coerce_checklist_items(cls, v):
+        # Accepts the legacy bare-string form as well as objects, so older
+        # clients and the built-in sample templates keep working.
+        return coerce_checklist_items(v)
+
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
     frequency: Optional[str] = None

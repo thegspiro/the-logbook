@@ -43,6 +43,9 @@ class RecordingSession:
         self.flush = AsyncMock()
 
     async def execute(self, statement, *args, **kwargs):
+        # Compile before answering: a mocked session never exercises the ORM,
+        # and an un-joinable select only raises at compile time.
+        str(statement)
         self.statements.append(statement)
         return self._results.pop(0) if self._results else MagicMock()
 
@@ -187,7 +190,9 @@ class TestDeletePhase:
         phase = SimpleNamespace(id=phase_id)
         link_id, req_id = str(uuid4()), str(uuid4())
         e1, e2 = str(uuid4()), str(uuid4())
-        remaining = SimpleNamespace(id=str(uuid4()), phase_number=2)
+        remaining = SimpleNamespace(
+            id=str(uuid4()), phase_number=2, prerequisite_phase_ids=[phase_id]
+        )
         db = RecordingSession(
             [
                 _rows([(link_id, req_id)]),  # requirement links on phase
@@ -212,6 +217,9 @@ class TestDeletePhase:
         # Both enrollments recomputed; only the parked one re-advanced.
         assert svc._recalculate_enrollment_progress.await_count == 2
         assert svc._maybe_auto_advance_phase.await_count == 1
+        # The surviving phase no longer points at the phase that just went away
+        # — a dangling prerequisite gates nothing but still reads as a real one.
+        assert remaining.prerequisite_phase_ids is None
 
 
 class TestRemoveRequirement:
@@ -223,6 +231,7 @@ class TestRemoveRequirement:
         db = RecordingSession(
             [
                 _one(link),  # the link
+                _one(None),  # no sibling link in this program
                 _rows([(e1,)]),  # program enrollments
                 MagicMock(),  # delete RequirementProgress
                 _one(None),  # no other program references it -> orphan
@@ -254,6 +263,7 @@ class TestRemoveRequirement:
         db = RecordingSession(
             [
                 _one(link),  # the link
+                _one(None),  # no sibling link in this program
                 _rows([(str(uuid4()),)]),  # program enrollments
                 MagicMock(),  # delete RequirementProgress
             ]
@@ -268,11 +278,39 @@ class TestRemoveRequirement:
         assert error is None
         assert link in db.deleted
         # Progress rows only — the requirement itself is never deleted, and the
-        # "is it orphaned?" lookup is not even issued (the link + enrollment
-        # selects are the only two).
+        # "is it orphaned?" lookup is not even issued (the link, sibling-link
+        # and enrollment selects are the only three).
         assert db.stmt_types().count("Delete") == 1
-        assert db.stmt_types().count("Select") == 2
+        assert db.stmt_types().count("Select") == 3
         svc._recalculate_enrollment_progress.assert_awaited_once()
+
+
+class TestRemoveRequirementKeepsSiblingProgress:
+    async def test_progress_survives_when_another_phase_still_links_it(self):
+        """
+        Unlinking one of two links to the same requirement leaves the program
+        still tracking it, so the members' progress rows must stay — deleting
+        them would silently reset work already signed off.
+        """
+        link = SimpleNamespace(
+            id=str(uuid4()), requirement_id=str(uuid4()), owns_requirement=True
+        )
+        db = RecordingSession(
+            [
+                _one(link),  # the link
+                _one(SimpleNamespace(id="other-link")),  # a sibling link remains
+                _rows([(str(uuid4()),)]),  # program enrollments
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc._recalculate_enrollment_progress = AsyncMock()
+        svc._maybe_auto_advance_phase = AsyncMock()
+
+        ok, error = await svc.remove_requirement_from_program(uuid4(), uuid4(), uuid4())
+
+        assert ok is True
+        assert error is None
+        assert db.stmt_types().count("Delete") == 0
 
 
 class TestReorderRequirements:

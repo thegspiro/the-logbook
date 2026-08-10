@@ -20,6 +20,8 @@ import {
   Flag,
   BadgeCheck,
   LogOut,
+  Circle,
+  Lock,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
@@ -33,6 +35,7 @@ import {
   requirementTarget,
   requirementAction,
 } from '../utils/pipelineProgress';
+import { checklistDoneIds, hiddenChecklistCount, visibleChecklistItems } from '../utils/checklistItems';
 import type {
   MemberProgramProgress,
   ProgramPhase,
@@ -40,7 +43,10 @@ import type {
   RequirementProgressRecord,
 } from '../types/training';
 
-const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ record }) => {
+const RequirementRow: React.FC<{ record: RequirementProgressRecord; lockedBy?: string[] | undefined }> = ({
+  record,
+  lockedBy,
+}) => {
   const meta = STATUS_META[record.status];
   const done = record.status === 'completed' || record.status === 'verified';
   const score = record.progress_notes?.latest_score;
@@ -50,11 +56,25 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ recor
   // A count-based target ("12 / 24 hrs") gets a mini fill bar; a knowledge-test
   // target ("Pass ≥ 70%") is a threshold, not something to fill toward.
   const showBar = !!target && record.requirement?.requirement_type !== 'knowledge_test' && !done;
+  const isChecklist = record.requirement?.requirement_type === 'checklist';
+  const visibleSteps = isChecklist ? visibleChecklistItems(record.requirement?.checklist_items) : [];
+  const hiddenSteps = isChecklist ? hiddenChecklistCount(record.requirement?.checklist_items) : 0;
+  const doneIds = checklistDoneIds(record);
+  // Gated behind a prerequisite the member hasn't finished. Shown greyed with
+  // the reason rather than hidden — a step that vanishes reads as a bug, and a
+  // step offered without explanation gets attempted and refused.
+  const locked = !done && !!lockedBy?.length;
   return (
-    <div className="bg-theme-surface-secondary flex items-start justify-between gap-3 rounded-lg p-3">
+    <div
+      className={`bg-theme-surface-secondary flex items-start justify-between gap-3 rounded-lg p-3 ${
+        locked ? 'opacity-60' : ''
+      }`}
+    >
       <div className="flex min-w-0 flex-1 items-start gap-2">
         {done ? (
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+        ) : locked ? (
+          <Lock className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         ) : (
           <div className="border-theme-surface-border mt-0.5 h-4 w-4 shrink-0 rounded-full border" />
         )}
@@ -78,11 +98,51 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ recor
               />
             </div>
           )}
-          {!done && action && (
-            <p className="text-theme-text-muted mt-1 flex items-center gap-1 text-xs">
-              <ArrowRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-              <span>{action}</span>
+          {/* The steps themselves, not just a count. This is the whole point of
+              a checklist requirement to the member: without it they are told
+              "Station Orientation Checklist" and left to guess what is on it. */}
+          {visibleSteps.length > 0 && (
+            <ul className="mt-1.5 space-y-1">
+              {visibleSteps.map((item) => {
+                const stepDone = doneIds.includes(item.id);
+                return (
+                  <li key={item.id} className="flex items-start gap-1.5 text-xs">
+                    {stepDone ? (
+                      <CheckCircle2
+                        className="mt-0.5 h-3 w-3 shrink-0 text-green-600 dark:text-green-400"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <Circle className="text-theme-text-muted mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                    )}
+                    <span className={stepDone ? 'text-theme-text-muted line-through' : 'text-theme-text-secondary'}>
+                      {item.text}
+                    </span>
+                  </li>
+                );
+              })}
+              {hiddenSteps > 0 && (
+                // Named as a count rather than silently dropped, so "3 / 5
+                // steps" above still adds up against what is on screen.
+                <li className="text-theme-text-muted text-xs italic">
+                  + {hiddenSteps} more {hiddenSteps === 1 ? 'step' : 'steps'} your officer records
+                </li>
+              )}
+            </ul>
+          )}
+          {locked ? (
+            <p className="mt-1 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-400">
+              <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+              <span>Locked until you finish {(lockedBy ?? []).join(' and ')}.</span>
             </p>
+          ) : (
+            !done &&
+            action && (
+              <p className="text-theme-text-muted mt-1 flex items-center gap-1 text-xs">
+                <ArrowRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span>{action}</span>
+              </p>
+            )
           )}
         </div>
       </div>
@@ -283,7 +343,11 @@ const MyProgramProgressPage: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     {group.records.map((record) => (
-                      <RequirementRow key={record.id} record={record} />
+                      <RequirementRow
+                        key={record.id}
+                        record={record}
+                        lockedBy={data.locked_requirements?.[record.requirement_id]}
+                      />
                     ))}
                   </div>
                 </div>

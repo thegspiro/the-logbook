@@ -1,7 +1,61 @@
 # Application Review — Core Infrastructure (Tier B)
 
 **Prefix:** `CI2` · **Iteration:** B24 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+## Pass 4 (2026-08-09) — invariants re-verified, no code change
+
+Re-verified the crypto/CSV/middleware foundation: **CI-1** `SafeCsvWriter` present
+and used by the exporters; **CI-4** the field decrypt path narrows its catch to
+`except InvalidToken` so a genuine `InvalidTag` propagates (2 refs in
+`encrypted_types.py`) — the same fail-closed posture this session applied to the
+external-training `_decrypt_field` (B18) and the MS-1 medical-screening columns (B1);
+**CI-5** AES-256-GCM (600k PBKDF2); **Pitfall #4** middleware is pure ASGI (no
+`BaseHTTPMiddleware`); `app/core/*.py` E712-free; latent-500 lens N/A (foundational
+code, no enum-bearing request schemas).
+
+Open items unchanged, all ops/config/migration-gated: **CI-9** (TLS posture,
+`optimize_image` fail-closed, Redis cert), **CI-4 full fail-closed decrypt** (remove
+the legacy-plaintext `InvalidToken` fallback entirely — gated on the app-wide
+encryption backfill completing; not flippable now while legacy plaintext still
+exists across columns), **CI-11** (the unreachable in-memory rate-limit fallback —
+a behavior change), **CI-10 residual** (design/migration).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
+
+---
+
+## Pass 3 (2026-08-09) — verified clean, no code change
+
+Re-verified the crypto/CSV/middleware foundation:
+
+- **CI-1** — `SafeCsvWriter` (`utils/csv_export.py`) present; the five exporters use
+  it (Pitfall #15).
+- **CI-4** — the field decrypt path narrows its catch to `except InvalidToken` (legacy
+  plaintext only); a genuine AES-256-GCM `InvalidTag` propagates
+  (`encrypted_types.py:49`).
+- **CI-5** — field encryption is AES-256-GCM (600k PBKDF2), per the corrected docs.
+- **Pitfall #4 (pure ASGI middleware)** — `security_middleware.py` explicitly does
+  **not** import `BaseHTTPMiddleware` (module note, line 18); every middleware there
+  is pure ASGI (`__call__(scope, receive, send)`), so the Set-Cookie-stripping hazard
+  the pitfall warns about doesn't apply.
+
+**E712-free** across `app/core/*.py` and `app/main.py`. **Latent-500 lens N/A** —
+this is foundational code (config/crypto/middleware/database), not a resource module
+with enum-bearing request schemas.
+
+### Still flagged (unchanged)
+
+- **CI-9** (TLS-CRITICAL posture, `optimize_image` fail-closed, Redis cert — ops/
+  config decisions), **CI-4 full fail-closed decrypt** (flip once the AES-256-GCM
+  backfill completes — migration-gated), **CI-11** (defense-in-depth), **CI-10
+  residual** (design/migration).
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · no code changed.
+
+---
 
 ## Pass 2 (2026-08-08) — six-lens sweep — no code change
 

@@ -9,18 +9,19 @@ The Events module handles department events, attendance tracking with QR code ch
 1. [Events Overview](#events-overview)
 2. [Viewing and RSVPing to Events](#viewing-and-rsvping-to-events)
 3. [QR Code Check-In](#qr-code-check-in)
-4. [Creating Events (Officers)](#creating-events-officers)
-5. [Event Templates and Recurring Events](#event-templates-and-recurring-events)
-6. [Calendar View, Analytics & Templates](#calendar-view-analytics--templates-2026-03-13)
-7. [RSVP Enhancements](#rsvp-enhancements-2026-03-13)
-8. [Event Notifications](#event-notifications-2026-03-13)
-9. [Bulk Operations & Import](#bulk-operations--import-2026-03-13)
-10. [Meeting Minutes](#meeting-minutes)
-11. [Action Items](#action-items)
-12. [Elections and Voting](#elections-and-voting)
-13. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
-14. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
-15. [Troubleshooting](#troubleshooting)
+4. [Guest Check-In for Non-Members](#guest-check-in-for-non-members-2026-08-09)
+5. [Creating Events (Officers)](#creating-events-officers)
+6. [Event Templates and Recurring Events](#event-templates-and-recurring-events)
+7. [Calendar View, Analytics & Templates](#calendar-view-analytics--templates-2026-03-13)
+8. [RSVP Enhancements](#rsvp-enhancements-2026-03-13)
+9. [Event Notifications](#event-notifications-2026-03-13)
+10. [Bulk Operations & Import](#bulk-operations--import-2026-03-13)
+11. [Meeting Minutes](#meeting-minutes)
+12. [Action Items](#action-items)
+13. [Elections and Voting](#elections-and-voting)
+14. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
+15. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -106,6 +107,95 @@ Officers can view real-time check-in activity from the event's **Monitoring** vi
 ![Event check-in monitoring page with the live attendee list](./images/04-06-check-in-monitoring.png)
 
 > **Hint:** Officers can also manually check in members or override check-in/check-out times from the monitoring view, useful for members who forgot to scan.
+
+---
+
+## Guest Check-In for Non-Members (2026-08-09)
+
+The QR code above is for **members**. Scanning it without an account takes you to
+the login page — which is exactly the wrong answer at a volunteer interest night,
+where most of the room has no account and no reason to make one just to sign in.
+
+An event can now show a **second QR code** for guests. The two sit side by side
+on the room display. A guest scans theirs, types their name, and is signed in.
+
+> **[SCREENSHOT NEEDED]:** _The room display (`/display/:code`) for an event that
+> has guest check-in switched on, showing both QR codes side by side — the member
+> code labelled for members and the guest code labelled for visitors — with the
+> event name and room above them._
+
+### Switching it on
+
+Both settings live on **Edit Event → Check-In Settings**, and both start off.
+
+| Setting                                         | What it does                                                                                |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Allow guest check-in**                        | Adds the guest QR code to the room display and opens the public sign-in page for this event |
+| **Create a prospective member from each guest** | Also opens a record in the recruitment pipeline for every guest who leaves an email address |
+
+> **[SCREENSHOT NEEDED]:** _The Check-In Settings section of the Edit Event form
+> showing the existing check-in window fields together with the two new guest
+> toggles, with "Allow guest check-in" ticked and "Create a prospective member
+> from each guest" ticked beneath it._
+
+> **Only switch this on for outreach events.** Turning on guest check-in means
+> anyone who can reach that QR code can write to your event's attendance list
+> without logging in. That is the right trade for an open house or an interest
+> night. It is the wrong trade for a business meeting or a training session,
+> whose attendance drives records that only apply to members — leave it off
+> there.
+
+### What the guest fills in
+
+Name is required. Everything else is optional: email, phone, the organization
+they are with, and why they came.
+
+The form is deliberately short. A walk-in at an interest night should be asked
+for the minimum needed to follow up, not for a membership application — the real
+application form is what your follow-up email links to.
+
+> **[SCREENSHOT NEEDED]:** _The guest sign-in page as a visitor sees it on a
+> phone, showing the event name, date and room at the top, then the first name,
+> last name, email, phone, organization and "what brings you here" fields, with
+> the sign-in button below._
+
+> **[SCREENSHOT NEEDED]:** _The confirmation state after a guest signs in,
+> showing the "thanks for signing in" message with the event name._
+
+### Where the guest ends up
+
+| Record                                             | When                                                                       |
+| -------------------------------------------------- | -------------------------------------------------------------------------- |
+| An entry on the event's **external attendee** list | Always                                                                     |
+| A card in the **prospective members** pipeline     | Only if the event has the second toggle on **and** the guest left an email |
+
+A prospect opened this way is linked back to the event it came from, and its
+referral source reads **"Attended: _event name_"** — so at the next pipeline
+review you can see which open house each lead walked in from.
+
+> **[SCREENSHOT NEEDED]:** _The prospective-members board showing a card created
+> by a guest sign-in, with the detail drawer open on the referral source reading
+> "Attended: Volunteer Interest Night" and the linked event visible._
+
+### Edge cases
+
+| What happens                                                                                                                                     | Why                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A guest who arrives early is turned away** until the check-in window opens. Members get a grace period before a flexible window; guests do not | A member who checks in early can be identified and corrected afterwards. An anonymous early sign-in can be neither, so guests are held to the window you actually set    |
+| **A guest who taps the code twice is not counted twice** — they see "already checked in"                                                         | Matched on their email if they gave one, on their name if they did not                                                                                                   |
+| **Two guests with the same name and no email become one entry**                                                                                  | The name match is the weaker fallback. It is the deliberate trade: a duplicate on every double-tap is far more common at a kiosk than two Chris Smiths at one open house |
+| **A guest you pre-registered keeps the details you typed**                                                                                       | The kiosk sign-in only fills in blanks; it never overwrites something a person entered on purpose                                                                        |
+| **A guest already in your pipeline does not get a second card**                                                                                  | Their existing record is linked to the event instead                                                                                                                     |
+| **A guest with no email is still signed in** — they just do not get a pipeline card                                                              | There would be no way to follow up, so there is nothing to open                                                                                                          |
+| **If the pipeline card cannot be created, the guest is still signed in**                                                                         | The sign-in is what they came to do. The failure is logged for you; it never costs them their attendance                                                                 |
+| **Deleting a prospect does not delete the attendance**                                                                                           | Who was in the room is the event's history, not the prospect's                                                                                                           |
+| **A busy night can hit the daily ceiling** — 300 sign-ins per event per day by default                                                           | Sized for an open house, not a stadium. Past that is abuse rather than attendance. Ask your administrator if you genuinely need it raised                                |
+
+> **Troubleshooting: the guest QR code is missing from the display.** Check three
+> things, in this order: the event has **Allow guest check-in** ticked; the event
+> is actually assigned to **that room**; and the display is showing the event you
+> think it is. The guest code is drawn per event, not per room, so an event
+> without the setting simply shows the member code alone.
 
 ---
 

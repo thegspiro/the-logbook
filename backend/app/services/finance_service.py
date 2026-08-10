@@ -48,6 +48,7 @@ from app.models.finance import (
 from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.model_updates import apply_updates
 
 
 def _apply_payment_totals(dues: MemberDues) -> None:
@@ -130,9 +131,7 @@ class FinanceService:
             raise ValueError("Fiscal year not found")
         if fy.is_locked:
             raise ValueError("Fiscal year is locked and cannot be modified")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(fy, key, value)
+        apply_updates(fy, kwargs)
         await self.db.flush()
         await self.db.refresh(fy, ["updated_at"])
         return fy
@@ -215,9 +214,7 @@ class FinanceService:
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(cat, key, value)
+        apply_updates(cat, kwargs)
         await self.db.flush()
         await self.db.refresh(cat, ["updated_at"])
         return cat
@@ -269,9 +266,7 @@ class FinanceService:
         if not budget:
             raise ValueError("Budget not found")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(budget, key, value)
+        apply_updates(budget, kwargs)
         await self.db.flush()
         await self.db.refresh(budget, ["updated_at"])
         return budget
@@ -355,9 +350,7 @@ class FinanceService:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(chain, key, value)
+        apply_updates(chain, kwargs)
         await self.db.flush()
         await self.db.refresh(chain, ["updated_at"])
         return chain
@@ -396,9 +389,7 @@ class FinanceService:
         step = result.scalar_one_or_none()
         if not step:
             raise ValueError("Approval chain step not found")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(step, key, value)
+        apply_updates(step, kwargs)
         await self.db.flush()
         return step
 
@@ -1194,9 +1185,7 @@ class FinanceService:
         ):
             raise ValueError("Cannot edit a purchase request in this status")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(pr, key, value)
+        apply_updates(pr, kwargs)
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
         return pr
@@ -1275,11 +1264,19 @@ class FinanceService:
         return pr
 
     async def mark_pr_paid(
-        self, pr_id: str, org_id: str, actual_amount: Optional[float] = None
+        self,
+        pr_id: str,
+        org_id: str,
+        actual_amount: Optional[float] = None,
+        acted_by: Optional[str] = None,
     ) -> PurchaseRequest:
         pr = await self.get_purchase_request(pr_id, org_id)
         if not pr:
             raise ValueError("Purchase request not found")
+        # SoD (FIN-4): the person who disburses must not be the requester.
+        assert_different_person(
+            acted_by, pr.requested_by, action="mark paid", record="purchase request"
+        )
         if pr.status not in (
             PurchaseRequestStatus.APPROVED,
             PurchaseRequestStatus.ORDERED,
@@ -1334,12 +1331,19 @@ class FinanceService:
         self,
         org_id: str,
         status: Optional[str] = None,
+        restrict_to_user: Optional[str] = None,
     ) -> list[ExpenseReport]:
+        # Expense reports are personal reimbursement records (payee, amounts owed).
+        # A plain finance.view holder is confined to their own submissions;
+        # restrict_to_user=None (finance managers/treasurers) sees the whole org
+        # queue (FIN-5, owner decision 2026-08-09).
         query = (
             select(ExpenseReport)
             .options(selectinload(ExpenseReport.line_items))
             .where(ExpenseReport.organization_id == org_id)
         )
+        if restrict_to_user is not None:
+            query = query.where(ExpenseReport.submitted_by == restrict_to_user)
         if status:
             query = query.where(ExpenseReport.status == status)
         query = query.order_by(ExpenseReport.created_at.desc())
@@ -1347,9 +1351,9 @@ class FinanceService:
         return list(result.scalars().unique().all())
 
     async def get_expense_report(
-        self, er_id: str, org_id: str
+        self, er_id: str, org_id: str, restrict_to_user: Optional[str] = None
     ) -> Optional[ExpenseReport]:
-        result = await self.db.execute(
+        query = (
             select(ExpenseReport)
             .options(selectinload(ExpenseReport.line_items))
             .where(
@@ -1357,6 +1361,9 @@ class FinanceService:
                 ExpenseReport.organization_id == org_id,
             )
         )
+        if restrict_to_user is not None:
+            query = query.where(ExpenseReport.submitted_by == restrict_to_user)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_expense_report(
@@ -1408,9 +1415,7 @@ class FinanceService:
         ):
             raise ValueError("Cannot edit an expense report in this status")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(er, key, value)
+        apply_updates(er, kwargs)
         await self.db.flush()
         await self.db.refresh(er, ["updated_at"])
         return er
@@ -1484,11 +1489,19 @@ class FinanceService:
         return er
 
     async def mark_expense_paid(
-        self, er_id: str, org_id: str, payment_method: Optional[str] = None
+        self,
+        er_id: str,
+        org_id: str,
+        payment_method: Optional[str] = None,
+        acted_by: Optional[str] = None,
     ) -> ExpenseReport:
         er = await self.get_expense_report(er_id, org_id)
         if not er:
             raise ValueError("Expense report not found")
+        # SoD (FIN-4): the person who disburses must not be the requester.
+        assert_different_person(
+            acted_by, er.requested_by, action="mark paid", record="expense report"
+        )
         if er.status != ExpenseReportStatus.APPROVED:
             raise ValueError("Only approved reports can be marked as paid")
 
@@ -1560,9 +1573,7 @@ class FinanceService:
         ):
             raise ValueError("Cannot edit a check request in this status")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(cr, key, value)
+        apply_updates(cr, kwargs)
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
         return cr
@@ -1618,10 +1629,15 @@ class FinanceService:
         org_id: str,
         check_number: str,
         check_date: Optional[datetime] = None,
+        acted_by: Optional[str] = None,
     ) -> CheckRequest:
         cr = await self.get_check_request(cr_id, org_id)
         if not cr:
             raise ValueError("Check request not found")
+        # SoD (FIN-4): the person who issues the check must not be the requester.
+        assert_different_person(
+            acted_by, cr.requested_by, action="issue check", record="check request"
+        )
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")
 
@@ -1700,9 +1716,7 @@ class FinanceService:
         if not schedule:
             raise ValueError("Dues schedule not found")
         await self._validate_finance_fks(org_id, kwargs)
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(schedule, key, value)
+        apply_updates(schedule, kwargs)
         await self.db.flush()
         await self.db.refresh(schedule, ["updated_at"])
         return schedule
@@ -1867,6 +1881,8 @@ class FinanceService:
         dues = result.scalar_one_or_none()
         if not dues:
             raise ValueError("Member dues record not found")
+        # SoD (FIN-4): a member must not waive their own dues.
+        assert_different_person(waived_by, dues.user_id, action="waive", record="dues")
 
         dues.status = DuesStatus.WAIVED
         dues.waived_by = waived_by
@@ -1987,9 +2003,7 @@ class FinanceService:
         mapping = result.scalar_one_or_none()
         if not mapping:
             raise ValueError("Export mapping not found")
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(mapping, key, value)
+        apply_updates(mapping, kwargs)
         await self.db.flush()
         await self.db.refresh(mapping, ["updated_at"])
         return mapping
@@ -2242,7 +2256,8 @@ class FinanceService:
         (2) a foreign ``category_id``/``fiscal_year_id`` would leave a dangling
         cross-tenant reference that skews category/fiscal-year rollups. Only
         keys actually present in ``data`` are checked (update paths pass
-        ``exclude_none`` dumps), so this never rejects an omitted field.
+        ``exclude_unset`` dumps and a null clears rather than sets), so this
+        never rejects an omitted or explicitly-cleared field.
         """
         budget_id = data.get("budget_id")
         if budget_id and not await self.get_budget(budget_id, org_id):

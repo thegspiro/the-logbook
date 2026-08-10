@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
 
+import { useConfirm } from '../contexts/ConfirmContext';
 /**
  * Where the error was raised. Rows written before the `source` context key
  * existed carry neither marker, so they fall back to "Client".
@@ -24,6 +25,7 @@ function sourceLabel(error: ErrorLog): string {
  * Data is fetched from the backend API.
  */
 const ErrorMonitoringPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
   const canClearErrors = checkPermission('audit.manage');
@@ -66,7 +68,14 @@ const ErrorMonitoringPage: React.FC = () => {
   };
 
   const clearAllErrors = async () => {
-    if (window.confirm('Are you sure you want to clear all errors? This cannot be undone.')) {
+    if (
+      await confirm({
+        title: 'Clear all errors?',
+        message: 'Every recorded error is discarded, along with the history behind these statistics.',
+        confirmLabel: 'Clear all',
+        cancelLabel: 'Keep them',
+      })
+    ) {
       await errorTracker.clearErrors();
       setErrors([]);
       setStats(null);
@@ -113,11 +122,7 @@ const ErrorMonitoringPage: React.FC = () => {
       <div className="bg-theme-surface mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg p-4 shadow-md backdrop-blur-xs">
         <div className="flex items-center gap-2">
           <label className="text-theme-text-secondary text-sm font-medium">Filter:</label>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="border-theme-input-border text-theme-text-primary bg-theme-input-bg focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
-          >
+          <select value={filter} onChange={(e) => setFilter(e.target.value)} className="form-input">
             <option value="all">All Errors</option>
             {stats &&
               Object.keys(stats.byType).map((type) => (
