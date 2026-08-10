@@ -85,10 +85,27 @@ DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 # account whose own records have to be worth picturing. Keep it in step with
 # DEMO_MEMBER_CREDENTIALS in manifest.mjs.
 DEMO_MEMBER_USERNAME = "nbelhaj"
-# A second member, used as the *examiner* on the peer-run skills test. It has to
-# be someone other than the candidate: skills testing refuses a test whose
-# examiner is also its candidate.
-DEMO_PEER_EXAMINER_USERNAME = "cfrazier"
+# A second member, used as the *examiner* on the peer-run skills test. Two
+# constraints, and the second one is easy to miss:
+#
+#   * Not the candidate — skills testing refuses a test whose examiner is also
+#     its candidate.
+#   * Not an officer. An examiner holding `training.manage` validates their own
+#     result in the same step, so the test lands signed off and the validation
+#     queue stays empty — which is the one thing this member exists to prevent.
+#
+# `cfrazier` was a lieutenant, and lieutenant carries training.manage by rank
+# default, so every "pending validation" seed silently produced a validated
+# test and three screenshots timed out waiting for a queue that was never
+# non-empty. `rduarte` is a firefighter, which does not.
+DEMO_PEER_EXAMINER_USERNAME = "rduarte"
+
+# Ranks whose default permissions include training.manage. Mirrors
+# app/core/permissions.py's rank defaults; kept here as a literal because the
+# seeder talks to the API over HTTP and does not import the backend.
+OFFICER_RANKS = frozenset(
+    {"lieutenant", "captain", "deputy_chief", "assistant_chief", "fire_chief"}
+)
 
 # How many active applicants `--bulk-prospects` tops the pipeline up to.
 # Comfortably past the board's 200-card ceiling, so the truncation notice reads
@@ -2840,6 +2857,20 @@ class Seeder:
         published = [t for t in templates if pick(t, "status") == "published"]
         if not candidate or not examiner or not published:
             return None
+
+        # The examiner must not hold training.manage, or their submission
+        # validates itself and this step quietly produces the opposite of what
+        # it exists for. Ranks carry default permissions, so a rank change to
+        # this account — or reusing the constant for someone promoted — breaks
+        # it silently: the step still reports success, and three screenshots
+        # fail much later waiting on an empty queue. Fail loudly here instead.
+        if (pick(examiner, "rank") or "") in OFFICER_RANKS:
+            raise RuntimeError(
+                f"Peer examiner {DEMO_PEER_EXAMINER_USERNAME!r} holds rank "
+                f"{pick(examiner, 'rank')!r}, which grants training.manage. "
+                "Their own completion would self-validate, leaving the "
+                "validation queue empty. Pick a non-officer."
+            )
 
         peer = self.member_session(
             base_url,
