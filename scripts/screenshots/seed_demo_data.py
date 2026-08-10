@@ -2654,9 +2654,19 @@ class Seeder:
         if records or not courses:
             return records
         # Every member gets a spread of completed courses so My Training, the
-        # compliance matrix and the hours reports all have something to show;
-        # a few expirations land in the near future to populate the
-        # expiring-certifications view.
+        # compliance matrix and the hours reports all have something to show.
+        #
+        # A handful also expire soon, which is what fills the Expiring
+        # Certifications view. The general spread cannot do that on its own:
+        # its expiry works out to TODAY + 365 - 45*offset - 2*member_index,
+        # whose minimum across the whole loop is TODAY + 233 — so for a
+        # 22-member department nothing ever landed inside the 90-day window and
+        # that view was permanently empty, against a comment claiming otherwise.
+        #
+        # NEAR_EXPIRY_DAYS is therefore explicit rather than derived, and spans
+        # both bands the view counts separately: Critical (<= 30 days) and
+        # Warning (31-90).
+        near_expiry_days = [12, 26, 45, 78]
         for member_index, member in enumerate(members):
             user_id = pick(member, "id")
             if not user_id:
@@ -2677,7 +2687,11 @@ class Seeder:
                     "credit_hours": hours,
                     "completion_date": str(completed),
                     "expiration_date": str(
-                        completed + timedelta(days=365 + member_index * 3)
+                        # One record per member, for the first few members,
+                        # expires inside the 90-day window the view filters on.
+                        TODAY + timedelta(days=near_expiry_days[member_index])
+                        if offset == 0 and member_index < len(near_expiry_days)
+                        else completed + timedelta(days=365 + member_index * 3)
                     ),
                     "status": "completed",
                     "passed": True,
@@ -2908,7 +2922,10 @@ class Seeder:
                 continue
             criteria_results = []
             for ci, criterion in enumerate(section.get("criteria") or []):
-                if not isinstance(criterion, dict) or criterion.get("type") == "statement":
+                if (
+                    not isinstance(criterion, dict)
+                    or criterion.get("type") == "statement"
+                ):
                     continue
                 # One deliberate miss, so the scorecard shows a mixed result
                 # rather than a uniform wall of passes. It is a non-critical
@@ -3549,9 +3566,7 @@ class Seeder:
         if target <= 0:
             return 0
 
-        existing = self.api.get(
-            "/prospective-members/prospects?limit=1&status=active"
-        )
+        existing = self.api.get("/prospective-members/prospects?limit=1&status=active")
         current = (
             existing.get("total", 0) if isinstance(existing, dict) else len(existing)
         )
@@ -4339,9 +4354,9 @@ class Seeder:
         )
         self.step("event templates", self.seed_event_templates)
         self.step("elections", self.seed_elections)
-        prospect_data = self.step(
-            "prospective members", self.seed_prospective_members
-        ) or {}
+        prospect_data = (
+            self.step("prospective members", self.seed_prospective_members) or {}
+        )
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []
             self.step(

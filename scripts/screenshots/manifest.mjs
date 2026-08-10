@@ -1478,7 +1478,11 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Expiring Certifications page showing a table of upcoming expirations",
     alt: "Expiring certifications table sorted by expiration date",
-    route: "/training/admin",
+    // Bare /training/admin lands on the Dashboard overview, so this and
+    // 02-41 captured the same default tab under two different captions —
+    // byte-identical files, neither showing what it claims. The hub keys
+    // this view as expiring-certs (page=dashboard).
+    route: "/training/admin?tab=expiring-certs",
     fullPage: true,
   },
   {
@@ -1955,7 +1959,9 @@ export const SHOTS = [
     anchor:
       "The Training Admin Reports tab showing the Compliance, Hours Summary, and Certification",
     alt: "Training admin reports tab with the compliance, hours, and certification cards",
-    route: "/training/admin",
+    // See 02-41's twin above: bare /training/admin is the Dashboard overview.
+    // Reports lives under the Enhancements page.
+    route: "/training/admin?tab=reports",
     fullPage: true,
   },
   {
