@@ -3399,15 +3399,22 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             return 0
 
         items_html = ""
-        for item in low_stock:
+        any_from_lots = False
+        for item, on_hand, from_lots in low_stock:
             cat_name = item.category.name if item.category else "Uncategorized"
+            any_from_lots = any_from_lots or from_lots
+            # Name the ledger the figure came from. For a lot-stocked item it
+            # will not match the item's own quantity column, and an unexplained
+            # mismatch reads as a bug rather than as the count that matters.
+            source = "in-date lots" if from_lots else "on hand"
             items_html += (
                 f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
                 f"{_html.escape(item.name)}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
                 f"{_html.escape(cat_name)}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
-                f"<strong style='color:#dc2626;'>{item.quantity}</strong></td>"
+                f"<strong style='color:#dc2626;'>{on_hand}</strong>"
+                f"<br><span style='color:#6b7280;font-size:11px;'>{source}</span></td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
                 f"{item.reorder_point}</td></tr>"
             )
@@ -3430,7 +3437,15 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             "Low Stock Alert",
             "<p>The following inventory items are at or below their reorder point:</p>"
             f"{table_html}"
-            "<p>Please review and reorder as needed.</p>",
+            + (
+                "<p style='color:#6b7280;font-size:13px;'>Items kept as dated "
+                "stock lots are counted from their in-date lots — expired lots "
+                "cannot be issued or swapped onto an apparatus, so they do not "
+                "count as stock on hand.</p>"
+                if any_from_lots
+                else ""
+            )
+            + "<p>Please review and reorder as needed.</p>",
             header_color="#dc2626",
         )
 

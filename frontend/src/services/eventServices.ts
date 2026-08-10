@@ -1570,6 +1570,11 @@ export interface InventoryLotCreate {
   notes?: string | undefined;
 }
 
+/** One line of a received delivery: which item, and the lot it arrived as. */
+export interface InventoryLotBulkEntry extends InventoryLotCreate {
+  inventory_item_id: string;
+}
+
 export interface InventoryLotUpdate {
   lot_number?: string | undefined;
   expiration_date?: string | undefined;

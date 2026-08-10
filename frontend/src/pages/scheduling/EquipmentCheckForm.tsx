@@ -1473,20 +1473,27 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <span className="text-[10px]">({result?.photoFiles?.length})</span>
             )}
           </button>
-          {item.inventoryItemId &&
-            (getExpirationStatus(item, today) === 'expired' ||
-              getExpirationStatus(item, today) === 'expiring_soon') && (
-              <button
-                type="button"
-                onClick={() => {
-                  void openSwap(item);
-                }}
-                className="flex min-h-[36px] items-center gap-1 text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
-              >
-                <Repeat className="h-3 w-3" aria-hidden="true" />
-                Swap
-              </button>
-            )}
+          {/* Offered whenever the item is linked to inventory, not only when it
+              is near its date. Expiry is one reason a unit comes off a truck;
+              used, damaged, contaminated, missing and recalled are the others,
+              and gating on the date left a crew holding an empty bracket with
+              ready stock on the shelf and no way to reach it. */}
+          {item.inventoryItemId && (
+            <button
+              type="button"
+              onClick={() => {
+                void openSwap(item);
+              }}
+              className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors ${
+                getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
+                  ? 'text-blue-600 hover:text-blue-700'
+                  : 'text-theme-text-muted hover:text-theme-text-secondary'
+              }`}
+            >
+              <Repeat className="h-3 w-3" aria-hidden="true" />
+              Swap
+            </button>
+          )}
           {/* An expiration can be set on any check type, but only date_lot has
               the serial/lot update panel. Without this, an expired item of any
               other type could never record its replacement and would fail
@@ -1835,7 +1842,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
-                <h3 className="text-theme-text-primary truncate text-sm font-semibold">Swap in fresh stock</h3>
+                <h3 className="text-theme-text-primary truncate text-sm font-semibold">Replace from ready stock</h3>
                 <p className="text-theme-text-muted truncate text-xs">{swapTarget.name}</p>
               </div>
               <button

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -3971,18 +3971,76 @@ class InventoryService:
     async def get_low_stock_items_for_alerts(
         self,
         organization_id: UUID,
-    ) -> List[InventoryItem]:
-        """Get items below their reorder point for email alerts."""
+    ) -> List[Tuple[InventoryItem, int, bool]]:
+        """Items at or below their reorder point, as (item, on_hand, from_lots).
+
+        On-hand is read from stock lots for any item that has them, and from
+        ``InventoryItem.quantity`` for the rest. The two are separate ledgers —
+        adding a lot does not touch ``quantity`` — so a consumable stocked
+        purely through lots (which is what the supply-officer screens create)
+        could sit at zero ready units without ever tripping this alert, and one
+        whose ``quantity`` was never maintained could trip it every day.
+
+        Lots past their expiration do not count toward on-hand: the swap
+        refuses them, so they are not stock anyone can use, and counting them
+        would hide exactly the shortage that most needs ordering.
+
+        ``from_lots`` tells the caller which ledger the number came from, so an
+        alert can say so rather than appear to contradict the item's own
+        quantity field.
+        """
+        today = date.today()
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active.is_(True))
             .where(InventoryItem.reorder_point.isnot(None))
-            .where(InventoryItem.quantity <= InventoryItem.reorder_point)
             .options(selectinload(InventoryItem.category))
-            .order_by(InventoryItem.quantity.asc())
         )
-        return list(result.scalars().all())
+        candidates = list(result.scalars().all())
+        if not candidates:
+            return []
+
+        # One row per item that has any lot at all; the sum counts only the
+        # in-date ones. Presence in this map is what marks an item as
+        # lot-managed — an item whose lots have all expired must read as zero
+        # on hand, not fall back to a stale quantity column.
+        totals_result = await self.db.execute(
+            select(
+                InventoryLot.inventory_item_id,
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                or_(
+                                    InventoryLot.expiration_date.is_(None),
+                                    InventoryLot.expiration_date >= today,
+                                ),
+                                InventoryLot.quantity,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+            )
+            .where(
+                InventoryLot.organization_id == str(organization_id),
+                InventoryLot.inventory_item_id.in_([i.id for i in candidates]),
+            )
+            .group_by(InventoryLot.inventory_item_id)
+        )
+        lot_totals = {item_id: int(total) for item_id, total in totals_result.all()}
+
+        low: List[Tuple[InventoryItem, int, bool]] = []
+        for item in candidates:
+            from_lots = item.id in lot_totals
+            on_hand = lot_totals[item.id] if from_lots else (item.quantity or 0)
+            if on_hand <= (item.reorder_point or 0):
+                low.append((item, on_hand, from_lots))
+
+        low.sort(key=lambda row: row[1])
+        return low
 
     # ------------------------------------------------------------------
     # Stock Lots (ready replacement stock with lot # + expiration)
@@ -4047,6 +4105,62 @@ class InventoryService:
         await self.db.commit()
         await self.db.refresh(lot)
         return lot
+
+    async def add_lots_bulk(
+        self,
+        organization_id: str,
+        entries: List[Dict[str, Any]],
+        created_by: Optional[str] = None,
+    ) -> List[InventoryLot]:
+        """Record a whole delivery at once — one lot per item line.
+
+        Pre-stocking is how dated stock reaches the crews: a lot added here is
+        immediately offered in the check screen's swap picker, so a member
+        pulling an expired or used unit has a replacement to select. Entering a
+        shipment one item-detail page at a time was the friction that kept that
+        stock from existing.
+
+        All or nothing. A partially-applied delivery is worse than a rejected
+        one: the officer has no way to tell which lines landed, and re-entering
+        the shipment would double-count whatever did.
+        """
+        if not entries:
+            return []
+
+        # XC-1: every inventory_item_id here is client-supplied. Resolve them
+        # in one org-scoped query rather than trusting the ids — an unchecked
+        # one would file a lot against another department's item.
+        item_ids = {str(e["inventory_item_id"]) for e in entries}
+        result = await self.db.execute(
+            select(InventoryItem.id).where(
+                InventoryItem.id.in_(item_ids),
+                InventoryItem.organization_id == organization_id,
+            )
+        )
+        known = {row for row in result.scalars().all()}
+        missing = item_ids - known
+        if missing:
+            raise ValueError(
+                f"{len(missing)} item(s) in this delivery are not in your "
+                f"inventory and were not received"
+            )
+
+        lots: List[InventoryLot] = []
+        for entry in entries:
+            data = {k: v for k, v in entry.items() if k != "inventory_item_id"}
+            lot = InventoryLot(
+                organization_id=organization_id,
+                inventory_item_id=str(entry["inventory_item_id"]),
+                created_by=created_by,
+                **data,
+            )
+            self.db.add(lot)
+            lots.append(lot)
+
+        await self.db.commit()
+        for lot in lots:
+            await self.db.refresh(lot)
+        return lots
 
     async def update_lot(
         self,

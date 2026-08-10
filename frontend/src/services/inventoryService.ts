@@ -61,6 +61,7 @@ import type {
   ImpactPlanCreate,
   ImpactPlannerRequestSizesResponse,
   InventoryLot,
+  InventoryLotBulkEntry,
   InventoryLotCreate,
   InventoryLotUpdate,
   ExpiringLot,
@@ -820,6 +821,17 @@ export const inventoryService = {
   async addItemLot(itemId: string, data: InventoryLotCreate): Promise<InventoryLot> {
     const response = await api.post<InventoryLot>(`/inventory/items/${itemId}/lots`, data);
     return response.data;
+  },
+
+  /**
+   * Receive a delivery in one pass — one dated lot per item line.
+   *
+   * All or nothing on the server: a partly-applied delivery leaves the officer
+   * unable to tell which lines landed, and re-entering it would double-count.
+   */
+  async addLotsBulk(entries: InventoryLotBulkEntry[]): Promise<InventoryLot[]> {
+    const response = await api.post<InventoryLot[]>('/inventory/lots/bulk', { entries });
+    return asArray(response.data);
   },
 
   async updateItemLot(lotId: string, data: InventoryLotUpdate): Promise<InventoryLot> {

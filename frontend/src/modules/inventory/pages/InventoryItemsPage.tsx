@@ -20,6 +20,7 @@ import {
   ArrowUpDown,
   Plus,
   Package,
+  PackagePlus,
   AlertTriangle,
   Wrench,
   ChevronRight,
@@ -42,6 +43,7 @@ import { Modal } from '../../../components/Modal';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import { ItemFormModal } from '../components/ItemFormModal';
+import ReceiveStockModal from '../components/ReceiveStockModal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import type {
@@ -324,6 +326,7 @@ const InventoryItemsPage: React.FC = () => {
   const [skip, setSkip] = useState(0);
   const [selIds, setSelIds] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState('');
@@ -645,6 +648,14 @@ const InventoryItemsPage: React.FC = () => {
               className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
             >
               <UserPlus className="h-4 w-4" /> Assign
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={() => setReceiveOpen(true)}
+              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+            >
+              <PackagePlus className="h-4 w-4" /> Receive Stock
             </button>
           )}
           {canManage && (
@@ -991,6 +1002,8 @@ const InventoryItemsPage: React.FC = () => {
         storageAreas={storageAreas}
         editItem={editItem}
       />
+
+      <ReceiveStockModal isOpen={receiveOpen} onClose={() => setReceiveOpen(false)} onReceived={refresh} />
 
       {/* Quick-assign: pick a member, then assign items to them */}
       <MemberPickerModal
