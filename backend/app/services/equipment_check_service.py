@@ -8,7 +8,7 @@ check submissions, checklist resolution by position, and item history.
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,6 +16,7 @@ from app.core.utils import generate_uuid
 from app.models.apparatus import (
     Apparatus,
     ApparatusEquipment,
+    CheckItemDeployedLot,
     CheckTemplateCompartment,
     CheckTemplateItem,
     EquipmentCheckTemplate,
@@ -31,6 +32,7 @@ from app.models.training import (
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 
 
@@ -94,7 +96,47 @@ class EquipmentCheckService:
                 )
             )
         )
-        return result.scalars().first()
+        template = result.scalars().first()
+        if template is not None:
+            items = [i for c in template.compartments for i in c.items]
+            await self._attach_unit_labels(organization_id, items)
+            # Sorted and stripped of spent rows here rather than letting the
+            # response read the raw relationship: the crew needs them in the
+            # order they should be drawn from, and a schema field bound to the
+            # ORM collection could not carry the expired flag.
+            for item in items:
+                item.lots_aboard = self._deployed_lot_payload(item)
+        return template
+
+    async def _attach_unit_labels(
+        self,
+        organization_id: str,
+        items: List[CheckTemplateItem],
+    ) -> None:
+        """Hang each item's unit of measure on it for the response schema.
+
+        "2/4" does not tell a crew whether it is looking for two boxes or two
+        gloves, and the catalog already knows which. Read from the linked
+        inventory item rather than stored again on the checklist, so a
+        department that relabels a unit does not have to re-enter it on every
+        truck that carries it.
+        """
+        inv_ids = [i.inventory_item_id for i in items if i.inventory_item_id]
+        if not inv_ids:
+            return
+        # Org-scoped: inventory_item_id is a client-supplied FK, and an
+        # unfiltered read here would render a foreign org's label (EC2-4).
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.unit_of_measure).where(
+                InventoryItem.id.in_(inv_ids),
+                InventoryItem.organization_id == organization_id,
+            )
+        )
+        units = {iid: unit for iid, unit in result.all()}
+        for item in items:
+            item.unit_of_measure = (
+                units.get(item.inventory_item_id) if item.inventory_item_id else None
+            )
 
     async def list_templates(
         self,
@@ -400,9 +442,11 @@ class EquipmentCheckService:
         # (inventory_item_id is name-projected in get_my_checklists).
         await self._validate_item_fks(data, organization_id)
 
-        for key, value in data.items():
-            if key not in self.PROTECTED_FIELDS and hasattr(item, key):
-                setattr(item, key, value)
+        # apply_updates rather than a setattr loop: the builder clears an
+        # expiration or unlinks an inventory item by sending an explicit null,
+        # and a null aimed at a NOT NULL column has to surface as a 400 instead
+        # of a flush-time IntegrityError.
+        apply_updates(item, data, skip=self.PROTECTED_FIELDS)
 
         await self.db.commit()
         await self.db.refresh(item)
@@ -545,14 +589,51 @@ class EquipmentCheckService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _resolve_expiration(
+        item_data: Dict[str, Any],
+        tmpl_item: Optional[CheckTemplateItem],
+    ) -> Optional[date]:
+        """The expiration that governs this item result, newest source wins.
+
+        ``expiration_found`` is what the crew read off a unit they replaced
+        during the check and therefore supersedes the template's stored date.
+        Otherwise the template is authoritative: it is the department's record
+        of what is on the truck, and it is what the supply worklist and the
+        next check will both read. The client's own ``expiration_date`` is only
+        consulted when no template item resolves (a check submitted with no
+        template linkage at all).
+        """
+        found = item_data.get("expiration_found")
+        if found:
+            return found
+        if tmpl_item is not None:
+            return tmpl_item.expiration_date if tmpl_item.has_expiration else None
+        return item_data.get("expiration_date")
+
+    @classmethod
     def _compute_check_status(
+        cls,
         items_data: List[Dict[str, Any]],
+        template_items_map: Optional[Dict[str, CheckTemplateItem]] = None,
     ) -> tuple:
         """Auto-fail expired/under-quantity items and compute aggregate counts.
 
+        Expiry is recomputed here rather than taken from the submitted
+        ``is_expired`` flag: it decides whether a safety-critical item is
+        force-failed, so it must come from the department's own record (or from
+        the replacement the crew just logged), not from whatever the client
+        asserted. ``item["is_expired"]`` and ``item["expiration_date"]`` are
+        normalized in place so the stored result agrees with the verdict.
+
         Returns (total, completed, failed, overall_status).
         """
+        today = date.today()
+        template_items_map = template_items_map or {}
         for item in items_data:
+            tmpl_item = template_items_map.get(item.get("template_item_id") or "")
+            expiration = cls._resolve_expiration(item, tmpl_item)
+            item["expiration_date"] = expiration
+            item["is_expired"] = bool(expiration and expiration < today)
             if item.get("is_expired"):
                 item["status"] = "fail"
             req_qty = item.get("required_quantity")
@@ -573,11 +654,51 @@ class EquipmentCheckService:
 
         return total, completed, failed, overall_status
 
+    @staticmethod
+    def _apply_found_values_to_template(
+        tmpl_item: Optional[CheckTemplateItem],
+        *,
+        serial_found: Optional[str] = None,
+        lot_found: Optional[str] = None,
+        expiration_found: Optional[date] = None,
+    ) -> bool:
+        """Write a swapped-in unit's identifiers back onto the template item.
+
+        The template row is the department's record of what is physically on
+        the apparatus, so a replacement logged during a check has to land there
+        — the next check, the expiry auto-fail and the supply worklist all read
+        it. The expiration in particular: without it a replaced unit keeps the
+        old date and fails every check from then on.
+
+        Returns True when the template actually changed.
+        """
+        if tmpl_item is None:
+            return False
+        serial_changed = serial_found and serial_found != (
+            tmpl_item.serial_number or ""
+        )
+        lot_changed = lot_found and lot_found != (tmpl_item.lot_number or "")
+        expiration_changed = (
+            expiration_found and expiration_found != tmpl_item.expiration_date
+        )
+        if not (serial_changed or lot_changed or expiration_changed):
+            return False
+
+        if serial_found:
+            tmpl_item.serial_number = serial_found
+        if lot_found:
+            tmpl_item.lot_number = lot_found
+        if expiration_found:
+            tmpl_item.has_expiration = True
+            tmpl_item.expiration_date = expiration_found
+        return True
+
     async def _create_check_items(
         self,
         check_id: str,
         items_data: List[Dict[str, Any]],
         template_items_map: Dict[str, CheckTemplateItem],
+        organization_id: str,
     ) -> List[ShiftEquipmentCheckItem]:
         """Create ORM check item records, updating template serials as needed."""
         created: List[ShiftEquipmentCheckItem] = []
@@ -585,23 +706,35 @@ class EquipmentCheckService:
             tmpl_item_id = item_data.get("template_item_id")
             serial_found = item_data.get("serial_found")
             lot_found = item_data.get("lot_found")
-            updated_serial = False
+            expiration_found = item_data.get("expiration_found")
 
-            if tmpl_item_id and (serial_found or lot_found):
-                tmpl_item = template_items_map.get(tmpl_item_id)
-                if tmpl_item:
-                    serial_changed = serial_found and serial_found != (
-                        tmpl_item.serial_number or ""
-                    )
-                    lot_changed = lot_found and lot_found != (
-                        tmpl_item.lot_number or ""
-                    )
-                    if serial_changed or lot_changed:
-                        updated_serial = True
-                        if serial_found:
-                            tmpl_item.serial_number = serial_found
-                        if lot_found:
-                            tmpl_item.lot_number = lot_found
+            tmpl_item = template_items_map.get(tmpl_item_id) if tmpl_item_id else None
+            updated_serial = self._apply_found_values_to_template(
+                tmpl_item,
+                serial_found=serial_found,
+                lot_found=lot_found,
+                expiration_found=expiration_found,
+            )
+            # A check is a recount. quantity_found is a crew standing at the
+            # compartment counting, so it outranks whatever the running total
+            # had drifted to, and it settles a shortfall report if the truck is
+            # back to full.
+            found_qty = item_data.get("quantity_found")
+            if (
+                tmpl_item is not None
+                and found_qty is not None
+                and self._target_quantity(tmpl_item) is not None
+            ):
+                counted = max(0, int(found_qty))
+                # Where lots are aboard the total has to be reconciled against
+                # them; writing the scalar alone would be discarded, since the
+                # lot sum is what every reader uses.
+                if self._deployed_lots(tmpl_item):
+                    self._reconcile_to_total(tmpl_item, counted, organization_id)
+                    tmpl_item.quantity_on_truck = self._on_truck(tmpl_item)
+                else:
+                    tmpl_item.quantity_on_truck = counted
+                self._sync_restock_after_restocking(tmpl_item)
 
             check_item = ShiftEquipmentCheckItem(
                 id=generate_uuid(),
@@ -620,6 +753,7 @@ class EquipmentCheckService:
                 lot_number=item_data.get("lot_number"),
                 serial_found=serial_found,
                 lot_found=lot_found,
+                expiration_found=expiration_found,
                 updated_serial=updated_serial,
                 photo_urls=item_data.get("photo_urls"),
                 is_expired=item_data.get("is_expired", False),
@@ -748,8 +882,14 @@ class EquipmentCheckService:
                     "been submitted for this shift"
                 )
 
+        # Loaded before the status computation, not after: expiry is decided
+        # from the template item (see _compute_check_status), so the map has to
+        # exist before any item can be force-failed.
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
         total, completed, failed, overall_status = self._compute_check_status(
-            items_data
+            items_data, template_items_map
         )
 
         # shifts.apparatus_id is polymorphic — it holds an apparatus.id for a
@@ -800,10 +940,9 @@ class EquipmentCheckService:
                     f"Items do not belong to template: " f"{', '.join(invalid)}"
                 )
 
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id
+        await self._create_check_items(
+            check.id, items_data, template_items_map, organization_id
         )
-        await self._create_check_items(check.id, items_data, template_items_map)
 
         await self._update_apparatus_deficiency(
             shift.apparatus_id, organization_id, overall_status
@@ -891,8 +1030,13 @@ class EquipmentCheckService:
         if not items_data:
             raise ValueError("At least one checklist item is required")
 
+        # See submit_check: the template map decides expiry, so it is loaded
+        # before the status computation rather than just before the write.
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
         total, completed, failed, overall_status = self._compute_check_status(
-            items_data
+            items_data, template_items_map
         )
 
         check = ShiftEquipmentCheck(
@@ -915,10 +1059,9 @@ class EquipmentCheckService:
         self.db.add(check)
         await self.db.flush()
 
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id
+        await self._create_check_items(
+            check.id, items_data, template_items_map, organization_id
         )
-        await self._create_check_items(check.id, items_data, template_items_map)
 
         await self._update_apparatus_deficiency(
             apparatus_id, organization_id, overall_status
@@ -970,6 +1113,14 @@ class EquipmentCheckService:
             item.template_item_id: item for item in check.items if item.template_item_id
         }
 
+        # A replacement logged while finishing an incomplete check has to reach
+        # the template too — otherwise which write path the crew happened to
+        # take decides whether the truck's record gets updated.
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
+        today = date.today()
+
         for item_data in items_data:
             tmpl_id = item_data.get("template_item_id")
             existing = existing_map.get(tmpl_id) if tmpl_id else None
@@ -988,7 +1139,28 @@ class EquipmentCheckService:
                     "serial_found", existing.serial_found
                 )
                 existing.lot_found = item_data.get("lot_found", existing.lot_found)
-                existing.is_expired = item_data.get("is_expired", existing.is_expired)
+                existing.expiration_found = (
+                    item_data.get("expiration_found") or existing.expiration_found
+                )
+
+                tmpl_item = template_items_map.get(tmpl_id or "")
+                if self._apply_found_values_to_template(
+                    tmpl_item,
+                    serial_found=existing.serial_found,
+                    lot_found=existing.lot_found,
+                    expiration_found=existing.expiration_found,
+                ):
+                    existing.updated_serial = True
+
+                expiration = self._resolve_expiration(
+                    {
+                        "expiration_found": existing.expiration_found,
+                        "expiration_date": existing.expiration_date,
+                    },
+                    tmpl_item,
+                )
+                existing.expiration_date = expiration
+                existing.is_expired = bool(expiration and expiration < today)
 
         all_items = check.items
         # Re-apply the same auto-fail rule the initial submit uses
@@ -1220,6 +1392,9 @@ class EquipmentCheckService:
                 "level_reading": item.level_reading,
                 "serial_number": item.serial_number,
                 "lot_number": item.lot_number,
+                # Prefilled so a crew reading a date off the unit sees what the
+                # last crew recorded and only has to correct a mismatch.
+                "expiration_date": item.expiration_date,
                 "notes": item.notes,
             }
 
@@ -1324,9 +1499,43 @@ class EquipmentCheckService:
             )
             .where(
                 EquipmentCheckTemplate.organization_id == organization_id,
-                CheckTemplateItem.has_expiration.is_(True),
-                CheckTemplateItem.expiration_date.isnot(None),
-                CheckTemplateItem.expiration_date <= cutoff,
+                # Two ways onto this worklist. A date the officer can see
+                # coming, and a crew's report that something was used or pulled
+                # — the second has no expiration to sort by and would otherwise
+                # sit unseen until someone ran a check.
+                or_(
+                    and_(
+                        CheckTemplateItem.has_expiration.is_(True),
+                        CheckTemplateItem.expiration_date.isnot(None),
+                        CheckTemplateItem.expiration_date <= cutoff,
+                    ),
+                    # The rows display the soonest date *aboard*, so the filter
+                    # has to see it too. An item whose column reads next year
+                    # while it carries a lot expiring this week belongs on this
+                    # list, and matching only the column would hide exactly the
+                    # case the deployed-lot table was added for.
+                    CheckTemplateItem.id.in_(
+                        select(CheckItemDeployedLot.template_item_id).where(
+                            CheckItemDeployedLot.organization_id == organization_id,
+                            CheckItemDeployedLot.quantity > 0,
+                            CheckItemDeployedLot.expiration_date.isnot(None),
+                            CheckItemDeployedLot.expiration_date <= cutoff,
+                        )
+                    ),
+                    CheckTemplateItem.restock_needed.is_(True),
+                    # A counted position below its target belongs here whether
+                    # or not anyone filed a report — a check that recorded two
+                    # of four is the same shortfall as a crew reporting it.
+                    and_(
+                        CheckTemplateItem.quantity_on_truck.isnot(None),
+                        CheckTemplateItem.quantity_on_truck
+                        < func.coalesce(
+                            CheckTemplateItem.required_quantity,
+                            CheckTemplateItem.expected_quantity,
+                            0,
+                        ),
+                    ),
+                ),
             )
             .order_by(CheckTemplateItem.expiration_date.asc())
         )
@@ -1366,7 +1575,7 @@ class EquipmentCheckService:
 
         items: List[Dict[str, Any]] = []
         for item, comp, tmpl in rows:
-            exp = item.expiration_date
+            exp = self._soonest_expiration(item)
             lots = lots_by_item.get(item.inventory_item_id or "", [])
             items.append(
                 {
@@ -1385,19 +1594,36 @@ class EquipmentCheckService:
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
+                    "restock_needed": bool(item.restock_needed),
+                    "restock_note": item.restock_note,
+                    "restock_reported_at": item.restock_reported_at,
+                    "quantity_on_truck": self._on_truck(item),
+                    "target_quantity": self._target_quantity(item),
+                    "is_short": self._is_short(item),
                     "inventory_item_id": item.inventory_item_id,
                     "inventory_item_name": (
                         item_names.get(item.inventory_item_id)
                         if item.inventory_item_id
                         else None
                     ),
-                    "ready_stock": sum(lot.quantity for lot in lots),
+                    # Stock that has itself expired on the shelf is not ready
+                    # stock: swapping it in would fail the item on the next
+                    # check. It stays in ready_lots (so the officer can see and
+                    # pull it) but must not mask a restock need.
+                    "ready_stock": sum(
+                        lot.quantity
+                        for lot in lots
+                        if not (lot.expiration_date and lot.expiration_date < today)
+                    ),
                     "ready_lots": [
                         {
                             "id": lot.id,
                             "lot_number": lot.lot_number,
                             "expiration_date": lot.expiration_date,
                             "quantity": lot.quantity,
+                            "is_expired": bool(
+                                lot.expiration_date and lot.expiration_date < today
+                            ),
                         }
                         for lot in lots
                     ],
@@ -1406,22 +1632,576 @@ class EquipmentCheckService:
 
         return {"days_ahead": days_ahead, "total": len(items), "items": items}
 
-    async def swap_item_lot(
+    async def get_apparatus_inventory(
+        self, apparatus_id: str, organization_id: str
+    ) -> Dict[str, Any]:
+        """What a given apparatus is carrying right now, compartment by
+        compartment, with the ready stock behind each tracked item.
+
+        Deliberately not a check. A check is a scheduled, signed, whole-truck
+        pass that produces a report; this is the standing view a member opens
+        at any hour to say "we used the last of these" or to put a fresh unit
+        in a bracket. Forcing that through a check submission is what left
+        mid-shift consumption unrecorded until the next morning.
+        """
+        today = date.today()
+
+        apparatus = await self.db.scalar(
+            select(Apparatus).where(
+                Apparatus.id == apparatus_id,
+                Apparatus.organization_id == organization_id,
+            )
+        )
+        if apparatus is None:
+            return {}
+
+        result = await self.db.execute(
+            select(
+                CheckTemplateItem,
+                CheckTemplateCompartment,
+                EquipmentCheckTemplate,
+            )
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.apparatus_id == apparatus_id,
+            )
+            .order_by(
+                CheckTemplateCompartment.sort_order.asc(),
+                CheckTemplateItem.sort_order.asc(),
+            )
+        )
+        rows = result.all()
+
+        inv_ids = [i.inventory_item_id for (i, _, _) in rows if i.inventory_item_id]
+        inventory_service = InventoryService(self.db)
+        lots_by_item = await inventory_service.get_lots_for_items(
+            organization_id, inv_ids
+        )
+        reporter_names = await self._get_user_name_map(
+            [i.restock_reported_by for (i, _, _) in rows if i.restock_reported_by]
+        )
+        await self._attach_unit_labels(organization_id, [i for (i, _, _) in rows])
+
+        compartments: List[Dict[str, Any]] = []
+        by_compartment: Dict[str, Dict[str, Any]] = {}
+        for item, compartment, _tmpl in rows:
+            # Headers and free-text lines are checklist scaffolding, not things
+            # anyone stocks; they would be dead rows in a supply view.
+            if item.check_type in ("header", "text"):
+                continue
+            entry = by_compartment.get(compartment.id)
+            if entry is None:
+                entry = {
+                    "compartment_id": compartment.id,
+                    "compartment_name": compartment.name,
+                    "items": [],
+                }
+                by_compartment[compartment.id] = entry
+                compartments.append(entry)
+
+            exp = self._soonest_expiration(item)
+            lots = lots_by_item.get(item.inventory_item_id or "", [])
+            in_date = [
+                lot
+                for lot in lots
+                if not (lot.expiration_date and lot.expiration_date < today)
+            ]
+            entry["items"].append(
+                {
+                    "template_item_id": item.id,
+                    "item_name": item.name,
+                    "check_type": item.check_type,
+                    "target_quantity": self._target_quantity(item),
+                    "quantity_on_truck": self._on_truck(item),
+                    "is_short": self._is_short(item),
+                    "unit_of_measure": getattr(item, "unit_of_measure", None),
+                    "deployed_lots": self._deployed_lot_payload(item),
+                    "serial_number": item.serial_number,
+                    "lot_number": item.lot_number,
+                    "expiration_date": exp,
+                    "days_until_expiration": (exp - today).days if exp else None,
+                    "is_expired": bool(exp and exp < today),
+                    "restock_needed": bool(item.restock_needed),
+                    "restock_note": item.restock_note,
+                    "restock_reported_at": item.restock_reported_at,
+                    "restock_reported_by_name": (
+                        reporter_names.get(str(item.restock_reported_by))
+                        if item.restock_reported_by
+                        else None
+                    ),
+                    "inventory_item_id": item.inventory_item_id,
+                    "ready_stock": sum(lot.quantity for lot in in_date),
+                    "ready_lots": [
+                        {
+                            "id": lot.id,
+                            "lot_number": lot.lot_number,
+                            "expiration_date": lot.expiration_date,
+                            "quantity": lot.quantity,
+                            "is_expired": False,
+                        }
+                        for lot in in_date
+                    ],
+                }
+            )
+
+        return {
+            "apparatus_id": apparatus.id,
+            "apparatus_name": apparatus.name,
+            "compartments": compartments,
+        }
+
+    @staticmethod
+    def _target_quantity(item: CheckTemplateItem) -> Optional[int]:
+        """How many this position should hold, or None if it is not counted.
+
+        ``required_quantity`` is the state-mandated floor and outranks the
+        department's own ``expected_quantity`` where both are set — being short
+        of the legal minimum is the fact that matters.
+        """
+        return item.required_quantity or item.expected_quantity
+
+    @staticmethod
+    def _deployed_lots(item: CheckTemplateItem) -> List[CheckItemDeployedLot]:
+        """Lots aboard for this position, soonest to expire first.
+
+        Sorting is first-expiring-first-out, which is both the order a crew
+        should draw from and the order consumption is applied in. Lots with no
+        date sort last: an undated unit is never the one that needs using up.
+        """
+        lots = getattr(item, "deployed_lots", None) or []
+        return sorted(
+            [lot for lot in lots if lot.quantity > 0],
+            key=lambda lot: (lot.expiration_date is None, lot.expiration_date),
+        )
+
+    @classmethod
+    def _soonest_expiration(cls, item: CheckTemplateItem):
+        """The earliest date aboard — the one that actually puts a truck out.
+
+        Falls back to the item's own column for a position with no deployed
+        lots recorded, which is every position a department has not yet
+        restocked through the lot flow.
+        """
+        for lot in cls._deployed_lots(item):
+            if lot.expiration_date:
+                return lot.expiration_date
+        return item.expiration_date if item.has_expiration else None
+
+    @classmethod
+    def _on_truck(cls, item: CheckTemplateItem) -> Optional[int]:
+        """The live count, falling back to what the item was stocked with.
+
+        Deployed lots outrank the scalar where they exist: they are a count of
+        actual units with actual dates, and keeping the scalar as the authority
+        would let the two disagree.
+
+        A NULL ``quantity_on_truck`` with no lots means nobody has counted since
+        the item was defined, not that the bracket is empty; the template's
+        target is the best available answer until a crew contradicts it.
+        """
+        lots = cls._deployed_lots(item)
+        if lots:
+            return sum(lot.quantity for lot in lots)
+        if item.quantity_on_truck is not None:
+            return item.quantity_on_truck
+        return cls._target_quantity(item)
+
+    @classmethod
+    def _is_short(cls, item: CheckTemplateItem) -> bool:
+        """True when a counted position holds less than it should."""
+        target = cls._target_quantity(item)
+        on_truck = cls._on_truck(item)
+        if target is None or on_truck is None:
+            return False
+        return on_truck < target
+
+    @classmethod
+    def _materialize_untracked_units(
+        cls, item: CheckTemplateItem, organization_id: str
+    ) -> None:
+        """Give the units already aboard a row before the first lot joins them.
+
+        A position counted as 3 with no lot rows, restocked with 1 fresh unit,
+        would otherwise read as 1 aboard — the lot sum becomes the authority
+        the moment any lot exists, and the three units nobody had recorded a lot
+        for would vanish. They are recorded with the item's existing lot number
+        and date, which is all that was ever known about them.
+        """
+        # The raw collection, not the in-stock view: the question is whether
+        # this position has ever had a lot recorded, and a row sitting at zero
+        # still means yes. Asking the filtered view would add a second row
+        # describing the same units.
+        if item.deployed_lots:
+            return
+        existing_count = cls._on_truck(item)
+        if not existing_count or existing_count < 1:
+            return
+        item.deployed_lots.append(
+            CheckItemDeployedLot(
+                id=generate_uuid(),
+                organization_id=organization_id,
+                template_item_id=item.id,
+                lot_number=item.lot_number,
+                expiration_date=(item.expiration_date if item.has_expiration else None),
+                quantity=existing_count,
+            )
+        )
+
+    @classmethod
+    def _reconcile_to_total(
+        cls, item: CheckTemplateItem, total: int, organization_id: str
+    ) -> None:
+        """Make the lots aboard add up to a counted total.
+
+        A recount gives one number for a position that may hold several lots,
+        so the difference has to be placed somewhere. Writing it to
+        ``quantity_on_truck`` alone would be silently discarded: once lots
+        exist their sum is what every reader uses.
+
+        Fewer than recorded means units left, and they come off soonest-first
+        like any other consumption. More than recorded means the record was
+        incomplete; the surplus goes to an undated row, because the honest
+        answer to "when do these expire" is that nobody knows — and an undated
+        row neither flatters the position's soonest-date reading nor gets
+        drawn from before the dated stock.
+        """
+        current = cls._on_truck(item) or 0
+        if total == current:
+            return
+        if total < current:
+            cls._consume_deployed(item, current - total)
+            return
+        item.deployed_lots.append(
+            CheckItemDeployedLot(
+                id=generate_uuid(),
+                organization_id=organization_id,
+                template_item_id=item.id,
+                lot_number=None,
+                expiration_date=None,
+                quantity=total - current,
+            )
+        )
+
+    @classmethod
+    def _consume_deployed(cls, item: CheckTemplateItem, quantity: int) -> int:
+        """Draw units off the deployed lots, soonest to expire first.
+
+        First-expiring-first-out is the order a crew should be pulling from
+        anyway, and it is the only order that keeps a truck's remaining stock
+        as fresh as possible. Returns how many were actually drawn, which is
+        less than asked when the record held fewer than the crew used — that
+        is a correction to the record, not a negative quantity.
+        """
+        remaining = quantity
+        emptied = []
+        # _deployed_lots returns a fresh sorted list, so removing from the
+        # collection below does not disturb this iteration.
+        for lot in cls._deployed_lots(item):
+            if remaining <= 0:
+                break
+            take = min(lot.quantity, remaining)
+            lot.quantity -= take
+            remaining -= take
+            if lot.quantity == 0:
+                emptied.append(lot)
+        # A lot drawn down to nothing is no longer aboard. Leaving the row
+        # would accumulate dead records against every position a truck ever
+        # restocked, and keep a spent lot's foreign key alive for no reader.
+        for lot in emptied:
+            item.deployed_lots.remove(lot)
+        return quantity - remaining
+
+    @classmethod
+    def _sync_restock_after_restocking(cls, item: CheckTemplateItem) -> None:
+        """Settle the restock report if the shortfall it described is gone.
+
+        A partial restock leaves the report standing: two of the four back on
+        the truck is still a truck that is short two, and clearing the flag
+        there would drop it off the worklist with the gap still open.
+        """
+        if not cls._is_short(item):
+            cls._clear_restock(item)
+
+    async def report_item_used(
         self,
         template_item_id: str,
-        inventory_lot_id: str,
         organization_id: str,
-        user: Optional[User] = None,
+        user: User,
+        note: Optional[str] = None,
+        quantity_used: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Swap a ready-stock lot onto the apparatus for a checklist item.
+        """Record consumption against a checklist item, from whoever used it.
 
-        Decrements the lot's on-hand quantity by one and updates the deployed
-        checklist item's lot number and expiration to the new lot's values, so
-        the truck now reflects the fresher unit. Raises ValueError on a
-        mismatched or empty lot.
+        Raised at the moment of use rather than discovered at the next check.
+        For a counted position the on-truck figure comes down by the number
+        used, so the worklist can say how short the truck is rather than only
+        that something is needed. The count floors at zero: a crew reporting
+        more than the record thought was there is telling you the record was
+        wrong, and a negative count is not a fact about any truck.
         """
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
+        )
+        if item is None:
+            return None
+
+        before = self._on_truck(item)
+        if quantity_used:
+            if self._deployed_lots(item):
+                self._consume_deployed(item, quantity_used)
+                # Where lots exist their sum is the authority; the scalar is a
+                # cached mirror of it.
+                if self._target_quantity(item) is not None:
+                    item.quantity_on_truck = self._on_truck(item)
+            elif self._target_quantity(item) is not None:
+                item.quantity_on_truck = max(0, (before or 0) - quantity_used)
+
+        item.restock_needed = True
+        item.restock_reported_at = datetime.now(timezone.utc)
+        item.restock_reported_by = str(user.id)
+        item.restock_note = (note or "").strip() or None
+
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            item,
+            user,
+            action="restock_needed",
+            changes={
+                "note": item.restock_note,
+                "quantity_used": quantity_used,
+                "quantity_on_truck": item.quantity_on_truck,
+            },
+        )
+        await self.db.commit()
+        return self._restock_state(item)
+
+    def _deployed_lot_payload(self, item: CheckTemplateItem) -> List[Dict[str, Any]]:
+        """Each lot aboard, in the order a crew should draw from it."""
+        return [
+            {
+                "id": lot.id,
+                "lot_number": lot.lot_number,
+                "expiration_date": lot.expiration_date,
+                "quantity": lot.quantity,
+                "is_expired": bool(
+                    lot.expiration_date and lot.expiration_date < date.today()
+                ),
+            }
+            for lot in self._deployed_lots(item)
+        ]
+
+    async def get_item_deployed_lots(
+        self, template_item_id: str, organization_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """The lots aboard for one position, with the position's totals."""
+        item, _ = await self._get_item_with_template(template_item_id, organization_id)
+        if item is None:
+            return None
+        return {
+            "template_item_id": item.id,
+            "item_name": item.name,
+            "target_quantity": self._target_quantity(item),
+            "quantity_on_truck": self._on_truck(item),
+            "is_short": self._is_short(item),
+            "unit_of_measure": getattr(item, "unit_of_measure", None),
+            "lots": self._deployed_lot_payload(item),
+        }
+
+    async def update_deployed_lot(
+        self,
+        template_item_id: str,
+        deployed_lot_id: str,
+        organization_id: str,
+        user: User,
+        updates: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Correct one lot aboard so the record matches what is in the bag.
+
+        Quantity, lot number and date together, because they are one act: a
+        crew changing a drug out is reading a new box and telling the
+        application what it says. Recording the count without the date would
+        leave the application asserting an expiration for a unit that is no
+        longer there.
+
+        Zero quantity removes the lot. A lot counted down to nothing is not a
+        lot the truck carries, and an empty row would keep contributing its
+        date to the position's soonest-expiry reading forever.
+        """
+        quantity = updates.get("quantity")
+        if quantity is None or quantity < 0:
+            raise ValueError("Quantity cannot be negative")
+
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
+        )
+        if item is None:
+            return None
+
+        target = next(
+            (lot for lot in (item.deployed_lots or []) if lot.id == deployed_lot_id),
+            None,
+        )
+        if target is None:
+            return None
+
+        before = {
+            "quantity": target.quantity,
+            "lot_number": target.lot_number,
+            "expiration_date": (
+                target.expiration_date.isoformat() if target.expiration_date else None
+            ),
+        }
+
+        if quantity == 0:
+            item.deployed_lots.remove(target)
+        else:
+            target.quantity = quantity
+            # Partial: an absent key leaves the field alone, an explicit null
+            # clears it. Sending a blank date as "unchanged" is how a corrected
+            # box silently keeps the old expiration.
+            if "lot_number" in updates:
+                lot_number = updates["lot_number"]
+                target.lot_number = (lot_number or "").strip() or None
+            if "expiration_date" in updates:
+                target.expiration_date = updates["expiration_date"]
+
+        if self._target_quantity(item) is not None:
+            item.quantity_on_truck = self._on_truck(item)
+        self._sync_restock_after_restocking(item)
+
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            item,
+            user,
+            action="counted",
+            changes={
+                "from": before,
+                "to": (
+                    None
+                    if quantity == 0
+                    else {
+                        "quantity": target.quantity,
+                        "lot_number": target.lot_number,
+                        "expiration_date": (
+                            target.expiration_date.isoformat()
+                            if target.expiration_date
+                            else None
+                        ),
+                    }
+                ),
+            },
+        )
+        await self.db.commit()
+        return await self.get_item_deployed_lots(template_item_id, organization_id)
+
+    async def set_item_quantity(
+        self,
+        template_item_id: str,
+        organization_id: str,
+        user: User,
+        quantity: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Set the on-truck count outright — a recount, or a hand restock.
+
+        Distinct from reporting use: this is the crew saying what is actually
+        in the compartment, which is also how a count that drifted gets put
+        right without inventing a consumption that never happened.
+        """
+        if quantity < 0:
+            raise ValueError("Quantity cannot be negative")
+
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
+        )
+        if item is None:
+            return None
+        if self._target_quantity(item) is None:
+            raise ValueError("This item does not carry a quantity")
+
+        previous = self._on_truck(item)
+        if self._deployed_lots(item):
+            self._reconcile_to_total(item, quantity, organization_id)
+            item.quantity_on_truck = self._on_truck(item)
+        else:
+            item.quantity_on_truck = quantity
+        self._sync_restock_after_restocking(item)
+
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            item,
+            user,
+            action="counted",
+            changes={"from": previous, "to": quantity},
+        )
+        await self.db.commit()
+        return self._restock_state(item)
+
+    async def clear_item_restock(
+        self,
+        template_item_id: str,
+        organization_id: str,
+        user: User,
+    ) -> Optional[Dict[str, Any]]:
+        """Withdraw a restock report — restocked by hand, or raised in error."""
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
+        )
+        if item is None:
+            return None
+
+        self._clear_restock(item)
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            item,
+            user,
+            action="restocked",
+            changes=None,
+        )
+        await self.db.commit()
+        return self._restock_state(item)
+
+    @staticmethod
+    def _clear_restock(item: CheckTemplateItem) -> None:
+        """Drop a restock report and everything that described it.
+
+        Leaving the reporter and note behind would attribute a stale report to
+        whoever raised the last one the next time the flag is set.
+        """
+        item.restock_needed = False
+        item.restock_reported_at = None
+        item.restock_reported_by = None
+        item.restock_note = None
+
+    @classmethod
+    def _restock_state(cls, item: CheckTemplateItem) -> Dict[str, Any]:
+        return {
+            "template_item_id": item.id,
+            "restock_needed": bool(item.restock_needed),
+            "restock_note": item.restock_note,
+            "restock_reported_at": item.restock_reported_at,
+            "quantity_on_truck": cls._on_truck(item),
+            "target_quantity": cls._target_quantity(item),
+            "is_short": cls._is_short(item),
+        }
+
+    async def _get_item_with_template(
+        self, template_item_id: str, organization_id: str
+    ) -> tuple:
+        """Org-scoped item fetch that also yields its template id for the log."""
         result = await self.db.execute(
-            select(CheckTemplateItem)
+            select(CheckTemplateItem, EquipmentCheckTemplate.id)
             .join(
                 CheckTemplateCompartment,
                 CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
@@ -1435,8 +2215,135 @@ class EquipmentCheckService:
                 EquipmentCheckTemplate.organization_id == organization_id,
             )
         )
-        item = result.scalars().first()
-        if not item:
+        row = result.first()
+        return (None, None) if not row else (row[0], row[1])
+
+    async def _log_item_action(
+        self,
+        template_id: Optional[str],
+        organization_id: str,
+        item: CheckTemplateItem,
+        user: Optional[User],
+        *,
+        action: str,
+        changes: Optional[Dict[str, Any]],
+    ) -> None:
+        """Record a mid-shift change to a checklist item in the template log."""
+        if user is None or template_id is None:
+            return
+        first = getattr(user, "first_name", "") or ""
+        last = getattr(user, "last_name", "") or ""
+        await self.log_template_change(
+            organization_id=organization_id,
+            template_id=str(template_id),
+            user_id=str(user.id),
+            user_name=f"{first} {last}".strip() or "Unknown",
+            action=action,
+            entity_type="item",
+            entity_id=str(item.id),
+            entity_name=item.name,
+            changes=changes,
+        )
+
+    async def get_item_deployments(
+        self, inventory_item_id: str, organization_id: str
+    ) -> List[Dict[str, Any]]:
+        """Every apparatus checklist position this inventory item fills.
+
+        The supply view reads apparatus -> item; this is the same link read the
+        other way, which is the direction a recall or an expiring lot is worked
+        from: the officer is holding the item and needs to know which trucks
+        carry it and what is on each of them right now.
+        """
+        today = date.today()
+        result = await self.db.execute(
+            select(
+                CheckTemplateItem,
+                CheckTemplateCompartment.name,
+                EquipmentCheckTemplate,
+            )
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.inventory_item_id == inventory_item_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+            .order_by(CheckTemplateItem.expiration_date.asc())
+        )
+        rows = result.all()
+        if not rows:
+            return []
+
+        apparatus_ids = {t.apparatus_id for (_, _, t) in rows if t.apparatus_id}
+        apparatus_names: Dict[str, str] = {}
+        if apparatus_ids:
+            ares = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            apparatus_names = {aid: name for aid, name in ares.all()}
+
+        deployments: List[Dict[str, Any]] = []
+        for item, compartment_name, tmpl in rows:
+            exp = self._soonest_expiration(item)
+            deployments.append(
+                {
+                    "template_item_id": item.id,
+                    "item_name": item.name,
+                    "compartment_name": compartment_name,
+                    "template_id": tmpl.id,
+                    "template_name": tmpl.name,
+                    "apparatus_id": tmpl.apparatus_id,
+                    "apparatus_name": (
+                        apparatus_names.get(tmpl.apparatus_id)
+                        if tmpl.apparatus_id
+                        else None
+                    ),
+                    # A template defined for an apparatus *type* rather than one
+                    # vehicle has no apparatus_id to name; say which type so the
+                    # row is still actionable.
+                    "apparatus_type": tmpl.apparatus_type,
+                    "lot_number": item.lot_number,
+                    "serial_number": item.serial_number,
+                    "expiration_date": exp,
+                    "days_until_expiration": (exp - today).days if exp else None,
+                    "is_expired": bool(exp and exp < today),
+                }
+            )
+        return deployments
+
+    async def swap_item_lot(
+        self,
+        template_item_id: str,
+        inventory_lot_id: str,
+        organization_id: str,
+        user: Optional[User] = None,
+        quantity: int = 1,
+    ) -> Optional[Dict[str, Any]]:
+        """Move units from a ready-stock lot onto the apparatus.
+
+        Draws ``quantity`` off the lot and updates the deployed checklist item's
+        lot number and expiration to the new stock, so the truck reflects what
+        is now in the bracket. For a counted position the on-truck figure goes
+        up by the same number, which is what makes a two-of-four restock
+        expressible; ``quantity`` defaults to 1 for the single-unit case that
+        covers everything else. Raises ValueError on a mismatched, empty or
+        expired lot.
+        """
+        if quantity < 1:
+            raise ValueError("Restock quantity must be at least 1")
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
+        )
+        if item is None:
             return None
 
         # Lock the lot row for the read-check-decrement so two concurrent
@@ -1455,10 +2362,35 @@ class EquipmentCheckService:
             raise ValueError("Stock lot not found")
         if item.inventory_item_id and lot.inventory_item_id != item.inventory_item_id:
             raise ValueError("This stock lot is for a different inventory item")
-        if lot.quantity < 1:
-            raise ValueError("No stock available in this lot")
+        if lot.quantity < quantity:
+            raise ValueError(
+                f"This lot has only {lot.quantity} on hand"
+                if lot.quantity
+                else "No stock available in this lot"
+            )
+        if lot.expiration_date and lot.expiration_date < date.today():
+            # Deploying expired stock would fail the item on the next check and
+            # put expired supplies in service; refuse rather than record it.
+            raise ValueError("This stock lot has expired and cannot be deployed")
 
-        lot.quantity -= 1
+        lot_id_value = str(lot.id)
+        previous = {
+            "lot_number": item.lot_number,
+            "expiration_date": (
+                item.expiration_date.isoformat() if item.expiration_date else None
+            ),
+        }
+
+        lot.quantity -= quantity
+        was_restock = bool(item.restock_needed)
+
+        # Before anything overwrites the item's own lot/date: whatever is
+        # already aboard gets a row carrying the values it was actually
+        # recorded with. Doing this after the write below would stamp the
+        # incoming lot's date onto the older units — the very substitution
+        # this table exists to prevent.
+        self._materialize_untracked_units(item, organization_id)
+
         # Establish the catalog link if this was the item's first swap.
         if not item.inventory_item_id:
             item.inventory_item_id = lot.inventory_item_id
@@ -1468,6 +2400,68 @@ class EquipmentCheckService:
             item.has_expiration = True
             item.expiration_date = lot.expiration_date
 
+        # Record the units as their own presence on the truck rather than
+        # overwriting the position's single lot/date.
+        existing = next(
+            (
+                deployed
+                for deployed in (item.deployed_lots or [])
+                if deployed.inventory_lot_id == lot_id_value
+            ),
+            None,
+        )
+        if existing is not None:
+            existing.quantity += quantity
+        else:
+            item.deployed_lots.append(
+                CheckItemDeployedLot(
+                    id=generate_uuid(),
+                    organization_id=organization_id,
+                    template_item_id=item.id,
+                    inventory_lot_id=lot_id_value,
+                    lot_number=lot.lot_number,
+                    expiration_date=lot.expiration_date,
+                    quantity=quantity,
+                    deployed_by=str(user.id) if user is not None else None,
+                )
+            )
+        if self._target_quantity(item) is not None:
+            item.quantity_on_truck = self._on_truck(item)
+        self._sync_restock_after_restocking(item)
+
+        # A swap rewrites the same safety-critical template row that every
+        # manual edit logs, and it is the one change nobody typed — without an
+        # entry the changelog shows a lot number appearing on an apparatus with
+        # no author and no source lot.
+        if user is not None:
+            first = getattr(user, "first_name", "") or ""
+            last = getattr(user, "last_name", "") or ""
+            await self.log_template_change(
+                organization_id=organization_id,
+                template_id=str(template_id),
+                user_id=str(user.id),
+                user_name=f"{first} {last}".strip() or "Unknown",
+                action="swap",
+                entity_type="item",
+                entity_id=str(item.id),
+                entity_name=item.name,
+                changes={
+                    "inventory_lot_id": inventory_lot_id,
+                    "quantity": quantity,
+                    "quantity_on_truck": item.quantity_on_truck,
+                    "cleared_restock": was_restock and not item.restock_needed,
+                    "from": previous,
+                    "to": {
+                        "lot_number": item.lot_number,
+                        "expiration_date": (
+                            item.expiration_date.isoformat()
+                            if item.expiration_date
+                            else None
+                        ),
+                    },
+                },
+            )
+
         await self.db.commit()
 
         return {
@@ -1475,6 +2469,8 @@ class EquipmentCheckService:
             "lot_number": item.lot_number,
             "expiration_date": item.expiration_date,
             "remaining_quantity": lot.quantity,
+            "restock_needed": bool(item.restock_needed),
+            "quantity_on_truck": self._on_truck(item),
         }
 
     # ------------------------------------------------------------------
@@ -1592,6 +2588,10 @@ class EquipmentCheckService:
                 id=generate_uuid(),
                 compartment_id=compartment.id,
                 equipment_id=item.equipment_id,
+                # Without this the clone loses its catalog link, and with it
+                # the ready-stock view and the ability to swap a fresh lot in —
+                # cloning is how a department stands up the second engine.
+                inventory_item_id=item.inventory_item_id,
                 name=item.name,
                 description=item.description,
                 sort_order=item.sort_order,

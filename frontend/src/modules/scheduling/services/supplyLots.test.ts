@@ -48,9 +48,23 @@ describe('schedulingService supply + swap', () => {
 
     const result = await schedulingService.swapItemLot('ti1', 'lot-9');
 
+    // Defaults to a single unit, which is the whole story for a bracket that
+    // holds one; a counted position passes its shortfall instead.
     expect(mockPost).toHaveBeenCalledWith('/equipment-checks/items/ti1/swap', {
       inventory_lot_id: 'lot-9',
+      quantity: 1,
     });
     expect(result).toEqual(res);
+  });
+
+  it('swapItemLot carries a multi-unit restock through', async () => {
+    mockPost.mockResolvedValueOnce({ data: { templateItemId: 'ti1', remainingQuantity: 7 } });
+
+    await schedulingService.swapItemLot('ti1', 'lot-9', 3);
+
+    expect(mockPost).toHaveBeenCalledWith('/equipment-checks/items/ti1/swap', {
+      inventory_lot_id: 'lot-9',
+      quantity: 3,
+    });
   });
 });

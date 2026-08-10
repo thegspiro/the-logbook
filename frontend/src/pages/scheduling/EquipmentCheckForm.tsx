@@ -27,6 +27,7 @@ import {
   Eye,
   Wrench,
   Camera,
+  Info,
   Minus,
   Plus,
   Type,
@@ -41,7 +42,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLot } from '../../services/eventServices';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { formatDate } from '../../utils/dateFormatting';
+import { formatDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import {
@@ -61,9 +62,11 @@ import type {
   StandaloneEquipmentCheckCreate,
   CheckType,
   LastCheckItemResult,
+  DeployedLot,
 } from '../../modules/scheduling/types/equipmentCheck';
 import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
 import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
+import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
 
 import { useConfirm } from '../../contexts/ConfirmContext';
 // ============================================================================
@@ -87,6 +90,7 @@ interface ItemResult {
   lotNumber?: string | undefined;
   serialFound?: string | undefined;
   lotFound?: string | undefined;
+  expirationFound?: string | undefined;
   photoUrls?: string[] | undefined;
   photoFiles?: File[] | undefined;
   notes?: string | undefined;
@@ -96,16 +100,43 @@ interface ItemResult {
 // Helpers
 // ============================================================================
 
-function getExpirationStatus(item: CheckTemplateItem): 'ok' | 'expiring_soon' | 'expired' | null {
-  if (!item.hasExpiration || !item.expirationDate) return null;
+/**
+ * Expiry verdict for a checklist item, as YYYY-MM-DD calendar-day comparison.
+ *
+ * `today` is the local (org-timezone) date so the answer matches the backend's
+ * `expiration_date < today`, which is what actually force-fails the item on
+ * submit. Parsing the date-only string into a `Date` instead would put it at
+ * UTC midnight and call an item expired on its own expiry day in any timezone
+ * behind UTC — the badge would say EXPIRED while the server passed it.
+ */
+/**
+ * The soonest date actually aboard, falling back to the position's own column.
+ *
+ * A position holding three boxes holds three dates, and the truck is exposed
+ * by its oldest. Reading the column instead would report the date of whichever
+ * lot was restocked last.
+ */
+function soonestExpiration(item: CheckTemplateItem): string | undefined {
+  const dated = (item.lotsAboard ?? []).filter((lot) => lot.expirationDate);
+  if (dated.length > 0) {
+    // The API sorts them, but a verdict that takes an apparatus out of service
+    // should not depend on the order a payload arrived in.
+    return dated.reduce((soonest, lot) => ((lot.expirationDate ?? '') < (soonest.expirationDate ?? '') ? lot : soonest))
+      .expirationDate;
+  }
+  return item.hasExpiration ? item.expirationDate : undefined;
+}
 
-  const now = new Date();
-  const expDate = new Date(item.expirationDate);
+function getExpirationStatus(item: CheckTemplateItem, today: string): 'ok' | 'expiring_soon' | 'expired' | null {
+  const soonest = soonestExpiration(item);
+  if (!soonest) return null;
 
-  if (expDate < now) return 'expired';
+  const expDate = soonest.slice(0, 10);
+  if (expDate < today) return 'expired';
 
   const warningMs = (item.expirationWarningDays ?? 30) * 24 * 60 * 60 * 1000;
-  if (expDate.getTime() - now.getTime() < warningMs) return 'expiring_soon';
+  const daysOut = Date.parse(`${expDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`);
+  if (daysOut < warningMs) return 'expiring_soon';
 
   return 'ok';
 }
@@ -174,6 +205,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 }) => {
   const { confirm } = useConfirm();
   const tz = useTimezone();
+  // Calendar day in the org's timezone — the reference every expiry check in
+  // this form compares against, so the badge, the auto-fail and the server all
+  // agree on what "expired" means.
+  const today = useMemo(() => getTodayLocalDate(tz), [tz]);
   const [results, setResults] = useState<Record<string, ItemResult>>({});
   // Lot swaps performed during this check: override the deployed item's lot /
   // expiration so the badge reflects the fresher unit that was swapped in.
@@ -181,12 +216,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     {}
   );
   const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
+  // Lots corrected during this check, so the row reflects the box the crew is
+  // holding without waiting for a template re-fetch.
+  const [lotEdits, setLotEdits] = useState<Record<string, DeployedLot[]>>({});
+  const [lotBusyId, setLotBusyId] = useState<string | null>(null);
   const [swapLots, setSwapLots] = useState<InventoryLot[]>([]);
   const [swapLoading, setSwapLoading] = useState(false);
   const [swapping, setSwapping] = useState(false);
   const [collapsedCompartments, setCollapsedCompartments] = useState<Set<string>>(new Set());
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
-  const [expandedPhotos, setExpandedPhotos] = useState<Set<string>>(new Set());
   const [expandedSerialUpdate, setExpandedSerialUpdate] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [overallNotes, setOverallNotes] = useState('');
@@ -324,39 +362,76 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     }));
   }, []);
 
-  // Apply any in-check lot swap to an item so the badge and expiration reflect
-  // the fresher unit that was swapped in (without needing a template re-fetch).
+  // Apply an in-check replacement to an item so the badge, the auto-fail and
+  // the submitted snapshot all reflect the unit now on the truck rather than
+  // the one it replaced. Two sources, in order: a lot swapped from inventory
+  // (which the server already wrote to the template), then an expiration the
+  // crew typed in by hand — the crew reading the box wins over both.
   const applyOverride = useCallback(
     (item: CheckTemplateItem): CheckTemplateItem => {
       const o = swapOverrides[item.id];
-      if (!o) return item;
+      const typedExpiration = results[item.id]?.expirationFound;
+      const corrected = lotEdits[item.id];
+      if (!o && !typedExpiration && !corrected) return item;
       return {
         ...item,
-        ...(o.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
-        ...(o.expirationDate !== undefined ? { hasExpiration: true, expirationDate: o.expirationDate } : {}),
+        ...(corrected ? { lotsAboard: corrected } : {}),
+        ...(o?.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
+        ...(o?.expirationDate !== undefined ? { hasExpiration: true, expirationDate: o.expirationDate } : {}),
+        ...(typedExpiration ? { hasExpiration: true, expirationDate: typedExpiration } : {}),
       };
     },
-    [swapOverrides]
+    [swapOverrides, results, lotEdits]
   );
 
-  const openSwap = useCallback(async (item: CheckTemplateItem) => {
-    if (!item.inventoryItemId) return;
-    setSwapTarget(item);
-    setSwapLots([]);
-    setSwapLoading(true);
+  const openSwap = useCallback(
+    async (item: CheckTemplateItem) => {
+      if (!item.inventoryItemId) return;
+      setSwapTarget(item);
+      setSwapLots([]);
+      setSwapLoading(true);
+      try {
+        const lots = await inventoryService.getItemLots(item.inventoryItemId);
+        // Freshest (latest expiration) first — that's the best unit to swap in.
+        // Stock that expired on the shelf is left out: the server refuses it, and
+        // offering it would only invite a swap that fails the item straight back.
+        const inStock = lots
+          .filter((l) => l.quantity > 0 && !(l.expiration_date && l.expiration_date < today))
+          .sort((a, b) => (b.expiration_date ?? '').localeCompare(a.expiration_date ?? ''));
+        setSwapLots(inStock);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to load ready stock'));
+      } finally {
+        setSwapLoading(false);
+      }
+    },
+    [today]
+  );
+
+  /**
+   * Correct one lot aboard from inside the check.
+   *
+   * This is the reconciliation a check is for: a crew reading a date off a box
+   * that disagrees with the record fixes the record then and there, rather
+   * than passing an item whose stored expiration belongs to a unit no longer
+   * in the bag.
+   */
+  const correctLot = async (
+    item: CheckTemplateItem,
+    lotId: string,
+    changes: { quantity: number; lotNumber?: string; expirationDate?: string }
+  ) => {
+    setLotBusyId(item.id);
     try {
-      const lots = await inventoryService.getItemLots(item.inventoryItemId);
-      // Freshest (latest expiration) first — that's the best unit to swap in.
-      const inStock = lots
-        .filter((l) => l.quantity > 0)
-        .sort((a, b) => (b.expiration_date ?? '').localeCompare(a.expiration_date ?? ''));
-      setSwapLots(inStock);
+      const updated = await schedulingService.updateDeployedLot(item.id, lotId, changes);
+      setLotEdits((prev) => ({ ...prev, [item.id]: updated.lots }));
+      toast.success('Lot updated');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load ready stock'));
+      toast.error(getErrorMessage(err, 'Failed to update the lot'));
     } finally {
-      setSwapLoading(false);
+      setLotBusyId(null);
     }
-  }, []);
+  };
 
   const doSwap = useCallback(
     async (lot: InventoryLot) => {
@@ -371,9 +446,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             ...(res.expirationDate !== undefined ? { expirationDate: res.expirationDate } : {}),
           },
         }));
-        // Record the swapped-in lot as the found lot and clear the auto-fail.
+        // Record the swapped-in lot as the found lot/expiration and clear the
+        // auto-fail — the item on the truck is no longer the expired one.
         updateResult(swapTarget.id, {
           lotFound: res.lotNumber,
+          expirationFound: res.expirationDate,
           status: 'not_checked',
         });
         toast.success('Swapped in fresh stock');
@@ -389,15 +466,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   const toggleNotes = useCallback((itemId: string) => {
     setExpandedNotes((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  }, []);
-
-  const togglePhotos = useCallback((itemId: string) => {
-    setExpandedPhotos((prev) => {
       const next = new Set(prev);
       if (next.has(itemId)) next.delete(itemId);
       else next.add(itemId);
@@ -520,20 +588,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         for (const comp of compartments) {
           for (const item of comp.items) {
             const prev = data[item.id];
-            if (!prev) continue;
-            if (item.checkType === 'quantity' && prev.quantity_found != null) {
-              const required = item.requiredQuantity ?? item.expectedQuantity;
-              seed[item.id] = {
-                status: required != null ? (prev.quantity_found >= required ? 'pass' : 'fail') : 'pass',
-                quantityFound: prev.quantity_found,
-              };
-            } else if ((item.checkType === 'level' || item.checkType === 'reading') && prev.level_reading != null) {
-              const belowMin =
-                item.checkType === 'level' && item.minLevel != null && prev.level_reading < item.minLevel;
-              seed[item.id] = {
-                status: belowMin ? 'fail' : 'pass',
-                levelReading: prev.level_reading,
-              };
+            // The running on-truck count outranks the last check's number: it
+            // carries everything used since, so a crew that pulled two at 03:00
+            // opens this at 2 rather than at the 4 the last check recorded.
+            const known = item.quantityOnTruck ?? prev?.quantity_found;
+            if (item.checkType === 'quantity' && known != null) {
+              // Seeded WITHOUT a status. The number is a starting point, not a
+              // check — marking it pass/fail here would let a crew submit a
+              // complete report having looked at nothing, and the progress
+              // counter would agree with them.
+              seed[item.id] = { status: 'not_checked', quantityFound: known };
+            } else if ((item.checkType === 'level' || item.checkType === 'reading') && prev?.level_reading != null) {
+              seed[item.id] = { status: 'not_checked', levelReading: prev.level_reading };
             }
           }
         }
@@ -595,6 +661,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const hasProgress = checkedItems > 0;
+  // True while any quantity still shows a number nobody has confirmed this
+  // pass; the banner explains those and retires itself once they are gone.
+  const hasCarriedCounts = useMemo(
+    () =>
+      checkableItems.some(
+        (item) => results[item.id]?.quantityFound != null && results[item.id]?.status === 'not_checked'
+      ),
+    [checkableItems, results]
+  );
 
   useEffect(() => {
     if (previewMode || !hasProgress) return;
@@ -672,30 +747,98 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     [updateResult, focusNextItem]
   );
 
-  const passAllInCompartment = useCallback((compartment: CheckTemplateCompartment) => {
-    setResults((prev) => {
-      const next = { ...prev };
-      for (const item of compartment.items) {
-        if (item.checkType === 'header' || item.checkType === 'text') continue;
-        const expStatus = getExpirationStatus(item);
-        if (expStatus === 'expired') continue;
-        const existing = next[item.id];
-        const patch: Partial<ItemResult> = { status: 'pass' };
-        if (item.checkType === 'quantity') {
+  /** Items in this compartment a crew still has to record something for. */
+  const checkableIn = useCallback(
+    (compartment: CheckTemplateCompartment) =>
+      compartment.items.filter(
+        (item) =>
+          item.checkType !== 'header' && item.checkType !== 'text' && getExpirationStatus(item, today) !== 'expired'
+      ),
+    [today]
+  );
+
+  /**
+   * Accept the numbers already shown, without changing any of them.
+   *
+   * The counterpart to setting par, and the one a crew wants far more often:
+   * they have walked the compartment, the carried figures match what is in it,
+   * and a shortfall they can see should stay a shortfall. Status still comes
+   * from the number, so confirming 18 of 24 files a failure rather than
+   * quietly passing it.
+   */
+  const confirmCountsInCompartment = useCallback(
+    (compartment: CheckTemplateCompartment) => {
+      setResults((prev) => {
+        const next = { ...prev };
+        for (const item of checkableIn(compartment)) {
+          const existing = next[item.id];
           const required = item.requiredQuantity ?? item.expectedQuantity;
-          if (required != null) {
-            patch.quantityFound = required;
+          const shown = existing?.quantityFound;
+          const patch: Partial<ItemResult> = { status: 'pass' };
+          if (item.checkType === 'quantity' && required != null) {
+            // Nothing carried means nothing to confirm; leave it for the crew.
+            if (shown == null) continue;
+            patch.status = shown >= required ? 'pass' : 'fail';
           }
+          next[item.id] = { status: 'not_checked', ...existing, ...patch };
         }
-        next[item.id] = {
-          status: 'not_checked',
-          ...existing,
-          ...patch,
-        };
+        return next;
+      });
+    },
+    [checkableIn]
+  );
+
+  /** Quantity positions this compartment would have to *raise* to reach par. */
+  const shortOfPar = useCallback(
+    (compartment: CheckTemplateCompartment) =>
+      checkableIn(compartment).filter((item) => {
+        if (item.checkType !== 'quantity') return false;
+        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const shown = results[item.id]?.quantityFound;
+        return required != null && shown != null && shown < required;
+      }),
+    [checkableIn, results]
+  );
+
+  /**
+   * Assert the whole compartment is at its required quantities.
+   *
+   * This writes par over whatever is shown, which is right when a crew means
+   * it and wrong when they are using it as a fast path — a carried 18 of 24
+   * became a recorded 24, putting six gauze on the record that are not in the
+   * bag. It now says so first, and only when it would actually raise a count;
+   * a compartment already at par is still one tap.
+   */
+  const setCompartmentToPar = useCallback(
+    async (compartment: CheckTemplateCompartment) => {
+      const raising = shortOfPar(compartment);
+      if (raising.length > 0) {
+        const names = raising.map((i) => i.name).join(', ');
+        const ok = await confirm({
+          title: 'Record these at full?',
+          message: `${names} ${raising.length === 1 ? 'is' : 'are'} showing below the required quantity. Setting the compartment to par records ${raising.length === 1 ? 'it' : 'them'} as full — only do this if you have restocked.`,
+          confirmLabel: 'Yes, they are full',
+          cancelLabel: 'Keep the counts',
+          variant: 'warning',
+        });
+        if (!ok) return;
       }
-      return next;
-    });
-  }, []);
+      setResults((prev) => {
+        const next = { ...prev };
+        for (const item of checkableIn(compartment)) {
+          const existing = next[item.id];
+          const patch: Partial<ItemResult> = { status: 'pass' };
+          if (item.checkType === 'quantity') {
+            const required = item.requiredQuantity ?? item.expectedQuantity;
+            if (required != null) patch.quantityFound = required;
+          }
+          next[item.id] = { status: 'not_checked', ...existing, ...patch };
+        }
+        return next;
+      });
+    },
+    [checkableIn, shortOfPar, confirm]
+  );
 
   const hasQuantityItems = useCallback(
     (compartment: CheckTemplateCompartment) => compartment.items.some((item) => item.checkType === 'quantity'),
@@ -736,6 +879,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           // Detect serial/lot updates for date_lot items
           const serialFound = result?.serialFound || undefined;
           const lotFound = result?.lotFound || undefined;
+          const expirationFound = result?.expirationFound || undefined;
 
           if (result?.photoFiles && result.photoFiles.length > 0) {
             itemsWithPhotos.push({
@@ -759,7 +903,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             lot_number: result?.lotNumber || undefined,
             serial_found: serialFound,
             lot_found: lotFound,
-            is_expired: item.hasExpiration && item.expirationDate ? new Date(item.expirationDate) < new Date() : false,
+            expiration_found: expirationFound,
+            is_expired: getExpirationStatus(item, today) === 'expired',
             expiration_date: item.expirationDate || undefined,
             notes: result?.notes || undefined,
           });
@@ -855,8 +1000,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               lot_number: result?.lotNumber || undefined,
               serial_found: result?.serialFound || undefined,
               lot_found: result?.lotFound || undefined,
-              is_expired:
-                item.hasExpiration && item.expirationDate ? new Date(item.expirationDate) < new Date() : false,
+              expiration_found: result?.expirationFound || undefined,
+              is_expired: getExpirationStatus(item, today) === 'expired',
               expiration_date: item.expirationDate || undefined,
               notes: result?.notes || undefined,
             });
@@ -897,7 +1042,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const renderExpirationBadge = (item: CheckTemplateItem) => {
-    const status = getExpirationStatus(item);
+    const status = getExpirationStatus(item, today);
     if (!status) return null;
 
     if (status === 'expired') {
@@ -928,7 +1073,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const renderCheckInput = (item: CheckTemplateItem) => {
     const result = results[item.id];
     const currentStatus = result?.status ?? 'not_checked';
-    const expirationStatus = getExpirationStatus(item);
+    const expirationStatus = getExpirationStatus(item, today);
     const isExpired = expirationStatus === 'expired';
 
     // Auto-fail expired items
@@ -1015,10 +1160,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const isAtPar = required != null && currentQty >= required;
         const isCritical = criticalMin != null && currentQty <= criticalMin;
         const hasBeenSet = result?.quantityFound != null;
+        // Seeded from the running count but not yet affirmed by this crew. The
+        // number is shown so they only correct what changed; it is not a check.
+        const isCarriedOver = hasBeenSet && currentStatus === 'not_checked';
+        const unit = item.unitOfMeasure;
         const prevQty = lastCheckData?.[item.id]?.quantity_found;
 
         const getQtyColor = () => {
-          if (!hasBeenSet) return 'text-theme-text-muted';
+          if (!hasBeenSet || isCarriedOver) return 'text-theme-text-muted';
+          // Expired outranks the count. Two of two expired units meet the
+          // number and are still nothing the crew can use, so this must not
+          // read as the healthy state.
+          if (isExpired) return 'text-red-600 dark:text-red-400 font-bold';
           if (isCritical) return 'text-red-600 dark:text-red-400 font-bold';
           if (!isAtPar) return 'text-orange-500 dark:text-orange-400 font-medium';
           return 'text-green-600 dark:text-green-400 font-medium';
@@ -1037,9 +1190,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             <div className="min-w-0 space-y-0.5 text-xs">
               {expected != null && (
                 <span className={`block ${getQtyColor()}`}>
-                  {hasBeenSet ? currentQty : '—'}/{expected} Expected
+                  {hasBeenSet ? currentQty : '—'}/{expected}
+                  {unit ? ` ${unit}` : ''}
                 </span>
               )}
+
               {hasBeenSet && isCritical && (
                 <span className="block text-[10px] font-semibold text-red-600 dark:text-red-400">
                   CRITICAL — below minimum ({criticalMin})
@@ -1075,6 +1230,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       : 'border-theme-surface-border text-theme-text-primary'
                 }`}
                 value={hasBeenSet ? currentQty : ''}
+                onFocus={() => {
+                  // Touching the field is the crew looking at it. That counts
+                  // as the check for a carried number they agree with, which
+                  // is why no per-row "confirm" prompt is needed.
+                  if (isCarriedOver) setQuantity(currentQty);
+                }}
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val === '') {
@@ -1209,7 +1370,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {showSerialUpdate && (
               <div className="space-y-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
                 <p className="text-xs text-blue-700 dark:text-blue-400">
-                  Enter the new serial/lot numbers. The template will be automatically updated.
+                  Enter the new serial/lot numbers{item.hasExpiration ? ' and expiration' : ''}. The template will be
+                  automatically updated.
                 </p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div>
@@ -1249,6 +1411,27 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       }
                     />
                   </div>
+                  {item.hasExpiration && (
+                    <div>
+                      <label
+                        htmlFor={`new-expiration-${item.id}`}
+                        className="text-theme-text-secondary mb-1 block text-xs"
+                      >
+                        New expiration
+                      </label>
+                      <input
+                        id={`new-expiration-${item.id}`}
+                        type="date"
+                        className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        value={result?.expirationFound ?? ''}
+                        onChange={(e) =>
+                          updateResult(item.id, {
+                            expirationFound: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1404,37 +1587,83 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           >
             <MessageSquare className="h-3 w-3" aria-hidden="true" />
             {showNotesField ? 'Hide' : 'Note'}
-          </button>
-          <button
-            type="button"
-            onClick={() => togglePhotos(item.id)}
-            aria-expanded={expandedPhotos.has(item.id)}
-            className={`flex min-h-[36px] items-center gap-1 text-xs transition-colors ${
-              (result?.photoFiles?.length ?? 0) > 0
-                ? 'font-medium text-blue-600'
-                : 'text-theme-text-muted hover:text-theme-text-secondary'
-            }`}
-          >
-            <Camera className="h-3 w-3" aria-hidden="true" />
-            Photo
             {(result?.photoFiles?.length ?? 0) > 0 && (
-              <span className="text-[10px]">({result?.photoFiles?.length})</span>
+              <span className="inline-flex items-center gap-0.5 font-medium text-blue-600">
+                <Camera className="h-3 w-3" aria-hidden="true" />
+                {result?.photoFiles?.length}
+              </span>
             )}
           </button>
-          {item.inventoryItemId &&
-            (getExpirationStatus(item) === 'expired' || getExpirationStatus(item) === 'expiring_soon') && (
-              <button
-                type="button"
-                onClick={() => {
-                  void openSwap(item);
-                }}
-                className="flex min-h-[36px] items-center gap-1 text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
-              >
-                <Repeat className="h-3 w-3" aria-hidden="true" />
-                Swap
-              </button>
-            )}
+          {/* Offered whenever the item is linked to inventory, not only when it
+              is near its date. Expiry is one reason a unit comes off a truck;
+              used, damaged, contaminated, missing and recalled are the others,
+              and gating on the date left a crew holding an empty bracket with
+              ready stock on the shelf and no way to reach it. */}
+          {item.inventoryItemId && (
+            <button
+              type="button"
+              onClick={() => {
+                void openSwap(item);
+              }}
+              className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors ${
+                getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
+                  ? 'text-blue-600 hover:text-blue-700'
+                  : 'text-theme-text-muted hover:text-theme-text-secondary'
+              }`}
+            >
+              <Repeat className="h-3 w-3" aria-hidden="true" />
+              Swap
+            </button>
+          )}
+          {/* An expiration can be set on any check type, but only date_lot has
+              the serial/lot update panel. Without this, an expired item of any
+              other type could never record its replacement and would fail
+              every check until an admin edited the template. */}
+          {item.checkType !== 'date_lot' && item.hasExpiration && (item.lotsAboard?.length ?? 0) === 0 && (
+            <button
+              type="button"
+              onClick={() => toggleSerialUpdate(item.id)}
+              aria-expanded={expandedSerialUpdate.has(item.id)}
+              className="text-theme-text-muted hover:text-theme-text-secondary flex min-h-[36px] items-center gap-1 text-xs transition-colors"
+            >
+              <Calendar className="h-3 w-3" aria-hidden="true" />
+              {expandedSerialUpdate.has(item.id) ? 'Cancel' : 'Replaced — new date'}
+            </button>
+          )}
         </div>
+        {item.checkType !== 'date_lot' &&
+          item.hasExpiration &&
+          (item.lotsAboard?.length ?? 0) === 0 &&
+          expandedSerialUpdate.has(item.id) && (
+            <div className="space-y-1 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+              <label
+                htmlFor={`replaced-expiration-${item.id}`}
+                className="block text-xs text-blue-700 dark:text-blue-400"
+              >
+                Expiration on the replacement — the template will be updated to match.
+              </label>
+              <input
+                id={`replaced-expiration-${item.id}`}
+                type="date"
+                className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none sm:w-56"
+                value={result?.expirationFound ?? ''}
+                onChange={(e) => updateResult(item.id, { expirationFound: e.target.value })}
+              />
+            </div>
+          )}
+        {(item.lotsAboard?.length ?? 0) > 0 && (
+          <div className="border-theme-surface-border space-y-2 rounded-lg border p-3">
+            <p className="text-theme-text-secondary text-xs font-medium">
+              Lots aboard — check each date against the box
+            </p>
+            <LotsAboardPanel
+              lots={item.lotsAboard ?? []}
+              busy={lotBusyId === item.id}
+              onSave={(lotId, changes) => correctLot(item, lotId, changes)}
+              onRemove={(lotId) => correctLot(item, lotId, { quantity: 0 })}
+            />
+          </div>
+        )}
         {showNotesField && (
           <textarea
             rows={2}
@@ -1445,7 +1674,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             onChange={(e) => updateResult(item.id, { notes: e.target.value })}
           />
         )}
-        {expandedPhotos.has(item.id) && (
+        {/* A photo is evidence for the note beside it, so it opens with the
+            note rather than from a control of its own — four buttons on a row
+            left nothing readable on a phone. */}
+        {showNotesField && (
           <div className="space-y-2">
             {/* Photo thumbnails */}
             {result?.photoUrls && result.photoUrls.length > 0 && (
@@ -1581,21 +1813,47 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   {/* Items — visible when expanded */}
                   {!isCollapsed && (
                     <div className="mt-3 ml-1 space-y-3">
-                      {/* Pass All / Set All to Par */}
+                      {/* Two bulk actions for a compartment that carries
+                          quantities, because "the numbers are right" and "it is
+                          all full" are different claims and only one of them
+                          used to exist. Confirming leads: it is the common case
+                          and the one that cannot record stock nobody has. */}
                       {!previewMode && checked < checkable.length && (
-                        <div className="flex justify-end">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {hasQuantityItems(comp) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                confirmCountsInCompartment(comp);
+                              }}
+                              aria-label={`Confirm the counts shown in ${comp.name}`}
+                              className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium whitespace-nowrap text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              Confirm Counts
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              passAllInCompartment(comp);
+                              if (hasQuantityItems(comp)) {
+                                void setCompartmentToPar(comp);
+                              } else {
+                                confirmCountsInCompartment(comp);
+                              }
                             }}
                             aria-label={
                               hasQuantityItems(comp)
                                 ? `Set all items in ${comp.name} to par`
                                 : `Mark all items in ${comp.name} as passed`
                             }
-                            className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium whitespace-nowrap text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
+                            className={`flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
+                              hasQuantityItems(comp)
+                                ? 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
+                                : 'border-green-500/30 bg-green-500/10 text-green-700 hover:bg-green-500/20 dark:text-green-400'
+                            }`}
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                             {hasQuantityItems(comp) ? 'Set All to Par' : 'Pass All'}
@@ -1741,16 +1999,29 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         </div>
       </div>
 
+      {/* Said once, at the top, rather than on every row it applies to: the
+          carry-over is a standing rule about the whole check, and repeating it
+          per item turned one sentence into sixty pieces of chrome. */}
+      {hasCarriedCounts && (
+        <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-secondary mx-4 mt-3 flex items-start gap-2 rounded-lg border p-3 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+          <span>
+            Counts are carried over from the last recorded count. Change what is different — anything you leave alone
+            still needs a tap to confirm you looked.
+          </span>
+        </div>
+      )}
+
       {/* Content */}
       {renderFlatView()}
 
       {/* Lot swap modal — pick a ready replacement to put on the apparatus */}
       {swapTarget && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
           <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
-                <h3 className="text-theme-text-primary truncate text-sm font-semibold">Swap in fresh stock</h3>
+                <h3 className="text-theme-text-primary truncate text-sm font-semibold">Replace from ready stock</h3>
                 <p className="text-theme-text-muted truncate text-xs">{swapTarget.name}</p>
               </div>
               <button
@@ -1762,7 +2033,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-2 overflow-auto px-4 py-3">
+            <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
               {swapLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />

@@ -345,6 +345,14 @@ class InventoryItemResponse(InventoryItemBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
+    # Ready units across the item's in-date stock lots, and whether it is
+    # stocked that way at all. Lots and `quantity` are separate ledgers, so a
+    # consumable kept as dated stock has a `quantity` nothing maintains; a
+    # display that shows only that column reports a stale number. Null when
+    # the item has no lots — there is nothing to prefer over `quantity`.
+    lot_stock: Optional[int] = None
+    is_lot_stocked: bool = False
+
     model_config = _response_config
 
 
@@ -365,6 +373,22 @@ class InventoryLotBase(BaseModel):
 
 class InventoryLotCreate(InventoryLotBase):
     """Schema for adding a stock lot to an item."""
+
+
+class InventoryLotBulkEntry(InventoryLotBase):
+    """One line of a received shipment: which item, and the lot it arrived as."""
+
+    inventory_item_id: str
+    # A received line with no units is a data-entry slip, not an empty lot: the
+    # base schema's 0 default is right for "I am tracking this lot but have
+    # none left", and wrong for goods coming through the door.
+    quantity: int = Field(..., ge=1)
+
+
+class InventoryLotBulkCreate(BaseModel):
+    """A whole delivery entered at once, one lot per item line."""
+
+    entries: List[InventoryLotBulkEntry] = Field(..., min_length=1, max_length=200)
 
 
 class InventoryLotUpdate(BaseModel):

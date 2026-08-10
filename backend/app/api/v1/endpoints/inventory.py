@@ -95,6 +95,7 @@ from app.schemas.inventory import (
     InventoryItemCreate,
     InventoryItemResponse,
     InventoryItemUpdate,
+    InventoryLotBulkCreate,
     InventoryLotCreate,
     InventoryLotResponse,
     InventoryLotUpdate,
@@ -568,6 +569,10 @@ async def export_items_csv(
             "Manufacturer",
             "Model Number",
             "Quantity",
+            # Lot-stocked consumables carry their real count here; the Quantity
+            # column above is not maintained for them, and an export that shows
+            # only it disagrees with every screen.
+            "Ready Lot Stock",
             "Tracking Type",
             "Purchase Date",
             "Purchase Price",
@@ -600,6 +605,11 @@ async def export_items_csv(
                 item.manufacturer or "",
                 item.model_number or "",
                 item.quantity,
+                (
+                    getattr(item, "lot_stock", None)
+                    if getattr(item, "is_lot_stocked", False)
+                    else ""
+                ),
                 (
                     item.tracking_type.value
                     if hasattr(item.tracking_type, "value")
@@ -5522,6 +5532,33 @@ async def add_item_lot(
     if lot is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return lot
+
+
+@router.post(
+    "/lots/bulk",
+    response_model=list[InventoryLotResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_lots_bulk(
+    data: InventoryLotBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Receive a delivery: add one dated stock lot per item line, in one pass.
+
+    Pre-stocked lots become selectable replacements in the equipment-check
+    swap picker, so a crew pulling an expired or used unit has fresh stock to
+    put on the truck.
+    """
+    service = InventoryService(db)
+    try:
+        return await service.add_lots_bulk(
+            organization_id=str(current_user.organization_id),
+            entries=[e.model_dump(exclude_unset=True) for e in data.entries],
+            created_by=str(current_user.id),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
 @router.patch(

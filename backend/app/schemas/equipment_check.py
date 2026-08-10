@@ -91,6 +91,15 @@ class CheckTemplateItemResponse(UTCResponseBase):
     image_url: Optional[str] = None
     equipment_id: Optional[str] = None
     inventory_item_id: Optional[str] = None
+    quantity_on_truck: Optional[int] = None
+    # Projected from the linked catalog item: "2/4" alone does not say whether
+    # a crew is looking for two boxes or two gloves.
+    unit_of_measure: Optional[str] = None
+    # The lots physically aboard, soonest first. A crew checking a drug bag is
+    # reading dates off boxes; without these the form can only show one date
+    # for a position that may hold three, and there is no way to tell whether
+    # what is in the bag is what the record says.
+    lots_aboard: List["DeployedLot"] = []
     has_expiration: bool
     expiration_date: Optional[date] = None
     expiration_warning_days: int
@@ -249,7 +258,14 @@ class CheckItemResultSubmit(BaseModel):
     lot_number: Optional[str] = Field(None, max_length=100)
     serial_found: Optional[str] = Field(None, max_length=100)
     lot_found: Optional[str] = Field(None, max_length=100)
+    # Expiration read off a unit replaced during this check. Written back onto
+    # the template item alongside lot_found so the truck's record reflects the
+    # unit actually on it.
+    expiration_found: Optional[date] = None
     photo_urls: Optional[List[str]] = None
+    # Advisory only: the server recomputes expiry from the template item (or
+    # expiration_found) so a client cannot pass an expired item by asserting it
+    # is fine. Kept for checks submitted without a template item to resolve.
     is_expired: bool = False
     expiration_date: Optional[date] = None
     notes: Optional[str] = None
@@ -309,6 +325,7 @@ class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     lot_number: Optional[str] = None
     serial_found: Optional[str] = None
     lot_found: Optional[str] = None
+    expiration_found: Optional[date] = None
     updated_serial: bool = False
     photo_urls: Optional[List[str]] = None
     is_expired: bool
@@ -575,6 +592,11 @@ class ReadyLot(BaseModel):
     lot_number: Optional[str] = None
     expiration_date: Optional[date] = None
     quantity: int = 0
+    # Stock can expire on the shelf. Such a lot is still listed so the supply
+    # officer can see and dispose of it, but it is excluded from ready_stock
+    # and refused by the swap endpoint — putting it on a truck would fail the
+    # item on the very next check.
+    is_expired: bool = False
 
 
 class SupplyExpiringItem(BaseModel):
@@ -593,6 +615,15 @@ class SupplyExpiringItem(BaseModel):
     expiration_date: Optional[date] = None
     days_until_expiration: Optional[int] = None
     is_expired: bool = False
+    # An item reaches this worklist either by its date or by a crew reporting
+    # it used; without this the two are indistinguishable in the response, and
+    # a used item has no expiration to explain why it is listed.
+    restock_needed: bool = False
+    restock_note: Optional[str] = None
+    restock_reported_at: Optional[datetime] = None
+    quantity_on_truck: Optional[int] = None
+    target_quantity: Optional[int] = None
+    is_short: bool = False
     inventory_item_id: Optional[str] = None
     inventory_item_name: Optional[str] = None
     ready_stock: int = 0
@@ -609,10 +640,166 @@ class SupplyOverviewResponse(BaseModel):
     items: List[SupplyExpiringItem] = []
 
 
+class DeployedLot(BaseModel):
+    """One lot physically aboard for a checklist position.
+
+    A four-slot bracket can hold units from three lots with three dates; the
+    position's exposure is the earliest of them, which is why these are listed
+    rather than collapsed into one number and one date.
+    """
+
+    model_config = _camel_config
+
+    id: str
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    quantity: int = 0
+    is_expired: bool = False
+
+
+class ItemDeployedLots(BaseModel):
+    """The lots aboard for one position, with the position's totals."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    item_name: str
+    target_quantity: Optional[int] = None
+    quantity_on_truck: Optional[int] = None
+    is_short: bool = False
+    unit_of_measure: Optional[str] = None
+    lots: List[DeployedLot] = []
+
+
+class DeployedLotUpdateRequest(BaseModel):
+    """Correct one lot aboard so the record matches what is in the bag.
+
+    ``lot_number`` and ``expiration_date`` are partial: omitted leaves them
+    alone, an explicit null clears them. A crew changing a drug out enters the
+    new date here, which is what keeps the application and the bag saying the
+    same thing.
+    """
+
+    quantity: int = Field(..., ge=0)
+    lot_number: Optional[str] = Field(None, max_length=100)
+    expiration_date: Optional[date] = None
+
+
+class ApparatusInventoryItem(BaseModel):
+    """One tracked position on an apparatus, with the stock behind it."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    item_name: str
+    check_type: Optional[str] = None
+    # What the position should hold, and what it actually holds. The second is
+    # NULL-backed on the model but never null here: an uncounted item reads as
+    # its target, because the record of what was stocked is the best answer
+    # until a crew contradicts it.
+    target_quantity: Optional[int] = None
+    quantity_on_truck: Optional[int] = None
+    is_short: bool = False
+    unit_of_measure: Optional[str] = None
+    deployed_lots: List[DeployedLot] = []
+    serial_number: Optional[str] = None
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    days_until_expiration: Optional[int] = None
+    is_expired: bool = False
+    restock_needed: bool = False
+    restock_note: Optional[str] = None
+    restock_reported_at: Optional[datetime] = None
+    restock_reported_by_name: Optional[str] = None
+    inventory_item_id: Optional[str] = None
+    ready_stock: int = 0
+    ready_lots: List[ReadyLot] = []
+
+
+class ApparatusInventoryCompartment(BaseModel):
+    """A compartment's worth of tracked positions."""
+
+    model_config = _camel_config
+
+    compartment_id: str
+    compartment_name: str
+    items: List[ApparatusInventoryItem] = []
+
+
+class ApparatusInventoryResponse(BaseModel):
+    """What an apparatus is carrying right now.
+
+    Read at any hour, outside any check — the standing view a crew uses to
+    record what they just used and to put fresh stock in a bracket.
+    """
+
+    model_config = _camel_config
+
+    apparatus_id: str
+    apparatus_name: Optional[str] = None
+    compartments: List[ApparatusInventoryCompartment] = []
+
+
+class ItemUsedRequest(BaseModel):
+    """Report that a checklist item was used or pulled off the truck."""
+
+    note: Optional[str] = Field(None, max_length=500)
+    # Omitted for a position that is not counted (a single tool, a pass/fail
+    # inspection), where the report itself is the whole message.
+    quantity_used: Optional[int] = Field(None, ge=1)
+
+
+class ItemQuantityRequest(BaseModel):
+    """Set the on-truck count outright — a recount, or a hand restock."""
+
+    quantity: int = Field(..., ge=0)
+
+
+class ItemRestockStateResponse(BaseModel):
+    """Where a checklist item stands after a use, restock or recount."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    restock_needed: bool = False
+    restock_note: Optional[str] = None
+    restock_reported_at: Optional[datetime] = None
+    quantity_on_truck: Optional[int] = None
+    target_quantity: Optional[int] = None
+    is_short: bool = False
+
+
+class ItemDeployment(BaseModel):
+    """A checklist position on an apparatus that an inventory item fills.
+
+    The supply view answers "what is expiring on my trucks"; this answers the
+    same link from the other side — "which trucks carry this item" — which is
+    the direction a recall or an expiring lot is actually worked from.
+    """
+
+    model_config = _camel_config
+
+    template_item_id: str
+    item_name: str
+    compartment_name: Optional[str] = None
+    template_id: Optional[str] = None
+    template_name: Optional[str] = None
+    apparatus_id: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    apparatus_type: Optional[str] = None
+    lot_number: Optional[str] = None
+    serial_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    days_until_expiration: Optional[int] = None
+    is_expired: bool = False
+
+
 class LotSwapRequest(BaseModel):
-    """Swap a ready-stock lot onto the apparatus for a checklist item."""
+    """Move units from a ready-stock lot onto the apparatus."""
 
     inventory_lot_id: str
+    # Defaults to one, which is the whole story for a single-unit bracket.
+    quantity: int = Field(1, ge=1)
 
 
 class LotSwapResponse(BaseModel):
@@ -624,3 +811,12 @@ class LotSwapResponse(BaseModel):
     lot_number: Optional[str] = None
     expiration_date: Optional[date] = None
     remaining_quantity: int = 0
+    # A full restock settles the report; a partial one leaves it standing,
+    # because the truck is still short.
+    restock_needed: bool = False
+    quantity_on_truck: Optional[int] = None
+
+
+# CheckTemplateItemResponse references DeployedLot, which is declared with the
+# supply schemas further down; bind the forward reference now that it exists.
+CheckTemplateItemResponse.model_rebuild()

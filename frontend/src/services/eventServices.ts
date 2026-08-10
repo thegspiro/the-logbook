@@ -760,6 +760,17 @@ export interface InventoryItem {
   quantity_issued: number;
   unit_of_measure?: string;
   reorder_point?: number;
+  /**
+   * Ready units across the item's in-date stock lots.
+   *
+   * Lots and `quantity` are separate ledgers — receiving a lot does not touch
+   * `quantity`, and an equipment-check swap decrements only the lot — so for a
+   * consumable kept as dated stock this is the real count and `quantity` is
+   * whatever it was last set to. Null when the item has no lots.
+   */
+  lot_stock?: number | null;
+  /** True when the item is stocked as lots, so `lot_stock` is the count to show. */
+  is_lot_stocked?: boolean;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;
@@ -1568,6 +1579,11 @@ export interface InventoryLotCreate {
   quantity: number;
   received_date?: string | undefined;
   notes?: string | undefined;
+}
+
+/** One line of a received delivery: which item, and the lot it arrived as. */
+export interface InventoryLotBulkEntry extends InventoryLotCreate {
+  inventory_item_id: string;
 }
 
 export interface InventoryLotUpdate {

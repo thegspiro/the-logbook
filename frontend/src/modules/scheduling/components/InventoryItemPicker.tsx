@@ -14,9 +14,15 @@ import { inventoryService } from '@/services/inventoryService';
 interface InventoryItemPickerProps {
   value?: string | undefined;
   onChange: (id: string | undefined, name?: string) => void;
+  /** Overrides the link-specific wording for other uses (e.g. receiving stock). */
+  placeholder?: string;
 }
 
-const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChange }) => {
+const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
+  value,
+  onChange,
+  placeholder = 'Search inventory to link…',
+}) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ id: string; name: string; sub?: string }[]>([]);
   const [open, setOpen] = useState(false);
@@ -122,7 +128,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
           spellCheck={false}
           type="text"
           className="text-theme-text-primary placeholder:text-theme-text-muted min-w-0 flex-1 bg-transparent text-sm outline-none"
-          placeholder="Search inventory to link…"
+          placeholder={placeholder}
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           onFocus={() => setOpen(true)}
