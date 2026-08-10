@@ -1265,19 +1265,20 @@ The inventory admin dashboard has been redesigned with **grouped card sections**
 
 ### New Layout
 
-The admin hub now organizes pages into logical groups:
+The hub opens with a low-stock banner (when anything is under its threshold),
+three headline cards — **Items**, **Members** and **Checkouts**, each carrying
+its own figure — and then the rest of the pages in three groups:
 
-| Group                     | Pages                                                                     |
-| ------------------------- | ------------------------------------------------------------------------- |
-| **Items & Stock**         | Manage Items, Pool Items, Categories, Variant Groups                      |
-| **Equipment Kits**        | Equipment Kits management                                                 |
-| **Member Equipment**      | Members Inventory, Active Checkouts                                       |
-| **Requests & Workflows**  | Equipment Requests, Return Requests, Write-Off Requests, Reorder Requests |
-| **Maintenance & Reports** | Maintenance Records, Charges & Fees                                       |
-| **Import & Labels**       | CSV Import, Barcode Label Printing                                        |
+| Group                    | Pages                                                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| **Inventory Management** | Pool Items, Categories, Equipment Kits, Variant Groups, Issuance Allowances, Impact Planner, Maintenance, Storage Areas |
+| **Requests & Workflows** | Equipment Requests, Return Requests, Charges, Write-Offs, Reorder Requests, Expiring on Apparatus                       |
+| **Tools**                | Import / Export, Department Store                                                                                       |
 
-> **Screenshot needed:**
-> _[Screenshot of the redesigned Inventory Admin Hub showing grouped card sections — "Items & Stock" group with Manage Items, Pool Items, Categories, and Variant Groups cards, each with an icon, title, and item count badge]_
+Only the cards with something outstanding carry a count — Reorder Requests
+shows how many are pending, the rest are plain links.
+
+![The inventory admin hub with its cards grouped into sections](./images/05-60-admin-hub-groups.png)
 
 ### New Admin Pages
 
@@ -1350,10 +1351,11 @@ The Storage Areas page now shows the **actual inventory items** assigned to each
 
 ### Barcode and Asset Tag Always Visible
 
-The item detail page now **always shows** barcode and asset tag fields, displaying `--` as a placeholder when no value is set. Previously, these fields were hidden when empty, making it unclear whether the item had been assigned a barcode.
+The item detail page now **always shows** the Barcode and Asset Tag fields — they sit in the **Basic Info** card alongside name, category and status — displaying `--` when no value is set. Previously they were hidden when empty, making it unclear whether the item had been assigned a barcode at all. The same `--` convention runs through the other cards, so an item with no recorded size or colour reads as blank rather than as missing sections.
 
-> **Screenshot needed:**
-> _[Screenshot of an item detail page sidebar showing the barcode field with a Code128 barcode image, the asset tag field showing "AT-2024-001", and below them a second item with barcode showing "--" and asset tag showing "--"]_
+The barcode is printed rather than drawn here: **Print Barcode** in the page header opens the label page. The detail view shows the number, not an image of the code.
+
+![An item's barcode and asset tag on its detail page](./images/05-61-item-barcode-fields.png)
 
 ### Barcode Numbering
 

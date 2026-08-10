@@ -529,6 +529,32 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "05-60-admin-hub-groups",
+    doc: "05-inventory.md",
+    line: 1279,
+    anchor:
+      "Screenshot of the Inventory Admin hub showing the low-stock banner",
+    alt: "The inventory admin hub with its cards grouped into sections",
+    route: "/inventory/admin",
+    fullPage: true,
+  },
+  {
+    id: "05-61-item-barcode-fields",
+    doc: "05-inventory.md",
+    line: 1355,
+    anchor:
+      "Screenshot of an item detail page showing Barcode and Asset Tag in its",
+    alt: "An item's barcode and asset tag on its detail page",
+    route: "/inventory/items",
+    prepare: openFirstFromApi(
+      "/inventory/items?limit=20",
+      (id) => `/inventory/items/${id}`,
+      "items",
+      (item) => Boolean(item.asset_tag ?? item.assetTag),
+    ),
+    fullPage: false,
+  },
+  {
     id: "02-79-training-attachments",
     doc: "02-training.md",
     line: 1591,
