@@ -31,6 +31,7 @@ from app.models.training import (
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 
 
@@ -400,9 +401,11 @@ class EquipmentCheckService:
         # (inventory_item_id is name-projected in get_my_checklists).
         await self._validate_item_fks(data, organization_id)
 
-        for key, value in data.items():
-            if key not in self.PROTECTED_FIELDS and hasattr(item, key):
-                setattr(item, key, value)
+        # apply_updates rather than a setattr loop: the builder clears an
+        # expiration or unlinks an inventory item by sending an explicit null,
+        # and a null aimed at a NOT NULL column has to surface as a 400 instead
+        # of a flush-time IntegrityError.
+        apply_updates(item, data, skip=self.PROTECTED_FIELDS)
 
         await self.db.commit()
         await self.db.refresh(item)
@@ -545,14 +548,51 @@ class EquipmentCheckService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _resolve_expiration(
+        item_data: Dict[str, Any],
+        tmpl_item: Optional[CheckTemplateItem],
+    ) -> Optional[date]:
+        """The expiration that governs this item result, newest source wins.
+
+        ``expiration_found`` is what the crew read off a unit they replaced
+        during the check and therefore supersedes the template's stored date.
+        Otherwise the template is authoritative: it is the department's record
+        of what is on the truck, and it is what the supply worklist and the
+        next check will both read. The client's own ``expiration_date`` is only
+        consulted when no template item resolves (a check submitted with no
+        template linkage at all).
+        """
+        found = item_data.get("expiration_found")
+        if found:
+            return found
+        if tmpl_item is not None:
+            return tmpl_item.expiration_date if tmpl_item.has_expiration else None
+        return item_data.get("expiration_date")
+
+    @classmethod
     def _compute_check_status(
+        cls,
         items_data: List[Dict[str, Any]],
+        template_items_map: Optional[Dict[str, CheckTemplateItem]] = None,
     ) -> tuple:
         """Auto-fail expired/under-quantity items and compute aggregate counts.
 
+        Expiry is recomputed here rather than taken from the submitted
+        ``is_expired`` flag: it decides whether a safety-critical item is
+        force-failed, so it must come from the department's own record (or from
+        the replacement the crew just logged), not from whatever the client
+        asserted. ``item["is_expired"]`` and ``item["expiration_date"]`` are
+        normalized in place so the stored result agrees with the verdict.
+
         Returns (total, completed, failed, overall_status).
         """
+        today = date.today()
+        template_items_map = template_items_map or {}
         for item in items_data:
+            tmpl_item = template_items_map.get(item.get("template_item_id") or "")
+            expiration = cls._resolve_expiration(item, tmpl_item)
+            item["expiration_date"] = expiration
+            item["is_expired"] = bool(expiration and expiration < today)
             if item.get("is_expired"):
                 item["status"] = "fail"
             req_qty = item.get("required_quantity")
@@ -573,6 +613,45 @@ class EquipmentCheckService:
 
         return total, completed, failed, overall_status
 
+    @staticmethod
+    def _apply_found_values_to_template(
+        tmpl_item: Optional[CheckTemplateItem],
+        *,
+        serial_found: Optional[str] = None,
+        lot_found: Optional[str] = None,
+        expiration_found: Optional[date] = None,
+    ) -> bool:
+        """Write a swapped-in unit's identifiers back onto the template item.
+
+        The template row is the department's record of what is physically on
+        the apparatus, so a replacement logged during a check has to land there
+        — the next check, the expiry auto-fail and the supply worklist all read
+        it. The expiration in particular: without it a replaced unit keeps the
+        old date and fails every check from then on.
+
+        Returns True when the template actually changed.
+        """
+        if tmpl_item is None:
+            return False
+        serial_changed = serial_found and serial_found != (
+            tmpl_item.serial_number or ""
+        )
+        lot_changed = lot_found and lot_found != (tmpl_item.lot_number or "")
+        expiration_changed = (
+            expiration_found and expiration_found != tmpl_item.expiration_date
+        )
+        if not (serial_changed or lot_changed or expiration_changed):
+            return False
+
+        if serial_found:
+            tmpl_item.serial_number = serial_found
+        if lot_found:
+            tmpl_item.lot_number = lot_found
+        if expiration_found:
+            tmpl_item.has_expiration = True
+            tmpl_item.expiration_date = expiration_found
+        return True
+
     async def _create_check_items(
         self,
         check_id: str,
@@ -585,23 +664,14 @@ class EquipmentCheckService:
             tmpl_item_id = item_data.get("template_item_id")
             serial_found = item_data.get("serial_found")
             lot_found = item_data.get("lot_found")
-            updated_serial = False
+            expiration_found = item_data.get("expiration_found")
 
-            if tmpl_item_id and (serial_found or lot_found):
-                tmpl_item = template_items_map.get(tmpl_item_id)
-                if tmpl_item:
-                    serial_changed = serial_found and serial_found != (
-                        tmpl_item.serial_number or ""
-                    )
-                    lot_changed = lot_found and lot_found != (
-                        tmpl_item.lot_number or ""
-                    )
-                    if serial_changed or lot_changed:
-                        updated_serial = True
-                        if serial_found:
-                            tmpl_item.serial_number = serial_found
-                        if lot_found:
-                            tmpl_item.lot_number = lot_found
+            updated_serial = self._apply_found_values_to_template(
+                template_items_map.get(tmpl_item_id) if tmpl_item_id else None,
+                serial_found=serial_found,
+                lot_found=lot_found,
+                expiration_found=expiration_found,
+            )
 
             check_item = ShiftEquipmentCheckItem(
                 id=generate_uuid(),
@@ -620,6 +690,7 @@ class EquipmentCheckService:
                 lot_number=item_data.get("lot_number"),
                 serial_found=serial_found,
                 lot_found=lot_found,
+                expiration_found=expiration_found,
                 updated_serial=updated_serial,
                 photo_urls=item_data.get("photo_urls"),
                 is_expired=item_data.get("is_expired", False),
@@ -748,8 +819,14 @@ class EquipmentCheckService:
                     "been submitted for this shift"
                 )
 
+        # Loaded before the status computation, not after: expiry is decided
+        # from the template item (see _compute_check_status), so the map has to
+        # exist before any item can be force-failed.
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
         total, completed, failed, overall_status = self._compute_check_status(
-            items_data
+            items_data, template_items_map
         )
 
         # shifts.apparatus_id is polymorphic — it holds an apparatus.id for a
@@ -800,9 +877,6 @@ class EquipmentCheckService:
                     f"Items do not belong to template: " f"{', '.join(invalid)}"
                 )
 
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id
-        )
         await self._create_check_items(check.id, items_data, template_items_map)
 
         await self._update_apparatus_deficiency(
@@ -891,8 +965,13 @@ class EquipmentCheckService:
         if not items_data:
             raise ValueError("At least one checklist item is required")
 
+        # See submit_check: the template map decides expiry, so it is loaded
+        # before the status computation rather than just before the write.
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
         total, completed, failed, overall_status = self._compute_check_status(
-            items_data
+            items_data, template_items_map
         )
 
         check = ShiftEquipmentCheck(
@@ -915,9 +994,6 @@ class EquipmentCheckService:
         self.db.add(check)
         await self.db.flush()
 
-        template_items_map = await self._load_template_items_map(
-            items_data, organization_id
-        )
         await self._create_check_items(check.id, items_data, template_items_map)
 
         await self._update_apparatus_deficiency(
@@ -970,6 +1046,14 @@ class EquipmentCheckService:
             item.template_item_id: item for item in check.items if item.template_item_id
         }
 
+        # A replacement logged while finishing an incomplete check has to reach
+        # the template too — otherwise which write path the crew happened to
+        # take decides whether the truck's record gets updated.
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
+        today = date.today()
+
         for item_data in items_data:
             tmpl_id = item_data.get("template_item_id")
             existing = existing_map.get(tmpl_id) if tmpl_id else None
@@ -988,7 +1072,28 @@ class EquipmentCheckService:
                     "serial_found", existing.serial_found
                 )
                 existing.lot_found = item_data.get("lot_found", existing.lot_found)
-                existing.is_expired = item_data.get("is_expired", existing.is_expired)
+                existing.expiration_found = (
+                    item_data.get("expiration_found") or existing.expiration_found
+                )
+
+                tmpl_item = template_items_map.get(tmpl_id or "")
+                if self._apply_found_values_to_template(
+                    tmpl_item,
+                    serial_found=existing.serial_found,
+                    lot_found=existing.lot_found,
+                    expiration_found=existing.expiration_found,
+                ):
+                    existing.updated_serial = True
+
+                expiration = self._resolve_expiration(
+                    {
+                        "expiration_found": existing.expiration_found,
+                        "expiration_date": existing.expiration_date,
+                    },
+                    tmpl_item,
+                )
+                existing.expiration_date = expiration
+                existing.is_expired = bool(expiration and expiration < today)
 
         all_items = check.items
         # Re-apply the same auto-fail rule the initial submit uses
@@ -1220,6 +1325,9 @@ class EquipmentCheckService:
                 "level_reading": item.level_reading,
                 "serial_number": item.serial_number,
                 "lot_number": item.lot_number,
+                # Prefilled so a crew reading a date off the unit sees what the
+                # last crew recorded and only has to correct a mismatch.
+                "expiration_date": item.expiration_date,
                 "notes": item.notes,
             }
 
@@ -1391,13 +1499,24 @@ class EquipmentCheckService:
                         if item.inventory_item_id
                         else None
                     ),
-                    "ready_stock": sum(lot.quantity for lot in lots),
+                    # Stock that has itself expired on the shelf is not ready
+                    # stock: swapping it in would fail the item on the next
+                    # check. It stays in ready_lots (so the officer can see and
+                    # pull it) but must not mask a restock need.
+                    "ready_stock": sum(
+                        lot.quantity
+                        for lot in lots
+                        if not (lot.expiration_date and lot.expiration_date < today)
+                    ),
                     "ready_lots": [
                         {
                             "id": lot.id,
                             "lot_number": lot.lot_number,
                             "expiration_date": lot.expiration_date,
                             "quantity": lot.quantity,
+                            "is_expired": bool(
+                                lot.expiration_date and lot.expiration_date < today
+                            ),
                         }
                         for lot in lots
                     ],
@@ -1457,6 +1576,10 @@ class EquipmentCheckService:
             raise ValueError("This stock lot is for a different inventory item")
         if lot.quantity < 1:
             raise ValueError("No stock available in this lot")
+        if lot.expiration_date and lot.expiration_date < date.today():
+            # Deploying expired stock would fail the item on the next check and
+            # put expired supplies in service; refuse rather than record it.
+            raise ValueError("This stock lot has expired and cannot be deployed")
 
         lot.quantity -= 1
         # Establish the catalog link if this was the item's first swap.
@@ -1592,6 +1715,10 @@ class EquipmentCheckService:
                 id=generate_uuid(),
                 compartment_id=compartment.id,
                 equipment_id=item.equipment_id,
+                # Without this the clone loses its catalog link, and with it
+                # the ready-stock view and the ability to swap a fresh lot in —
+                # cloning is how a department stands up the second engine.
+                inventory_item_id=item.inventory_item_id,
                 name=item.name,
                 description=item.description,
                 sort_order=item.sort_order,

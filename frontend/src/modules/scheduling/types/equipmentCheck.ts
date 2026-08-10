@@ -268,6 +268,8 @@ export interface CheckItemResultSubmit {
   lot_number?: string | undefined;
   serial_found?: string | undefined;
   lot_found?: string | undefined;
+  /** Expiration read off a replacement unit; written back onto the template. */
+  expiration_found?: string | undefined;
   photo_urls?: string[] | undefined;
   is_expired?: boolean | undefined;
   expiration_date?: string | undefined;
@@ -312,6 +314,7 @@ export interface ShiftEquipmentCheckItemRecord {
   lotNumber?: string;
   serialFound?: string;
   lotFound?: string;
+  expirationFound?: string;
   updatedSerial?: boolean;
   photoUrls?: string[];
   isExpired: boolean;
@@ -376,6 +379,7 @@ export interface LastCheckItemResult {
   level_reading?: number;
   serial_number?: string;
   lot_number?: string;
+  expiration_date?: string;
   notes?: string;
 }
 
@@ -451,6 +455,8 @@ export interface ReadyLot {
   lotNumber?: string;
   expirationDate?: string;
   quantity: number;
+  /** Stock that expired on the shelf: listed, but not swappable onto a truck. */
+  isExpired?: boolean;
 }
 
 export interface SupplyExpiringItem {

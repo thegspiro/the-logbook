@@ -294,10 +294,19 @@ const SupplyExpiringPage: React.FC = () => {
                     {item.readyLots.map((lot) => (
                       <span
                         key={lot.id}
-                        className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]"
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] ${
+                          lot.isExpired
+                            ? 'border-red-500/30 bg-red-500/10 text-red-700 line-through dark:text-red-400'
+                            : 'border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted'
+                        }`}
+                        // Expired shelf stock is shown so it can be pulled and
+                        // disposed of, but it is excluded from the ready count
+                        // and refused by the swap — it is not a replacement.
+                        title={lot.isExpired ? 'Expired — cannot be deployed' : undefined}
                       >
                         {lot.lotNumber || 'No lot'} · {lot.quantity}×
                         {lot.expirationDate ? ` · ${formatDate(lot.expirationDate, tz)}` : ''}
+                        {lot.isExpired ? ' · expired' : ''}
                       </span>
                     ))}
                   </div>

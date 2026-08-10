@@ -41,7 +41,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLot } from '../../services/eventServices';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { formatDate } from '../../utils/dateFormatting';
+import { formatDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import {
@@ -87,6 +87,7 @@ interface ItemResult {
   lotNumber?: string | undefined;
   serialFound?: string | undefined;
   lotFound?: string | undefined;
+  expirationFound?: string | undefined;
   photoUrls?: string[] | undefined;
   photoFiles?: File[] | undefined;
   notes?: string | undefined;
@@ -96,16 +97,24 @@ interface ItemResult {
 // Helpers
 // ============================================================================
 
-function getExpirationStatus(item: CheckTemplateItem): 'ok' | 'expiring_soon' | 'expired' | null {
+/**
+ * Expiry verdict for a checklist item, as YYYY-MM-DD calendar-day comparison.
+ *
+ * `today` is the local (org-timezone) date so the answer matches the backend's
+ * `expiration_date < today`, which is what actually force-fails the item on
+ * submit. Parsing the date-only string into a `Date` instead would put it at
+ * UTC midnight and call an item expired on its own expiry day in any timezone
+ * behind UTC — the badge would say EXPIRED while the server passed it.
+ */
+function getExpirationStatus(item: CheckTemplateItem, today: string): 'ok' | 'expiring_soon' | 'expired' | null {
   if (!item.hasExpiration || !item.expirationDate) return null;
 
-  const now = new Date();
-  const expDate = new Date(item.expirationDate);
-
-  if (expDate < now) return 'expired';
+  const expDate = item.expirationDate.slice(0, 10);
+  if (expDate < today) return 'expired';
 
   const warningMs = (item.expirationWarningDays ?? 30) * 24 * 60 * 60 * 1000;
-  if (expDate.getTime() - now.getTime() < warningMs) return 'expiring_soon';
+  const daysOut = Date.parse(`${expDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`);
+  if (daysOut < warningMs) return 'expiring_soon';
 
   return 'ok';
 }
@@ -174,6 +183,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 }) => {
   const { confirm } = useConfirm();
   const tz = useTimezone();
+  // Calendar day in the org's timezone — the reference every expiry check in
+  // this form compares against, so the badge, the auto-fail and the server all
+  // agree on what "expired" means.
+  const today = useMemo(() => getTodayLocalDate(tz), [tz]);
   const [results, setResults] = useState<Record<string, ItemResult>>({});
   // Lot swaps performed during this check: override the deployed item's lot /
   // expiration so the badge reflects the fresher unit that was swapped in.
@@ -324,39 +337,49 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     }));
   }, []);
 
-  // Apply any in-check lot swap to an item so the badge and expiration reflect
-  // the fresher unit that was swapped in (without needing a template re-fetch).
+  // Apply an in-check replacement to an item so the badge, the auto-fail and
+  // the submitted snapshot all reflect the unit now on the truck rather than
+  // the one it replaced. Two sources, in order: a lot swapped from inventory
+  // (which the server already wrote to the template), then an expiration the
+  // crew typed in by hand — the crew reading the box wins over both.
   const applyOverride = useCallback(
     (item: CheckTemplateItem): CheckTemplateItem => {
       const o = swapOverrides[item.id];
-      if (!o) return item;
+      const typedExpiration = results[item.id]?.expirationFound;
+      if (!o && !typedExpiration) return item;
       return {
         ...item,
-        ...(o.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
-        ...(o.expirationDate !== undefined ? { hasExpiration: true, expirationDate: o.expirationDate } : {}),
+        ...(o?.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
+        ...(o?.expirationDate !== undefined ? { hasExpiration: true, expirationDate: o.expirationDate } : {}),
+        ...(typedExpiration ? { hasExpiration: true, expirationDate: typedExpiration } : {}),
       };
     },
-    [swapOverrides]
+    [swapOverrides, results]
   );
 
-  const openSwap = useCallback(async (item: CheckTemplateItem) => {
-    if (!item.inventoryItemId) return;
-    setSwapTarget(item);
-    setSwapLots([]);
-    setSwapLoading(true);
-    try {
-      const lots = await inventoryService.getItemLots(item.inventoryItemId);
-      // Freshest (latest expiration) first — that's the best unit to swap in.
-      const inStock = lots
-        .filter((l) => l.quantity > 0)
-        .sort((a, b) => (b.expiration_date ?? '').localeCompare(a.expiration_date ?? ''));
-      setSwapLots(inStock);
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load ready stock'));
-    } finally {
-      setSwapLoading(false);
-    }
-  }, []);
+  const openSwap = useCallback(
+    async (item: CheckTemplateItem) => {
+      if (!item.inventoryItemId) return;
+      setSwapTarget(item);
+      setSwapLots([]);
+      setSwapLoading(true);
+      try {
+        const lots = await inventoryService.getItemLots(item.inventoryItemId);
+        // Freshest (latest expiration) first — that's the best unit to swap in.
+        // Stock that expired on the shelf is left out: the server refuses it, and
+        // offering it would only invite a swap that fails the item straight back.
+        const inStock = lots
+          .filter((l) => l.quantity > 0 && !(l.expiration_date && l.expiration_date < today))
+          .sort((a, b) => (b.expiration_date ?? '').localeCompare(a.expiration_date ?? ''));
+        setSwapLots(inStock);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to load ready stock'));
+      } finally {
+        setSwapLoading(false);
+      }
+    },
+    [today]
+  );
 
   const doSwap = useCallback(
     async (lot: InventoryLot) => {
@@ -371,9 +394,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             ...(res.expirationDate !== undefined ? { expirationDate: res.expirationDate } : {}),
           },
         }));
-        // Record the swapped-in lot as the found lot and clear the auto-fail.
+        // Record the swapped-in lot as the found lot/expiration and clear the
+        // auto-fail — the item on the truck is no longer the expired one.
         updateResult(swapTarget.id, {
           lotFound: res.lotNumber,
+          expirationFound: res.expirationDate,
           status: 'not_checked',
         });
         toast.success('Swapped in fresh stock');
@@ -672,30 +697,33 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     [updateResult, focusNextItem]
   );
 
-  const passAllInCompartment = useCallback((compartment: CheckTemplateCompartment) => {
-    setResults((prev) => {
-      const next = { ...prev };
-      for (const item of compartment.items) {
-        if (item.checkType === 'header' || item.checkType === 'text') continue;
-        const expStatus = getExpirationStatus(item);
-        if (expStatus === 'expired') continue;
-        const existing = next[item.id];
-        const patch: Partial<ItemResult> = { status: 'pass' };
-        if (item.checkType === 'quantity') {
-          const required = item.requiredQuantity ?? item.expectedQuantity;
-          if (required != null) {
-            patch.quantityFound = required;
+  const passAllInCompartment = useCallback(
+    (compartment: CheckTemplateCompartment) => {
+      setResults((prev) => {
+        const next = { ...prev };
+        for (const item of compartment.items) {
+          if (item.checkType === 'header' || item.checkType === 'text') continue;
+          const expStatus = getExpirationStatus(item, today);
+          if (expStatus === 'expired') continue;
+          const existing = next[item.id];
+          const patch: Partial<ItemResult> = { status: 'pass' };
+          if (item.checkType === 'quantity') {
+            const required = item.requiredQuantity ?? item.expectedQuantity;
+            if (required != null) {
+              patch.quantityFound = required;
+            }
           }
+          next[item.id] = {
+            status: 'not_checked',
+            ...existing,
+            ...patch,
+          };
         }
-        next[item.id] = {
-          status: 'not_checked',
-          ...existing,
-          ...patch,
-        };
-      }
-      return next;
-    });
-  }, []);
+        return next;
+      });
+    },
+    [today]
+  );
 
   const hasQuantityItems = useCallback(
     (compartment: CheckTemplateCompartment) => compartment.items.some((item) => item.checkType === 'quantity'),
@@ -736,6 +764,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           // Detect serial/lot updates for date_lot items
           const serialFound = result?.serialFound || undefined;
           const lotFound = result?.lotFound || undefined;
+          const expirationFound = result?.expirationFound || undefined;
 
           if (result?.photoFiles && result.photoFiles.length > 0) {
             itemsWithPhotos.push({
@@ -759,7 +788,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             lot_number: result?.lotNumber || undefined,
             serial_found: serialFound,
             lot_found: lotFound,
-            is_expired: item.hasExpiration && item.expirationDate ? new Date(item.expirationDate) < new Date() : false,
+            expiration_found: expirationFound,
+            is_expired: getExpirationStatus(item, today) === 'expired',
             expiration_date: item.expirationDate || undefined,
             notes: result?.notes || undefined,
           });
@@ -855,8 +885,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               lot_number: result?.lotNumber || undefined,
               serial_found: result?.serialFound || undefined,
               lot_found: result?.lotFound || undefined,
-              is_expired:
-                item.hasExpiration && item.expirationDate ? new Date(item.expirationDate) < new Date() : false,
+              expiration_found: result?.expirationFound || undefined,
+              is_expired: getExpirationStatus(item, today) === 'expired',
               expiration_date: item.expirationDate || undefined,
               notes: result?.notes || undefined,
             });
@@ -897,7 +927,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const renderExpirationBadge = (item: CheckTemplateItem) => {
-    const status = getExpirationStatus(item);
+    const status = getExpirationStatus(item, today);
     if (!status) return null;
 
     if (status === 'expired') {
@@ -928,7 +958,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const renderCheckInput = (item: CheckTemplateItem) => {
     const result = results[item.id];
     const currentStatus = result?.status ?? 'not_checked';
-    const expirationStatus = getExpirationStatus(item);
+    const expirationStatus = getExpirationStatus(item, today);
     const isExpired = expirationStatus === 'expired';
 
     // Auto-fail expired items
@@ -1209,7 +1239,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {showSerialUpdate && (
               <div className="space-y-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
                 <p className="text-xs text-blue-700 dark:text-blue-400">
-                  Enter the new serial/lot numbers. The template will be automatically updated.
+                  Enter the new serial/lot numbers{item.hasExpiration ? ' and expiration' : ''}. The template will be
+                  automatically updated.
                 </p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div>
@@ -1249,6 +1280,27 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       }
                     />
                   </div>
+                  {item.hasExpiration && (
+                    <div>
+                      <label
+                        htmlFor={`new-expiration-${item.id}`}
+                        className="text-theme-text-secondary mb-1 block text-xs"
+                      >
+                        New expiration
+                      </label>
+                      <input
+                        id={`new-expiration-${item.id}`}
+                        type="date"
+                        className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        value={result?.expirationFound ?? ''}
+                        onChange={(e) =>
+                          updateResult(item.id, {
+                            expirationFound: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1422,7 +1474,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             )}
           </button>
           {item.inventoryItemId &&
-            (getExpirationStatus(item) === 'expired' || getExpirationStatus(item) === 'expiring_soon') && (
+            (getExpirationStatus(item, today) === 'expired' ||
+              getExpirationStatus(item, today) === 'expiring_soon') && (
               <button
                 type="button"
                 onClick={() => {
@@ -1434,7 +1487,39 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 Swap
               </button>
             )}
+          {/* An expiration can be set on any check type, but only date_lot has
+              the serial/lot update panel. Without this, an expired item of any
+              other type could never record its replacement and would fail
+              every check until an admin edited the template. */}
+          {item.checkType !== 'date_lot' && item.hasExpiration && (
+            <button
+              type="button"
+              onClick={() => toggleSerialUpdate(item.id)}
+              aria-expanded={expandedSerialUpdate.has(item.id)}
+              className="text-theme-text-muted hover:text-theme-text-secondary flex min-h-[36px] items-center gap-1 text-xs transition-colors"
+            >
+              <Calendar className="h-3 w-3" aria-hidden="true" />
+              {expandedSerialUpdate.has(item.id) ? 'Cancel' : 'Replaced — new date'}
+            </button>
+          )}
         </div>
+        {item.checkType !== 'date_lot' && item.hasExpiration && expandedSerialUpdate.has(item.id) && (
+          <div className="space-y-1 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+            <label
+              htmlFor={`replaced-expiration-${item.id}`}
+              className="block text-xs text-blue-700 dark:text-blue-400"
+            >
+              Expiration on the replacement — the template will be updated to match.
+            </label>
+            <input
+              id={`replaced-expiration-${item.id}`}
+              type="date"
+              className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none sm:w-56"
+              value={result?.expirationFound ?? ''}
+              onChange={(e) => updateResult(item.id, { expirationFound: e.target.value })}
+            />
+          </div>
+        )}
         {showNotesField && (
           <textarea
             rows={2}

@@ -249,7 +249,14 @@ class CheckItemResultSubmit(BaseModel):
     lot_number: Optional[str] = Field(None, max_length=100)
     serial_found: Optional[str] = Field(None, max_length=100)
     lot_found: Optional[str] = Field(None, max_length=100)
+    # Expiration read off a unit replaced during this check. Written back onto
+    # the template item alongside lot_found so the truck's record reflects the
+    # unit actually on it.
+    expiration_found: Optional[date] = None
     photo_urls: Optional[List[str]] = None
+    # Advisory only: the server recomputes expiry from the template item (or
+    # expiration_found) so a client cannot pass an expired item by asserting it
+    # is fine. Kept for checks submitted without a template item to resolve.
     is_expired: bool = False
     expiration_date: Optional[date] = None
     notes: Optional[str] = None
@@ -309,6 +316,7 @@ class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     lot_number: Optional[str] = None
     serial_found: Optional[str] = None
     lot_found: Optional[str] = None
+    expiration_found: Optional[date] = None
     updated_serial: bool = False
     photo_urls: Optional[List[str]] = None
     is_expired: bool
@@ -575,6 +583,11 @@ class ReadyLot(BaseModel):
     lot_number: Optional[str] = None
     expiration_date: Optional[date] = None
     quantity: int = 0
+    # Stock can expire on the shelf. Such a lot is still listed so the supply
+    # officer can see and dispose of it, but it is excluded from ready_stock
+    # and refused by the swap endpoint — putting it on a truck would fail the
+    # item on the very next check.
+    is_expired: bool = False
 
 
 class SupplyExpiringItem(BaseModel):
