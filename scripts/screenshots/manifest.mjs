@@ -529,6 +529,61 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "02-79-training-attachments",
+    doc: "02-training.md",
+    line: 1591,
+    anchor: "The Attachments panel for a training record showing an uploaded",
+    alt: "The attachments panel for a training record, listing an uploaded certificate",
+    route: "/members",
+    prepare: async (page) => {
+      // The member holding the seeded certificate, and then the record that
+      // carries it — any other row opens an empty panel.
+      const owner = await page.evaluate(async () => {
+        const r = await fetch("/api/v1/training/records?limit=200", {
+          credentials: "include",
+        });
+        const body = await r.json();
+        const list = Array.isArray(body) ? body : body.records || [];
+        const withFile = list.find((x) => (x.attachments || []).length > 0);
+        return withFile
+          ? { userId: withFile.user_id, title: withFile.title }
+          : null;
+      });
+      if (!owner) throw new Error("no training record carries an attachment");
+      await page.goto(
+        new URL(`/members/${owner.userId}/training`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(2000);
+      // The page opens filtered to this month, which hides older records —
+      // and the seeded certificate is on one of them.
+      await page
+        .getByRole("button", { name: /^All Time$/ })
+        .click({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(1200);
+      const button = page.getByRole("button", { name: /^Files$/ }).first();
+      await button.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+      await button.click({ timeout: 15_000, force: true });
+      await page.waitForTimeout(1200);
+    },
+    fullPage: false,
+  },
+  {
+    id: "02-78-my-training-toolbar",
+    doc: "02-training.md",
+    line: 70,
+    anchor: "The My Training records toolbar showing the date-range picker",
+    alt: "The My Training date-range toolbar with its helper text and the two export buttons",
+    // A member's own overview: the toolbar is about exporting *your* records.
+    auth: "member",
+    route: "/training/my-training",
+    // Clipped to the toolbar. It is one bar on a long page, and a page shot
+    // renders the helper text too small to read.
+    selector:
+      "div.rounded-lg.border:has(label:text-is('Training records date range'))",
+  },
+  {
     id: "04-37-hour-tracking-mapping",
     doc: "04-events-meetings.md",
     line: 1196,

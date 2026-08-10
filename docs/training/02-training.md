@@ -67,7 +67,7 @@ At the top of the **My Training** overview is a date-range toolbar that scopes y
 2. The Training History list (and any export) updates to show only records completed within the selected range.
 3. To see and export your **entire** history — for example, for an external audit or a new employer — clear the dates. Omitting a start date exports your lifetime history.
 
-> **[SCREENSHOT NEEDED]:** _The My Training records toolbar showing the date-range picker (defaulted to the last 12 months) with the helper text about clearing the dates, alongside the Export CSV / Export PDF buttons._
+![The My Training date-range toolbar with its helper text and the two export buttons](./images/02-78-my-training-toolbar.png)
 
 If your department has enabled member exports, two buttons appear beside the date range:
 
@@ -1589,10 +1589,10 @@ Members and officers can attach supporting documents (certificates, transcripts,
 ### Uploading and Downloading Attachments
 
 1. On the **Member Training History** page, find the record and click its **Files** action to open the Attachments panel.
-2. Click **Upload** and choose the file. Allowed types are PDF, JPEG, PNG, GIF, WEBP, DOC, and DOCX, up to **25 MB** each.
+2. Click **Upload certificate** and choose the file. Allowed types are PDF, JPEG, PNG, GIF, WEBP, DOC, and DOCX, up to **25 MB** each — the type is checked from the file's own contents, not its extension.
 3. The uploaded file appears in the list. Click **Download** next to any attachment to retrieve it.
 
-> **[SCREENSHOT NEEDED]:** _The Attachments panel for a training record showing an uploaded certificate in the list with its Download link and the Upload button._
+![The attachments panel for a training record, listing an uploaded certificate](./images/02-79-training-attachments.png)
 
 > **Hint:** You can manage attachments on **your own** records. Officers with `training.manage` permission can manage attachments on any member's records.
 

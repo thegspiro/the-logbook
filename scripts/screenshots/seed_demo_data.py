@@ -2887,7 +2887,14 @@ class Seeder:
         """
         self.api.put(
             "/training/module-config/config",
-            {"report_review_required": True},
+            {
+                "report_review_required": True,
+                # Off by default, and the two Export buttons on a member's own
+                # training overview render only under it — the guide documents
+                # them, so the demo department is one that has turned member
+                # self-export on.
+                "allow_member_report_export": True,
+            },
         )
 
         # Checked against the *states* present, not merely "are there any". A
@@ -4257,11 +4264,41 @@ class Seeder:
 
     # -- training records --------------------------------------------
 
+    def _attach_a_certificate(self, records: list[dict]) -> None:
+        """Put one certificate on one training record.
+
+        The Attachments panel is documented with a file in it, and nothing
+        else in the seeder uploads one — so the panel was an empty state on
+        every record in the demo database. Keyed on whether any record already
+        carries an attachment rather than on the record count, which is what
+        would let a re-seed skip this forever.
+        """
+        for record in records[:20]:
+            if pick(record, "attachments"):
+                return
+        target = next((r for r in records if pick(r, "id")), None)
+        if not target:
+            return
+        try:
+            self.api.post_file(
+                f"/training/records/{pick(target, 'id')}/attachments",
+                {},
+                "completion-certificate.pdf",
+                _demo_pdf(
+                    "Certificate of Completion",
+                    "Oakville Fire Department — course completion record.",
+                ),
+                "application/pdf",
+            )
+        except ApiError as exc:
+            self.blocked.append(f"training attachment: {exc}")
+
     def seed_training_records(
         self, members: list[dict], courses: list[dict]
     ) -> list[dict]:
         records = items(self.api.get("/training/records?limit=200"), "records")
         if records or not courses:
+            self._attach_a_certificate(records)
             return records
         # Every member gets a spread of completed courses so My Training, the
         # compliance matrix and the hours reports all have something to show;

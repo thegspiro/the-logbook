@@ -252,8 +252,50 @@ class TrainingRecordUpdate(BaseModel):
         return validate_enum_value(v, ModelTrainingStatus, "status")
 
 
+class TrainingAttachment(BaseModel):
+    """One file on a training record, as clients are allowed to see it.
+
+    The stored attachment also carries `file_path` — an absolute path on the
+    server's disk — and `uploaded_by`. Neither belongs in a response, so this
+    schema lists what does and a validator drops the rest. `index` is how a
+    client names an attachment on the download route; the stored records have
+    no id of their own.
+    """
+
+    index: Optional[int] = None
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
+    file_size: Optional[int] = None
+    uploaded_at: Optional[str] = None
+
+
 class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     """Schema for training record response"""
+
+    # Overrides the base's `List[str]`. The upload endpoint stores a dict per
+    # attachment, so a record with one file made this endpoint fail response
+    # validation and return a 500 — for the whole list, not just that record.
+    attachments: Optional[List[TrainingAttachment]] = None
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def number_the_attachments(cls, v):
+        """Stamp each attachment with its position.
+
+        The stored attachments have no id; the download route addresses them
+        by index, so a client that never sees one cannot fetch a file. Legacy
+        rows hold bare strings (the column's original shape) and are carried
+        through as a file name.
+        """
+        if not isinstance(v, list):
+            return v
+        numbered = []
+        for i, a in enumerate(v):
+            if isinstance(a, dict):
+                numbered.append({**a, "index": i})
+            else:
+                numbered.append({"index": i, "file_name": a})
+        return numbered
 
     id: UUID
     organization_id: UUID
