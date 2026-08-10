@@ -1508,6 +1508,32 @@ export const SHOTS = [
       "Screenshot of the compliance report showing a requirement (e.g., 'Monthly Minimum Shifts:",
     alt: "Scheduling compliance report with per-member shift totals",
     route: "/scheduling/reports",
+    // The page opens on Member Hours with an empty date picker and the words
+    // "Select a Date Range" where the report goes, so a plain route visit
+    // captured a placeholder rather than the compliance report the placeholder
+    // asks for. Switch to Shift Compliance, give it a range wide enough to
+    // cover the seeded shifts, and run it.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /shift compliance/i })
+        .or(page.getByRole("button", { name: /shift compliance/i }))
+        .first()
+        .click({ timeout: 10_000 })
+        .catch(() => {});
+      const dates = page.locator('input[type="date"]');
+      await dates.first().fill("2026-07-01", { timeout: 10_000 });
+      await dates.nth(1).fill("2026-08-31", { timeout: 10_000 });
+      await page
+        .getByRole("button", { name: /generate report/i })
+        .first()
+        .click({ timeout: 10_000 });
+      // The empty-state heading is the thing being replaced, so its
+      // disappearance is what "the report rendered" actually means.
+      await page
+        .getByText(/select a date range/i)
+        .waitFor({ state: "hidden", timeout: 20_000 })
+        .catch(() => {});
+    },
     fullPage: true,
   },
   {
