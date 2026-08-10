@@ -26,11 +26,22 @@ import urllib.request
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from http.cookiejar import CookieJar
+from pathlib import Path
 from time import monotonic, sleep
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from bootstrap_demo import DEMO_ADMIN_PASSWORD, DEMO_ADMIN_USERNAME
+
+# The skill sheet blueprints live one directory up, beside the other seeders,
+# because the screenshot harness is not their only consumer.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from skill_sheet_library import (  # noqa: E402  (path set up above)
+    SKILL_SHEETS,
+    build_template_payload,
+    criterion_result,
+)
 
 
 class Throttle:
@@ -2483,102 +2494,43 @@ class Seeder:
     # -- skills testing ----------------------------------------------
 
     def seed_skills_testing(self) -> list[dict]:
+        """Publish the shared skill sheet library.
+
+        The blueprints live in ``scripts/skill_sheet_library.py`` rather than
+        here so the screenshot harness, the general seeder and the tests all
+        build the same sheets. They used to be inline, with every criterion
+        typed ``"checkbox"`` — which is not one of the five types the examiner
+        screen can render, so every step drew a notes box and no pass/fail
+        control at all. The steps could not be scored, and because
+        ``require_all_critical`` treats an unscored critical step as a failure,
+        every seeded evaluation was a guaranteed fail worth 0%.
+        """
         templates = items(
             self.api.get("/training/skills-testing/templates"), "templates"
         )
         names = {t.get("name") for t in templates}
-        blueprint = [
-            (
+
+        # The demo organization shows a working subset rather than all ten
+        # sheets: enough for the templates table, the picker and the member
+        # view to look populated, without a screenshot of a scrolling list.
+        demo_sheets = [
+            sheet
+            for sheet in SKILL_SHEETS
+            if sheet["name"]
+            in {
                 "Patient Assessment / Management — Medical",
-                "Emergency Medical",
-                [
-                    (
-                        "Scene Size-Up",
-                        [
-                            "Takes or verbalizes standard precautions",
-                            "Determines the scene is safe",
-                            "Determines the mechanism of injury / nature of illness",
-                            "Determines the number of patients",
-                            "Requests additional EMS assistance if necessary",
-                        ],
-                    ),
-                    (
-                        "Primary Survey",
-                        [
-                            "Verbalizes general impression of the patient",
-                            "Determines responsiveness / level of consciousness",
-                            "Determines chief complaint / apparent life threats",
-                            "Assesses airway and breathing",
-                            "Assesses circulation",
-                        ],
-                    ),
-                    (
-                        "History Taking",
-                        [
-                            "Obtains history of the present illness",
-                            "Obtains past medical history",
-                            "Performs a focused physical examination",
-                        ],
-                    ),
-                ],
-            ),
-            (
                 "SCBA Donning — Timed Evolution",
-                "Fire Suppression",
-                [
-                    (
-                        "Preparation",
-                        [
-                            "Inspects cylinder pressure before donning",
-                            "Checks harness and straps for damage",
-                        ],
-                    ),
-                    (
-                        "Donning",
-                        [
-                            "Dons the pack without assistance",
-                            "Seals the facepiece and checks for leaks",
-                            "Activates the PASS device",
-                        ],
-                    ),
-                ],
-            ),
+                "Pump Operations — Draft and Relay Supply",
+                "1¾\" Handline — Advance and Flow",
+            }
         ]
 
-        for name, category, sections in blueprint:
-            if name in names:
+        for sheet in demo_sheets:
+            if sheet["name"] in names:
                 continue
             template = self.api.post(
                 "/training/skills-testing/templates",
-                {
-                    "name": name,
-                    "description": f"{name} skill sheet, NREMT-style scoring.",
-                    "category": category,
-                    "passing_percentage": 70,
-                    "require_all_critical": True,
-                    # The list endpoint hides anything other than
-                    # "all_members" from non-officer viewers; "organization"
-                    # is not one of the accepted values and made every
-                    # template invisible.
-                    "visibility": "all_members",
-                    "sections": [
-                        {
-                            "name": section_name,
-                            "sort_order": order,
-                            "criteria": [
-                                {
-                                    "label": label,
-                                    "type": "checkbox",
-                                    "required": True,
-                                    "sort_order": criterion_order,
-                                    "max_score": 1,
-                                }
-                                for criterion_order, label in enumerate(criteria)
-                            ],
-                        }
-                        for order, (section_name, criteria) in enumerate(sections)
-                    ],
-                },
+                build_template_payload(sheet),
             )
             # A draft template cannot be selected when starting a test, so the
             # "New Test" page shows nothing until at least one is published.
@@ -2831,6 +2783,11 @@ class Seeder:
         # is the convention the API, the scorer and the scorecard renderer all
         # share. Statement criteria are skipped for the same reason the scorer
         # skips them: they carry prose, not a score.
+        #
+        # `criterion_result` supplies the per-type evidence field the scorecard
+        # renders — the stopwatch reading on a timed step, the ticked boxes on
+        # a checklist. Writing a bare passed/score scores correctly but leaves
+        # those rows blank where the evidence belongs.
         section_results = []
         for si, section in enumerate(sections):
             if not isinstance(section, dict):
@@ -2847,8 +2804,7 @@ class Seeder:
                     {
                         "criterion_id": f"criterion-{si}-{ci}",
                         "criterion_label": criterion.get("label", ""),
-                        "passed": not missed,
-                        "score": 0 if missed else criterion.get("max_score", 1),
+                        **criterion_result(criterion, not missed),
                         "notes": "Prompted once before continuing." if missed else None,
                     }
                 )
