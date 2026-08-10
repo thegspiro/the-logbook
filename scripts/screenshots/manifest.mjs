@@ -529,6 +529,59 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "05-59-impact-planner-results",
+    doc: "05-inventory.md",
+    line: 1652,
+    anchor: "Screenshot of the analysis results showing the four summary cards",
+    alt: "Impact planner results with its summary cards, size breakdown and cost estimate",
+    route: "/inventory/admin/impact-planner",
+    prepare: async (page) => {
+      // A size breakdown and a stock category, or the results are a member
+      // list with none of the per-size shortfall and cost columns this
+      // section is about.
+      const sizeField = page.locator('select[aria-label="Size needed"]');
+      const sizes = await sizeField
+        .locator("option")
+        .evaluateAll((els) =>
+          els.map((e) => e.getAttribute("value")).filter(Boolean),
+        );
+      if (sizes[0]) await sizeField.selectOption(sizes[0]);
+      await page.waitForTimeout(600);
+      // The stock select only renders once a size field is chosen, and only a
+      // stock category turns the size panel into shortfall-and-cost columns.
+      const stock = page
+        .locator("select")
+        .filter({ hasText: /subtract current stock/i });
+      const opts = await stock
+        .locator("option")
+        .evaluateAll((els) =>
+          els.map((e) => e.getAttribute("value")).filter(Boolean),
+        );
+      if (opts[0]) await stock.selectOption(opts[0]);
+      await page.waitForTimeout(400);
+      await page
+        .getByRole("button", { name: /Analyze Impact/i })
+        .click({ timeout: 15_000 });
+      // The analysis is a round trip over the whole roster.
+      await page.waitForTimeout(3000);
+      // Analysing scrolls the results into view; the summary cards and the
+      // size-and-cost panel this section is about are at the top of them.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page
+        .locator("main, [role='main']")
+        .first()
+        .evaluate((el) => (el.scrollTop = 0))
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
+    // Viewport, not full page: the sidebar is position:fixed, so a full-page
+    // capture of the 2,100px results paints it across the middle of them. The
+    // summary cards and the size-and-cost panel this section describes are
+    // both above the fold at this height.
+    viewport: { width: 1440, height: 1150 },
+    fullPage: false,
+  },
+  {
     id: "08-59-breadcrumbs",
     doc: "08-admin-reports.md",
     line: 596,

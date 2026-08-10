@@ -1646,10 +1646,10 @@ The analysis shows:
   - Shortfall (needing minus on-hand)
   - Unit cost (if available)
   - Estimated cost (shortfall × unit cost)
-- **Total purchase cost estimate**: Sum of all size line costs
+- **Totals**: the count to buy and the estimated cost, shown as two badges beside the panel heading rather than as a footer row
 - **Member list**: Expandable table showing each member's name, rank, station, size, and whether they need the item, need a replacement, or are over their allowance
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the analysis results showing summary cards at the top (e.g., "42 members analyzed, 28 need item, 3 need replacement, 5 missing sizes"), the size breakdown table with shortfall and cost columns, and the total cost estimate at the bottom._
+![Impact planner results with its summary cards, size breakdown and cost estimate](./images/05-59-impact-planner-results.png)
 
 ### Taking Action from the Analysis
 

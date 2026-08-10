@@ -185,17 +185,11 @@ export interface Room {
 
 export type TabId = 'facilities' | 'maintenance' | 'inspections';
 
-/** Words that should stay fully uppercased when formatting enum labels */
-const ACRONYMS = new Set(['ada', 'hvac', 'id', 'ppe', 'nfpa', 'osha']);
-
-/** Convert a snake_case enum value to a human-readable label (e.g. "building_code" → "Building Code") */
-export function enumLabel(value: string | undefined | null): string {
-  if (!value) return '';
-  return value
-    .split('_')
-    .map((w) => (ACRONYMS.has(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
-    .join(' ');
-}
+// Re-exported rather than defined here: the same snake_case-to-label problem
+// turns up wherever an enum reaches the screen (the inventory impact planner
+// was rendering "Deputy_chief"), so the implementation lives in utils and this
+// keeps every existing `from '../types'` import working.
+export { enumLabel } from '@/utils/displayValue';
 
 export const INSPECTION_TYPES = [
   'fire',

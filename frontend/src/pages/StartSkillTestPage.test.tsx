@@ -112,6 +112,11 @@ describe('StartSkillTestPage', () => {
      *  also what a screen-reader user needs to tell them apart. */
     const templateChangeButton = () => screen.queryByRole('button', { name: 'Change template' });
 
+    /** The pre-selection waits on a template fetch and then an effect. Testing
+     *  Library's 1s default is enough in isolation and marginal under a full
+     *  parallel run, where this was the one test in 2,650 that flaked. */
+    const SELECTION_TIMEOUT = { timeout: 5000 };
+
     it('should pre-select the template the user tapped', async () => {
       currentSearchParams = new URLSearchParams('template=tpl-2&from=member');
       renderWithRouter(<StartSkillTestPage />);
@@ -119,7 +124,7 @@ describe('StartSkillTestPage', () => {
       // The template name alone is not the signal — it is also a row in the
       // unselected picker. The step's Change button only exists once the
       // selection has applied, so wait on that.
-      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument());
+      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument(), SELECTION_TIMEOUT);
 
       expect(screen.getByText('Ladder Operations')).toBeInTheDocument();
       expect(screen.queryByPlaceholderText('Search templates...')).not.toBeInTheDocument();
@@ -130,7 +135,7 @@ describe('StartSkillTestPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<StartSkillTestPage />);
 
-      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument());
+      await waitFor(() => expect(templateChangeButton()).toBeInTheDocument(), SELECTION_TIMEOUT);
       await user.click(templateChangeButton() as HTMLElement);
 
       expect(screen.getByPlaceholderText('Search templates...')).toBeInTheDocument();
@@ -143,7 +148,7 @@ describe('StartSkillTestPage', () => {
 
       await waitFor(() => {
         expect(mockToastError).toHaveBeenCalledWith('That test is no longer available — choose one below.');
-      });
+      }, SELECTION_TIMEOUT);
       expect(screen.getByPlaceholderText('Search templates...')).toBeInTheDocument();
     });
 
