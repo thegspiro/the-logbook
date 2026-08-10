@@ -9,7 +9,14 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.schemas.base import UTCResponseBase
 
@@ -153,6 +160,20 @@ class EventBase(BaseModel):
     require_checkout: bool = Field(
         default=False, description="Require manual check-out"
     )
+    allow_guest_check_in: bool = Field(
+        default=False,
+        description=(
+            "Show a guest QR code on room displays so non-members can record "
+            "their attendance without an account"
+        ),
+    )
+    guest_check_in_creates_prospect: bool = Field(
+        default=False,
+        description=(
+            "Also open a prospective-member record for each guest who "
+            "supplies an email address"
+        ),
+    )
     custom_category: Optional[str] = Field(
         None,
         max_length=100,
@@ -204,6 +225,8 @@ class EventUpdate(BaseModel):
     check_in_minutes_before: Optional[int] = None
     check_in_minutes_after: Optional[int] = None
     require_checkout: Optional[bool] = None
+    allow_guest_check_in: Optional[bool] = None
+    guest_check_in_creates_prospect: Optional[bool] = None
     custom_category: Optional[str] = Field(
         None,
         max_length=100,
@@ -426,6 +449,70 @@ class QRCheckInData(BaseModel):
     timezone: Optional[str] = Field(
         default=None, description="Organization IANA timezone for display"
     )
+    allow_guest_check_in: bool = Field(
+        default=False,
+        description="Whether non-members may self-record attendance",
+    )
+
+
+class GuestCheckInRequest(BaseModel):
+    """Schema for an unauthenticated guest recording their own attendance.
+
+    Deliberately narrow: a walk-in at an interest night should be asked for the
+    minimum needed to follow up, not a membership application. Anything richer
+    belongs on the real application form the follow-up email links to.
+    """
+
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(default=None, max_length=50)
+    organization_name: Optional[str] = Field(default=None, max_length=255)
+    interest_reason: Optional[str] = Field(default=None, max_length=2000)
+    # Honeypot: real browsers leave it empty because the field is hidden. Named
+    # to look attractive to a form-filling bot, matching the public forms API.
+    hp_website: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def _strip_name(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Name cannot be blank")
+        return stripped
+
+
+class GuestCheckInResponse(BaseModel):
+    """Confirmation returned to a guest after a kiosk sign-in."""
+
+    status: str = Field(description="'checked_in' or 'already_checked_in'")
+    attendee_id: str
+    event_name: str
+    checked_in_at: str
+    prospect_created: bool = Field(
+        default=False,
+        description="Whether a prospective-member record was opened",
+    )
+    message: str
+
+
+class GuestCheckInEventInfo(BaseModel):
+    """Minimal public event detail for the guest sign-in page."""
+
+    event_id: str
+    event_name: str
+    event_type: Optional[str] = None
+    start_datetime: str
+    end_datetime: str
+    location_name: Optional[str] = None
+    organization_name: Optional[str] = None
+    is_open: bool = Field(description="Whether the check-in window is currently open")
+    closed_reason: Optional[str] = None
+    collects_prospect_details: bool = Field(
+        default=False,
+        description="Whether sign-in opens a membership-pipeline record",
+    )
+    timezone: Optional[str] = None
 
 
 class EventStats(BaseModel):

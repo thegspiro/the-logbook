@@ -63,6 +63,7 @@ from app.services.training_waiver_service import (
 )
 from app.utils.checklist import checklist_progress, prune_done_ids, to_storage
 from app.utils.json_ids import normalize_id_list
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org
 from app.utils.phase_prerequisites import find_cycle
 
@@ -669,19 +670,11 @@ class TrainingProgramService:
             if field in target_fields
         )
 
-        # Update fields.
-        #
         # `updates` is built with exclude_unset, so a None here was sent
-        # deliberately. For most fields None still means "leave alone" (the
-        # long-standing behavior callers rely on), but for these it is the
-        # value: without them an officer could set a freshness window and never
-        # take it off again.
-        clearable_fields = {"recency_days"}
-        for field, value in updates.items():
-            if not hasattr(requirement, field):
-                continue
-            if value is not None or field in clearable_fields:
-                setattr(requirement, field, value)
+        # deliberately: the officer cleared the field. That applies to every
+        # nullable column, not just the freshness window that used to be the
+        # single hand-listed exception.
+        apply_updates(requirement, updates)
 
         requirement.updated_at = datetime.now(timezone.utc)
         await self.db.commit()

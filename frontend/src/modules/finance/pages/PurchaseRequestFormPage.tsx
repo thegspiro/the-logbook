@@ -19,6 +19,8 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { PurchaseRequestPriority } from '../types';
 import type { PurchaseRequest } from '../types';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
+import { getErrorMessage } from '@/utils/errorHandling';
+import { blankToNull } from '@/utils/formValues';
 
 // =============================================================================
 // Validation Schema
@@ -179,23 +181,35 @@ const PurchaseRequestFormPage: React.FC = () => {
         priority: data.priority as PurchaseRequestPriority,
         fiscalYearId: data.fiscalYearId,
       };
-      const desc = data.description?.trim();
-      if (desc) payload.description = desc;
-      const vendor = data.vendor?.trim();
-      if (vendor) payload.vendor = vendor;
-      if (data.budgetId) payload.budgetId = data.budgetId;
 
       if (isEdit && id) {
+        // Edit sends every optional field, blank ones as an explicit null, so
+        // removing a vendor or clearing a description actually takes. Omitting
+        // them here would read as "leave alone" once the backend applies the
+        // exclude_unset dump, and the removal would silently not happen.
+        payload.description = blankToNull(data.description);
+        payload.vendor = blankToNull(data.vendor);
+        payload.budgetId = data.budgetId || null;
+
         await purchaseRequestService.update(id, payload);
         toast.success('Purchase request updated');
         void navigate(`/finance/purchase-requests/${id}`);
       } else {
+        // Create omits blanks so they never reach a validator as "".
+        const desc = data.description?.trim();
+        if (desc) payload.description = desc;
+        const vendor = data.vendor?.trim();
+        if (vendor) payload.vendor = vendor;
+        if (data.budgetId) payload.budgetId = data.budgetId;
+
         const created = await createPurchaseRequest(payload);
         toast.success('Purchase request created');
         void navigate(`/finance/purchase-requests/${created.id}`);
       }
-    } catch {
-      // Error handled by store or caught above
+    } catch (err: unknown) {
+      // The edit path calls the service directly rather than going through the
+      // store, so nothing else surfaces its failure.
+      toast.error(getErrorMessage(err, 'Could not save the purchase request'));
     }
   };
 

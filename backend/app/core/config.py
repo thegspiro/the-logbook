@@ -234,6 +234,12 @@ class Settings(BaseSettings):
     # 0 disables the cap.
     PUBLIC_FORM_DAILY_LIMIT: int = 500
 
+    # Per-event/day ceiling on unauthenticated guest check-ins from a room
+    # display. Sized for an open house, not a stadium — a real interest night
+    # signs in tens of people, so anything past this is abuse rather than
+    # attendance. 0 disables the cap.
+    GUEST_CHECK_IN_DAILY_LIMIT: int = 300
+
     # Trusted proxy IPs for X-Forwarded-For validation
     TRUSTED_PROXY_IPS: str = ""  # Comma-separated list of trusted proxy IPs
 

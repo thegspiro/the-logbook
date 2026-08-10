@@ -31,6 +31,8 @@ interface KioskEvent {
   location_id?: string;
   location_name?: string;
   require_checkout?: boolean;
+  /** Event opted in to unauthenticated guest sign-in (outreach events). */
+  allow_guest_check_in?: boolean;
 }
 
 interface DisplayData {
@@ -114,6 +116,13 @@ const LocationKioskPage: React.FC = () => {
 
   const getCheckInUrl = (eventId: string) => {
     return `${window.location.origin}/events/${eventId}/check-in`;
+  };
+
+  // Guests are addressed through the room's display code: it is the only
+  // credential an anonymous scanner carries, and it is what lets the backend
+  // resolve which department (and which room) the sign-in belongs to.
+  const getGuestCheckInUrl = (eventId: string) => {
+    return `${window.location.origin}/display/${code}/events/${eventId}/guest`;
   };
 
   const formatTime = (isoString: string) => {
@@ -209,16 +218,51 @@ const LocationKioskPage: React.FC = () => {
               </p>
             </div>
 
-            {/* QR Code */}
-            <div className="mb-8 flex justify-center">
-              <div className="rounded-2xl bg-white p-8 shadow-2xl shadow-black/50">
-                <QRCodeSVG value={getCheckInUrl(currentEvent.event_id)} size={280} level="H" includeMargin={true} />
-              </div>
-            </div>
+            {/* QR codes. Members and guests get separate codes rather than one
+                dual-purpose code: the member flow handles check-out as well as
+                check-in, which is meaningless for a walk-in, and keeping them
+                apart means a mis-scan lands on the wrong page instead of
+                recording the wrong kind of attendance. */}
+            {currentEvent.allow_guest_check_in ? (
+              <div className="mb-8 flex flex-col items-center justify-center gap-6 sm:flex-row sm:items-start sm:gap-10">
+                <div className="flex flex-col items-center">
+                  <div className="rounded-2xl bg-white p-6 shadow-2xl shadow-black/50">
+                    <QRCodeSVG value={getCheckInUrl(currentEvent.event_id)} size={200} level="H" includeMargin={true} />
+                  </div>
+                  <p className="text-theme-text-primary mt-4 text-lg font-semibold">Department member</p>
+                  <p className="text-theme-text-muted mt-1 max-w-[16rem] text-sm">
+                    Scan to check in or out. You will be prompted to log in if needed.
+                  </p>
+                </div>
 
-            {/* Instructions */}
-            <p className="text-theme-text-primary text-xl font-medium">Scan with your phone to check in</p>
-            <p className="text-theme-text-muted mt-2 text-sm">You will be prompted to log in if needed</p>
+                <div className="flex flex-col items-center">
+                  <div className="rounded-2xl bg-white p-6 shadow-2xl shadow-black/50">
+                    <QRCodeSVG
+                      value={getGuestCheckInUrl(currentEvent.event_id)}
+                      size={200}
+                      level="H"
+                      includeMargin={true}
+                    />
+                  </div>
+                  <p className="text-theme-text-primary mt-4 text-lg font-semibold">Visiting us today?</p>
+                  <p className="text-theme-text-muted mt-1 max-w-[16rem] text-sm">
+                    Scan to sign in. No account needed.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mb-8 flex justify-center">
+                  <div className="rounded-2xl bg-white p-8 shadow-2xl shadow-black/50">
+                    <QRCodeSVG value={getCheckInUrl(currentEvent.event_id)} size={280} level="H" includeMargin={true} />
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <p className="text-theme-text-primary text-xl font-medium">Scan with your phone to check in</p>
+                <p className="text-theme-text-muted mt-2 text-sm">You will be prompted to log in if needed</p>
+              </>
+            )}
           </div>
         ) : (
           /* Idle state — no active events */

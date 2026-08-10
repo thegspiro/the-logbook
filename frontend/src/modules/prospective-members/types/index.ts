@@ -345,7 +345,7 @@ export interface PipelineCreate {
 
 export interface PipelineUpdate {
   name?: string | undefined;
-  description?: string | undefined;
+  description?: string | null | undefined;
   is_active?: boolean | undefined;
   is_default?: boolean | undefined;
   is_template?: boolean | undefined;
@@ -757,8 +757,8 @@ export interface ElectionPackageCreate {
 }
 
 export interface ElectionPackageUpdate {
-  coordinator_notes?: string | undefined;
-  supporting_statement?: string | undefined;
+  coordinator_notes?: string | null | undefined;
+  supporting_statement?: string | null | undefined;
   custom_fields?: Record<string, string> | undefined;
   status?: ElectionPackageStatus | undefined;
 }

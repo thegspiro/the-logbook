@@ -128,6 +128,7 @@ const AVAILABLE_ROLES = [
 export const SchedulingNotificationsPanel: React.FC = () => {
   const [rules, setRules] = useState<NotificationRuleRecord[]>([]);
   const [loadingRules, setLoadingRules] = useState(true);
+  const [rulesLoadFailed, setRulesLoadFailed] = useState(false);
   const [creating, setCreating] = useState<string | null>(null);
 
   // Shift decline/drop notification settings (stored in org settings)
@@ -157,7 +158,12 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         });
         setRules(data);
       } catch (err) {
-        console.warn('Failed to load notification rules:', err);
+        // Worth interrupting for: with no rules loaded every switch reads as
+        // off, so an already-enabled notification looks disabled and toggling
+        // it posts a second rule with the same name instead of flipping the
+        // one that exists.
+        setRulesLoadFailed(true);
+        toast.error(getErrorMessage(err, 'Could not load the notification settings'));
       } finally {
         setLoadingRules(false);
       }
@@ -318,7 +324,10 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         const updated = await notificationsService.toggleRule(existing.id, !existing.enabled);
         setRules((prev) => prev.map((r) => (r.id === existing.id ? updated : r)));
       } catch (err) {
-        console.warn('Failed to toggle notification rule:', err);
+        // The switch reverts on its own (setRules never runs), so success needs
+        // no toast — but without this the revert is the only feedback, and it
+        // reads as a dead control rather than a failed save.
+        toast.error(getErrorMessage(err, 'Failed to update the notification'));
       }
     } else {
       setCreating(preset.name);
@@ -334,7 +343,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         });
         setRules((prev) => [...prev, newRule]);
       } catch (err) {
-        console.warn('Failed to create notification rule:', err);
+        toast.error(getErrorMessage(err, 'Failed to turn on the notification'));
       } finally {
         setCreating(null);
       }
@@ -355,6 +364,14 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         <div className="text-theme-text-muted flex items-center gap-2 py-4 text-sm" role="status" aria-live="polite">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading notification rules...
         </div>
+      ) : rulesLoadFailed ? (
+        <div className="alert-warning flex items-start gap-2 text-sm" role="alert">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            These settings could not be loaded, so the switches below are not shown — they would read as off whatever
+            their real state is. Reload the page to try again.
+          </span>
+        </div>
       ) : (
         <div className="space-y-2">
           {SCHEDULING_NOTIFICATION_PRESETS.map((preset) => {
@@ -371,6 +388,10 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                   <p className="text-theme-text-muted mt-0.5 text-xs">{preset.description}</p>
                 </div>
                 <button
+                  type="button"
+                  role="switch"
+                  aria-checked={enabled}
+                  aria-label={preset.name}
                   onClick={() => {
                     void handleToggle(preset);
                   }}

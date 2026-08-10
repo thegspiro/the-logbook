@@ -53,6 +53,9 @@ from app.schemas.event import (
 from app.schemas.event import EventStats as EventStatistics
 from app.schemas.event import (
     EventUpdate,
+    GuestCheckInEventInfo,
+    GuestCheckInRequest,
+    GuestCheckInResponse,
     ManagerAddAttendee,
     QRCheckInData,
     RecordActualTimes,
@@ -153,6 +156,9 @@ __all__ = [
     "CheckInMonitoringStats",
     "ManagerAddAttendee",
     "RSVPOverride",
+    "GuestCheckInRequest",
+    "GuestCheckInResponse",
+    "GuestCheckInEventInfo",
     # Election schemas
     "BallotItem",
     "PositionEligibility",

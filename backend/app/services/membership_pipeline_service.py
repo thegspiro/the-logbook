@@ -40,6 +40,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
 from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
@@ -184,11 +185,7 @@ class MembershipPipelineService:
         if data.get("is_default") and not pipeline.is_default:
             await self._unset_default_pipeline(organization_id)
 
-        for key, value in data.items():
-            if key in self._PIPELINE_PROTECTED_FIELDS:
-                continue
-            if value is not None and hasattr(pipeline, key):
-                setattr(pipeline, key, value)
+        apply_updates(pipeline, data, skip=self._PIPELINE_PROTECTED_FIELDS)
 
         await self.db.commit()
         return await self.get_pipeline(pipeline_id, organization_id)
@@ -368,11 +365,7 @@ class MembershipPipelineService:
         old_config = step.config if isinstance(step.config, dict) else {}
         old_form_id = old_config.get("form_id")
 
-        for key, value in data.items():
-            if key in self._STEP_PROTECTED_FIELDS:
-                continue
-            if value is not None and hasattr(step, key):
-                setattr(step, key, value)
+        apply_updates(step, data, skip=self._STEP_PROTECTED_FIELDS)
 
         await self.db.commit()
         await self.db.refresh(step)
@@ -2864,6 +2857,20 @@ class MembershipPipelineService:
     # Duplicate Detection
     # =========================================================================
 
+    async def find_active_prospect_by_email(
+        self, organization_id: str, email: str
+    ) -> Optional[ProspectiveMember]:
+        """Public wrapper over :meth:`_find_active_prospect_by_email`.
+
+        Callers that create prospects from a non-application context — a guest
+        signing in at a room kiosk, say — need to know whether one already
+        exists *before* calling :meth:`create_prospect`, whose duplicate path
+        emails the applicant a "we already have your application" notice. That
+        notice is right for a re-submitted application and wrong for someone
+        who merely walked into a second interest meeting.
+        """
+        return await self._find_active_prospect_by_email(organization_id, email)
+
     async def _find_active_prospect_by_email(
         self, organization_id: str, email: str
     ) -> Optional[ProspectiveMember]:
@@ -3688,19 +3695,17 @@ class MembershipPipelineService:
         if not pkg:
             return None
 
-        for key, value in updates.items():
-            if key in self._ELECTION_PKG_PROTECTED_FIELDS:
-                continue
-            if not hasattr(pkg, key) or value is None:
-                continue
-            if key == "package_config":
-                # Merge into existing config to avoid wiping previously
-                # stored keys (documents, stage_summary, etc.).
-                merged = copy.deepcopy(pkg.package_config or {})
-                merged.update(value)
-                pkg.package_config = merged
-            else:
-                setattr(pkg, key, value)
+        applied = dict(updates)
+        if isinstance(applied.get("package_config"), dict):
+            # Merge into existing config to avoid wiping previously stored
+            # keys (documents, stage_summary, etc.) — a partial config dict
+            # adds to what is there rather than replacing it. An explicit
+            # null still falls through to apply_updates and clears the column.
+            merged = copy.deepcopy(pkg.package_config or {})
+            merged.update(applied["package_config"])
+            applied["package_config"] = merged
+
+        apply_updates(pkg, applied, skip=self._ELECTION_PKG_PROTECTED_FIELDS)
 
         await self._log_activity(
             prospect_id=prospect_id,
