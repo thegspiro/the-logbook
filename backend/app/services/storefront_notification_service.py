@@ -72,13 +72,24 @@ from app.models.storefront import (
 from app.models.user import Organization, User, UserStatus
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_template_service import EmailTemplateService
+from app.services.email_theme import (
+    ACCENT_AMBER,
+    ACCENT_BLUE,
+    ACCENT_GREEN,
+    ACCENT_RED,
+    TABLE_STYLE,
+    TD_STYLE,
+    TFOOT_STYLE,
+    TH_STYLE,
+)
 from app.utils.storefront_payments import build_payment_options
 
-# Colors used for the email header banner, by notice kind.
-_HEADER_BLUE = "#1d4ed8"
-_HEADER_GREEN = "#047857"
-_HEADER_AMBER = "#b45309"
-_HEADER_RED = "#b91c1c"
+# Header banner colour by notice kind. Aliased rather than re-declared so a
+# coded fallback and its default template cannot drift apart.
+_HEADER_BLUE = ACCENT_BLUE
+_HEADER_GREEN = ACCENT_GREEN
+_HEADER_AMBER = ACCENT_AMBER
+_HEADER_RED = ACCENT_RED
 
 _METHOD_LABELS = {
     StorePaymentMethod.VENMO: "Venmo",
@@ -101,10 +112,7 @@ def _money(value: Optional[Decimal], currency: str = "USD") -> str:
 
 def _cell(content: str, align: str = "left", bold: bool = False) -> str:
     weight = "font-weight:600;" if bold else ""
-    return (
-        f'<td style="padding:6px 12px;border-bottom:1px solid #eee;'
-        f'text-align:{align};{weight}">{content}</td>'
-    )
+    return f'<td style="{TD_STYLE}text-align:{align};{weight}">{content}</td>'
 
 
 class StorefrontNotificationService:
@@ -227,19 +235,18 @@ class StorefrontNotificationService:
                 f"-{_money(order.discount_amount, currency)}</td></tr>"
             )
         totals += (
-            '<tr><td colspan="3" style="padding:8px 12px;text-align:right;'
-            'font-weight:700;border-top:2px solid #e5e7eb;">Total</td>'
-            '<td style="padding:8px 12px;text-align:right;font-weight:700;'
-            f'border-top:2px solid #e5e7eb;">{_money(order.total, currency)}</td></tr>'
+            f'<tr><td colspan="3" style="{TFOOT_STYLE}text-align:right;">Total</td>'
+            f'<td style="{TFOOT_STYLE}text-align:right;">'
+            f"{_money(order.total, currency)}</td></tr>"
         )
 
         return (
-            '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
-            '<thead><tr style="background:#f3f4f6;">'
-            '<th style="padding:8px 12px;text-align:left;">Item</th>'
-            '<th style="padding:8px 12px;text-align:center;">Qty</th>'
-            '<th style="padding:8px 12px;text-align:right;">Price</th>'
-            '<th style="padding:8px 12px;text-align:right;">Total</th>'
+            f'<table style="{TABLE_STYLE}">'
+            "<thead><tr>"
+            f'<th style="{TH_STYLE}text-align:left;">Item</th>'
+            f'<th style="{TH_STYLE}text-align:center;">Qty</th>'
+            f'<th style="{TH_STYLE}text-align:right;">Price</th>'
+            f'<th style="{TH_STYLE}text-align:right;">Total</th>'
             f"</tr></thead><tbody>{rows}{totals}</tbody></table>"
         )
 

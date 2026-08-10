@@ -307,9 +307,14 @@ async def preview_email_template(
         preview_template, context, organization=organization
     )
 
+    # Run the same CSS inliner the send path runs. Gmail strips <style>, so
+    # what leaves the building is the inlined form; previewing the un-inlined
+    # document showed a layout no recipient would actually get.
+    from app.services.email_service import inline_email_css
+
     return EmailTemplatePreviewResponse(
         subject=subject,
-        html_body=html_body,
+        html_body=inline_email_css(html_body),
         text_body=text_body,
     )
 

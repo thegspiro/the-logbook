@@ -377,14 +377,22 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           <span>CSS Styles</span>
         </button>
         {showCss && (
-          <textarea
-            id="template-css"
-            rows={8}
-            value={cssStyles}
-            onChange={(e) => setCssStyles(e.target.value)}
-            className={`${inputClass} mt-2`}
-            placeholder=".container { max-width: 600px; ... }"
-          />
+          <>
+            <textarea
+              id="template-css"
+              rows={8}
+              value={cssStyles}
+              onChange={(e) => setCssStyles(e.target.value)}
+              className={`${inputClass} mt-2`}
+              placeholder=".container { max-width: 600px; ... }"
+              aria-describedby="css-hint"
+            />
+            <p id="css-hint" className="text-theme-text-muted mt-1 text-xs">
+              {cssStyles.trim()
+                ? 'This template uses its own styles. Clear this box to go back to the built-in ones, which are kept up to date for you.'
+                : 'Using the built-in styles. Anything you put here replaces them for this template only, and stops it picking up future improvements.'}
+            </p>
+          </>
         )}
       </div>
     </div>

@@ -4,7 +4,6 @@ Email Template Service
 Manages CRUD operations for email templates and renders them with context variables.
 """
 
-import html as _html_mod
 import re
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
@@ -22,24 +21,21 @@ from app.core.constants import (
 )
 from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.services import email_templates_storefront as _storefront_templates
-
-# Default CSS styles shared across all email templates.
-# Colour contrast ratios meet WCAG 2.1 AA (4.5:1 for normal text):
-#   #333 on #f9fafb = 10.6:1, white on #dc2626 = 4.6:1,
-#   white on #2563eb = 4.6:1, #4b5563 on white = 7.5:1.
-DEFAULT_CSS = """
-body { font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-.container { max-width: 600px; margin: 0 auto; padding: 20px; }
-.logo { text-align: center; padding: 16px 0 0 0; }
-.logo img { max-height: 80px; max-width: 200px; }
-.header { background-color: #dc2626; color: white; padding: 20px; text-align: center; }
-.header h1 { margin: 0; font-size: 24px; }
-.content { padding: 20px; background-color: #f9fafb; }
-.content p { margin: 0 0 16px 0; }
-.button { display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
-.details { background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #e5e7eb; }
-.footer { padding: 20px; text-align: center; font-size: 12px; color: #4b5563; }
-"""
+from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
+    ACCENT_AMBER,
+    ACCENT_BLUE,
+    ACCENT_GREEN,
+    ACCENT_INDIGO,
+    ACCENT_RED,
+    ACCENT_SLATE,
+    ACCENT_VIOLET,
+    DEFAULT_CSS,
+    TABLE_STYLE,
+    TD_STYLE,
+    TFOOT_STYLE,
+    TH_STYLE,
+    build_email_document,
+)
 
 # Variables available to ALL template types (injected automatically)
 GLOBAL_VARIABLES: List[Dict[str, str]] = [
@@ -190,6 +186,13 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "election_title", "description": "Title of the election/ballot"},
         {"name": "meeting_date", "description": "Date of the meeting"},
         {"name": "custom_message", "description": "Custom message from secretary"},
+        {
+            "name": "custom_message_html",
+            "description": (
+                "The secretary's message as a paragraph, omitted entirely when "
+                "no message was written"
+            ),
+        },
         {"name": "ballot_url", "description": "Link to the voting page"},
         {"name": "voting_opens", "description": "Date and time voting opens"},
         {"name": "voting_closes", "description": "Date and time voting closes"},
@@ -319,6 +322,21 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     "event_request_status": [
         {"name": "contact_name", "description": "Requester's name"},
         {"name": "status_label", "description": "New request status"},
+        {
+            "name": "details_html",
+            "description": (
+                "Panel listing the scheduled date and decline reason, showing "
+                "only the ones that are set"
+            ),
+        },
+        {
+            "name": "details_text",
+            "description": "Plain-text version of the details panel",
+        },
+        {
+            "name": "message_html",
+            "description": "The coordinator's message as a paragraph, empty if none",
+        },
         {"name": "event_date", "description": "Scheduled event date (if set)"},
         {"name": "decline_reason", "description": "Reason for decline (if applicable)"},
         {"name": "message", "description": "Additional message from coordinator"},
@@ -338,6 +356,84 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "name": "original_date",
             "description": "Date the original application was received",
         },
+    ],
+    "ballot_eligibility_summary": [
+        {"name": "recipient_name", "description": "Recipient's display name"},
+        {"name": "election_title", "description": "Title of the election"},
+        {"name": "sent_count", "description": "Number of ballots sent"},
+        {
+            "name": "skipped_count",
+            "description": "Number of members skipped as ineligible",
+        },
+        {
+            "name": "total_checked_in",
+            "description": "Number of members checked in at the meeting",
+        },
+        {
+            "name": "recipients_html",
+            "description": "HTML list of members who received ballots",
+        },
+        {
+            "name": "recipients_text",
+            "description": "Plain-text list of members who received ballots",
+        },
+        {
+            "name": "skipped_voters_html",
+            "description": "HTML table of skipped members with the reason for each",
+        },
+        {
+            "name": "skipped_voters_text",
+            "description": "Plain-text list of skipped members with the reason for each",
+        },
+    ],
+    "shift_assignment": [
+        {"name": "recipient_name", "description": "Assigned member's name"},
+        {"name": "position", "description": "Position the member is filling"},
+        {"name": "shift_date", "description": "Date of the shift"},
+        {"name": "shift_start", "description": "Shift start time, department timezone"},
+        {
+            "name": "checklist_html",
+            "description": (
+                "Equipment checklists due at the start of this shift, omitted "
+                "entirely when the apparatus has none"
+            ),
+        },
+        {"name": "checklist_text", "description": "Plain-text checklist list"},
+        {"name": "shift_url", "description": "Link to the shift in the schedule"},
+    ],
+    "shift_decline": [
+        {"name": "member_name", "description": "Member who declined or was removed"},
+        {
+            "name": "action",
+            "description": "What happened — 'declined' or 'was removed from'",
+        },
+        {"name": "position", "description": "Position now open"},
+        {"name": "shift_date", "description": "Date of the shift"},
+        {"name": "shift_url", "description": "Link to the shift in the schedule"},
+    ],
+    "shift_reminder": [
+        {"name": "recipient_name", "description": "Member's first name"},
+        {"name": "position", "description": "Position the member is filling"},
+        {"name": "shift_date", "description": "Date of the shift"},
+        {"name": "shift_start", "description": "Shift start time, department timezone"},
+        {
+            "name": "time_range",
+            "description": "Shift start and end times, department timezone",
+        },
+        {"name": "apparatus_name", "description": "Apparatus assigned, if any"},
+        {
+            "name": "apparatus_html",
+            "description": "Apparatus line, omitted entirely when the shift has none",
+        },
+        {"name": "apparatus_text", "description": "Plain-text apparatus line"},
+        {"name": "roster_html", "description": "Table of the crew on this shift"},
+        {"name": "roster_text", "description": "Plain-text crew list"},
+        {
+            "name": "checklist_html",
+            "description": "Start-of-shift equipment checklists to complete",
+        },
+        {"name": "checklist_text", "description": "Plain-text checklist list"},
+        {"name": "arrival_url", "description": "Link to mark arrival at the station"},
     ],
 }
 
@@ -459,6 +555,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "election_title": "Captain Election 2026",
             "meeting_date": "April 1, 2026 at 07:00 PM",
             "custom_message": "Please review the candidates before voting.",
+            "custom_message_html": (
+                "<p>Please review the candidates before voting.</p>"
+            ),
             "ballot_url": "https://example.com/ballot#token=sample-token",
             "voting_opens": "March 28, 2026 at 08:00 AM",
             "voting_closes": "April 1, 2026 at 05:00 PM",
@@ -487,49 +586,49 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "item_count": "5",
             "total_value": "2,450.00",
             "items_list_html": (
-                '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
-                '<thead><tr style="background-color:#374151;color:white;">'
-                '<th style="padding:8px 10px;text-align:left;font-size:12px;">#</th>'
-                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Item</th>'
-                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Serial #</th>'
-                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Asset Tag</th>'
-                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Condition</th>'
-                '<th style="padding:8px 10px;text-align:right;font-size:12px;">Value</th>'
+                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
+                "<thead><tr>"
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">#</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Serial #</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Asset Tag</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Condition</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:right;">Value</th>'
                 "</tr></thead><tbody>"
-                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">1</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Coat (Size L)</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TC-2024-0456</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TCOAT-012</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$850.00</td></tr>'
-                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">2</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Pants (Size L)</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TP-2024-0789</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TPANT-012</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$650.00</td></tr>'
-                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">3</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Helmet (Black)</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-2024-0089</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-089</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Excellent</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$450.00</td></tr>'
-                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">4</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA Mask</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA-2023-0234</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA-234</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Fair</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$350.00</td></tr>'
-                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">5</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Radio (Portable)</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-2024-0567</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-567</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$150.00</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">1</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Turnout Coat (Size L)</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TC-2024-0456</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TCOAT-012</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Good</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$850.00</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">2</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Turnout Pants (Size L)</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TP-2024-0789</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TPANT-012</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Good</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$650.00</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">3</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Helmet (Black)</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">HLM-2024-0089</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">HLM-089</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Excellent</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$450.00</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">4</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">SCBA Mask</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">SCBA-2023-0234</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">SCBA-234</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Fair</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$350.00</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">5</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Radio (Portable)</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">RAD-2024-0567</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">RAD-567</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Good</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$150.00</td></tr>'
                 "</tbody>"
-                '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
-                '<td colspan="5" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
-                '<td style="padding:8px 10px;text-align:right;">$2,450.00</td>'
+                "<tfoot><tr>"
+                '<td colspan="5" style="padding:12px;background-color:#f9fafb;font-weight:600;color:#1f2937;border-top:1px solid #e5e7eb;text-align:right;">Total Outstanding Value:</td>'
+                '<td style="padding:12px;background-color:#f9fafb;font-weight:600;color:#1f2937;border-top:1px solid #e5e7eb;text-align:right;">$2,450.00</td>'
                 "</tr></tfoot></table>"
             ),
             "items_list_text": (
@@ -612,33 +711,33 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "item_count": "3",
             "total_value": "1,200.00",
             "items_list_html": (
-                '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
-                '<thead><tr style="background-color:#374151;color:white;">'
-                '<th style="padding:8px 10px;text-align:left;font-size:12px;">#</th>'
-                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Item</th>'
-                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Serial #</th>'
-                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Asset Tag</th>'
-                '<th style="padding:8px 10px;text-align:right;font-size:12px;">Value</th>'
+                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
+                "<thead><tr>"
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">#</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Item</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Serial #</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Asset Tag</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:right;">Value</th>'
                 "</tr></thead><tbody>"
-                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">1</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Coat (Size L)</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TC-2024-0456</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TCOAT-012</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$500.00</td></tr>'
-                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">2</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Helmet (Black)</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-2024-0089</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-089</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$450.00</td></tr>'
-                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">3</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Radio (Portable)</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-2024-0567</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-567</td>'
-                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$250.00</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">1</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Turnout Coat (Size L)</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TC-2024-0456</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">TCOAT-012</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$500.00</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">2</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Helmet (Black)</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">HLM-2024-0089</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">HLM-089</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$450.00</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">3</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Radio (Portable)</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">RAD-2024-0567</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">RAD-567</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:right;">$250.00</td></tr>'
                 "</tbody>"
-                '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
-                '<td colspan="4" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
-                '<td style="padding:8px 10px;text-align:right;">$1,200.00</td>'
+                "<tfoot><tr>"
+                '<td colspan="4" style="padding:12px;background-color:#f9fafb;font-weight:600;color:#1f2937;border-top:1px solid #e5e7eb;text-align:right;">Total Outstanding Value:</td>'
+                '<td style="padding:12px;background-color:#f9fafb;font-weight:600;color:#1f2937;border-top:1px solid #e5e7eb;text-align:right;">$1,200.00</td>'
                 "</tr></tfoot></table>"
             ),
             "items_list_text": (
@@ -692,22 +791,22 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "quorum_status": "Quorum Met",
             "quorum_detail": "Quorum requires 50% turnout. Actual: 84.4% (38/45).",
             "results_html": (
-                '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
-                '<tr style="background:#f3f4f6;"><th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Position</th>'
-                '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Candidate</th>'
-                '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Votes</th>'
-                '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">%</th>'
-                '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Result</th></tr>'
-                '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Captain</td>'
-                '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">John Smith</td>'
-                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">22</td>'
-                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">57.9%</td>'
-                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">\u2705 Elected</td></tr>'
-                '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Captain</td>'
-                '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">Jane Doe</td>'
-                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">16</td>'
-                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">42.1%</td>'
-                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">&mdash;</td></tr>'
+                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
+                '<tr><th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Position</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Candidate</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:center;">Votes</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:center;">%</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:center;">Result</th></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Captain</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">John Smith</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">22</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">57.9%</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">\u2705 Elected</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Captain</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Jane Doe</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">16</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">42.1%</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;text-align:center;">&mdash;</td></tr>'
                 "</table>"
             ),
             "results_text": (
@@ -730,13 +829,13 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
                 "  ... and 35 others"
             ),
             "skipped_voters_html": (
-                '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
-                '<tr style="background:#f3f4f6;"><th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Member</th>'
-                '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Reason</th></tr>'
-                '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Tom Brown</td>'
-                "<td style=\"padding:8px;border-bottom:1px solid #e5e7eb;\">Membership tier 'Social' is not eligible to vote</td></tr>"
-                '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Sarah Lee</td>'
-                '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">Not checked in as present at the meeting</td></tr>'
+                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
+                '<tr><th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Member</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Reason</th></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Tom Brown</td>'
+                "<td style=\"padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;\">Membership tier 'Social' is not eligible to vote</td></tr>"
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Sarah Lee</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Not checked in as present at the meeting</td></tr>'
                 "</table>"
             ),
             "skipped_voters_text": (
@@ -758,6 +857,16 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "event_date": "April 15, 2026 at 06:00 PM",
             "decline_reason": "",
             "message": "Your event has been approved and added to the calendar.",
+            "details_html": (
+                '<div class="details">'
+                "<p><strong>Scheduled Date:</strong> April 15, 2026 at 06:00 PM</p>"
+                "</div>"
+            ),
+            "details_text": "Scheduled Date: April 15, 2026 at 06:00 PM",
+            "message_html": (
+                '<p style="white-space:pre-line;">Your event has been approved '
+                "and added to the calendar.</p>"
+            ),
         }
     ),
     "it_password_notification": _sample(
@@ -772,6 +881,98 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         {
             "applicant_name": "Alex Johnson",
             "original_date": "February 15, 2026",
+        }
+    ),
+    "ballot_eligibility_summary": _sample(
+        {
+            "recipient_name": "Secretary Robert Johnson",
+            "election_title": "Captain Election 2026",
+            "sent_count": "38",
+            "skipped_count": "7",
+            "total_checked_in": "41",
+            "recipients_html": (
+                "<ul>"
+                "<li>John Smith (jsmith@example.com)</li>"
+                "<li>Jane Doe (jdoe@example.com)</li>"
+                "<li>Mike Wilson (mwilson@example.com)</li>"
+                "<li>... and 35 others</li>"
+                "</ul>"
+            ),
+            "recipients_text": (
+                "  - John Smith (jsmith@example.com)\n"
+                "  - Jane Doe (jdoe@example.com)\n"
+                "  - Mike Wilson (mwilson@example.com)\n"
+                "  ... and 35 others"
+            ),
+            "skipped_voters_html": (
+                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
+                '<tr><th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Member</th>'
+                '<th style="padding:10px 12px;background-color:#f3f4f6;color:#374151;font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e7eb;text-align:left;">Reason</th></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Tom Brown</td>'
+                "<td style=\"padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;\">Membership tier 'Social' is not eligible to vote</td></tr>"
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Sarah Lee</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Not checked in as present at the meeting</td></tr>'
+                "</table>"
+            ),
+            "skipped_voters_text": (
+                "  - Tom Brown: Membership tier 'Social' is not eligible to vote\n"
+                "  - Sarah Lee: Not checked in as present at the meeting"
+            ),
+        }
+    ),
+    "shift_assignment": _sample(
+        {
+            "recipient_name": "John Doe",
+            "position": "Driver",
+            "shift_date": "March 18, 2026",
+            "shift_start": "06:00",
+            "checklist_html": (
+                "<p><strong>Equipment checklists to complete:</strong></p>"
+                "<ul><li>Engine 1 Start-of-Shift Check</li></ul>"
+            ),
+            "checklist_text": (
+                "Equipment checklists to complete: Engine 1 Start-of-Shift Check"
+            ),
+            "shift_url": "https://example.com/scheduling?shift=456",
+        }
+    ),
+    "shift_decline": _sample(
+        {
+            "member_name": "John Doe",
+            "action": "declined",
+            "position": "Driver",
+            "shift_date": "March 18, 2026",
+            "shift_url": "https://example.com/scheduling?shift=456",
+        }
+    ),
+    "shift_reminder": _sample(
+        {
+            "recipient_name": "John",
+            "position": "Driver",
+            "shift_date": "Mar 18, 2026",
+            "shift_start": "06:00",
+            "time_range": "06:00 – 18:00",
+            "apparatus_name": "Engine 1",
+            "apparatus_html": "<p><strong>Apparatus:</strong> Engine 1</p>",
+            "apparatus_text": "Apparatus: Engine 1",
+            "roster_html": (
+                "<p><strong>Crew roster:</strong></p>"
+                '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">John Doe</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Driver</td></tr>'
+                '<tr><td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Jane Smith</td>'
+                '<td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#1f2937;">Officer</td></tr>'
+                "</table>"
+            ),
+            "roster_text": "Crew: John Doe (Driver), Jane Smith (Officer)",
+            "checklist_html": (
+                "<p><strong>Start-of-shift checklists to complete:</strong></p>"
+                "<ul><li>Engine 1 Start-of-Shift Check</li></ul>"
+            ),
+            "checklist_text": (
+                "Start-of-shift checklists: Engine 1 Start-of-Shift Check"
+            ),
+            "arrival_url": "https://example.com/scheduling/checkin?shift=456",
         }
     ),
 }
@@ -809,7 +1010,7 @@ DEFAULT_WELCOME_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -857,7 +1058,7 @@ DEFAULT_PASSWORD_RESET_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -917,7 +1118,7 @@ DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
     <div class="footer">
         <p>This is an official department notice from {{organization_name}}.</p>
         <p>A copy has been placed in your member file.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -984,7 +1185,7 @@ DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated inventory notice from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1045,7 +1246,7 @@ DEFAULT_CERT_EXPIRATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1098,7 +1299,7 @@ DEFAULT_POST_EVENT_VALIDATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1149,7 +1350,7 @@ DEFAULT_POST_SHIFT_VALIDATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1201,7 +1402,7 @@ DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
     <div class="footer">
         <p>This is an official department notice from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1256,7 +1457,7 @@ DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1287,7 +1488,7 @@ DEFAULT_INACTIVITY_WARNING_SUBJECT = (
 # Default election rollback alert email
 DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #dc2626;">
+    <div class="header">
         <h1>Election Rolled Back</h1>
     </div>
     <div class="content">
@@ -1306,7 +1507,7 @@ DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1332,7 +1533,7 @@ DEFAULT_ELECTION_ROLLBACK_SUBJECT = "ALERT: Election Rolled Back — {{election_
 # Default election deleted alert email
 DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #dc2626;">
+    <div class="header">
         <h1>Election Deleted</h1>
     </div>
     <div class="content">
@@ -1351,7 +1552,7 @@ DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1390,7 +1591,7 @@ DEFAULT_MEMBER_ARCHIVED_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1409,7 +1610,14 @@ DEFAULT_MEMBER_ARCHIVED_SUBJECT = (
     "Member Archived: {{member_name}} — {{organization_name}}"
 )
 
-# Default event request status update email
+# Default event request status update email.
+#
+# This one goes to a member of the public, and most status changes carry only
+# some of the optional fields — a scheduled request has a date and no decline
+# reason, a declined one the reverse. The panel and the coordinator's note are
+# therefore injected pre-built so an absent value leaves nothing behind; the
+# earlier body labelled all three unconditionally and mailed "Reason:" followed
+# by empty space to whoever asked the department to come to their block party.
 DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
@@ -1420,18 +1628,16 @@ DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
 
         <p>Your event request has been updated to: <strong>{{status_label}}</strong>.</p>
 
-        <div class="details">
-            <p><strong>Scheduled Date:</strong> {{event_date}}</p>
-            <p><strong>Reason:</strong> {{decline_reason}}</p>
-            <p><strong>Message:</strong> {{message}}</p>
-        </div>
+        {{details_html}}
+
+        {{message_html}}
 
         <p>Thank you for your request.</p>
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1441,9 +1647,8 @@ Hello {{contact_name}},
 
 Your event request has been updated to: {{status_label}}.
 
-Scheduled Date: {{event_date}}
-Reason: {{decline_reason}}
-Message: {{message}}
+{{details_text}}
+{{message}}
 
 Thank you for your request.
 
@@ -1475,7 +1680,7 @@ DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated IT security notice from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1519,8 +1724,7 @@ DEFAULT_DUPLICATE_APPLICATION_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
-        <p>{{organization_phone}} | {{organization_email}}</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1539,7 +1743,6 @@ status of your application, please contact us directly.
 
 ---
 This is an automated message from {{organization_name}}.
-{{organization_phone}} | {{organization_email}}
 {{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_DUPLICATE_APPLICATION_SUBJECT = (
@@ -1549,7 +1752,7 @@ DEFAULT_DUPLICATE_APPLICATION_SUBJECT = (
 # Default ballot notification email
 DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #4f46e5;">
+    <div class="header" style="background-color: #4338ca;">
         <h1>{{election_title}}</h1>
     </div>
     <div class="content">
@@ -1580,7 +1783,7 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1616,7 +1819,7 @@ DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
 # Default election report email
 DEFAULT_ELECTION_REPORT_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #059669;">
+    <div class="header" style="background-color: #047857;">
         <h1>Election Report</h1>
     </div>
     <div class="content">
@@ -1630,7 +1833,7 @@ DEFAULT_ELECTION_REPORT_HTML = """<div class="container">
             <p><strong>Voting Period:</strong> {{start_date}} &mdash; {{end_date}}</p>
         </div>
 
-        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Turnout &amp; Quorum</h2>
+        <h2>Turnout &amp; Quorum</h2>
         <div class="details">
             <p><strong>Eligible Voters:</strong> {{total_eligible_voters}}</p>
             <p><strong>Votes Cast:</strong> {{total_votes_cast}}</p>
@@ -1639,21 +1842,21 @@ DEFAULT_ELECTION_REPORT_HTML = """<div class="container">
             <p>{{quorum_detail}}</p>
         </div>
 
-        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Results</h2>
+        <h2>Results</h2>
         {{results_html}}
 
-        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Ballot Recipients ({{total_eligible_voters}})</h2>
+        <h2>Ballot Recipients ({{total_eligible_voters}})</h2>
         <p>The following members received ballots:</p>
         {{ballot_recipients_html}}
 
-        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Members Who Did Not Receive Ballots</h2>
+        <h2>Members Who Did Not Receive Ballots</h2>
         <p>The following active members were not sent a ballot, with the reason why:</p>
         {{skipped_voters_html}}
     </div>
     <div class="footer">
         <p>This is an automated election report from {{organization_name}}.</p>
         <p>Please retain this email for your records.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1695,7 +1898,7 @@ DEFAULT_ELECTION_REPORT_SUBJECT = (
 # Default ballot eligibility summary email (sent to secretary after ballot dispatch)
 DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #d97706;">
+    <div class="header" style="background-color: #b45309;">
         <h1>Ballot Eligibility Summary</h1>
     </div>
     <div class="content">
@@ -1709,14 +1912,14 @@ DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = """<div class="container">
             <p><strong>Total Checked In:</strong> {{total_checked_in}}</p>
         </div>
 
-        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Members Who Received Ballots ({{sent_count}})</h2>
+        <h2>Members Who Received Ballots ({{sent_count}})</h2>
         {{recipients_html}}
 
-        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #f59e0b;padding-bottom:6px;color:#92400e;">Members Who Did Not Receive Ballots ({{skipped_count}})</h2>
+        <h2 style="color:#92400e;border-bottom-color:#b45309;">Members Who Did Not Receive Ballots ({{skipped_count}})</h2>
         <p>The following members were skipped because they did not meet the eligibility requirements for any ballot item. The specific reason for each member is listed below.</p>
         {{skipped_voters_html}}
 
-        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">What You Can Do</h2>
+        <h2>What You Can Do</h2>
         <ul>
             <li><strong>Voter Overrides:</strong> If a skipped member should be allowed to vote, use the Voter Override feature on the election page to grant them an exception.</li>
             <li><strong>Check-In Members:</strong> If a member was skipped due to attendance, check them in on the Meeting Attendance panel and resend ballots.</li>
@@ -1726,7 +1929,7 @@ DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated eligibility summary from {{organization_name}}.</p>
         <p>Please retain this email for your records.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1763,7 +1966,7 @@ DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT = (
 # Default event cancellation email
 DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #dc2626;">
+    <div class="header">
         <h1>Event Cancelled</h1>
     </div>
     <div class="content">
@@ -1782,7 +1985,7 @@ DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1834,7 +2037,7 @@ DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated reminder from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1863,7 +2066,7 @@ DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
 # Default series end reminder email
 DEFAULT_SERIES_END_REMINDER_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #f59e0b;">
+    <div class="header" style="background-color: #b45309;">
         <h1>Recurring Series Ending Soon</h1>
     </div>
     <div class="content">
@@ -1887,7 +2090,7 @@ DEFAULT_SERIES_END_REMINDER_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated reminder from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1918,7 +2121,7 @@ DEFAULT_SERIES_END_REMINDER_SUBJECT = (
 # Default training approval email
 DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
-    <div class="header" style="background-color: #7c3aed;">
+    <div class="header" style="background-color: #6d28d9;">
         <h1>Training Approval Needed</h1>
     </div>
     <div class="content">
@@ -1942,7 +2145,7 @@ DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
-        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1967,6 +2170,174 @@ Please do not reply to this email.
 DEFAULT_TRAINING_APPROVAL_SUBJECT = (
     "Training Approval Needed: {{course_name}} — {{event_date}}"
 )
+
+# Shift notices. Departments send these more often than anything else in the
+# catalogue, and until these defaults existed the wording lived in
+# SchedulingService and run_shift_reminders with no way to change it — the
+# template type was already in the enum and already had a home in the Email
+# Templates screen, so the row was simply never created.
+#
+# {{checklist_names}} and {{hours_until}} may arrive empty (no apparatus
+# checklist configured, no reminder offset), so both sit on their own line
+# rather than inside a labelled panel row where an empty value would leave a
+# dangling "Checklists:".
+DEFAULT_SHIFT_ASSIGNMENT_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
+    <div class="header" style="background-color: #047857;">
+        <h1>New Shift Assignment</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>You have been assigned to an upcoming shift:</p>
+
+        <div class="details">
+            <p><strong>Position:</strong> {{position}}</p>
+            <p><strong>Date:</strong> {{shift_date}}</p>
+            <p><strong>Starts:</strong> {{shift_start}}</p>
+        </div>
+
+        {{checklist_html}}
+
+        <p>Please confirm or decline this assignment so the shift officer knows
+        whether the position is covered.</p>
+
+        <p style="text-align: center;">
+            <a href="{{shift_url}}" class="button" role="link">View Shift</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+    </div>
+</div>"""
+
+DEFAULT_SHIFT_ASSIGNMENT_TEXT = """New Shift Assignment
+
+Hello {{recipient_name}},
+
+You have been assigned to an upcoming shift:
+
+Position: {{position}}
+Date: {{shift_date}}
+Starts: {{shift_start}}
+
+{{checklist_text}}
+
+Please confirm or decline this assignment so the shift officer knows whether
+the position is covered.
+
+View shift: {{shift_url}}
+
+---
+This is an automated message from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+
+DEFAULT_SHIFT_ASSIGNMENT_SUBJECT = "Shift Assignment: {{position}} on {{shift_date}}"
+
+DEFAULT_SHIFT_DECLINE_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
+    <div class="header" style="background-color: #b45309;">
+        <h1>Shift Coverage Needed</h1>
+    </div>
+    <div class="content">
+        <p><strong>{{member_name}}</strong> {{action}} the following position.
+        It is now open:</p>
+
+        <div class="details">
+            <p><strong>Position:</strong> {{position}}</p>
+            <p><strong>Date:</strong> {{shift_date}}</p>
+        </div>
+
+        <p>Please assign a replacement so the shift is not left short.</p>
+
+        <p style="text-align: center;">
+            <a href="{{shift_url}}" class="button" role="link">Open the Schedule</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+    </div>
+</div>"""
+
+DEFAULT_SHIFT_DECLINE_TEXT = """Shift Coverage Needed
+
+{{member_name}} {{action}} the following position. It is now open:
+
+Position: {{position}}
+Date: {{shift_date}}
+
+Please assign a replacement so the shift is not left short.
+
+Open the schedule: {{shift_url}}
+
+---
+This is an automated message from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+
+DEFAULT_SHIFT_DECLINE_SUBJECT = "Shift Coverage Needed: {{position}} on {{shift_date}}"
+
+DEFAULT_SHIFT_REMINDER_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
+    <div class="header" style="background-color: #1d4ed8;">
+        <h1>Start-of-Shift Report</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>Your upcoming shift report is below. Please arrive on time and mark
+        your arrival when you get to the station.</p>
+
+        <div class="details">
+            <p><strong>Date:</strong> {{shift_date}}</p>
+            <p><strong>Time:</strong> {{time_range}}</p>
+            <p><strong>Your position:</strong> {{position}}</p>
+        </div>
+
+        {{apparatus_html}}
+
+        {{roster_html}}
+
+        {{checklist_html}}
+
+        <p style="text-align: center;">
+            <a href="{{arrival_url}}" class="button" role="link">Mark Arrival</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated reminder from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
+    </div>
+</div>"""
+
+DEFAULT_SHIFT_REMINDER_TEXT = """Start-of-Shift Report
+
+Hello {{recipient_name}},
+
+Your upcoming shift report is below. Please arrive on time and mark your
+arrival when you get to the station.
+
+Date: {{shift_date}}
+Time: {{time_range}}
+Your position: {{position}}
+{{apparatus_text}}
+{{roster_text}}
+{{checklist_text}}
+
+Mark arrival: {{arrival_url}}
+
+---
+This is an automated reminder from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+
+DEFAULT_SHIFT_REMINDER_SUBJECT = "Shift Report — {{shift_date}} at {{shift_start}}"
 
 
 def build_items_list_html(
@@ -1993,31 +2364,32 @@ def build_items_list_html(
     cols.append("Value")
 
     header_cells = "".join(
-        f'<th style="padding:8px 10px;text-align:{"right" if c == "Value" else "left"};font-size:12px;">{c}</th>'
+        f'<th style="{TH_STYLE}text-align:{"right" if c == "Value" else "left"};">{c}</th>'
         for c in cols
     )
     rows = ""
     for idx, item in enumerate(items, 1):
         cells = (
-            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{idx}</td>'
-            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{_h.escape(str(item.get("name", "")))}</td>'
-            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{_h.escape(str(item.get("serial_number", "-")))}</td>'
-            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{_h.escape(str(item.get("asset_tag", "-")))}</td>'
+            f'<td style="{TD_STYLE}">{idx}</td>'
+            f'<td style="{TD_STYLE}">{_h.escape(str(item.get("name", "")))}</td>'
+            f'<td style="{TD_STYLE}">{_h.escape(str(item.get("serial_number", "-")))}</td>'
+            f'<td style="{TD_STYLE}">{_h.escape(str(item.get("asset_tag", "-")))}</td>'
         )
         if include_condition:
             cond = item.get("condition", "unknown")
-            cells += f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{_h.escape(str(cond).title())}</td>'
-        cells += f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">${item.get("value", 0):,.2f}</td>'
+            cells += f'<td style="{TD_STYLE}">{_h.escape(str(cond).title())}</td>'
+        cells += (
+            f'<td style="{TD_STYLE}text-align:right;">${item.get("value", 0):,.2f}</td>'
+        )
         rows += f"<tr>{cells}</tr>"
 
     col_count = len(cols)
     return (
-        '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
-        f'<thead><tr style="background-color:#374151;color:white;">{header_cells}</tr></thead>'
+        f'<table style="{TABLE_STYLE}">'
+        f"<thead><tr>{header_cells}</tr></thead>"
         f"<tbody>{rows}</tbody>"
-        '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
-        f'<td colspan="{col_count - 1}" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
-        f'<td style="padding:8px 10px;text-align:right;">${total_value:,.2f}</td>'
+        f'<tfoot><tr><td colspan="{col_count - 1}" style="{TFOOT_STYLE}text-align:right;">Total Outstanding Value:</td>'
+        f'<td style="{TFOOT_STYLE}text-align:right;">${total_value:,.2f}</td>'
         "</tr></tfoot></table>"
     )
 
@@ -2134,7 +2506,12 @@ class EmailTemplateService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
-            css_styles=css_styles or DEFAULT_CSS,
+            # NULL, not a copy of DEFAULT_CSS. render() falls back to the
+            # current default for a NULL, so a department that never touched
+            # the stylesheet tracks improvements to it; baking a snapshot in
+            # at creation time froze every existing organization on the
+            # stylesheet that shipped the day they signed up.
+            css_styles=css_styles or None,
             description=description,
             allow_attachments=allow_attachments,
             available_variables=GLOBAL_VARIABLES
@@ -2248,7 +2625,8 @@ class EmailTemplateService:
         template.subject = defn["subject"]
         template.html_body = defn["html"]
         template.text_body = defn["text"]
-        template.css_styles = DEFAULT_CSS
+        # See create_template: NULL means "track the built-in stylesheet".
+        template.css_styles = None
         template.updated_by = updated_by
         await self.db.flush()
         await self.db.refresh(template, attribute_names=["updated_at"])
@@ -2304,6 +2682,42 @@ class EmailTemplateService:
         into the context (without overwriting values already supplied by the
         caller).
         """
+        ctx = self.build_context(context, organization)
+
+        # The subject becomes the SMTP Subject: header and the text body the
+        # text/plain alternative — neither is markup, so neither is escaped.
+        # Only html_body is.
+        subject = self._replace_variables(template.subject, ctx, escape_html=False)
+        html_body = self._replace_variables(template.html_body, ctx)
+        text_body = None
+        if template.text_body:
+            text_body = self._replace_variables(
+                template.text_body, ctx, escape_html=False
+            )
+
+        full_html = build_email_document(
+            subject, html_body, template.css_styles or DEFAULT_CSS
+        )
+
+        return subject, full_html, text_body
+
+    @classmethod
+    def build_context(
+        cls,
+        context: Dict[str, Any],
+        organization: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Add the variables every template may use to a caller's context.
+
+        Split out of :meth:`render` because the code-default fallback in
+        ``EmailService._render_with_fallback`` needs exactly the same set. It
+        did not have it, so a department that had never opened the Email
+        Templates screen — and therefore had no template rows, because that
+        screen is what creates them — received footers reading a literal
+        ``{{organization_phone}} | {{organization_email}}``.
+
+        Caller-supplied values always win; every key here is a ``setdefault``.
+        """
         ctx = dict(context)
         if organization:
             ctx.setdefault("organization_name", getattr(organization, "name", ""))
@@ -2321,7 +2735,7 @@ class EmailTemplateService:
             # Build formatted mailing address
             ctx.setdefault(
                 "organization_mailing_address",
-                self._format_address(
+                cls._format_address(
                     getattr(organization, "mailing_address_line1", None),
                     getattr(organization, "mailing_address_line2", None),
                     getattr(organization, "mailing_city", None),
@@ -2338,7 +2752,7 @@ class EmailTemplateService:
             else:
                 ctx.setdefault(
                     "organization_physical_address",
-                    self._format_address(
+                    cls._format_address(
                         getattr(organization, "physical_address_line1", None),
                         getattr(organization, "physical_address_line2", None),
                         getattr(organization, "physical_city", None),
@@ -2372,58 +2786,17 @@ class EmailTemplateService:
             import html as _h
 
             org_name = ctx.get("organization_name", "Organization")
+            # No class on the <img>: it sits inside <div class="logo">, and the
+            # inliner would otherwise copy that div's centring and padding onto
+            # the image as well.
             ctx.setdefault(
                 "organization_logo_img",
-                f'<img src="{_h.escape(str(logo_val))}" alt="{_h.escape(str(org_name))}" class="logo" style="max-height:80px;max-width:200px;" />',
+                f'<img src="{_h.escape(str(logo_val))}" alt="{_h.escape(str(org_name))}" style="max-height:72px;max-width:200px;" />',
             )
         else:
             ctx.setdefault("organization_logo_img", "")
 
-        # The subject becomes the SMTP Subject: header and the text body the
-        # text/plain alternative — neither is markup, so neither is escaped.
-        # Only html_body is.
-        subject = self._replace_variables(template.subject, ctx, escape_html=False)
-        html_body = self._replace_variables(template.html_body, ctx)
-        text_body = None
-        if template.text_body:
-            text_body = self._replace_variables(
-                template.text_body, ctx, escape_html=False
-            )
-
-        # Wrap HTML body with full document structure and CSS.
-        # lang/dir for screen readers (WCAG 3.1.1), meta charset for
-        # consistent rendering, viewport for mobile clients.
-        css = template.css_styles or DEFAULT_CSS
-        safe_subject_attr = _html_mod.escape(subject, quote=True)
-        full_html = f"""<!DOCTYPE html>
-<html lang="en" dir="ltr" xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="color-scheme" content="light" />
-<meta name="supported-color-schemes" content="light" />
-<title>{_html_mod.escape(subject)}</title>
-<style>
-{css}
-</style>
-<!--[if mso]>
-<noscript>
-<xml>
-<o:OfficeDocumentSettings>
-<o:PixelsPerInch>96</o:PixelsPerInch>
-</o:OfficeDocumentSettings>
-</xml>
-</noscript>
-<![endif]-->
-</head>
-<body>
-<div role="article" aria-roledescription="email" aria-label="{safe_subject_attr}">
-{html_body}
-</div>
-</body>
-</html>"""
-
-        return subject, full_html, text_body
+        return ctx
 
     @classmethod
     def render_static(
@@ -2470,12 +2843,19 @@ class EmailTemplateService:
         "items_list_html",
         "items_issued_html",
         "items_returned_html",
+        "items_removed_html",
         "organization_logo_img",
         "ballot_items_html",
         "results_html",
         "ballot_recipients_html",
+        "recipients_html",
         "skipped_voters_html",
         "custom_message_html",
+        "details_html",
+        "message_html",
+        "apparatus_html",
+        "roster_html",
+        "checklist_html",
     } | _storefront_templates.RAW_HTML_VARIABLES
 
     def _replace_variables(
@@ -2759,6 +3139,40 @@ class EmailTemplateService:
                 "Sent to the applicant when a duplicate membership application "
                 "is detected for the same email address. The department is "
                 "BCC'd automatically."
+            ),
+        },
+        {
+            "type": EmailTemplateType.SHIFT_ASSIGNMENT,
+            "name": "Shift Assignment",
+            "subject": DEFAULT_SHIFT_ASSIGNMENT_SUBJECT,
+            "html": DEFAULT_SHIFT_ASSIGNMENT_HTML,
+            "text": DEFAULT_SHIFT_ASSIGNMENT_TEXT,
+            "description": (
+                "Sent to a member when they are assigned to a shift. Only sent "
+                "when email is enabled in Scheduling Settings > Assignment "
+                "Notifications."
+            ),
+        },
+        {
+            "type": EmailTemplateType.SHIFT_DECLINE,
+            "name": "Shift Coverage Needed",
+            "subject": DEFAULT_SHIFT_DECLINE_SUBJECT,
+            "html": DEFAULT_SHIFT_DECLINE_HTML,
+            "text": DEFAULT_SHIFT_DECLINE_TEXT,
+            "description": (
+                "Sent to the shift officer and the notified roles when a member "
+                "declines or is removed from a shift, leaving the position open."
+            ),
+        },
+        {
+            "type": EmailTemplateType.SHIFT_REMINDER,
+            "name": "Shift Reminder",
+            "subject": DEFAULT_SHIFT_REMINDER_SUBJECT,
+            "html": DEFAULT_SHIFT_REMINDER_HTML,
+            "text": DEFAULT_SHIFT_REMINDER_TEXT,
+            "description": (
+                "Sent to members ahead of a shift they are assigned to, on the "
+                "lead times set in Scheduling Settings > Shift Reminders."
             ),
         },
         # The storefront's ten live in their own module; see

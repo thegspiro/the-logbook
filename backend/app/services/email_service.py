@@ -27,7 +27,8 @@ from app.core.config import settings
 from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
-from app.services.email_template_service import DEFAULT_CSS, EmailTemplateService
+from app.services.email_template_service import EmailTemplateService
+from app.services.email_theme import build_email_document
 
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
@@ -72,6 +73,11 @@ def inline_email_css(html: str) -> str:
     for m in re.finditer(r"([^{}]+)\{([^}]+)\}", css):
         selector = m.group(1).strip()
         styles = re.sub(r"\s+", " ", m.group(2).strip()).rstrip(";") + ";"
+        # These land inside style="…". A double quote — most often a quoted
+        # font name — would close the attribute and spill the rest of the
+        # declaration into the tag as bogus attributes. CSS accepts either
+        # quote character, so swapping is lossless.
+        styles = styles.replace('"', "'")
 
         # body { ... }
         if selector == "body":
@@ -103,32 +109,71 @@ def inline_email_css(html: str) -> str:
 
     # --- inline compound (parent > child) styles ----------------------
     for parent_cls, child_tag, styles in child_styles:
-        # Find content inside elements with parent_cls and style child tags
-        pattern = (
-            r"(<[a-zA-Z]\w*\b[^>]*\bclass=\"" + re.escape(parent_cls) + r"\"[^>]*>)"
-            r"(.*?)"
-            r"(</[a-zA-Z]\w*>)"
-        )
-
-        def _replace_children(
-            outer: re.Match, ctag: str = child_tag, cstyles: str = styles
-        ) -> str:
-            open_tag = outer.group(1)
-            inner = outer.group(2)
-            close_tag = outer.group(3)
-            inner = re.sub(
-                rf"<{ctag}\b([^>]*)>",
-                lambda m: _add_style_to_tag(m.group(0), cstyles),
-                inner,
-            )
-            return open_tag + inner + close_tag
-
-        html = re.sub(pattern, _replace_children, html, flags=re.DOTALL)
+        html = _style_descendants(html, parent_cls, child_tag, styles)
 
     # --- remove <style> block -----------------------------------------
     html = re.sub(r"\s*<style[^>]*>.*?</style>\s*", "", html, flags=re.DOTALL)
 
     return html
+
+
+def _find_element_end(html: str, start: int, tag_name: str) -> int:
+    """Return the offset of the ``</tag_name>`` that closes an open element.
+
+    *start* is the offset just past the element's opening tag.  Nested
+    elements of the same name are counted so the first ``</div>`` inside a
+    ``<div>`` does not end it.  An unbalanced document ends at EOF rather
+    than raising — malformed HTML in an admin-edited template must still
+    send.
+    """
+    token = re.compile(rf"<(/?){re.escape(tag_name)}\b[^>]*?(/?)>", re.IGNORECASE)
+    depth = 1
+    pos = start
+    while True:
+        match = token.search(html, pos)
+        if not match:
+            return len(html)
+        if match.group(1) == "/":
+            depth -= 1
+            if depth == 0:
+                return match.start()
+        elif match.group(2) != "/":
+            depth += 1
+        pos = match.end()
+
+
+def _style_descendants(html: str, parent_cls: str, child_tag: str, styles: str) -> str:
+    """Apply a ``.parent child`` rule to every matching descendant.
+
+    Scoping by element depth rather than by "up to the next closing tag"
+    matters more than it looks: the naive form stopped at the first ``</p>``,
+    so ``.content p`` styled the opening paragraph of every email and left the
+    rest to the client's defaults.  Since Gmail strips ``<style>`` and only
+    the inlined attributes survive, that was the spacing most recipients
+    actually saw.
+    """
+    open_re = re.compile(
+        r"<([a-zA-Z]\w*)\b[^>]*\bclass=\"" + re.escape(parent_cls) + r"\"[^>]*?(/?)>"
+    )
+    child_re = re.compile(rf"<{re.escape(child_tag)}\b[^>]*?/?>", re.IGNORECASE)
+
+    out: List[str] = []
+    pos = 0
+    while True:
+        match = open_re.search(html, pos)
+        if not match:
+            break
+        out.append(html[pos : match.end()])
+        pos = match.end()
+        if match.group(2) == "/":  # self-closing parent has no descendants
+            continue
+        end = _find_element_end(html, match.end(), match.group(1))
+        out.append(
+            child_re.sub(lambda m: _add_style_to_tag(m.group(0), styles), html[pos:end])
+        )
+        pos = end
+    out.append(html[pos:])
+    return "".join(out)
 
 
 def _merge_body_style(html: str, styles: str) -> str:
@@ -187,7 +232,7 @@ def build_email_logo_img(organization: Optional[Organization]) -> str:
     safe_name = _html.escape(str(org_name))
     return (
         f'<img src="{safe_url}" alt="{safe_name}" '
-        f'style="max-height:80px;max-width:200px;" />'
+        f'style="max-height:72px;max-width:200px;" />'
     )
 
 
@@ -245,14 +290,10 @@ def wrap_email_body(
     )
     contact_parts = [p for p in (org_phone, org_email_addr, org_website) if p]
     contact_line = (
-        f'<p style="font-size: 11px; color: #9ca3af;">{" | ".join(contact_parts)}</p>'
-        if contact_parts
-        else ""
+        f'<p class="muted">{" | ".join(contact_parts)}</p>' if contact_parts else ""
     )
     style_attr = f' style="background-color: {header_color};"' if header_color else ""
-    return (
-        f"<!DOCTYPE html><html><head>"
-        f"<style>{DEFAULT_CSS}</style></head><body>"
+    body = (
         f'<div class="container">'
         f"{logo_div}"
         f'<div class="header"{style_attr}>'
@@ -262,8 +303,9 @@ def wrap_email_body(
         f"<p>{footer_text}</p>"
         f"<p>Please do not reply to this email.</p>"
         f"{contact_line}"
-        f"</div></div></body></html>"
+        f"</div></div>"
     )
+    return build_email_document(title, body)
 
 
 class EmailService:
@@ -358,7 +400,12 @@ class EmailService:
                 loaded, context, organization=self.organization
             )
 
-        context["organization_logo_img"] = self._build_logo_img()
+        # Same organization variables the stored-template path gets. Without
+        # this the code defaults mailed their footer as a literal
+        # "{{organization_phone}} | {{organization_email}}" — and this path is
+        # the *normal* one until somebody opens the Email Templates screen,
+        # since that screen is what creates the rows.
+        context = EmailTemplateService.build_context(context, self.organization)
 
         def _replace(text: str, escape: bool = True) -> str:
             def replacer(match: re.Match) -> str:
@@ -376,10 +423,7 @@ class EmailService:
         # "Fire & Rescue" as "Fire &amp; Rescue". CR/LF in the subject is stripped
         # by _sanitize_header at the send layer.
         subject = _replace(default_subject, escape=False)
-        html_body = (
-            f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style>"
-            f"</head><body>{_replace(default_html)}</body></html>"
-        )
+        html_body = build_email_document(subject, _replace(default_html))
         text_body = _replace(default_text, escape=False)
         return subject, html_body, text_body
 

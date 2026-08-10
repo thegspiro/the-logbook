@@ -195,7 +195,13 @@ class MessageHistoryListResponse(BaseModel):
 class SendTestEmailRequest(BaseModel):
     """Request schema for sending a test email"""
 
-    to_email: str = Field(..., description="Recipient email address")
+    to_email: str = Field(
+        "",
+        description=(
+            "Recipient email address. Blank sends to the requesting user — "
+            "the 'send a test to me' button has no other address to offer."
+        ),
+    )
     template_id: Optional[str] = Field(
         None, description="Optional template ID to use for the test"
     )

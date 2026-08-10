@@ -27,12 +27,15 @@ being told how to pay.
 from typing import Any, Dict, List
 
 from app.models.email_template import EmailTemplateType
-
-# Header banner colours, matching the ones the service passes to
-# ``wrap_email_body`` so a defaulted template looks like the coded fallback.
-_GREEN = "#047857"
-_AMBER = "#b45309"
-_RED = "#b91c1c"
+from app.services.email_theme import (
+    ACCENT_AMBER,
+    ACCENT_GREEN,
+    ACCENT_RED,
+    TABLE_STYLE,
+    TD_STYLE,
+    TFOOT_STYLE,
+    TH_STYLE,
+)
 
 
 def _shell(title: str, content: str, header_color: str = "") -> str:
@@ -48,7 +51,7 @@ def _shell(title: str, content: str, header_color: str = "") -> str:
         '    <div class="footer">\n'
         "        <p>This is an automated message from {{organization_name}}.</p>\n"
         "        <p>Please do not reply to this email.</p>\n"
-        '        <p style="font-size: 11px; color: #9ca3af;">'
+        '        <p class="muted">'
         "{{organization_phone}} | {{organization_email}} | "
         "{{organization_website}}</p>\n"
         "    </div>\n"
@@ -112,7 +115,7 @@ ORDER_CANCELLED_HTML = _shell(
     """        <p>Your order <strong>{{order_number}}</strong> has been cancelled.</p>
         {{cancellation_reason_html}}
         {{refund_notice_html}}""",
-    header_color=_RED,
+    header_color=ACCENT_RED,
 )
 ORDER_CANCELLED_TEXT = """Order {{order_number}} was cancelled.
 """ + _FOOTER_TEXT
@@ -124,7 +127,7 @@ PAYMENT_REMINDER_HTML = _shell(
            <strong>{{balance_due}}</strong>.</p>
         {{items_table_html}}
         {{payment_block_html}}""",
-    header_color=_AMBER,
+    header_color=ACCENT_AMBER,
 )
 PAYMENT_REMINDER_TEXT = """Order {{order_number}} has a balance of {{balance_due}}.
 """ + _FOOTER_TEXT
@@ -134,7 +137,7 @@ PAYMENT_RECEIVED_HTML = _shell(
     "Payment Received",
     """        {{payment_summary_html}}
         {{balance_notice_html}}""",
-    header_color=_GREEN,
+    header_color=ACCENT_GREEN,
 )
 PAYMENT_RECEIVED_TEXT = """Payment received for order {{order_number}}.
 """ + _FOOTER_TEXT
@@ -161,7 +164,7 @@ WINDOW_OPEN_SUBJECT = "Store orders are open — {{window_name}}"
 WINDOW_OPEN_HTML = _shell(
     "Ordering Is Open",
     _window_body("The department store is now taking orders."),
-    header_color=_GREEN,
+    header_color=ACCENT_GREEN,
 )
 WINDOW_OPEN_TEXT = """Store orders are open for {{window_name}}.
 """ + _FOOTER_TEXT
@@ -170,7 +173,7 @@ WINDOW_CLOSING_SUBJECT = "Last call — {{window_name}} closes soon"
 WINDOW_CLOSING_HTML = _shell(
     "Order Window Closing",
     _window_body("Last call — the store order window closes soon."),
-    header_color=_AMBER,
+    header_color=ACCENT_AMBER,
 )
 WINDOW_CLOSING_TEXT = """The {{window_name}} order window closes soon.
 """ + _FOOTER_TEXT
@@ -312,18 +315,22 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     EmailTemplateType.STOREFRONT_VENDOR_ORDER_PLACED.value: _WINDOW_VARS,
 }
 
+# Built from the same constants StorefrontNotificationService uses, so the
+# preview a quartermaster approves is the table the member receives.
 _SAMPLE_ITEMS_TABLE = (
-    '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
-    '<thead><tr style="background:#f3f4f6;">'
-    '<th style="padding:8px 12px;text-align:left;">Item</th>'
-    '<th style="padding:8px 12px;text-align:center;">Qty</th>'
-    '<th style="padding:8px 12px;text-align:right;">Total</th></tr></thead>'
+    f'<table style="{TABLE_STYLE}">'
+    "<thead><tr>"
+    f'<th style="{TH_STYLE}text-align:left;">Item</th>'
+    f'<th style="{TH_STYLE}text-align:center;">Qty</th>'
+    f'<th style="{TH_STYLE}text-align:right;">Total</th></tr></thead>'
     "<tbody><tr>"
-    '<td style="padding:6px 12px;">Department Job Shirt<br>'
+    f'<td style="{TD_STYLE}text-align:left;">Department Job Shirt<br>'
     '<span style="color:#6b7280;font-size:12px;">Large</span></td>'
-    '<td style="padding:6px 12px;text-align:center;">1</td>'
-    '<td style="padding:6px 12px;text-align:right;">$53.00</td>'
-    "</tr></tbody></table>"
+    f'<td style="{TD_STYLE}text-align:center;">1</td>'
+    f'<td style="{TD_STYLE}text-align:right;">$53.00</td>'
+    "</tr></tbody>"
+    f'<tfoot><tr><td colspan="2" style="{TFOOT_STYLE}text-align:right;">Total</td>'
+    f'<td style="{TFOOT_STYLE}text-align:right;">$53.00</td></tr></tfoot></table>'
 )
 _SAMPLE_PAYMENT_BLOCK = (
     "<p><strong>Balance due: $53.00</strong></p>"
