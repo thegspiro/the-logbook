@@ -90,7 +90,7 @@ defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 httpx==0.28.1
 requests==2.34.2  # For health checks (CVE-2024-35195 & CVE-2024-47081 fixes)
 aiofiles==25.1.0
-websockets==14.2
+websockets==17.0.1
 
 # ============================================
 # Data Validation & Parsing
