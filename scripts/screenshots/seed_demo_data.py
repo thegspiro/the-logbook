@@ -1574,7 +1574,8 @@ class Seeder:
                 # Setting shift_officer_id mints an assignment of its own, so an
                 # officer picked independently could already be crewing another
                 # apparatus that day and the API rejects the double-booking.
-                if pool_cursor < len(day_pool):
+                officer_seated = pool_cursor < len(day_pool)
+                if officer_seated:
                     payload["shift_officer_id"] = day_pool[pool_cursor]
                     pool_cursor += 1
                 shift = self.api.post("/scheduling/shifts", payload)
@@ -1585,20 +1586,30 @@ class Seeder:
                 # crewed to its minimum instead: the calendar tints a shift by
                 # how well it is staffed, and a schedule that is uniformly short
                 # renders as a wall of amber with no green to compare it to.
+                #
+                # The officer takes one of those seats — count them, or every
+                # shift comes out one body over its own position list and the
+                # readiness tile reads "4 assigned / 3 positions".
                 full = index == 0 and offset % 2 == 0
                 shift_id = pick(shift, "id")
-                crew = day_pool[
-                    pool_cursor : pool_cursor + staffing - (0 if full else 1)
-                ]
+                # The seats this rig actually has, minus the one the shift
+                # officer already holds. Crewing everybody as "firefighter"
+                # left the Driver/Operator seat open on every board in the
+                # department while the surplus firefighters piled up under
+                # "Additional Crew" — a rig that is fully crewed on paper and
+                # short a driver on screen.
+                seats = SHIFT_POSITIONS[:staffing]
+                if officer_seated and "officer" in seats:
+                    seats = [seat for seat in seats if seat != "officer"]
+                if not full:
+                    seats = seats[:-1]
+                crew = day_pool[pool_cursor : pool_cursor + len(seats)]
                 pool_cursor += len(crew)
                 for slot, user_id in enumerate(crew):
                     try:
                         self.api.post(
                             f"/scheduling/shifts/{shift_id}/assignments",
-                            {
-                                "user_id": user_id,
-                                "position": ("officer" if slot == 0 else "firefighter"),
-                            },
+                            {"user_id": user_id, "position": seats[slot]},
                         )
                     except ApiError as exc:
                         # The night shift runs 19:00-07:00, so its crew is still
@@ -1628,6 +1639,8 @@ class Seeder:
                         # slot — neither is worth failing the whole seed over.
                         if exc.code not in (400, 409):
                             raise
+        self._seat_shift_officers(shifts)
+        self._align_crew_to_seats(shifts)
         self._seed_shift_attendance(shifts)
         return {
             "templates": templates,
@@ -1635,6 +1648,102 @@ class Seeder:
             "apparatus": fleet,
             "shifts": shifts,
         }
+
+    def _seat_shift_officers(self, shifts: list[dict]) -> None:
+        """Put each shift's designated officer onto its crew board.
+
+        Seating happens in the application, on the transition from one officer
+        to another — so shifts created before that path learned to fall back to
+        the shift's own riding positions still name a Shift Officer who holds no
+        seat and appears on no roster. Re-setting the officer (clear, then set)
+        replays the transition and lets the fixed code do the seating, rather
+        than the seeder minting an assignment the product would not have.
+
+        Keyed on the officer being absent from the roster, so a database whose
+        boards are already correct is left alone.
+        """
+        for shift in shifts:
+            shift_id = pick(shift, "id")
+            officer_id = pick(shift, "shift_officer_id", "shiftOfficerId")
+            if not shift_id or not officer_id:
+                continue
+            crew = items(
+                self.api.get(f"/scheduling/shifts/{shift_id}/assignments"),
+                "assignments",
+            )
+            if any(pick(row, "user_id", "userId") == officer_id for row in crew):
+                continue
+            try:
+                self.api.patch(
+                    f"/scheduling/shifts/{shift_id}", {"shift_officer_id": None}
+                )
+                self.api.patch(
+                    f"/scheduling/shifts/{shift_id}", {"shift_officer_id": officer_id}
+                )
+            except ApiError as exc:
+                # A double-booking refusal means the officer is already crewing
+                # another rig that day; the board is then correct to leave the
+                # seat open, and the header names who is in charge regardless.
+                if exc.code not in (400, 409):
+                    raise
+                self.blocked.append(f"shift officer seat: {exc}")
+
+    def _align_crew_to_seats(self, shifts: list[dict]) -> None:
+        """Match a future shift's roster to the seats the crew board renders.
+
+        The board seats members by position name, so a crew assigned entirely
+        as "firefighter" leaves the Driver/Operator seat open on every rig in
+        the department while the surplus firefighters stack up under
+        "Additional Crew" — a shift that is fully crewed by headcount and short
+        a driver on screen. A database seeded before the officer took a seat is
+        also one body over its own seat count, which the readiness tile reports
+        as "4 assigned / 3 positions".
+
+        Both are repaired here rather than only in the create path, so an
+        existing demo database is brought into line instead of needing a wipe:
+        members already sitting in a seat stay put, the rest are moved into
+        whatever is still open, and anyone left over is dropped.
+
+        Future shifts only: a past shift's roster is what actually worked it,
+        and its attendance records hang off those assignments.
+        """
+        for shift in shifts:
+            shift_id = pick(shift, "id")
+            day = str(pick(shift, "shift_date", "shiftDate") or "")
+            slots = pick(shift, "positions") or []
+            if not shift_id or not slots or day <= str(TODAY):
+                continue
+            seats = [str(pick(slot, "position") or "") for slot in slots]
+            crew = [
+                row
+                for row in items(
+                    self.api.get(f"/scheduling/shifts/{shift_id}/assignments"),
+                    "assignments",
+                )
+                if pick(row, "assignment_status", "assignmentStatus")
+                in ("assigned", "confirmed")
+            ]
+
+            # Everyone already in a seat keeps it; each seat is claimed once,
+            # so a third firefighter on a two-firefighter rig counts as unseated
+            # rather than as filling a seat somebody else holds.
+            unclaimed = list(seats)
+            unseated = []
+            for row in crew:
+                position = str(pick(row, "position") or "")
+                if position in unclaimed:
+                    unclaimed.remove(position)
+                else:
+                    unseated.append(row)
+
+            for row in unseated:
+                if unclaimed:
+                    self.api.patch(
+                        f"/scheduling/assignments/{pick(row, 'id')}",
+                        {"position": unclaimed.pop(0)},
+                    )
+                else:
+                    self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
 
     def _seed_shift_attendance(self, shifts: list[dict]) -> None:
         """Check the crew of past shifts in and out again.
@@ -3620,16 +3729,29 @@ class Seeder:
                 f"/training/shift-reports/{pick(report, 'id')}/review",
                 {"review_status": "approved"},
             )
-        for report in others[1:2]:
+        # Two flagged, not one: the Flagged view is a queue, and a queue of one
+        # pictures neither the batch-review bar (which needs more than one
+        # report) nor the fact that reviewers write a different reason on each.
+        flag_notes = [
+            (
+                "Hours do not match the roster for this shift — please "
+                "confirm the relief time and resubmit."
+            ),
+            (
+                "No narrative for the pump evolution. Add what was attempted "
+                "and what needed prompting, then resubmit."
+            ),
+        ]
+        # Keyed on how many are already flagged, so a re-run tops the queue up
+        # rather than flagging two more of them every time.
+        already = [
+            r for r in others if pick(r, "review_status", "reviewStatus") == "flagged"
+        ]
+        candidates = [r for r in others[1:] if r not in already]
+        for report, note in zip(candidates, flag_notes[len(already) :]):
             self.api.post(
                 f"/training/shift-reports/{pick(report, 'id')}/review",
-                {
-                    "review_status": "flagged",
-                    "reviewer_notes": (
-                        "Hours do not match the roster for this shift — please "
-                        "confirm the relief time and resubmit."
-                    ),
-                },
+                {"review_status": "flagged", "reviewer_notes": note},
             )
         return reports
 

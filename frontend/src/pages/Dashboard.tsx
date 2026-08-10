@@ -55,6 +55,7 @@ import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStat
 import { requirementTarget, requirementAction } from '../utils/pipelineProgress';
 import { useTimezone } from '../hooks/useTimezone';
 import {
+  formatCalendarDate,
   formatDate,
   formatDateCustom,
   formatNumber,
@@ -486,15 +487,14 @@ const Dashboard: React.FC = () => {
   };
 
   const formatShiftDate = (dateStr: string) => {
-    return formatDateCustom(
-      dateStr + 'T00:00:00',
-      {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      },
-      tz
-    );
+    // A shift_date is a calendar date, not an instant — see formatCalendarDate.
+    // Padded to midnight and run through the department timezone, today's
+    // shift rendered as yesterday under "My Upcoming Shifts".
+    return formatCalendarDate(dateStr, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   const formatShiftTime = (timeStr?: string) => {

@@ -965,7 +965,7 @@ export const ShiftReportsTab: React.FC = () => {
                   <Clock className="h-3 w-3" /> {report.hours_on_shift}h
                 </span>
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
-                  <Phone className="h-3 w-3" /> {report.calls_responded} calls
+                  <Phone className="h-3 w-3" /> {report.calls_responded} call{report.calls_responded === 1 ? '' : 's'}
                 </span>
                 {report.performance_rating && renderRating(report.performance_rating)}
                 {report.officer_name && (
@@ -2328,7 +2328,8 @@ export const ShiftReportsTab: React.FC = () => {
                         <Clock className="h-3.5 w-3.5" /> {reviewReport.hours_on_shift}h
                       </span>
                       <span className="text-theme-text-muted flex items-center gap-1">
-                        <Phone className="h-3.5 w-3.5" /> {reviewReport.calls_responded} calls
+                        <Phone className="h-3.5 w-3.5" /> {reviewReport.calls_responded} call
+                        {reviewReport.calls_responded === 1 ? '' : 's'}
                       </span>
                       {reviewReport.performance_rating && renderRating(reviewReport.performance_rating)}
                     </div>
