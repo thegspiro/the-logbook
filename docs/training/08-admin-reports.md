@@ -543,7 +543,12 @@ The following modules now include comprehensive `log_audit_event()` calls for HI
 
 All audit events are appended to the tamper-proof SHA-256 hash chain in the `audit_logs` table.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Security > Audit Log page filtered to "shift_report" events showing recent shift completion report audit entries with timestamps, acting user, event type (e.g., shift_report_reviewed), and metadata (report ID, review status)._
+Find these under **Administration → Organization Settings → Audit Log** and
+search for `shift_report`. The search box holds its own draft — it does not
+filter until you press **Apply** — while the severity and category dropdowns
+take effect the moment you change them.
+
+![The audit log searched for shift_report, listing review and update events](./images/08-54-audit-shift-reports.png)
 
 ### Shift Report Security Fix _(2026-04-07)_
 
@@ -556,7 +561,7 @@ A critical authorization bypass was identified and fixed on the `GET /shift-repo
 - `reviewer_notes` are **always stripped** for trainees regardless of visibility settings
 - Unauthorized access returns **403 Forbidden**
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Security > Audit Log page filtered to "medical" events showing recent medical screening audit entries with timestamps, user, and event details._
+![The audit log filtered to the medical screening category](./images/08-55-audit-medical.png)
 
 ## Pagination Standardization _(2026-03-29)_
 
@@ -631,7 +636,12 @@ Admins with the `audit.view` permission can read the audit trail directly. Navig
 
 ![Audit Log page with summary stat cards and the filter bar](./images/08-19-audit-log.png)
 
-> **Note:** The audit log is scoped to your organization — events for your department's users only. System-level events (such as scheduled jobs that have no acting user) are deliberately excluded from this view.
+> **Note:** The audit log is scoped to your organization. That scope is the
+> _only_ filter applied — an event recorded against your department with no
+> acting user, such as a kiosk guest sign-in or a scheduled job, still appears,
+> with **system** shown in italics in the User column. What the view never shows
+> is an event belonging to another department, or a platform-wide event recorded
+> against no organization at all.
 
 ### Rate Limiting
 
@@ -1531,13 +1541,13 @@ Four stat cards appear at the top of the page:
 
 Click any row to expand it and see the full **event metadata** — a JSON view of all data associated with the event (e.g., report ID, review status, affected member, old/new values).
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Audit Log page showing the summary stat cards at the top, the filter bar (search, severity, category dropdowns), and the event table with several rows. Show one row expanded to reveal the JSON event metadata._
+![The audit log with a row expanded to its JSON event metadata](./images/08-53-audit-log-expanded.png)
 
 ### Edge Cases
 
 | Scenario                              | Behavior                                    |
 | ------------------------------------- | ------------------------------------------- |
-| System-level events (no acting user)  | Excluded from org-scoped view               |
+| System-level events (no acting user)  | Shown, with **system** in the User column   |
 | Very large audit trail (100k+ events) | Paginated; server-side filtering            |
 | Multiple severity levels selected     | Events matching any selected severity shown |
 | Event with no metadata                | Expandable row shows empty JSON `{}`        |

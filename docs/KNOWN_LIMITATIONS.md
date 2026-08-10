@@ -704,6 +704,21 @@ an election configured to open itself could not be told to stop.
 `tests/test_election_update_allowlist.py` now checks the invariant, since the
 pattern cannot report its own omissions.
 
+## Audit Log — The Search Box Needs Apply, The Dropdowns Do Not (2026-08-10)
+
+Two filters on the same bar behave differently. The severity and category
+selects write straight to the query state and refetch on change; the search
+input holds a separate draft that only reaches the query when **Apply** is
+pressed. Typing a term and reading the table gives the unfiltered list under a
+filled-in search box, with no cue that the term has not been applied.
+
+Not changed — an unconditionally live search on a table this size is a fetch
+per keystroke, and the Apply button is a deliberate answer to that. Recorded
+because it reads as a bug from the outside, and because it caught this repo's
+own screenshot: the first capture of the shift-report filter showed
+"shift_report" in the box above 1,865 unfiltered rows. Worth revisiting as a
+debounce, or as disabling Apply until the draft differs.
+
 ## Prospects — `referral_source` Is Stored But Never Shown (2026-08-10)
 
 A guest sign-in stamps the prospect's `referral_source` with

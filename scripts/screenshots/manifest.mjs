@@ -1053,6 +1053,60 @@ export const SHOTS = [
     route: "/admin/audit-log",
     fullPage: true,
   },
+  // ── Audit log ──────────────────────────────────────────────────────
+  //
+  // The filters are component state with no URL form, so each of these types
+  // into the search box or picks from the category select rather than
+  // navigating to a filtered route.
+  {
+    id: "08-53-audit-log-expanded",
+    doc: "08-admin-reports.md",
+    line: 1544,
+    anchor:
+      "Screenshot of the Audit Log page showing the summary stat cards at the top",
+    alt: "The audit log with a row expanded to its JSON event metadata",
+    route: "/admin/audit-log",
+    prepare: async (page) => {
+      const row = page.locator("tbody tr").first();
+      await row.click({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-54-audit-shift-reports",
+    doc: "08-admin-reports.md",
+    line: 551,
+    anchor: 'Screenshot of the Audit Log searched for "shift_report"',
+    alt: "The audit log searched for shift_report, listing review and update events",
+    route: "/admin/audit-log",
+    prepare: async (page) => {
+      await page.getByLabel(/search audit log/i).fill("shift_report");
+      // Apply, not just type. The search box holds its own draft state and
+      // only reaches the query on Apply — the severity and category selects
+      // refetch on change, which is what made the first attempt at this shot
+      // show a filled-in search box above 1,865 unfiltered rows.
+      await page.getByRole("button", { name: /^Apply$/ }).click();
+      await page.waitForTimeout(1200);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-55-audit-medical",
+    doc: "08-admin-reports.md",
+    line: 564,
+    anchor:
+      "Screenshot of the Audit Log with its category filter set to medical_screening",
+    alt: "The audit log filtered to the medical screening category",
+    route: "/admin/audit-log",
+    prepare: async (page) => {
+      await page
+        .getByLabel(/filter by category/i)
+        .selectOption("medical_screening");
+      await page.waitForTimeout(1200);
+    },
+    fullPage: true,
+  },
   {
     id: "08-21-medical-screening",
     doc: "08-admin-reports.md",
