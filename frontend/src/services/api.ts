@@ -206,6 +206,8 @@ export type {
   EmailAttachment,
   EmailTemplateUpdate,
   EmailTemplatePreview,
+  EmailFooter,
+  EmailFooterLibrary,
   NotificationRuleRecord,
   NotificationLogRecord,
   NotificationsSummary,

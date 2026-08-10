@@ -6,6 +6,7 @@ Accessible by admins via the membership module admin area.
 """
 
 import asyncio
+import copy
 import os
 import uuid
 
@@ -27,6 +28,8 @@ from app.models.email_template import (
 from app.models.user import User
 from app.schemas.email_template import (
     EmailAttachmentResponse,
+    EmailFooterLibrary,
+    EmailFooterLibraryResponse,
     EmailTemplatePreviewRequest,
     EmailTemplatePreviewResponse,
     EmailTemplateResponse,
@@ -35,11 +38,114 @@ from app.schemas.email_template import (
     ScheduledEmailResponse,
     ScheduledEmailUpdate,
 )
-from app.services.email_template_service import SAMPLE_CONTEXT, EmailTemplateService
+from app.services import email_footers
+from app.services.email_template_service import (
+    GLOBAL_VARIABLES,
+    SAMPLE_CONTEXT,
+    EmailTemplateService,
+)
 from app.services.officer_service import OfficerService
 from app.utils.org_scoping import assert_in_org
 
 router = APIRouter()
+
+
+async def _footer_library_response(
+    db: AsyncSession, organization_id: str
+) -> EmailFooterLibraryResponse:
+    """Read the library back with a live count of who uses each footer.
+
+    The count is what makes deleting a footer a decision rather than a
+    guess — the screen can say "3 templates use this" before it goes.
+    """
+    from sqlalchemy import func, select
+
+    from app.models.user import Organization
+
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == str(organization_id))
+    )
+    organization = org_result.scalar_one_or_none()
+    library = email_footers.read_library(organization)
+
+    counts = await db.execute(
+        select(EmailTemplate.footer_key, func.count(EmailTemplate.id))
+        .where(EmailTemplate.organization_id == str(organization_id))
+        .group_by(EmailTemplate.footer_key)
+    )
+    usage = {footer["key"]: 0 for footer in library["footers"]}
+    for key, count in counts.all():
+        # A NULL footer_key means "the default", so those templates count
+        # towards the footer they actually render with.
+        resolved = key if key in usage else library["default_key"]
+        usage[resolved] = usage.get(resolved, 0) + count
+
+    return EmailFooterLibraryResponse(
+        default_key=library["default_key"],
+        footers=library["footers"],
+        variables=[
+            variable
+            for variable in GLOBAL_VARIABLES
+            if variable["name"] in email_footers.FOOTER_VARIABLE_NAMES
+        ],
+        usage=usage,
+    )
+
+
+@router.get("/footers", response_model=EmailFooterLibraryResponse)
+async def get_email_footers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """The department's footer library, seeded on first read."""
+    return await _footer_library_response(db, current_user.organization_id)
+
+
+@router.put("/footers", response_model=EmailFooterLibraryResponse)
+async def update_email_footers(
+    payload: EmailFooterLibrary,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """Replace the footer library.
+
+    Saved whole: the default and the list have to stay consistent, and a
+    per-footer save could leave ``default_key`` naming a footer the same
+    request deleted.
+    """
+    from sqlalchemy import select
+
+    from app.models.user import Organization
+
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
+        )
+
+    # Deep copy before touching a nested key: Organization.settings is a
+    # MutableDict that tracks top-level assignment only, and a shallow copy
+    # shares the nested dicts with SQLAlchemy's committed state, so the
+    # UPDATE is skipped as a no-op. See CLAUDE.md pitfall 12.
+    settings = copy.deepcopy(organization.settings or {})
+    settings[email_footers.ORG_SETTINGS_FOOTER_KEY] = payload.model_dump()
+    organization.settings = settings
+
+    await db.commit()
+    logger.info(
+        "Email footers updated org={} by={} count={}",
+        current_user.organization_id,
+        current_user.id,
+        len(payload.footers),
+    )
+    return await _footer_library_response(db, current_user.organization_id)
 
 
 @router.get("", response_model=list[EmailTemplateResponse])
@@ -301,6 +407,13 @@ async def preview_email_template(
         html_body=preview_data.html_body or template.html_body,
         text_body=preview_data.text_body or template.text_body,
         css_styles=preview_data.css_styles or template.css_styles,
+        # Carried through so the preview closes with the footer this template
+        # is set to use, not the department's default.
+        footer_key=(
+            preview_data.footer_key
+            if preview_data.footer_key is not None
+            else template.footer_key
+        ),
     )
 
     subject, html_body, text_body = service.render(

@@ -48,22 +48,13 @@ def _shell(title: str, content: str, header_color: str = "") -> str:
         f"        <h1>{title}</h1>\n"
         "    </div>\n"
         f'    <div class="content">\n{content}\n    </div>\n'
-        '    <div class="footer">\n'
-        "        <p>This is an automated message from {{organization_name}}.</p>\n"
-        "        <p>Please do not reply to this email.</p>\n"
-        '        <p class="muted">'
-        "{{organization_phone}} | {{organization_email}} | "
-        "{{organization_website}}</p>\n"
-        "    </div>\n"
+        "    {{footer_html}}\n"
         "</div>"
     )
 
 
 _FOOTER_TEXT = """
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 
 # ----------------------------------------------------------------------

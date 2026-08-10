@@ -267,31 +267,25 @@ def wrap_email_body(
         organization: Org for logo. ``None`` skips the logo.
         title: Text for the ``<h1>`` header banner.
         body_html: Pre-escaped HTML for the content area.
-        footer_text: Optional custom first-line footer text.
-            Defaults to "This is an automated message from <org>."
+        footer_text: Optional replacement for the whole footer block. Left
+            empty — which is the usual case — the department's default footer
+            is used, the same one its templates close with.
         header_color: Optional inline ``background-color`` for the header.
-            E.g. ``"#dc2626"`` for red alerts.
+            E.g. ``"#b91c1c"`` for red alerts.
     """
     logo_img = build_email_logo_img(organization)
     logo_div = f'<div class="logo">{logo_img}</div>' if logo_img else ""
-    org_name = _html.escape(getattr(organization, "name", "")) if organization else ""
-    if not footer_text:
-        footer_text = f"This is an automated message from {org_name}."
-    org_phone = (
-        _html.escape(getattr(organization, "phone", None) or "") if organization else ""
-    )
-    org_email_addr = (
-        _html.escape(getattr(organization, "email", None) or "") if organization else ""
-    )
-    org_website = (
-        _html.escape(getattr(organization, "website", None) or "")
-        if organization
-        else ""
-    )
-    contact_parts = [p for p in (org_phone, org_email_addr, org_website) if p]
-    contact_line = (
-        f'<p class="muted">{" | ".join(contact_parts)}</p>' if contact_parts else ""
-    )
+
+    # The department's default footer, so a one-off email from a scheduled
+    # task closes the same way its templated mail does. *footer_text*
+    # overrides the whole block for the few callers that need to say
+    # something else.
+    if footer_text:
+        footer_block = f'<div class="footer"><p>{_html.escape(footer_text)}</p></div>'
+    else:
+        context = EmailTemplateService.build_context({}, organization)
+        footer_block = str(context.get("footer_html", ""))
+
     style_attr = f' style="background-color: {header_color};"' if header_color else ""
     body = (
         f'<div class="container">'
@@ -299,11 +293,7 @@ def wrap_email_body(
         f'<div class="header"{style_attr}>'
         f"<h1>{_html.escape(title)}</h1></div>"
         f'<div class="content">{body_html}</div>'
-        f'<div class="footer">'
-        f"<p>{footer_text}</p>"
-        f"<p>Please do not reply to this email.</p>"
-        f"{contact_line}"
-        f"</div></div>"
+        f"{footer_block}</div>"
     )
     return build_email_document(title, body)
 

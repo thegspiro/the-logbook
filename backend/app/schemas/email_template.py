@@ -7,7 +7,7 @@ Pydantic schemas for email template API requests and responses.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -43,6 +43,7 @@ class EmailTemplateResponse(UTCResponseBase):
     html_body: str
     text_body: Optional[str] = None
     css_styles: Optional[str] = None
+    footer_key: Optional[str] = None
     is_active: bool
     allow_attachments: bool
     default_cc: Optional[List[str]] = None
@@ -65,6 +66,14 @@ class EmailTemplateUpdate(BaseModel):
     html_body: Optional[str] = Field(None, min_length=1)
     text_body: Optional[str] = None
     css_styles: Optional[str] = None
+    footer_key: Optional[str] = Field(
+        None,
+        max_length=32,
+        description=(
+            "Key of the footer this template closes with. Empty string means "
+            "the department's default footer."
+        ),
+    )
     description: Optional[str] = None
     is_active: Optional[bool] = None
     allow_attachments: Optional[bool] = None
@@ -87,6 +96,11 @@ class EmailTemplatePreviewRequest(BaseModel):
     html_body: Optional[str] = None
     text_body: Optional[str] = None
     css_styles: Optional[str] = None
+    footer_key: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="Preview with this footer instead of the template's saved one",
+    )
     context: Dict[str, Any] = Field(default_factory=dict)
     member_id: Optional[str] = Field(
         None, description="Optional member ID to populate preview with real member data"
@@ -99,6 +113,82 @@ class EmailTemplatePreviewResponse(BaseModel):
     subject: str
     html_body: str
     text_body: Optional[str] = None
+
+
+# --- Email footer schemas ---
+
+
+class EmailFooter(BaseModel):
+    """One named footer in a department's library."""
+
+    key: str = Field(
+        ...,
+        min_length=1,
+        max_length=32,
+        pattern=r"^[a-z0-9][a-z0-9_-]{0,31}$",
+        description="Stable identifier templates refer to; not shown to recipients",
+    )
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=300)
+    lines: List[str] = Field(
+        default_factory=list,
+        max_length=6,
+        description=(
+            "The footer's own sentences, in order. May use the organization "
+            "variables, e.g. {{organization_name}}."
+        ),
+    )
+    show_contact: bool = Field(
+        True, description="Append the phone / email / website line"
+    )
+    show_mailing_address: bool = Field(
+        False,
+        description=(
+            "Append the department's mailing address — expected on mail to "
+            "people outside the department"
+        ),
+    )
+
+    @field_validator("lines")
+    @classmethod
+    def _lines_are_reasonable(cls, value: List[str]) -> List[str]:
+        for line in value:
+            if len(line) > 300:
+                raise ValueError("A footer line may not exceed 300 characters")
+        return [line for line in value if line.strip()]
+
+
+class EmailFooterLibrary(BaseModel):
+    """A department's whole footer library, saved in one go.
+
+    Saved whole rather than per-footer because the default and the list have
+    to stay consistent: a partial save could leave ``default_key`` naming a
+    footer that the same request deleted.
+    """
+
+    default_key: str = Field(..., min_length=1, max_length=32)
+    footers: List[EmailFooter] = Field(..., min_length=1, max_length=12)
+
+    @model_validator(mode="after")
+    def _default_exists_and_keys_are_unique(self) -> "EmailFooterLibrary":
+        keys = [footer.key for footer in self.footers]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Two footers cannot share a key")
+        if self.default_key not in keys:
+            raise ValueError("The default footer must be one of the footers listed")
+        return self
+
+
+class EmailFooterLibraryResponse(BaseModel):
+    """The library plus what a template may put in a footer line."""
+
+    default_key: str
+    footers: List[EmailFooter]
+    variables: List[TemplateVariable] = []
+    usage: Dict[str, int] = Field(
+        default_factory=dict,
+        description="How many templates currently use each footer key",
+    )
 
 
 # --- Scheduled Email schemas ---

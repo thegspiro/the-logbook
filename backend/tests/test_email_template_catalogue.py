@@ -19,6 +19,7 @@ import pytest
 from app.models.email_template import EmailTemplateType
 from app.services.email_service import inline_email_css
 from app.services.email_template_service import (
+    RENDERER_INJECTED_VARIABLES,
     SAMPLE_CONTEXT,
     EmailTemplateService,
     get_variables_for_type,
@@ -39,7 +40,7 @@ def _variables_used(defn: dict) -> set:
     for field in ("subject", "html", "text"):
         used |= set(re.findall(r"\{\{\s*(\w+)\s*\}\}", defn[field] or ""))
     # Injected by the renderer itself rather than by a caller.
-    return used - {"organization_logo_img"}
+    return used - RENDERER_INJECTED_VARIABLES
 
 
 class TestEveryNoticeIsEditable:

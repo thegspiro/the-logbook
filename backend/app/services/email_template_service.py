@@ -20,6 +20,7 @@ from app.core.constants import (
     ORG_SETTINGS_OFFICER_KEY,
 )
 from app.models.email_template import EmailTemplate, EmailTemplateType
+from app.services import email_footers as _footers
 from app.services import email_templates_storefront as _storefront_templates
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
     ACCENT_AMBER,
@@ -59,7 +60,27 @@ GLOBAL_VARIABLES: List[Dict[str, str]] = [
         "name": "login_url",
         "description": "URL to the application login page",
     },
+    {
+        "name": "footer_html",
+        "description": (
+            "The closing block, from the footer this template is set to use. "
+            "Edit the wording once under Footers instead of in every template."
+        ),
+    },
+    {
+        "name": "footer_text",
+        "description": "Plain-text version of the footer block",
+    },
 ]
+
+
+# Variables ``build_context`` produces itself rather than taking from a
+# caller. Send sites never pass them and sample contexts do not carry them,
+# so anything checking "is every variable in this body supplied?" has to
+# discount these.
+RENDERER_INJECTED_VARIABLES: frozenset = frozenset(
+    {"organization_logo_img", "footer_html", "footer_text"}
+)
 
 
 def get_variables_for_type(
@@ -1007,11 +1028,7 @@ DEFAULT_WELCOME_HTML = """<div class="container">
 
         <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{{login_url}}</small></p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_WELCOME_TEXT = """Welcome to {{organization_name}}
@@ -1027,10 +1044,7 @@ For security, please change your password after your first login.
 
 Log in at: {{login_url}}
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_WELCOME_SUBJECT = "Welcome to {{organization_name}} — Your Account is Ready"
 
@@ -1055,11 +1069,7 @@ DEFAULT_PASSWORD_RESET_HTML = """<div class="container">
 
         <p>If you did not request a password reset, you can safely ignore this email. Your password will not be changed.</p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_PASSWORD_RESET_TEXT = """Password Reset Request
@@ -1074,10 +1084,7 @@ Reset your password: {{reset_url}}
 
 If you did not request a password reset, you can safely ignore this email. Your password will not be changed.
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset — {{organization_name}}"
 
@@ -1114,12 +1121,9 @@ DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
             {{performed_by_title}}<br/>
             {{organization_name}}
         </p>
+        <p class="muted">A copy of this notice has been placed in your member file.</p>
     </div>
-    <div class="footer">
-        <p>This is an official department notice from {{organization_name}}.</p>
-        <p>A copy has been placed in your member file.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_MEMBER_DROPPED_TEXT = """Department Property Return Notice
@@ -1145,10 +1149,9 @@ Respectfully,
 {{performed_by_title}}
 {{organization_name}}
 
----
-This is an official department notice from {{organization_name}}.
-A copy has been placed in your member file.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+A copy of this notice has been placed in your member file.
+
+{{footer_text}}"""
 
 # Default inventory change notification email
 DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
@@ -1182,11 +1185,7 @@ DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
 
         <p>Thank you,<br/>{{organization_name}}</p>
     </div>
-    <div class="footer">
-        <p>This is an automated inventory notice from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_INVENTORY_CHANGE_TEXT = """Inventory Change Confirmation — {{organization_name}}
@@ -1213,10 +1212,7 @@ Quartermaster or department administration at your earliest convenience.
 Thank you,
 {{organization_name}}
 
----
-This is an automated inventory notice from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_INVENTORY_CHANGE_SUBJECT = "Inventory Update — {{organization_name}}"
 
@@ -1243,11 +1239,7 @@ DEFAULT_CERT_EXPIRATION_HTML = """<div class="container">
             <a href="{{renewal_url}}" class="button" role="link">View Certifications</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_CERT_EXPIRATION_TEXT = """Certification Expiration Notice
@@ -1264,10 +1256,7 @@ Please take action to renew this certification before it expires.
 
 View your certifications: {{renewal_url}}
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_CERT_EXPIRATION_SUBJECT = (
     "Certification Expiring: {{cert_name}} — {{organization_name}}"
@@ -1296,11 +1285,7 @@ DEFAULT_POST_EVENT_VALIDATION_HTML = """<div class="container">
             <a href="{{validation_url}}" class="button" role="link">Validate Attendance</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_POST_EVENT_VALIDATION_TEXT = """Please Validate Attendance
@@ -1317,10 +1302,7 @@ Please review and validate the attendance records.
 
 Validate attendance: {{validation_url}}
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_POST_EVENT_VALIDATION_SUBJECT = "Attendance Validation Needed: {{event_title}}"
 
@@ -1347,11 +1329,7 @@ DEFAULT_POST_SHIFT_VALIDATION_HTML = """<div class="container">
             <a href="{{validation_url}}" class="button" role="link">Validate Shift</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_POST_SHIFT_VALIDATION_TEXT = """Shift Attendance Validation
@@ -1368,10 +1346,7 @@ Please review and confirm the shift attendance.
 
 Validate shift: {{validation_url}}
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_POST_SHIFT_VALIDATION_SUBJECT = (
     "Shift Validation Needed: {{shift_name}} — {{shift_date}}"
@@ -1399,11 +1374,7 @@ DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
 
         <p>Please contact the department administration to arrange return of these items as soon as possible.</p>
     </div>
-    <div class="footer">
-        <p>This is an official department notice from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_PROPERTY_RETURN_REMINDER_TEXT = """Property Return Reminder
@@ -1421,10 +1392,7 @@ Return Deadline: {{return_deadline}}
 
 Please contact the department administration to arrange return of these items.
 
----
-This is an official department notice from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT = (
     "Property Return Reminder — {{organization_name}}"
@@ -1454,11 +1422,7 @@ DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
             <a href="{{prospect_url}}" class="button" role="link">View Prospect</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_INACTIVITY_WARNING_TEXT = """Prospective Member Inactivity Alert
@@ -1476,10 +1440,7 @@ Please review their progress and take appropriate action.
 
 View prospect: {{prospect_url}}
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_INACTIVITY_WARNING_SUBJECT = (
     "Inactivity Alert: {{prospect_name}} — {{organization_name}}"
@@ -1504,11 +1465,7 @@ DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
 
         <p>Please review the election details and coordinate with your team as needed.</p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_ELECTION_ROLLBACK_TEXT = """Election Rolled Back
@@ -1523,10 +1480,7 @@ Reason: {{reason}}
 
 Please review the election details and coordinate with your team as needed.
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_ELECTION_ROLLBACK_SUBJECT = "ALERT: Election Rolled Back — {{election_title}}"
 
@@ -1549,11 +1503,7 @@ DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
 
         <p>All associated ballots and results have been removed. If you have questions, please contact {{performer_name}}.</p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_ELECTION_DELETED_TEXT = """Election Deleted
@@ -1568,10 +1518,7 @@ Reason: {{reason}}
 
 All associated ballots and results have been removed.
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_ELECTION_DELETED_SUBJECT = "CRITICAL: Election Deleted — {{election_title}}"
 
@@ -1588,11 +1535,7 @@ DEFAULT_MEMBER_ARCHIVED_HTML = """<div class="container">
 
         <p>The member's profile remains accessible for legal requests or future reactivation.</p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_MEMBER_ARCHIVED_TEXT = """Member Archived: {{member_name}}
@@ -1601,10 +1544,7 @@ All department property has been returned. Previous status: {{previous_status}}.
 
 The member's profile remains accessible for legal requests or future reactivation.
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_MEMBER_ARCHIVED_SUBJECT = (
     "Member Archived: {{member_name}} — {{organization_name}}"
@@ -1634,11 +1574,7 @@ DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
 
         <p>Thank you for your request.</p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_EVENT_REQUEST_STATUS_TEXT = """Event Request Update
@@ -1652,10 +1588,7 @@ Your event request has been updated to: {{status_label}}.
 
 Thank you for your request.
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = "Event Request Update — {{status_label}}"
 
@@ -1677,11 +1610,7 @@ DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = """<div class="container">
 
         <p>This is an informational notice. No action is required unless the request appears suspicious.</p>
     </div>
-    <div class="footer">
-        <p>This is an automated IT security notice from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT = """IT Notice: Password Reset Requested
@@ -1695,10 +1624,7 @@ IP Address: {{ip_address}}
 
 This is an informational notice. No action is required unless the request appears suspicious.
 
----
-This is an automated IT security notice from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
     "[IT Notice] Password Reset Requested — {{organization_name}}"
@@ -1722,10 +1648,7 @@ DEFAULT_DUPLICATE_APPLICATION_HTML = """<div class="container">
         <p>If you believe this is an error, or if you have questions about the
         status of your application, please contact us directly.</p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_DUPLICATE_APPLICATION_TEXT = """Application Already on File
@@ -1741,9 +1664,7 @@ application has not been created.
 If you believe this is an error, or if you have questions about the
 status of your application, please contact us directly.
 
----
-This is an automated message from {{organization_name}}.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_DUPLICATE_APPLICATION_SUBJECT = (
     "Application Already on File — {{organization_name}}"
@@ -1780,11 +1701,7 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
         <p>If you have any questions, please contact your election administrator:<br/>
         <strong>{{admin_contact_name}}</strong> ({{admin_contact_email}})</p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_BALLOT_NOTIFICATION_TEXT = """Ballot Available: {{election_title}}
@@ -1809,10 +1726,7 @@ Vote here: {{ballot_url}}
 If you have any questions, please contact your election administrator:
 {{admin_contact_name}} ({{admin_contact_email}})
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
 
@@ -1853,11 +1767,7 @@ DEFAULT_ELECTION_REPORT_HTML = """<div class="container">
         <p>The following active members were not sent a ballot, with the reason why:</p>
         {{skipped_voters_html}}
     </div>
-    <div class="footer">
-        <p>This is an automated election report from {{organization_name}}.</p>
-        <p>Please retain this email for your records.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_ELECTION_REPORT_TEXT = """Election Report — {{election_title}}
@@ -1886,10 +1796,7 @@ BALLOT RECIPIENTS ({{total_eligible_voters}})
 MEMBERS WHO DID NOT RECEIVE BALLOTS
 {{skipped_voters_text}}
 
----
-This is an automated election report from {{organization_name}}.
-Please retain this email for your records.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_ELECTION_REPORT_SUBJECT = (
     "Election Report: {{election_title}} — {{organization_name}}"
@@ -1926,11 +1833,7 @@ DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = """<div class="container">
             <li><strong>Review Tier Settings:</strong> If a membership tier is incorrectly marked as ineligible, update it in Organization Settings &gt; Membership Tiers.</li>
         </ul>
     </div>
-    <div class="footer">
-        <p>This is an automated eligibility summary from {{organization_name}}.</p>
-        <p>Please retain this email for your records.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT = """Ballot Eligibility Summary — {{election_title}}
@@ -1954,10 +1857,7 @@ WHAT YOU CAN DO
 - Check-In Members: If a member was skipped due to attendance, check them in and resend ballots.
 - Review Tier Settings: If a membership tier is incorrectly marked as ineligible, update it in Organization Settings > Membership Tiers.
 
----
-This is an automated eligibility summary from {{organization_name}}.
-Please retain this email for your records.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT = (
     "Ballot Eligibility Summary: {{election_title}} — {{organization_name}}"
@@ -1982,11 +1882,7 @@ DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
 
         <p>Please update your calendar accordingly. If you have questions, contact your department leadership.</p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_EVENT_CANCELLATION_TEXT = """Event Cancelled
@@ -2001,10 +1897,7 @@ Reason: {{reason}}
 
 Please update your calendar accordingly.
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_EVENT_CANCELLATION_SUBJECT = (
     "Event Cancelled: {{event_title}} — {{organization_name}}"
@@ -2034,11 +1927,7 @@ DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
             <a href="{{event_url}}" class="button" role="link">View Event</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated reminder from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_EVENT_REMINDER_TEXT = """Event Reminder
@@ -2056,10 +1945,7 @@ Location: {{location_name}}
 
 View event: {{event_url}}
 
----
-This is an automated reminder from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
 
@@ -2087,11 +1973,7 @@ DEFAULT_SERIES_END_REMINDER_HTML = """<div class="container">
             <a href="{{event_url}}" class="button" role="link">View Event</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated reminder from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_SERIES_END_REMINDER_TEXT = """Recurring Series Ending Soon
@@ -2109,10 +1991,7 @@ If you would like to extend or modify this series, please update the event befor
 
 View event: {{event_url}}
 
----
-This is an automated reminder from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_SERIES_END_REMINDER_SUBJECT = (
     "Recurring Series Ending Soon: {{event_title}} — Ends {{series_end_date}}"
@@ -2142,11 +2021,7 @@ DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
             <a href="{{approval_url}}" class="button" role="link">Review &amp; Approve</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_TRAINING_APPROVAL_TEXT = """Training Approval Needed
@@ -2162,10 +2037,7 @@ Approval Deadline: {{approval_deadline}}
 
 Review and approve: {{approval_url}}
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_TRAINING_APPROVAL_SUBJECT = (
     "Training Approval Needed: {{course_name}} — {{event_date}}"
@@ -2206,11 +2078,7 @@ DEFAULT_SHIFT_ASSIGNMENT_HTML = """<div class="container">
             <a href="{{shift_url}}" class="button" role="link">View Shift</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_SHIFT_ASSIGNMENT_TEXT = """New Shift Assignment
@@ -2230,10 +2098,7 @@ the position is covered.
 
 View shift: {{shift_url}}
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_SHIFT_ASSIGNMENT_SUBJECT = "Shift Assignment: {{position}} on {{shift_date}}"
 
@@ -2257,11 +2122,7 @@ DEFAULT_SHIFT_DECLINE_HTML = """<div class="container">
             <a href="{{shift_url}}" class="button" role="link">Open the Schedule</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated message from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_SHIFT_DECLINE_TEXT = """Shift Coverage Needed
@@ -2275,10 +2136,7 @@ Please assign a replacement so the shift is not left short.
 
 Open the schedule: {{shift_url}}
 
----
-This is an automated message from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_SHIFT_DECLINE_SUBJECT = "Shift Coverage Needed: {{position}} on {{shift_date}}"
 
@@ -2309,11 +2167,7 @@ DEFAULT_SHIFT_REMINDER_HTML = """<div class="container">
             <a href="{{arrival_url}}" class="button" role="link">Mark Arrival</a>
         </p>
     </div>
-    <div class="footer">
-        <p>This is an automated reminder from {{organization_name}}.</p>
-        <p>Please do not reply to this email.</p>
-        <p class="muted">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
-    </div>
+    {{footer_html}}
 </div>"""
 
 DEFAULT_SHIFT_REMINDER_TEXT = """Start-of-Shift Report
@@ -2332,10 +2186,7 @@ Your position: {{position}}
 
 Mark arrival: {{arrival_url}}
 
----
-This is an automated reminder from {{organization_name}}.
-Please do not reply to this email.
-{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
+{{footer_text}}"""
 
 DEFAULT_SHIFT_REMINDER_SUBJECT = "Shift Report — {{shift_date}} at {{shift_start}}"
 
@@ -2496,6 +2347,7 @@ class EmailTemplateService:
         description: Optional[str] = None,
         allow_attachments: bool = False,
         created_by: Optional[str] = None,
+        footer_key: Optional[str] = None,
     ) -> EmailTemplate:
         """Create a new email template"""
         template = EmailTemplate(
@@ -2503,6 +2355,7 @@ class EmailTemplateService:
             organization_id=organization_id,
             template_type=template_type,
             name=name,
+            footer_key=footer_key,
             subject=subject,
             html_body=html_body,
             text_body=text_body,
@@ -2564,6 +2417,7 @@ class EmailTemplateService:
             "allow_attachments",
             "default_cc",
             "default_bcc",
+            "footer_key",
         }
         for key, value in fields.items():
             if key in allowed_fields and value is not None:
@@ -2627,6 +2481,9 @@ class EmailTemplateService:
         template.text_body = defn["text"]
         # See create_template: NULL means "track the built-in stylesheet".
         template.css_styles = None
+        # The footer choice is part of the default, not a separate preference:
+        # the shipped body for a public notice assumes the public footer.
+        template.footer_key = defn.get("footer")
         template.updated_by = updated_by
         await self.db.flush()
         await self.db.refresh(template, attribute_names=["updated_at"])
@@ -2682,7 +2539,9 @@ class EmailTemplateService:
         into the context (without overwriting values already supplied by the
         caller).
         """
-        ctx = self.build_context(context, organization)
+        ctx = self.build_context(
+            context, organization, footer_key=getattr(template, "footer_key", None)
+        )
 
         # The subject becomes the SMTP Subject: header and the text body the
         # text/plain alternative — neither is markup, so neither is escaped.
@@ -2706,6 +2565,7 @@ class EmailTemplateService:
         cls,
         context: Dict[str, Any],
         organization: Optional[Any] = None,
+        footer_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Add the variables every template may use to a caller's context.
 
@@ -2796,6 +2656,14 @@ class EmailTemplateService:
         else:
             ctx.setdefault("organization_logo_img", "")
 
+        # Last, because the footer's own text is resolved against everything
+        # above it. Rendering is a single substitution pass, so a
+        # {{organization_name}} left inside an already-substituted
+        # {{footer_html}} would mail as those literal braces.
+        footer = _footers.resolve(organization, footer_key)
+        ctx.setdefault("footer_html", _footers.render_html(footer, ctx))
+        ctx.setdefault("footer_text", _footers.render_text(footer, ctx))
+
         return ctx
 
     @classmethod
@@ -2851,6 +2719,7 @@ class EmailTemplateService:
         "recipients_html",
         "skipped_voters_html",
         "custom_message_html",
+        "footer_html",
         "details_html",
         "message_html",
         "apparatus_html",
@@ -2971,6 +2840,7 @@ class EmailTemplateService:
         },
         {
             "type": EmailTemplateType.ELECTION_REPORT,
+            "footer": "official",
             "name": "Election Report",
             "subject": DEFAULT_ELECTION_REPORT_SUBJECT,
             "html": DEFAULT_ELECTION_REPORT_HTML,
@@ -2983,6 +2853,7 @@ class EmailTemplateService:
         },
         {
             "type": EmailTemplateType.BALLOT_ELIGIBILITY_SUMMARY,
+            "footer": "official",
             "name": "Ballot Eligibility Summary",
             "subject": DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT,
             "html": DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML,
@@ -2994,6 +2865,7 @@ class EmailTemplateService:
         },
         {
             "type": EmailTemplateType.MEMBER_DROPPED,
+            "footer": "official",
             "name": "Member Dropped \u2014 Property Return Notice",
             "subject": "Notice of Department Property Return \u2014 {{organization_name}}",
             "html": DEFAULT_MEMBER_DROPPED_HTML,
@@ -3053,6 +2925,7 @@ class EmailTemplateService:
         },
         {
             "type": EmailTemplateType.PROPERTY_RETURN_REMINDER,
+            "footer": "official",
             "name": "Property Return Reminder",
             "subject": DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT,
             "html": DEFAULT_PROPERTY_RETURN_REMINDER_HTML,
@@ -3086,6 +2959,7 @@ class EmailTemplateService:
         },
         {
             "type": EmailTemplateType.ELECTION_DELETED,
+            "footer": "official",
             "name": "Election Deleted Alert",
             "subject": DEFAULT_ELECTION_DELETED_SUBJECT,
             "html": DEFAULT_ELECTION_DELETED_HTML,
@@ -3108,6 +2982,7 @@ class EmailTemplateService:
         },
         {
             "type": EmailTemplateType.EVENT_REQUEST_STATUS,
+            "footer": "public",
             "name": "Event Request Status Update",
             "subject": DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
             "html": DEFAULT_EVENT_REQUEST_STATUS_HTML,
@@ -3131,6 +3006,7 @@ class EmailTemplateService:
         },
         {
             "type": EmailTemplateType.DUPLICATE_APPLICATION,
+            "footer": "public",
             "name": "Duplicate Application Notice",
             "subject": DEFAULT_DUPLICATE_APPLICATION_SUBJECT,
             "html": DEFAULT_DUPLICATE_APPLICATION_HTML,
@@ -3207,6 +3083,7 @@ class EmailTemplateService:
                     description=defn.get("description"),
                     allow_attachments=defn.get("attachments", False),
                     created_by=created_by,
+                    footer_key=defn.get("footer"),
                 )
                 created.append(template)
 
