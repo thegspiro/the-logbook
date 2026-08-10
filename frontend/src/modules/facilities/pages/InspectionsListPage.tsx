@@ -172,7 +172,18 @@ export default function InspectionsListPage() {
                     <Calendar className="h-3 w-3" />
                     {formatDate(insp.inspectionDate, tz)}
                   </span>
-                  {insp.inspectorName && <span>{insp.inspectorName}</span>}
+                  {/* Who inspected, and for whom. The organization is asked for
+                      on the form and is one of the fields search matches, so
+                      leaving it off every row meant you could find a record by
+                      typing "Commonwealth Mutual" and then not see it named
+                      anywhere on the result. */}
+                  {insp.inspectorName && (
+                    <span>
+                      {insp.inspectorName}
+                      {insp.inspectorOrganization ? ` · ${insp.inspectorOrganization}` : ''}
+                    </span>
+                  )}
+                  {!insp.inspectorName && insp.inspectorOrganization && <span>{insp.inspectorOrganization}</span>}
                   {insp.nextInspectionDate && <span>Next: {formatDate(insp.nextInspectionDate, tz)}</span>}
                   {insp.correctiveActions && !insp.correctiveActionCompleted && (
                     <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">

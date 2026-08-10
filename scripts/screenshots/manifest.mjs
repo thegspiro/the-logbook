@@ -529,6 +529,17 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "06-15-facility-maintenance-form",
+    doc: "06-apparatus-facilities.md",
+    line: 211,
+    anchor:
+      "Screenshot of the New Maintenance Record form showing the facility",
+    alt: "New facility maintenance record form with its facility, type, date, vendor and cost fields",
+    route: "/facilities/maintenance",
+    prepare: clickByName(/^New Record$/),
+    fullPage: false,
+  },
+  {
     id: "05-57-assign-scan-modal",
     doc: "05-inventory.md",
     line: 446,

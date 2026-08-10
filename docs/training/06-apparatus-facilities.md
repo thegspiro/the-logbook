@@ -204,13 +204,15 @@ Click on any facility from the dashboard to open its full-page detail view at `/
 
 The facilities module was refactored for maintainability:
 
-- **Shared constants**: Status colors, priority colors, maintenance types, inspection types, room types, and NFPA zone options are centralized in `modules/facilities/constants.ts` and used consistently across all section components
+- **Shared constants**: Inspection, compliance, contact and room type options, the NFPA zone list, and the condition scale with its colours are centralized in `modules/facilities/constants.ts` and used consistently across all section components. **Maintenance types are not** — they are department-configurable records fetched from the API, so the dropdown's contents differ by organization (the demo department has 39)
 - **Custom hooks**: Form state management for inspections (`useInspectionForm`) and maintenance records (`useMaintenanceForm`) is extracted into dedicated hooks, supporting create/edit/delete operations with search and status filtering
 - **Type consolidation**: All facilities TypeScript types live in `modules/facilities/types/` with a barrel export
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the maintenance form showing the type dropdown (with 16 NFPA-aligned options), priority selector (low/medium/high/critical with color badges), date fields, and vendor/cost inputs._
+![New facility maintenance record form with its facility, type, date, vendor and cost fields](./images/06-15-facility-maintenance-form.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the inspections list with the result filter dropdown (All/Passed/Failed/Pending) showing filtered results with inspector name, organization, and pass/fail status badges._
+The inspections list itself is pictured under
+[Recording an Inspection](#recording-an-inspection) below — this section
+describes how it is built, not a second screen.
 
 ---
 

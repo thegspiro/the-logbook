@@ -733,23 +733,55 @@ class Seeder:
                     "Atlantic Fire Apparatus",
                     2_450,
                     120,
+                    "Annual Pump Test",
                 ),
-                ("Oil and filter change", "In-house", 210, 75),
+                ("Oil and filter change", "In-house", 210, 75, "Oil Change"),
                 (
                     "Brake inspection and pad replacement",
                     "Commonwealth Truck",
                     1_180,
                     40,
+                    "Brake Inspection",
                 ),
-                ("Aerial ladder annual certification", "Seagrave Service", 3_600, 200),
-                ("Replace front tires", "Tidewater Tire", 1_950, None),
-                ("Repair cab HVAC blower", "Commonwealth Truck", 640, None),
+                (
+                    "Aerial ladder annual certification",
+                    "Seagrave Service",
+                    3_600,
+                    200,
+                    "Aerial Device Test",
+                ),
+                (
+                    "Replace front tires",
+                    "Tidewater Tire",
+                    1_950,
+                    None,
+                    "Tire Replacement",
+                ),
+                (
+                    "Repair cab HVAC blower",
+                    "Commonwealth Truck",
+                    640,
+                    None,
+                    "General Repair",
+                ),
             ]
-            for index, (description, vendor, cost, days_ago) in enumerate(work):
+            # Named, not indexed. The type list is department-configurable and
+            # arrives alphabetically, so `types[index % len(types)]` filed an
+            # oil change under "Aerial Device Test" — plausible-looking data
+            # that contradicts the record it labels.
+            by_name = {pick(t, "name"): pick(t, "id") for t in types}
+
+            def type_id(*preferred: str) -> str | None:
+                for name in (*preferred, "General Repair", "Repair"):
+                    if by_name.get(name):
+                        return by_name[name]
+                return pick(types[0], "id") if types else None
+
+            for index, (description, vendor, cost, days_ago, kind) in enumerate(work):
                 unit = apparatus[index % len(apparatus)]
                 payload = {
                     "apparatus_id": pick(unit, "id"),
-                    "maintenance_type_id": pick(types[index % len(types)], "id"),
+                    "maintenance_type_id": type_id(kind),
                     "description": description,
                     "vendor": vendor,
                     "cost": cost,
@@ -769,6 +801,20 @@ class Seeder:
                         TODAY + timedelta(days=365 - days_ago)
                     )
                 maintenance.append(self.api.post("/apparatus/maintenance", payload))
+        else:
+            self._repair_maintenance_types(
+                "/apparatus/maintenance",
+                maintenance,
+                types,
+                {
+                    "Annual pump service and flow test": "Annual Pump Test",
+                    "Oil and filter change": "Oil Change",
+                    "Brake inspection and pad replacement": "Brake Inspection",
+                    "Aerial ladder annual certification": "Aerial Device Test",
+                    "Replace front tires": "Tire Replacement",
+                    "Repair cab HVAC blower": "General Repair",
+                },
+            )
 
         fuel = items(self.api.get("/apparatus/fuel-logs"), "fuel_logs")
         if not fuel:
@@ -3926,6 +3972,27 @@ class Seeder:
 
     # -- skills testing ----------------------------------------------
 
+    def _repair_maintenance_types(
+        self, path: str, records: list[dict], types: list[dict], intended: dict
+    ) -> None:
+        """Re-file records this seeder stamped with an arbitrary type.
+
+        Earlier runs picked `types[index % len(types)]`, which walks an
+        alphabetical list of department-configurable types — so an oil change
+        was filed under "Aerial Device Test" and an HVAC filter change under
+        "Backflow Preventer Test". A long-lived demo database keeps those rows
+        because the create step only runs when the table is empty.
+        """
+        by_name = {pick(t, "name"): pick(t, "id") for t in types}
+        for record in records:
+            record_id = pick(record, "id")
+            wanted = intended.get(pick(record, "description"))
+            target = by_name.get(wanted) if wanted else None
+            current = pick(record, "maintenance_type_id", "maintenanceTypeId")
+            if not record_id or not target or current == target:
+                continue
+            self.api.patch(f"{path}/{record_id}", {"maintenance_type_id": target})
+
     def _repair_criterion_types(self, templates: list[dict]) -> None:
         """Rewrite criteria this seeder stored under a type the scorer ignores.
 
@@ -5817,24 +5884,63 @@ class Seeder:
             types.append(self.api.post("/facilities/maintenance-types", payload))
 
         if not maintenance:
-            for index, (description, vendor, cost, days_ago) in enumerate(
+            # Each record names the type it is actually an instance of. Taking
+            # `types[index % len(types)]` walked an alphabetical list of ~39
+            # department-configurable types and stamped whatever fell out, so
+            # the maintenance list read "HVAC filter replacement — dorm wing"
+            # under a "Backflow Preventer Test" badge. Falling back to General
+            # Repair keeps a department that has trimmed its type list working.
+            by_name = {pick(t, "name"): pick(t, "id") for t in types}
+
+            def type_id(*preferred: str) -> str | None:
+                for name in (*preferred, "General Repair", "Repair"):
+                    if by_name.get(name):
+                        return by_name[name]
+                return pick(types[0], "id") if types else None
+
+            for index, (description, vendor, cost, days_ago, kind) in enumerate(
                 [
                     (
                         "Replace bay door opener motor",
                         "Tidewater Door Service",
                         1_840,
                         45,
+                        "Bay Door Service",
                     ),
-                    ("Annual generator load bank test", "PowerGen Services", 950, 30),
-                    ("HVAC filter replacement — dorm wing", "In-house", 120, 12),
-                    ("Repair kitchen exhaust hood", "Chesapeake Mechanical", 640, None),
-                    ("Reseal apparatus bay floor", "Atlantic Coatings", 3_200, None),
+                    (
+                        "Annual generator load bank test",
+                        "PowerGen Services",
+                        950,
+                        30,
+                        "Generator Annual Load Test",
+                    ),
+                    (
+                        "HVAC filter replacement — dorm wing",
+                        "In-house",
+                        120,
+                        12,
+                        "HVAC Filter Change",
+                    ),
+                    (
+                        "Repair kitchen exhaust hood",
+                        "Chesapeake Mechanical",
+                        640,
+                        None,
+                        "Exhaust Extraction System Inspection",
+                    ),
+                    (
+                        "Reseal apparatus bay floor",
+                        "Atlantic Coatings",
+                        3_200,
+                        None,
+                        "General Repair",
+                    ),
                 ]
             ):
                 facility = facilities[index % len(facilities)]
                 payload = {
                     "facility_id": pick(facility, "id"),
-                    "maintenance_type_id": pick(types[index % len(types)], "id"),
+                    "maintenance_type_id": type_id(kind),
                     "description": description,
                     "vendor": vendor,
                     "cost": cost,
@@ -5852,6 +5958,21 @@ class Seeder:
                         TODAY + timedelta(days=365 - days_ago)
                     )
                 maintenance.append(self.api.post("/facilities/maintenance", payload))
+        else:
+            self._repair_maintenance_types(
+                "/facilities/maintenance",
+                maintenance,
+                types,
+                {
+                    "Replace bay door opener motor": "Bay Door Service",
+                    "Annual generator load bank test": "Generator Annual Load Test",
+                    "HVAC filter replacement — dorm wing": "HVAC Filter Change",
+                    "Repair kitchen exhaust hood": (
+                        "Exhaust Extraction System Inspection"
+                    ),
+                    "Reseal apparatus bay floor": "General Repair",
+                },
+            )
 
         if not inspections:
             for index, (title, kind, inspector, agency, passed, days_ago) in enumerate(
