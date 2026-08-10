@@ -651,11 +651,7 @@ export const SHOTS = [
         .first()
         .waitFor({ timeout: 15_000 });
       await page.waitForTimeout(800);
-      // Scrolled past the stat row: "Hours Worked This Month" reads 0 because
-      // no seeded shift has been checked out of yet, and a zero beside a
-      // populated calendar reads as a fault rather than as the subject.
-      await page.evaluate(() => window.scrollBy(0, 260));
-      await page.waitForTimeout(500);
+      await page.evaluate(() => window.scrollTo(0, 0));
     },
     fullPage: false,
   },

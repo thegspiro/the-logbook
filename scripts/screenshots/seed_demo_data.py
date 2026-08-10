@@ -1628,12 +1628,75 @@ class Seeder:
                         # slot — neither is worth failing the whole seed over.
                         if exc.code not in (400, 409):
                             raise
+        self._seed_shift_attendance(shifts)
         return {
             "templates": templates,
             "patterns": patterns,
             "apparatus": fleet,
             "shifts": shifts,
         }
+
+    def _seed_shift_attendance(self, shifts: list[dict]) -> None:
+        """Check the crew of past shifts in and out again.
+
+        Nobody had ever worked a seeded shift, so "Hours Worked This Month" on
+        the scheduling page read 0 beside a calendar of 120 shifts, and every
+        attendance and completion screen was empty. The rows the seeder did
+        leave behind carried NULL times and no duration, which is worse than
+        none: the API computes duration from the two timestamps, so a row
+        without them contributes nothing while still counting as attendance.
+
+        Only shifts that have already ended are touched. Checking somebody out
+        of a shift still in progress would be a lie, and the in-progress state
+        is what several other screenshots are about.
+        """
+        now = datetime.now(timezone.utc)
+        for shift in shifts:
+            shift_id = pick(shift, "id")
+            day = str(pick(shift, "shift_date", "shiftDate") or "")
+            if not shift_id or not day or day >= str(TODAY):
+                continue
+            existing = items(
+                self.api.get(f"/scheduling/shifts/{shift_id}/attendance"),
+                "attendance",
+            )
+            # Keyed on a *usable* row, not any row: the pre-existing rows have
+            # no timestamps and would otherwise mask the gap forever.
+            if any(pick(row, "checked_in_at", "checkedInAt") for row in existing):
+                continue
+            start = pick(shift, "start_time", "startTime")
+            end = pick(shift, "end_time", "endTime")
+            if not start or not end:
+                continue
+            started = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+            ended = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+            if ended > now:
+                continue
+            crew = items(
+                self.api.get(f"/scheduling/shifts/{shift_id}/assignments"),
+                "assignments",
+            )
+            for index, assignment in enumerate(crew):
+                user_id = pick(assignment, "user_id", "userId")
+                if not user_id:
+                    continue
+                # A few minutes either side of the scheduled times, so the
+                # durations are not all identical to the minute.
+                checked_in = started + timedelta(minutes=index * 3)
+                checked_out = ended - timedelta(minutes=(index % 3) * 5)
+                try:
+                    self.api.post(
+                        f"/scheduling/shifts/{shift_id}/attendance",
+                        {
+                            "user_id": user_id,
+                            "checked_in_at": iso(checked_in),
+                            "checked_out_at": iso(checked_out),
+                        },
+                    )
+                except ApiError as exc:
+                    if exc.code not in (400, 409):
+                        raise
+                    self.blocked.append(f"shift attendance: {exc}")
 
     def _top_up_crew(self, shift: dict, target: int, pool: list[str]) -> int:
         """Add crew to an already-seeded shift until it meets `target`.
