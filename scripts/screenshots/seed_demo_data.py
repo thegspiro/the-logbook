@@ -841,6 +841,46 @@ class Seeder:
         ("Medic Duty", "06:00", "18:00", 12, "#2563EB", 2),
     ]
 
+    def seed_platoons(self, members: list[dict]) -> None:
+        """Turn platoon scheduling on and deal the roster into A/B/C.
+
+        Left off, two guides picture something that isn't there: Platoon
+        Management renders a "platoon scheduling is turned off" banner over a
+        single Unassigned column, and Scheduling Settings shows six sections
+        instead of seven, because the Platoons section is hidden while the
+        feature is off. Both are captioned as showing the opposite.
+
+        The department the demo data describes runs an A/B/C rotation — it
+        seeds the "A/B/C Platoon Rotation" shift pattern already — so the
+        toggle being off was an omission rather than a choice.
+        """
+        settings = self.api.get("/scheduling/settings") or {}
+        if not settings.get("platoons_enabled"):
+            self.api.put(
+                "/scheduling/settings",
+                {"platoons_enabled": True},
+            )
+
+        overview = self.api.get("/scheduling/platoons/overview") or {}
+        already = sum(
+            len(p.get("members") or [])
+            for p in (overview.get("platoons") or [])
+            if (p.get("platoon") or "").strip()
+        )
+        if already:
+            return
+
+        # Deal round-robin so every platoon has a mix of ranks rather than one
+        # column of officers and two of firefighters.
+        assignable = [pick(m, "id") for m in members if pick(m, "id")]
+        for index, platoon in enumerate(("A", "B", "C")):
+            batch = assignable[index::3]
+            if batch:
+                self.api.post(
+                    "/scheduling/platoons/bulk-assign",
+                    {"user_ids": batch, "platoon": platoon},
+                )
+
     def seed_scheduling(
         self, stations: list[dict], apparatus: list[dict], members: list[dict]
     ) -> dict[str, list[dict]]:
@@ -4220,6 +4260,7 @@ class Seeder:
             "event rsvps",
             lambda: self.seed_event_rsvps(self.base_url, events, members),
         )
+        self.step("platoons", lambda: self.seed_platoons(members))
         self.step(
             "scheduling",
             lambda: self.seed_scheduling(stations, apparatus, members),
