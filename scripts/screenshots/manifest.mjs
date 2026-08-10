@@ -637,6 +637,29 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "03-55-staffing-status-cards",
+    doc: "03-scheduling.md",
+    line: 1331,
+    anchor: "Screenshot of the weekly schedule, its cards tinted green",
+    alt: "The weekly schedule, its cards tinted green when fully staffed and amber when short",
+    route: "/scheduling",
+    prepare: async (page) => {
+      // The staffing ratio only appears once a shift knows how many positions
+      // it has, so wait for a card to render one rather than a fixed pause.
+      await page
+        .getByText(/\d+\/\d+/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+      // Scrolled past the stat row: "Hours Worked This Month" reads 0 because
+      // no seeded shift has been checked out of yet, and a zero beside a
+      // populated calendar reads as a fault rather than as the subject.
+      await page.evaluate(() => window.scrollBy(0, 260));
+      await page.waitForTimeout(500);
+    },
+    fullPage: false,
+  },
+  {
     id: "03-54-crew-board-open-slots",
     doc: "03-scheduling.md",
     line: 987,

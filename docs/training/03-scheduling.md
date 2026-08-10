@@ -1025,10 +1025,22 @@ The Calls/Incidents placeholder section has been removed from the shift detail p
 
 Shift templates now pass their position definitions and minimum staffing requirements through to created shifts. Previously, only the template's time and apparatus information were inherited — position assignments had to be set up manually on each shift.
 
-When a shift is created from a template (either directly or via pattern-based generation), the template's `positions` and `min_staffing` values are copied to the new shift. In the `ShiftDetailPanel`, if the linked apparatus has no positions defined, the system falls back to the shift-level positions from the template.
+When a shift is created from a template (either directly or via pattern-based
+generation), the template's `positions` and `min_staffing` values are copied to
+the new shift, and the crew board is built from them.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel crew roster showing position assignments inherited from a template, with position labels (Officer, Driver, Firefighter) and the min staffing indicator]_
+> **In practice the shift's own positions are always what you see.** The panel
+> is written to prefer the linked apparatus's riding positions and fall back to
+> the shift's, but the full Apparatus module does not model riding positions at
+> all — it reports them as "not specified" by design. So on a department using
+> the full module, the fallback is the only path, and a shift created without
+> positions has no crew board at all. The board's subheading names both sources
+> ("Positions from E-2 + shift customizations") regardless.
+
+The board is pictured under
+[Structured Position Slots & Decline Handling](#structured-position-slots--decline-handling),
+with the "N assigned / N positions" tile beside it standing in for the minimum
+staffing indicator.
 
 ### Timezone Display Fix
 
@@ -1313,8 +1325,10 @@ Shift cards now show staffing status at a glance:
 | Green tint on shift card      | Overrides template color when fully staffed |
 | Amber tint on shift card      | Overrides template color when understaffed  |
 
-> **Screenshot needed:**
-> _[Screenshot of the weekly calendar view showing three shift cards: one with green tint and CheckCircle2 (fully staffed, 4/4), one with amber tint (understaffed, 2/4), and one with template color (no min staffing configured)]_
+A shift with no minimum staffing configured keeps its template colour and
+shows no ratio at all — there is nothing to measure it against.
+
+![The weekly schedule, its cards tinted green when fully staffed and amber when short](./images/03-55-staffing-status-cards.png)
 
 ### Position-First Assignment Flow
 
