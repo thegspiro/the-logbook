@@ -253,19 +253,25 @@ Save frequently used event configurations as templates:
 
 Create a series of repeating events:
 
-1. Navigate to **Events Admin**.
-2. Click **Create Recurring Event**.
-3. Set the recurrence pattern:
-   - **Daily** — Every day or every N days
-   - **Weekly** — Every week on selected days (e.g., every Monday and Wednesday)
-   - **Monthly** — On the same date each month (e.g., the 15th)
-   - **Monthly by Weekday** — On a specific weekday occurrence (e.g., "2nd Tuesday of every month" or "last Friday of every month"). The weekday auto-populates from your event date
-   - **Annual** — On the same date each year
-4. Set the start and end dates for the series.
-5. Each occurrence is created as an individual event that can be modified independently.
+1. Navigate to **Events Admin > Create Event** and fill in the event as usual.
+2. Tick **Make this a recurring event**. The recurrence controls appear beneath
+   it — there is no separate "Create Recurring Event" button.
+3. Choose the pattern from **Repeats**. Eight are offered:
+   - **Daily**
+   - **Weekly**
+   - **Every 2 Weeks**
+   - **Monthly (same date)** — e.g. the 15th
+   - **Monthly (by weekday)** — reveals **Which Occurrence** (1st–4th, Last) and
+     **Day of Week**, so "2nd Tuesday of every month" is two dropdowns
+   - **Annually (same date)**
+   - **Annually (by weekday)** — same two dropdowns
+   - **Custom Days**
+4. Set the series end date under **Duration**, or tick **Rolling 12-month cycle**
+   to keep it running.
+5. Add any **Exception Dates** to skip — a date picker and an **Add** button.
+6. Each occurrence is created as an individual event that can be modified independently.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the recurring event creation form showing the base event settings plus the recurrence pattern selector (daily/weekly/monthly/monthly-by-weekday/annual), weekday selectors, and the series date range]_
+![The event form with recurrence switched on, showing the pattern and series end date](./images/04-35-recurring-event-form.png)
 
 ### Managing Recurring Event Series
 
@@ -342,17 +348,24 @@ For simple events, use the quick-create flow:
 3. All other settings use sensible defaults
 4. Click **Create** to save immediately
 
-### Rich Text Descriptions
+### Markdown Descriptions
 
-Event descriptions now support rich text formatting:
+The description field is a plain textarea with a **markdown** toolbar above it —
+four buttons that wrap the selected text rather than a what-you-see editor. The
+raw markdown stays visible as you type and is rendered when the event is shown.
 
-- Bold, italic, underline
-- Bullet and numbered lists
-- Links
-- Headings
+| Button      | Inserts       |
+| ----------- | ------------- |
+| **B**       | `**bold**`    |
+| _I_         | `*italic*`    |
+| Bullet list | `- item`      |
+| Link        | `[text](url)` |
 
-> **Screenshot needed:**
-> _[Screenshot of the event creation form showing the rich text editor for the description field with the formatting toolbar visible]_
+Underline, numbered lists and headings have no button. The hint beside the
+toolbar — "Supports \*\*bold\*\*, \*italic\*, - lists, [links](url)" — is the
+full list of what the field supports.
+
+![The event description field with its markdown toolbar and syntax hint](./images/04-36-description-markdown.png)
 
 ---
 

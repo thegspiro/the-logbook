@@ -529,6 +529,41 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "04-36-description-markdown",
+    doc: "04-events-meetings.md",
+    line: 354,
+    anchor:
+      "Screenshot of the event form's Description field with its markdown",
+    alt: "The event description field with its markdown toolbar and syntax hint",
+    route: "/events/admin?tab=create",
+    // Clipped to the field: the toolbar is four small buttons on a 2,700px
+    // form, and a page-level shot makes them unreadable.
+    selector: "div:has(> #event-description)",
+  },
+  {
+    id: "04-35-recurring-event-form",
+    doc: "04-events-meetings.md",
+    line: 267,
+    anchor: "Screenshot of the event form with recurrence switched on, showing",
+    alt: "The event form with recurrence switched on, showing the pattern and series end date",
+    route: "/events/admin?tab=create",
+    prepare: async (page) => {
+      await page
+        .getByLabel(/Make this a recurring event/i)
+        .check({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+      // Monthly (by weekday): the pattern the guide singles out, and the only
+      // one that reveals the ordinal and weekday selectors it describes.
+      await page
+        .locator("#recurrence-pattern")
+        .selectOption("monthly_weekday", { timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    // Clipped to the form: the sidebar is position:fixed, so a full-page
+    // capture of a 2,700px form paints it across the middle of the page.
+    selector: "form",
+  },
+  {
     id: "03-49-report-card-names",
     doc: "03-scheduling.md",
     line: 1138,
