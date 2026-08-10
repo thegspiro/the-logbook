@@ -997,18 +997,46 @@ Require demonstrating skills with officer evaluation.
 
 #### 7. Checklist Requirements
 
-Require completing a checklist of tasks.
+Require completing a checklist of tasks. Steps are **signed off one at a time**,
+and the requirement's completion is `ticked / total` — so a member six steps into
+eight reads 75%, not 0%.
 
 ```json
 {
   "requirement_type": "checklist",
   "checklist_items": [
-    "Complete station tour",
-    "Review SOPs",
-    "Equipment familiarization"
+    { "id": "…", "text": "Complete station tour", "member_visible": true },
+    { "id": "…", "text": "Review SOPs", "member_visible": true },
+    { "id": "…", "text": "References called", "member_visible": false }
   ]
 }
 ```
+
+| Field            | Meaning                                                                                                                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | Assigned server-side when a step is created. Send it back on edit so the step keeps its identity — and the ticks recorded against it — through a rename or a reorder         |
+| `text`           | 1–500 chars, trimmed                                                                                                                                                         |
+| `member_visible` | `true` by default. `false` keeps the step off the member's view — background check returned, references called. **Hiding a step is the deliberate choice, not the fallback** |
+
+**Both shapes are accepted on input.** A bare string, an object, or a mix
+normalizes to the object form (`app/utils/checklist.py` → `app/schemas/checklist.py`),
+which is why the built-in sample templates still declare their steps as plain
+strings. **Legacy string rows normalize on read** rather than through a
+migration: it costs no lock on a JSON column, and every write goes through the
+one helper, so the rest of the codebase sees a single shape.
+
+Progress is recorded by `PATCH /progress/{progress_id}` with
+`checklist_done: [step_id, …]`.
+
+> **Hidden steps still count toward the denominator.** Excluding them would let a
+> requirement read 100% while the background check was outstanding. The member is
+> shown `+N more steps your officer records` instead of a total that does not
+> match what is on their screen.
+
+> **Before 2026-08-09 none of this was visible to anyone.** The requirement stored
+> the list, and nothing rendered it: the member saw the requirement's title and had
+> to guess, the officer signing it off saw "8 items" and not the items, and the
+> whole thing was one all-or-nothing tick.
 
 #### 8. Knowledge Test Requirements
 

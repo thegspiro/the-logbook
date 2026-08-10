@@ -312,9 +312,46 @@ in error.]**
 
 > "And it's tuned to not become noise. A member who stays behind isn't re-alerted
 > every single week — there's a cooldown. Pace is measured from their current
-> cycle, so someone who just restarted a recert cycle isn't wrongly flagged.
-> Deadline warnings fire at thirty, fourteen, and seven days out. You get the
-> signal that matters, when it matters."
+> cycle, so someone who just restarted a recert cycle isn't wrongly flagged. You
+> get the signal that matters, when it matters."
+
+**[SCREEN: The program's reminder settings — days before deadline, and 'only warn
+if below N%'.]**
+
+> "The warning schedule is **yours to set, per program**. Pick the days you want
+> — ninety, thirty, seven — and optionally tell it to skip anyone already above a
+> percentage, so a warning always means something."
+
+**[CALLOUT: "Per-program schedule — updated 2026-08-09"]**
+
+> "Worth saying out loud if you've used this before: until August ninth this
+> field was stored and ignored. Everyone got thirty, fourteen and seven days no
+> matter what you'd configured. It's honoured now — so if you set ninety days
+> once and never saw a ninety-day warning, that's why."
+
+### WHEN THE DEADLINE ACTUALLY PASSES (added 2026-08-09)
+
+**[SCREEN: The Enrollments tab filtered to Expired, showing one expired
+enrollment with the Reopen action.]**
+
+> "And here's what used to happen when the deadline arrived: nothing. The
+> warnings stopped, the enrollment stayed **Active**, and the member's page read
+> 'forty-two days overdue' next to a status saying they were fine. There was no
+> way to filter for them either."
+
+> "An enrollment past its target date now goes to **Expired** — the moment
+> anybody opens it, and in a daily sweep for the ones nobody opens. The member's
+> told, you're told, and you can finally filter for them."
+
+**[SCREEN: Clicking Reopen; the dialog with an optional new deadline.]**
+
+> "Expired isn't a dead end. **Reopen** puts them back to active, and you can set
+> a new deadline while you're there — the ordinary case of granting an extension.
+> Nothing they finished is lost, and their progress is recalculated on the way
+> back in, so a recruit who quietly finished the work while expired comes back
+> marked **complete** instead of waiting for you to notice."
+
+**[CALLOUT: "Reopen keeps every completed requirement"]**
 
 **[TRANSITION: Your pipeline routine]**
 

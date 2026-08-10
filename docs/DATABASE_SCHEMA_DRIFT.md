@@ -429,6 +429,32 @@ column sits second.
 
 ---
 
+## Since the audit (checked 2026-08-10)
+
+`python scripts/validate_migrations.py` reports **282 migrations, one head**, so
+the chain is linear again. Two things happened to it after the 2026-08-05 audit
+that are worth recording here:
+
+- **A revision-id collision, now repaired.** Two migrations claimed
+  `20260808_0002` (`drop_shift_equipment_check_apparatus_fk` and
+  `add_owns_requirement_to_program_requirements`), leaving two heads. The first
+  was renumbered to `20260808_0003`; `0002` kept its number because live
+  databases had already applied it. **A database can be recorded as having run a
+  migration it never saw** — see
+  [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#two-migrations-claimed-20260808_0002--and-what-it-left-behind-2026-08-09)
+  for the symptom and the repair.
+- **The medical-screening PHI migration was re-pointed onto main's head** after a
+  rebase renumbered around it.
+
+Both build paths still agree: the model changes since the audit — `events`
+gaining `allow_guest_check_in` and `guest_check_in_creates_prospect`,
+`event_external_attendees` gaining `prospect_id` (+ its index), and
+`program_requirements` gaining `owns_requirement` — each ship with a matching
+migration, and `docs/DATABASE_SCHEMA.md` has been regenerated to match
+(**238 tables · 4110 columns · 773 foreign keys**).
+
+---
+
 ## Preventing recurrence
 
 Wire `python scripts/generate_schema_docs.py --check` into CI. It fails when

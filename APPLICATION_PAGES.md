@@ -6,18 +6,29 @@ Complete reference of all pages in the application, organized by module.
 
 ## Public Pages (No Authentication Required)
 
-| URL                | Page                   | Description                                                    |
-| ------------------ | ---------------------- | -------------------------------------------------------------- |
-| `/`                | Welcome                | Landing / onboarding entry point                               |
-| `/login`           | Login                  | User authentication                                            |
-| `/forgot-password` | Forgot Password        | Password reset request                                         |
-| `/reset-password`  | Reset Password         | Password reset form                                            |
-| `/auth/callback`   | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect) |
-| `/f/:slug`         | Public Form            | Public form submission (token-based)                           |
-| `/ballot`          | Ballot Voting          | Public ballot voting (token-based)                             |
-| `/display/:code`   | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)      |
-| `/privacy`         | Privacy Policy         | Public privacy notice; department-configurable text            |
-| `/terms`           | Terms of Service       | Public terms of use; department-configurable text              |
+| URL                                    | Page                   | Description                                                              |
+| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------ |
+| `/`                                    | Welcome                | Landing / onboarding entry point                                         |
+| `/login`                               | Login                  | User authentication                                                      |
+| `/forgot-password`                     | Forgot Password        | Password reset request                                                   |
+| `/reset-password`                      | Reset Password         | Password reset form                                                      |
+| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)           |
+| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                     |
+| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                       |
+| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based)                |
+| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_ |
+| `/privacy`                             | Privacy Policy         | Public privacy notice; department-configurable text                      |
+| `/terms`                               | Terms of Service       | Public terms of use; department-configurable text                        |
+
+> **The guest check-in page is addressed through the room's display code**, not
+> through the event alone, so the backend can resolve the department without a
+> session — the event id by itself would leave the organization to be taken from
+> the request. It renders outside `AppLayout` and uses bare `fetch`, not the
+> shared axios instance, because that instance's 401 interceptor would redirect
+> the very visitors this page exists for. The route only produces a working page
+> when the event has `allow_guest_check_in` set and is actually held in that
+> room; otherwise it renders a "sign-in is not available" state. See
+> **Events → Check-In Settings** below.
 
 > **Public routes sit outside `AppLayout`** and therefore do not inherit its background. Until 2026-08-08 the public form page, ballot voting page and the prospective-member application-status page painted `bg-theme-surface-secondary` — a **translucent** token in dark mode, designed to composite over `AppLayout`'s gradient — so they rendered over the browser's bare white canvas: white-on-white labels with dark inputs. `body` now carries the themed gradient, and these pages use the same gradient utility as `LoginPage`. **Any new public route must use the gradient utility, not a surface token.** Print styles force a white body background, so printed output is unaffected.
 
@@ -41,6 +52,13 @@ Complete reference of all pages in the application, organized by module.
 | `/onboarding/modules/:moduleId/config` | Module Config         | Configure individual module                                                              |
 | `/onboarding/system-owner`             | System Owner Creation | Create initial system owner account                                                      |
 | `/onboarding/security-check`           | Security Check        | Security verification                                                                    |
+| `/onboarding/stations`                 | Station Setup         | Create the department's stations                                                         |
+| `/onboarding/apparatus`                | Apparatus Setup       | Create the department's apparatus                                                        |
+| `/onboarding/complete`                 | Setup Complete        | Confirmation / hand-off into the app                                                     |
+
+> **Completed setup cannot be replayed** _(2026-08-08)_. Once onboarding is
+> finished, the station and apparatus setup endpoints refuse further writes, so a
+> retained link cannot be used to add stations or apparatus after the fact.
 
 **Legacy redirects:**
 
@@ -135,12 +153,13 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 ### Member-Facing Pages
 
-| URL                    | Page          | Permission    |
-| ---------------------- | ------------- | ------------- |
-| `/events`              | Events List   | Authenticated |
-| `/events/:id`          | Event Detail  | Authenticated |
-| `/events/:id/qr-code`  | Event QR Code | Authenticated |
-| `/events/:id/check-in` | Self Check-In | Authenticated |
+| URL                            | Page                 | Permission                |
+| ------------------------------ | -------------------- | ------------------------- |
+| `/events`                      | Events List          | Authenticated             |
+| `/events/:id`                  | Event Detail         | Authenticated             |
+| `/events/:id/qr-code`          | Event QR Code        | Authenticated             |
+| `/events/:id/check-in`         | Self Check-In        | Authenticated             |
+| `/event-request/status/:token` | Event Request Status | Token-based (public link) |
 
 ### Per-Event Admin Pages
 
@@ -156,6 +175,22 @@ Requires `members.manage` permission. Tab-based admin interface.
 | ------------------- | -------------------------- | ---------------- |
 | `/events/analytics` | Event Analytics Dashboard  | `analytics.view` |
 | `/events/templates` | Event Templates Management | `events.manage`  |
+
+### Check-In Settings _(2026-08-09)_
+
+Set per event on **Edit Event → Check-In Settings**. Both default to off.
+
+| Setting                                     | Field                             | Effect                                                                                            |
+| ------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Allow guest check-in                        | `allow_guest_check_in`            | Adds a second, guest QR code to the room display and opens `/display/:code/events/:eventId/guest` |
+| Create a prospective member from each guest | `guest_check_in_creates_prospect` | Also opens a pipeline record for each guest who supplies an email, linked to the event            |
+
+> **Turning on guest check-in exposes an unauthenticated write path.** It is for
+> outreach events — volunteer interest nights, open houses — and should stay off
+> for business meetings and training sessions, whose attendance drives records
+> that only apply to members. The room display renders both QR codes side by side
+> when the event opts in; the member code (`/events/:id/check-in`) is unchanged,
+> and check-out remains member-only.
 
 > **Event Analytics Dashboard** shows summary cards (total events, RSVPs, check-ins, attendance rate), event type distribution chart, monthly trends chart, top events table, and date range filtering. **Event Templates Management** lists all templates with create/edit/toggle/delete actions.
 
@@ -202,17 +237,24 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 ### Member-Facing Pages
 
-| URL                                | Page                                    | Permission        |
-| ---------------------------------- | --------------------------------------- | ----------------- |
-| `/training`                        | My Training                             | Authenticated     |
-| `/training/my-training`            | My Training                             | Authenticated     |
-| `/training/submit`                 | Submit Training                         | Authenticated     |
-| `/training/courses`                | Course Library                          | Authenticated     |
-| `/training/programs`               | Training Programs                       | Authenticated     |
-| `/training/programs/:programId`    | Program Detail                          | Authenticated     |
-| `/training/cohorts`                | Course Cohorts                          | `training.manage` |
-| `/training/cohorts/:cohortId`      | Cohort Detail (class timeline + roster) | `training.manage` |
-| `/training/my-skill-tests/:testId` | My Skill Test Result (read-only)        | Authenticated     |
+| URL                                   | Page                                    | Permission        |
+| ------------------------------------- | --------------------------------------- | ----------------- |
+| `/training`                           | My Training                             | Authenticated     |
+| `/training/my-training`               | My Training                             | Authenticated     |
+| `/training/submit`                    | Submit Training                         | Authenticated     |
+| `/training/courses`                   | Course Library                          | Authenticated     |
+| `/training/programs`                  | Training Programs                       | Authenticated     |
+| `/training/programs/:programId`       | Program Detail                          | Authenticated     |
+| `/training/cohorts`                   | Course Cohorts                          | `training.manage` |
+| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster) | `training.manage` |
+| `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)        | Authenticated     |
+| `/training/my-progress/:enrollmentId` | My Program Progress                     | Authenticated     |
+
+> **`/training/my-progress/:enrollmentId` is where every training notification
+> now lands** _(2026-08-09)_. All eight `action_url`s previously pointed at
+> `/training/programs/{id}/progress` or `.../enrollments`, neither of which is a
+> route — the router's catch-all bounced the member to the dashboard. They point
+> here and at `/training/programs?tab=enrollments` instead.
 
 ### Skills Testing _(permissions revised 2026-08-08)_
 
@@ -266,9 +308,15 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Manual Shift Report _(2026-04-11)_
 
-| URL                             | Page                | Permission        |
-| ------------------------------- | ------------------- | ----------------- |
-| `/training/manual-shift-report` | Manual Shift Report | `training.manage` |
+| URL                             | Page                           | Permission        |
+| ------------------------------- | ------------------------------ | ----------------- |
+| `/training/manual-shift-report` | Manual Shift Report            | `training.manage` |
+| `/training/log-shift`           | Log Shift                      | `training.manage` |
+| `/training/compliance-config`   | Compliance Requirements Config | `settings.manage` |
+
+> **Manual entry settings look empty when the feature is off** — everything below
+> the enable checkbox on the **ManualEntrySettingsPanel** is conditional on it.
+> A single-checkbox panel is the feature switched off, not a broken page.
 
 > For departments without the Scheduling module enabled. Officers can file shift completion reports by manually entering shift date, start/end times, apparatus, crew members, and trainee evaluations. Supports apparatus-specific skill/task auto-population and save-as-draft. Admin configuration via the **ManualEntrySettingsPanel** on the Training Admin page controls whether manual entry is enabled, which apparatus types are available, and default shift times.
 
@@ -360,26 +408,66 @@ Tab-based interface with the following views:
 
 ### Scheduling Admin Pages (2026-03-19)
 
-| URL                     | Page                       | Permission          |
-| ----------------------- | -------------------------- | ------------------- |
-| `/scheduling/templates` | Shift Templates Management | `scheduling.manage` |
-| `/scheduling/patterns`  | Shift Pattern Management   | `scheduling.manage` |
-| `/scheduling/reports`   | Scheduling Reports         | `scheduling.manage` |
-| `/scheduling/settings`  | Scheduling Settings        | `scheduling.manage` |
+| URL                           | Page                       | Permission          |
+| ----------------------------- | -------------------------- | ------------------- |
+| `/scheduling/templates`       | Shift Templates Management | `scheduling.manage` |
+| `/scheduling/patterns`        | Shift Pattern Management   | `scheduling.manage` |
+| `/scheduling/reports`         | Scheduling Reports         | `scheduling.manage` |
+| `/scheduling/settings`        | Scheduling Settings        | `scheduling.manage` |
+| `/scheduling/platoons`        | Platoon Management         | Authenticated       |
+| `/scheduling/checkin`         | Shift Check-In             | Authenticated       |
+| `/scheduling/supply/expiring` | Expiring Supply Items      | Authenticated       |
 
 > Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
 
-### Scheduling Settings Sub-Tabs _(2026-04-04)_
+> **Tab clicks now write `?tab=`** _(2026-08-09)_. Until this was fixed, clicking
+> any tab on `/scheduling` selected it and immediately snapped back to
+> **Schedule**, so Equipment Checks and every other tab could only be reached by
+> deep link. Selecting **Schedule** removes the param, so the default URL stays
+> clean.
 
-The Scheduling Settings page uses a tabbed sub-navigation:
+### Scheduling Settings Sections _(rebuilt 2026-08-09)_
 
-| Sub-Tab        | Description                                                                                                                                                                                                                             |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shift Settings | Default durations, positions, apparatus type defaults, staffing rules                                                                                                                                                                   |
-| Notifications  | Email recipients and notification preferences for shift events                                                                                                                                                                          |
-| Shift Reports  | Checklist timing windows, post-shift validation, officer report requirements, training module defaults (call types, skills, tasks), per-apparatus-type skill/task mappings, rating scale customization, and report form section toggles |
+`/scheduling/settings` now uses the **shared settings layout**
+(`components/settings/SettingsLayout.tsx`) — the same shell as Organization
+Settings and Event Settings: a section sidebar with descriptions on desktop, a
+scrollable tab strip on phones, and the section body in a surface card under a
+single header. It replaces the pill/segmented tab bar and the two stacked titles
+("Scheduling Settings" from the page, then "Shift Settings" from the panel) it
+had before.
 
-> The **Shift Reports** settings tab links to the Training Module Configuration for defaults (call types, skills, tasks) and provides an inline UI for managing per-apparatus-type skill and task mappings. Changes to form section toggles control which sections officers see when filing shift completion reports.
+Sections are defined in
+`modules/scheduling/components/schedulingSettingsSections.ts`:
+
+| Section (`?tab=`) | Label         | Description                             | Saved by footer |
+| ----------------- | ------------- | --------------------------------------- | --------------- |
+| `general`         | General       | Shift defaults, overtime, and close-out | Yes             |
+| `apparatus`       | Apparatus     | Apparatus and resource type defaults    | Yes             |
+| `platoons`        | Platoons      | Platoon rosters and assignments         | No              |
+| `eligibility`     | Eligibility   | Who may sign up for a shift             | No              |
+| `notifications`   | Notifications | Shift reminders and alerts              | No              |
+| `equipment`       | Equipment     | Check requirements and templates        | Yes             |
+| `shift-reports`   | Shift Reports | End-of-shift reporting options          | No              |
+
+> **The Save/Reset footer appears only on the three sections it actually
+> writes** (`LOCALLY_SAVED_SECTIONS`). It used to be shown on all seven while
+> saving three, so Notifications and Shift Reports offered a Save button that
+> flashed "Settings saved" without touching their values. Every other section
+> owns its own save control.
+
+> **Selecting a section writes `?tab=`**, as the other settings screens do, so a
+> section can be linked to, refreshed into, and reached with the back button.
+> The page previously read the param on mount but never wrote it. A deep link to
+> **Platoons** while the department has that feature switched off falls back to
+> General by derivation rather than by resetting state, so the link still lands
+> once the feature flag loads.
+
+> **Eligibility here is not the same screen as rank eligibility.**
+> **Scheduling → Settings → Eligibility** governs which _membership types_ may
+> self-sign-up for a shift; per-rank shift-**position** eligibility is set on
+> **Settings → Ranks**.
+
+> The **Shift Reports** section links to the Training Module Configuration for defaults (call types, skills, tasks) and provides an inline UI for managing per-apparatus-type skill and task mappings. Changes to form section toggles control which sections officers see when filing shift completion reports. It is a section navigator of its own eight sections, not a page of three cards.
 
 ### Equipment Check Pages (2026-03-19)
 
@@ -395,10 +483,16 @@ The Scheduling Settings page uses a tabbed sub-navigation:
 
 ## Elections
 
-| URL              | Page            | Permission    |
-| ---------------- | --------------- | ------------- |
-| `/elections`     | Elections List  | Authenticated |
-| `/elections/:id` | Election Detail | Authenticated |
+| URL                   | Page              | Permission         |
+| --------------------- | ----------------- | ------------------ |
+| `/elections`          | Elections List    | Authenticated      |
+| `/elections/:id`      | Election Detail   | Authenticated      |
+| `/elections/settings` | Election Settings | `elections.manage` |
+
+> **Voiding a paper-ballot batch** used to ask for its reason with
+> `window.prompt`, which a browser may suppress — and which silently dropped any
+> reason shorter than three characters. It now uses an in-app dialog that shows
+> the validation message _(2026-08-09)_.
 
 ---
 
@@ -479,11 +573,152 @@ The Scheduling Settings page uses a tabbed sub-navigation:
 
 ---
 
+## Finance _(documented 2026-08-10)_
+
+| URL                                   | Page                       | Permission                    |
+| ------------------------------------- | -------------------------- | ----------------------------- |
+| `/finance`                            | Finance Dashboard          | Authenticated                 |
+| `/finance/budgets`                    | Budgets                    | Authenticated                 |
+| `/finance/budgets/:id`                | Budget Detail              | Authenticated                 |
+| `/finance/purchase-requests`          | Purchase Requests          | Authenticated                 |
+| `/finance/purchase-requests/new`      | New Purchase Request       | Authenticated                 |
+| `/finance/purchase-requests/:id`      | Purchase Request Detail    | Authenticated                 |
+| `/finance/purchase-requests/:id/edit` | Edit Purchase Request      | Authenticated                 |
+| `/finance/expenses`                   | Expense Reports            | Authenticated                 |
+| `/finance/expenses/new`               | New Expense Report         | Authenticated                 |
+| `/finance/expenses/:id`               | Expense Report Detail      | Authenticated                 |
+| `/finance/check-requests`             | Check Requests             | Authenticated                 |
+| `/finance/check-requests/new`         | New Check Request          | Authenticated                 |
+| `/finance/check-requests/:id`         | Check Request Detail       | Authenticated                 |
+| `/finance/dues`                       | Dues                       | `finance.view`                |
+| `/finance/settings`                   | Finance Settings           | `finance.manage`              |
+| `/finance/settings/approval-chains`   | Approval Chains            | `finance.configure_approvals` |
+| `/finance/approvals/:token`           | Tokenized Approval Landing | Token-based                   |
+
+> **Separation of duties on money out** _(2026-08-09)_. The member who
+> **disburses** may not be the member the record is **about**. Enforced
+> server-side — not merely hidden in the UI — so a direct API call is refused
+> with a `400` too:
+>
+> | Action                                      | Actor must differ from  |
+> | ------------------------------------------- | ----------------------- |
+> | Mark a purchase request paid                | the request's requester |
+> | Mark an expense report paid                 | the report's requester  |
+> | Issue a check                               | the request's requester |
+> | Waive dues                                  | the dues member         |
+> | Mark a store order paid / waive / refund it | the order's member      |
+>
+> **Edge case:** the out-of-band reconciliation path runs with no actor id and is
+> exempt — the guard no-ops on a missing id, so an automated bank
+> reconciliation is not blocked by a rule about people. A treasurer paying out
+> their own reimbursement needs a second officer to record the payment.
+
+> **Read-permission gates** _(2026-08-09)_. Reimbursement detail now requires the
+> read permission rather than being reachable by any authenticated member
+> (FIN-5).
+
+---
+
+## Grants & Fundraising _(documented 2026-08-10)_
+
+| URL                             | Page                | Permission           |
+| ------------------------------- | ------------------- | -------------------- |
+| `/grants`                       | Grants Dashboard    | Authenticated        |
+| `/grants/opportunities`         | Grant Opportunities | Authenticated        |
+| `/grants/applications`          | Grant Applications  | Authenticated        |
+| `/grants/applications/new`      | New Application     | `fundraising.manage` |
+| `/grants/applications/:id`      | Grant Detail        | Authenticated        |
+| `/grants/applications/:id/edit` | Edit Application    | `fundraising.manage` |
+| `/grants/campaigns`             | Campaigns           | Authenticated        |
+| `/grants/donors`                | Donors              | Authenticated        |
+| `/grants/donations`             | Donations           | Authenticated        |
+| `/grants/reports`               | Fundraising Reports | `fundraising.view`   |
+
+---
+
+## Storefront _(documented 2026-08-10)_
+
+| URL             | Page                 | Permission          |
+| --------------- | -------------------- | ------------------- |
+| `/store`        | Department Store     | `storefront.view`   |
+| `/store/orders` | My Orders            | `storefront.view`   |
+| `/store/admin`  | Store Administration | `storefront.manage` |
+
+> Recording an order payment is subject to the same separation-of-duties rule as
+> finance disbursement — see **Finance** above.
+
+---
+
+## Administrative Hours _(documented 2026-08-10)_
+
+| URL                                           | Page                      | Permission           |
+| --------------------------------------------- | ------------------------- | -------------------- |
+| `/admin-hours`                                | Administrative Hours      | Authenticated        |
+| `/admin-hours/:categoryId/clock-in`           | Clock In / Out            | Authenticated        |
+| `/admin-hours/categories/:categoryId/qr-code` | Category QR Code          | Authenticated        |
+| `/admin-hours/manage`                         | Manage Categories & Hours | `admin_hours.manage` |
+
+> **Bulk approval cannot be used to approve your own hours** _(2026-08-08)_, and
+> **deactivating a category leaves already-logged hours alone** — the confirmation
+> dialog now says so _(2026-08-09)_.
+
+---
+
+## Communications & Messaging _(documented 2026-08-10)_
+
+| URL                               | Page                      | Permission             |
+| --------------------------------- | ------------------------- | ---------------------- |
+| `/messages`                       | Messages                  | Authenticated          |
+| `/communications/messages`        | Message Administration    | `notifications.manage` |
+| `/communications/email-templates` | Email Template Management | `settings.manage`      |
+
+---
+
+## IP Security _(documented 2026-08-10)_
+
+| URL                        | Page                       | Permission        |
+| -------------------------- | -------------------------- | ----------------- |
+| `/ip-security`             | IP Security Administration | `security.manage` |
+| `/ip-security/my-requests` | My Access Requests         | Authenticated     |
+
+---
+
+## Label, Badge & Print Routes _(documented 2026-08-10)_
+
+Print-optimized routes. They render a print layout rather than an app screen, and
+are opened from the corresponding module's list view.
+
+| URL                                 | Prints                  | Permission        |
+| ----------------------------------- | ----------------------- | ----------------- |
+| `/members/print-labels`             | Member labels           | Authenticated     |
+| `/members/:userId/id-card`          | Member ID card          | Authenticated     |
+| `/members/scan`                     | Member badge scanner    | Authenticated     |
+| `/prospective-members/print-labels` | Applicant badges        | Authenticated     |
+| `/inventory/print-labels`           | Inventory labels        | Authenticated     |
+| `/apparatus/print-labels`           | Apparatus labels        | Authenticated     |
+| `/facilities/print-labels`          | Facility / room labels  | Authenticated     |
+| `/training/print/member`            | Member training history | Authenticated     |
+| `/training/print/program`           | Training program        | Authenticated     |
+| `/training/print/compliance`        | Compliance matrix       | `training.manage` |
+| `/scheduling/checkin/print`         | Shift check-in sheet    | Authenticated     |
+| `/scheduling/shift-reports/print`   | Shift report            | Authenticated     |
+
+---
+
+## Platform Administration
+
+| URL                         | Page               | Permission        |
+| --------------------------- | ------------------ | ----------------- |
+| `/admin/platform-analytics` | Platform Analytics | `settings.manage` |
+
+---
+
 ## User Account
 
-| URL        | Page                  | Permission    |
-| ---------- | --------------------- | ------------- |
-| `/account` | User Account Settings | Authenticated |
+| URL                 | Page                  | Permission    |
+| ------------------- | --------------------- | ------------- |
+| `/account`          | User Account Settings | Authenticated |
+| `/settings/account` | Redirect → `/account` | Authenticated |
 
 ## Settings & Administration
 
@@ -521,8 +756,19 @@ The Scheduling Settings page uses a tabbed sub-navigation:
 
 ---
 
-**Total: ~110 direct routes + 25 admin hub tabs across 18 modules**
+**Total: 203 declared routes + 25 admin hub tabs across 18 modules** _(counted
+2026-08-10 from `App.tsx` and every `modules/*/routes.tsx`; the previous
+"~110" predated the Finance, Grants, Storefront, Admin Hours, Communications,
+IP Security and print/label routes, all of which are now listed above.)_
 
 > **Note (2026-03-26):** Notification cards redesigned with expand/collapse, pinned-first sorting, contextual CTAs, and mark-as-read on collapse. Notification metadata column added for rich card rendering. Scheduling page supports `?tab=` deep-linking (schedule, my-shifts, open-shifts, requests, equipment-checks). Shift notifications deep-link to scheduling with shift pre-selected. In-process scheduled task runner replaces external cron. Standalone equipment checks (not tied to shifts). Flat scrollable check form with inline compartments and section headers. Text check type changed to read-only statement. Critical minimum quantity threshold on check items. Template clone preserves is_header and critical_minimum_quantity. EVOC certification levels integrated across training, apparatus, and scheduling. Training record category tracking. Virginia NCCR recertification standards. Event attendees importable into election ballot lists. Linked elections displayed on event and minutes detail pages. Apparatus type/status badges render actual icons. navigate(-1) replaced with hardcoded back paths and breadcrumbs. Chrome label printing fixed via iframe-based approach. App startup handles MySQL not ready with retry backoff.
 >
-> **Note (2026-03-24):** Module availability depends on feature flags (`MODULE_*_ENABLED` in backend config). Disabled modules hide their navigation items and return 403 from API endpoints. The onboarding flow (`/onboarding/modules`) lets organizations choose which modules to enable during initial setup.
+> **Note (2026-03-24, corrected 2026-08-10):** Module availability is **per
+> organization**, held in the organization's `enabled_modules` setting and
+> consumed by the frontend navigation. The onboarding flow
+> (`/onboarding/modules`) is where an organization chooses them, and they are
+> editable afterwards in Organization Settings. There are **no deployment-level
+> `MODULE_*_ENABLED` environment flags** — those were removed because they gated
+> nothing (every router registers unconditionally) and merely duplicated the
+> per-org mechanism. A module switched off hides its navigation; it does not by
+> itself return 403 from the API.
