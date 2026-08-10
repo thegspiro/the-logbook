@@ -747,32 +747,97 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     [updateResult, focusNextItem]
   );
 
-  const passAllInCompartment = useCallback(
+  /** Items in this compartment a crew still has to record something for. */
+  const checkableIn = useCallback(
+    (compartment: CheckTemplateCompartment) =>
+      compartment.items.filter(
+        (item) =>
+          item.checkType !== 'header' && item.checkType !== 'text' && getExpirationStatus(item, today) !== 'expired'
+      ),
+    [today]
+  );
+
+  /**
+   * Accept the numbers already shown, without changing any of them.
+   *
+   * The counterpart to setting par, and the one a crew wants far more often:
+   * they have walked the compartment, the carried figures match what is in it,
+   * and a shortfall they can see should stay a shortfall. Status still comes
+   * from the number, so confirming 18 of 24 files a failure rather than
+   * quietly passing it.
+   */
+  const confirmCountsInCompartment = useCallback(
     (compartment: CheckTemplateCompartment) => {
       setResults((prev) => {
         const next = { ...prev };
-        for (const item of compartment.items) {
-          if (item.checkType === 'header' || item.checkType === 'text') continue;
-          const expStatus = getExpirationStatus(item, today);
-          if (expStatus === 'expired') continue;
+        for (const item of checkableIn(compartment)) {
           const existing = next[item.id];
+          const required = item.requiredQuantity ?? item.expectedQuantity;
+          const shown = existing?.quantityFound;
           const patch: Partial<ItemResult> = { status: 'pass' };
-          if (item.checkType === 'quantity') {
-            const required = item.requiredQuantity ?? item.expectedQuantity;
-            if (required != null) {
-              patch.quantityFound = required;
-            }
+          if (item.checkType === 'quantity' && required != null) {
+            // Nothing carried means nothing to confirm; leave it for the crew.
+            if (shown == null) continue;
+            patch.status = shown >= required ? 'pass' : 'fail';
           }
-          next[item.id] = {
-            status: 'not_checked',
-            ...existing,
-            ...patch,
-          };
+          next[item.id] = { status: 'not_checked', ...existing, ...patch };
         }
         return next;
       });
     },
-    [today]
+    [checkableIn]
+  );
+
+  /** Quantity positions this compartment would have to *raise* to reach par. */
+  const shortOfPar = useCallback(
+    (compartment: CheckTemplateCompartment) =>
+      checkableIn(compartment).filter((item) => {
+        if (item.checkType !== 'quantity') return false;
+        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const shown = results[item.id]?.quantityFound;
+        return required != null && shown != null && shown < required;
+      }),
+    [checkableIn, results]
+  );
+
+  /**
+   * Assert the whole compartment is at its required quantities.
+   *
+   * This writes par over whatever is shown, which is right when a crew means
+   * it and wrong when they are using it as a fast path — a carried 18 of 24
+   * became a recorded 24, putting six gauze on the record that are not in the
+   * bag. It now says so first, and only when it would actually raise a count;
+   * a compartment already at par is still one tap.
+   */
+  const setCompartmentToPar = useCallback(
+    async (compartment: CheckTemplateCompartment) => {
+      const raising = shortOfPar(compartment);
+      if (raising.length > 0) {
+        const names = raising.map((i) => i.name).join(', ');
+        const ok = await confirm({
+          title: 'Record these at full?',
+          message: `${names} ${raising.length === 1 ? 'is' : 'are'} showing below the required quantity. Setting the compartment to par records ${raising.length === 1 ? 'it' : 'them'} as full — only do this if you have restocked.`,
+          confirmLabel: 'Yes, they are full',
+          cancelLabel: 'Keep the counts',
+          variant: 'warning',
+        });
+        if (!ok) return;
+      }
+      setResults((prev) => {
+        const next = { ...prev };
+        for (const item of checkableIn(compartment)) {
+          const existing = next[item.id];
+          const patch: Partial<ItemResult> = { status: 'pass' };
+          if (item.checkType === 'quantity') {
+            const required = item.requiredQuantity ?? item.expectedQuantity;
+            if (required != null) patch.quantityFound = required;
+          }
+          next[item.id] = { status: 'not_checked', ...existing, ...patch };
+        }
+        return next;
+      });
+    },
+    [checkableIn, shortOfPar, confirm]
   );
 
   const hasQuantityItems = useCallback(
@@ -1748,21 +1813,47 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   {/* Items — visible when expanded */}
                   {!isCollapsed && (
                     <div className="mt-3 ml-1 space-y-3">
-                      {/* Pass All / Set All to Par */}
+                      {/* Two bulk actions for a compartment that carries
+                          quantities, because "the numbers are right" and "it is
+                          all full" are different claims and only one of them
+                          used to exist. Confirming leads: it is the common case
+                          and the one that cannot record stock nobody has. */}
                       {!previewMode && checked < checkable.length && (
-                        <div className="flex justify-end">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {hasQuantityItems(comp) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                confirmCountsInCompartment(comp);
+                              }}
+                              aria-label={`Confirm the counts shown in ${comp.name}`}
+                              className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium whitespace-nowrap text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              Confirm Counts
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              passAllInCompartment(comp);
+                              if (hasQuantityItems(comp)) {
+                                void setCompartmentToPar(comp);
+                              } else {
+                                confirmCountsInCompartment(comp);
+                              }
                             }}
                             aria-label={
                               hasQuantityItems(comp)
                                 ? `Set all items in ${comp.name} to par`
                                 : `Mark all items in ${comp.name} as passed`
                             }
-                            className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium whitespace-nowrap text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
+                            className={`flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
+                              hasQuantityItems(comp)
+                                ? 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
+                                : 'border-green-500/30 bg-green-500/10 text-green-700 hover:bg-green-500/20 dark:text-green-400'
+                            }`}
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                             {hasQuantityItems(comp) ? 'Set All to Par' : 'Pass All'}

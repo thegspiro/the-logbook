@@ -148,6 +148,66 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(screen.getByDisplayValue('4')).toBeInTheDocument();
   });
 
+  it('confirms the counts shown without raising any of them', async () => {
+    const user = userEvent.setup();
+    render({ requiredQuantity: 24, expectedQuantity: 24, quantityOnTruck: 18 });
+    await screen.findByDisplayValue('18');
+
+    await user.click(screen.getByRole('button', { name: /Confirm the counts shown/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('1/1')).toBeInTheDocument();
+    });
+    // The shortfall a crew can see stays a shortfall — and files as a failure
+    // rather than quietly passing.
+    expect(screen.getByDisplayValue('18')).toBeInTheDocument();
+    expect(screen.getByText(/Below required \(24\)/)).toBeInTheDocument();
+  });
+
+  it('asks before recording a short compartment as full', async () => {
+    const user = userEvent.setup();
+    render({ requiredQuantity: 24, expectedQuantity: 24, quantityOnTruck: 18 });
+    await screen.findByDisplayValue('18');
+
+    await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
+
+    // Par writes over what is shown, so putting six gauze on the record that
+    // are not in the bag has to be a decision, not a fast path.
+    expect(await screen.findByText(/showing below the required quantity/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Keep the counts/ }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('18')).toBeInTheDocument();
+    });
+  });
+
+  it('sets par once the crew says they restocked', async () => {
+    const user = userEvent.setup();
+    render({ requiredQuantity: 24, expectedQuantity: 24, quantityOnTruck: 18 });
+    await screen.findByDisplayValue('18');
+
+    await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
+    await user.click(await screen.findByRole('button', { name: /Yes, they are full/ }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('24')).toBeInTheDocument();
+    });
+  });
+
+  it('does not interrupt a compartment already at par', async () => {
+    const user = userEvent.setup();
+    render({ requiredQuantity: 24, expectedQuantity: 24, quantityOnTruck: 24 });
+    await screen.findByDisplayValue('24');
+
+    await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
+
+    // Nothing would be raised, so there is nothing to warn about.
+    await waitFor(() => {
+      expect(screen.getByText('1/1')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/showing below the required quantity/)).not.toBeInTheDocument();
+  });
+
   it('keeps the photo control with the note it evidences', async () => {
     const user = userEvent.setup();
     render({ quantityOnTruck: 4 });
