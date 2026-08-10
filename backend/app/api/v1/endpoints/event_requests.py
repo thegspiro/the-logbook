@@ -16,7 +16,6 @@ import html as _html
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -148,78 +147,83 @@ async def _send_request_notification(
 
         # Notify the requester
         if trigger_config.get("notify_requester", False):
+            from app.models.email_template import EmailTemplateType
+            from app.services.email_template_service import (
+                DEFAULT_EVENT_REQUEST_STATUS_HTML,
+                DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
+                DEFAULT_EVENT_REQUEST_STATUS_TEXT,
+            )
+
             org_name = org.name if org else "Department"
+            event_date = (
+                event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
+                if event_request.event_date
+                else ""
+            )
+            decline_reason = event_request.decline_reason or ""
+            message = extra_context.get("message", "") if extra_context else ""
+
+            # Build the optional blocks here rather than labelling them in the
+            # template: a scheduled request has a date and no decline reason,
+            # a declined one the reverse, and the recipient is a member of the
+            # public who should not receive a bare "Reason:" with nothing after
+            # it. Escaped at the point of assembly — every value below is
+            # either department-entered or public-supplied.
+            detail_rows = []
+            detail_lines = []
+            if event_date:
+                detail_rows.append(
+                    f"<p><strong>Scheduled Date:</strong> {_html.escape(event_date)}</p>"
+                )
+                detail_lines.append(f"Scheduled Date: {event_date}")
+            if decline_reason:
+                detail_rows.append(
+                    f"<p><strong>Reason:</strong> {_html.escape(decline_reason)}</p>"
+                )
+                detail_lines.append(f"Reason: {decline_reason}")
+
             context = {
                 "contact_name": event_request.contact_name or "",
                 "status_label": status_label,
-                "event_date": (
-                    event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
-                    if event_request.event_date
+                "event_date": event_date,
+                "decline_reason": decline_reason,
+                "message": message,
+                "details_html": (
+                    f'<div class="details">{"".join(detail_rows)}</div>'
+                    if detail_rows
                     else ""
                 ),
-                "decline_reason": event_request.decline_reason or "",
-                "message": (extra_context.get("message", "") if extra_context else ""),
+                "details_text": "\n".join(detail_lines),
+                "message_html": (
+                    f'<p style="white-space:pre-line;">{_html.escape(message)}</p>'
+                    if message
+                    else ""
+                ),
                 "organization_name": org_name,
             }
 
-            subject = None
-            html_body = None
-            text_body = None
-
-            # Try loading the admin-configured template
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                tmpl_svc = EmailTemplateService(db)
-                template = await tmpl_svc.get_template(
-                    str(org.id), EmailTemplateType.EVENT_REQUEST_STATUS
-                )
-                if template:
-                    subject, html_body, text_body = tmpl_svc.render(
-                        template, context, organization=org
-                    )
-            except Exception as tmpl_err:
-                logger.warning(
-                    f"Failed to load event_request_status template, using default: {tmpl_err}"
-                )
-
-            # Fall back to inline default
-            if not subject:
-                import re
-
-                from app.services.email_service import build_email_logo_img
-                from app.services.email_template_service import (
-                    DEFAULT_CSS,
-                    DEFAULT_EVENT_REQUEST_STATUS_HTML,
-                    DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
-                    DEFAULT_EVENT_REQUEST_STATUS_TEXT,
-                )
-
-                context["organization_logo_img"] = build_email_logo_img(org)
-                subject = DEFAULT_EVENT_REQUEST_STATUS_SUBJECT
-                rendered_html = DEFAULT_EVENT_REQUEST_STATUS_HTML
-                rendered_text = DEFAULT_EVENT_REQUEST_STATUS_TEXT
-                # organization_logo_img is trusted, pre-built HTML; every other
-                # value (incl. the public-supplied contact_name) is escaped
-                # before it lands in the HTML body.
-                raw_html_keys = {"organization_logo_img"}
-                for key, val in context.items():
-                    pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
-                    html_val = (
-                        str(val) if key in raw_html_keys else _html.escape(str(val))
-                    )
-                    subject = re.sub(pattern, str(val), subject)
-                    rendered_html = re.sub(pattern, html_val, rendered_html)
-                    rendered_text = re.sub(pattern, str(val), rendered_text)
-                html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
-                text_body = rendered_text
+            # _render_with_fallback loads the department's template and falls
+            # back to the built-in default, escaping each destination the way
+            # it needs. Hand-rolling that here previously fed each value to
+            # re.sub as a replacement string, so a backslash in a public
+            # contact name was read as a group reference.
+            subject, html_body, text_body = await email_service._render_with_fallback(
+                template_type=EmailTemplateType.EVENT_REQUEST_STATUS,
+                context=context,
+                db=db,
+                organization_id=str(org.id) if org else None,
+                default_subject=DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
+                default_html=DEFAULT_EVENT_REQUEST_STATUS_HTML,
+                default_text=DEFAULT_EVENT_REQUEST_STATUS_TEXT,
+            )
 
             await email_service.send_email(
                 to_emails=[event_request.contact_email],
                 subject=subject,
                 html_body=html_body,
                 text_body=text_body,
+                db=db,
+                template_type=EmailTemplateType.EVENT_REQUEST_STATUS.value,
             )
 
         # Notify the assigned coordinator
