@@ -123,20 +123,43 @@ describe('EquipmentCheckForm quantity seeding', () => {
     // The whole safety point: a pre-filled number is a starting point, so the
     // progress counter must not report the check as done before anyone looked.
     expect(screen.getByText('0/1')).toBeInTheDocument();
-    expect(screen.getByText(/Carried over/)).toBeInTheDocument();
   });
 
-  it('confirms an unchanged count in one tap', async () => {
-    const user = userEvent.setup();
+  it('states the carry-over once rather than on every row', async () => {
     render({ quantityOnTruck: 4 });
     await screen.findByDisplayValue('4');
 
-    await user.click(screen.getByRole('button', { name: /Carried over/ }));
+    // One standing rule about the whole check, not sixty pieces of chrome.
+    expect(screen.getByText(/Counts are carried over from the last recorded count/)).toBeInTheDocument();
+  });
+
+  it('confirms an unchanged count when the field is touched', async () => {
+    const user = userEvent.setup();
+    render({ quantityOnTruck: 4 });
+    const field = await screen.findByDisplayValue('4');
+
+    await user.click(field);
 
     await waitFor(() => {
       expect(screen.getByText('1/1')).toBeInTheDocument();
     });
-    expect(screen.queryByText(/Carried over/)).not.toBeInTheDocument();
+    // Nothing left carried, so the explanation retires itself.
+    expect(screen.queryByText(/Counts are carried over/)).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('4')).toBeInTheDocument();
+  });
+
+  it('keeps the photo control with the note it evidences', async () => {
+    const user = userEvent.setup();
+    render({ quantityOnTruck: 4 });
+    await screen.findByDisplayValue('4');
+
+    // Collapsed, the row carries two controls rather than four.
+    expect(screen.queryByRole('button', { name: /Add photo/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Note$/ }));
+
+    expect(await screen.findByRole('button', { name: /Add photo/ })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Notes for this item...')).toBeInTheDocument();
   });
 
   it('treats an adjustment as the check itself', async () => {

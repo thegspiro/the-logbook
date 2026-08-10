@@ -27,6 +27,7 @@ import {
   Eye,
   Wrench,
   Camera,
+  Info,
   Minus,
   Plus,
   Type,
@@ -224,7 +225,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const [swapping, setSwapping] = useState(false);
   const [collapsedCompartments, setCollapsedCompartments] = useState<Set<string>>(new Set());
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
-  const [expandedPhotos, setExpandedPhotos] = useState<Set<string>>(new Set());
   const [expandedSerialUpdate, setExpandedSerialUpdate] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [overallNotes, setOverallNotes] = useState('');
@@ -473,15 +473,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     });
   }, []);
 
-  const togglePhotos = useCallback((itemId: string) => {
-    setExpandedPhotos((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  }, []);
-
   const toggleSerialUpdate = useCallback((itemId: string) => {
     setExpandedSerialUpdate((prev) => {
       const next = new Set(prev);
@@ -670,6 +661,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const hasProgress = checkedItems > 0;
+  // True while any quantity still shows a number nobody has confirmed this
+  // pass; the banner explains those and retires itself once they are gone.
+  const hasCarriedCounts = useMemo(
+    () =>
+      checkableItems.some(
+        (item) => results[item.id]?.quantityFound != null && results[item.id]?.status === 'not_checked'
+      ),
+    [checkableItems, results]
+  );
 
   useEffect(() => {
     if (previewMode || !hasProgress) return;
@@ -1129,15 +1129,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   {unit ? ` ${unit}` : ''}
                 </span>
               )}
-              {isCarriedOver && (
-                <button
-                  type="button"
-                  onClick={() => setQuantity(currentQty)}
-                  className="block text-[10px] font-medium text-blue-600 hover:text-blue-700"
-                >
-                  Carried over — tap to confirm
-                </button>
-              )}
+
               {hasBeenSet && isCritical && (
                 <span className="block text-[10px] font-semibold text-red-600 dark:text-red-400">
                   CRITICAL — below minimum ({criticalMin})
@@ -1173,6 +1165,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       : 'border-theme-surface-border text-theme-text-primary'
                 }`}
                 value={hasBeenSet ? currentQty : ''}
+                onFocus={() => {
+                  // Touching the field is the crew looking at it. That counts
+                  // as the check for a carried number they agree with, which
+                  // is why no per-row "confirm" prompt is needed.
+                  if (isCarriedOver) setQuantity(currentQty);
+                }}
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val === '') {
@@ -1524,21 +1522,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           >
             <MessageSquare className="h-3 w-3" aria-hidden="true" />
             {showNotesField ? 'Hide' : 'Note'}
-          </button>
-          <button
-            type="button"
-            onClick={() => togglePhotos(item.id)}
-            aria-expanded={expandedPhotos.has(item.id)}
-            className={`flex min-h-[36px] items-center gap-1 text-xs transition-colors ${
-              (result?.photoFiles?.length ?? 0) > 0
-                ? 'font-medium text-blue-600'
-                : 'text-theme-text-muted hover:text-theme-text-secondary'
-            }`}
-          >
-            <Camera className="h-3 w-3" aria-hidden="true" />
-            Photo
             {(result?.photoFiles?.length ?? 0) > 0 && (
-              <span className="text-[10px]">({result?.photoFiles?.length})</span>
+              <span className="inline-flex items-center gap-0.5 font-medium text-blue-600">
+                <Camera className="h-3 w-3" aria-hidden="true" />
+                {result?.photoFiles?.length}
+              </span>
             )}
           </button>
           {/* Offered whenever the item is linked to inventory, not only when it
@@ -1621,7 +1609,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             onChange={(e) => updateResult(item.id, { notes: e.target.value })}
           />
         )}
-        {expandedPhotos.has(item.id) && (
+        {/* A photo is evidence for the note beside it, so it opens with the
+            note rather than from a control of its own — four buttons on a row
+            left nothing readable on a phone. */}
+        {showNotesField && (
           <div className="space-y-2">
             {/* Photo thumbnails */}
             {result?.photoUrls && result.photoUrls.length > 0 && (
@@ -1916,6 +1907,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           />
         </div>
       </div>
+
+      {/* Said once, at the top, rather than on every row it applies to: the
+          carry-over is a standing rule about the whole check, and repeating it
+          per item turned one sentence into sixty pieces of chrome. */}
+      {hasCarriedCounts && (
+        <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-secondary mx-4 mt-3 flex items-start gap-2 rounded-lg border p-3 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+          <span>
+            Counts are carried over from the last recorded count. Change what is different — anything you leave alone
+            still needs a tap to confirm you looked.
+          </span>
+        </div>
+      )}
 
       {/* Content */}
       {renderFlatView()}
