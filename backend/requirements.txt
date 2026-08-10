@@ -71,7 +71,7 @@ pywebpush==2.0.3
 # ============================================
 boto3==1.43.61  # AWS S3
 azure-storage-blob==12.30.0
-google-cloud-storage==2.19.0
+google-cloud-storage==3.13.1
 python-magic==0.4.27
 
 # ============================================
