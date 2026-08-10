@@ -2003,6 +2003,31 @@ _AUDIT_EVENT_DESCRIPTIONS = {
     "leave_of_absence_deleted": "Leave of absence deactivated",
 }
 
+# The audit page's Event Type dropdown speaks a coarser vocabulary than the
+# stored event types — one entry covers several. Selecting "Profile Updates"
+# sent "profile_update", which was compared for equality against the stored
+# "user_profile_updated" and matched nothing, so every option except "All
+# Events" emptied the page and told the reader to clear the filter.
+_AUDIT_EVENT_FILTERS: dict[str, list[str]] = {
+    "profile_update": [
+        "user_profile_updated",
+        "user_updated",
+        "user_photo_updated",
+        "user_photo_removed",
+    ],
+    "status_change": [
+        "member_status_changed",
+        "member_archived",
+        "member_reactivated",
+        "leave_of_absence_created",
+        "leave_of_absence_updated",
+        "leave_of_absence_deleted",
+    ],
+    "role_change": ["user_role_assigned", "user_role_removed"],
+    "password_reset": ["admin_password_reset"],
+    "membership_change": ["membership_type_changed"],
+}
+
 
 @router.get("/{user_id}/audit-history", response_model=list[MemberAuditLogEntry])
 async def get_member_audit_history(
@@ -2064,7 +2089,11 @@ async def get_member_audit_history(
     )
 
     if event_type:
-        query = query.where(AuditLog.event_type == event_type)
+        # An unrecognised value falls through to an exact match, so a caller
+        # naming a stored type directly still works.
+        query = query.where(
+            AuditLog.event_type.in_(_AUDIT_EVENT_FILTERS.get(event_type, [event_type]))
+        )
 
     # Paginate
     offset = (page - 1) * page_size

@@ -299,12 +299,21 @@ Navigate to **Members > Admin**, click on a member, then click **History** to vi
 The audit history page shows a chronological list of all changes made to a member's record, including:
 
 - **What changed** - Which field was modified (e.g., rank, status, station)
-- **Old value → New value** - The before and after values
 - **Who made the change** - The user who performed the edit
 - **When** - Timestamp of the change
+- **Details** - Expands the entry to show the rest of what was recorded
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Member Audit History page showing a timeline of changes with entries like "Rank changed from 'Firefighter' to 'Lieutenant' by John Smith on 2026-02-15 14:30"]_
+**Before and after values are shown for status and membership-type changes**
+("Status changed: probationary → active"), which record both. A profile field
+edit records _which_ fields were touched, not what they were before — so a rank
+change reads "Member profile updated: rank" and the Details panel names the
+field, but the previous rank is not kept.
+
+Use **Filter by** to narrow the list. This matters more than it sounds: viewing
+a member's page is itself an audited event, so an unfiltered history is mostly
+"Member profile viewed" and the edits are buried among them.
+
+![Member audit history filtered to profile updates, showing what changed and who changed it](./images/01-08-member-audit-history.png)
 
 > **Note:** Audit entries are only created for changes made after the audit history feature was deployed. Earlier changes will not appear in the history.
 
