@@ -1322,32 +1322,40 @@ The email template editor has been significantly improved with new productivity 
 
 A **Discard** button appears when you have unsaved changes. Clicking it reverts the editor to the last saved state, discarding all modifications since the last save.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the template editor showing the "Discard" button highlighted in the toolbar, next to the Save button. Show the editor with some modified HTML content._
+![The template editor with unsaved changes, showing Discard beside Save](./images/08-56-template-discard.png)
 
 ### Reset to Default
 
 Each template can be reset to its built-in default content:
 
 1. Open the template in the editor
-2. Click **Reset to Default** in the toolbar
+2. Click **Reset** in the template's header — the dialog it opens is titled
+   "Reset to Default"
 3. Confirm the action in the dialog
 4. The template's subject, HTML body, text body, and CSS styles are restored to the application's defaults
 5. Custom CC/BCC recipients are **preserved** — only content is reset
 
 This is useful when a template has been heavily customized and you want to start fresh from the standard design.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Reset to Default" confirmation dialog showing which fields will be reset (Subject, HTML Body, Text Body, CSS) and which will be preserved (CC, BCC)._
+![The Reset to Default confirmation, naming what it restores and what it keeps](./images/08-57-template-reset-dialog.png)
 
 ### Send Test Email
 
 You can now send a test email to verify your template changes before they go live:
 
-1. Open the template in the editor
-2. Click **Send Test Email** in the toolbar
-3. The system sends the email using the current editor content (including unsaved changes) to the configured test recipient
-4. Check your email inbox to verify the rendering, links, and footer content
+1. Open the template and switch to the **Preview** tab — the button sits under
+   the rendered preview, not in the toolbar, and stays greyed out until a
+   preview has been generated
+2. Click **Send Test Email to Me**
+3. The system sends what you are looking at — the current editor content,
+   unsaved changes included — to **your own** address. There is no field for a
+   different recipient
+4. Check your inbox to verify the rendering, links, and footer content
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Send Test Email" button in the toolbar and the success toast notification showing "Test email sent to admin@example.com"._
+Sending needs a working mail transport. On a department that has not configured
+one, the button reports the failure rather than a delivery.
+
+![Send Test Email to Me, under the rendered preview it sends](./images/08-58-template-send-test.png)
 
 ### Template Search
 

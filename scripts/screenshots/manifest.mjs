@@ -1053,6 +1053,61 @@ export const SHOTS = [
     route: "/admin/audit-log",
     fullPage: true,
   },
+  // ── Email template editor ──────────────────────────────────────────
+  //
+  // The page selects its first template on load, so neither of these has to
+  // pick one — but the Discard button exists only while the editor is dirty,
+  // which is why that shot types into the HTML body first.
+  {
+    id: "08-56-template-discard",
+    doc: "08-admin-reports.md",
+    line: 1325,
+    anchor: 'Screenshot of the template editor showing the "Discard" button',
+    alt: "The template editor with unsaved changes, showing Discard beside Save",
+    route: "/communications/email-templates",
+    prepare: async (page) => {
+      const body = page.locator("#template-html");
+      await body.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+      await body.click({ timeout: 10_000 });
+      await page.keyboard.type("\n<!-- edited -->");
+      await page.waitForTimeout(400);
+    },
+    // Viewport, not full page: the template list runs to forty-odd entries, so
+    // a full-page shot is mostly sidebar — and Playwright renders the fixed nav
+    // partway down a tall capture, which reads as a layout bug. Everything the
+    // placeholder names sits above the fold.
+  },
+  {
+    id: "08-57-template-reset-dialog",
+    doc: "08-admin-reports.md",
+    line: 1340,
+    anchor: 'Screenshot of the "Reset to Default" confirmation dialog',
+    alt: "The Reset to Default confirmation, naming what it restores and what it keeps",
+    route: "/communications/email-templates",
+    prepare: clickByName(/^Reset$/),
+  },
+  {
+    id: "08-58-template-send-test",
+    doc: "08-admin-reports.md",
+    line: 1358,
+    anchor: 'Screenshot of the "Send Test Email to Me" button',
+    alt: "Send Test Email to Me, under the rendered preview it sends",
+    route: "/communications/email-templates",
+    // The button lives under the Preview tab, not in the toolbar, and stays
+    // disabled until a preview has been rendered — clicking Preview is what
+    // renders one. Deliberately not clicked: sending needs a working mail
+    // transport, and a staged success toast would be a picture of something
+    // that did not happen.
+    prepare: async (page) => {
+      await clickByName(/^Preview$/)(page);
+      await page.waitForTimeout(1500);
+      await page
+        .getByRole("button", { name: /Send Test Email to Me/i })
+        .scrollIntoViewIfNeeded({ timeout: 10_000 })
+        .catch(() => {});
+    },
+  },
+
   // ── Audit log ──────────────────────────────────────────────────────
   //
   // The filters are component state with no URL form, so each of these types
