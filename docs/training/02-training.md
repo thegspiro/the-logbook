@@ -397,9 +397,7 @@ Prerequisites are enforced on both **manual** and **automatic** advancement. An
 officer using **Advance to next phase** with **force** still overrides them —
 that is what force is for.
 
-> **[SCREENSHOT NEEDED]:** _The phase editor showing the prerequisite picker with
-> two earlier phases selected, and the helper text distinguishing phase order from
-> prerequisites._
+![A phase's prerequisite picker, with the helper text separating phase order from prerequisites](./images/02-90-phase-prerequisites.png)
 
 **Edge cases**
 

@@ -871,6 +871,102 @@ export const SHOTS = [
     selector: "div.fixed.inset-0 > div",
   },
   {
+    // NOT YET CAPTURABLE — four approaches tried on 2026-08-10, all timing out
+    // on the pencil: a hasText row filter, a two-`has` filter, walking up 6
+    // then 12 ancestors from the button, and restricting to `:visible`. The
+    // page itself is fine (a full-page shot shows the row, its "8 items"
+    // subtitle and the pencil), so the next attempt should skip the list
+    // entirely and open the editor by URL if the modal is addressable, or
+    // click the pencil by bounding box from the row's text node. Left in place
+    // rather than deleted so the reconnaissance is not repeated.
+    id: "02-89-officer-only-steps",
+    doc: "02-training.md",
+    line: 347,
+    anchor: "The requirement editor's checklist steps editor",
+    alt: "The checklist steps editor, with two steps toggled to officer-only",
+    route: "/training/programs",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/programs/programs",
+        (id) => `/training/programs/${id}`,
+        "programs",
+        (program) => /Probationary/i.test(program.name || ""),
+      )(page);
+      await page.waitForTimeout(1500);
+      // The checklist requirement is the only one with steps to hide.
+      // Walk up from the pencil to whichever ancestor names the requirement.
+      // Locator filters could not express this: the name and the action
+      // buttons sit in sibling subtrees, so no single div both contains the
+      // exact text and the button.
+      const index = await page
+        .locator('button[aria-label="Edit requirement"]:visible')
+        .evaluateAll((buttons) =>
+          buttons.findIndex((button) => {
+            let node = button;
+            for (let up = 0; up < 12 && node; up += 1) {
+              if (
+                (node.textContent || "").includes("Station Duties Checklist")
+              ) {
+                return true;
+              }
+              node = node.parentElement;
+            }
+            return false;
+          }),
+        );
+      if (index < 0) throw new Error("02-89: no checklist requirement row");
+      const pencil = page
+        .locator('button[aria-label="Edit requirement"]:visible')
+        .nth(index);
+      await pencil.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await pencil.click({ timeout: 15_000 });
+      await page.waitForTimeout(1200);
+      // Scroll to the last step rather than the section heading: the two
+      // officer-only rows are at the foot of the list.
+      await page
+        .getByText("Background check returned")
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: false,
+  },
+  {
+    id: "02-90-phase-prerequisites",
+    doc: "02-training.md",
+    line: 401,
+    anchor: "The phase editor showing the prerequisite picker",
+    alt: "A phase's prerequisite picker, with the helper text separating phase order from prerequisites",
+    route: "/training/programs",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/programs/programs",
+        (id) => `/training/programs/${id}`,
+        "programs",
+        (program) => /Probationary/i.test(program.name || ""),
+      )(page);
+      await page.waitForTimeout(1500);
+      // The picker lists only *earlier* phases, so editing phase 1 renders
+      // nothing at all — take the last phase on the page.
+      const edit = page.locator('button[aria-label="Edit phase"]');
+      await edit.first().waitFor({ timeout: 15_000 });
+      await edit.last().click();
+      await page.waitForTimeout(1200);
+      const picker = page
+        .locator("div")
+        .filter({ has: page.getByText("Finish these phases first") })
+        .last();
+      await picker.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      // Ticked, not left blank: the section is about a phase held back until
+      // earlier ones finish, and an untouched picker shows the opposite.
+      const boxes = picker.locator('input[type="checkbox"]');
+      const count = await boxes.count();
+      for (let i = 0; i < count; i += 1) await boxes.nth(i).check();
+      await page.waitForTimeout(600);
+    },
+    fullPage: false,
+  },
+  {
     id: "02-88-member-checklist-view",
     doc: "02-training.md",
     line: 332,
