@@ -4075,10 +4075,15 @@ class Seeder:
         # Enrol the probationary members so the Enrollments tab and the
         # member-facing progression view have rows to render. Enrollments are
         # only listable per program — there is no collection-level GET.
+        # The demo member account is enrolled alongside the recruits: the
+        # member-facing progression view is only reachable as the member whose
+        # enrollment it is, and with nobody but the recruits enrolled there was
+        # nothing for `auth: "member"` shots to open.
         probationary = [
             pick(m, "id")
             for m in members
-            if str(pick(m, "username") or "") in RECRUIT_USERNAMES
+            if str(pick(m, "username") or "")
+            in (RECRUIT_USERNAMES | {DEMO_MEMBER_USERNAME})
         ]
         for program in programs:
             program_id = pick(program, "id")
@@ -4836,8 +4841,14 @@ class Seeder:
                     # cannot always tell whether answering is still allowed. Let
                     # the app be the authority: a refusal on those grounds is the
                     # rule working, not a seeding failure.
-                    if exc.code != 400 or not RSVP_CLOSED.search(exc.detail):
-                        raise
+                    if exc.code == 400 and RSVP_CLOSED.search(exc.detail):
+                        continue
+                    # Same reasoning for a cohort class: its event belongs to a
+                    # pipeline phase, and a member still in an earlier phase is
+                    # refused with a 409 phase gate. That is the feature.
+                    if exc.code == 409 and "phase_gate" in exc.detail:
+                        continue
+                    raise
 
     # -- skills tests --------------------------------------------------
 

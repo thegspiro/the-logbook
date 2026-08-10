@@ -871,6 +871,33 @@ export const SHOTS = [
     selector: "div.fixed.inset-0 > div",
   },
   {
+    id: "02-88-member-checklist-view",
+    doc: "02-training.md",
+    line: 332,
+    anchor: "The member's view of the same checklist requirement",
+    alt: "A member's progression view of a checklist, with the officer-only steps summarised beneath",
+    // Only the member whose enrollment it is can open this view.
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/programs/enrollments/me",
+        (id) => `/training/my-progress/${id}`,
+        "enrollments",
+      )(page);
+      await page.waitForTimeout(1500);
+      // Scrolled to the "+N more steps your officer records" line rather than
+      // to the requirement's heading: that line is the point of the section
+      // and it sits at the foot of the block, below the fold otherwise.
+      await page
+        .getByText(/more steps? your officer records/)
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await page.waitForTimeout(700);
+    },
+    fullPage: false,
+  },
+  {
     id: "02-87-checklist-steps",
     doc: "02-training.md",
     line: 331,

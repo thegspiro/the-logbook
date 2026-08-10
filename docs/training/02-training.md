@@ -330,9 +330,7 @@ Both of you can now read the steps, and they are **signed off one at a time**.
 
 ![A checklist requirement expanded to its steps, each with its own tick box](./images/02-87-checklist-steps.png)
 
-> **[SCREENSHOT NEEDED]:** _The member's view of the same checklist requirement
-> on their progress page, listing the steps they can see with their ticked/unticked
-> state and the "+2 more steps your officer records" line beneath them._
+![A member's progression view of a checklist, with the officer-only steps summarised beneath](./images/02-88-member-checklist-view.png)
 
 #### Steps only the officer sees
 
