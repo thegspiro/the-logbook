@@ -872,6 +872,29 @@ recorded rather than fixed: the alternative is showing a Flagged view to
 departments that never flag anything. Worth revisiting as "show the Flagged
 view whenever a flagged report exists".
 
+## Skills Testing — A Criterion Type The Scorer Could Not Read (2026-08-10)
+
+The criterion `type` was a free string up to 50 characters. The scorer and the
+examiner screen each recognise exactly five values; anything else fell through
+to a fallback branch that rendered plausibly and carried no points. The demo
+seeder had been writing `"checkbox"` for months. Nothing complained: templates
+saved, tests ran, steps were marked — and every scorecard reported
+"No percentage could be calculated" with all three sections marked as not
+counting, on a sheet that looked fully scored.
+
+Fixed by validating `type` against the known set on the way in, with an error
+that names the accepted values. Two things this does **not** cover:
+
+- **Rows already stored** are unaffected — validation runs on input only. The
+  seeder repairs its own (`_repair_criterion_types`); a real deployment that
+  authored criteria through the API rather than the builder would need a
+  migration, and none is written because the builder has only ever offered the
+  five.
+- **A template of pure pass/fail steps still has no point pool**, and that is
+  deliberate — turning `score_pass_fail_criteria` on by default would change
+  the meaning of every percentage already on record. Such a sheet scores by
+  section average and says so.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

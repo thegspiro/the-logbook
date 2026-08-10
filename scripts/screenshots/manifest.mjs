@@ -3717,6 +3717,60 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "09-14-test-records-statuses",
+    doc: "09-skills-testing.md",
+    line: 304,
+    anchor: "The officer's Test Records tab showing a mix of rows",
+    alt: "Test records showing unfinished, completed and cancelled rows side by side",
+    // The three states only read differently when all three are present. The
+    // seeder cancels one unfinished test for exactly this shot.
+    route: "/training/admin?page=skills-testing&tab=tests",
+    fullPage: true,
+  },
+  {
+    id: "09-16-active-scoring-screen",
+    doc: "09-skills-testing.md",
+    line: 344,
+    anchor: "The active scoring screen mid-test, showing the",
+    alt: "The scoring screen partway through a test, with section chips, the scored count and a mix of scored and unscored steps",
+    // A test stopped partway through — the seeder makes exactly one. An
+    // untouched test shows three outstanding chips and a fresh one shows none
+    // scored, and neither is the screen this section describes.
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=50",
+      (id) => `/training/skills-testing/test/${id}/active`,
+      "tests",
+      (test) => test.status === "in_progress",
+    ),
+    fullPage: false,
+  },
+  {
+    id: "09-15-scorecard-breakdown",
+    doc: "09-skills-testing.md",
+    line: 418,
+    anchor: "The score breakdown panel at the top of a completed",
+    alt: "A completed scorecard's score breakdown, with per-section totals and the passing threshold",
+    route: "/training/skills-testing",
+    // Specifically the weighted sheet. A pass/fail template carries no point
+    // pool, so any other completed test shows "no percentage could be
+    // calculated" and every section marked as not counting — a true screen,
+    // but not the breakdown this placeholder describes.
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=50",
+      (id) => `/training/skills-testing/test/${id}`,
+      "tests",
+      (test) =>
+        test.status === "completed" &&
+        (test.overallScore ?? test.overall_score ?? null) !== null,
+    ),
+    // Viewport rather than full page: the scorecard's "Back to Tests" bar is
+    // sticky, and a full-page shot paints it across the middle of the sheet,
+    // over the very section rows this placeholder is about.
+    viewport: { width: 1440, height: 1000 },
+    fullPage: false,
+  },
+  {
     id: "16-04-documenso-connect",
     doc: "16-integrations.md",
     line: 176,

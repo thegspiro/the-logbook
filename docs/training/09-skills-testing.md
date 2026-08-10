@@ -101,10 +101,18 @@ Add sections to organize the evaluation, then add criteria (scored items) within
 
 1. Within a section, click **Add Criterion**.
 2. Enter the step description (e.g., "Determines scene/situation safety").
-3. Select the **criterion type**:
-   - **Binary** (default) — Simple pass/fail checkbox
-   - **Statement** — Open-ended text box for descriptive responses (e.g., "Describe the patient's chief complaint")
-4. Set the **point value** (default 1) for weighted scoring. Higher-value criteria carry more weight in the overall score.
+3. Select the **criterion type**. The dropdown offers five:
+   - **Pass / Fail** (default) — one tap, the digital equivalent of a tick box
+   - **Numeric Score** — a weighted step scored out of its max, and the only
+     type that feeds the overall percentage unless the template opts pass/fail
+     steps in (see "Pass/Fail steps can be made to carry points" below)
+   - **Timed Task** — a stopwatch on the step itself, with its own limit
+   - **Checklist** — several sub-items ticked off within one step
+   - **Statement** — text the examiner reads aloud to the candidate; it marks
+     itself and is never scored
+4. On a **Numeric Score** step, set **Max Points** — this is where weighting
+   lives, and a step worth 20 moves the percentage twice as far as one worth 10.
+   The field appears for that type alone; the other four have nothing to weight.
 5. Check **Required** if this is a critical criterion — failing a required criterion triggers automatic fail when "Require All Critical" is enabled on the template.
 
 ![Skill template builder with its sections and scored criteria](./images/09-04-template-builder.png)
@@ -297,10 +305,11 @@ rather than dropping you back at section 1 to hunt for where you had got to. In
 the officer's **Test Records** tab an unfinished test says **Tap to resume** and
 opens on the scoring screen; a finished one still opens on its scorecard.
 
-> **[SCREENSHOT NEEDED]:** _The officer's Test Records tab showing a mix of rows —
-> an unfinished test with its "Tap to resume" affordance, a completed test, and a
-> cancelled test with its distinct status — so the three read differently at a
-> glance._
+A test that has been started says **Tap to resume**; one created but not yet
+begun says **Tap to start**. A cancelled test says neither — it is closed, and
+opening it shows its scorecard rather than the scoring screen.
+
+![Test records showing unfinished, completed and cancelled rows side by side](./images/09-14-test-records-statuses.png)
 
 #### A cancelled test is read-only _(2026-08-09)_
 
@@ -334,17 +343,14 @@ candidate rather than the tablet.
   left.
 - **A running "scored / total" count and a save-status line** sit with them, so
   "am I finished?" and "did that save?" are both answerable at a glance.
-- **The primary bottom-bar button is Next**, not Finish. On the old screen the
-  biggest, reddest button on every section ended the evaluation while moving on
-  was a small grey one.
+- **The primary bottom-bar button is Next**, not Finish — on every section but
+  the last, where it becomes **Finish & Review** because there is nowhere left
+  to move on to. On the old screen the biggest, reddest button on _every_
+  section ended the evaluation while moving on was a small grey one.
 - **Moving between sections returns you to the top of the screen**, rather than
   dropping you halfway down the new one.
 
-> **[SCREENSHOT NEEDED]:** _The active scoring screen mid-test, showing the
-> candidate's name in the header, the 44px section chips across the top with one
-> active and two showing complete, the running "scored / total" count and
-> save-status line, a scored criterion and an unscored one below, and the bottom
-> bar with Prev and a primary Next button._
+![The scoring screen partway through a test, with section chips, the scored count and a mix of scored and unscored steps](./images/09-16-active-scoring-screen.png)
 
 ### Recording a mark
 
@@ -415,9 +421,7 @@ Two things fixed that:
   A passed step earns its points (its max score, or 1 if none is set); a failed
   one earns none.
 
-> **[SCREENSHOT NEEDED]:** _The score breakdown panel at the top of a completed
-> scorecard, showing per-section point totals with one section flagged as
-> contributing no points, the passing threshold, and the final percentage._
+![A completed scorecard's score breakdown, with per-section totals and the passing threshold](./images/09-15-scorecard-breakdown.png)
 
 > **Turning the setting on never re-scores an old result.** The rule is frozen
 > into each test at the moment it is created, so a test taken under the old
@@ -709,11 +713,7 @@ Navigate to **Training Admin > Skills Testing > Summary** for a department-wide 
 > it is only actionable by someone who can validate. Members receive `0` rather
 > than a hidden card.
 
-> **[SCREENSHOT NEEDED]:** _The Summary dashboard viewed by a training officer
-> with a non-zero **Needs Validation** card visible, so the review-queue badge
-> that drives officers to the queue can be seen alongside the other stats._
-
-![Skills testing summary with a non-zero Pending Validation count](./images/09-12-summary-pending-validation.png)
+![Skills testing summary with a non-zero Needs Validation count](./images/09-12-summary-pending-validation.png)
 
 ---
 

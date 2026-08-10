@@ -93,6 +93,10 @@ GUEST_EMAIL = "rosa.delgado@example.com"
 # be someone other than the candidate: skills testing refuses a test whose
 # examiner is also its candidate.
 DEMO_PEER_EXAMINER_USERNAME = "cfrazier"
+# The one skill sheet built from weighted `score` steps. Named so the test
+# seeder can find it: it is the only template that can produce a scorecard with
+# per-section point totals and a percentage.
+SCORED_TEMPLATE_NAME = "Handline Advance — Weighted Evaluation"
 
 # How many active applicants `--bulk-prospects` tops the pipeline up to.
 # Comfortably past the board's 200-card ceiling, so the truncation notice reads
@@ -110,7 +114,9 @@ BULK_PROSPECT_TARGET = 247
 SHIFT_CONFLICT = re.compile(r"conflicting shift", re.IGNORECASE)
 
 RSVP_CLOSED = re.compile(
-    r"deadline has passed|already ended|no longer accepting", re.IGNORECASE
+    r"deadline has passed|already ended|no longer accepting"
+    r"|does not require RSVP",
+    re.IGNORECASE,
 )
 
 # The demo organization's timezone, which the UI renders in. Clock times in the
@@ -291,6 +297,31 @@ def pick(record: dict, *names: str) -> Any:
         if name in record:
             return record[name]
     return None
+
+
+# The criterion types the scorer and the examiner screen understand. Mirrors
+# CRITERION_TYPES in app/schemas/skills_testing.py; the API rejects anything
+# else, and this seeder used to write "checkbox", which was stored happily and
+# then scored as nothing.
+CRITERION_TYPES = ("pass_fail", "score", "checklist", "time_limit", "statement")
+
+
+def criterion_payload(entry: Any, sort_order: int) -> dict:
+    """One criterion from a blueprint entry.
+
+    A bare string is the common case — a required pass/fail step, as on a paper
+    skill sheet. A dict supplies its own type and scoring so one template can
+    mix weighted `score` steps with sections that carry no points at all.
+    """
+    if isinstance(entry, str):
+        entry = {"label": entry}
+    criterion = {
+        "type": "pass_fail",
+        "required": True,
+        "sort_order": sort_order,
+        **entry,
+    }
+    return criterion
 
 
 def _demo_pdf(title: str, subtitle: str) -> bytes:
@@ -3784,10 +3815,41 @@ class Seeder:
 
     # -- skills testing ----------------------------------------------
 
+    def _repair_criterion_types(self, templates: list[dict]) -> None:
+        """Rewrite criteria this seeder stored under a type the scorer ignores.
+
+        Earlier runs wrote `"type": "checkbox"`, which the API accepted and the
+        scorer counted for nothing. New criteria are rejected now, but a
+        long-lived demo database still holds the old ones, and re-seeding does
+        not touch a template that already exists by name.
+        """
+        for template in templates:
+            template_id = pick(template, "id")
+            sections = pick(template, "sections") or []
+            if not template_id or not isinstance(sections, list):
+                continue
+            repaired = False
+            for section in sections:
+                if not isinstance(section, dict):
+                    continue
+                for criterion in section.get("criteria") or []:
+                    if (
+                        isinstance(criterion, dict)
+                        and criterion.get("type") not in CRITERION_TYPES
+                    ):
+                        criterion["type"] = "pass_fail"
+                        repaired = True
+            if repaired:
+                self.api.put(
+                    f"/training/skills-testing/templates/{template_id}",
+                    {"sections": sections},
+                )
+
     def seed_skills_testing(self) -> list[dict]:
         templates = items(
             self.api.get("/training/skills-testing/templates"), "templates"
         )
+        self._repair_criterion_types(templates)
         names = {t.get("name") for t in templates}
         blueprint = [
             (
@@ -3845,6 +3907,90 @@ class Seeder:
                     ),
                 ],
             ),
+            (
+                # A weighted sheet, deliberately unlike the two above. The
+                # percentage is computed from ``score`` criteria alone, so a
+                # department whose sheets are pure pass/fail can never produce
+                # a scorecard with per-section point totals — and the guide
+                # documents exactly that breakdown, including a section that
+                # contributes nothing to the total.
+                SCORED_TEMPLATE_NAME,
+                "Fire Suppression",
+                [
+                    (
+                        "Safety Briefing",
+                        [
+                            {
+                                "label": (
+                                    "Examiner reads the evolution brief to the "
+                                    "candidate before the clock starts."
+                                ),
+                                "type": "statement",
+                                "statement_text": (
+                                    "You are the nozzle firefighter on a 1¾\" "
+                                    "line. Advance to the second floor and "
+                                    "report conditions."
+                                ),
+                                "required": False,
+                            },
+                            {
+                                "label": "Full PPE worn, including hood and gloves",
+                                "type": "pass_fail",
+                            },
+                        ],
+                    ),
+                    (
+                        "Hose Advance",
+                        [
+                            {
+                                "label": "Selects and stretches the correct line",
+                                "type": "score",
+                                "max_score": 10,
+                                "passing_score": 7,
+                                # Points, not a critical gate: a weighted
+                                # step contributes its number, and only
+                                # critical steps can fail a sheet outright.
+                                "required": False,
+                            },
+                            {
+                                "label": "Advances without kinks or snags",
+                                "type": "score",
+                                "max_score": 10,
+                                "passing_score": 7,
+                                # Points, not a critical gate: a weighted
+                                # step contributes its number, and only
+                                # critical steps can fail a sheet outright.
+                                "required": False,
+                            },
+                        ],
+                    ),
+                    (
+                        "Nozzle Operation",
+                        [
+                            {
+                                "label": "Bleeds the line and sets the pattern",
+                                "type": "score",
+                                "max_score": 10,
+                                "passing_score": 7,
+                                # Points, not a critical gate: a weighted
+                                # step contributes its number, and only
+                                # critical steps can fail a sheet outright.
+                                "required": False,
+                            },
+                            {
+                                "label": "Maintains control under flow",
+                                "type": "score",
+                                "max_score": 20,
+                                "passing_score": 14,
+                                # Points, not a critical gate: a weighted
+                                # step contributes its number, and only
+                                # critical steps can fail a sheet outright.
+                                "required": False,
+                            },
+                        ],
+                    ),
+                ],
+            ),
         ]
 
         for name, category, sections in blueprint:
@@ -3868,14 +4014,8 @@ class Seeder:
                             "name": section_name,
                             "sort_order": order,
                             "criteria": [
-                                {
-                                    "label": label,
-                                    "type": "checkbox",
-                                    "required": True,
-                                    "sort_order": criterion_order,
-                                    "max_score": 1,
-                                }
-                                for criterion_order, label in enumerate(criteria)
+                                criterion_payload(entry, criterion_order)
+                                for criterion_order, entry in enumerate(criteria)
                             ],
                         }
                         for order, (section_name, criteria) in enumerate(sections)
@@ -3994,6 +4134,12 @@ class Seeder:
         # Skip the clearly-finished events up front; the per-call handler
         # below catches the rest, since the list response omits rsvp_deadline.
         def still_open(event: dict) -> bool:
+            # Not every event collects RSVPs — the guest sign-in event is an
+            # open house, and answering for it is refused outright. Only an
+            # explicit False excludes an event, so a list response that omits
+            # the field does not silently drop every event on the floor.
+            if pick(event, "requires_rsvp", "requiresRsvp") is False:
+                return False
             ends = str(pick(event, "end_datetime", "endDatetime") or "")
             deadline = str(pick(event, "rsvp_deadline", "rsvpDeadline") or "")
             now = iso(NOW)
@@ -4031,11 +4177,48 @@ class Seeder:
 
     # -- skills tests --------------------------------------------------
 
+    def _cancel_one_test(self, tests: list[dict]) -> None:
+        """Close out one unfinished test, so the records tab shows all three.
+
+        Cancelling is not voiding: a cancelled test was never scored, so there
+        is no result to withdraw. It is the state an evaluation reaches when the
+        candidate withdrew or the weather stopped the drill, and the records tab
+        renders it differently from both an unfinished test and a passed one.
+        """
+        statuses = {pick(t, "status") for t in tests}
+        if "cancelled" in statuses:
+            return
+        candidate = next(
+            (t for t in tests if pick(t, "status") == "draft" and pick(t, "id")),
+            None,
+        )
+        if not candidate:
+            return
+        try:
+            self.api.post(
+                f"/training/skills-testing/tests/{pick(candidate, 'id')}/cancel",
+                {
+                    "reason": (
+                        "Called out to a working fire partway through — "
+                        "rescheduled for the next drill night."
+                    )
+                },
+            )
+        except ApiError as exc:
+            self.blocked.append(f"cancel skills test: {exc}")
+
     def seed_skills_tests(
         self, templates: list[dict], members: list[dict]
     ) -> list[dict]:
         tests = items(self.api.get("/training/skills-testing/tests"), "tests")
-        if tests or not templates or not members:
+        if tests:
+            # Keyed on the *statuses* present, not on "are there any". The
+            # records tab is documented as showing three kinds of row at a
+            # glance — unfinished, completed, cancelled — and a database seeded
+            # before this step existed has only the first two.
+            self._cancel_one_test(tests)
+            return tests
+        if not templates or not members:
             return tests
 
         # The seeder posts as the demo administrator, so that account is the
@@ -4072,6 +4255,221 @@ class Seeder:
                 )
             )
         return tests
+
+    def seed_scored_test(
+        self, templates: list[dict], members: list[dict]
+    ) -> dict | None:
+        """One completed test on the weighted sheet, scored below full marks.
+
+        The percentage is computed from ``score`` criteria alone, so the two
+        NREMT-style sheets above — pass/fail throughout — can only ever produce
+        a scorecard reading "no percentage could be calculated", with every
+        section marked as not counting. This is the one test that exercises the
+        breakdown the guide documents: per-section point totals, a section that
+        contributes none, and an overall percentage.
+        """
+        scored_template = next(
+            (t for t in templates if pick(t, "name") == SCORED_TEMPLATE_NAME), None
+        )
+        if not scored_template or not members:
+            return None
+        template_id = pick(scored_template, "id")
+
+        existing = items(self.api.get("/training/skills-testing/tests"), "tests")
+        for test in existing:
+            if pick(test, "template_id", "templateId") == template_id and pick(
+                test, "completed_at", "completedAt"
+            ):
+                return test
+
+        examiner_id = next(
+            (
+                pick(m, "id")
+                for m in members
+                if pick(m, "username") == DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        candidate = next(
+            (
+                m
+                for m in members
+                if pick(m, "username") == DEMO_MEMBER_USERNAME
+                and pick(m, "id") != examiner_id
+            ),
+            None,
+        )
+        if not candidate or not template_id:
+            return None
+
+        test = self.api.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": pick(candidate, "id"),
+                "notes": "Annual handline evaluation, weighted sheet.",
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        # Deliberately short of full marks on two steps, so the section totals
+        # differ from one another and the percentage is not a flat 100.
+        awarded = {
+            "Selects and stretches the correct line": 9,
+            "Advances without kinks or snags": 8,
+            "Bleeds the line and sets the pattern": 10,
+            "Maintains control under flow": 15,
+        }
+
+        detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
+        section_results = []
+        for si, section in enumerate(detail.get("template_sections") or []):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if (
+                    not isinstance(criterion, dict)
+                    or criterion.get("type") == "statement"
+                ):
+                    continue
+                label = criterion.get("label", "")
+                score = awarded.get(label)
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": label,
+                        "passed": True,
+                        "score": score,
+                        "notes": (
+                            "Slight kink at the stairwell turn."
+                            if label == "Advances without kinks or snags"
+                            else None
+                        ),
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+
+        self.api.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 214,
+            },
+        )
+        return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
+
+    def seed_in_progress_test(
+        self, templates: list[dict], members: list[dict]
+    ) -> dict | None:
+        """One test stopped partway through, on the weighted sheet.
+
+        The scoring screen only reads as documented when the sheet is partly
+        filled: the section chips show complete against outstanding, the header
+        counts scored against total, and a scored criterion sits above an
+        unscored one. Every other test the seeder makes is either untouched or
+        finished, and neither shows any of that.
+        """
+        scored_template = next(
+            (t for t in templates if pick(t, "name") == SCORED_TEMPLATE_NAME), None
+        )
+        if not scored_template or not members:
+            return None
+        template_id = pick(scored_template, "id")
+
+        existing = items(self.api.get("/training/skills-testing/tests"), "tests")
+        for test in existing:
+            if (
+                pick(test, "template_id", "templateId") == template_id
+                and pick(test, "status") == "in_progress"
+            ):
+                return test
+
+        examiner_id = next(
+            (
+                pick(m, "id")
+                for m in members
+                if pick(m, "username") == DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        candidate = next(
+            (
+                m
+                for m in members
+                if pick(m, "id") != examiner_id
+                and pick(m, "username") != DEMO_MEMBER_USERNAME
+            ),
+            None,
+        )
+        if not candidate or not template_id:
+            return None
+
+        test = self.api.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": pick(candidate, "id"),
+                "notes": "Paused at the nozzle section — hydrant crew held up.",
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
+        sections = detail.get("template_sections") or []
+
+        # Everything up to the last section is filled; the last is left with one
+        # step scored and one blank. That is what puts a complete chip, an
+        # active chip and an outstanding count on the same screen.
+        last_index = len(sections) - 1
+        section_results = []
+        for si, section in enumerate(sections):
+            if not isinstance(section, dict):
+                continue
+            criteria = [
+                (ci, c)
+                for ci, c in enumerate(section.get("criteria") or [])
+                if isinstance(c, dict) and c.get("type") != "statement"
+            ]
+            if si == last_index:
+                criteria = criteria[:1]
+            criteria_results = [
+                {
+                    "criterion_id": f"criterion-{si}-{ci}",
+                    "criterion_label": criterion.get("label", ""),
+                    "passed": True,
+                    "score": criterion.get("max_score"),
+                    "notes": None,
+                }
+                for ci, criterion in criteria
+            ]
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+
+        return self.api.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 148,
+            },
+        )
 
     def seed_pending_validation_test(
         self, base_url: str, templates: list[dict], members: list[dict]
@@ -5637,6 +6035,14 @@ class Seeder:
         )
         templates = self.step("skills testing", self.seed_skills_testing) or []
         self.step("skills tests", lambda: self.seed_skills_tests(templates, members))
+        self.step(
+            "skills test with points",
+            lambda: self.seed_scored_test(templates, members),
+        )
+        self.step(
+            "skills test in progress",
+            lambda: self.seed_in_progress_test(templates, members),
+        )
         self.step(
             "skills test awaiting validation",
             lambda: self.seed_pending_validation_test(
