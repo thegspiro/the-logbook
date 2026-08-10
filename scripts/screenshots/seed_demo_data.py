@@ -1523,6 +1523,36 @@ class Seeder:
             4300.00,
             "individual",
         ),
+        # Appended, not inserted: asset tags are derived from this list's index,
+        # so anything added in the middle renumbers every item after it. These
+        # three exist so there is individually-tracked gear left over once every
+        # member has been issued a piece — without them nobody can hold more
+        # than one, and the screens that list a member's kit picture a list of
+        # one.
+        (
+            "Wildland Brush Coat",
+            "Structural PPE",
+            "Lion",
+            "Wildland",
+            410.00,
+            "individual",
+        ),
+        (
+            "Rescue Harness",
+            "Structural PPE",
+            "Sterling",
+            "Class II",
+            265.00,
+            "individual",
+        ),
+        (
+            "Thermal Imaging Camera",
+            "SCBA & Air Supply",
+            "Seek",
+            "Attack PRO",
+            3100.00,
+            "individual",
+        ),
     ]
 
     def seed_inventory(self, stations: list[dict]) -> dict[str, list[dict]]:
@@ -1874,12 +1904,17 @@ class Seeder:
             for i in inventory_items
             if (i.get("tracking_type") or i.get("trackingType")) == "individual"
         ]
+        # Before the round-robin, not after: the spread hands every spare piece
+        # to a different member, so a kit built afterwards has nothing left to
+        # build from.
+        kitted = self._kit_out_one_member(members, assignable)
+
         for index, item in enumerate(assignable):
             status = (item.get("status") or "").lower()
-            if status and status != "available":
+            item_id = pick(item, "id")
+            if (status and status != "available") or item_id in kitted:
                 continue
             user_id = pick(members[index % len(members)], "id")
-            item_id = pick(item, "id")
             if not user_id or not item_id:
                 continue
             self.api.post(
@@ -1891,7 +1926,83 @@ class Seeder:
                     "assignment_reason": "Initial issue",
                 },
             )
+
         return {"storage_areas": areas, "kits": kits, "allowances": allowances}
+
+    def _kit_out_one_member(
+        self, members: list[dict], assignable: list[dict], target: int = 3
+    ) -> set[str]:
+        """Give one member a full set rather than a single piece of gear.
+
+        Spreading one item per member leaves nobody holding two, and every
+        multi-item screen then pictures a list of one: the batch return with a
+        condition per item, the item count on a member's row, the equipment
+        list on their profile. A firefighter issued exactly one thing is not
+        the realistic case either.
+        """
+        member = next(
+            (m for m in members if pick(m, "username") == DEMO_MEMBER_USERNAME), None
+        )
+        user_id = pick(member or {}, "id")
+        if not user_id:
+            return set()
+
+        held = items(self.api.get(f"/inventory/items?assigned_to={user_id}"), "items")
+        available = [
+            i
+            for i in assignable
+            if (pick(i, "status") or "").lower() == "available" and pick(i, "id")
+        ]
+        taken: set[str] = set()
+        shortfall = max(0, target - len(held))
+        for item in available[:shortfall]:
+            item_id = pick(item, "id")
+            self.api.post(
+                f"/inventory/items/{item_id}/assign",
+                {
+                    "item_id": item_id,
+                    "user_id": user_id,
+                    "assignment_type": "permanent",
+                    "assignment_reason": "Initial issue",
+                },
+            )
+            taken.add(item_id)
+
+        # A database seeded before this step exists has every piece of gear
+        # already spread one-per-member, so there is nothing "available" left
+        # and the kit would never appear. Keyed on the state that matters — is
+        # anyone holding a set — rather than on whether the item table is
+        # empty, which is the guard that has silently frozen this seeder's
+        # additions before. Gear moves between members in a real department;
+        # taking a piece back to build the demo kit is a normal operation.
+        shortfall -= len(taken)
+        if shortfall <= 0:
+            return taken
+        for item in items(self.api.get("/inventory/items?limit=200"), "items"):
+            if shortfall <= 0:
+                break
+            item_id = pick(item, "id")
+            holder = pick(item, "assigned_to_user_id", "assignedToUserId")
+            if (
+                not item_id
+                or not holder
+                or holder == user_id
+                or pick(item, "tracking_type", "trackingType") != "individual"
+            ):
+                continue
+            self.api.post(f"/inventory/items/{item_id}/unassign", {"item_id": item_id})
+            self.api.post(
+                f"/inventory/items/{item_id}/assign",
+                {
+                    "item_id": item_id,
+                    "user_id": user_id,
+                    "assignment_type": "permanent",
+                    "assignment_reason": "Initial issue",
+                },
+            )
+            taken.add(item_id)
+            shortfall -= 1
+        return taken
 
     # -- inventory: variants and reorder requests --------------------
 

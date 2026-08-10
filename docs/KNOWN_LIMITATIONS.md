@@ -872,6 +872,26 @@ recorded rather than fixed: the alternative is showing a Flagged view to
 departments that never flag anything. Worth revisiting as "show the Flagged
 view whenever a flagged report exists".
 
+## Inventory — Scanning Has No Screen Of Its Own (2026-08-10)
+
+`inventoryService.lookupByCode` (`GET /inventory/lookup`) has exactly one
+consumer: `InventoryScanModal`, which is opened with `mode="checkout"` or
+`mode="return"` already decided and a member already chosen. There is no
+"scan an item, then pick what to do with it" screen anywhere — no Scan button
+on `/inventory`, no route, no component. `docs/training/05-inventory.md`
+described one, including quick-action buttons (Check Out, Return, View
+Details) that exist nowhere; the section now documents the real flow.
+
+Two smaller mismatches in the same guide, corrected rather than recorded:
+there is no **Batch Checkout** or **Batch Return** entry in the admin menu
+(both start from a member's row on **Members Equipment**), and the item-detail
+assign path takes a member and nothing else — the "assignment date, condition
+selector, notes field" the guide listed are not on it.
+
+The scan placeholder is left open for a second reason as well: the capture
+harness runs headless with no camera, so the viewfinder cannot be photographed
+by the automation even once a screen exists to photograph.
+
 ## Skills Testing — A Criterion Type The Scorer Could Not Read (2026-08-10)
 
 The criterion `type` was a free string up to 50 characters. The scorer and the

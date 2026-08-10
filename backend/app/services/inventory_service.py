@@ -726,7 +726,12 @@ class InventoryService:
             query = query.where(InventoryItem.category_id.in_(select(cat_subq)))
 
         if assigned_to:
-            query = query.where(InventoryItem.assigned_to_user_id == assigned_to)
+            # str(): the column is String(36) and the parameter is a UUID, so
+            # the comparison bound a UUID against a char column and matched
+            # nothing at all — "everything issued to this member" answered
+            # "nothing" for every member. Every other id filter here already
+            # casts; this one was the exception.
+            query = query.where(InventoryItem.assigned_to_user_id == str(assigned_to))
 
         if location_id:
             query = query.where(InventoryItem.location_id == str(location_id))

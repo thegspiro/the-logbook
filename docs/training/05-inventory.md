@@ -413,11 +413,28 @@ Items can be permanently assigned to members. Assigned items appear on the membe
 
 **Required Permission:** `inventory.manage`
 
+There are two ways in, and which one you want depends on whether you are
+starting from the item or from the person.
+
+**From the item** — one item, one member:
+
 1. Open the item detail view.
-2. Click **Assign to Member**.
-3. Select the member from the dropdown.
-4. Set the assignment date and any notes.
-5. Save.
+2. In the **Assignment** card, click **Assign Item**. (It appears only on
+   individually-tracked items that are not already assigned; an assigned one
+   offers **Unassign** instead.)
+3. Search for the member and pick them. The assignment is written immediately —
+   the date is stamped for you, and there is no notes or condition field on this
+   path.
+
+**From the member** — kitting somebody out, several items at once:
+
+1. Go to **Inventory Admin > Members Equipment**.
+2. Click **Assign** on their row.
+3. Scan each item, or type a name, barcode, serial or asset tag and press
+   **Enter**. Items stack up in a list with a quantity each, and anything added
+   twice is refused with a notice rather than counted twice.
+4. Click **Assign _n_ Items**. Each item is applied independently, so one
+   failure does not lose the rest — the result list says what happened to each.
 
 ### Viewing Your Assignments
 
@@ -426,8 +443,7 @@ Your assigned items appear in two places:
 - **Your Member Profile** - Under the "Assigned Inventory" section
 - **Inventory > Items** - Items assigned to you are marked with your name
 
-> **Screenshot placeholder:**
-> _[Screenshot of the item assignment form showing the member selector dropdown, assignment date, condition selector, notes field, and save button]_
+![Assigning items to a member by scanning or searching, with two items staged](./images/05-57-assign-scan-modal.png)
 
 ---
 
@@ -463,24 +479,30 @@ For items that are temporarily loaned (not permanently assigned), use the checko
 
 For events or training sessions where multiple items need to be processed at once, use batch operations.
 
+Both batch screens start from a **member**, not from a list of items — you pick
+the person on **Inventory Admin > Members Equipment** and the screen then works
+on their gear. There is no separate "Batch Checkout" or "Batch Return" entry in
+the admin menu.
+
 ### Batch Checkout
 
-1. Navigate to **Inventory Admin**.
-2. Use **Batch Checkout** to select multiple items and a single borrower.
-3. Set the expected return date.
-4. Confirm all items at once.
+1. Go to **Inventory Admin > Members Equipment**.
+2. Click **Assign** on the member's row.
+3. Scan each item, or type a name, barcode, serial or asset tag and press
+   **Enter**. Each addition appears in a staged list with its own quantity.
+4. Click **Assign _n_ Items**.
 
 Each item is processed individually — if one item fails (e.g., already checked out), the others still succeed. The results screen shows per-item success/failure status.
 
 ### Batch Return
 
-1. Navigate to **Inventory Admin**.
-2. Use **Batch Return** to process multiple returns at once.
+1. Go to **Inventory Admin > Members Equipment**.
+2. Click **Return** on the member's row. Everything they hold is listed and
+   selected, with **Select All** / **Deselect All** above it.
 3. For each item, set the return condition (excellent, good, fair, poor, damaged).
 4. Invalid conditions are rejected — the system does not silently fall back to a default.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the batch checkout interface with multiple item checkboxes, a member selector, and per-item status results]_
+![Returning several items at once, each with its own condition](./images/05-58-return-items-modal.png)
 
 > **Hint:** Batch operations validate each item independently. If an item is assigned to a different user than expected (e.g., due to a concurrent change), that item's return will fail with a clear error message while the rest succeed.
 
@@ -488,19 +510,23 @@ Each item is processed individually — if one item fails (e.g., already checked
 
 ## Barcode and QR Scanning
 
-Items can be looked up by scanning their barcode or QR code:
+Scanning is **inside the assign and return flows**, not a lookup screen of its
+own. You choose the person and what you are doing first, then scan; there is no
+"scan an item and pick an action afterwards" step.
 
-1. Navigate to **Inventory**.
-2. Click the **Scan** button.
-3. Use your device's camera to scan the barcode or QR code.
-4. The system looks up the item and displays its details.
+1. Go to **Inventory Admin > Members Equipment** (or **Assign Items** from the
+   items list, which asks who first).
+2. Click **Assign** or **Return** on the member's row.
+3. Click **Start Camera** and hold the barcode or QR code up to it. Each
+   successful read adds the item to the staged list.
+4. Repeat for every item, then confirm the whole batch.
 
-From the scan result, you can check out, return, or view the item's full details. If a code matches multiple items (e.g., the same serial number in different categories), all matches are displayed.
+If a code matches multiple items (e.g., the same serial number in different categories), all matches are displayed.
 
 > **Screenshot placeholder:**
-> _[Screenshot of the barcode scan interface showing the camera viewfinder and a recently scanned item result with quick action buttons (Check Out, Return, View Details)]_
+> _[Screenshot of the scan modal with the camera running and an item just read into the staged list]_
 
-> **Hint:** Barcode scanning works best with a device that has a camera. On desktop, you can use a USB barcode scanner, which types the code into the search field. If scanning fails, check that the barcode is clean and well-lit; a specific error message will indicate whether the item was not found or a network error occurred.
+> **Hint:** Barcode scanning works best with a device that has a camera. On desktop, you can use a USB barcode scanner, which types the code into the search field — as does typing a name, serial or asset tag by hand, which is the same path. If scanning fails, check that the barcode is clean and well-lit; a specific error message will indicate whether the item was not found or a network error occurred.
 
 ---
 

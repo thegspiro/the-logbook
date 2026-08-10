@@ -528,6 +528,80 @@ export function openElectionTab(tabId, match) {
 }
 
 export const SHOTS = [
+  {
+    id: "05-57-assign-scan-modal",
+    doc: "05-inventory.md",
+    line: 446,
+    anchor: "Screenshot of the Assign Items modal showing the member it is",
+    alt: "Assigning items to a member by scanning or searching, with two items staged",
+    route: "/inventory/admin/members",
+    prepare: async (page) => {
+      await clickByName(/^Assign$/)(page);
+      // Staged through the live search rather than the camera: a headless
+      // browser has no camera, and the typed path is the one a desk assignment
+      // actually uses. Two items, so the staged list reads as a list.
+      // Asset tags rather than names: a name search can resolve to the same
+      // record twice ("Structural" and "Helmet" are both the helmet) and the
+      // modal then shows a duplicate warning instead of a second row.
+      for (const tag of ["OFD-1003", "OFD-1008"]) {
+        await page.getByPlaceholder(/Search by name, barcode/).fill(tag);
+        await page.waitForTimeout(900);
+        await page.keyboard.press("Enter");
+        await page.waitForTimeout(900);
+      }
+    },
+    fullPage: false,
+  },
+  {
+    id: "05-58-return-items-modal",
+    doc: "05-inventory.md",
+    line: 506,
+    anchor:
+      "Screenshot of the Return Items modal listing everything one member",
+    alt: "Returning several items at once, each with its own condition",
+    route: "/inventory/admin/members",
+    prepare: async (page) => {
+      // The member the seeder issues a full kit to. Any other row holds one
+      // item, and a "batch" return of one row shows none of the mechanism.
+      const row = page
+        .locator("div")
+        .filter({ hasText: /Nadia Belhaj/ })
+        .filter({ has: page.getByRole("button", { name: /^Return$/ }) })
+        .last();
+      await row
+        .getByRole("button", { name: /^Return$/ })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(1200);
+      await page
+        .getByRole("button", { name: /select all/i })
+        .first()
+        .click({ timeout: 5_000 })
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
+  },
+  {
+    id: "15-14-applicant-drawer-overview",
+    doc: "15-prospective-members.md",
+    line: 295,
+    anchor:
+      "Screenshot of the applicant detail drawer showing contact information",
+    alt: "Applicant detail drawer on its overview tab, with the stage indicator and tab row",
+    route: "/prospective-members",
+    // The drawer is component state, not a route — the same reason 04-34 opens
+    // it by clicking a card rather than navigating.
+    prepare: async (page) => {
+      const card = page
+        .locator("[class*='cursor-pointer']")
+        .filter({ hasText: /\w/ })
+        .first();
+      await card.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+      await card.click({ timeout: 15_000 });
+      await page.waitForTimeout(1800);
+    },
+    fullPage: true,
+  },
   // ── 00 Getting Started ──────────────────────────────────────────────
   {
     id: "00-01-login-page",

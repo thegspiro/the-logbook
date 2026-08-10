@@ -272,16 +272,27 @@ is no change to what you see; the change is to what was being sent behind it.
 
 ## Applicant Detail View
 
-Click an applicant card to open the **detail drawer** with:
+Click an applicant card to open the **detail drawer**. It is a single scrolling
+column of sections rather than a tab strip — everything is on one surface, and
+the sections that do not apply to this applicant are simply absent:
 
-- **Overview**: Name, email, phone, membership type, current stage, time in stage
-- **Activity Log**: Chronological record of all actions (stage changes, emails sent, documents uploaded)
-- **Documents**: Uploaded files with download links
-- **Interviews**: Interview records with recommendations
-- **Events**: Linked events (orientations, ride-alongs)
-- **Election Package**: (if at election vote stage) Package details and ballot status
+- **Contact Information**: Email and phone, editable in place
+- **Desired Membership Type**: Regular or administrative
+- **Application Data**: What they submitted, when there is a linked application
+- **Current Stage**: The stage and when they entered it
+- **Linked Events**: Orientations, ride-alongs and open houses, with **Link Event**
+- **Progress**: The stage rail, "_n_ of _m_ stages completed", and time in pipeline
+- **Checklist Progress**, **Approval Status**, **Reference Checks**,
+  **Medical Screenings**, **Interview Requirement**: shown when the current
+  stage carries that requirement
+- **Election Package**: at the election-vote stage only
+- **Stage History**: Every stage entered, with its date
+- **Notes** and **Activity Log**: the log is collapsed until you open it
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the applicant detail drawer showing the overview tab with applicant info, current stage indicator, days in stage, and the tabbed content area (Activity, Documents, Interviews, Events, Election Package)._
+The action bar pins to the bottom: **Advance**, **Reject**, **Withdraw**,
+**Hold**, **Skip**, and **Interview**.
+
+![Applicant detail drawer on its overview tab, with the stage indicator and tab row](./images/15-14-applicant-drawer-overview.png)
 
 ---
 
