@@ -6,6 +6,7 @@ attendance tracking, and calendar views.
 """
 
 import calendar
+import html as _html
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
@@ -155,6 +156,28 @@ class SchedulingService:
             await self.db.rollback()
             return False, str(e)
 
+    @staticmethod
+    def _frontend_url() -> str:
+        """Base URL for links in outgoing email."""
+        from app.core.config import settings
+
+        return (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
+
+    async def _member_display_name(self, user_id: Any) -> str:
+        """Full name for a member, or an empty string if it cannot be resolved.
+
+        Empty rather than a placeholder: the templates open with
+        "Hello {{recipient_name}}," and an unresolved name reads better as
+        "Hello," than as "Hello Unknown,".
+        """
+        result = await self.db.execute(select(User).where(User.id == str(user_id)))
+        user = result.scalar_one_or_none()
+        if not user:
+            return ""
+        first = user.first_name or ""
+        last = user.last_name or ""
+        return (user.full_name or f"{first} {last}".strip()) or ""
+
     async def _send_notification(
         self,
         recipient_ids: set,
@@ -169,12 +192,21 @@ class SchedulingService:
         email_html_body: Optional[str] = None,
         email_cc: Optional[list] = None,
         email_template_type: Optional[str] = None,
+        email_template: Optional[Any] = None,
+        email_context: Optional[dict] = None,
+        email_defaults: Optional[tuple] = None,
         org: Optional[Any] = None,
     ) -> None:
         """Create in-app NotificationLog records and optionally send email.
 
         This is the shared backbone for all scheduling notification methods.
         Failures are logged but never propagated.
+
+        Pass *email_template* (an ``EmailTemplateType``) together with
+        *email_context* and *email_defaults* — ``(subject, html, text)`` — to
+        send through the department's editable template, falling back to those
+        defaults. Callers that have no template still pass *email_html_body*
+        and get the generic chrome.
         """
         try:
             for rid in recipient_ids:
@@ -205,17 +237,36 @@ class SchedulingService:
                     )
                     to_emails = [r[0] for r in recipient_result.all() if r[0]]
                     if to_emails:
-                        content = email_html_body or f"<p>{message}</p>"
-                        html = wrap_email_body(
-                            org,
-                            email_subject or subject,
-                            content,
-                        )
                         email_svc = EmailService(organization=org)
+                        if email_template and email_defaults:
+                            (
+                                send_subject,
+                                html,
+                                text,
+                            ) = await email_svc._render_with_fallback(
+                                template_type=email_template,
+                                context=dict(email_context or {}),
+                                db=self.db,
+                                organization_id=str(organization_id),
+                                default_subject=email_defaults[0],
+                                default_html=email_defaults[1],
+                                default_text=email_defaults[2],
+                            )
+                        else:
+                            # message is assembled from member names and
+                            # position labels, so it is escaped rather than
+                            # dropped into the body as markup.
+                            content = (
+                                email_html_body or f"<p>{_html.escape(message)}</p>"
+                            )
+                            send_subject = email_subject or subject
+                            html = wrap_email_body(org, send_subject, content)
+                            text = None
                         await email_svc.send_email(
                             to_emails=to_emails,
-                            subject=email_subject or subject,
+                            subject=send_subject,
                             html_body=html,
+                            text_body=text,
                             cc_emails=email_cc or None,
                             db=self.db,
                             template_type=email_template_type or category,
@@ -2727,15 +2778,14 @@ class SchedulingService:
                 f"This position is now open."
             )
 
+            from app.models.email_template import EmailTemplateType
+            from app.services.email_template_service import (
+                DEFAULT_SHIFT_DECLINE_HTML,
+                DEFAULT_SHIFT_DECLINE_SUBJECT,
+                DEFAULT_SHIFT_DECLINE_TEXT,
+            )
+
             wants_email = sched_cfg.get("send_email", False)
-            email_subj = (
-                f"Shift Coverage Needed \u2014 " f"{position} on {shift_date_str}"
-            )
-            email_html = (
-                f"<p>{message}</p>"
-                f"<p>Please log in to the scheduling "
-                f"module to assign a replacement.</p>"
-            )
 
             await self._send_notification(
                 recipient_ids=recipient_ids,
@@ -2745,10 +2795,21 @@ class SchedulingService:
                 organization_id=organization_id,
                 action_url=f"/scheduling?shift={shift_id}",
                 send_email=wants_email,
-                email_subject=email_subj,
-                email_html_body=email_html,
                 email_cc=sched_cfg.get("cc_emails", []),
                 email_template_type="shift_decline",
+                email_template=EmailTemplateType.SHIFT_DECLINE,
+                email_context={
+                    "member_name": user_name,
+                    "action": action,
+                    "position": position,
+                    "shift_date": shift_date_str,
+                    "shift_url": f"{self._frontend_url()}/scheduling?shift={shift_id}",
+                },
+                email_defaults=(
+                    DEFAULT_SHIFT_DECLINE_SUBJECT,
+                    DEFAULT_SHIFT_DECLINE_HTML,
+                    DEFAULT_SHIFT_DECLINE_TEXT,
+                ),
                 org=org,
             )
 
@@ -2827,15 +2888,14 @@ class SchedulingService:
             if shift.start_time:
                 notif_metadata["shift_start_time"] = shift.start_time.isoformat()
 
+            from app.models.email_template import EmailTemplateType
+            from app.services.email_template_service import (
+                DEFAULT_SHIFT_ASSIGNMENT_HTML,
+                DEFAULT_SHIFT_ASSIGNMENT_SUBJECT,
+                DEFAULT_SHIFT_ASSIGNMENT_TEXT,
+            )
+
             wants_email = assign_cfg.get("send_email", False)
-            email_subj = (
-                f"Shift Assignment \u2014 " f"{position_label} on {shift_date_str}"
-            )
-            email_html = (
-                f"<p>{message}</p>"
-                f"<p>Please log in to the scheduling "
-                f"module to confirm or decline this assignment.</p>"
-            )
 
             await self._send_notification(
                 recipient_ids={str(user_id)},
@@ -2846,10 +2906,41 @@ class SchedulingService:
                 action_url=f"/scheduling?shift={shift_id}",
                 notification_metadata=notif_metadata,
                 send_email=wants_email,
-                email_subject=email_subj,
-                email_html_body=email_html,
                 email_cc=assign_cfg.get("cc_emails", []),
                 email_template_type="shift_assignment",
+                email_template=EmailTemplateType.SHIFT_ASSIGNMENT,
+                email_context={
+                    "recipient_name": await self._member_display_name(user_id),
+                    "position": position_label,
+                    "shift_date": shift_date_str,
+                    "shift_start": (
+                        shift.start_time.astimezone(org_tz).strftime("%H:%M")
+                        if shift.start_time
+                        else "See the schedule"
+                    ),
+                    "checklist_html": (
+                        "<p><strong>Equipment checklists to complete:</strong></p>"
+                        "<ul>"
+                        + "".join(
+                            f"<li>{_html.escape(n)}</li>" for n in checklist_names
+                        )
+                        + "</ul>"
+                        if checklist_names
+                        else ""
+                    ),
+                    "checklist_text": (
+                        "Equipment checklists to complete: "
+                        + ", ".join(checklist_names)
+                        if checklist_names
+                        else ""
+                    ),
+                    "shift_url": f"{self._frontend_url()}/scheduling?shift={shift_id}",
+                },
+                email_defaults=(
+                    DEFAULT_SHIFT_ASSIGNMENT_SUBJECT,
+                    DEFAULT_SHIFT_ASSIGNMENT_HTML,
+                    DEFAULT_SHIFT_ASSIGNMENT_TEXT,
+                ),
                 org=org,
             )
 

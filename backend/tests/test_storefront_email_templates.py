@@ -20,6 +20,7 @@ from app.services import email_templates_storefront as storefront_templates
 from app.services import storefront_notification_service as notify_module
 from app.services import storefront_preview_service as preview_module
 from app.services.email_template_service import (
+    RENDERER_INJECTED_VARIABLES,
     SAMPLE_CONTEXT,
     EmailTemplateService,
     get_variables_for_type,
@@ -114,8 +115,8 @@ class TestTheTemplatesAreRegistered:
             used = set()
             for field in ("subject", "html", "text"):
                 used |= set(re.findall(r"\{\{\s*(\w+)\s*\}\}", defn[field]))
-            # organization_logo_img is injected by the renderer itself.
-            missing = used - set(sample) - {"organization_logo_img"}
+            # The renderer injects these itself; no caller supplies them.
+            missing = used - set(sample) - RENDERER_INJECTED_VARIABLES
             assert not missing, f"{key} has no sample for {sorted(missing)}"
 
     def test_every_variable_a_default_body_uses_is_documented(self):
@@ -126,7 +127,7 @@ class TestTheTemplatesAreRegistered:
             used = set()
             for field in ("subject", "html", "text"):
                 used |= set(re.findall(r"\{\{\s*(\w+)\s*\}\}", defn[field]))
-            missing = used - documented - {"organization_logo_img"}
+            missing = used - documented - RENDERER_INJECTED_VARIABLES
             assert not missing, f"{key} does not document {sorted(missing)}"
 
     def test_computed_chunks_are_registered_as_raw_html(self):

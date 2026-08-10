@@ -94,6 +94,13 @@ class EmailTemplate(Base):
     text_body = Column(Text)
     css_styles = Column(Text)
 
+    # Which named footer this template closes with. NULL means "whichever
+    # footer the department marked default", so a new footer becomes the
+    # house style without touching every row. An unrecognised key (a footer
+    # that was deleted) also falls back to the default rather than leaving
+    # the message with no footer at all — see app/services/email_footers.py.
+    footer_key = Column(String(32), nullable=True)
+
     # Configuration
     is_active = Column(Boolean, default=True, nullable=False, server_default="1")
     allow_attachments = Column(

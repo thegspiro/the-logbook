@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Save, Variable, Loader2, ChevronDown, ChevronUp, Info, Undo2, UserCheck } from 'lucide-react';
-import type { EmailTemplate, EmailTemplateUpdate, TemplateVariable } from '../types';
+import type { EmailFooter, EmailTemplate, EmailTemplateUpdate, TemplateVariable } from '../types';
 import { validateEmailList, parseEmailList } from '../../../hooks/useEmailListInput';
 
 interface TemplateEditorProps {
@@ -21,6 +21,10 @@ interface TemplateEditorProps {
    * folding them into one list would bury the type-specific ones.
    */
   officerVariables?: TemplateVariable[];
+  /** The department's footer library, for the "closes with" picker. */
+  footers?: EmailFooter[];
+  /** Which footer a template that has not chosen one renders with. */
+  footerDefaultKey?: string;
 }
 
 export const TemplateEditor: React.FC<TemplateEditorProps> = ({
@@ -29,11 +33,14 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   onSave,
   onDirtyChange,
   officerVariables = [],
+  footers = [],
+  footerDefaultKey = '',
 }) => {
   const [subject, setSubject] = useState(template.subject);
   const [htmlBody, setHtmlBody] = useState(template.html_body);
   const [textBody, setTextBody] = useState(template.text_body ?? '');
   const [cssStyles, setCssStyles] = useState(template.css_styles ?? '');
+  const [footerKey, setFooterKey] = useState(template.footer_key ?? '');
   const [defaultCc, setDefaultCc] = useState((template.default_cc ?? []).join(', '));
   const [defaultBcc, setDefaultBcc] = useState((template.default_bcc ?? []).join(', '));
   const [showCss, setShowCss] = useState(false);
@@ -57,6 +64,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     htmlBody !== template.html_body ||
     textBody !== (template.text_body ?? '') ||
     cssStyles !== (template.css_styles ?? '') ||
+    footerKey !== (template.footer_key ?? '') ||
     defaultCc !== origCc ||
     defaultBcc !== origBcc;
 
@@ -70,6 +78,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     setHtmlBody(template.html_body);
     setTextBody(template.text_body ?? '');
     setCssStyles(template.css_styles ?? '');
+    setFooterKey(template.footer_key ?? '');
     setDefaultCc((template.default_cc ?? []).join(', '));
     setDefaultBcc((template.default_bcc ?? []).join(', '));
     setShowRecipients((template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0);
@@ -79,6 +88,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     template.html_body,
     template.text_body,
     template.css_styles,
+    template.footer_key,
     template.default_cc,
     template.default_bcc,
   ]);
@@ -92,6 +102,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     setHtmlBody(template.html_body);
     setTextBody(template.text_body ?? '');
     setCssStyles(template.css_styles ?? '');
+    setFooterKey(template.footer_key ?? '');
     setDefaultCc((template.default_cc ?? []).join(', '));
     setDefaultBcc((template.default_bcc ?? []).join(', '));
   }, [template]);
@@ -103,6 +114,10 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     if (htmlBody !== template.html_body) data.html_body = htmlBody;
     if (textBody !== (template.text_body ?? '')) data.text_body = textBody;
     if (cssStyles !== (template.css_styles ?? '')) data.css_styles = cssStyles;
+    // Sent as '' rather than omitted when cleared: an omitted key means
+    // "leave this alone" to the backend's exclude_unset update, so the
+    // template would keep its old footer behind a success toast.
+    if (footerKey !== (template.footer_key ?? '')) data.footer_key = footerKey;
     if (defaultCc !== origCc) data.default_cc = parsedCc.length > 0 ? parsedCc : null;
     if (defaultBcc !== origBcc) data.default_bcc = parsedBcc.length > 0 ? parsedBcc : null;
     onSave(data);
@@ -144,6 +159,11 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
   const labelClass = 'form-label';
   const inputClass = 'form-input font-mono';
+
+  const defaultFooter = footers.find((footer) => footer.key === footerDefaultKey);
+  // Falls back to the default footer, matching what the renderer does with a
+  // key naming a footer that has since been deleted.
+  const selectedFooter = footers.find((footer) => footer.key === footerKey) ?? defaultFooter;
 
   return (
     <div className="space-y-4">
@@ -198,6 +218,36 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           aria-describedby="subject-hint"
         />
       </div>
+
+      {/* Footer */}
+      {footers.length > 0 && (
+        <div>
+          <label htmlFor="template-footer" className={labelClass}>
+            Closes with
+          </label>
+          <select
+            id="template-footer"
+            value={footerKey}
+            onChange={(e) => setFooterKey(e.target.value)}
+            className="form-input"
+            aria-describedby="footer-hint"
+          >
+            <option value="">
+              Department default
+              {defaultFooter ? ` — ${defaultFooter.name}` : ''}
+            </option>
+            {footers.map((footer) => (
+              <option key={footer.key} value={footer.key}>
+                {footer.name}
+              </option>
+            ))}
+          </select>
+          <p id="footer-hint" className="text-theme-text-muted mt-1 text-xs">
+            {selectedFooter?.description ||
+              'Edit the wording under the Footers tab — it applies to every template using it.'}
+          </p>
+        </div>
+      )}
 
       {/* Default CC / BCC (collapsible) */}
       <div>
@@ -377,14 +427,22 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           <span>CSS Styles</span>
         </button>
         {showCss && (
-          <textarea
-            id="template-css"
-            rows={8}
-            value={cssStyles}
-            onChange={(e) => setCssStyles(e.target.value)}
-            className={`${inputClass} mt-2`}
-            placeholder=".container { max-width: 600px; ... }"
-          />
+          <>
+            <textarea
+              id="template-css"
+              rows={8}
+              value={cssStyles}
+              onChange={(e) => setCssStyles(e.target.value)}
+              className={`${inputClass} mt-2`}
+              placeholder=".container { max-width: 600px; ... }"
+              aria-describedby="css-hint"
+            />
+            <p id="css-hint" className="text-theme-text-muted mt-1 text-xs">
+              {cssStyles.trim()
+                ? 'This template uses its own styles. Clear this box to go back to the built-in ones, which are kept up to date for you.'
+                : 'Using the built-in styles. Anything you put here replaces them for this template only, and stops it picking up future improvements.'}
+            </p>
+          </>
         )}
       </div>
     </div>

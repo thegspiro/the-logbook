@@ -1798,12 +1798,19 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 # org.settings["shift_reminders"] to suppress.
                 if reminder_cfg.get("send_email", True) and roster:
                     try:
-                        from app.services.email_service import wrap_email_body
+                        from app.models.email_template import EmailTemplateType
+                        from app.services.email_template_service import (
+                            DEFAULT_SHIFT_REMINDER_HTML,
+                            DEFAULT_SHIFT_REMINDER_SUBJECT,
+                            DEFAULT_SHIFT_REMINDER_TEXT,
+                        )
+                        from app.services.email_theme import TABLE_STYLE, TD_STYLE
 
                         cc_emails = reminder_cfg.get("cc_emails", [])
                         email_svc = EmailService(organization=org)
 
                         checklist_html = ""
+                        checklist_text = ""
                         if checklist_names:
                             items = "".join(
                                 f"<li>{_html.escape(n)}</li>" for n in checklist_names
@@ -1813,121 +1820,91 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                                 "to complete:</strong></p>"
                                 f"<ul>{items}</ul>"
                             )
+                            checklist_text = "Start-of-shift checklists: " + ", ".join(
+                                checklist_names
+                            )
                         else:
                             checklist_html = (
                                 "<p><em>No equipment checklists "
                                 "are assigned for this shift.</em></p>"
                             )
+                            checklist_text = (
+                                "No equipment checklists are assigned for this shift."
+                            )
 
                         roster_html = ""
+                        roster_text = ""
                         if roster:
                             roster_rows = "".join(
-                                f"<tr><td style='padding:4px 8px'>"
+                                f'<tr><td style="{TD_STYLE}">'
                                 f"{_html.escape(r['name'])}</td>"
-                                f"<td style='padding:4px 8px;color:#555'>"
+                                f'<td style="{TD_STYLE}">'
                                 f"{_html.escape(r['position_label'])}</td></tr>"
                                 for r in roster
                             )
                             roster_html = (
                                 "<p><strong>Crew roster:</strong></p>"
-                                "<table style='border-collapse:collapse;"
-                                "margin:0 0 12px 0' role='presentation'>"
+                                f'<table style="{TABLE_STYLE}" role="presentation">'
                                 f"{roster_rows}</table>"
                             )
-
-                        details_rows = []
-                        if apparatus_name:
-                            details_rows.append(
-                                "<tr><td style='padding:2px 8px;color:#555'>"
-                                "Apparatus</td>"
-                                "<td style='padding:2px 8px'>"
-                                f"<strong>{_html.escape(apparatus_name)}"
-                                "</strong></td></tr>"
+                            roster_text = "Crew: " + ", ".join(
+                                f"{m['name']} ({m['position_label']})" for m in roster
                             )
-                        details_rows.append(
-                            "<tr><td style='padding:2px 8px;color:#555'>"
-                            "Date</td>"
-                            f"<td style='padding:2px 8px'><strong>"
-                            f"{_html.escape(shift_date_str)}"
-                            "</strong></td></tr>"
-                        )
-                        details_rows.append(
-                            "<tr><td style='padding:2px 8px;color:#555'>"
-                            "Time</td>"
-                            f"<td style='padding:2px 8px'><strong>"
-                            f"{_html.escape(time_range)}"
-                            "</strong></td></tr>"
-                        )
-                        details_html = (
-                            "<table style='border-collapse:collapse;"
-                            "margin:0 0 12px 0' role='presentation'>"
-                            + "".join(details_rows)
-                            + "</table>"
+
+                        apparatus_html = ""
+                        apparatus_text = ""
+                        if apparatus_name:
+                            apparatus_html = (
+                                "<p><strong>Apparatus:</strong> "
+                                f"{_html.escape(apparatus_name)}</p>"
+                            )
+                            apparatus_text = f"Apparatus: {apparatus_name}"
+
+                        arrival_url = (
+                            f"{settings.FRONTEND_URL}/scheduling/"
+                            f"checkin?shift={shift.id}"
                         )
 
                         for r in roster:
                             email = r["email"]
                             if not email:
                                 continue
-                            e_first = _html.escape(r["first_name"] or "")
-                            e_pos = _html.escape(r["position_label"])
-                            arrival_url = (
-                                f"{settings.FRONTEND_URL}/scheduling/"
-                                f"checkin?shift={shift.id}"
-                            )
                             try:
+                                # Each recipient gets their own render: the
+                                # position line and greeting differ per crew
+                                # member, so this cannot be hoisted.
+                                (
+                                    r_subject,
+                                    r_html,
+                                    r_text,
+                                ) = await email_svc._render_with_fallback(
+                                    template_type=EmailTemplateType.SHIFT_REMINDER,
+                                    context={
+                                        "recipient_name": r["first_name"] or "",
+                                        "position": r["position_label"],
+                                        "shift_date": shift_date_str,
+                                        "shift_start": start_str,
+                                        "time_range": time_range,
+                                        "apparatus_name": apparatus_name or "",
+                                        "apparatus_html": apparatus_html,
+                                        "apparatus_text": apparatus_text,
+                                        "roster_html": roster_html,
+                                        "roster_text": roster_text,
+                                        "checklist_html": checklist_html,
+                                        "checklist_text": checklist_text,
+                                        "arrival_url": arrival_url,
+                                    },
+                                    db=db,
+                                    organization_id=str(org.id),
+                                    default_subject=DEFAULT_SHIFT_REMINDER_SUBJECT,
+                                    default_html=DEFAULT_SHIFT_REMINDER_HTML,
+                                    default_text=DEFAULT_SHIFT_REMINDER_TEXT,
+                                )
                                 sent, _ = await email_svc.send_email(
                                     to_emails=[email],
-                                    subject=subject,
-                                    html_body=wrap_email_body(
-                                        org,
-                                        "Start-of-Shift Report",
-                                        f"<p>Hello {e_first},</p>"
-                                        "<p>Your upcoming shift report is "
-                                        "below. Please arrive on time and "
-                                        "mark your arrival when you get "
-                                        "to the station.</p>"
-                                        f"{details_html}"
-                                        f"<p><strong>Your position:</strong> "
-                                        f"{e_pos}</p>"
-                                        f"{roster_html}"
-                                        f"{checklist_html}"
-                                        "<p style='text-align: center;'>"
-                                        f"<a href='{_html.escape(arrival_url)}' "
-                                        "class='button' role='link'>"
-                                        "Mark Arrival</a></p>",
-                                    ),
-                                    text_body=(
-                                        f"Hi {r['first_name'] or ''},\n\n"
-                                        f"Start-of-Shift Report\n"
-                                        f"Date: {shift_date_str}\n"
-                                        f"Time: {time_range}\n"
-                                        + (
-                                            f"Apparatus: {apparatus_name}\n"
-                                            if apparatus_name
-                                            else ""
-                                        )
-                                        + f"Your position: {r['position_label']}\n"
-                                        + (
-                                            "Crew: "
-                                            + ", ".join(
-                                                f"{m['name']} "
-                                                f"({m['position_label']})"
-                                                for m in roster
-                                            )
-                                            + "\n"
-                                            if roster
-                                            else ""
-                                        )
-                                        + (
-                                            "Start-of-shift checklists: "
-                                            + ", ".join(checklist_names)
-                                            + "\n"
-                                            if checklist_names
-                                            else ""
-                                        )
-                                        + f"\nMark Arrival: {arrival_url}"
-                                    ),
+                                    subject=r_subject,
+                                    html_body=r_html,
+                                    text_body=r_text,
                                     cc_emails=cc_emails or None,
                                     db=db,
                                     template_type="shift_reminder",

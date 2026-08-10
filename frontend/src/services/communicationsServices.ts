@@ -16,6 +16,8 @@ import type {
   EmailAttachment,
   EmailTemplateUpdate,
   EmailTemplatePreview,
+  EmailFooter,
+  EmailFooterLibrary,
 } from './adminServices';
 import { asArray } from '../utils/asArray';
 
@@ -216,7 +218,7 @@ export const emailTemplatesService = {
   async previewTemplate(
     templateId: string,
     context?: Record<string, unknown>,
-    overrides?: { subject?: string; html_body?: string; css_styles?: string },
+    overrides?: { subject?: string; html_body?: string; css_styles?: string; footer_key?: string },
     memberId?: string
   ): Promise<EmailTemplatePreview> {
     const response = await api.post<EmailTemplatePreview>(`/email-templates/${templateId}/preview`, {
@@ -238,6 +240,17 @@ export const emailTemplatesService = {
 
   async deleteAttachment(templateId: string, attachmentId: string): Promise<void> {
     await api.delete(`/email-templates/${templateId}/attachments/${attachmentId}`);
+  },
+
+  async getFooters(): Promise<EmailFooterLibrary> {
+    const response = await api.get<EmailFooterLibrary>('/email-templates/footers');
+    return response.data;
+  },
+
+  /** Saved whole: the default and the list have to stay consistent. */
+  async updateFooters(data: { default_key: string; footers: EmailFooter[] }): Promise<EmailFooterLibrary> {
+    const response = await api.put<EmailFooterLibrary>('/email-templates/footers', data);
+    return response.data;
   },
 };
 

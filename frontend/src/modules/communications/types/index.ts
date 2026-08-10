@@ -9,6 +9,8 @@ export type {
   EmailAttachment,
   EmailTemplateUpdate,
   EmailTemplatePreview,
+  EmailFooter,
+  EmailFooterLibrary,
   TemplateVariable,
   ScheduledEmail,
   ScheduledEmailCreate,
