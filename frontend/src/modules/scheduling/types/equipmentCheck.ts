@@ -131,6 +131,43 @@ export interface CheckTemplateItem {
   updatedAt?: string;
 }
 
+/** How much of a template is wired to the inventory catalog. */
+export interface LinkCoverage {
+  /** Positions that could carry a link — headers and unnamed rows excluded. */
+  linkable: number;
+  linked: number;
+  unlinked: number;
+}
+
+export interface InventoryMatchSuggestion {
+  id: string;
+  name: string;
+  /**
+   * 1.0 only when the two names normalize identically. Anything less is a
+   * judgement call: "Oxygen Mask" scores high against both the adult and the
+   * pediatric mask, which is exactly the case a person has to arbitrate.
+   */
+  score: number;
+  confidence: 'exact' | 'strong' | 'weak';
+}
+
+export interface InventoryMatch {
+  templateItemId: string;
+  itemName: string;
+  checkType?: string;
+  suggestions: InventoryMatchSuggestion[];
+}
+
+export interface InventoryMatchesResult {
+  coverage: LinkCoverage;
+  matches: InventoryMatch[];
+}
+
+export interface InventoryLinkResult {
+  linked: number;
+  coverage: LinkCoverage;
+}
+
 export interface CheckTemplateItemCreate {
   name: string;
   description?: string | undefined;

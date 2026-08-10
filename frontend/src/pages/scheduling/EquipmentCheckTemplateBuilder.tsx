@@ -40,6 +40,7 @@ import {
   ArrowRightLeft,
   List,
   Package,
+  Link2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -59,7 +60,12 @@ import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { schedulingService } from '@/modules/scheduling';
 import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
 import InventoryItemPicker from '@/modules/scheduling/components/InventoryItemPicker';
+import CatalogQuickAdd from '@/modules/scheduling/components/CatalogQuickAdd';
+import InventoryMatchModal from '@/modules/scheduling/components/InventoryMatchModal';
+import type { CatalogAddPayload } from '@/modules/scheduling/components/CatalogQuickAdd';
+import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
+import { parseCsvRecords, csvValue } from '@/utils/csv';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -68,6 +74,7 @@ import type {
   CheckTemplateItem,
   CheckType,
   TemplateType,
+  LinkCoverage,
 } from '@/modules/scheduling/types/equipmentCheck';
 import {
   TEMPLATE_TYPE_LABELS,
@@ -140,6 +147,36 @@ function emptyItem(): ItemFormState {
     expirationDate: '',
     expirationWarningDays: '30',
     imageUrl: '',
+  };
+}
+
+/**
+ * Map a saved item back into form state.
+ *
+ * Written out by hand at each of the three add paths before this existed, and
+ * all three omitted `inventoryItemId` — harmless while no add path could set
+ * one, and wrong the moment quick-add could: a freshly linked item would sit
+ * there reading as unlinked until the page was reloaded.
+ */
+function itemFormFromResponse(created: CheckTemplateItem): ItemFormState {
+  return {
+    id: created.id,
+    name: created.name,
+    description: created.description ?? '',
+    checkType: created.checkType,
+    isRequired: created.isRequired,
+    requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+    expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+    criticalMinimumQuantity: created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
+    minLevel: created.minLevel != null ? String(created.minLevel) : '',
+    levelUnit: created.levelUnit ?? '',
+    serialNumber: created.serialNumber ?? '',
+    lotNumber: created.lotNumber ?? '',
+    inventoryItemId: created.inventoryItemId ?? '',
+    hasExpiration: created.hasExpiration,
+    expirationDate: created.expirationDate ?? '',
+    expirationWarningDays: String(created.expirationWarningDays ?? 30),
+    imageUrl: created.imageUrl ?? '',
   };
 }
 
@@ -277,6 +314,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const isEditing = Boolean(templateId);
+  // Writing to the catalog is a separate grant from building checklists, so a
+  // scheduling officer without it is offered linking but not creation —
+  // showing the affordance anyway would just produce a 403 they cannot act on.
+  const canManageInventory = useAuthStore((s) => s.checkPermission)('inventory.manage');
 
   // State
   const [form, setForm] = useState<TemplateFormState>(defaultTemplateForm);
@@ -860,47 +901,44 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [bulkPasteValues, setBulkPasteValues] = useState<Record<string, string>>({});
   const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
 
-  const handleQuickAdd = async (compartmentIdx: number) => {
+  const handleQuickAdd = async (compartmentIdx: number, payload: CatalogAddPayload) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
     const key = getCompKey(compartmentIdx);
-    const name = (quickAddValues[key] ?? '').trim();
+    const name = payload.name.trim();
     if (!name) return;
 
     if (comp.id) {
       try {
-        const payload: CheckTemplateItemCreate = {
+        const createPayload: CheckTemplateItemCreate = {
           name,
           sort_order: comp.items.length,
+          // The catalog link travels with the item on the way in. Adding it
+          // afterwards is the step that never happened.
+          ...(payload.inventoryItemId ? { inventory_item_id: payload.inventoryItemId } : {}),
+          ...(payload.checkType ? { check_type: payload.checkType } : {}),
+          ...(payload.hasExpiration ? { has_expiration: true } : {}),
         };
-        const created = await schedulingService.addCheckItem(comp.id, payload);
-        const item: ItemFormState = {
-          id: created.id,
-          name: created.name,
-          description: created.description ?? '',
-          checkType: created.checkType,
-          isRequired: created.isRequired,
-          requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
-          expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
-          criticalMinimumQuantity:
-            created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
-          minLevel: created.minLevel != null ? String(created.minLevel) : '',
-          levelUnit: created.levelUnit ?? '',
-          serialNumber: created.serialNumber ?? '',
-          lotNumber: created.lotNumber ?? '',
-          hasExpiration: created.hasExpiration,
-          expirationDate: created.expirationDate ?? '',
-          expirationWarningDays: String(created.expirationWarningDays ?? 30),
-          imageUrl: created.imageUrl ?? '',
-        };
-        updateCompartmentField(compartmentIdx, { items: [...comp.items, item] });
+        const created = await schedulingService.addCheckItem(comp.id, createPayload);
+        updateCompartmentField(compartmentIdx, {
+          items: [...comp.items, itemFormFromResponse(created)],
+        });
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add item'));
         return;
       }
     } else {
       updateCompartmentField(compartmentIdx, {
-        items: [...comp.items, { ...emptyItem(), name }],
+        items: [
+          ...comp.items,
+          {
+            ...emptyItem(),
+            name,
+            ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
+            ...(payload.checkType ? { checkType: payload.checkType } : {}),
+            ...(payload.hasExpiration ? { hasExpiration: true } : {}),
+          },
+        ],
       });
     }
     setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
@@ -930,25 +968,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             sort_order: comp.items.length + i,
           };
           const created = await schedulingService.addCheckItem(comp.id, payload);
-          newItems.push({
-            id: created.id,
-            name: created.name,
-            description: created.description ?? '',
-            checkType: created.checkType,
-            isRequired: created.isRequired,
-            requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
-            expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
-            criticalMinimumQuantity:
-              created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
-            minLevel: created.minLevel != null ? String(created.minLevel) : '',
-            levelUnit: created.levelUnit ?? '',
-            serialNumber: created.serialNumber ?? '',
-            lotNumber: created.lotNumber ?? '',
-            hasExpiration: created.hasExpiration,
-            expirationDate: created.expirationDate ?? '',
-            expirationWarningDays: String(created.expirationWarningDays ?? 30),
-            imageUrl: created.imageUrl ?? '',
-          });
+          newItems.push(itemFormFromResponse(created));
         }
         updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
       } catch (err: unknown) {
@@ -984,24 +1004,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           is_required: false,
         };
         const headerCreated = await schedulingService.addCheckItem(comp.id, headerPayload);
-        newItems.push({
-          id: headerCreated.id,
-          name: headerCreated.name,
-          description: '',
-          checkType: 'header',
-          isRequired: false,
-          requiredQuantity: '',
-          expectedQuantity: '',
-          criticalMinimumQuantity: '',
-          minLevel: '',
-          levelUnit: '',
-          serialNumber: '',
-          lotNumber: '',
-          hasExpiration: false,
-          expirationDate: '',
-          expirationWarningDays: '30',
-          imageUrl: '',
-        });
+        newItems.push(itemFormFromResponse(headerCreated));
 
         for (let i = 0; i < preset.items.length; i++) {
           const presetItem = preset.items[i];
@@ -1012,25 +1015,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             check_type: presetItem.checkType,
           };
           const created = await schedulingService.addCheckItem(comp.id, payload);
-          newItems.push({
-            id: created.id,
-            name: created.name,
-            description: created.description ?? '',
-            checkType: created.checkType,
-            isRequired: created.isRequired,
-            requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
-            expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
-            criticalMinimumQuantity:
-              created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
-            minLevel: created.minLevel != null ? String(created.minLevel) : '',
-            levelUnit: created.levelUnit ?? '',
-            serialNumber: created.serialNumber ?? '',
-            lotNumber: created.lotNumber ?? '',
-            hasExpiration: created.hasExpiration,
-            expirationDate: created.expirationDate ?? '',
-            expirationWarningDays: String(created.expirationWarningDays ?? 30),
-            imageUrl: created.imageUrl ?? '',
-          });
+          newItems.push(itemFormFromResponse(created));
         }
         updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
       } catch (err: unknown) {
@@ -1453,6 +1438,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [showPresetPicker, setShowPresetPicker] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  const [showInventoryMatch, setShowInventoryMatch] = useState(false);
   const [changelogEntries, setChangelogEntries] = useState<
     Array<{
       id: string;
@@ -1698,26 +1684,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     reader.onload = (ev) => {
       try {
         const text = ev.target?.result as string;
-        const lines = text
-          .split('\n')
-          .map((l) => l.trim())
-          .filter(Boolean);
-        if (lines.length < 2) {
+        // Header-driven rather than positional: a department that reorders
+        // columns or adds one is not writing a broken file, and the old
+        // fixed-index reader silently mapped whatever landed in slot 3 to the
+        // quantity.
+        const { rows: records } = parseCsvRecords(text);
+        if (records.length === 0) {
           toast.error('CSV file must have a header row and at least one data row');
           return;
         }
 
-        const rows = lines.slice(1).map((line) => {
-          const cols = line.split(',').map((c) => c.trim());
-          return {
-            compartment: cols[0] ?? '',
-            name: cols[1] ?? '',
-            checkType: cols[2] ?? 'pass_fail',
-            expectedQty: cols[3] ?? '',
-            criticalMin: cols[4] ?? '',
-            levelUnit: cols[5] ?? '',
-          };
-        });
+        const rows = records.map((record) => ({
+          compartment: csvValue(record, 'compartment', 'container', 'location'),
+          name: csvValue(record, 'name', 'item', 'item name'),
+          checkType: csvValue(record, 'check type', 'type') || 'pass_fail',
+          expectedQty: csvValue(record, 'expected qty', 'expected quantity', 'quantity', 'qty', 'par'),
+          criticalMin: csvValue(record, 'critical min', 'critical minimum', 'minimum'),
+          levelUnit: csvValue(record, 'level unit', 'unit'),
+        }));
+
+        if (rows.every((r) => !r.name)) {
+          toast.error('CSV must have a "Name" column identifying each item');
+          return;
+        }
 
         setCsvPreview(rows);
       } catch {
@@ -1804,6 +1793,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     setCsvPreview(null);
     setIsDirty(true);
     toast.success(`Imported ${imported.length} compartment(s) with ${csvPreview.length} item(s) from CSV`);
+    // Imported rows are names on a page, not catalog links. Saying so here is
+    // what stops a template looking finished while tracking nothing — the
+    // "linked" count in the toolbar is the follow-up.
+    if (templateId) {
+      toast('Save, then use “Link to inventory” to connect these to your catalog', { icon: '🔗' });
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -1900,6 +1895,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       completeness: totalItems > 0 ? Math.round((namedItems / totalItems) * 100) : 100,
       namedCompartments,
     };
+  }, [compartments]);
+
+  /**
+   * How much of this template is wired to the inventory catalog.
+   *
+   * Derived from what is on screen rather than fetched, so it stays honest
+   * while the template is being edited — adding an unlinked item should move
+   * the number immediately, not after a save and a reload. Mirrors the
+   * backend's rule: a header is a caption and an unnamed row cannot be matched
+   * against anything, so neither counts against coverage.
+   */
+  const coverage = useMemo<LinkCoverage>(() => {
+    const items = compartments
+      .filter((c) => !c.isHeader)
+      .flatMap((c) => c.items)
+      .filter((i) => i.checkType !== 'header' && i.name.trim());
+    const linked = items.filter((i) => Boolean(i.inventoryItemId)).length;
+    return { linkable: items.length, linked, unlinked: items.length - linked };
   }, [compartments]);
 
   // ---------------------------------------------------------------------------
@@ -3080,30 +3093,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          className="form-input flex-1 text-sm"
-                          placeholder="Type item name and press Enter..."
-                          value={quickAddValues[compKey] ?? ''}
-                          onChange={(e) => setQuickAddValues((prev) => ({ ...prev, [compKey]: e.target.value }))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              void handleQuickAdd(idx);
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void handleQuickAdd(idx)}
-                          disabled={!(quickAddValues[compKey] ?? '').trim()}
-                          className="flex flex-shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Add
-                        </button>
-                      </div>
+                      <CatalogQuickAdd
+                        value={quickAddValues[compKey] ?? ''}
+                        onChange={(v) => setQuickAddValues((prev) => ({ ...prev, [compKey]: v }))}
+                        onAdd={(payload) => handleQuickAdd(idx, payload)}
+                        canCreateInventory={canManageInventory}
+                      />
                     )}
                   </div>
                 );
@@ -3339,6 +3334,30 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">CSV Sample</span>
           </a>
+          {templateId && coverage && coverage.linkable > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowInventoryMatch(true)}
+              className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                coverage.unlinked > 0
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400'
+                  : 'border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary'
+              }`}
+              title={
+                coverage.unlinked > 0
+                  ? `${coverage.unlinked} item(s) are not linked to inventory, so their expiration and stock are not tracked`
+                  : 'Every item is linked to inventory'
+              }
+            >
+              <Link2 className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                {coverage.linked}/{coverage.linkable} linked
+              </span>
+              <span className="sm:hidden">
+                {coverage.linked}/{coverage.linkable}
+              </span>
+            </button>
+          )}
           {templateId && (
             <button
               type="button"
@@ -3574,6 +3593,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Bulk catalog linking — rescues checklists written before the link existed */}
+      {templateId && (
+        <InventoryMatchModal
+          templateId={templateId}
+          isOpen={showInventoryMatch}
+          onClose={() => setShowInventoryMatch(false)}
+          onLinked={() => void loadTemplate(templateId)}
+        />
       )}
 
       {/* Change Log Modal (admin only) */}
