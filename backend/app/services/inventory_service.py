@@ -753,7 +753,33 @@ class InventoryService:
         result = await self.db.execute(query)
         items = list(result.scalars().all())
 
+        await self._attach_lot_stock(str(organization_id), items)
+
         return items, total
+
+    async def _attach_lot_stock(
+        self, organization_id: str, items: List[InventoryItem]
+    ) -> None:
+        """Hang ready-lot figures on each item for the response schema.
+
+        ``quantity`` and stock lots are separate ledgers: receiving a lot does
+        not touch the column, and an equipment-check swap decrements only the
+        lot. A grid that shows ``quantity`` alone therefore reports a stale
+        number for every consumable a department keeps as dated stock, which is
+        the same disagreement the reorder alert had to be taught about.
+
+        Transient attributes rather than mapped columns — nothing is persisted
+        and no flush is triggered; they exist to be read by
+        ``InventoryItemResponse``.
+        """
+        if not items:
+            return
+        totals = await self._in_date_lot_totals(
+            organization_id, [item.id for item in items]
+        )
+        for item in items:
+            item.is_lot_stocked = item.id in totals
+            item.lot_stock = totals.get(item.id)
 
     async def get_item_by_id(
         self, item_id: UUID, organization_id: UUID
@@ -3968,6 +3994,51 @@ class InventoryService:
     # Low Stock & Overdue Alerts
     # ------------------------------------------------------------------
 
+    async def _in_date_lot_totals(
+        self, organization_id: str, item_ids: List[str]
+    ) -> Dict[str, int]:
+        """Ready units per item, counting only lots that have not expired.
+
+        One row per item that has *any* lot at all, so membership in the result
+        is what marks an item as lot-stocked. That distinction carries the
+        weight: an item whose lots have all expired must read as zero ready
+        units, not fall back to an ``InventoryItem.quantity`` column that lot
+        bookkeeping never touches.
+
+        Expired lots are excluded because the equipment-check swap refuses
+        them — they are not stock anyone can put on a truck, and counting them
+        would paper over the shortage.
+        """
+        if not item_ids:
+            return {}
+        today = date.today()
+        result = await self.db.execute(
+            select(
+                InventoryLot.inventory_item_id,
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                or_(
+                                    InventoryLot.expiration_date.is_(None),
+                                    InventoryLot.expiration_date >= today,
+                                ),
+                                InventoryLot.quantity,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+            )
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryLot.inventory_item_id.in_(item_ids),
+            )
+            .group_by(InventoryLot.inventory_item_id)
+        )
+        return {item_id: int(total) for item_id, total in result.all()}
+
     async def get_low_stock_items_for_alerts(
         self,
         organization_id: UUID,
@@ -3989,7 +4060,6 @@ class InventoryService:
         alert can say so rather than appear to contradict the item's own
         quantity field.
         """
-        today = date.today()
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
@@ -4001,36 +4071,9 @@ class InventoryService:
         if not candidates:
             return []
 
-        # One row per item that has any lot at all; the sum counts only the
-        # in-date ones. Presence in this map is what marks an item as
-        # lot-managed — an item whose lots have all expired must read as zero
-        # on hand, not fall back to a stale quantity column.
-        totals_result = await self.db.execute(
-            select(
-                InventoryLot.inventory_item_id,
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                or_(
-                                    InventoryLot.expiration_date.is_(None),
-                                    InventoryLot.expiration_date >= today,
-                                ),
-                                InventoryLot.quantity,
-                            ),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ),
-            )
-            .where(
-                InventoryLot.organization_id == str(organization_id),
-                InventoryLot.inventory_item_id.in_([i.id for i in candidates]),
-            )
-            .group_by(InventoryLot.inventory_item_id)
+        lot_totals = await self._in_date_lot_totals(
+            str(organization_id), [i.id for i in candidates]
         )
-        lot_totals = {item_id: int(total) for item_id, total in totals_result.all()}
 
         low: List[Tuple[InventoryItem, int, bool]] = []
         for item in candidates:

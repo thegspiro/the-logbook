@@ -110,6 +110,45 @@ class TestLowStockUsesLotsWhenPresent:
         assert mock_db.execute.await_count == 1
 
 
+class TestItemsCarryTheirLotStock:
+    """The grid and the export read the same ledger the reorder alert does."""
+
+    async def test_lot_stocked_items_are_marked_with_their_ready_count(
+        self, service, mock_db
+    ):
+        lot_stocked = _item("i-1", quantity=50, reorder_point=None)
+        plain = _item("i-2", quantity=7, reorder_point=None)
+        totals_result = MagicMock()
+        totals_result.all.return_value = [("i-1", 12)]
+        mock_db.execute = AsyncMock(return_value=totals_result)
+
+        await service._attach_lot_stock("org-1", [lot_stocked, plain])
+
+        assert (lot_stocked.is_lot_stocked, lot_stocked.lot_stock) == (True, 12)
+        # No lots at all: nothing to prefer over the quantity column, and the
+        # null says so rather than implying zero stock.
+        assert (plain.is_lot_stocked, plain.lot_stock) == (False, None)
+
+    async def test_item_whose_lots_all_expired_reads_as_zero_not_stale(
+        self, service, mock_db
+    ):
+        item = _item("i-1", quantity=50, reorder_point=None)
+        totals_result = MagicMock()
+        totals_result.all.return_value = [("i-1", 0)]
+        mock_db.execute = AsyncMock(return_value=totals_result)
+
+        await service._attach_lot_stock("org-1", [item])
+
+        assert (item.is_lot_stocked, item.lot_stock) == (True, 0)
+
+    async def test_no_items_skips_the_query(self, service, mock_db):
+        mock_db.execute = AsyncMock()
+
+        await service._attach_lot_stock("org-1", [])
+
+        mock_db.execute.assert_not_awaited()
+
+
 class TestAddLotsBulk:
     def _wire_items(self, mock_db, known_ids):
         result = MagicMock()

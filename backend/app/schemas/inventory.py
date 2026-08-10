@@ -345,6 +345,14 @@ class InventoryItemResponse(InventoryItemBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
+    # Ready units across the item's in-date stock lots, and whether it is
+    # stocked that way at all. Lots and `quantity` are separate ledgers, so a
+    # consumable kept as dated stock has a `quantity` nothing maintains; a
+    # display that shows only that column reports a stale number. Null when
+    # the item has no lots — there is nothing to prefer over `quantity`.
+    lot_stock: Optional[int] = None
+    is_lot_stocked: bool = False
+
     model_config = _response_config
 
 

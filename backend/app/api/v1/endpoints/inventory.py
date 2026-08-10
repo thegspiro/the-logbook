@@ -569,6 +569,10 @@ async def export_items_csv(
             "Manufacturer",
             "Model Number",
             "Quantity",
+            # Lot-stocked consumables carry their real count here; the Quantity
+            # column above is not maintained for them, and an export that shows
+            # only it disagrees with every screen.
+            "Ready Lot Stock",
             "Tracking Type",
             "Purchase Date",
             "Purchase Price",
@@ -601,6 +605,11 @@ async def export_items_csv(
                 item.manufacturer or "",
                 item.model_number or "",
                 item.quantity,
+                (
+                    getattr(item, "lot_stock", None)
+                    if getattr(item, "is_lot_stocked", False)
+                    else ""
+                ),
                 (
                     item.tracking_type.value
                     if hasattr(item.tracking_type, "value")
