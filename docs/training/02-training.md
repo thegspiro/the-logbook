@@ -881,7 +881,10 @@ The card also shows:
 
 **Required Permission:** `training.manage` (officers) / authenticated (trainees, own reports only)
 
-Navigate to **Training Admin > Shift Reports** or the **Shift Reports** tab in the Scheduling page to view and manage shift officer reports.
+Navigate to **Shift Scheduling > Shift Reports** to view and manage shift
+officer reports. **Training Admin > Records > Shift Reports** is a signpost
+rather than a second copy of the screen — it holds a single card explaining that
+reports are filed from Shift Scheduling, and a button through to it.
 
 Shift completion reports are filed by shift officers after each shift. They record:
 
@@ -897,7 +900,12 @@ Shift completion reports are filed by shift officers after each shift. They reco
 
 These reports **automatically update training program progress** for enrolled members. When a report is filed (or a draft is completed), the system credits hours, shift count, and call count toward matching requirements. Call type requirements support **case-insensitive matching** against the report's call_types array — only calls matching the required types count toward progress.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports tab showing a list of filed reports with columns for date, officer, trainee, hours, calls, rating, and a status indicator showing which requirements were auto-progressed._
+Which requirements a report advanced is recorded on the report
+(`requirements_progressed`) but is not shown anywhere in the interface — not on
+the card, not in the expanded body, and not in the review modal. Check the
+member's enrolment progress to see the credit land.
+
+![Filed shift reports listing trainee, date, hours, calls and rating](./images/02-31-shift-reports-filed.png)
 
 ### Shift Finalization Workflow _(2026-03-28)_
 
@@ -946,23 +954,26 @@ The shift report system supports a multi-stage review workflow:
 
 **For Officers:**
 
-- Navigate to the **Drafts** view in ShiftReportsTab to see auto-created drafts awaiting completion
-- Click a draft to edit and fill in evaluation details
+- Navigate to the **Drafts** view to see auto-created drafts awaiting completion. **Submit All Drafts** files the whole batch at once
+- Click a draft to open it, then **Complete Draft** to fill in evaluation details
 - Submit to transition the draft to `approved` or `pending_review`
 - Draft → approved transition triggers **deferred pipeline progress** (progress was not applied when the draft was created)
 
 **For Reviewers:**
 
-- Navigate to the **Pending Review** view
+- Navigate to the **Review Queue** view. It and **Flagged** appear in the view
+  strip only while **Require review before a report reaches the trainee** is on
+  in Shift Report settings; with review switched off, a report can still be
+  flagged through the API but no view in the tab lists it
 - Review reports and approve or flag them — the review modal displays the full report content (hours, calls, rating, strengths, improvements, narrative, skills with scores, tasks) for complete context
 - **Batch review** _(2026-04-07)_ — Select multiple reports using checkboxes, toggle select-all, then click "Approve Selected" or "Flag Selected" to review up to 100 reports at once
 - Navigate to the **Flagged** view _(2026-04-07)_ — Reports previously flagged appear here for follow-up. Flagged reports can be re-reviewed and approved
 - Optionally **redact fields** — clearing sensitive content from specified fields before the trainee sees the report
 - Add **reviewer notes** (encrypted, never visible to trainees)
 
-![Shift reports pending review with selection controls](./images/02-30-shift-reports.png)
+![Shift reports review queue with select-all ticked and the batch approve and flag controls showing](./images/02-30-shift-reports.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Flagged tab showing previously flagged reports with a "Re-review" button and the flagged status badge on each card._
+![A flagged shift report expanded to show the reviewer's note and the Re-Review action](./images/02-32-shift-reports-flagged.png)
 
 **For Trainees:**
 
@@ -971,22 +982,24 @@ The shift report system supports a multi-stage review workflow:
 - Add optional **comments** during acknowledgment
 - View personal statistics: total hours, calls, average rating, and monthly breakdown
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the officer's Drafts view showing auto-created draft reports with shift date, trainee name, auto-populated hours/calls, and an "Edit" button to complete the report._
+![A draft shift report expanded to its Complete Draft action, with Submit All Drafts above](./images/02-33-shift-reports-drafts.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the review modal showing review status options (Approve/Flag), field redaction checkboxes, and reviewer notes textarea._
+![The shift report review modal with approve and flag actions, redaction checkboxes and reviewer notes](./images/02-36-shift-report-review-modal.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the trainee's My Reports view showing a list of approved reports with an Acknowledge button and the personal stats card above._
+![A trainee's own shift reports with the personal statistics card above them](./images/02-35-shift-reports-my-reports.png)
 
 ### Officer Analytics Dashboard _(2026-03-29)_
 
-Navigate to the **Officer Dashboard** view in ShiftReportsTab to see org-wide analytics:
+The analytics sit at the top of the **Filed by Me** view — there is no separate
+dashboard view to switch to. They cover the whole department, not only the
+reports you filed:
 
 - **Summary cards** — Total reports, total hours, total calls, average rating
 - **Per-trainee breakdown table** — Each trainee's report count, hours, calls, and average rating
 - **Status counts** — How many reports are in draft, pending_review, approved, and flagged status
 - **Monthly trend** — Chart data showing reports, hours, and calls per month
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the officer analytics dashboard showing the summary metric cards at the top, the per-trainee data table in the middle, and the monthly trend section below._
+![Shift report analytics with summary cards, per-trainee table and monthly hours](./images/02-34-shift-report-analytics.png)
 
 ### Trainee Statistics Dashboard _(2026-03-29)_
 
@@ -996,9 +1009,12 @@ Trainees see a personal stats card at the top of their My Reports view:
 - **Total hours** logged across all reports
 - **Total calls** responded
 - **Average rating** across all rated reports
-- **Monthly breakdown** — per-month data for the current evaluation period
+- **Monthly breakdown** — a small bar per month, drawn underneath the four
+  totals. It appears only once the trainee has reports in **more than one**
+  month; a trainee with a single month of reports sees the totals alone, since
+  there is no trend to plot from one bar
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the trainee stats card showing total hours, calls, average rating, and monthly breakdown._
+![A trainee's shift progress card with reports, hours, calls and average rating](./images/02-37-trainee-stats-card.png)
 
 ### Visibility Configuration
 

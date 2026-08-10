@@ -64,11 +64,21 @@ def locate(lines: list[str], shot: dict) -> int | None:
     misses, fall back to the shot's ``anchor``: a distinctive phrase from the
     placeholder's own description, which does not move.
     """
+    anchor = normalize(shot.get("anchor") or "")
+
+    # The hint is only trusted when the placeholder it lands on is *this*
+    # shot's. Accepting any marker at that line meant a stale number quietly
+    # filled its neighbour: an edit to the prose above pushed the review-modal
+    # placeholder down two lines, its old line number landed on the Flagged
+    # placeholder, and the modal was stamped into the flagged section under a
+    # caption about re-review buttons. Nothing reported it — the run counted
+    # six replacements and every one of them looked like a success.
     index = shot["line"] - 1
     if 0 <= index < len(lines) and MARKER.match(lines[index]):
-        return index
+        block = normalize(" ".join(lines[index : block_end(lines, index)]))
+        if not anchor or anchor in block:
+            return index
 
-    anchor = normalize(shot.get("anchor") or "")
     if not anchor:
         return None
 

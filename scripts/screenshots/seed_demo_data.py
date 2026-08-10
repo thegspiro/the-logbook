@@ -2225,6 +2225,356 @@ class Seeder:
                         raise
         return {"templates": templates, "checks": checks}
 
+    # -- shift completion reports ------------------------------------
+
+    def _name_on_run_log(
+        self,
+        shift_id: str,
+        shift_date: str,
+        trainee_id: str,
+        count: int = 1,
+    ) -> list[dict]:
+        """Make the shift's run log name this trainee, and return their calls.
+
+        A report's call count is not taken from the create payload — the
+        service derives it by counting the calls whose `responding_members`
+        includes the trainee. Runs seeded without a crew therefore leave every
+        report reading "0 calls" and the analytics card at a total of zero.
+        """
+        calls = items(self.api.get(f"/scheduling/shifts/{shift_id}/calls"), "calls")
+        mine = [
+            c
+            for c in calls
+            if trainee_id in [str(m) for m in (c.get("responding_members") or [])]
+        ]
+        if len(mine) >= count:
+            return mine
+        # Tops up to `count` rather than returning at the first match, so a
+        # re-run can widen a log it previously seeded one call into.
+        spare = [c for c in calls if c not in mine][: count - len(mine)]
+        if spare:
+            for call in spare:
+                riders = [str(m) for m in (call.get("responding_members") or [])]
+                self.api.patch(
+                    f"/scheduling/calls/{pick(call, 'id')}",
+                    {"responding_members": sorted(set(riders + [trainee_id]))},
+                )
+            return mine + spare
+        runs = [
+            ("EMS — Fall Victim", "Lift assist, no transport."),
+            ("Automatic Fire Alarm", "Steam from a shower, no incident."),
+            ("Motor Vehicle Collision", "Two vehicles, no extrication."),
+        ]
+        logged = list(mine)
+        for offset in range(count - len(mine)):
+            incident_type, notes = runs[offset % len(runs)]
+            dispatched = datetime.combine(
+                date.fromisoformat(shift_date),
+                time(hour=10 + offset * 3),
+                tzinfo=ORG_TIMEZONE,
+            ).astimezone(timezone.utc)
+            logged.append(
+                self.api.post(
+                    f"/scheduling/shifts/{shift_id}/calls",
+                    {
+                        "incident_type": incident_type,
+                        "dispatched_at": iso(dispatched),
+                        "on_scene_at": iso(dispatched + timedelta(minutes=5)),
+                        "cleared_at": iso(dispatched + timedelta(hours=1)),
+                        "notes": notes,
+                        "responding_members": [trainee_id],
+                    },
+                )
+            )
+        return logged
+
+    def seed_shift_reports(self, members: list[dict]) -> list[dict]:
+        """Filed, draft, pending-review and flagged shift completion reports.
+
+        Every view of the Shift Reports tab reads the same collection, so
+        without these the tab shows one empty state for all six views and
+        `officer-analytics` returns zeros for the summary cards. The four
+        review states have to be reached by different routes: `save_as_draft`
+        on create is the only way to make a draft, `pending_review` is where a
+        create lands once review is required, and `approved` and `flagged` both
+        come from the review endpoint — which is also what writes the reviewer
+        note the flagged card displays.
+
+        `report_review_required` is switched on first because the Review Queue
+        and Flagged buttons are rendered only under that flag — with review off
+        a report can still *be* flagged (the review endpoint does not consult
+        the flag) but no view in the tab lists it.
+        """
+        self.api.put(
+            "/training/module-config/config",
+            {"report_review_required": True},
+        )
+
+        # Checked against the *states* present, not merely "are there any". A
+        # run that dies partway leaves a handful of approved reports behind,
+        # and a bare truthiness guard then treats that wreckage as done — which
+        # is how the Review Queue and Flagged views stayed empty through a
+        # re-seed that reported success.
+        existing = items(self.api.get("/training/shift-reports/all?limit=50"))
+
+        demo_member_id = str(
+            pick(
+                next(
+                    (m for m in members if pick(m, "username") == DEMO_MEMBER_USERNAME),
+                    {},
+                ),
+                "id",
+            )
+        )
+
+        # The demo member's own report is approved on every run, not only on
+        # the run that files it. A trainee sees only approved reports, so a
+        # report of theirs left pending or flagged empties My Reports — and the
+        # early return below would otherwise carry that state forward untouched.
+        for report in existing:
+            if str(pick(report, "trainee_id", "traineeId")) != demo_member_id:
+                continue
+            if pick(report, "review_status", "reviewStatus") in ("approved", "draft"):
+                continue
+            self.api.post(
+                f"/training/shift-reports/{pick(report, 'id')}/review",
+                {"review_status": "approved"},
+            )
+
+        # Reports filed before their shift's run log named the trainee stored a
+        # zero that no later edit to the log rewrites, so repair them here
+        # rather than only getting it right on a virgin database — this is the
+        # path a re-seed of a long-lived demo container actually takes.
+        for report in existing:
+            shift_id = pick(report, "shift_id", "shiftId")
+            if not shift_id or pick(report, "calls_responded", "callsResponded"):
+                continue
+            mine = self._name_on_run_log(
+                str(shift_id),
+                str(pick(report, "shift_date", "shiftDate")),
+                str(pick(report, "trainee_id", "traineeId")),
+            )
+            if mine:
+                self.api.put(
+                    f"/training/shift-reports/{pick(report, 'id')}",
+                    {
+                        "calls_responded": len(mine),
+                        "call_types": sorted(
+                            {
+                                c.get("incident_type")
+                                for c in mine
+                                if c.get("incident_type")
+                            }
+                        ),
+                    },
+                )
+
+        # Two calendar months, not just the four review states: the analytics
+        # card draws its monthly trend only when there is more than one month
+        # to plot, so a set of reports all filed against the same week renders
+        # the summary cards and the trainee table and then simply omits the
+        # section the guide describes underneath them.
+        wanted = {"approved", "pending_review", "flagged", "draft"}
+        have = {pick(r, "review_status", "reviewStatus") for r in existing}
+        months = {str(pick(r, "shift_date", "shiftDate"))[:7] for r in existing}
+        if wanted <= have and len(months) >= 2:
+            return items(self.api.get("/training/shift-reports/all?limit=50"))
+
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        past = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate")),
+            reverse=True,
+        )
+        if not past:
+            self.blocked.append("shift reports: no past shift to file against")
+            return []
+
+        # A report can only be filed about someone who was actually on the
+        # shift — the create rejects anyone else with "Trainee has no
+        # attendance or assignment record for this shift" — so the trainees
+        # come from each shift's crew rather than from the roster at large.
+        # `shift-crew` also reports who already has a report, which is what
+        # keeps a re-run off the (shift, trainee) unique constraint; that
+        # violation surfaces as a 500, not a conflict.
+        pairs: list[tuple[dict, str]] = []
+        seen_trainees = {
+            str(pick(r, "trainee_id", "traineeId"))
+            for r in existing
+            if pick(r, "trainee_id", "traineeId")
+        }
+        # Walked newest-then-oldest alternately rather than straight down the
+        # list, so the reports land in more than one calendar month and the
+        # analytics card has a trend to plot. Straight iteration files all five
+        # against the same fortnight, which is the shape the schedule happens
+        # to have at its most recent end.
+        interleaved: list[dict] = []
+        head, tail = 0, len(past) - 1
+        while head <= tail:
+            interleaved.append(past[head])
+            if head != tail:
+                interleaved.append(past[tail])
+            head, tail = head + 1, tail - 1
+
+        for shift in interleaved[:30]:
+            if len(pairs) >= 5:
+                break
+            crew = items(
+                self.api.get(f"/training/shift-reports/shift-crew/{pick(shift, 'id')}")
+            )
+            available = [
+                c
+                for c in crew
+                if not c.get("has_existing_report")
+                and str(c.get("user_id")) not in seen_trainees
+            ]
+            if not available:
+                continue
+            # The member account the `auth: "member"` shots sign in as has to
+            # be among the trainees, or their My Reports view stays empty for
+            # the one session that can picture it.
+            chosen = next(
+                (c for c in available if str(c.get("user_id")) == demo_member_id),
+                available[0],
+            )
+            seen_trainees.add(str(chosen.get("user_id")))
+            pairs.append((shift, str(chosen.get("user_id"))))
+
+        # Wired before the reports are filed, not after: the create derives the
+        # call count from the run log, and nothing re-derives it later. The
+        # count varies so the reports list does not show the same figure in
+        # every row, which reads as a placeholder rather than as data.
+        for index, (shift, trainee_id) in enumerate(pairs):
+            self._name_on_run_log(
+                str(pick(shift, "id")),
+                str(pick(shift, "shift_date", "shiftDate")),
+                trainee_id,
+                count=1 + (index % 3),
+            )
+        if not pairs and not existing:
+            self.blocked.append("shift reports: no crewed past shift to file against")
+            return []
+
+        skills = [
+            ("Pump operations", 4, "Set the pump and held pressure without prompting."),
+            ("Hose deployment", 3, "Crosslay stretch was clean; kinks on the reload."),
+            ("Hydrant connection", 4, "Wrapped and dressed the hydrant unassisted."),
+            ("SCBA donning", 5, "Under sixty seconds, mask seal checked."),
+            ("Ladder throw", 3, "Needs a second set on the 24' extension."),
+        ]
+        tasks = [
+            ("Apparatus check", "Completed the start-of-shift engine inventory."),
+            ("Hose testing", 'Assisted with annual service test on 2 1/2" line.'),
+            ("Station duties", "Bay wash-down and SCBA cylinder swap."),
+        ]
+        narratives = [
+            "Strong shift. Took the nozzle on the room-and-contents fire and "
+            "held the line without being told twice.",
+            "Steady progress on pump operations. Still talks through the "
+            "steps out loud, which is fine at this stage.",
+            "Good instincts on the medical call — got a full set of vitals "
+            "before the medic unit arrived.",
+            "Quiet shift, mostly station duties. Used the downtime to work "
+            "the ladder evolutions.",
+            "Handled the extrication assignment well; watch tool placement "
+            "on the B-post next time.",
+        ]
+
+        created: list[dict] = []
+        for index, (shift, trainee_id) in enumerate(pairs):
+            shift_date = str(pick(shift, "shift_date", "shiftDate"))
+            payload = {
+                "shift_id": pick(shift, "id"),
+                "shift_date": shift_date,
+                "trainee_id": trainee_id,
+                "hours_on_shift": [12.0, 10.5, 8.0, 12.0, 6.0][index % 5],
+                "calls_responded": [3, 1, 2, 0, 4][index % 5],
+                "call_types": [
+                    ["Structure Fire", "EMS"],
+                    ["EMS"],
+                    ["Motor Vehicle Collision", "Automatic Fire Alarm"],
+                    [],
+                    ["EMS", "Odor Investigation"],
+                ][index % 5],
+                "performance_rating": [4, 3, 4, 3, 5][index % 5],
+                "areas_of_strength": [
+                    "Aggressive but controlled on the nozzle.",
+                    "Asks good questions and writes things down.",
+                    "Excellent patient rapport.",
+                    "Reliable on apparatus checks.",
+                    "Fastest SCBA donning on the crew.",
+                ][index % 5],
+                "areas_for_improvement": [
+                    "Slow to mask up before entry.",
+                    "Pump discharge pressures still need a cheat sheet.",
+                    "Radio traffic is too long — keep it to the point.",
+                    "Needs more reps on ladders.",
+                    "Watch tool placement during extrication.",
+                ][index % 5],
+                "officer_narrative": narratives[index % len(narratives)],
+                "skills_observed": [
+                    {
+                        "skill_name": name,
+                        "demonstrated": True,
+                        "score": score,
+                        "notes": note,
+                    }
+                    for name, score, note in skills[: 3 + (index % 3)]
+                ],
+                "tasks_performed": [
+                    {"task": task, "description": description}
+                    for task, description in tasks[: 2 + (index % 2)]
+                ],
+            }
+            # The last trainee's report stays a draft so the Drafts view has
+            # something to picture; the rest submit into the review queue.
+            if index == len(pairs) - 1:
+                payload["save_as_draft"] = True
+            created.append(self.api.post("/training/shift-reports", payload))
+
+        # With review required every non-draft create lands in `pending_review`,
+        # so the other two states are set afterwards, across the reports an
+        # earlier run left behind as well as the new ones.
+        #
+        # The demo member is picked out by name rather than by position. Their
+        # report has to be approved — My Reports shows a trainee only their
+        # approved reports — and it must never be the one flagged, which is
+        # what a positional `queued[3]` did as soon as a second run changed the
+        # ordering: it flagged the member's only report and emptied the one
+        # view a member's session can picture.
+        reports = existing + created
+        queued = [
+            r for r in reports if pick(r, "review_status", "reviewStatus") != "draft"
+        ]
+        mine = [
+            r
+            for r in queued
+            if str(pick(r, "trainee_id", "traineeId")) == demo_member_id
+        ]
+        others = [r for r in queued if r not in mine]
+        for report in mine[:1] + others[:1]:
+            self.api.post(
+                f"/training/shift-reports/{pick(report, 'id')}/review",
+                {"review_status": "approved"},
+            )
+        for report in others[1:2]:
+            self.api.post(
+                f"/training/shift-reports/{pick(report, 'id')}/review",
+                {
+                    "review_status": "flagged",
+                    "reviewer_notes": (
+                        "Hours do not match the roster for this shift — please "
+                        "confirm the relief time and resubmit."
+                    ),
+                },
+            )
+        return reports
+
     # -- notification rules ------------------------------------------
 
     def seed_notification_rules(self) -> list[dict]:
@@ -4996,6 +5346,7 @@ class Seeder:
         self.step("expense reports", lambda: self.seed_expense_reports(finance))
         self.step("check requests", lambda: self.seed_check_requests(finance))
         self.step("equipment checks", self.seed_equipment_checks)
+        self.step("shift reports", lambda: self.seed_shift_reports(members))
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

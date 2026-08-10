@@ -790,7 +790,11 @@ export const ShiftReportsTab: React.FC = () => {
             <p className="text-theme-text-secondary mb-2 text-xs font-medium">Monthly Hours</p>
             <div className="flex h-20 items-end gap-1">
               {traineeStats.monthly.map((m) => (
-                <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
+                // h-full, not auto: the bar's height is a percentage, and a
+                // percentage resolves against nothing on an auto-height parent,
+                // so the column rendered its month label with an invisible
+                // zero-height bar above it.
+                <div key={m.month} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
                   <div
                     className="w-full rounded-t bg-violet-500/20"
                     style={{ height: `${Math.max((m.hours / maxHours) * 100, 4)}%` }}
@@ -890,7 +894,9 @@ export const ShiftReportsTab: React.FC = () => {
             <p className="text-theme-text-secondary mb-2 text-xs font-medium">Monthly Trend</p>
             <div className="flex h-24 items-end gap-1.5">
               {officerAnalytics.monthly.map((m) => (
-                <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
+                // See the trainee chart above: an auto-height column gives the
+                // percentage-height bar nothing to resolve against.
+                <div key={m.month} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
                   <span className="text-theme-text-muted text-[9px] font-medium">{m.reports}</span>
                   <div
                     className="w-full rounded-t bg-violet-500/20"

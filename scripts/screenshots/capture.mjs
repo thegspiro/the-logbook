@@ -70,6 +70,22 @@ async function optimize(target) {
 const DESKTOP = { width: 1440, height: 900 };
 const MOBILE = { width: 414, height: 896 };
 
+/**
+ * A shot's `viewport`: "mobile", omitted for desktop, or an explicit
+ * `{ width, height }`.
+ *
+ * The explicit form exists for elements sized against the viewport rather than
+ * their content — a modal at `max-h-[90dvh]` with its own scrollbar is as tall
+ * as the window and no taller, so neither a full-page shot nor an element shot
+ * can reach the buttons at its foot. Giving that one shot a taller window is
+ * the only framing that contains the whole dialog.
+ */
+function viewportFor(shot) {
+  if (!shot.viewport) return DESKTOP;
+  if (shot.viewport === "mobile") return MOBILE;
+  return shot.viewport;
+}
+
 const args = process.argv.slice(2);
 const onlyIndex = args.indexOf("--only");
 const only = onlyIndex >= 0 ? args[onlyIndex + 1] : null;
@@ -334,7 +350,7 @@ async function main() {
     const target = resolve(OUTPUT_DIR, `${shot.id}.png`);
     const page = await sessions.pageFor(shot);
     try {
-      await page.setViewportSize(shot.viewport === "mobile" ? MOBILE : DESKTOP);
+      await page.setViewportSize(viewportFor(shot));
       await page.goto(`${BASE_URL}${shot.route}`, {
         waitUntil: "domcontentloaded",
       });

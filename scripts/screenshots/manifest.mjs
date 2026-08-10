@@ -90,6 +90,26 @@ export function clickByName(name) {
 }
 
 /**
+ * Open the first shift report card in whichever view is showing.
+ *
+ * A report card is a collapsed summary; everything a reviewer acts on — the
+ * reviewer's note, Re-Review Report, the draft's Edit, a trainee's Acknowledge
+ * — is inside it. The header is a plain <button> with no accessible name of
+ * its own (its content is the trainee name and a row of stat spans), so it is
+ * reached positionally rather than by label.
+ */
+export async function expandFirstReportCard(page) {
+  const header = page
+    .locator("div.rounded-xl > button:visible")
+    .filter({ hasText: /\d+(\.\d+)?h/ })
+    .first();
+  await header.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
+  await header.click({ timeout: 10_000 });
+  // The body animates open; the shot is otherwise taken mid-expand.
+  await page.waitForTimeout(400);
+}
+
+/**
  * Select a section in the Shift Reports settings panel.
  *
  * The panel renders its section list *twice* — a label-only strip for phones
@@ -381,13 +401,15 @@ export function openStaffedShift(extraMatch) {
 export async function selectStorageRoom(page) {
   const room = page.locator("#room-select");
   await room.waitFor({ timeout: 10_000 });
-  const options = await room.locator("option").evaluateAll((nodes) =>
-    nodes.map((n) => n.value).filter(Boolean),
-  );
+  const options = await room
+    .locator("option")
+    .evaluateAll((nodes) => nodes.map((n) => n.value).filter(Boolean));
   for (const value of options) {
     await room.selectOption(value);
     await page.waitForTimeout(600);
-    if (await page.getByRole("button", { name: /^Show \d+ items? in / }).count()) {
+    if (
+      await page.getByRole("button", { name: /^Show \d+ items? in / }).count()
+    ) {
       return;
     }
   }
@@ -2430,15 +2452,133 @@ export const SHOTS = [
     ),
     fullPage: true,
   },
+  // ── Shift completion reports ───────────────────────────────────────
+  //
+  // `/training/shift-reports` is a redirect stub — a card that says reports are
+  // filed from Shift Scheduling and offers a button through to it. The tab
+  // itself lives at `/scheduling?tab=shift-reports`, and pointing these shots
+  // at the training route is how 02-30 came to picture an empty "Filed (0)"
+  // stub under a caption promising report cards with checkboxes.
+  //
+  // Only `view=drafts` is honoured as a URL parameter; the other five views are
+  // reachable only by clicking their button, and Review Queue and Flagged are
+  // rendered only while the department has `report_review_required` on (the
+  // seeder switches it on).
   {
     id: "02-30-shift-reports",
     doc: "02-training.md",
-    line: 742,
+    line: 962,
     anchor:
       "Screenshot of the Pending Review view showing report cards with checkboxes, the",
-    alt: "Shift reports pending review with selection controls",
-    route: "/training/shift-reports",
+    alt: "Shift reports review queue with select-all ticked and the batch approve and flag controls showing",
+    route: "/scheduling?tab=shift-reports",
+    // Select-all is ticked deliberately. "Approve Selected" / "Flag Selected"
+    // render only while something is selected, so an untouched queue pictures
+    // the checkboxes without the controls they exist to reach.
+    prepare: async (page) => {
+      await clickByName(/Review Queue/i)(page);
+      await page
+        .getByRole("checkbox")
+        .first()
+        .check({ timeout: 10_000 })
+        .catch(() => {});
+    },
     fullPage: true,
+  },
+  {
+    id: "02-31-shift-reports-filed",
+    doc: "02-training.md",
+    line: 900,
+    anchor:
+      "Screenshot of the Shift Reports tab showing a list of filed reports with columns",
+    alt: "Filed shift reports listing trainee, date, hours, calls and rating",
+    route: "/scheduling?tab=shift-reports",
+    fullPage: true,
+  },
+  {
+    id: "02-32-shift-reports-flagged",
+    doc: "02-training.md",
+    line: 965,
+    anchor:
+      "Screenshot of the Flagged tab showing previously flagged reports with a",
+    alt: "A flagged shift report expanded to show the reviewer's note and the Re-Review action",
+    route: "/scheduling?tab=shift-reports",
+    // The flagged badge shows on the collapsed card, but the reviewer's note
+    // and the Re-Review Report button the placeholder names are inside it.
+    prepare: async (page) => {
+      await clickByName(/Flagged/i)(page);
+      await expandFirstReportCard(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "02-33-shift-reports-drafts",
+    doc: "02-training.md",
+    line: 974,
+    anchor:
+      "Screenshot of the officer's Drafts view showing auto-created draft reports with",
+    alt: "A draft shift report expanded to its Complete Draft action, with Submit All Drafts above",
+    route: "/scheduling?tab=shift-reports&view=drafts",
+    prepare: expandFirstReportCard,
+    fullPage: true,
+  },
+  {
+    id: "02-34-shift-report-analytics",
+    doc: "02-training.md",
+    line: 1002,
+    anchor:
+      "Screenshot of the officer analytics dashboard showing the summary metric cards",
+    alt: "Shift report analytics with summary cards, per-trainee table and monthly hours",
+    route: "/scheduling?tab=shift-reports",
+    // Clipped to the card. The analytics render at the top of Filed by Me
+    // rather than in a view of their own, so a full-page shot here is the same
+    // picture as 02-31 with a different caption under it.
+    selector: 'div:has(> h3:text("Shift Report Analytics"))',
+  },
+  {
+    id: "02-35-shift-reports-my-reports",
+    doc: "02-training.md",
+    line: 978,
+    anchor:
+      "Screenshot of the trainee's My Reports view showing a list of approved reports",
+    alt: "A trainee's own shift reports with the personal statistics card above them",
+    route: "/scheduling?tab=shift-reports",
+    auth: "member",
+    prepare: expandFirstReportCard,
+    fullPage: true,
+  },
+  {
+    id: "02-36-shift-report-review-modal",
+    doc: "02-training.md",
+    line: 976,
+    anchor:
+      "Screenshot of the review modal showing review status options (Approve/Flag), field",
+    alt: "The shift report review modal with approve and flag actions, redaction checkboxes and reviewer notes",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      await clickByName(/Review Queue/i)(page);
+      await expandFirstReportCard(page);
+      await clickByName(/Review Report/i)(page);
+    },
+    // The dialog itself, not the page — a full-page shot drops the modal
+    // halfway down a scrolled backdrop. The taller window is what gets the
+    // reviewer notes and the Approve/Flag buttons into the frame: the dialog
+    // is `max-h-[90dvh]` with its own scrollbar, so at 900px it simply ends
+    // partway down the redaction checkboxes and no element shot can reach past
+    // its own box.
+    viewport: { width: 1440, height: 1500 },
+    selector: 'div[role="dialog"][aria-label="Review Report"] > div',
+  },
+  {
+    id: "02-37-trainee-stats-card",
+    doc: "02-training.md",
+    line: 1017,
+    anchor:
+      "Screenshot of the trainee stats card showing total reports, hours, calls,",
+    alt: "A trainee's shift progress card with reports, hours, calls and average rating",
+    route: "/scheduling?tab=shift-reports",
+    auth: "member",
+    selector: 'div:has(> h3:text("My Shift Progress"))',
   },
 
   // ── Seventh batch: shift detail panel ──────────────────────────────
@@ -3392,7 +3532,8 @@ export const SHOTS = [
     id: "01-11-create-waiver",
     doc: "01-membership.md",
     line: 573,
-    anchor: "Screenshot of the Add Leave of Absence modal showing the member dropdown",
+    anchor:
+      "Screenshot of the Add Leave of Absence modal showing the member dropdown",
     alt: "Create waiver form with the member, type and date fields",
     route: "/members/admin/waivers",
     prepare: clickByName(/^Create Waiver$/),
@@ -3402,7 +3543,8 @@ export const SHOTS = [
     id: "04-10-event-attendance",
     doc: "04-events-meetings.md",
     line: 315,
-    anchor: "Screenshot of the EventRSVPSection on an event detail page showing the attendee list",
+    anchor:
+      "Screenshot of the EventRSVPSection on an event detail page showing the attendee list",
     alt: "Event attendance list with each member's RSVP and check-in state",
     route: "/events",
     prepare: openFirstFromApi(
@@ -3417,13 +3559,17 @@ export const SHOTS = [
     id: "09-12-template-linked-requirement",
     doc: "09-skills-testing.md",
     line: 145,
-    anchor: 'The Create/Edit Template form showing the "Linked Training Requirement" dropdown',
+    anchor:
+      'The Create/Edit Template form showing the "Linked Training Requirement" dropdown',
     alt: "Template builder with its linked training requirement field",
     route: "/training/skills-testing/templates/new",
     prepare: async (page) => {
       // Pick a real requirement — the field defaults to "None", which is not
       // what the placeholder asks to show.
-      const select = page.locator("select").filter({ hasText: /not linked/ }).first();
+      const select = page
+        .locator("select")
+        .filter({ hasText: /not linked/ })
+        .first();
       const value = await select
         .locator("option")
         .nth(1)
@@ -3439,7 +3585,8 @@ export const SHOTS = [
     id: "04-12-linked-elections",
     doc: "04-events-meetings.md",
     line: 1184,
-    anchor: "Screenshot of an event detail page showing a \"Linked Elections\" section",
+    anchor:
+      'Screenshot of an event detail page showing a "Linked Elections" section',
     alt: "Linked elections card on the event the vote is held at",
     route: "/events",
     prepare: async (page) => {
@@ -3474,7 +3621,8 @@ export const SHOTS = [
     id: "04-11-event-notifications",
     doc: "04-events-meetings.md",
     line: 346,
-    anchor: "Screenshot of the EventNotificationPanel showing the notification type dropdown",
+    anchor:
+      "Screenshot of the EventNotificationPanel showing the notification type dropdown",
     alt: "Event notification panel with its type and audience controls",
     route: "/events",
     prepare: openFirstFromApi(
@@ -3491,7 +3639,8 @@ export const SHOTS = [
     id: "08-36-template-search",
     doc: "08-admin-reports.md",
     line: 1336,
-    anchor: "Screenshot of the template list sidebar showing the search field with \"welcome\" typed",
+    anchor:
+      'Screenshot of the template list sidebar showing the search field with "welcome" typed',
     alt: "Email template sidebar filtered to templates matching welcome",
     route: "/communications/email-templates",
     prepare: async (page) => {
@@ -3506,7 +3655,8 @@ export const SHOTS = [
     id: "08-37-email-officers",
     doc: "08-admin-reports.md",
     line: 1437,
-    anchor: "Screenshot of the Officers tab showing the office list with holders",
+    anchor:
+      "Screenshot of the Officers tab showing the office list with holders",
     alt: "Officers tab listing each office and the member holding it",
     route: "/communications/email-templates",
     prepare: clickByName(/^Officers$/),
@@ -3516,7 +3666,8 @@ export const SHOTS = [
     id: "08-38-email-configuration",
     doc: "08-admin-reports.md",
     line: 1479,
-    anchor: "Screenshot of the Email Configuration page showing the Cloudflare platform",
+    anchor:
+      "Screenshot of the Email Configuration page showing the Cloudflare platform",
     alt: "Email configuration with the sending platform and credentials",
     route: "/settings?tab=email",
     // The credential fields are per-platform and the demo org has none set, so
@@ -3530,7 +3681,8 @@ export const SHOTS = [
     id: "05-52-item-maintenance",
     doc: "05-inventory.md",
     line: 566,
-    anchor: "Screenshot of the maintenance section on an item detail page, showing past",
+    anchor:
+      "Screenshot of the maintenance section on an item detail page, showing past",
     alt: "Item inspections tab listing its service history",
     route: "/inventory/items",
     prepare: async (page) => {
@@ -3550,7 +3702,8 @@ export const SHOTS = [
     id: "05-51-label-print-settings",
     doc: "05-inventory.md",
     line: 531,
-    anchor: "Screenshot of the barcode print page Settings panel showing the Label Size grid",
+    anchor:
+      "Screenshot of the barcode print page Settings panel showing the Label Size grid",
     alt: "Label print settings with the size presets and content options",
     route: "/inventory/print-labels",
     prepare: async (page) => {
@@ -3578,7 +3731,8 @@ export const SHOTS = [
     id: "05-49-variant-stock-matrix",
     doc: "05-inventory.md",
     line: 1440,
-    anchor: "Screenshot of the Variant Groups page showing a variant group expanded",
+    anchor:
+      "Screenshot of the Variant Groups page showing a variant group expanded",
     alt: "Variant group stock matrix of quantities by size and colour",
     route: "/inventory/admin/variant-groups",
     prepare: async (page) => {
@@ -3595,7 +3749,8 @@ export const SHOTS = [
     id: "05-48-storage-area-items",
     doc: "05-inventory.md",
     line: 1386,
-    anchor: "Screenshot of the Storage Areas page with one area expanded showing",
+    anchor:
+      "Screenshot of the Storage Areas page with one area expanded showing",
     alt: "Storage area expanded to show the items stored in it",
     route: "/inventory/storage-areas",
     prepare: async (page) => {
@@ -3614,7 +3769,8 @@ export const SHOTS = [
     id: "05-47-items-filter-bar",
     doc: "05-inventory.md",
     line: 1454,
-    anchor: "Screenshot of the Items List filter bar showing the three new dropdown filters",
+    anchor:
+      "Screenshot of the Items List filter bar showing the three new dropdown filters",
     alt: "Items list filter bar with the size, colour and style dropdowns",
     route: "/inventory/items",
     // Clipped to the filter card. The placeholder asks for the Size dropdown
@@ -3626,7 +3782,8 @@ export const SHOTS = [
     id: "05-46-size-preferences",
     doc: "05-inventory.md",
     line: 216,
-    anchor: "Screenshot of the Size Preferences modal titled \"Sizes — Jane Doe\"",
+    anchor:
+      'Screenshot of the Size Preferences modal titled "Sizes — Jane Doe"',
     alt: "Size preferences modal for one member",
     route: "/inventory/admin/members",
     prepare: clickByName(/^Sizes$/),
@@ -3636,7 +3793,8 @@ export const SHOTS = [
     id: "08-32-module-management",
     doc: "08-admin-reports.md",
     line: 142,
-    anchor: "Screenshot of the Module Management section showing the three categories",
+    anchor:
+      "Screenshot of the Module Management section showing the three categories",
     alt: "Module management with a toggle for each optional feature",
     route: "/settings?tab=modules",
     fullPage: true,
@@ -3645,7 +3803,8 @@ export const SHOTS = [
     id: "08-33-notifications-inbox",
     doc: "08-admin-reports.md",
     line: 1209,
-    anchor: "Screenshot of the Notifications inbox page showing the \"Mark All Read\" button",
+    anchor:
+      'Screenshot of the Notifications inbox page showing the "Mark All Read" button',
     alt: "Notifications inbox with the mark-all-as-read action",
     route: "/notifications?tab=inbox",
     // Unread only. "Show read" is on by default, and the demo database still
@@ -3653,7 +3812,10 @@ export const SHOTS = [
     // name the enum rather than the position. Publishing those would put a
     // fixed bug into the guide.
     prepare: async (page) => {
-      await page.getByLabel(/show read/i).first().uncheck({ timeout: 10_000 });
+      await page
+        .getByLabel(/show read/i)
+        .first()
+        .uncheck({ timeout: 10_000 });
     },
     fullPage: true,
   },
@@ -3661,11 +3823,15 @@ export const SHOTS = [
     id: "08-35-notifications-show-read",
     doc: "08-admin-reports.md",
     line: 1219,
-    anchor: "Screenshot of the Notifications inbox showing the \"Show read\" toggle",
+    anchor:
+      'Screenshot of the Notifications inbox showing the "Show read" toggle',
     alt: "Notifications inbox with read notifications revealed",
     route: "/notifications?tab=inbox",
     prepare: async (page) => {
-      await page.getByLabel(/show read/i).first().check({ timeout: 10_000 });
+      await page
+        .getByLabel(/show read/i)
+        .first()
+        .check({ timeout: 10_000 });
     },
     fullPage: true,
     holdBack:
@@ -3677,7 +3843,8 @@ export const SHOTS = [
     id: "08-34-email-templates",
     doc: "08-admin-reports.md",
     line: 1383,
-    anchor: "Screenshot of the Email Templates sidebar showing seven collapsible category",
+    anchor:
+      "Screenshot of the Email Templates sidebar showing seven collapsible category",
     alt: "Email template categories in the editor sidebar",
     route: "/communications/email-templates",
     fullPage: true,
@@ -3686,7 +3853,8 @@ export const SHOTS = [
     id: "03-44-month-calendar",
     doc: "03-scheduling.md",
     line: 65,
-    anchor: "Screenshot of the month calendar view showing several shifts across different days",
+    anchor:
+      "Screenshot of the month calendar view showing several shifts across different days",
     alt: "Month calendar of shifts with the week and month view toggle",
     route: "/scheduling",
     prepare: clickByName(/^Month$/),
@@ -3696,7 +3864,8 @@ export const SHOTS = [
     id: "03-43-time-off-request-form",
     doc: "03-scheduling.md",
     line: 199,
-    anchor: "Screenshot of the time-off request form showing start date, end date",
+    anchor:
+      "Screenshot of the time-off request form showing start date, end date",
     alt: "Time-off request modal with its date range and reason",
     route: "/scheduling?tab=my-shifts",
     prepare: clickByName(/^Request Time Off$/),

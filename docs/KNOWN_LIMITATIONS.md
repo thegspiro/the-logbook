@@ -704,6 +704,84 @@ an election configured to open itself could not be told to stop.
 `tests/test_election_update_allowlist.py` now checks the invariant, since the
 pattern cannot report its own omissions.
 
+## Screenshot Harness — A Stale Line Number Filled Its Neighbour (2026-08-10)
+
+Fixed 2026-08-10. `apply_placeholders.py` locates a placeholder by line number
+with the shot's `anchor` as a fallback. The hint was accepted whenever the
+line held _any_ placeholder marker — the anchor was never consulted to confirm
+it was the right one:
+
+```python
+index = shot["line"] - 1
+if 0 <= index < len(lines) and MARKER.match(lines[index]):
+    return index          # ...but is it *this* shot's placeholder?
+```
+
+Editing prose above a placeholder pushes it down, and the stale number then
+lands on whichever placeholder moved into that slot. In this repository the
+review-modal shot was written into the Flagged section, under a caption about
+re-review buttons, while the modal's own placeholder stayed open. The run
+reported six successful replacements and named none of them as suspect — the
+failure is only visible by reading the rendered guide.
+
+The hint is now believed only when the anchor is also present in that block;
+otherwise it falls through to the anchor search that was already there.
+`tests/test_apply_placeholders.py` pins the rule, including the two cases that
+must still work: an anchorless shot trusting its hint, and an anchor matching
+two placeholders placing neither.
+
+## Shift Reports — An Officer's Call Count Was Overwritten (2026-08-10)
+
+Fixed 2026-08-10. `create_report` auto-populates from the linked shift, and for
+the call count it did so unconditionally:
+
+```python
+calls_responded = actual_calls          # whatever the officer typed, gone
+data_sources["calls_responded"] = "shift_calls"
+```
+
+The hours beside it were guarded (`if actual_hours:`); the calls were not. The
+report form has an editable call-count field, badged `(auto)` and pre-filled
+from the same records, and the guide tells officers they may correct it before
+submitting. They could type into it, and the value never survived the request —
+answered 201, stored the derived number.
+
+It matters when the two disagree, which is exactly when someone edits: a run
+logged against the wrong crew, or a member who rode in on one call and not
+another. The fix honours a supplied value and falls back to the derived one
+when the field is omitted (`None`, not `0` — a caller may legitimately mean
+zero).
+
+The batch path is deliberately unchanged. Its form collects one call count for
+the _shift_, not per crew member, so handing that figure to each report would
+credit every rider with every run; it now passes `None` explicitly and keeps
+deriving per trainee, which is what it has always stored.
+
+## Shift Reports — Auto-Progressed Requirements Are Not Shown (2026-08-10)
+
+Filing a report credits hours, shifts and calls toward matching pipeline
+requirements, and the report records which ones in `requirements_progressed`.
+Nothing displays it. The column is not in `ShiftCompletionReportResponse`, so
+it never reaches the browser, and no view — card, expanded body, review modal —
+has a place for it.
+
+The training guide claimed the reports list carried "a status indicator showing
+which requirements were auto-progressed"; corrected 2026-08-10 to say where the
+credit can actually be seen, which is the member's enrolment progress.
+
+## Shift Reports — Flagged Reports Are Unreachable With Review Off (2026-08-10)
+
+The Review Queue and Flagged buttons render only while the organization has
+`report_review_required` on. The review endpoint does not consult that flag, so
+a report can be flagged and then become invisible the moment an administrator
+switches review off — it is not in the queue, not in Flagged, and Filed by Me
+shows it with a badge but no way to act on it.
+
+No data is lost and turning review back on restores the views, so this is
+recorded rather than fixed: the alternative is showing a Flagged view to
+departments that never flag anything. Worth revisiting as "show the Flagged
+view whenever a flagged report exists".
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked
