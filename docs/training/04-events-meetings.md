@@ -1129,11 +1129,13 @@ Recurring events can now use a **rolling 12-month window** that automatically ex
 To enable rolling recurrence:
 
 1. Create or edit a recurring event
-2. Select "Rolling (12 months)" as the recurrence end option
-3. The system generates occurrences up to 12 months from today and auto-refreshes the window
+2. Under **Duration**, tick **Rolling 12-month cycle**. It is a checkbox rather
+   than an option in a list, and ticking it replaces the series end-date field —
+   the two are alternatives, not settings you combine
+3. The note beneath confirms what will happen: "New occurrences are created
+   automatically to maintain a 12-month horizon"
 
-> **Screenshot needed:**
-> _[Screenshot of the recurring event form showing the "Rolling (12 months)" option selected in the recurrence end date area, with a note explaining that the system will auto-generate future occurrences]_
+![The recurrence controls with the rolling 12-month cycle ticked](./images/04-38-rolling-recurrence.png)
 
 > **Edge case:** Rolling recurrence with a monthly-by-weekday pattern (e.g., "2nd Tuesday") generates all occurrences correctly, including months where the weekday pattern falls on the last week.
 
@@ -1184,14 +1186,20 @@ Events can now be linked to administrative hour tracking categories, automatical
 
 **Setting up the integration:**
 
-1. Navigate to **Events Settings > Hour Tracking**
-2. Map event types to admin hour categories (e.g., "Business Meeting" → "Administrative Hours")
-3. Set compliance requirements (e.g., "4 hours per quarter")
+1. Navigate to **Events Admin > Settings > Hour Tracking**
+2. Pick an event source and an admin hours category in the **Add Mapping** row,
+   set the percentage of the attendance to credit, and click **Add**
+3. Each event source becomes a card listing its categories, with a badge showing
+   how much of it is allocated. **A source can be split across categories** —
+   the percentages per source add up to at most 100, and anything unallocated
+   is simply not tracked
+
+**Compliance thresholds are not set here.** This screen decides where the hours
+land; how many are required lives with the admin hours categories themselves.
 
 When members attend events with configured mappings, their attendance hours are automatically credited.
 
-> **Screenshot needed:**
-> _[Screenshot of the Events Settings > Hour Tracking section showing a mapping table with event types on the left, admin hour categories on the right, and a "Requirements" section below with compliance thresholds]_
+![Event hour-tracking settings mapping event types to admin hour categories](./images/04-37-hour-tracking-mapping.png)
 
 > **Edge case:** If no mapping is configured for an event type, attendance is not credited to admin hours. The mapping must be explicitly set up in Events Settings.
 

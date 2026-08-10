@@ -529,6 +529,40 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "04-37-hour-tracking-mapping",
+    doc: "04-events-meetings.md",
+    line: 1196,
+    anchor:
+      "Screenshot of Events Settings > Hour Tracking showing each event source",
+    alt: "Event hour-tracking settings mapping event types to admin hour categories",
+    route: "/events/admin?tab=settings",
+    prepare: clickByName(/^Hour Tracking/),
+    fullPage: true,
+  },
+  {
+    id: "04-38-rolling-recurrence",
+    doc: "04-events-meetings.md",
+    line: 1136,
+    anchor:
+      'Screenshot of the recurrence block with "Rolling 12-month cycle" ticked',
+    alt: "The recurrence controls with the rolling 12-month cycle ticked",
+    route: "/events/admin?tab=create",
+    prepare: async (page) => {
+      await page
+        .getByLabel(/Make this a recurring event/i)
+        .check({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+      await page
+        .getByLabel(/Rolling 12-month cycle/i)
+        .check({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    // Clipped to the recurrence block. The whole form is already pictured
+    // under "Recurring Events"; what this section adds is the rolling option
+    // and the note under it.
+    selector: "div.border-l-2:has(#recurrence-pattern)",
+  },
+  {
     id: "05-59-impact-planner-results",
     doc: "05-inventory.md",
     line: 1652,
