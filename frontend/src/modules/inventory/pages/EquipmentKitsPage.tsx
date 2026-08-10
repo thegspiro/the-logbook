@@ -372,7 +372,11 @@ const EquipmentKitsPage: React.FC = () => {
               )}
               <div className="text-theme-text-muted border-theme-surface-border mt-auto flex items-center gap-2 border-t pt-2 text-xs">
                 <Package className="h-3.5 w-3.5" />
-                {kit.line_items?.length ?? 0} item{(kit.line_items?.length ?? 0) !== 1 ? 's' : ''}
+                {/* The list response carries item_count, not the line items
+                    themselves — reading length off the absent array showed
+                    every kit as holding nothing. */}
+                {kit.line_items?.length ?? kit.item_count ?? 0} item
+                {(kit.line_items?.length ?? kit.item_count ?? 0) !== 1 ? 's' : ''}
               </div>
             </div>
           ))}

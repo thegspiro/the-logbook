@@ -2581,11 +2581,9 @@ export interface AnnualComplianceReport {
     nfpa_1401_compliant: boolean;
     field_details: RecordCompletenessField[];
   };
-  iso_readiness: {
-    overall_pct: number;
-    class_estimate: number;
-    categories: ISOCategory[];
-  };
+  // No `iso_readiness` block: the report carries only the headline
+  // `executive_summary.iso_readiness_pct`. The full category breakdown lives
+  // on GET /compliance/iso-readiness, which the ISO Readiness tab calls.
 }
 
 // =============================================================================

@@ -62,8 +62,7 @@ Each shift is displayed as a colored block on the calendar showing:
 
 Click on any shift to open the **Shift Detail Panel** with full information, attendance records, and actions.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the month calendar view showing several shifts across different days, with color coding for different shift types (e.g., Day shift in blue, Night shift in purple). Include the week/month toggle buttons]_
+![Month calendar of shifts with the week and month view toggle](./images/03-44-month-calendar.png)
 
 ![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
 
@@ -196,8 +195,9 @@ Officers will review the request and approve or deny it.
 - **Denied** - Request denied (reason provided)
 - **Cancelled** - Withdrawn by the member
 
-> **Screenshot placeholder:**
-> _[Screenshot of the time-off request form showing start date, end date, reason field, and submit button. Below, show a list of past requests with their statuses]_
+![Time-off request modal with its date range and reason](./images/03-43-time-off-request-form.png)
+
+Open it from **Request Time Off** on the My Shifts tab. Submitted requests, and their statuses, are listed under **Requests > Time Off** rather than below the form.
 
 ---
 
@@ -547,7 +547,7 @@ Organization Settings and Event Settings: a **section list down the left** on a
 computer, a **scrollable tab strip across the top** on a phone, and one heading
 rather than the two stacked titles it used to show.
 
-Seven sections:
+Seven sections, of which six are always present:
 
 | Section           | What it holds                                             |
 | ----------------- | --------------------------------------------------------- |
@@ -559,14 +559,15 @@ Seven sections:
 | **Equipment**     | Check requirements and templates                          |
 | **Shift Reports** | End-of-shift reporting options                            |
 
-> **[SCREENSHOT NEEDED]:** _The rebuilt Scheduling Settings screen on a desktop
-> browser, showing the left-hand section list with all seven sections and their
-> descriptions, "General" selected and marked as current, and the General
-> section's content in the card to its right under the single page heading._
+**Platoons only appears once platoon scheduling is switched on**, from the
+toggle at the top of **General**. A department that does not run A/B/C
+rotations sees six sections and no empty platoon screen — and turning the
+feature off while you are on that section returns you to General rather than
+leaving you on a page that has gone.
 
-> **[SCREENSHOT NEEDED]:** _The same screen at phone width, showing the
-> horizontally scrollable section tab strip across the top in place of the
-> sidebar._
+![Scheduling settings on desktop, with the section list beside the selected section's card](./images/03-47-settings-desktop.png)
+
+![Scheduling settings at phone width, the section list replaced by a scrollable tab strip](./images/03-48-settings-phone.png)
 
 ### Two things that changed with it
 
@@ -658,7 +659,7 @@ Shifts generated from platoon patterns display a **platoon badge** (e.g., "A Pla
 
 ### Shift Position Eligibility
 
-Operational ranks now define which shift positions each rank is eligible for. When members sign up for open shifts, they only see positions their rank qualifies for.
+Operational ranks define which shift positions each rank is eligible for. When members sign up for open shifts, they only see positions their rank qualifies for.
 
 **Setting up eligible positions:**
 
@@ -700,8 +701,7 @@ Admin functionality has been extracted into dedicated pages for better navigatio
 
 Each page has back navigation to the main scheduling hub. Access requires `scheduling.manage` permission.
 
-> **Screenshot needed:**
-> _[Screenshot of one of the scheduling admin sub-pages (e.g., Templates) showing the page header with back navigation arrow, and the content area below]_
+![A scheduling admin sub-page with its back arrow and page header](./images/03-51-admin-subpage-header.png)
 
 ### Equipment Check System
 
@@ -729,12 +729,11 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 
 6. Items can track serial numbers, lot numbers, expiration dates (with warning windows), and required quantities
 7. Use **drag-and-drop** to reorder compartments and items
-8. Use **vehicle check presets** to import common inspection categories for engine, ladder, or ambulance types
+8. On a **vehicle** or **combined** template, **Load Vehicle Preset** offers nine pre-built checks — Engine/Pumper, Ladder/Tower, Ambulance/Rescue, Tanker/Water Tender, Rescue/Heavy Rescue, Brush/Wildland, Boat/Watercraft, Utility/Command and Generic Vehicle — each showing how many sections and items it will add before you pick it
 
 ![Equipment check template builder with the template header and sections](./images/03-22-equipment-check-builder.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the vehicle check preset picker showing preset categories (Engine, Ladder, Ambulance) with preview of included compartments and items]_
+![The vehicle preset picker listing each pre-built check with its section and item counts](./images/03-50-vehicle-preset-picker.png)
 
 #### For Members: Submitting Equipment Checks
 
@@ -804,10 +803,15 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
 1. Open the **Shift Detail Panel** for a past, un-finalized shift
 2. Click **"Finalize Shift"** — a pre-finalization checklist modal appears
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the pre-finalization checklist modal showing the equipment check validation status (green checkmark or red X), attendance count, call count, and the Finalize button at the bottom._
+![The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button](./images/03-45-finalize-checklist.png)
 
 3. The checklist validates:
-   - **End-of-shift equipment checks** must be completed (blocks finalization if incomplete)
+   - **End-of-shift equipment checks** — outstanding checks are called out,
+     but they only _block_ finalization when the department has turned on
+     **require end-of-shift checks before finalizing** in Scheduling
+     Settings → Close-out rules. It is off by default, so the modal warns
+     and lets the officer proceed; with it on, finalizing needs a
+     logged override reason
    - Attendance summary and call count shown for reference
 4. Click **Finalize** to confirm
 
@@ -821,9 +825,12 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
 | **Draft reports created**  | ShiftCompletionReport drafts auto-created for all attendees with active training program enrollments                         |
 | **Notification sent**      | Officer receives notification with count of drafts created                                                                   |
 
-After finalization, a green badge shows "Shift finalized on [date]".
+After finalization, a green badge shows "Shift finalized on [date]" with a
+**Reopen** link beside it, and the pass-down note entered at close-out is
+shown underneath. The Finalize control is gone, but the crew roster keeps its
+remove buttons — reopening is what unlocks the shift, not the badge alone.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ShiftDetailPanel after finalization showing the green "Finalized" badge with timestamp and the locked state (no edit buttons)._
+![A finalized shift showing the green finalized badge with its date, the Reopen link and the pass-down note](./images/03-46-finalized-badge.png)
 
 #### Shift Finalization Edge Cases
 
@@ -961,14 +968,23 @@ When filing a report linked to a specific shift, the trainee dropdown automatica
 
 ### Structured Position Slots & Decline Handling
 
-Shifts now define required and optional position slots. When a member declines or is removed from a shift:
+A shift's riding positions are shown on the shift panel as a **Crew Board**,
+headed with the apparatus and a count of how many slots are still open. Each
+position is a row: a filled one names the member and their position with an
+**Assigned** badge and a remove control; an open one reads **Open position**
+and carries its own **Assign** and **Sign Up** buttons. When a member declines
+or is removed:
 
 - The system sends a decline notification
-- The open slot becomes visible on the shift card for re-assignment
-- Other eligible members can sign up for the vacated slot
+- Their position returns to the board as an open slot
+- Other eligible members can sign up for it, or an officer can assign somebody
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel showing position slots — some filled (with member name and green badge), one marked "Open" with a yellow badge, and an "Assign" button next to the open slot]_
+> **The board only appears once the shift has positions.** They come from the
+> apparatus's riding assignments plus any per-shift customizations — the panel
+> says so under the heading. A shift with none configured shows a plain Crew
+> Roster of whoever is assigned, with no open slots to fill.
+
+![A shift's crew board — one filled position and three open, each with Assign and Sign Up](./images/03-54-crew-board-open-slots.png)
 
 ### Additional Fixes (2026-03-19)
 
@@ -1009,10 +1025,22 @@ The Calls/Incidents placeholder section has been removed from the shift detail p
 
 Shift templates now pass their position definitions and minimum staffing requirements through to created shifts. Previously, only the template's time and apparatus information were inherited — position assignments had to be set up manually on each shift.
 
-When a shift is created from a template (either directly or via pattern-based generation), the template's `positions` and `min_staffing` values are copied to the new shift. In the `ShiftDetailPanel`, if the linked apparatus has no positions defined, the system falls back to the shift-level positions from the template.
+When a shift is created from a template (either directly or via pattern-based
+generation), the template's `positions` and `min_staffing` values are copied to
+the new shift, and the crew board is built from them.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel crew roster showing position assignments inherited from a template, with position labels (Officer, Driver, Firefighter) and the min staffing indicator]_
+> **In practice the shift's own positions are always what you see.** The panel
+> is written to prefer the linked apparatus's riding positions and fall back to
+> the shift's, but the full Apparatus module does not model riding positions at
+> all — it reports them as "not specified" by design. So on a department using
+> the full module, the fallback is the only path, and a shift created without
+> positions has no crew board at all. The board's subheading names both sources
+> ("Positions from E-2 + shift customizations") regardless.
+
+The board is pictured under
+[Structured Position Slots & Decline Handling](#structured-position-slots--decline-handling),
+with the "N assigned / N positions" tile beside it standing in for the minimum
+staffing indicator.
 
 ### Timezone Display Fix
 
@@ -1123,11 +1151,13 @@ Reports that reviewers flag for follow-up are now accessible from a dedicated **
 
 Report cards now display **trainee and officer names** alongside dates:
 
-- Card header: "**Trainee Name** — April 5, 2026"
-- Card footer: "Filed by **Officer Name** on April 6, 2026"
+- Card header: "**Trainee Name** — Sun, Aug 9, 2026"
+- The metadata row beneath it: hours, calls, the rating badge, the **officer who
+  filed it**, and — once reviewed — "Reviewed by **Name**". All of it is on the
+  collapsed card, so a list of reports is readable without opening any of them
 - Review modal: Shows shift date alongside trainee and officer names in the header
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of a shift report card showing "FF Carter — April 5, 2026" in the header, performance rating stars, hours/calls metadata, and "Filed by Lt. Davis" in the footer._
+![A shift report card naming the trainee in its header and the filing officer in its footer](./images/03-49-report-card-names.png)
 
 ### Full Report Content in Review Modal
 
@@ -1188,7 +1218,7 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 | "Too many attempts" on shift signup                                                       | Rate limiting may be active. Wait a few seconds and try again.                                                                                                                                                         |
 | Cannot edit shift times after creation                                                    | Officers with `scheduling.manage` can now edit shift start/end times, apparatus, color, notes, and custom creation times from the shift detail panel.                                                                  |
 | Position change requires opening a modal                                                  | Use the new inline position change UI directly on the shift card to change a member's assigned position without navigating away.                                                                                       |
-| Shift signup shows no positions                                                           | Your rank may not have eligible positions configured. Ask your administrator to check Settings > Operational Ranks.                                                                                                    |
+| Shift signup shows no positions                                                           | Your rank may not have eligible positions configured, or your membership type may be excluded from self-signup. Check both Settings > Ranks and Scheduling > Settings > Eligibility.                                   |
 | Dashboard still shows cancelled shifts                                                    | Fixed 2026-03-19 — declined and cancelled assignments are now filtered from "My Upcoming Shifts". Pull latest.                                                                                                         |
 | Sign Up button not appearing for open shifts                                              | Your rank may not be eligible for the remaining open positions. Check with your administrator.                                                                                                                         |
 | Can see assignment controls but get 403 error                                             | The shift detail panel now uses separate permissions: `scheduling.manage` for shift editing and `scheduling.assign` for member assignments. Ask your administrator to grant the appropriate permission.                |
@@ -1271,8 +1301,11 @@ When you have 2 or more pending shift assignments, checkboxes appear on each pen
 
 The UI updates immediately (optimistic update). If the API call fails for any shift, that shift reverts to its previous state and a toast notification shows the error.
 
-> **Screenshot needed:**
-> _[Screenshot of the My Shifts tab showing 3 pending shift cards with checkboxes selected, the "Select All" toggle enabled, and the "Confirm All" / "Decline All" bulk action buttons visible in the action bar above]_
+Only assignments still awaiting an answer carry a checkbox. Once confirmed, a
+card shows a green **Confirmed** badge and drops out of the selection entirely,
+so the count in the bar always matches what is still outstanding.
+
+![The My Shifts bulk bar — every pending assignment selected, with Confirm All and Decline All](./images/03-56-bulk-confirm-shifts.png)
 
 > **Edge case:** If you select 5 shifts and "Confirm All" but one fails (e.g., shift was cancelled by an officer), that one reverts to pending while the other 4 remain confirmed.
 
@@ -1295,8 +1328,10 @@ Shift cards now show staffing status at a glance:
 | Green tint on shift card      | Overrides template color when fully staffed |
 | Amber tint on shift card      | Overrides template color when understaffed  |
 
-> **Screenshot needed:**
-> _[Screenshot of the weekly calendar view showing three shift cards: one with green tint and CheckCircle2 (fully staffed, 4/4), one with amber tint (understaffed, 2/4), and one with template color (no min staffing configured)]_
+A shift with no minimum staffing configured keeps its template colour and
+shows no ratio at all — there is nothing to measure it against.
+
+![The weekly schedule, its cards tinted green when fully staffed and amber when short](./images/03-55-staffing-status-cards.png)
 
 ### Position-First Assignment Flow
 
@@ -1308,22 +1343,40 @@ The crew board in the shift detail panel now uses a position-first workflow:
 
 You can also click the **"Assign"** button directly on an open slot in the crew board to pre-fill the position.
 
-**Bulk Assignment:** When 2+ positions are unfilled, a **"Fill All Open"** button appears. This shows a compact form with one member dropdown per open position, letting you fill all positions at once.
+**Bulk Assignment:** When more than one position is unfilled, a **Fill All
+Open** button appears at the foot of the board, next to **Assign Member**, with
+the open count on it. It shows a compact form with one member dropdown per open
+position, letting you fill them all at once.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel crew board showing two filled positions (with member names and green badges), one open slot with an "Assign" button, and the "Fill All Open" button at the bottom]_
+> **Corrected 2026-08-10.** The screenshot this section used to ask for —
+> two filled positions, _one_ open slot, and the Fill All Open button — cannot
+> exist: the button only renders while two or more slots are open. The board is
+> pictured under
+> [Structured Position Slots & Decline Handling](#structured-position-slots--decline-handling)
+> instead.
 
 > **Edge case:** Members on leave, with approved time-off covering the shift date, or already assigned to the shift are automatically excluded from the member dropdown.
 
 ### Required/Optional Position Toggle
 
-In the shift template editor, each crew position now has a **required/optional toggle**:
+Open **Scheduling > Templates** and click **New Template** (or edit an
+existing one). Under **Crew Positions**, each row is a position dropdown with
+a badge beside it. The badge is the control: **click it to flip the position
+between required and optional.**
 
 - **Required** (violet badge) — the position must be filled for minimum staffing
-- **Optional** (muted) — position is available but not counted toward minimum staffing
+- **Optional** (muted badge) — position is available but not counted toward minimum staffing
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftTemplatesPage position editor showing 4 positions: "Officer" and "Driver" with violet required badges, "Firefighter" with a muted optional badge, and the toggle switch next to each]_
+The dropdown offers Officer, Driver/Operator, Firefighter, EMT, Probationary,
+Volunteer and Other, plus any custom positions your department has configured.
+**Add Position** adds a row, and the − removes one.
+
+> **Corrected 2026-08-10.** There is no toggle switch — the badge itself is
+> the button, and its label is its state. The in-app helper text said "Toggle
+> the switch to mark a position as optional" and has been corrected too. Note
+> also that the driver position is labelled **Driver/Operator**.
+
+![Template crew positions, each with a button reading Required or Optional](./images/03-53-template-position-required.png)
 
 > **Edge case:** Existing templates with bare string positions (created before this update) default to `required=true` automatically.
 
@@ -1487,17 +1540,32 @@ This replaces the need for external cron jobs. Tasks resume automatically on con
 
 EVOC (Emergency Vehicle Operations Course) certification levels are now integrated across training, apparatus, and scheduling:
 
-1. **Member profiles** track EVOC level (Basic, Intermediate, Advanced)
-2. **Apparatus records** specify required EVOC level for operators
-3. **Scheduling** validates EVOC certification when assigning members to driver/operator positions
+1. **Operator records** carry a member's EVOC level, one per apparatus, on the
+   rig's **Operators** tab — not on the member's profile. The levels
+   themselves are configured per organization rather than fixed. See
+   [Membership → EVOC Certification](./01-membership.md#evoc-certification)
+2. **Apparatus records** specify the EVOC level required to drive that rig
+3. **Scheduling** checks the two against each other when assigning a member to
+   a driver/operator position
 
-When assigning a member to a Driver/Operator position, the system checks the apparatus's required EVOC level against the member's certification. If the member's level is insufficient, a warning is displayed.
+When assigning a member to a Driver/Operator position, the system takes the
+highest level from the member's **current** operator records — active,
+certified and not past their expiration — and compares it against the
+apparatus's requirement. A member who falls short, or has no EVOC record at
+all, produces a warning naming the required level; the assignment is not
+blocked. An apparatus with no required level never warns.
 
-> **Screenshot needed:**
-> _[Screenshot of a member's profile showing EVOC certification level (e.g., "EVOC Level: Advanced") alongside other certifications]_
+> **Corrected 2026-08-10.** This said member profiles track an EVOC level of
+> Basic, Intermediate or Advanced. No profile has such a field, and those
+> three names are the demo department's configured levels rather than the
+> system's.
 
-> **Screenshot needed:**
-> _[Screenshot of the apparatus detail page showing the "Required EVOC Level" field set to "Intermediate"]_
+**Setting the requirement.** Edit the apparatus (**Operations > Apparatus >**
+_a rig_ **> Edit**) and choose from **Required EVOC Level**. The control is on
+the edit form rather than the detail page, and it only appears once your
+organization has EVOC levels configured.
+
+![The Required EVOC Level control on an apparatus, set to the level needed to drive it](./images/03-52-apparatus-required-evoc.png)
 
 ### Edge Cases
 
@@ -1700,9 +1768,7 @@ the old one and get a new one.
 > **Note:** The feed is read-only and shows roughly the last two months through
 > the next year of your assigned (non-cancelled) shifts.
 
-> **[SCREENSHOT NEEDED]:** \_[The "Subscribe to my shifts" card on My Shifts,
->
-> > expanded to show the calendar URL, Copy button, and Reset link.]\_
+![Subscribe to my shifts card showing the calendar feed URL and its controls](./images/03-34-calendar-subscribe.png)
 
 ### The On-Duty Officer Can Run Their Own Shift
 

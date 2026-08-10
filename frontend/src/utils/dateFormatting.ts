@@ -306,6 +306,34 @@ export const formatDateCustom = (
 };
 
 /**
+ * Format a calendar date ("YYYY-MM-DD") for display, without shifting it.
+ *
+ * A shift date, a leave start date or a due date is a *calendar* date: it has
+ * no time and belongs to no timezone. Padding one out to `"2026-08-10T00:00:00"`
+ * and handing it to a timezone-aware formatter converts a date that was never
+ * an instant — parsed as local midnight, then rendered in the department's
+ * zone, "2026-08-10" comes back as "Sun, Aug 9" for anybody west of the
+ * browser's own offset. Today's shift then reads as yesterday's.
+ *
+ * Anchored at UTC midnight and formatted in UTC, so the day, month and weekday
+ * are the ones written in the string for every viewer.
+ *
+ * @param dateOnly - Calendar date "YYYY-MM-DD" (anything else returns 'N/A')
+ * @param options - Intl.DateTimeFormatOptions (timeZone is set for you)
+ * @returns Formatted string
+ */
+export const formatCalendarDate = (
+  dateOnly: string | null | undefined,
+  options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' }
+): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly ?? '');
+  if (!match) return 'N/A';
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+  if (isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleString('en-US', { ...options, timeZone: 'UTC' });
+};
+
+/**
  * Format a number for display (currency, counts, measurements).
  * Use this instead of `value.toLocaleString()` to avoid ESLint
  * conflicts with the date-method restrictions.

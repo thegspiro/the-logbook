@@ -1129,7 +1129,12 @@ async def get_item(
             detail="Item not found",
         )
 
-    return item
+    payload = InventoryItemResponse.model_validate(item)
+    if item.assigned_to_user:
+        # The detail page's Assignment card prints who holds the item; without
+        # a name it showed the raw user id.
+        payload.assigned_to_name = item.assigned_to_user.full_name
+    return payload
 
 
 @router.get("/items/{item_id}/history")
@@ -1983,7 +1988,13 @@ async def get_item_maintenance_history(
         skip=skip,
         limit=limit,
     )
-    return maintenance_records
+    responses = []
+    for record in maintenance_records:
+        payload = MaintenanceRecordResponse.model_validate(record)
+        if record.technician:
+            payload.performed_by_name = record.technician.full_name
+        responses.append(payload)
+    return responses
 
 
 @router.get("/maintenance/due", response_model=list[InventoryItemResponse])
@@ -5180,7 +5191,12 @@ async def list_equipment_kits(
     kits = await service.get_equipment_kits(
         current_user.organization_id, active_only=active_only
     )
-    return [EquipmentKitResponse.model_validate(k) for k in kits]
+    responses = []
+    for kit in kits:
+        payload = EquipmentKitResponse.model_validate(kit)
+        payload.item_count = len(kit.line_items or [])
+        responses.append(payload)
+    return responses
 
 
 @router.post(

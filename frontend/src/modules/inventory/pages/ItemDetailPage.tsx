@@ -439,7 +439,7 @@ const ItemDetailPage: React.FC = () => {
                       to={`/members/${item.assigned_to_user_id}`}
                       className="text-blue-600 hover:underline dark:text-blue-400"
                     >
-                      {item.assigned_to_user_id}
+                      {item.assigned_to_name ?? item.assigned_to_user_id}
                     </Link>
                   }
                 />
@@ -707,7 +707,9 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, ca
                 )}
               </p>
               {rec.description && <p className="text-theme-text-muted mt-0.5 text-xs">{rec.description}</p>}
-              {rec.performed_by && <p className="text-theme-text-muted text-xs">By: {rec.performed_by}</p>}
+              {rec.performed_by && (
+                <p className="text-theme-text-muted text-xs">By: {rec.performed_by_name ?? rec.performed_by}</p>
+              )}
             </div>
             <div className="text-theme-text-muted text-right text-xs whitespace-nowrap">
               <p>{rec.completed_date ? formatDate(rec.completed_date, tz) : 'Pending'}</p>

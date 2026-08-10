@@ -79,7 +79,9 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
             {operators.map((op) => (
               <div key={op.id} className="card-secondary flex items-center justify-between p-4">
                 <div className="min-w-0 flex-1">
-                  <p className="text-theme-text-primary font-medium">Operator ID: {op.userId}</p>
+                  {/* userId is the fallback, not the label: a roster row that
+                      reads "Operator ID: a8c2c854-…" names nobody. */}
+                  <p className="text-theme-text-primary font-medium">{op.userName || op.userId}</p>
                   <div className="mt-0.5 flex items-center gap-2">
                     <p className="text-theme-text-muted text-sm">
                       {op.isCertified ? 'Certified' : 'Not Certified'}

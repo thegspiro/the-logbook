@@ -57,6 +57,21 @@ from app.utils.apparatus_ref import (
 )
 
 
+def _position_label(position) -> str:
+    """Human-readable position for a notification body.
+
+    `ShiftPosition` is declared twice — once in `app.models.training` and once
+    in `app.schemas.scheduling` — so an `isinstance` check against either one
+    misses members of the other, and the enum falls through to its repr:
+    members were told they had been assigned to the
+    "ShiftPosition.FIREFIGHTER position". Reading `.value` off whatever arrives
+    is indifferent to which class it came from, and also covers the ORM
+    attribute, whose `str()` is the same repr.
+    """
+    value = getattr(position, "value", position)
+    return str(value) if value else "unspecified"
+
+
 class SchedulingService:
     """Service for scheduling management"""
 
@@ -1113,24 +1128,37 @@ class SchedulingService:
         self, shift: "Shift", officer_id: str, organization_id: UUID
     ) -> None:
         """Ensure the shift officer is assigned to the 'officer'
-        position on the apparatus.
+        position on the shift's crew board.
 
-        When a shift officer is designated and the apparatus has an 'officer'
+        When a shift officer is designated and the crew board has an 'officer'
         position, this creates or updates assignments so the officer fills that
-        seat on the crew board.
+        seat on the board.
         """
-        # Load apparatus to check if it has an "officer" position
+        # Resolve the seats the crew board actually renders, which is what
+        # `_enrich_shift_dict` puts on the wire as `apparatus_positions`: the
+        # apparatus's riding positions when it has them, the shift's own
+        # otherwise. Reading `apparatus.positions` alone left the designated
+        # officer off the board entirely on any department using the full
+        # Apparatus module — that module deliberately does not model riding
+        # positions, so the fallback is the only path there, and the panel
+        # named a Shift Officer who held no seat and appeared on no roster.
+        slots: List[Dict[str, Any]] = []
         apparatus_id = shift.apparatus_id
-        if not apparatus_id:
+        if apparatus_id:
+            apparatus_map = await self._get_apparatus_map(
+                organization_id, [apparatus_id]
+            )
+            apparatus = apparatus_map.get(apparatus_id)
+            if apparatus:
+                slots = self.normalize_positions(apparatus.positions)
+        if not slots:
+            slots = self.normalize_positions(shift.positions)
+        if not slots:
             return
 
-        apparatus_map = await self._get_apparatus_map(organization_id, [apparatus_id])
-        apparatus = apparatus_map.get(apparatus_id)
-        if not apparatus or not apparatus.positions:
-            return
-
-        # Check if the apparatus has an "officer" position
-        has_officer_position = any(p.lower() == "officer" for p in apparatus.positions)
+        has_officer_position = any(
+            str(slot.get("position") or "").lower() == "officer" for slot in slots
+        )
         if not has_officer_position:
             return
 
@@ -2772,8 +2800,9 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
+            position_label = _position_label(position)
             message = (
-                f"{user_name} {action} the {position} position "
+                f"{user_name} {action} the {position_label} position "
                 f"on the {shift_date_str} shift. "
                 f"This position is now open."
             )
@@ -2852,7 +2881,7 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
-            position_label = position or "unspecified"
+            position_label = _position_label(position)
 
             from app.services.scheduled_tasks import resolve_check_templates
 
@@ -3072,7 +3101,7 @@ class SchedulingService:
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
-            position_label = str(assignment.position or "")
+            position_label = _position_label(assignment.position)
 
             message = (
                 f"{user_name} has confirmed the "

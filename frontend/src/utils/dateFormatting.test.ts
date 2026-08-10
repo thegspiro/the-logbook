@@ -5,6 +5,7 @@ import {
   formatShortDateTime,
   formatTime,
   formatForDateTimeInput,
+  formatCalendarDate,
   localToUTC,
   getTodayLocalDate,
   toLocalDateString,
@@ -414,5 +415,33 @@ describe('isFutureDate', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-06-15T12:00:00.000Z'));
     expect(isFutureDate(new Date('2030-01-01'))).toBe(true);
+  });
+});
+
+describe('formatCalendarDate', () => {
+  // A shift_date, a leave start_date or a due date is a calendar date: it has
+  // no time and belongs to no timezone. Padding one to midnight and running it
+  // through a viewer timezone moved it a day — "My Upcoming Shifts" showed
+  // today's shift as yesterday's for every zone west of the browser's.
+  it('keeps the day written in the string, west of UTC', () => {
+    expect(formatCalendarDate('2026-08-10', { weekday: 'short', month: 'short', day: 'numeric' })).toBe('Mon, Aug 10');
+  });
+
+  it('keeps the day written in the string, east of UTC', () => {
+    expect(formatCalendarDate('2026-01-01', { year: 'numeric', month: '2-digit', day: '2-digit' })).toBe('01/01/2026');
+  });
+
+  it('ignores a time component rather than letting it shift the day', () => {
+    expect(formatCalendarDate('2026-08-10T23:30:00Z', { month: 'short', day: 'numeric' })).toBe('Aug 10');
+  });
+
+  it('returns N/A for a missing or unparseable value', () => {
+    expect(formatCalendarDate(null)).toBe('N/A');
+    expect(formatCalendarDate('')).toBe('N/A');
+    expect(formatCalendarDate('not-a-date')).toBe('N/A');
+  });
+
+  it('defaults to a readable medium date', () => {
+    expect(formatCalendarDate('2026-08-10')).toBe('Aug 10, 2026');
   });
 });

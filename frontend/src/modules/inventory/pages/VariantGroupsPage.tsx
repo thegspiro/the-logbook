@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { ItemVariantGroup, ItemVariantGroupCreate, InventoryCategory, InventoryItem } from '../types';
+import { STANDARD_SIZES } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
@@ -44,6 +45,25 @@ const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
 const labelClass = 'form-label';
 
+/**
+ * Order sizes the way a quartermaster reads them.
+ *
+ * The matrix rows come out of a Set built by walking the item list, so without
+ * this they follow whatever order the API returned — S, L, XL, M — which makes
+ * the grid unreadable. Letter sizes sort by their position in the picker;
+ * numeric sizes (boot 10.5, waist 34) sort numerically after them.
+ */
+const compareSizes = (a: string, b: string): number => {
+  const order = (size: string): number => STANDARD_SIZES.findIndex((s) => s.value === size.toLowerCase());
+  const [ia, ib] = [order(a), order(b)];
+  if (ia !== -1 && ib !== -1) return ia - ib;
+  if (ia !== -1) return -1;
+  if (ib !== -1) return 1;
+  const [na, nb] = [Number.parseFloat(a), Number.parseFloat(b)];
+  if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+  return a.localeCompare(b);
+};
+
 /** Stock matrix — shows on-hand quantities by size × color (or style) */
 const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
   const matrix = useMemo(() => {
@@ -59,8 +79,8 @@ const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
 
     if (sizes.size === 0) return null;
 
-    const sizeList = Array.from(sizes);
-    const colList = Array.from(columns);
+    const sizeList = Array.from(sizes).sort(compareSizes);
+    const colList = Array.from(columns).sort((a, b) => a.localeCompare(b));
     if (colList.length === 0) colList.push('');
 
     const grid: Record<string, Record<string, { onHand: number; total: number }>> = {};

@@ -775,6 +775,8 @@ export interface InventoryItem {
   next_inspection_due?: string;
   inspection_interval_days?: number;
   assigned_to_user_id?: string;
+  /** Only the item detail endpoint sends this; list endpoints leave it unset. */
+  assigned_to_name?: string;
   assigned_date?: string;
   min_rank_order?: number | null;
   restricted_to_positions?: string[] | null;
@@ -805,6 +807,7 @@ export interface MaintenanceRecord {
   completed_date?: string;
   next_due_date?: string;
   performed_by?: string;
+  performed_by_name?: string;
   vendor_name?: string;
   cost?: number;
   condition_before?: string;
@@ -991,7 +994,9 @@ export interface EquipmentKit {
   created_at: string;
   updated_at: string;
   created_by?: string;
+  /** Only on the detail response; the list omits them and sends item_count. */
   line_items?: EquipmentKitItem[];
+  item_count?: number;
 }
 
 export interface EquipmentKitItem {
