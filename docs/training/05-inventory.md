@@ -226,30 +226,43 @@ When creating a new uniform or PPE item that comes in multiple sizes and styles,
 
 1. Navigate to **Inventory Admin > Items** and click **Add Item**
 2. Fill in the base item details (name, category, description)
-3. Toggle **Generate Sizes & Styles** to enable variant generation
+3. Switch on **Generate Sizes & Styles**. The switch appears only on a _new_
+   item whose category is a uniform, PPE, tool or equipment type — it is
+   hidden while editing an existing item, and disappears if you change the
+   category to one that does not support variants
+4. Pick **Sizes** from the chips. Eleven are offered: XXS, XS, S, M, L, XL,
+   XXL, 3XL, 4XL, One Size and Custom. At least one is required
+5. Optionally pick **Styles**. Ten are offered: Short Sleeve, Long Sleeve,
+   Men's, Women's, Unisex, V-Neck, Crew Neck, Polo, Button Down and Quarter Zip
+6. Optionally enter **Colors** as a comma-separated list (e.g. "Navy, White")
+7. Read the preview panel, which shows the total and how it was reached —
+   "16 items will be created / 4 sizes × 2 styles × 2 colors". The submit
+   button counts along with it and reads **Create 16 Items**
+8. Set **Starting Quantity** under _Quantity Per Variant_ — it applies to each
+   generated item, not to the batch — then submit. The system creates every
+   combination as a pool item and groups them under a new `ItemVariantGroup`
 
-> **Screenshot needed:**
-> _[Screenshot of the ItemFormModal showing the "Generate Sizes & Styles" toggle enabled, with chip-based multi-select fields for Sizes (showing XS, S, M, L, XL, 2XL chips) and Styles (showing Regular, Long, Short chips), a colors text input with "Black, Navy" entered, and a live preview badge showing "12 items will be created"]_
+> **Corrected 2026-08-10.** The size chips were listed as "XS, S, M, L, XL,
+> 2XL" (the label is **XXL**, and five more sizes exist), and the styles as
+> "Regular, Long, Short" — three cuts that have never been in the list. The
+> real styles are garment cuts, which is why the example below is a uniform
+> shirt rather than a turnout coat.
 
-4. Select **sizes** from the chip-based multi-select (e.g., S, M, L, XL, 2XL)
-5. Select **styles** from the chip-based multi-select (e.g., Regular, Long, Short)
-6. Enter **colors** as a comma-separated list (e.g., "Black, Navy, Red")
-7. Review the live preview showing the total count: `sizes × colors × styles`
-8. Click **Create** — the system generates all combinations as individual pool items grouped under a new `ItemVariantGroup`
+![The Generate Sizes & Styles block with sizes and styles picked and the resulting item count](./images/05-62-generate-variants.png)
 
 ### Example
 
-For a turnout coat with:
+For a uniform polo shirt with:
 
 - 4 sizes: S, M, L, XL
-- 2 styles: Regular, Long
-- 2 colors: Black, Tan
+- 2 styles: Short Sleeve, Long Sleeve
+- 2 colors: Navy, White
 
 The system creates `4 × 2 × 2 = 16` pool items:
 
-- Turnout Coat - S / Regular / Black
-- Turnout Coat - S / Regular / Tan
-- Turnout Coat - S / Long / Black
+- Uniform Polo Shirt - S / Short Sleeve / Navy
+- Uniform Polo Shirt - S / Short Sleeve / White
+- Uniform Polo Shirt - S / Long Sleeve / Navy
 - ... (16 total)
 
 All 16 items are linked under a single variant group and share the base description and category.
@@ -871,14 +884,20 @@ Navigate to **Inventory Admin > Variant Groups** (`/inventory/admin/variant-grou
 
 ### Creating a Variant Group
 
-1. Click **Create Group**.
-2. Enter the group name, description, and category.
+1. Click **Add Group**. The **Add Variant Group** dialog opens.
+2. Enter the group **Name** (the only required field), an optional
+   **Description**, and pick a **Category**.
 3. Set pricing: **Base Price** and **Replacement Cost**.
-4. Select the **Unit of Measure** (each, pair, set, etc.).
-5. Click **Save**.
+4. Type the **Unit of Measure** — it is a free-text field, not a list, so
+   "each", "pair", "set" or anything else your department uses is accepted.
+5. Click **Create Group**. (Opening an existing group shows the same dialog
+   with **Update Group** instead.)
 
-> **Screenshot needed:**
-> _[Screenshot of the Variant Group create/edit modal showing a group named "Structural Coat" with base price $895.00, replacement cost $1,200.00, category "PPE", and unit of measure "each"]_
+> **Corrected 2026-08-10.** The entry button is **Add Group**, not "Create
+> Group" — that is the submit button inside the dialog — the unit of measure
+> is typed rather than selected, and there is no "Save".
+
+![The variant group form with its name, category, pricing and unit-of-measure fields](./images/05-63-variant-group-modal.png)
 
 ### Managing Variant Groups
 

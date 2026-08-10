@@ -637,6 +637,115 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "05-62-generate-variants",
+    doc: "05-inventory.md",
+    line: 251,
+    anchor:
+      "Screenshot of the Add Item dialog with Generate Sizes & Styles switched on",
+    alt: "The Generate Sizes & Styles block with sizes and styles picked and the resulting item count",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Add Item/i })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+      // The toggle only renders for a category whose item type supports
+      // variants — uniform, PPE, tool or equipment — so the category has to
+      // be chosen before it appears.
+      const category = page
+        .locator("select")
+        .filter({ hasText: /categor/i })
+        .first();
+      const options = await category.locator("option").evaluateAll((els) =>
+        els
+          .filter((e) => /uniform|ppe|gear|clothing/i.test(e.textContent || ""))
+          .map((e) => e.getAttribute("value"))
+          .filter(Boolean),
+      );
+      if (options[0]) await category.selectOption(options[0]);
+      await page.waitForTimeout(500);
+      // The checkbox is sr-only inside a label that wraps only the toggle
+      // track; the caption beside it is a sibling span, so clicking the words
+      // does nothing at all.
+      await page
+        .locator("fieldset input[type='checkbox']")
+        .first()
+        .check({ force: true, timeout: 10_000 });
+      await page.waitForTimeout(700);
+      for (const size of ["S", "M", "L", "XL"]) {
+        await page
+          .getByRole("button", { name: size, exact: true })
+          .first()
+          .click({ timeout: 5_000 })
+          .catch(() => {});
+      }
+      for (const style of ["Short Sleeve", "Long Sleeve"]) {
+        await page
+          .getByRole("button", { name: style, exact: true })
+          .first()
+          .click({ timeout: 5_000 })
+          .catch(() => {});
+      }
+      await page
+        .getByPlaceholder("e.g. Navy, White, Red (comma-separated, optional)")
+        .fill("Navy, White", { timeout: 10_000 });
+      // A name, so the form is not pictured with its one required field
+      // blank. Scoped to the dialog — the page's own search box is the first
+      // input on the document and swallowed the text.
+      await page
+        .locator("div.fixed.inset-0 form input:not([type])")
+        .first()
+        .fill("Uniform Polo Shirt", { timeout: 10_000 });
+      await page.waitForTimeout(700);
+    },
+    // The toggle and the chips are two sibling fieldsets, so a clip to
+    // either shows half the story; the modal panel frames both.
+    selector: "div.fixed.inset-0 > div",
+    viewport: { width: 1440, height: 1400 },
+  },
+  {
+    id: "05-63-variant-group-modal",
+    doc: "05-inventory.md",
+    line: 901,
+    anchor:
+      "Screenshot of the Add Variant Group dialog filled in for a structural coat",
+    alt: "The variant group form with its name, category, pricing and unit-of-measure fields",
+    route: "/inventory/admin/variant-groups",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Add Group/i })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+      // Filled in, so the shot shows what a group is rather than an empty
+      // form: a turnout coat carried in sizes S–4XL.
+      const dialog = page.locator("div.fixed.inset-0");
+      await dialog
+        .getByPlaceholder("e.g. Class A Dress Uniform")
+        .fill("Structural Coat");
+      await dialog
+        .getByPlaceholder("Optional description")
+        .fill(
+          "NFPA 1971 structural firefighting coat, carried in sizes S through 4XL.",
+        );
+      const category = dialog.locator("select").first();
+      const categories = await category.locator("option").evaluateAll((els) =>
+        els
+          .filter((e) => /ppe|gear|protect/i.test(e.textContent || ""))
+          .map((e) => e.getAttribute("value"))
+          .filter(Boolean),
+      );
+      if (categories[0]) await category.selectOption(categories[0]);
+      const money = dialog.locator('input[placeholder="0.00"]');
+      await money.nth(0).fill("895.00");
+      await money.nth(1).fill("1200.00");
+      await dialog.getByPlaceholder("e.g. each, pair, set").fill("each");
+      await page.waitForTimeout(600);
+    },
+    selector: "div.fixed.inset-0 > div",
+  },
+  {
     id: "02-80-session-course-autopopulate",
     doc: "02-training.md",
     line: 1728,
