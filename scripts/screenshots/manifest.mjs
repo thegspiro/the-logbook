@@ -1213,6 +1213,35 @@ export const SHOTS = [
     },
   },
   {
+    id: "10-12-mobile-bottom-nav",
+    doc: "10-mobile-pwa.md",
+    line: 127,
+    anchor:
+      "Screenshot of the app on a phone in standalone mode showing the bottom tab bar",
+    alt: "Bottom navigation bar as it appears on a phone",
+    route: "/dashboard",
+    viewport: "mobile",
+    // Clipped to the bar itself: the placeholder is about the tab strip, and a
+    // whole-phone shot renders it as a sliver at the bottom of a long page.
+    selector: 'nav[aria-label="Primary"].fixed',
+    allowEmptyState: true,
+  },
+  {
+    id: "10-13-mobile-top-bar",
+    doc: "10-mobile-pwa.md",
+    line: 538,
+    anchor:
+      "Screenshot of the mobile top navigation bar showing the hamburger menu, page title",
+    alt: "Mobile top bar with the menu button, page title and notification badge",
+    route: "/dashboard",
+    viewport: "mobile",
+    selector: "header",
+    allowEmptyState: true,
+    holdBack:
+      "the phone top bar is logo, department name and hamburger — the bell and " +
+      "its unread badge are inside the menu, not on the bar the placeholder describes",
+  },
+  {
     id: "10-04-mobile-dashboard",
     // same dashboard, phone width
     allowEmptyState: true,
