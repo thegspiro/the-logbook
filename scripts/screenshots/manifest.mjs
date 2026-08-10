@@ -529,6 +529,49 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "03-49-report-card-names",
+    doc: "03-scheduling.md",
+    line: 1138,
+    anchor: "Screenshot of an expanded shift report card, its header naming",
+    alt: "A shift report card naming the trainee in its header and the filing officer in its footer",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      await expandFirstReportCard(page);
+      // Scroll the card's own header to the top of the viewport: expanding it
+      // leaves the summary table above still filling most of the screen.
+      await page
+        .locator("div.rounded-xl > button:visible")
+        .filter({ hasText: /\d+(\.\d+)?h/ })
+        .first()
+        .evaluate((el) => el.scrollIntoView({ block: "start" }))
+        .catch(() => {});
+      await page.waitForTimeout(500);
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-47-settings-desktop",
+    doc: "03-scheduling.md",
+    line: 562,
+    anchor: "The rebuilt Scheduling Settings screen on a desktop",
+    alt: "Scheduling settings on desktop, with the section list beside the selected section's card",
+    route: "/scheduling/settings",
+    fullPage: true,
+  },
+  {
+    id: "03-48-settings-phone",
+    doc: "03-scheduling.md",
+    line: 567,
+    anchor: "The same screen at phone width, showing the",
+    alt: "Scheduling settings at phone width, the section list replaced by a scrollable tab strip",
+    route: "/scheduling/settings",
+    viewport: "mobile",
+    // Viewport, not full page: the phone layout pins a bottom tab bar, and a
+    // full-page capture paints it across the middle of the settings card. The
+    // tab strip this shot is about is above the fold anyway.
+    fullPage: false,
+  },
+  {
     id: "02-76-report-form-sections",
     doc: "02-training.md",
     line: 1053,

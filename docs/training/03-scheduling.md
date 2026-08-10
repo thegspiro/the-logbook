@@ -547,7 +547,7 @@ Organization Settings and Event Settings: a **section list down the left** on a
 computer, a **scrollable tab strip across the top** on a phone, and one heading
 rather than the two stacked titles it used to show.
 
-Seven sections:
+Seven sections, of which six are always present:
 
 | Section           | What it holds                                             |
 | ----------------- | --------------------------------------------------------- |
@@ -559,14 +559,15 @@ Seven sections:
 | **Equipment**     | Check requirements and templates                          |
 | **Shift Reports** | End-of-shift reporting options                            |
 
-> **[SCREENSHOT NEEDED]:** _The rebuilt Scheduling Settings screen on a desktop
-> browser, showing the left-hand section list with all seven sections and their
-> descriptions, "General" selected and marked as current, and the General
-> section's content in the card to its right under the single page heading._
+**Platoons only appears once platoon scheduling is switched on**, from the
+toggle at the top of **General**. A department that does not run A/B/C
+rotations sees six sections and no empty platoon screen — and turning the
+feature off while you are on that section returns you to General rather than
+leaving you on a page that has gone.
 
-> **[SCREENSHOT NEEDED]:** _The same screen at phone width, showing the
-> horizontally scrollable section tab strip across the top in place of the
-> sidebar._
+![Scheduling settings on desktop, with the section list beside the selected section's card](./images/03-47-settings-desktop.png)
+
+![Scheduling settings at phone width, the section list replaced by a scrollable tab strip](./images/03-48-settings-phone.png)
 
 ### Two things that changed with it
 
@@ -1131,11 +1132,13 @@ Reports that reviewers flag for follow-up are now accessible from a dedicated **
 
 Report cards now display **trainee and officer names** alongside dates:
 
-- Card header: "**Trainee Name** — April 5, 2026"
-- Card footer: "Filed by **Officer Name** on April 6, 2026"
+- Card header: "**Trainee Name** — Sun, Aug 9, 2026"
+- The metadata row beneath it: hours, calls, the rating badge, the **officer who
+  filed it**, and — once reviewed — "Reviewed by **Name**". All of it is on the
+  collapsed card, so a list of reports is readable without opening any of them
 - Review modal: Shows shift date alongside trainee and officer names in the header
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of a shift report card showing "FF Carter — April 5, 2026" in the header, performance rating stars, hours/calls metadata, and "Filed by Lt. Davis" in the footer._
+![A shift report card naming the trainee in its header and the filing officer in its footer](./images/03-49-report-card-names.png)
 
 ### Full Report Content in Review Modal
 
