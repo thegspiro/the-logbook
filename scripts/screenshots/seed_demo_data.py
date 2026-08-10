@@ -3591,8 +3591,35 @@ class Seeder:
                     },
                 )
             )
+        self._link_elections_to_meetings(elections)
         self._seed_nominations(elections)
         return elections
+
+    def _link_elections_to_meetings(self, elections: list[dict]) -> None:
+        """Attach each election to the meeting it is conducted at.
+
+        An election carries an optional `event_id`, and the event detail page
+        renders a "Linked Elections" card only when something points at it.
+        Unlinked, that card never appears — and the elections are described as
+        being held at the monthly business meeting anyway.
+        """
+        events = items(self.api.get("/events?limit=100"), "events")
+        meetings = [
+            e
+            for e in events
+            if "meeting" in (e.get("title") or "").lower()
+            and not (e.get("is_cancelled") or e.get("isCancelled"))
+        ]
+        if not meetings:
+            return
+        for index, election in enumerate(elections):
+            election_id = pick(election, "id")
+            if not election_id or pick(election, "event_id", "eventId"):
+                continue
+            meeting_id = pick(meetings[index % len(meetings)], "id")
+            if not meeting_id:
+                continue
+            self.api.patch(f"/elections/{election_id}", {"event_id": meeting_id})
 
     def _seed_nominations(self, elections: list[dict]) -> None:
         """Nominate candidates for the officer election.

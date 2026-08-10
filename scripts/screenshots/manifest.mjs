@@ -907,16 +907,6 @@ export const SHOTS = [
     route: "/training/skills-testing/templates/new",
     fullPage: true,
   },
-  {
-    id: "09-06-new-test",
-    doc: "09-skills-testing.md",
-    line: 179,
-    anchor:
-      "Screenshot of the New Test form showing a template dropdown (with 'Patient",
-    alt: "New skills test form with template and candidate selection",
-    route: "/training/skills-testing/test/new",
-    fullPage: true,
-  },
 
   // ── 10 Mobile & PWA ─────────────────────────────────────────────────
   {
@@ -2901,7 +2891,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1255,
     anchor:
-      "Screenshot of the SchedulingNotificationsPanel showing the “Shift Assignment Alerts” section",
+      "Screenshot of the SchedulingNotificationsPanel showing the \"Shift Assignment Alerts\" section",
     alt: "Scheduling notification settings for assignment alerts",
     route: "/scheduling/settings?tab=notifications",
     // Clipped to its own section: the notifications tab stacks six of these and
@@ -2914,7 +2904,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1268,
     anchor:
-      "Screenshot of the SchedulingNotificationsPanel showing the “Start-of-Shift Reminders” section",
+      "Screenshot of the SchedulingNotificationsPanel showing the \"Start-of-Shift Reminders\" section",
     alt: "Start-of-shift reminder settings with the lookahead dropdown",
     route: "/scheduling/settings?tab=notifications",
     selector: 'div.mt-5:has(> div > h4:text-is("Start-of-Shift Reminders"))',
@@ -2955,6 +2945,41 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "04-12-linked-elections",
+    doc: "04-events-meetings.md",
+    line: 1184,
+    anchor: "Screenshot of an event detail page showing a \"Linked Elections\" section",
+    alt: "Linked elections card on the event the vote is held at",
+    route: "/events",
+    prepare: async (page) => {
+      // The card renders only when an election points at the event, so the
+      // event has to be discovered from the election rather than the other
+      // way round.
+      const eventId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/elections?limit=20", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body) ? body : body.elections || [];
+        for (const row of rows) {
+          const detail = await fetch(`/api/v1/elections/${row.id}`, {
+            credentials: "include",
+          });
+          if (!detail.ok) continue;
+          const election = await detail.json();
+          if (election.event_id) return election.event_id;
+        }
+        return null;
+      });
+      if (!eventId) throw new Error("no election is linked to an event");
+      await page.goto(`${new URL(page.url()).origin}/events/${eventId}`, {
+        waitUntil: "domcontentloaded",
+      });
+    },
+    selector: 'div.bg-theme-surface:has(> h2:has-text("Linked Elections"))',
+  },
+  {
     id: "04-11-event-notifications",
     doc: "04-events-meetings.md",
     line: 346,
@@ -2975,7 +3000,7 @@ export const SHOTS = [
     id: "08-36-template-search",
     doc: "08-admin-reports.md",
     line: 1336,
-    anchor: "Screenshot of the template list sidebar showing the search field with “welcome” typed",
+    anchor: "Screenshot of the template list sidebar showing the search field with \"welcome\" typed",
     alt: "Email template sidebar filtered to templates matching welcome",
     route: "/communications/email-templates",
     prepare: async (page) => {
@@ -3110,7 +3135,7 @@ export const SHOTS = [
     id: "05-46-size-preferences",
     doc: "05-inventory.md",
     line: 216,
-    anchor: "Screenshot of the Size Preferences modal titled “Sizes — Jane Doe”",
+    anchor: "Screenshot of the Size Preferences modal titled \"Sizes — Jane Doe\"",
     alt: "Size preferences modal for one member",
     route: "/inventory/admin/members",
     prepare: clickByName(/^Sizes$/),
@@ -3129,7 +3154,7 @@ export const SHOTS = [
     id: "08-33-notifications-inbox",
     doc: "08-admin-reports.md",
     line: 1209,
-    anchor: "Screenshot of the Notifications inbox page showing the “Mark All Read” button",
+    anchor: "Screenshot of the Notifications inbox page showing the \"Mark All Read\" button",
     alt: "Notifications inbox with the mark-all-as-read action",
     route: "/notifications?tab=inbox",
     // Unread only. "Show read" is on by default, and the demo database still
@@ -3145,7 +3170,7 @@ export const SHOTS = [
     id: "08-35-notifications-show-read",
     doc: "08-admin-reports.md",
     line: 1219,
-    anchor: "Screenshot of the Notifications inbox showing the “Show read” toggle",
+    anchor: "Screenshot of the Notifications inbox showing the \"Show read\" toggle",
     alt: "Notifications inbox with read notifications revealed",
     route: "/notifications?tab=inbox",
     prepare: async (page) => {
@@ -3190,7 +3215,7 @@ export const SHOTS = [
     id: "03-40-report-form-sections",
     doc: "03-scheduling.md",
     line: 815,
-    anchor: "Screenshot showing the “Report Form Sections” card with 7 toggle switches",
+    anchor: "Screenshot showing the \"Report Form Sections\" card with 7 toggle switches",
     alt: "Report form sections with a toggle for each part of the report",
     route: "/scheduling/settings?tab=shift-reports",
     prepare: clickByName(/^Form Sections/),

@@ -1179,8 +1179,7 @@ Event detail pages now display elections that are linked to the event. Each link
 - Direct link to the election detail page
 - Vote count summary
 
-> **Screenshot needed:**
-> _[Screenshot of an event detail page showing a "Linked Elections" section with one election card displaying the election title, "Open" status badge in blue, and a "View Election" link]_
+![Linked elections card on the event the vote is held at](./images/04-12-linked-elections.png)
 
 ### Viewing Linked Elections on Meeting Minutes
 
