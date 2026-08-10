@@ -275,6 +275,21 @@ the reading is there.]**
 
 **[CALLOUT: "Moving on no longer loses the reading"]**
 
+**[SCREEN: A statement criterion with "Start clock & read" beneath the read-aloud
+box; tap it and the button is replaced by the on-the-clock note.]**
+
+> "One sheet-dependent thing. Statements normally sit **off** the clock —
+> they mark themselves the moment a section renders, so if they started timing,
+> just opening a test would start the clock before your candidate is even in
+> position."
+
+> "But plenty of sheets read the opening prompt **inside** the limit — 'your time
+> starts now.' So a statement can be marked as one that starts the timer, and you
+> get a **Start clock and read** button. You tap it when the candidate's ready.
+> It's a button rather than automatic for the same reason: whether it's read on
+> the clock is a property of the sheet, but **when** you read it isn't."
+> _(2026-08-09)_
+
 **[TRANSITION: Back at the desk]**
 
 ---
@@ -592,6 +607,29 @@ Skills Tests section.]**
 > "Here's the other side. My Training now has a **Skills Tests** section — their
 > official results and their practice attempts, each opening a read-only
 > scorecard."
+
+**[SCREEN: The score breakdown panel at the top of a scorecard — per-section
+point totals, one section flagged as contributing nothing, the threshold, the
+final percentage.]**
+
+> "And the percentage shows its working now. This panel is above the sections on
+> both your view and theirs: what each section contributed, the threshold that
+> was applied, and any critical step that decided the outcome on its own."
+> _(2026-08-09)_
+
+**[CALLOUT: "This section contributed no points"]**
+
+> "That flag is the one worth understanding. Not every criterion type feeds the
+> percentage — **score** steps do, **checklist** and **timed** steps don't, and
+> **Pass/Fail** steps only if your template opts in. So a sheet whose knowledge
+> questions are Pass/Fail steps could show a candidate eighty-six percent with two
+> of four questions wrong, and nothing on the page explained how. Now it does."
+
+> "If you'd rather those questions counted, there's a per-template setting to make
+> Pass/Fail steps carry points. Turning it on **won't** re-score anything already
+> taken — the rule is frozen into each test when it's created."
+
+**[CALLOUT: "Opting in never re-scores an old result"]**
 
 **[SCREEN: Open a result; show the frozen scorecard, the pass/fail, the section
 breakdown.]**

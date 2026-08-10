@@ -386,6 +386,84 @@ As the examiner scores criteria, the interface displays:
 > **Unscored steps read "—/N" in neutral type, not a red "0/N".** A red zero
 > reads as a fail the examiner never recorded.
 
+### What the percentage is actually made of _(2026-08-09)_
+
+A scorecard once read **86%** over a sheet whose visible sections included four
+knowledge questions, two of them failed — and nothing on the page explained how
+those two could be wrong without moving the number.
+
+They could because **not every criterion type feeds the percentage**:
+
+| Criterion type | Counts toward the percentage?                                |
+| -------------- | ------------------------------------------------------------ |
+| **Score**      | Yes — earns 0…max                                            |
+| **Pass/Fail**  | **Only if the template opts in** (see below); off by default |
+| **Checklist**  | No                                                           |
+| **Timed**      | No                                                           |
+| **Statement**  | No — read aloud, marks itself, never scored                  |
+
+This is a defensible way to build a sheet — the questions still appear on the
+scorecard, and a **critical** one still fails the test outright regardless of
+points. It was simply invisible to whoever read the result.
+
+Two things fixed that:
+
+- **The scorecard now shows its working.** A breakdown panel above the sections
+  gives the per-section point totals, the passing threshold applied, and any
+  critical step that decided the outcome on its own. It **flags any section that
+  contributed nothing** to the percentage, which is exactly the case that made
+  "86%" unreadable. Both the officer's and the candidate's result pages show it.
+- **Pass/Fail steps can be made to carry points**, with a per-template setting.
+  A passed step earns its points (its max score, or 1 if none is set); a failed
+  one earns none.
+
+> **[SCREENSHOT NEEDED]:** _The score breakdown panel at the top of a completed
+> scorecard, showing per-section point totals with one section flagged as
+> contributing no points, the passing threshold, and the final percentage._
+
+> **Turning the setting on never re-scores an old result.** The rule is frozen
+> into each test at the moment it is created, so a test taken under the old
+> behaviour keeps the number it was given. Change it and only new tests follow
+> the new rule.
+
+> **Checklist and timed steps stay out of the point pool deliberately.** A
+> checklist is partly completable and would need its own earned-fraction rule; a
+> time limit is a gate on the evolution, not a measure of how well it was
+> performed. If either must decide the outcome, make it a **critical** criterion.
+
+### A statement that is read on the clock _(2026-08-09)_
+
+The test clock starts on the examiner's first real action — recording a result,
+or moving between sections — because an examiner watching a candidate will not
+reliably remember to press play on a skill whose time limit is itself the
+pass/fail criterion.
+
+**Statements are excluded from that by default.** They mark themselves as a
+section renders, which is nobody's action, so opening a test whose first section
+leads with a statement must not start timing before the candidate is even in
+position.
+
+But sheets differ. Some read the opening statement as a brief _before_ the clock;
+others read it _inside_ the limit — "your time starts now." So a statement can be
+marked **starts the timer**:
+
+| Setting           | What the examiner sees                          | Effect                                    |
+| ----------------- | ----------------------------------------------- | ----------------------------------------- |
+| **Off** (default) | The read-aloud box alone                        | Read off the clock; nothing starts timing |
+| **On**            | A **"Start clock & read"** button under the box | The examiner's tap starts the clock       |
+
+> **[SCREENSHOT NEEDED]:** _A statement criterion on the scoring screen with
+> "starts the timer" enabled, showing the "Start clock & read" button beneath the
+> read-aloud box, and the same statement after tapping it — the button replaced
+> by the note that the statement falls inside the time limit and the clock is
+> running._
+
+> **It is a button, not an automatic start.** Whether a statement is read on the
+> clock is a property of the sheet; _when_ it is read is not. An examiner opens a
+> test to have it ready and reads the prompt once the candidate is in position,
+> which may be minutes later — starting on render would time the wait. Tapping it
+> also clears a manual pause, the way pressing play does.
+
 > **Statement criteria are excluded from every count.** They mark themselves, so
 > counting them showed progress on a section nobody had touched — and a section
 > could read "3 / 3" with a real step still blank.

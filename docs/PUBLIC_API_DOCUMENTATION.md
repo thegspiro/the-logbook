@@ -458,8 +458,8 @@ rather than falling back to whatever zone the device is set to.
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `first_name` | string | yes | 1–100, trimmed; blank after trimming is rejected |
-| `last_name` | string | yes | 1–100, trimmed |
+| `first_name` | string | yes | 1–100, must contain a non-whitespace character (`\S`), trimmed |
+| `last_name` | string | yes | Same |
 | `email` | string | no | Required for a prospect to be created |
 | `phone` | string | no | ≤ 50 |
 | `organization_name` | string | no | ≤ 255 |

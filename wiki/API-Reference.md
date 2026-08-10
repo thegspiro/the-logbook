@@ -514,15 +514,15 @@ to an event somewhere else.
 
 **Request** (`GuestCheckInRequest`):
 
-| Field               | Type   | Required | Notes                                                         |
-| ------------------- | ------ | -------- | ------------------------------------------------------------- |
-| `first_name`        | string | yes      | 1–100 chars, trimmed; blank after trimming is rejected        |
-| `last_name`         | string | yes      | 1–100 chars, trimmed                                          |
-| `email`             | email  | no       | Required for a prospect to be created                         |
-| `phone`             | string | no       | ≤ 50 chars                                                    |
-| `organization_name` | string | no       | ≤ 255 chars — the company/agency the guest is with            |
-| `interest_reason`   | string | no       | ≤ 2000 chars, stored on the attendance row as `notes`         |
-| `hp_website`        | string | no       | **Honeypot.** Hidden in the real form; only a bot fills it in |
+| Field               | Type   | Required | Notes                                                                |
+| ------------------- | ------ | -------- | -------------------------------------------------------------------- |
+| `first_name`        | string | yes      | 1–100 chars, must contain a non-whitespace character (`\S`), trimmed |
+| `last_name`         | string | yes      | Same                                                                 |
+| `email`             | email  | no       | Required for a prospect to be created                                |
+| `phone`             | string | no       | ≤ 50 chars                                                           |
+| `organization_name` | string | no       | ≤ 255 chars — the company/agency the guest is with                   |
+| `interest_reason`   | string | no       | ≤ 2000 chars, stored on the attendance row as `notes`                |
+| `hp_website`        | string | no       | **Honeypot.** Hidden in the real form; only a bot fills it in        |
 
 **Response** (`GuestCheckInResponse`): `status` (`checked_in` | `already_checked_in`),
 `attendee_id`, `event_name`, `checked_in_at`, `prospect_created`, `message`.
