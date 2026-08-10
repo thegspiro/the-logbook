@@ -515,7 +515,54 @@ class Seeder:
                 },
             )
             created.append(record)
+        self._fill_in_the_administrator(created)
         return created
+
+    def _fill_in_the_administrator(self, members: list[dict]) -> None:
+        """Give the demo administrator the contact details everyone else has.
+
+        `bootstrap_demo.py` creates this account, not `seed_members`, so it is
+        the one member on the roster with no phone, no address and no emergency
+        contact. Every screenshot taken as the administrator — Account
+        Settings first among them — was therefore a page of empty inputs.
+        """
+        admin = next(
+            (m for m in members if pick(m, "username") == DEMO_ADMIN_USERNAME), None
+        )
+        admin_id = pick(admin or {}, "id")
+        if not admin_id:
+            return
+        # Read through /with-roles, not the roster row. The member list gates
+        # contact details behind the organization's contact-info-visibility
+        # setting, so `phone` there is None whether or not one is on file — a
+        # guard keyed on it would re-write the record on every run and stamp
+        # over anything edited by hand.
+        try:
+            current = self.api.get(f"/users/{admin_id}/with-roles")
+        except ApiError:
+            return
+        if pick(current, "phone"):
+            return
+        self.api.patch(
+            f"/users/{admin_id}/profile",
+            {
+                "phone": "(703) 555-0100",
+                "mobile": "(703) 555-0101",
+                "address_street": "1 Firehouse Square",
+                "address_city": "Oakville",
+                "address_state": "VA",
+                "address_zip": "22046",
+                "station": "Station 1 - Headquarters",
+                "emergency_contacts": [
+                    {
+                        "name": "Marisol Ruiz",
+                        "relationship": "Spouse",
+                        "phone": "(703) 555-0102",
+                        "is_primary": True,
+                    }
+                ],
+            },
+        )
 
     # -- membership: recorded changes --------------------------------
 

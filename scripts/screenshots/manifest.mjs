@@ -529,6 +529,124 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "00-14-confirm-dialog",
+    doc: "00-getting-started.md",
+    line: 103,
+    anchor: "An in-app confirmation dialog over a dimmed page",
+    alt: "An in-app confirmation dialog with its consequence sentence and named buttons",
+    // A delete that names both the consequence and the two choices — the
+    // pattern the section is about. Equipment-check templates are the clearest
+    // instance in the app.
+    route: "/scheduling/settings?tab=equipment",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Delete/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
+  },
+  {
+    id: "00-15-sidebar-member",
+    doc: "00-getting-started.md",
+    line: 134,
+    anchor: "Screenshot of the sidebar navigation expanded, showing the member",
+    alt: "The navigation sidebar with the member-facing sections expanded",
+    route: "/dashboard",
+    // Expanded, which is the point of the shot: the collapsed sidebar shows a
+    // chevron beside Training and Operations and nothing of what is under
+    // them. The taller viewport is so the clip is not cut off partway down —
+    // the whole nav is longer than 900px once two groups are open.
+    prepare: async (page) => {
+      for (const group of ["Training", "Operations"]) {
+        await page
+          .getByRole("button", { name: new RegExp(`^${group}$`) })
+          .first()
+          .click({ timeout: 10_000 })
+          .catch(() => {});
+        await page.waitForTimeout(300);
+      }
+    },
+    viewport: { width: 1440, height: 1500 },
+    selector: "nav",
+  },
+  {
+    id: "00-16-sidebar-admin",
+    doc: "00-getting-started.md",
+    line: 153,
+    anchor:
+      "Screenshot of the sidebar with the Administration section expanded",
+    alt: "The sidebar scrolled to its Administration section with the admin-only links",
+    route: "/dashboard",
+    // A viewport shot rather than a clip of <nav>: the sidebar is one long
+    // scrolling element, so an element screenshot renders it whole and would
+    // be the same picture as the member-section shot above. Scrolling it and
+    // taking the viewport is what actually shows the admin half.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Members$/ })
+        .last()
+        .click({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(300);
+      await page
+        .locator("nav")
+        .first()
+        .evaluate((el) => {
+          el.scrollTop = el.scrollHeight;
+        })
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
+    fullPage: false,
+  },
+  {
+    id: "00-17-account-settings",
+    doc: "00-getting-started.md",
+    line: 305,
+    anchor: "Account Settings on its Account tab, with the tab row across",
+    alt: "Account settings on its Account tab, with contact, department and address fields",
+    route: "/account",
+    fullPage: true,
+  },
+  {
+    id: "00-18-rsvp-modal",
+    doc: "00-getting-started.md",
+    line: 326,
+    anchor: 'The RSVP modal for "Q3 Ladder Operations Drill" with',
+    alt: "The RSVP modal with its attendance choice, dietary and accessibility fields",
+    // As a member, not the administrator. The organizer's view of an event
+    // offers Check In, Send Reminders and Print Roster — there is no RSVP
+    // button on it, because the organizer is not the one answering.
+    auth: "member",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=50",
+        (id) => `/events/${id}`,
+        "events",
+        // More than two days out. RSVP closes a day before the event, and the
+        // list response omits rsvp_deadline — so "upcoming" alone picks
+        // tonight's meeting, whose RSVP window shut yesterday and which
+        // therefore renders no RSVP button at all.
+        (event) => {
+          if (!(event.requires_rsvp ?? event.requiresRsvp ?? false))
+            return false;
+          const start = event.start_datetime ?? event.startDatetime ?? "";
+          return start > new Date(Date.now() + 2 * 86400_000).toISOString();
+        },
+      )(page);
+      await page.waitForTimeout(1200);
+      await page
+        .getByRole("button", { name: /^(RSVP Now|Update RSVP|Change RSVP)$/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
+  },
+  {
     id: "06-15-facility-maintenance-form",
     doc: "06-apparatus-facilities.md",
     line: 211,
