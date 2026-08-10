@@ -19,14 +19,14 @@ been through a review pass.
 | # | Feature | Code | Prefix | Status |
 |---|---------|------|--------|--------|
 | A1 | Storefront & payments | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF | ✅ (p1, p2) |
-| A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ✅ |
-| A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ✅ |
-| A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ✅ |
-| A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ✅ |
-| A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ✅ |
-| A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ✅ |
-| A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ✅ |
-| A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | ✅ |
+| A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ✅ (p1, p2) |
+| A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ✅ (p1, p2) |
+| A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ✅ (p1, p2) |
+| A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ✅ (p1, p2) |
+| A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ✅ (p1, p2) |
+| A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ✅ (p1, p2) |
+| A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ✅ (p1, p2) |
+| A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | ✅ (p1, p2) |
 
 ## Tier B — second pass over the audited 27
 
@@ -39,33 +39,33 @@ from its open list.
 
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ✅ (p1, p2) |
-| B2 | apparatus | AP2 | ✅ (p1, p2) |
-| B3 | inventory | INV2 | ✅ (p1, p2) |
-| B4 | facilities | FAC2 | ✅ (p1, p2) |
-| B5 | elections | ELEC2 | ✅ (p1, p2) |
-| B6 | meetings & minutes | MM2 | ✅ (p1, p2) |
-| B7 | equipment-check | EC2 | ✅ (p1, p2) |
-| B8 | documents | DOC2 | ✅ (p1, p2) |
-| B9 | membership pipeline | MP2 | ✅ (p1, p2) |
-| B10 | messaging & communications | MSG2 | ✅ (p1, p2) |
-| B11 | notifications | NOTIF2 | ✅ (p1, p2) |
-| B12 | integrations | INT2 | ✅ (p1, p2) |
-| B13 | forms | FORM2 | ✅ |
-| B14 | grants & fundraising | GF2 | ✅ (p1, p2) |
-| B15 | admin-hours | AH2 | ✅ (p1, p2) |
-| B16 | reports & analytics | RPT2 | ✅ (p1, p2) |
-| B17 | events | EV2 | ✅ (p1, p2) |
-| B18 | training | TR2 | ✅ (p1, p2) |
-| B19 | scheduling | SCH2 | ✅ (p1, p2) |
-| B20 | finance | FIN2 | ✅ (p1, p2) |
-| B21 | orgs, roles & users | ORU2 | ✅ (p1, p2) |
-| B22 | compliance & skills | CS2 | ✅ (p1, p2) |
-| B23 | security, audit & IP | SEC2 | ✅ (p1, p2) |
-| B24 | core infra | CI2 | ✅ (p1, p2) |
-| B25 | onboarding | ONB2 | ✅ (p1, p2) |
-| B26 | public-portal | PP2 | ✅ (p1, p2) |
-| B27 | frontend shared | FE2 | ✅ (p1, p2) |
+| B1 | medical-screening | MS2 | ⬜ |
+| B2 | apparatus | AP2 | ⬜ |
+| B3 | inventory | INV2 | ⬜ |
+| B4 | facilities | FAC2 | ⬜ |
+| B5 | elections | ELEC2 | ⬜ |
+| B6 | meetings & minutes | MM2 | ⬜ |
+| B7 | equipment-check | EC2 | ⬜ |
+| B8 | documents | DOC2 | ⬜ |
+| B9 | membership pipeline | MP2 | ⬜ |
+| B10 | messaging & communications | MSG2 | ⬜ |
+| B11 | notifications | NOTIF2 | ⬜ |
+| B12 | integrations | INT2 | ⬜ |
+| B13 | forms | FORM2 | ⬜ |
+| B14 | grants & fundraising | GF2 | ⬜ |
+| B15 | admin-hours | AH2 | ⬜ |
+| B16 | reports & analytics | RPT2 | ⬜ |
+| B17 | events | EV2 | ⬜ |
+| B18 | training | TR2 | ⬜ |
+| B19 | scheduling | SCH2 | ⬜ |
+| B20 | finance | FIN2 | ⬜ |
+| B21 | orgs, roles & users | ORU2 | ⬜ |
+| B22 | compliance & skills | CS2 | ⬜ |
+| B23 | security, audit & IP | SEC2 | ⬜ |
+| B24 | core infra | CI2 | ⬜ |
+| B25 | onboarding | ONB2 | ⬜ |
+| B26 | public-portal | PP2 | ⬜ |
+| B27 | frontend shared | FE2 | ⬜ |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -1246,4 +1246,795 @@ The rotation wraps from B27 back to A1. Same discipline as Tier B pass 2.
   stays flagged; 2 LOW webhook-robustness items noted. **2 regression tests**
   (DB-backed + DB-free). flake8/black clean. User-visible fix in CHANGELOG. See
   storefront.md → Pass 2. Next: A2 auth & session lifecycle.
+- **A2 auth & session lifecycle ✅ (pass 2) — no code change.** Re-verified the
+  heavily-hardened surface: every pass-1/red-team fix holds (M1/M2/M3, H3 TOTP,
+  H5/AXC-1 get_client_ip, AUTH-1/2, SHA-256 reset tokens, JWT HS256+exp,
+  compare_digest). Six lenses found no verified bug (no blind setattr on protected
+  fields, no cross-user/org by-id write, no enumeration branch skipping dummy-verify,
+  no rate-limit-skipping path). 2 informational flags (oldest-org lookup w/o active
+  filter — single-org-benign; forgot_password config-construct w/o try/except —
+  not attacker-controllable). No code changed. See auth-session.md → Pass 2. Next: A3.
+- **A3 scheduled tasks & cron ✅ (pass 2).** Re-verified pass-1 (39/39 runner parity,
+  Pitfall-#12 dedup, the 8 CRON-1 runners roll back). The sweep found the **CRON-1 fix
+  was incomplete** — **6 fixes:** CRON-5 (MED: 3 more org-loops could poison the shared
+  session — `run_shift_auto_checkout` *deferred* its commit so a late org's rollback
+  discarded every earlier org's checkouts; `run_compliance_auto_reports` +
+  `run_officer_directory_sync` had no per-org commit/rollback; `cert_alert_service.
+  run_daily_cert_alerts` no rollback — all now commit-per-org + rollback), CRON-2b
+  (LOW: run_daily_cert_alerts didn't filter `Organization.active`), CRON-6 (LOW-MED
+  money: overdue-property reminder totalled chargeable value as float → Decimal; plus
+  a ZoneInfo fallback guard in the unguarded `_to_local`). **Flagged:** naive
+  `datetime.now()` at rolling-recurrence (aware-vs-naive TypeError risk vs the DB —
+  needs DB-verified change), rolling-recurrence rollback (SELECT-only, low risk),
+  cert-alert N+1 (perf), CRON-4 (raw str(e)). **1 DB-free regression test** (cron org-
+  loop isolation). flake8/black clean. Money + reliability fixes in CHANGELOG. See
+  scheduled-tasks.md → Pass 2. Next: A4.
+- **A4 email templates & delivery ✅ (pass 2).** Re-verified pass-1 (11 endpoints
+  gated, escape-at-construction, `_sanitize_header`, Redis overlap lock, MAIL-1/2).
+  Lenses 1–6 clean on primary paths. **1 fix — MAIL-5** (LOW: the code-default
+  `_render_with_fallback` path re-introduced MAIL-1 — its inline `_replace` had no
+  escape flag and HTML-escaped the subject + text/plain, so `O'Brien`→`O&#x27;Brien`
+  and `Fire & Rescue`→`Fire &amp; Rescue` on that path; added the same escape flag,
+  off for subject/text, on for HTML — XSS boundary verified untouched). MAIL-3/4 stay
+  flagged. **1 DB-free regression test** (fallback render). flake8/black clean.
+  User-visible fix in CHANGELOG. See email-templates.md → Pass 2. Next: A5.
+- **A6 member lifecycle & offboarding ✅ (pass 2).** Re-verified the irreversible ops
+  (anonymization never-cross-tenant + self-block + idempotent; retention floors;
+  every by-id op XC-3 clean; LIFE-1 Decimal). **1 fix — LIFE-4** (MED money:
+  `property_return_service.generate_report` totalled the chargeable "Total Assessed
+  Value" in the member's return letter as float — the LIFE-1 class unfixed in this
+  sibling; converted to Decimal, verified safe across `:,.2f`/FastAPI-encoder/audit
+  `default=str` consumers). **Flagged:** LIFE-2 (per-unit float division — FIN-7), the
+  pool-issuance full-vs-per-unit valuation mismatch between the two member-facing
+  figures (methodology reconciliation), and the DiD member-fetch org filter. Existing
+  23 property-return tests pass. flake8/black clean. Money fix in CHANGELOG. See
+  member-lifecycle.md → Pass 2. Next: A5 course cohorts (wave 2).
+- **A5 course cohorts & syllabus ✅ (pass 2).** Re-verified the cleanest module (XC-3,
+  generation bounds, CC-1, DST). **1 fix — CC-4** (MED XC-1: `add_ad_hoc_class`
+  validated only instructor/location in-org but persisted client `category_id`/
+  `requirement_id`/`phase_id` — which flow into the generated TrainingSession —
+  unvalidated, while the syllabus path's `_validate_references` validates exactly
+  these; extended the loop + phase-via-TrainingProgram-join to mirror it). Flagged:
+  three catalog-course JOINs missing the CC-1 org predicate (not live), reschedule/
+  cancel commit-before-cohort-match (cosmetic). **1 DB-free regression test.**
+  flake8/black clean. See course-cohorts.md → Pass 2. Next: A7.
+- **A7 dashboard & action items ✅ (pass 2).** Re-verified pass-1 (RPT-1 clean, DASH-1
+  minutes filter). **1 fix — DASH-3 (HIGH XC-2):** `/dashboard/action-items` had **no
+  permission gate** — the meeting half filtered only `organization_id`, so any member
+  (even one with neither `meetings.view` nor `minutes.view`) could read every meeting
+  action item's description org-wide, and the minutes half's `minutes_visibility_filter`
+  only reproduced the inner restricted-split, not the outer view gate. Gated each half
+  in-code as its owning module does (meeting half: meetings.view OR minutes.view;
+  minutes half: minutes.view), independently. Flagged: DASH-2, admin-summary counts
+  fold restricted items (integers only), display nits. **3 DB-free regression tests.**
+  flake8/black clean. Security fix in CHANGELOG. See dashboard.md → Pass 2. Next: A8.
+- **A8 locations & kiosk ✅ (pass 2).** Re-verified pass-1 (6/6 gated, LOC-1/2, no PP-1).
+  **1 fix — LOC-4** (MED: LOC-1 fixed the display *rendering* to use the canonical
+  `_get_check_in_window`, but the *selection* query still used a hardcoded 1h lead — a
+  superset — so the kiosk showed an active check-in QR for STRICT/early-FLEXIBLE events
+  up to an hour early, then rejected the scan. Kept a generous SQL prefilter, then
+  narrow in Python to the canonical per-event window; swept an E712). Flagged (folded
+  into LOC-3 dead-code): the authenticated display's hardcoded `is_valid` + missing
+  timezone. **1 DB-free regression test.** flake8/black clean. Kiosk fix in CHANGELOG.
+  See locations-kiosk.md → Pass 2. Next: A9.
+- **A9 platform ops & data lifecycle ✅ (pass 2) — no code change; Tier A pass 2
+  COMPLETE.** Re-verified the four services (assert_different_person wired to all four
+  SoD sites; admin-continuity ORU-7 across five paths with the service-layer role-edit
+  guard; data-export self-scoped + rate-limited + audited, no latent-500; audit-ship
+  env-only URL + HMAC + 2xx-gated watermark). All clean. **1 caller-side flag — OPS-6**
+  (MED, outside these four services): finance `approve_by_token` (public, unauth) sets
+  APPROVED with no `assert_different_person` and no `acted_by`, a twin of the
+  FIN-4-guarded `approve_step` — exploitability hinges on whether a requester can be an
+  "email" approver on their own chain (a chain-config product question); recorded, not
+  fixed. No code changed. See platform-ops.md → Pass 2.
+
+---
+
+## 🏁 Tier A pass 2 complete (2026-08-09) — full second pass done (all 36 features)
+
+All 9 Tier A modules (A1–A9) reviewed in pass 2, completing the second full pass over
+every feature (Tier A A1–A9 + Tier B B1–B27 = 36). Tier A pass-2 headline finds:
+**DASH-3 (HIGH** action-items permission bypass), **SF-4 (MED** currency-blind
+auto-settle), the **CRON-1 completion** (3 more org-loops + a deferred-commit
+data-loss), and a cluster of **float-money** fixes on member-facing chargeable totals
+(LIFE-4, CRON-6). Same discipline throughout: verified/safe fixes only, product/
+behavior/migration items flagged, regression tests added, gate green (flake8/black/
+tsc/eslint; DB-backed tests are the known no-MySQL sandbox limit).
 </content>
+
+---
+
+## 🏁 Pass 2 complete (2026-08-09) — full second rotation done
+
+Both tiers finished their second pass: Tier B pass 2 completed 2026-08-08, Tier A
+pass 2 completed 2026-08-09 (all 36 features). Pass 2 also closed out the four
+owner-approved product decisions that pass-2 findings had surfaced — money
+separation-of-duties on the disburse step, training auto-approve self-credit,
+external-recipient audit logging on report emails, and read-permission gates on
+member/applicant PII (RPT-3 / INT-3 / FIN-5) — each with regression tests, mirrored
+into `KNOWN_LIMITATIONS.md` and `CHANGELOG.md`.
+
+## 🔄 Pass 3 opened (2026-08-09)
+
+Tier B reset to ⬜ for a third full pass; Tier A remains ✅ (front-loaded,
+never-reviewed surfaces already covered twice — not re-run unless directed). Pass 3
+starts from pass-2's landed fixes and the owner-decision closures: re-verify they
+still hold, confirm no regression re-opened a fixed finding, and widen the lens for
+anything pass 2 flagged-not-fixed (the remaining migration/behavior items still open
+in `KNOWN_LIMITATIONS.md`). Next feature: **B1 medical-screening**.
+
+### Pass 3 log
+
+(pending)
+
+- **B1 medical-screening ✅ (pass 3).** Re-verified every landed fix holds: MS-3
+  create-path FK validation intact and still un-bypassable via update
+  (`ScreeningRecordUpdate` omits the FK fields); MS-2/MS2-4 name resolution
+  org-scoped across the compliance, expiring, and record paths; all 13 endpoints
+  gated; compliance-by-id org-scoped (no IDOR). MS-1 (PHI plaintext) still stands,
+  migration-shaped. **1 fix — MS2-5 (LOW/MED, latent-500):** the request schemas
+  typed `screening_type`/`status` as free strings, but the columns are strict MySQL
+  ENUMs and SQLAlchemy doesn't validate the string (`validate_strings=False`) — so a
+  bad value bound straight to MySQL and 500'd on the four write paths (`POST`/`PUT`
+  records + requirements; only `POST /records` even caught `ValueError`). Verified
+  the bind passes `'bogus_status'` through unvalidated. Added a `_validate_enum`
+  helper + `@field_validator`s on the four request schemas (lowercase-normalize then
+  reject unknown → 422), request-only so the responses are untouched. **7 tests
+  added** (`TestRequestEnumValidation`); 29 medical-screening tests pass (was 22).
+  Gate: flake8/black/tsc clean; eslint unaffected (no FE change). Fix in CHANGELOG.
+  See medical-screening.md → Pass 3. Next: B2 apparatus.
+
+- **B2 apparatus ✅ (pass 3).** Re-verified AP-1 (create-path FK validation) and
+  AP2-1 (update-path re-validation of the three eager-loaded FKs) hold; 83/83 auth
+  coverage intact; the service report resolves provider names org-scoped (confirming
+  AP2-2 is integrity-only, not a read-leak). **Closed AP2-2** (the one item pass 2
+  left open): the four dangling, non-projected FKs — `apparatus.required_evoc_level_id`
+  (EvocLevel), `maintenance.component_id` (ApparatusComponent),
+  `maintenance.service_provider_id` + `component_note.service_provider_id`
+  (ApparatusServiceProvider) — are now validated in-org via `assert_in_org` on **both**
+  create and update paths (all six endpoints already convert ValueError→400; the note
+  update schema omits component_id so it can't be re-pointed). The XC-1 create/update
+  FK class is now fully resolved for this module. **Also swept** the remaining 11
+  `== True/False # noqa: E712` comparisons to `.is_()` (Pitfall #10), removing every
+  E712 noqa from the service. Latent-500 lens (the B1 enum-as-free-str class) checked
+  and clean — the sole enum column (`fuel_type`) is properly typed. **4 tests added**
+  (`test_apparatus_service.py` now 10, was 6). Gate: flake8/black/tsc clean; eslint
+  unaffected (no FE change). No CHANGELOG entry (integrity-only hardening, no
+  user-visible change — matching AP2-1's treatment). See apparatus.md → Pass 3.
+  Next: B3 inventory.
+
+- **B3 inventory ✅ (pass 3).** Re-verified the landed fixes hold: INV2-1
+  member-in-org validation intact at all four member-facing mutation sites; INV-3
+  maintenance item guard intact; INV-1/2/5/6-safe-half unchanged. **Closed INV2-2**
+  (the E712 cleanup pass 2 deferred to "one focused commit"): swept all 55
+  `== True/False # noqa: E712` boolean-column comparisons in `inventory_service.py`
+  to `.is_()` (Pitfall #10), removing every E712 noqa — behavior-neutral. **Latent-500
+  lens clean:** an automated check of every inventory `*Create`/`*Update` schema field
+  that maps to one of the module's 17 enum columns found 0 typed as free `str` (all
+  properly enum-typed — no free-string→ENUM 500 path, unlike B1). **INV-4 remainder
+  stays flagged** — the ~15-method dangling-only FK `assert_in_org` sweep is
+  integrity-only (read-leak subset already closed in INV2-1) and, per pass 1/2,
+  deserves a dedicated focused pass rather than a rushed half-sweep. No new tests
+  (behavior-neutral sweep); gate: flake8/black/tsc clean, 142 non-DB inventory tests
+  pass (75 db_session errors are the known no-MySQL limit). No CHANGELOG (no
+  user-visible change). See inventory.md → Pass 3. Next: B4 facilities.
+
+- **B4 facilities ✅ (pass 3).** Re-verified the FK-validation class is fully closed:
+  FAC2-1's `_assert_facility_in_org` wired into all 9 `facility_id` update paths (+
+  `update_compliance_item`'s checklist_id), "only when supplied" semantics intact;
+  FAC-3 create-path validation intact; 95/95 endpoints permission-gated. **Swept the
+  last E712** (FAC2-2): a second `is_primary == True # noqa: E712` survived in
+  `update_photo`'s set-as-primary path (pass 1 only fixed `create_photo`'s) →
+  `.is_(True)`; module now free of every E712 noqa. **Latent-500 lens clean:** an
+  automated check of every facilities `*Create`/`*Update` field mapping to one of the
+  16 enum columns found 0 typed as free `str`. **FAC-4 stays flagged** (owner call):
+  `list_facilities` search is wired-but-unexposed — a one-line API addition, but an
+  unrequested API-surface change. No new tests (behavior-neutral sweep; the 9
+  FAC2-1 service tests still pass). Gate: flake8/black/tsc clean. No CHANGELOG (no
+  user-visible change). See facilities.md → Pass 3. Next: B5 elections.
+
+- **B5 elections ✅ (pass 3).** Re-verified the headline invariants on the
+  most-audited module: `create_candidate` user_id `assert_in_org` (endpoint 1716);
+  `CandidateUpdate` still has no FK fields (update-bypass closed); AXC-1 IP fix holds
+  (`get_client_ip` 6 sites / `request.client.host` 0); `/elections` uncacheable;
+  latent-500 clean (only `status` enum, properly typed). **Swept ELEC2-1** — the 31
+  `== True/False # noqa: E712` suppressions passes 1–2 deferred citing security-file
+  risk. On analysis the risk is churn not semantics: all 31 are boolean-flag WHERE
+  comparisons (`is_active`/`is_test`/`is_manual`/`used`/`accepted`/`is_write_in`);
+  `.is_()` changes only predicate syntax, never the matched set, so it can't touch
+  vote counting or the hash-chain. Swept all 31 → module free of E712 noqa. No new
+  tests (behavior-neutral); 82 non-DB election tests pass. Gate: flake8/black/tsc
+  clean. No CHANGELOG. See elections.md → Pass 3. Next: B6 meetings & minutes.
+
+- **B6 meetings & minutes ✅ (pass 3).** Re-verified MM-4/MM2-1/MM-3-frontend hold.
+  **Fixed MM2-2** (LOW/MED latent-500, the B1 class): `meeting_type` was free `str`
+  on six request schemas but maps to a strict MySQL ENUM — `create_minutes` inserts
+  it raw, so a bad value 500'd. The care point: `meeting_type` maps to *two* enums
+  (MeetingType for meetings; MinutesMeetingType — which includes `executive` — for
+  minutes/templates), so a naive shared validator would have rejected `executive`
+  and broken the restricted-minutes path. Added per-model `@field_validator`s
+  (request-only, lowercase-normalize, reject unknown → 422), each deriving its set
+  from the correct enum; also fixed a stale MinutesBase docstring. **11 tests added**;
+  150 existing meeting/minute tests still pass. **Flagged MM2-3**: `status`/`priority`
+  free-str fields need per-field verification (priority is an Integer column — the
+  lens over-matched; some status fields are server-set on create), so a focused
+  follow-up rather than a guessed sweep. Gate: flake8/black/tsc clean. CHANGELOG
+  updated (500→422 on malformed input). See meetings-minutes.md → Pass 3. Next: B7
+  equipment-check.
+
+- **B7 equipment-check ✅ (pass 3).** Re-verifying the EC2-3 "integrity-only" flag
+  found it was **mis**classified: **EC2-4 (MED read-leak)** — `get_my_checklists`
+  projects each item's `inventory_item_id` as `inventory_item_name`, but the
+  `item_names` (InventoryItem) lookup lacked the org filter the adjacent
+  `apparatus_names` query has, and `add_item`/`update_item` store the client-supplied
+  `inventory_item_id` raw. So a manager setting a foreign `inventory_item_id` leaked
+  another org's item name into the checklist (the EC2-1 shape). **Fixed two layers:**
+  org-scoped the `item_names` lookup (definitive), and added `_validate_item_fks`
+  (inventory_item_id + equipment_id in-org) on add_item/update_item/add_compartment
+  nested items + `parent_compartment_id` validation on both compartment paths —
+  **closing EC2-3.** Also fixed a latent-500: add_compartment/update_compartment/
+  add_item endpoints had no `ValueError→400` handling (only update_item did), so the
+  new guards would've 500'd; added the standard wrapper. **Swept EC2-5** (2 E712 in
+  shift_completion). **6 tests added** (12 total); sibling equipment tests pass. Gate:
+  flake8/black/tsc clean. No CHANGELOG (internal cross-tenant hardening, no
+  user-visible change — matching EC2-1/EC2-2). See equipment-check.md → Pass 3.
+  Next: B8 documents.
+
+- **B8 documents ✅ (pass 3).** Re-verified DOC-6 (`assert_in_org` on folder
+  parent_id/owner_user_id + update_document folder_id) and DOC2-1
+  (`attach_document_names`) hold; DOC-2/DOC-3 access + upload guards intact. **Latent-500
+  lens over-flagged, then cleared:** it flagged `DocumentFolderCreate/Update.visibility`
+  as free-str→ENUM, but both carry `Field(pattern="^(organization|leadership|owner)$")`
+  — validated at the schema (422), so no 500 path; with DOC-6's `status: Optional[DocumentStatus]`
+  every enum-mapped request field is validated. **No fix needed** (a lens false positive a
+  read resolves). **Swept DOC2-2** — 1 `is_system == True # noqa: E712` in the sibling
+  `document_service.py`. Corrected a stale future-dev note: the "dead uploader_name/folder_name
+  fields" were already populated by DOC2-1. DOC-4/DOC-5 remain flagged product decisions.
+  39 document tests pass. Gate: flake8/black/tsc clean. No CHANGELOG. See documents.md →
+  Pass 3. Next: B9 membership pipeline.
+
+- **B9 membership pipeline ✅ (pass 3).** Re-verified MP2-1/MP2-2/MP-6 hold. **Fixed
+  MP2-3** (latent-500): `step_type`/`action_type`/prospect `status` were free-str →
+  strict ENUM, inserted raw (create_step/update_step; update_prospect setattr, status
+  not protected) → 500 on bad value. Added `@field_validator`s (ProspectStatus,
+  PipelineStepType, ActionType), request-only, → 422. **Cleared two lens false
+  positives by reading:** interview `recommendation` goes through an
+  `InterviewRecommendation(...)` coercion the endpoints already convert to 400 (not a
+  500); `ProspectElectionPackage.status` is a plain String column, not an ENUM.
+  **Swept MP2-4** (4 E712). **10 tests added**; existing MP tests pass. Gate:
+  flake8/black/tsc clean. CHANGELOG updated. See membership-pipeline.md → Pass 3.
+  Next: B10 messaging.
+
+- **B10 messaging ✅ (pass 3).** Re-verified MSG-2 (`_validate_targeting` on
+  create+update) and the org-scoped `_targeted_users` choke point hold. **Latent-500
+  lens clean:** `DepartmentMessage`'s enum columns (`priority`, `target_type`) are
+  already typed as `MessagePriority`/`MessageTargetType` in the inline `messages.py`
+  schemas (with an explicit comment) — no free-string→ENUM path. **Swept MSG2-1** —
+  1 residual `is_active == True # noqa: E712` in `message_delivery_service.py` that
+  pass 1 missed (it swept messaging_service.py); module now E712-free. 36 messaging
+  tests pass. Gate: flake8/black clean; tsc n/a (no FE change). No CHANGELOG. See
+  messaging.md → Pass 3. Next: B11 notifications.
+
+- **B11 notifications ✅ (pass 3).** Re-verified NOTIF2-3 (push-endpoint SSRF
+  validator) and push scoping/fail-safe delivery hold. **Fixed NOTIF2-4** (latent-500):
+  rule `trigger`/`category`/`channel` were free-str → strict ENUM, stored raw
+  (create_rule `**rule_data`, update_rule setattr) → 500 on bad value. Added
+  `@field_validator`s (NotificationTrigger/Category/Channel), request-only → 422. **7
+  tests added.** **NOTIF2-3 DNS-rebinding residual kept flagged deliberately** — a
+  shared `assert_outbound_url_safe` exists, but adding resolve-time checks needs care
+  around the push test-harness (pass 2's reason) and the subscribe-vs-send rebinding
+  window; not a batch drive-by. E712 already clean (pass 1). Gate: flake8/black clean;
+  tsc n/a. CHANGELOG updated. See notifications.md → Pass 3. Next: B12 integrations.
+
+- **B12 integrations ✅ (pass 3) — verified clean, no code change.** INT-3 (the last
+  substantive open finding) was resolved earlier this session via the owner
+  read-permission decision (config list/get → integrations.manage + a status-only
+  `/connected` projection). Re-verified: INT-1 send-time SSRF holds
+  (`assert_outbound_url_safe` at every channel service's send boundary), INT-3 gate +
+  `/connected` route ordering hold, INT-4 config-merge (exclude_unset) holds.
+  Latent-500 lens **N/A** — the integration model has no enum columns (config is JSON
+  validated per-type). E712-free across the package. INT-5 (uninvoked
+  `KNOWN_WEBHOOK_DOMAINS` allowlist) stays flagged as an owner behavior decision. No
+  CHANGELOG. See integrations.md → Pass 3. Next: B13 forms.
+
+- **B13 forms ✅ (pass 3).** Re-verified FORM-1/2/3/6/7 hold. **Fixed FORM2-1**
+  (latent-500): `category`/`status`/`field_type`/`target_module`/`integration_type`
+  (FormIntegration) were free-str → strict ENUM, inserted raw → 500. Notably
+  `category` already had a validator but it only NORMALIZED case without rejecting
+  unknowns, so it never prevented the 500. Added a shared `_enum_check` (normalize +
+  validate) replacing the 2 normalize-only category validators and covering the
+  others → 422. **Cleared two false positives:** `Form.integration_type` is a String
+  column (not ENUM); `FormIntegrationUpdate` exposes no enum field. **Swept FORM2-2**:
+  6 boolean-column E712 → `.is_()`, keeping 1 `json_extract == True` JSON compare with
+  an explanatory noqa. **10 tests added.** Gate: flake8/black clean; tsc n/a. CHANGELOG
+  updated. See forms.md → Pass 3. Next: B14 grants & fundraising.
+
+- **B14 grants & fundraising ✅ (pass 3) — verified clean, no code change.**
+  Re-verified GF-6/GF-12 `assert_in_org` FK guards and GF-10/GF-11 enum fixes hold;
+  E712-free. **Latent-500 lens clears:** the module validates its enum fields with
+  `Literal` types (63 uses — how GF-10/11 were fixed). The one flag
+  (`GrantExpenditure*.payment_method`) is a double false positive — the lens doesn't
+  recognize `Literal` validation, and that column is a plain `String` (not ENUM), so
+  no 500. Noted GF2-obs (LOW): expenditure `payment_method` is free-text where a
+  sibling uses `PaymentMethodLiteral` — an inconsistency not a defect (String column
+  implies intentional free-text custom methods); folds into the GF-9 follow-up rather
+  than a money-module auto-fix. GF-7/8/9 remain flagged. No CHANGELOG. See
+  grants-fundraising.md → Pass 3. **B9–B14 batch complete.**
+
+- **B15 admin-hours ✅ (pass 3) — verified clean, no code change.** Re-verified the
+  self-credit/SoD guards hold on both approval paths: AH-4 single-entry
+  `assert_different_person` (service ~750) and AH-6 bulk-approve skips self-owned
+  entries (`skipped_self`, ~917); AH-1 (entries start PENDING) and AH-5 (org-scoped
+  internal queries) intact. Latent-500 lens clean (`entry_method`/`status` properly
+  typed); E712-free. FIN-7 float-money concern N/A — admin hours are time (24h/entry
+  cap), not currency. Per-org SoD toggle stays flagged. No CHANGELOG. See
+  admin-hours.md → Pass 3. Next: B16 reports & analytics.
+
+- **B16 reports & analytics ✅ (pass 3).** Re-verified RPT-1/RPT-2 hold and **RPT-3
+  confirmed resolved** (the PII-report gate landed this session via the owner
+  decision — `PII_REPORT_PERMISSIONS`/`_enforce_report_pii_permission` on
+  generate/run + `/available` filtering). Update-bypass clean. **Latent-500 lens
+  clean:** SavedReport has no enum columns (report_type/schedule_frequency are
+  String). **Swept RPT2-1** — 4 boolean-column E712 in reports.py (is_active) and
+  platform_analytics.py (is_cancelled ×2, checked_in). RPT-6 (>100% completion),
+  RPT-7 (defensive ValueError wrapper), RPT-5c stay flagged. 108 report/analytics
+  tests pass. Gate: flake8/black clean; tsc n/a. No CHANGELOG. See
+  reports-analytics.md → Pass 3. Next: B17 events.
+
+- **B17 events ✅ (pass 3).** Re-verified EV-8 (location_id in-org on create/update),
+  EV-9/EV-10, EV-1/2/6/7 hold; E712-free. **Fixed EV2-1** (the widest latent-500 this
+  pass): `event_type`/`check_in_window_type`/`recurrence_pattern`/RSVP `status` are
+  strict ENUMs but were free-str across **9 request schemas** with no validator,
+  inserted raw → 500. Added a shared `_enum_check` + `@field_validator`s on all 9
+  request classes (EventType/CheckInWindowType/RecurrencePattern/RSVPStatus), on the
+  concrete request classes not the shared bases → responses untouched. **10 tests
+  added**; 139 event tests pass. Gate: flake8/black clean; tsc n/a. CHANGELOG updated.
+  See events.md → Pass 3. Next: B18 training.
+
+- **B18 training ✅ (pass 3).** **TR-5 confirmed resolved** (Decision 4 this session —
+  `_credits_certification_or_requirement` routes credited submissions to manual
+  review); TR-6/TR-7/TR-1/2/3 hold. **Latent-500 lens clears:** the 10 flagged
+  `training_type`/`status`/`frequency` fields are false positives — `schemas/training.py`
+  already has 11 `@field_validator`s covering them (verified all three creates reject
+  bad values). **Swept TR2-1** — 26 boolean-column E712 across 6 training services
+  (enhancement 13, program/waiver 4 each, compliance/service 2 each, external 1) that
+  passes 1–2 never swept; all boolean columns (no JSON compares) → `.is_()`. 95
+  training tests pass. Gate: flake8/black clean; tsc n/a. No CHANGELOG. See training.md
+  → Pass 3. Next: B19 scheduling.
+
+- **B19 scheduling ✅ (pass 3).** Re-verified SCH-7 (`create_template` validates
+  apparatus_id via `apparatus_ref_exists` → "Apparatus not found"; update mirrors),
+  SCH-8 (`get_active_shift_for_apparatus` returns Optional[Shift], no 500),
+  SCH-1/2/3/4/6 hold. **Latent-500 lens clears:** shift enum columns
+  (assignment_status/pattern_type/position/status) are properly typed/validated in the
+  scheduling schemas — 0 free-str. **Swept SCH2-1** — 7 boolean-column E712
+  (Shift.is_finalized ×3, ShiftPattern.is_active, MemberLeaveOfAbsence.active ×2,
+  TrainingRequirement.active) → `.is_()`. SCH-5 (swap accept-path design change) and
+  SCH-6 residual stay flagged. 109 scheduling tests pass (DB-heavy module; db_session
+  errors are the no-MySQL limit). Gate: flake8/black clean; tsc n/a. No CHANGELOG. See
+  scheduling.md → Pass 3. Next: B20 finance.
+
+- **B20 finance ✅ (pass 3) — B15–B20 batch complete.** Two standing flags closed
+  this session and re-verified: **FIN-4 RESOLVED** (person-based SoD —
+  `assert_different_person` on mark_pr_paid/mark_expense_paid/issue_check/waive_dues,
+  Decision 1) and **FIN-5 RESOLVED** (`restrict_to_user` scoping, Decision 3). **Fixed
+  FIN2-1** (latent-500): 13 free-str enum fields (applies_to/step_type/approver_type/
+  frequency/expense_type/mapping_type/priority) across 8 request schemas mapped to
+  strict ENUMs, no validator, stored raw → 500. Added a shared `_enum_check` +
+  `@field_validator`s — input validation only, money math untouched. **8 tests
+  added**; finance unit tests pass. E712 already clean (pass 2). FIN-7 residual
+  (float→Decimal) + FIN-N stay flagged. Gate: flake8/black clean; tsc n/a. CHANGELOG
+  updated. See finance.md → Pass 3.
+
+- **B21 orgs, roles & users ✅ (pass 3) — verified clean, no code change.** Re-verified
+  the permission-ceiling guards on the highest-risk (privilege-escalation) module:
+  ORU-7a/7b (`_enforce_permission_grant_ceiling`/`_enforce_role_edit_ceiling`,
+  roles.py 51/87 wired at 228/312/327/452) and **ORU-7d CRITICAL**
+  (`_enforce_rank_grant_ceiling`, users.py 673, wired into create_member 234 +
+  update_user_profile 1314; test_rank_grant_ceiling.py 4/4 pass). Latent-500 lens
+  clean (identifier_type/leave_type/organization_type/status properly typed); E712-free
+  across role/org/user services. ORU-7c (org-wide member-role mass-escalation) stays
+  flagged. No CHANGELOG. See orgs-roles-users.md → Pass 3. Next: B22 compliance & skills.
+
+- **B22 compliance & skills ✅ (pass 3).** Re-verified CS-10 (`_authorize_test_write`
+  refuses examiner==candidate, test 2/2) and **CS-9 recipient audit confirmed** (the
+  allow-list was resolved this session via Decision 2 — `audit_external_recipients` in
+  `_email_report`). CS-1..7/CS-11 hold. **Latent-500 lens N/A** (no strict enum
+  columns on the compliance/skills models). **Swept CS2-1** — 2 boolean-column E712
+  (compliance_config `TrainingRequirement.active`, skills_testing `SkillTest.is_practice`)
+  → `.is_()`. CS-8 attestation SoD + CS-9 monthly windowing stay flagged. Gate:
+  flake8/black clean; tsc n/a. No CHANGELOG. See compliance-skills.md → Pass 3.
+  Next: B23 security, audit & IP.
+
+- **B23 security, audit & IP ✅ (pass 3).** Re-verified SEC-6 (security_monitoring
+  resolves + org-scopes each alert), SEC-10 (audit stamps organization_id into the
+  hash-chain input, v3; reads/exports filter it), SEC-1..9 hold. **Latent-500 lens
+  clean** — the only enum column (`severity`) is server-set, not a client input.
+  **Swept SEC2-1** — 2 boolean-column E712 (security_monitoring
+  `SecurityAlertRecord.acknowledged`, ip_security `CountryBlockRule.is_blocked`) →
+  `.is_()`. SEC-2 residual (DB-level tail-truncation detection) stays flagged. 354
+  security/audit tests pass. Gate: flake8/black clean; tsc n/a. No CHANGELOG. See
+  security-audit-ip.md → Pass 3. Next: B24 core infra.
+
+- **B24 core infra ✅ (pass 3) — verified clean, no code change.** Re-verified the
+  crypto/CSV/middleware foundation: CI-1 (SafeCsvWriter on the exporters), CI-4
+  (decrypt narrows to `except InvalidToken`; genuine AES-256-GCM InvalidTag
+  propagates), CI-5 (AES-256-GCM @ 600k PBKDF2). Pitfall #4 followed —
+  `security_middleware.py` explicitly does NOT use BaseHTTPMiddleware (all pure ASGI).
+  E712-free across app/core/ and main.py. Latent-500 lens N/A (foundational code, no
+  enum request schemas). CI-9/CI-4-full/CI-10-residual/CI-11 stay flagged. No
+  CHANGELOG. See core-infra.md → Pass 3. Next: B25 onboarding.
+
+- **B25 onboarding ✅ (pass 3).** Re-verified ONB-3/ONB-9 (completion guard `if
+  status.is_completed: raise` + second-org/second-owner replay guards) and ONB-8
+  (`/status` minimal post-completion body) hold. **Latent-500 lens N/A** — no
+  dedicated onboarding schema module; the flow reuses the validated user/role/org
+  schemas. **Swept ONB2-1** — 2 boolean-column E712 (`OnboardingStatus.is_completed`)
+  → `.is_()`. ONB-7 (role-editor client permissions) + ONB-8 residual stay flagged. 11
+  onboarding tests pass (DB-heavy integration tests hit the no-MySQL limit). Gate:
+  flake8/black clean; tsc n/a. No CHANGELOG. See onboarding.md → Pass 3. Next: B26
+  public-portal.
+
+- **B26 public-portal ✅ (pass 3) — verified clean, no code change.** Re-verified the
+  unauthenticated surface: PP-1 (webhook constant-time verifiers verify_shared_secret/
+  verify_hmac_signature; API-key prefix-scan + constant-time compare), PP-4
+  (public_rate_limit before expensive work on feeds/display), PP-2/3/5/7 hold.
+  E712-free across app/api/public/. Latent-500 lens N/A/clean — the public surface is
+  read/webhook; the one public write (form submission) goes through the forms schemas
+  validated in B13 (FORM2-1). PP-6 (token-at-rest infra/schema) + PP-7 residual stay
+  flagged. No CHANGELOG. See public-portal.md → Pass 3. Next: B27 frontend shared.
+
+- **B27 frontend shared ✅ (pass 3) — verified clean, no code change; Tier B pass 3
+  COMPLETE.** The backend enum-latent-500/E712 lenses don't apply to the frontend; the
+  frontend-specific checks were re-run: FE-2 (PII list endpoints stay in
+  UNCACHEABLE_PREFIXES, trailing-slash bug fixed — `/users` covers the list; the
+  Decision-2/3 PII gating interacts here and the excluded set is intact), FE-1
+  (`toAppError` object/array detail), auth invariants (httpOnly cookies, shared
+  refreshPromise, CSRF, no token in localStorage), banned date/number APIs (ESLint
+  enforced). Definitive gate: `tsc --noEmit` 0; eslint 0 across services/utils/hooks/
+  contexts/components; 476 shared-layer tests pass (27 files). See frontend-shared.md
+  → Pass 3.
+
+---
+
+## 🏁 Tier B pass 3 complete (2026-08-09) — all 27 features re-reviewed
+
+Tier B (B1–B27) has now been through a **third** full pass. Pass 3's throughline was
+the **B1 latent-500 enum lens** — a request field typed as free `str` mapping to a
+strict MySQL `ENUM` column, inserted raw, 500ing on a bad value. It paid off with
+**7 genuine 500-fixes** (B1 medical-screening, B6 meetings, B9 membership-pipeline,
+B11 notifications, B13 forms, B17 events — the widest at 9 schemas, B20 finance — in
+the money module) and, just as importantly, **numerous false positives cleared by
+reading** rather than blind-fixing (Literal types, String columns, coercion paths,
+existing `@field_validator`s, `pattern=` constraints, update-schemas that omit the
+field). Two cross-tenant/behavior finds surfaced from fresh reading (B7 EC2-4 — a
+read-leak pass 2 had misclassified as integrity-only; B2 AP2-2 closure), and the
+`== True/False # noqa: E712` debt was swept module-by-module (≈**90 comparisons**
+across the services, keeping the one intentional `json_extract == True`). Every
+owner-decision fix from earlier this session (Money SoD, TR-5, external-recipient
+audit, RPT-3/INT-3/FIN-5 read-gates → FIN-4/FIN-5 reconciled) was re-verified landed.
+Same discipline throughout: verified/safe fixes only, product/behavior/migration items
+flagged, regression tests added, gate green (flake8/black/tsc/eslint; DB-backed tests
+are the known no-MySQL sandbox limit). Tier A remains ✅ (not re-run in pass 3).
+
+## 🔄 Pass 4 opened (2026-08-09)
+
+Tier B reset to ⬜ for a fourth full pass; Tier A remains ✅ (front-loaded,
+never-reviewed surfaces already covered three times — not re-run unless directed).
+Pass 4 starts from pass-3's landed fixes and the owner-decision closures: re-verify
+they still hold, confirm no regression re-opened a fixed finding, and widen the lens
+for anything still flagged in `KNOWN_LIMITATIONS.md` (the remaining
+migration/behavior/product items — e.g. MS-1 PHI-at-rest, the FIN-7 float→Decimal
+refactor, the FORM-4/5 and CS-8 product decisions, and the module-specific residual
+FK sweeps like INV-4). Pass 3 drove the latent-500 enum lens and an E712 sweep to
+completion across all 27 modules, so pass 4's marginal value is in the deeper,
+migration-shaped and product-decision items rather than another mechanical sweep.
+Next feature: **B1 medical-screening**.
+
+### Pass 4 log
+
+- **B1 medical-screening ✅ (pass 4) — MS-1 closed: PHI encrypted at rest.** The
+  four PHI columns on `screening_records` (`provider_name`, `result_summary`,
+  `result_data`, `notes`) were plaintext; MS-1 has been the top flagged follow-up
+  since pass 1. Closed it safely without a backfill-risk migration: (1) added a new
+  transparent `EncryptedJSON` column type alongside `EncryptedText`
+  (`app/core/encrypted_types.py`) — `json.dumps`/`loads` around the payload, and a
+  legacy-read path that `json.loads` a pre-encryption `JSON`→`TEXT` row; (2)
+  converted the three text/identity columns to `EncryptedText` and `result_data`
+  to `EncryptedJSON` (`app/models/medical_screening.py`); (3) wrote the Alembic
+  migration (`20260809_0001_encrypt_medical_screening_phi.py`) — alters
+  `provider_name` `VARCHAR(255)`→`TEXT` and `result_data` `JSON`→`TEXT`, then
+  encrypts existing rows in place, with a reversible `downgrade()`. Safe because
+  `EncryptedText`/`EncryptedJSON` return legacy plaintext untouched on
+  `InvalidToken`, and a repo-wide search confirmed none of the four fields is used
+  in a `WHERE`/`filter`. **7 DB-free tests** (`tests/test_encrypted_types.py`, 12
+  cases) pin round-trip / ciphertext-at-rest / legacy tolerance for both types.
+  MS2-5 enum validators re-verified intact. **Caveat:** the migration `ALTER`s +
+  backfill can't run in the no-MySQL sandbox — must be verified in CI/staging with
+  a DB backup first; partial runs are safe to re-run. Gate: flake8 0 · black clean
+  · tsc n/a. See medical-screening.md → Pass 4. Next: B2 apparatus.
+
+- **B2 apparatus ✅ (pass 4) — invariants re-verified, no code change.** Pass 3
+  closed every code item; pass 4 confirmed the landed state holds: `assert_in_org`
+  wired at 17 sites (create + update FK classes), 0 E712 noqa, `fuel_type`
+  enum-typed (latent-500 lens clean). Open items unchanged (a MySQL-backed
+  integration test blocked by the no-DB sandbox; a future maintenance/EVOC
+  business-logic depth read). See apparatus.md → Pass 4.
+
+- **B3 inventory ✅ (pass 4) — INV-4 closed: the dedicated XC-1 FK-scoping sweep.**
+  Did the one substantive item the prior passes deferred: ~13 create/update methods
+  persisted client-supplied FK ids (category parent, item location/storage/
+  variant-group/assignee, maintenance performed_by, write-off clearance, return
+  assignment/issuance/checkout, reorder item/category, equipment-kit line items,
+  reorder-from-plan stock category) without an in-org check. Mapped every FK via a
+  sub-agent (all targets org-scoped), then validated each with the shared
+  `assert_in_org(..., allow_none=True)` — two DRY helpers (`_assert_item_fks_in_org`,
+  `_assert_reorder_fks_in_org`) where a method group shares the FK set, direct
+  calls elsewhere. `create_reorder_from_plan` now fails closed on a foreign stock
+  category (it previously stamped the client id as a dangling FK). `EquipmentKitItem`
+  child FKs validated directly (no org column of its own). Added `DepartureClearance`/
+  `StorageArea`/`Location` imports. Integrity-only class (read-leak subset already
+  closed in INV2-1), so a foreign id is now a clean `ValueError → 400`, no behavior
+  change for valid callers. **10 DB-free tests** (`test_inventory_inv4_fk_scoping.py`).
+  Closes the biggest standing item on the module. Gate: flake8 0 · black clean · tsc
+  n/a. See inventory.md → Pass 4.
+
+- **B4 facilities ✅ (pass 4) — invariants re-verified, no code change.**
+  `_assert_facility_in_org` wired at 10 sites (all 9 `facility_id` update paths +
+  `update_compliance_item`'s `checklist_id`), 0 E712 noqa, 16 enum columns all
+  enum-typed (latent-500 clean). One open item: FAC-4 (`list_facilities` `search`
+  wired but not exposed on `GET /facilities`) — an owner call, not a bug. See
+  facilities.md → Pass 4.
+
+- **B5 elections ✅ (pass 4) — 2 E712 the pass-3 sweep missed (ELEC2-2).** Pass 3's
+  ELEC2-1 swept the 31 E712 in `election_service.py` but missed two in the endpoint
+  file `elections.py` (`Candidate.accepted == True  # noqa: E712` at lines 409/3504,
+  a Boolean column). Swept both to `.is_(True)`; the module (service + endpoints) is
+  now fully E712-free. Headline invariants (create_candidate FK validation,
+  CandidateUpdate no-FK, get_client_ip, cache exclusion, enum-typed status)
+  re-verified. Gate: flake8 0 · black clean. See elections.md → Pass 4.
+
+- **B6 meetings & minutes ✅ (pass 4) — MM2-3 resolved.** Pass 3 flagged
+  `status`/`priority` free-str fields for per-field verification. Did that across
+  both action-item stacks: the `app.schemas.minute` → `MinuteService` fields
+  (`Motion.status`, `ActionItem.priority`/`status`) are **already safe** — the
+  service coerces through the enum constructor (`MotionStatus(...)`), raising a
+  caught `ValueError → 400`, so they're false positives (the pass-3 note also
+  misread `priority` against the wrong model's Integer column). The genuine gap was
+  the `app.schemas.meetings` → `MeetingsService` fields `MeetingUpdate.status` and
+  `ActionItemUpdate.status`, applied via a blind `setattr` (bad value reaches
+  MySQL: 500/DB-error under strict mode, silent `''` under non-strict). Fixed with
+  `@field_validator`s (shared `_validate_enum` helper) → clean 422. **10 tests**
+  (`test_meetings_status_validation.py`). Gate: flake8 0 · black clean · tsc n/a.
+  See meetings-minutes.md → Pass 4.
+
+- **B7 equipment-check ✅ (pass 4) — invariants re-verified, no code change.** EC2-4
+  read-leak fix (item_names lookup org-filtered), EC2-3 write-side `_validate_item_fks`,
+  and the three latent-500 endpoint guards all hold; both services E712-free. Open:
+  EC-11 (feature), EC-7 residual (owner permission call). See equipment-check.md → Pass 4.
+
+- **B8 documents ✅ (pass 4) — invariants re-verified, no code change.** DOC-6
+  `assert_in_org` guards (6 sites), DOC2-1 name enrichment, E712-free both services.
+  Open: DOC-4/DOC-5 owner decisions; the `get_folders`→`can_access_folder` ACL
+  consolidation left flagged (a drift-risk refactor that wants its own DB-backed
+  pass, not a rotation tick). See documents.md → Pass 4.
+
+- **B9 membership pipeline ✅ (pass 4) — MP2-5: two client-FK gaps the MP-5 sweep
+  missed.** A full FK audit (sub-agent) confirmed everything MP-5/MP2-2 hardened
+  holds, and found two writes that stored a client-supplied FK raw: (1)
+  `add_prospect_document.step_id` — the one MP-5 sibling skipped; now guarded with
+  the same `step in prospect.pipeline.steps` check its siblings use; (2)
+  `email_template_id` on `create_pipeline`/`add_step`/`update_step` — a FK to the
+  org-scoped `EmailTemplate`, not in `_STEP_PROTECTED_FIELDS`; now validated via a
+  shared `_assert_email_template_in_org` (assert_in_org, allow_none). Also fixed a
+  latent-500: the three step-writer endpoints had no `except ValueError` (only
+  reorder/prospect did), so the new guards would have 500'd — added the module-standard
+  400 wrapper. 6 tests. See membership-pipeline.md → Pass 4.
+
+- **B10 messaging ✅ (pass 4) — invariants re-verified, no code change.** MSG-2
+  `_validate_targeting` wired into create/update, org-scoped `_targeted_users` choke
+  point, enum-typed priority/target_type, E712-free both services. Open: MSG-3
+  (test-email design), get_inbox pagination. See messaging.md → Pass 4.
+
+- **B11 notifications ✅ (pass 4) — NOTIF2-3 DNS-rebinding residual closed at send
+  time.** The push SSRF residual (a public host re-pointed at an internal IP after
+  subscribe) is now caught where it matters: `_send_one` calls the shared
+  `assert_outbound_url_safe` immediately before `webpush` (re-resolves, fails closed
+  on a private IP), and `send_to_user` skips a now-non-public endpoint. Running the
+  guard at *send* time — not subscribe time — sidesteps the test-harness collision
+  pass 3 flagged; it's gated to production/staging so the loopback wire-format tests
+  (development env) still dispatch, and the subscribe-time IP-literal/localhost guard
+  still runs everywhere. 4 DB-free tests. See notifications.md → Pass 4.
+
+- **B12 integrations ✅ (pass 4) — invariants re-verified, no code change.** INT-1
+  send-time SSRF (`assert_outbound_url_safe` at store+send in all 5 channel
+  services), INT-3 read gate, INT-4 `exclude_unset` merge all hold; E712-free.
+  Doc correction: pass 2's "INT-1 more robust than B11's push fix" note is
+  superseded — B11 pass 4 gave push the same send-time guard, so the two outbound
+  surfaces have converged. Open: INT-5 allowlist (owner decision). See integrations.md.
+
+- **B13 forms ✅ (pass 4) — full FK re-audit; the one residual re-confirmed
+  non-security, no code change.** A fresh exhaustive client-FK audit (sub-agent)
+  found no new cross-org write gap: FORM-1/2 integration writes covered,
+  `field_mappings` validated against the form's own fields, submit-path integration
+  FKs `_entity_in_org`-checked. The only finding is the already-flagged BXC-1
+  `condition_field_id` residual — a *soft* reference (no DB FK), no org column,
+  never dereferenced server-side (drives client-side conditional visibility only),
+  so a foreign value is a dangling reference, not cross-org reach. Left flagged: the
+  worthwhile hardening is a *same-form* validation (correctness, not security), but
+  its builder semantics (self-referential fields created in the same call, server-gen
+  ids) want a DB-backed pass, not a rotation-tick guess. See forms.md → Pass 4.
+
+- **B14 grants & fundraising ✅ (pass 4) — full FK re-audit: zero gaps, no code
+  change.** Money module, so the FK surface got the closest look: every
+  create/update writer's client FK is validated (`_validate_application_fks`,
+  `_budget_item_in_application`, `_entity_in_org`, `_validate_pledge_fks`,
+  `_validate_fundraising_event_fks`, `assert_in_org`) or popped from the org-verified
+  URL path; the three response-only fields (`Donor.user_id`,
+  `GrantExpenditure.approved_by`, create-path `assigned_to`) can't be client-injected.
+  Open: GF-7/GF-8/GF-9 (product/refactor; GF-8 anonymity-in-staff-views is a genuine
+  product decision). See grants-fundraising.md → Pass 4.
+
+- **B15 admin-hours ✅ (pass 4) — invariants re-verified, no code change.** AH-4/AH-6
+  separation-of-duties (`assert_different_person` + bulk self-skip), AH-1 PENDING
+  default, AH-5 org-scoping, enum-typed request fields, E712-free all hold. Open:
+  per-org SoD toggle (product/config). See admin-hours.md → Pass 4.
+
+- **B16 reports & analytics ✅ (pass 4) — invariants re-verified; RPT-7 reconfirmed
+  defensive-only, no code change.** RPT-1 cross-org leak guard, RPT-2 `_safe_int`,
+  RPT-3 PII gate hold; E712-free. RPT-7 (the `except ValueError→400` wrapper on
+  `/generate`+`/run`) re-traced and left flagged — both paths already map the
+  generators' `{"error"}` dict to 400 and dates/filters are Pydantic-validated, so
+  there's no `ValueError` path today and the wrapper would be dead code
+  (anti-speculation). Open: RPT-6 (>100% completion edge), RPT-5c (float→Decimal).
+  See reports-analytics.md → Pass 4.
+
+- **B17 events ✅ (pass 4) — EV2-2: a cross-org read-leak + a dangling FK on the
+  location paths.** A fresh full FK audit (sub-agent) confirmed EV-8/BXC-1 hold on
+  every event-write path and found two location FKs on the adjacent surfaces: (1)
+  `schedule_request` (event-request→event) stored `event_location_id` unvalidated
+  when `create_calendar_event` was false (the default), and `_get_location_name`
+  wasn't org-scoped — so a foreign location's name leaked into `event_location_name`
+  (a real XC-1 read-leak); fixed two-layer (org-scope the enrichment + validate on
+  write via assert_in_org → 400). (2) `create_template`/`update_template` stored
+  `default_location_id` unvalidated (dangling-only, not projected); fixed with a
+  shared `_assert_template_location_in_org` + the module-standard `except ValueError
+  →400` on both template endpoints (previously absent — latent-500). 6 tests. See
+  events.md → Pass 4.
+
+- **B18 training ✅ (pass 4) — TR-6: external-credential decrypt now fails closed.**
+  `ExternalTrainingSyncService._decrypt_field` caught `except Exception: return
+  value`, so a genuine GCM auth failure (InvalidTag — tampered/wrong-key) handed the
+  raw stored value to the external LMS as a live credential. Narrowed the catch to
+  `except InvalidToken` (the legacy-plaintext case) so InvalidTag propagates and
+  fails closed — the same posture as the MS-1 EncryptedText type. 4 tests. The LOW
+  not-projected dangling-FK batch (session/recert/recurring/waiver + sync backstops)
+  stays a deliberate future FK-hardening batch. See training.md → Pass 4.
+
+- **B19 scheduling ✅ (pass 4) — invariants re-verified, no code change.** SCH-7
+  `apparatus_id` in-org validation, SCH-8 no-500, update-bypass clean, E712-free.
+  Open: SCH-5 (swap workflow), SCH-6 residual (conditional on unbuilt station link).
+  See scheduling.md → Pass 4.
+
+- **B20 finance ✅ (pass 4) — invariants re-verified, no code change.** FIN-4
+  disburse-side SoD (`assert_different_person`, 6 refs), FIN-5 view scoping,
+  `_validate_finance_fks` (13 refs), FIN2-1 enum validators hold; E712-free; FIN-N
+  re-confirmed not-live. Open: FIN-7 (float→Decimal refactor + pagination). See
+  finance.md → Pass 4.
+
+- **B21 orgs/roles/users ✅ (pass 4) — invariants re-verified, no code change.** The
+  privilege-escalation ceiling guards (ORU-7a/b permission+role-edit, ORU-7d CRITICAL
+  rank-grant) all wired; latent-500 clean; E712-free. Open: ORU-7c (org-wide member
+  role mass-edit — intended but sharp, owner decision). See orgs-roles-users.md.
+
+- **B22 compliance & skills ✅ (pass 4) — full FK re-audit: zero gaps, no code
+  change.** A fresh exhaustive client-FK audit (sub-agent) across all four services
+  found every writer covered: skill-test `template_id`/`candidate_id` org-scoped
+  selects, `requirement_id` via `_validate_requirement_link`, `add_test_viewer`
+  user_id in-org (Pitfall #14c); compliance-profile `requirement_ids`/`role_ids`/
+  `category_id` via `_validate_profile_fks` on create AND update. CS-8/CS-10 hold.
+  Open: CS-8 attestation, CS-9 monthly windowing (product/feature). See
+  compliance-skills.md → Pass 4.
+
+- **B23 security/audit/IP ✅ (pass 4) — invariants re-verified, no code change.**
+  SEC-6 alert org-scoping, SEC-10 audit org-column filter, SEC-2 tail cross-check,
+  DoS caps/LIKE/geo all hold; E712-free. Open: SEC-2 residual (external chain-tip
+  attestation, infra). See security-audit-ip.md → Pass 4.
+
+- **B24 core-infra ✅ (pass 4) — invariants re-verified, no code change.** CI-1
+  SafeCsvWriter, CI-4 InvalidToken-narrow decrypt (same fail-closed posture as B1/B18
+  this session), CI-5 AES-256-GCM, Pitfall #4 pure-ASGI middleware all hold;
+  E712-free. Open: CI-9/CI-4-full/CI-11/CI-10 (ops/config/migration-gated). See
+  core-infra.md → Pass 4.
+
+- **B25 onboarding ✅ (pass 4) — ONB2-2: 4 E712 the pass-3 sweep missed.** Pass 3's
+  ONB2-1 swept 2 `is_completed` E712 and claimed "E712-free," but 4 more survived in
+  `api/v1/onboarding.py` (`Organization.active`, `Role.is_system` — boolean columns).
+  Swept all 4 to `.is_(...)`; module now genuinely E712-free (same class as B5's
+  ELEC2-2). Open: ONB-7 (role editor product), ONB-8 residual. See onboarding.md.
+
+- **B26 public-portal ✅ (pass 4) — invariants re-verified, no code change.** PP-1
+  constant-time webhook auth, PP-4 rate-limit-before-work, PP-2/3/5/7 escaping/regex
+  guards, per-org api-key scoping all hold; `app/api/public/` E712-free. Open: PP-6
+  (Redis limiter + two-column status token — infra/schema), PP-7 residual. See
+  public-portal.md → Pass 4.
+
+- **B27 frontend shared ✅ (pass 4) — invariants re-verified, no code change; Tier B
+  pass 4 closed.** FE-2 HIPAA cache exclusion, FE-1 object-detail handling, httpOnly
+  auth / CSRF / refreshPromise, banned date/number APIs all hold. Open:
+  frontend-cleanup follow-ups (a future dedicated iteration). See frontend-shared.md.
+
+---
+
+## 🏁 Tier B pass 4 complete (2026-08-09) — all 27 features re-reviewed
+
+Tier B (B1–B27) has now been through a **fourth** full pass. Where pass 3's
+throughline was the latent-500 enum lens, pass 4's was the **deeper, migration- and
+audit-shaped items** pass 3 had deferred — plus a **fresh, exhaustive client-FK
+re-audit** (via sub-agents) of the largest write-surface modules to catch anything
+the incremental passes missed. Headline outcomes:
+
+**Substantive fixes (10 modules):**
+- **B1** MS-1 — PHI encrypted at rest (new `EncryptedJSON` type + Alembic migration).
+- **B3** INV-4 — the deferred ~13-method inventory FK org-scoping sweep.
+- **B6** MM2-3 — the two genuinely-unsafe meeting/action-item `status` validators.
+- **B9** MP2-5 — two client-FK gaps the MP-5 sweep missed (`add_prospect_document`
+  step, step-writer `email_template_id`) + a latent-500 endpoint wrapper.
+- **B11** NOTIF2-3 — push DNS-rebinding SSRF closed at **send** time (the insight
+  that sidestepped the test-harness collision that kept it deferred).
+- **B17** EV2-2 — a real cross-org **read-leak** (`schedule_request` location) + a
+  dangling template FK, found by the fresh FK audit.
+- **B18** TR-6 — external-credential decrypt now **fails closed** (`InvalidTag`
+  propagates instead of serving an unverified credential).
+- **B5** ELEC2-2 / **B25** ONB2-2 — E712 residuals two prior "E712-free" claims had
+  missed (endpoint files the service-only sweeps skipped).
+
+**Fresh FK re-audits that came back clean** (verify-only with evidence, not a rubber
+stamp): **B14** grants (money module), **B13** forms (one already-flagged
+non-security dangling ref), **B22** compliance/skills. Cross-tenant discipline
+(assert_in_org / is_in_org / `_validate_*_fks` / org-scoped fetch) is now
+comprehensively verified across the write surface.
+
+**Convergence noted:** B11's send-time push guard now matches B12 integrations'
+outbound SSRF re-check, and the fail-closed decrypt posture (B1 EncryptedText, B18
+`_decrypt_field`, B24 CI-4) is consistent across the crypto surface.
+
+Same discipline throughout: verified/safe fixes only; product/behavior/migration/
+infra items flagged in the module docs + `KNOWN_LIMITATIONS.md`; regression tests
+added for every code change; gate green (flake8/black/tsc/eslint; DB-backed tests
+are the known no-MySQL sandbox limit; the migration `ALTER`s need CI/staging
+verification). Tier A remains ✅ (front-loaded surfaces, not re-run in pass 4).
+
+---
+
+## 🔄 Pass 5 opened (2026-08-09)
+
+Tier B reset to ⬜ for a fifth full pass; Tier A remains ✅ (not re-run unless
+directed). Four passes have now driven the mechanical lenses to completion — the
+latent-500 enum sweep, the E712 sweep, and the cross-tenant client-FK re-audit are
+done and comprehensively verified across the write surface, so pass 5's marginal
+value is **not** another sweep of those. What remains, and where pass 5 should look:
+
+- **The flagged items still open in `KNOWN_LIMITATIONS.md` and the module docs** —
+  now mostly product/behavior/infra/migration decisions rather than defects. Pass 5
+  should (a) re-verify every pass-1..4 fix still holds (no regression re-opened a
+  finding), and (b) pick off any flagged item that has since become safely
+  closeable, the way pass 4 closed MS-1 once `EncryptedText` made a backfill-free
+  migration possible. Candidates: FIN-7 float→Decimal (money-math refactor), the
+  training dangling-FK batch (session/recert/recurring/waiver — LOW, not projected),
+  the B13 forms `condition_field_id` same-form correctness check, RPT-6 (>100%
+  completion edge), PP-6 (Redis limiter + two-column status token), CI-4 full
+  fail-closed decrypt (gated on the app-wide encryption backfill), CI-11.
+- **Depth reads beyond tenant isolation** — the business-logic corners the
+  security-first passes deliberately didn't reach (e.g. the apparatus
+  maintenance-scheduling / EVOC logic, the finance approval-chain state machine),
+  each as its own focused iteration.
+- **The MS-1 migration** must be verified against real MySQL (CI/staging, with a DB
+  backup) before deploy — carry this forward until confirmed.
+
+Same discipline as always: verified/safe fixes only, flag the rest, regression tests
+for every change, gate green. Next feature: **B1 medical-screening**.
+
+### Pass 5 log
+
+(pending)

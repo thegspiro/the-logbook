@@ -123,7 +123,7 @@ export const AccessLogsTab: React.FC = () => {
               value={filters.ip_address || ''}
               onChange={(e) => handleFilterChange('ip_address', e.target.value)}
               placeholder="e.g., 192.168.1.1"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             />
           </div>
 
@@ -135,7 +135,7 @@ export const AccessLogsTab: React.FC = () => {
               value={filters.endpoint || ''}
               onChange={(e) => handleFilterChange('endpoint', e.target.value)}
               placeholder="e.g., /api/public/v1/organization/info"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             />
           </div>
 
@@ -145,7 +145,7 @@ export const AccessLogsTab: React.FC = () => {
             <select
               value={filters.status_code || ''}
               onChange={(e) => handleFilterChange('status_code', e.target.value ? parseInt(e.target.value) : undefined)}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             >
               <option value="">All</option>
               <option value="200">200 - OK</option>
@@ -165,7 +165,7 @@ export const AccessLogsTab: React.FC = () => {
               onChange={(e) =>
                 handleFilterChange('flagged_suspicious', e.target.value === '' ? undefined : e.target.value === 'true')
               }
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             >
               <option value="">All</option>
               <option value="true">Flagged Only</option>
@@ -179,7 +179,7 @@ export const AccessLogsTab: React.FC = () => {
             <select
               value={filters.limit || 50}
               onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-hidden"
+              className="form-input"
             >
               <option value="25">25</option>
               <option value="50">50</option>

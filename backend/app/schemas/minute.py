@@ -7,11 +7,33 @@ Request and response schemas for meeting minutes, templates, and related endpoin
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.minute import MinutesMeetingType
 from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
+
+# MeetingMinutes.meeting_type / MinutesTemplate.meeting_type are strict MySQL
+# ENUMs; SQLAlchemy doesn't validate the string on bind, so an out-of-set value
+# reaches MySQL and 500s. Validate at the request schema (MM2-2, the B1
+# latent-500 class). This set includes 'executive' — the value the executive-
+# session read restriction keys on — so a valid restricted-minutes create is
+# unaffected.
+_MINUTES_MEETING_TYPES = {e.value for e in MinutesMeetingType}
+
+
+def _validate_minutes_meeting_type(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return value
+    normalized = value.lower() if isinstance(value, str) else value
+    if normalized not in _MINUTES_MEETING_TYPES:
+        raise ValueError(
+            f"Invalid meeting_type '{value}'. Must be one of: "
+            f"{', '.join(sorted(_MINUTES_MEETING_TYPES))}"
+        )
+    return normalized
+
 
 # ============================================
 # Section Schemas (for dynamic sections)
@@ -96,6 +118,10 @@ class TemplateCreate(BaseModel):
     header_config: Optional[HeaderConfig] = None
     footer_config: Optional[FooterConfig] = None
 
+    _check_meeting_type = field_validator("meeting_type")(
+        _validate_minutes_meeting_type
+    )
+
 
 class TemplateUpdate(BaseModel):
     """Schema for updating a minutes template"""
@@ -107,6 +133,10 @@ class TemplateUpdate(BaseModel):
     sections: Optional[List[TemplateSectionEntry]] = None
     header_config: Optional[HeaderConfig] = None
     footer_config: Optional[FooterConfig] = None
+
+    _check_meeting_type = field_validator("meeting_type")(
+        _validate_minutes_meeting_type
+    )
 
 
 class TemplateResponse(UTCResponseBase):
@@ -274,7 +304,8 @@ class MinutesBase(BaseModel):
     )
     meeting_type: str = Field(
         default="business",
-        description="Meeting type: business, special, committee, board, other",
+        description="Meeting type: business, special, committee, board, "
+        "trustee, executive, annual, other",
     )
     meeting_date: datetime = Field(..., description="Date and time of the meeting")
     location: Optional[str] = Field(None, max_length=300)
@@ -316,6 +347,10 @@ class MinutesCreate(MinutesBase):
     announcements: Optional[str] = None
     notes: Optional[str] = None
 
+    _check_meeting_type = field_validator("meeting_type")(
+        _validate_minutes_meeting_type
+    )
+
 
 class MinutesUpdate(BaseModel):
     """Schema for updating meeting minutes"""
@@ -345,6 +380,10 @@ class MinutesUpdate(BaseModel):
     committee_reports: Optional[str] = None
     announcements: Optional[str] = None
     notes: Optional[str] = None
+
+    _check_meeting_type = field_validator("meeting_type")(
+        _validate_minutes_meeting_type
+    )
 
 
 class MinutesResponse(UTCResponseBase):

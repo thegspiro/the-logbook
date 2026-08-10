@@ -291,7 +291,7 @@ async def deliver_department_message(message_id: str, organization_id: str) -> N
                 select(DepartmentMessage).where(
                     DepartmentMessage.id == str(message_id),
                     DepartmentMessage.organization_id == str(organization_id),
-                    DepartmentMessage.is_active == True,  # noqa: E712
+                    DepartmentMessage.is_active.is_(True),
                     DepartmentMessage.deleted_at.is_(None),
                 )
             )

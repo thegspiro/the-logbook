@@ -55,7 +55,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+    <div className="card-secondary p-5">
       <h3 className="text-theme-text-primary mb-1 text-base font-semibold">Position Names</h3>
       <p className="text-theme-text-muted mb-4 text-xs">
         Enable built-in position types or add custom ones unique to your department. Custom positions appear everywhere
@@ -134,7 +134,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
               setNewPositionValue(e.target.value.trim().toLowerCase().replace(/\s+/g, '_'));
             }}
             placeholder="Display name (e.g., Tillerman)"
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+            className="form-input flex-1"
           />
           <button
             onClick={addCustomPosition}

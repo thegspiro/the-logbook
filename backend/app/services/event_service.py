@@ -2214,10 +2214,26 @@ class EventService:
     # Event Templates
     # ============================================================
 
+    async def _assert_template_location_in_org(
+        self, location_id: Optional[str], organization_id: UUID
+    ) -> None:
+        # EV2-2 (XC-1): a template's default_location_id is client-supplied and
+        # stamped onto the template. Validate it is in the caller's org (mirrors
+        # the EV-8 create_event check), so a foreign id can't be persisted.
+        if location_id:
+            location_service = LocationService(self.db)
+            if not await location_service.get_location(
+                location_id, str(organization_id)
+            ):
+                raise ValueError("Location not found")
+
     async def create_template(
         self, template_data: Dict[str, Any], organization_id: UUID, created_by: UUID
     ) -> EventTemplate:
         """Create a new event template"""
+        await self._assert_template_location_in_org(
+            template_data.get("default_location_id"), organization_id
+        )
         template = EventTemplate(
             organization_id=str(organization_id),
             created_by=str(created_by),
@@ -2267,6 +2283,11 @@ class EventService:
         template = await self.get_template(template_id, organization_id)
         if not template:
             return None
+
+        if "default_location_id" in update_data:
+            await self._assert_template_location_in_org(
+                update_data.get("default_location_id"), organization_id
+            )
 
         for field, value in update_data.items():
             setattr(template, field, value)

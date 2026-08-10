@@ -9,11 +9,48 @@ approval chains, and export operations.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
-from app.models.finance import ExpenseType
+from app.models.finance import (
+    ApprovalEntityType,
+    ApprovalStepType,
+    ApproverType,
+    DuesFrequency,
+    ExpenseType,
+    ExportMappingType,
+    PurchaseRequestPriority,
+)
 from app.schemas.base import UTCResponseBase
+
+# applies_to / step_type / approver_type / frequency / expense_type / mapping_type /
+# priority map to strict MySQL ENUM columns, but were typed as free str and stored
+# raw — an out-of-set value passed Pydantic, reached MySQL, and 500'd (FIN2-1, the B1
+# latent-500 class). Validating the enum INPUT (→ 422) is safe hardening and does not
+# touch any money math. Amounts stay as-is (the float→Decimal FIN-7 item is separate).
+_APPLIES_TO = {e.value for e in ApprovalEntityType}
+_STEP_TYPES = {e.value for e in ApprovalStepType}
+_APPROVER_TYPES = {e.value for e in ApproverType}
+_DUES_FREQUENCIES = {e.value for e in DuesFrequency}
+_EXPENSE_TYPES = {e.value for e in ExpenseType}
+_MAPPING_TYPES = {e.value for e in ExportMappingType}
+_PRIORITIES = {e.value for e in PurchaseRequestPriority}
+
+
+def _enum_check(valid: set, field: str):
+    def _check(value):
+        if value is None:
+            return value
+        normalized = value.lower() if isinstance(value, str) else value
+        if normalized not in valid:
+            raise ValueError(
+                f"Invalid {field} '{value}'. Must be one of: "
+                f"{', '.join(sorted(valid))}"
+            )
+        return normalized
+
+    return _check
+
 
 _RESPONSE_CONFIG = ConfigDict(
     from_attributes=True,
@@ -166,6 +203,13 @@ class BudgetSummaryResponse(BaseModel):
 class ApprovalChainStepCreate(BaseModel):
     """Create a step in an approval chain"""
 
+    _check_step_type = field_validator("step_type")(
+        _enum_check(_STEP_TYPES, "step_type")
+    )
+    _check_approver_type = field_validator("approver_type")(
+        _enum_check(_APPROVER_TYPES, "approver_type")
+    )
+
     step_order: int = Field(..., ge=1)
     name: str = Field(..., min_length=1, max_length=200)
     step_type: str = "approval"
@@ -180,6 +224,13 @@ class ApprovalChainStepCreate(BaseModel):
 
 class ApprovalChainStepUpdate(BaseModel):
     """Update a step in an approval chain"""
+
+    _check_step_type = field_validator("step_type")(
+        _enum_check(_STEP_TYPES, "step_type")
+    )
+    _check_approver_type = field_validator("approver_type")(
+        _enum_check(_APPROVER_TYPES, "approver_type")
+    )
 
     step_order: Optional[int] = Field(None, ge=1)
     name: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -216,6 +267,10 @@ class ApprovalChainStepResponse(UTCResponseBase):
 class ApprovalChainCreate(BaseModel):
     """Create an approval chain"""
 
+    _check_applies_to = field_validator("applies_to")(
+        _enum_check(_APPLIES_TO, "applies_to")
+    )
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     applies_to: str
@@ -228,6 +283,10 @@ class ApprovalChainCreate(BaseModel):
 
 class ApprovalChainUpdate(BaseModel):
     """Update an approval chain"""
+
+    _check_applies_to = field_validator("applies_to")(
+        _enum_check(_APPLIES_TO, "applies_to")
+    )
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -310,6 +369,8 @@ class PendingApprovalResponse(UTCResponseBase):
 class PurchaseRequestCreate(BaseModel):
     """Create a purchase request"""
 
+    _check_priority = field_validator("priority")(_enum_check(_PRIORITIES, "priority"))
+
     fiscal_year_id: str
     budget_id: Optional[str] = None
     title: str = Field(..., min_length=1, max_length=300)
@@ -324,6 +385,8 @@ class PurchaseRequestCreate(BaseModel):
 
 class PurchaseRequestUpdate(BaseModel):
     """Update a purchase request"""
+
+    _check_priority = field_validator("priority")(_enum_check(_PRIORITIES, "priority"))
 
     budget_id: Optional[str] = None
     title: Optional[str] = Field(None, min_length=1, max_length=300)
@@ -378,6 +441,10 @@ class PurchaseRequestResponse(UTCResponseBase):
 
 class ExpenseLineItemCreate(BaseModel):
     """Create an expense line item"""
+
+    _check_expense_type = field_validator("expense_type")(
+        _enum_check(_EXPENSE_TYPES, "expense_type")
+    )
 
     budget_id: Optional[str] = None
     description: str = Field(..., min_length=1, max_length=500)
@@ -521,6 +588,10 @@ class CheckRequestResponse(UTCResponseBase):
 class DuesScheduleCreate(BaseModel):
     """Create a dues schedule"""
 
+    _check_frequency = field_validator("frequency")(
+        _enum_check(_DUES_FREQUENCIES, "frequency")
+    )
+
     name: str = Field(..., min_length=1, max_length=200)
     amount: float = Field(..., gt=0)
     frequency: str
@@ -534,6 +605,10 @@ class DuesScheduleCreate(BaseModel):
 
 class DuesScheduleUpdate(BaseModel):
     """Update a dues schedule"""
+
+    _check_frequency = field_validator("frequency")(
+        _enum_check(_DUES_FREQUENCIES, "frequency")
+    )
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     amount: Optional[float] = Field(None, gt=0)
@@ -659,6 +734,10 @@ class DuesSummaryResponse(BaseModel):
 class ExportMappingCreate(BaseModel):
     """Create an export mapping"""
 
+    _check_mapping_type = field_validator("mapping_type")(
+        _enum_check(_MAPPING_TYPES, "mapping_type")
+    )
+
     internal_category: str = Field(..., min_length=1, max_length=200)
     qb_account_name: str = Field(..., min_length=1, max_length=200)
     qb_account_number: Optional[str] = None
@@ -667,6 +746,10 @@ class ExportMappingCreate(BaseModel):
 
 class ExportMappingUpdate(BaseModel):
     """Update an export mapping"""
+
+    _check_mapping_type = field_validator("mapping_type")(
+        _enum_check(_MAPPING_TYPES, "mapping_type")
+    )
 
     internal_category: Optional[str] = Field(None, min_length=1, max_length=200)
     qb_account_name: Optional[str] = Field(None, min_length=1, max_length=200)

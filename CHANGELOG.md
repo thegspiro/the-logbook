@@ -133,6 +133,220 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > as a fixture holding a literal permission list.
 
 ---
+### Fixed
+
+- **Medical screening: saving a record with an unrecognized screening type or
+  status now shows a clear validation error instead of failing with a server
+  error (2026-08-09).** The medical-screening create/update forms already send
+  valid values, so this only affects malformed API requests, but those now return
+  a 422 with the list of allowed values rather than a 500.
+
+- **Meetings & minutes: saving a meeting, minutes, or template with an
+  unrecognized meeting type now returns a clear validation error instead of a
+  server error (2026-08-09).** Same class as the medical-screening fix; the forms
+  already send valid types, so only malformed API requests are affected. Valid
+  minutes types (including executive-session minutes) are unchanged.
+
+- **Meetings: updating a meeting's or an action item's status with an
+  unrecognized value now returns a clear validation error instead of a server
+  error (or silently storing a blank status) (2026-08-09).** Same class as the
+  fixes above; the meeting screens already send valid statuses, so only malformed
+  API requests are affected.
+
+- **Membership pipeline: saving a pipeline step or prospect status with an
+  unrecognized type/status now returns a clear validation error instead of a
+  server error (2026-08-09).** Same class as the fixes above — the pipeline
+  builder and applicant forms already send valid values, so only malformed API
+  requests are affected.
+
+- **Notification rules: saving a rule with an unrecognized trigger, category, or
+  channel now returns a clear validation error instead of a server error
+  (2026-08-09).** Same class as the fixes above; the rule editor already sends
+  valid values, so only malformed API requests are affected.
+
+- **Forms: saving a form, field, or integration with an unrecognized category,
+  status, field type, or target now returns a clear validation error instead of a
+  server error (2026-08-09).** Same class as the fixes above; the form builder
+  already sends valid values, so only malformed API requests are affected.
+
+- **Events: saving an event, template, or RSVP with an unrecognized event type,
+  check-in window, recurrence pattern, or RSVP status now returns a clear
+  validation error instead of a server error (2026-08-09).** Same class as the
+  fixes above; the event forms already send valid values, so only malformed API
+  requests are affected.
+
+- **Finance: saving an approval-chain step, purchase-request priority, dues
+  frequency, expense type, or export mapping with an unrecognized value now returns
+  a clear validation error instead of a server error (2026-08-09).** Same class as
+  the fixes above — input validation only; amounts and money handling are unchanged.
+  The finance forms already send valid values, so only malformed API requests are
+  affected.
+
+### Security: event-request scheduling can't reference another department's location (2026-08-09)
+
+**Security**
+
+- When an outreach event request is scheduled, the location assigned to it is now
+  verified to belong to your own department before it is saved, and the location
+  name shown on the request is looked up within your department only. Previously a
+  hand-crafted API request could attach another department's location id (when no
+  calendar event was created), and its name would then appear on the request. No
+  change for normal use — the scheduling screen only offers your own department's
+  locations.
+
+### Security: external-training credentials fail closed on a decryption error (2026-08-09)
+
+**Security**
+
+- API credentials for an external training provider (e.g. Vector Solutions) are
+  stored encrypted and decrypted just before the platform contacts the provider.
+  If decryption now fails because the stored value has been tampered with or the
+  encryption key is wrong, the sync is stopped instead of sending the unverified
+  value to the provider. Legitimate credentials, and older values saved before
+  encryption was added, are unaffected.
+
+### Security: membership-pipeline references are scoped to your department (2026-08-09)
+
+**Security**
+
+- Setting up a membership pipeline now verifies that the department stays inside
+  its own data. A pipeline step's email template, and the step a prospect's
+  uploaded document is filed under, are checked to belong to your department (and
+  the prospect's own pipeline) before they are saved — previously a hand-crafted
+  API request could attach another department's template or an unrelated step id.
+  No change for normal use; the pipeline builder already offers only your own
+  department's templates and steps. Saving a pipeline or step with an invalid
+  reference now returns a clear validation error instead of a server error.
+
+### Security: Web Push can no longer be aimed at an internal server (2026-08-09)
+
+**Security**
+
+- Browser push notifications are delivered by the server POSTing to a URL the
+  browser supplied when the device subscribed. That URL was screened at
+  subscribe time, but a public address could later be re-pointed at an internal
+  host (a DNS-rebinding trick) to make the server issue a request to an internal
+  target. The server now re-checks the destination immediately before each push
+  in production and staging, and skips any that resolves to a private/internal
+  address. No effect on real push delivery; this only closes an internal-request
+  vector.
+
+### Security: inventory records can no longer reference another department's data (2026-08-09)
+
+**Security**
+
+- Creating or editing inventory records — items, categories, maintenance records,
+  reorder and return requests, write-offs, size-variant batches, and equipment
+  kits — accepts several optional references (a parent category, a location, a
+  storage area, a variant group, an assigned member, the person who performed
+  maintenance, the assignment/issuance/checkout a return is against, etc.). These
+  references are now verified to belong to your own department before they are
+  saved. Previously a hand-crafted API request could attach the id of another
+  department's record; that record was never exposed in a response, but the stray
+  reference is now rejected outright with a clear error. No change for normal use —
+  the app already offers only your own department's records in these pickers.
+
+### Security: medical-screening health information is now encrypted at rest (2026-08-09)
+
+**Security**
+
+- Medical screening records store protected health information — the examining
+  provider's name, the result summary, structured results (scores/measurements),
+  and reviewer notes. These fields were previously held in the database as plain
+  text; they are now encrypted at rest with AES-256-GCM, matching how shift-report
+  narratives are already protected. Decryption is transparent, so the screening
+  screens behave exactly as before — nothing changes for users, but a database or
+  backup file no longer exposes the underlying health details.
+- Applied by a database migration that converts existing records in place. As with
+  any encryption-at-rest change, take a database backup before upgrading; the
+  migration is safe to re-run.
+
+### Money: you can no longer approve/record and pay out the same item yourself (2026-08-09)
+
+**Security**
+
+- **Separation of duties now covers the payout step.** A finance manager can no
+  longer mark their own purchase request or expense report paid, issue a check for
+  their own request, or waive their own dues; a store manager can no longer mark
+  their own order paid, waive its balance, or refund it. The action is refused with
+  a message asking for a second authorized person — matching how approvals already
+  worked. Automatic payment reconciliation (from the payment provider) is unaffected.
+
+- **Self-reported training that earns a certification can no longer auto-approve.**
+  A member submitting their own training toward a certification or a tracked
+  requirement (a certification course, a submission carrying a certification
+  number/expiration, or one linked to a training category) is now always routed to
+  an officer for review, even where the department had auto-approve turned on.
+  Auto-approve still applies to plain logged hours and skills practice, so nobody
+  can grant themselves a credential without a second person signing off.
+
+- **Emailing a compliance report to someone outside the department is now
+  recorded.** You can still send reports to any address (an outside auditor, a
+  state office), but each send to a recipient who isn't a member of your
+  organization is written to the audit log — who sent it, when, and to which
+  external addresses — so there's a trail whenever member/compliance data leaves
+  the department. Sending to fellow members is unaffected and creates no such entry.
+
+- **Reading personal data now needs the matching permission, not just report
+  access.** Three places where sensitive records sat behind a broad grant are
+  tightened: the member-roster and applicant-pipeline reports now require member /
+  prospective-member viewing access on top of report access (aggregate reports are
+  unchanged, and reports you can't run no longer appear in the list); expense-report
+  reimbursements are now visible only to their submitter unless you're a finance
+  manager; and an integration's configuration now requires integrations-admin access
+  to view. Features that only need to know whether an integration is *connected*
+  (such as meeting setup) keep working through a new status-only view that carries no
+  configuration.
+
+### Dashboard: action items are now shown only to members allowed to see them (2026-08-08)
+
+**Security**
+
+- **The dashboard's combined action-items list didn't check permissions**, so any
+  signed-in member could see the descriptions of meeting and minutes action items —
+  including items tied to executive-session minutes (disciplinary or legal matters).
+  Each half of the list is now gated the same way its own module is: meeting items
+  require meeting or minutes viewing access, and minutes items require minutes
+  viewing access.
+
+### Kiosk: check-in no longer shows as active before the window actually opens (2026-08-09)
+
+**Fixed**
+
+- **A location wall-display could show an event's check-in as "active" (with a
+  scannable QR) up to an hour before check-in actually opened**, and the scan would
+  then be rejected. The kiosk now shows check-in as active only during each event's
+  real check-in window (which varies by event).
+
+### Property return: the total value owed is now calculated precisely (2026-08-08)
+
+**Fixed**
+
+- **The "total assessed value" on a member's property-return letter and overdue
+  reminder was summed using floating-point math**, which can drift by fractions of a
+  cent. Because that figure is a charge a departing member can be billed for, it is
+  now computed with exact decimal math (matching how the clearance summary already
+  worked).
+
+### Scheduled jobs: one department's error no longer stops the rest (2026-08-08)
+
+**Fixed**
+
+- **Several nightly jobs (shift auto-checkout, compliance reports, officer-directory
+  refresh, certification alerts) processed every department in one shared database
+  transaction.** If one department hit an error partway through, it could cause the
+  remaining departments to fail too — and shift auto-checkout could even discard the
+  work already done for earlier departments. Each department's work is now saved and
+  isolated, so one failure no longer cascades.
+
+### Emails: department names and member names with an apostrophe or "&" render correctly (2026-08-08)
+
+**Fixed**
+
+- **On the built-in fallback email layout, a subject line or plain-text body could
+  show a name like "O'Brien" as "O&#x27;Brien" or "Fire & Rescue" as "Fire &amp;
+  Rescue."** The fallback path now matches the main templates, which already rendered
+  these correctly.
 
 ### Storefront: a payment in the wrong currency is no longer auto-applied (2026-08-08)
 

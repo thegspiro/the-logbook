@@ -124,7 +124,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 disabled={saving || selected.size === 0}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden disabled:opacity-50"
+                className="form-input disabled:opacity-50"
               >
                 {platoonOptions.map((p) => (
                   <option key={p} value={p}>

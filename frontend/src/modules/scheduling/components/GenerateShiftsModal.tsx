@@ -80,7 +80,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
           </div>
 
           <div>
-            <label htmlFor="generate-start" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="generate-start" className="form-label">
               Start Date <span aria-hidden="true">*</span>
             </label>
             <input
@@ -88,13 +88,13 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+              className="form-input"
               required
             />
           </div>
 
           <div>
-            <label htmlFor="generate-end" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="generate-end" className="form-label">
               End Date <span aria-hidden="true">*</span>
             </label>
             <input
@@ -102,7 +102,7 @@ const GenerateShiftsModal: React.FC<GenerateShiftsModalProps> = ({ isOpen, onClo
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+              className="form-input"
               required
             />
           </div>

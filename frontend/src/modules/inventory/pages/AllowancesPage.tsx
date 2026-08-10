@@ -26,7 +26,7 @@ const PERIOD_OPTIONS = [
 const periodLabel = (value: string): string => PERIOD_OPTIONS.find((p) => p.value === value)?.label ?? value;
 
 const inputClass = 'form-input w-full';
-const labelClass = 'block text-sm font-medium text-theme-text-primary mb-1';
+const labelClass = 'form-label';
 
 const AllowancesPage: React.FC = () => {
   const [allowances, setAllowances] = useState<IssuanceAllowance[]>([]);

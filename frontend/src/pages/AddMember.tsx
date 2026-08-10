@@ -371,7 +371,7 @@ const AddMember: React.FC = () => {
                     type="text"
                     value={membershipIdOverride}
                     onChange={(e) => setMembershipIdOverride(e.target.value)}
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring max-w-xs flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                    className="form-input max-w-xs flex-1"
                     placeholder={membershipIdPreview}
                   />
                   <span className="text-theme-text-muted text-sm">

@@ -1,6 +1,43 @@
 # Application Review — Dashboard & Action Items
 
-**Prefix:** `DASH` · **Iteration:** A7 · **Reviewed:** 2026-08-05
+**Prefix:** `DASH` · **Iteration:** A7 · **Reviewed:** 2026-08-05 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified pass-1: `minutes_visibility_filter` mirrors `MinuteService`'s
+`restricted` branch and is applied to the minutes half; every aggregate filters
+`organization_id` (RPT-1 clean); the dashboard is read-only (no cross-org write).
+But the XC-2 lens found the DASH-1 fix closed only the *inner* split. **1 fix.**
+
+### DASH-3 — HIGH — `/dashboard/action-items` had no permission gate (XC-2 re-exposure) — ✅ FIXED
+
+`get_unified_action_items` depends only on `get_current_active_user` — **no
+permission**. The **meeting half** filtered only `organization_id`, so **any**
+authenticated member (e.g. a probationary member with neither `meetings.view` nor
+`minutes.view`) could read **every meeting action item's `description`** org-wide;
+the minutes half applied `minutes_visibility_filter` but that only reproduces the
+*inner* manage/non-manage restricted split (it presupposes the caller already holds
+`minutes.view`) — it did **not** reproduce the *outer* view gate the sibling modules
+enforce (`meetings.py` requires `meetings.view` OR `minutes.view`; `minutes.py`
+requires `minutes.view`). The frontend `/action-items` route has no `ProtectedRoute`
+either, so the endpoint was the only gate. Action-item descriptions carry the
+underlying meeting/minutes free text — including executive-session disciplinary and
+legal matters. **Fix:** gate each half in-code (using the already-imported
+`user_has_permission`) exactly as its owning module does — the meeting half behind
+`meetings.view` OR `minutes.view`, the minutes half behind `minutes.view` —
+independently, so a caller holding only one still sees only that half. No new
+permission, no frontend change. 3 DB-free regression tests (no-perm → nothing
+queried; `meetings.view` → meeting half only; `minutes.view` → both).
+
+**Flagged (LOW, unchanged/new):** DASH-2 (`/dashboard/stats` hardcoded, zero frontend
+callers — delete-or-implement); the `admin-summary` open/overdue **counts** fold in
+restricted-minutes items with no visibility filter (behind `settings.manage`, exposes
+only integers — no free text, so not the DASH-1 vector); the meeting-half
+`assignee_name` is unpopulated and its `priority` is emitted as a raw int string
+(display nits).
+
+---
 
 **Backend:** `app/api/v1/endpoints/dashboard.py` (456 L, 4 endpoints),
 `app/services/attendance_dashboard_service.py` (329 L, reached via

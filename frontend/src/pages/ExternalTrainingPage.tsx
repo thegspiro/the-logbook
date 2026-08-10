@@ -180,7 +180,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                className="form-input"
                 placeholder="e.g., Vector Solutions - Main Account"
                 required
                 aria-required="true"
@@ -196,7 +196,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 type="url"
                 value={formData.api_base_url}
                 onChange={(e) => setFormData((prev) => ({ ...prev, api_base_url: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                className="form-input"
                 placeholder={
                   formData.provider_type === 'vector_solutions'
                     ? 'https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1'
@@ -227,7 +227,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, auth_type: e.target.value as 'api_key' | 'basic' | 'oauth2' }))
                   }
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                  className="form-input"
                 >
                   <option value="api_key">API Key</option>
                   <option value="basic">Basic Auth</option>
@@ -246,7 +246,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 type="password"
                 value={formData.api_key}
                 onChange={(e) => setFormData((prev) => ({ ...prev, api_key: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                className="form-input"
                 placeholder={
                   formData.provider_type === 'vector_solutions'
                     ? 'Enter your TargetSolutions AccessToken'
@@ -278,7 +278,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                       config: { ...prev.config, site_id: e.target.value || undefined },
                     }))
                   }
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                  className="form-input"
                   placeholder="Enter your TargetSolutions Site ID"
                 />
                 <p className="text-theme-text-muted mt-1 text-xs">
@@ -300,7 +300,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   type="password"
                   value={formData.api_secret || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, api_secret: e.target.value }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                  className="form-input"
                   placeholder="Enter your API secret"
                 />
               </div>
@@ -317,7 +317,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 id="provider-description"
                 value={formData.description || ''}
                 onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                className="form-input"
                 placeholder="Optional description for this integration"
                 rows={3}
               />
@@ -365,7 +365,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))
                     }
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                    className="form-input"
                   >
                     <option value={6}>Every 6 hours</option>
                     <option value={12}>Every 12 hours</option>
@@ -681,7 +681,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               type="text"
               value={formData.name}
               onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+              className="form-input"
               required
               aria-required="true"
             />
@@ -696,7 +696,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               type="url"
               value={formData.api_base_url}
               onChange={(e) => setFormData((prev) => ({ ...prev, api_base_url: e.target.value }))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+              className="form-input"
               required
               aria-required="true"
             />
@@ -711,7 +711,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               type="password"
               value={formData.api_key}
               onChange={(e) => setFormData((prev) => ({ ...prev, api_key: e.target.value }))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+              className="form-input"
               placeholder="Enter new API key to update"
             />
           </div>
@@ -729,7 +729,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                 type="password"
                 value={formData.api_secret}
                 onChange={(e) => setFormData((prev) => ({ ...prev, api_secret: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                className="form-input"
                 placeholder="Enter new API secret to update"
               />
             </div>
@@ -746,7 +746,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               id="edit-provider-description"
               value={formData.description}
               onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+              className="form-input"
               rows={3}
             />
           </div>
@@ -790,7 +790,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                   id="edit-provider-sync-interval"
                   value={formData.sync_interval_hours}
                   onChange={(e) => setFormData((prev) => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:outline-hidden"
+                  className="form-input"
                 >
                   <option value={6}>Every 6 hours</option>
                   <option value={12}>Every 12 hours</option>

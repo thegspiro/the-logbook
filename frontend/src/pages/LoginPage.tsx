@@ -342,7 +342,7 @@ export const LoginPage: React.FC = () => {
                 value={mfaCode}
                 onChange={(e) => setMfaCode(e.target.value)}
                 placeholder={useRecoveryCode ? 'xxxxx-xxxxx' : '123456'}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:ring-violet-500 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <button

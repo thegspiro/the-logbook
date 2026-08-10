@@ -102,7 +102,7 @@ const SendBallotEmailsModal: React.FC<SendBallotEmailsModalProps> = ({
                 onChange={(e) => setEmailSubject(e.target.value)}
                 placeholder={`Vote Now: ${election.title}`}
                 aria-label="Custom subject line"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
               />
             </div>
 
@@ -117,7 +117,7 @@ const SendBallotEmailsModal: React.FC<SendBallotEmailsModalProps> = ({
                 rows={3}
                 placeholder="Include any additional instructions or context for voters..."
                 aria-label="Additional message"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
               />
             </div>
 

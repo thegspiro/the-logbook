@@ -68,15 +68,9 @@ export const MfaPolicyCard: React.FC = () => {
             onClick={() => {
               void toggle(!required);
             }}
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-              required ? 'bg-violet-600' : 'bg-theme-surface-border'
-            }`}
+            className={`toggle-track-sm ${required ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
           >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                required ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
+            <span className={`toggle-knob-sm ${required ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         )}
       </div>

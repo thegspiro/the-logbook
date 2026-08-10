@@ -56,7 +56,7 @@ const EmailSection: React.FC<EmailSectionProps> = ({
                   type="button"
                   onClick={() => onToggleEmailTrigger(key)}
                   disabled={saving}
-                  className={`focus:ring-theme-focus-ring relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`focus:ring-theme-focus-ring toggle-track-md ${
                     config.enabled ? 'bg-green-500' : 'bg-theme-surface-hover'
                   }`}
                   role="switch"
@@ -116,7 +116,7 @@ const EmailSection: React.FC<EmailSectionProps> = ({
               <select
                 value={newTemplateTrigger}
                 onChange={(e) => onNewTemplateTriggerChange(e.target.value)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               >
                 <option value="">Manual send only</option>
                 {Object.entries(TRIGGER_LABELS).map(([key, triggerLabel]) => (

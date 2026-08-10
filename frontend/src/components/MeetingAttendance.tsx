@@ -175,7 +175,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
+              className="form-input shadow-xs"
               placeholder="Search by name or membership number..."
             />
           </div>

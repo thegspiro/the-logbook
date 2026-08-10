@@ -354,75 +354,89 @@ async def get_unified_action_items(
     org_id = current_user.organization_id
     items: list[ActionItemSummary] = []
 
-    # ── Meeting action items ──
-    query = select(MeetingActionItem).where(
-        MeetingActionItem.organization_id == org_id,
-    )
-    if status_filter:
-        query = query.where(MeetingActionItem.status == status_filter)
-    if assigned_to_me:
-        query = query.where(MeetingActionItem.assigned_to == current_user.id)
+    # This unified feed merges two modules and is NOT permission-gated at the
+    # route, so gate each half in-code exactly as its owning module does —
+    # otherwise a member with neither permission reads every action item's
+    # description org-wide (the XC-2 re-exposure; DASH-1 only closed the inner
+    # minutes restricted-split, which presupposes the caller already holds
+    # minutes.view). Meetings' own action-item read allows meetings.view OR
+    # minutes.view; minutes reads require minutes.view.
+    can_view_meetings = user_has_permission(
+        current_user, "meetings.view"
+    ) or user_has_permission(current_user, "minutes.view")
+    can_view_minutes = user_has_permission(current_user, "minutes.view")
 
-    result = await db.execute(query.order_by(MeetingActionItem.due_date.asc()))
-    for item in result.scalars().all():
-        items.append(
-            ActionItemSummary(
-                id=item.id,
-                source="meeting",
-                source_id=item.meeting_id,
-                description=item.description,
-                assignee_id=item.assigned_to,
-                due_date=item.due_date.isoformat() if item.due_date else None,
-                status=(
-                    item.status.value
-                    if hasattr(item.status, "value")
-                    else str(item.status)
-                ),
-                priority=str(item.priority) if item.priority else None,
-                created_at=item.created_at.isoformat() if item.created_at else "",
-            )
+    # ── Meeting action items ──
+    if can_view_meetings:
+        query = select(MeetingActionItem).where(
+            MeetingActionItem.organization_id == org_id,
         )
+        if status_filter:
+            query = query.where(MeetingActionItem.status == status_filter)
+        if assigned_to_me:
+            query = query.where(MeetingActionItem.assigned_to == current_user.id)
+
+        result = await db.execute(query.order_by(MeetingActionItem.due_date.asc()))
+        for item in result.scalars().all():
+            items.append(
+                ActionItemSummary(
+                    id=item.id,
+                    source="meeting",
+                    source_id=item.meeting_id,
+                    description=item.description,
+                    assignee_id=item.assigned_to,
+                    due_date=item.due_date.isoformat() if item.due_date else None,
+                    status=(
+                        item.status.value
+                        if hasattr(item.status, "value")
+                        else str(item.status)
+                    ),
+                    priority=str(item.priority) if item.priority else None,
+                    created_at=(item.created_at.isoformat() if item.created_at else ""),
+                )
+            )
 
     # ── Minutes action items (scoped to organization via MeetingMinutes) ──
-    query2 = (
-        select(ActionItem)
-        .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
-        .where(MeetingMinutes.organization_id == org_id)
-    )
-
-    restriction = minutes_visibility_filter(current_user)
-    if restriction is not None:
-        query2 = query2.where(restriction)
-
-    if status_filter:
-        query2 = query2.where(ActionItem.status == status_filter)
-    if assigned_to_me:
-        query2 = query2.where(ActionItem.assignee_id == current_user.id)
-
-    result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
-    for item in result2.scalars().all():
-        items.append(
-            ActionItemSummary(
-                id=item.id,
-                source="minutes",
-                source_id=item.minutes_id,
-                description=item.description,
-                assignee_id=item.assignee_id,
-                assignee_name=item.assignee_name,
-                due_date=item.due_date.isoformat() if item.due_date else None,
-                status=(
-                    item.status.value
-                    if hasattr(item.status, "value")
-                    else str(item.status)
-                ),
-                priority=(
-                    item.priority.value
-                    if hasattr(item.priority, "value")
-                    else str(item.priority) if item.priority else None
-                ),
-                created_at=item.created_at.isoformat() if item.created_at else "",
-            )
+    if can_view_minutes:
+        query2 = (
+            select(ActionItem)
+            .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
+            .where(MeetingMinutes.organization_id == org_id)
         )
+
+        restriction = minutes_visibility_filter(current_user)
+        if restriction is not None:
+            query2 = query2.where(restriction)
+
+        if status_filter:
+            query2 = query2.where(ActionItem.status == status_filter)
+        if assigned_to_me:
+            query2 = query2.where(ActionItem.assignee_id == current_user.id)
+
+        result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
+        for item in result2.scalars().all():
+            items.append(
+                ActionItemSummary(
+                    id=item.id,
+                    source="minutes",
+                    source_id=item.minutes_id,
+                    description=item.description,
+                    assignee_id=item.assignee_id,
+                    assignee_name=item.assignee_name,
+                    due_date=item.due_date.isoformat() if item.due_date else None,
+                    status=(
+                        item.status.value
+                        if hasattr(item.status, "value")
+                        else str(item.status)
+                    ),
+                    priority=(
+                        item.priority.value
+                        if hasattr(item.priority, "value")
+                        else str(item.priority) if item.priority else None
+                    ),
+                    created_at=(item.created_at.isoformat() if item.created_at else ""),
+                )
+            )
 
     # Sort by due date (nulls last)
     items.sort(key=lambda x: x.due_date or "9999-12-31")

@@ -818,7 +818,7 @@ const EventRequestsTab: React.FC = () => {
                                 <select
                                   value={selectedTemplateId}
                                   onChange={(e) => setSelectedTemplateId(e.target.value)}
-                                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                                  className="form-input flex-1"
                                 >
                                   <option value="">Choose a template...</option>
                                   {emailTemplates.map((tpl) => (
@@ -905,7 +905,7 @@ const EventRequestsTab: React.FC = () => {
                                     type="text"
                                     value={declineReason}
                                     onChange={(e) => setDeclineReason(e.target.value)}
-                                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                                    className="form-input"
                                     placeholder="Reason for declining..."
                                   />
                                   <button
@@ -1143,7 +1143,7 @@ const EventRequestsTab: React.FC = () => {
                                   }
                                 }}
                                 placeholder="Add a comment..."
-                                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                                className="form-input flex-1"
                               />
                               <button
                                 type="button"

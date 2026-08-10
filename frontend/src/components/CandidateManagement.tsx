@@ -424,13 +424,13 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                           type="text"
                           value={formData.name}
                           onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary block w-full rounded-md border px-3 py-2 text-sm shadow-xs"
+                          className="form-input shadow-xs"
                         />
                         {positions.length > 0 && (
                           <select
                             value={formData.position}
                             onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
-                            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
+                            className="form-input shadow-xs"
                           >
                             <option value="">Select position...</option>
                             {positions.map((pos) => (
@@ -444,7 +444,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                           value={formData.statement}
                           onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                           rows={2}
-                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary block w-full rounded-md border px-3 py-2 text-sm shadow-xs"
+                          className="form-input shadow-xs"
                           placeholder="Statement..."
                         />
                         <div className="flex gap-2">

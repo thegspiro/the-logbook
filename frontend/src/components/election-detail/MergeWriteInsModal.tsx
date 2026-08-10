@@ -102,7 +102,7 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({ candidates, mer
             id="merge-target"
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 focus:outline-hidden"
+            className="form-input mt-1"
           >
             <option value="">Select a candidate…</option>
             {targets.map((c) => (

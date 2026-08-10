@@ -291,7 +291,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                   type="checkbox"
                   checked={getCurrentValue(field.key)}
                   onChange={(e) => setDraft({ ...draft, [field.key]: e.target.checked })}
-                  className="bg-theme-input-bg border-theme-input-border focus:ring-theme-focus-ring h-5 w-5 rounded-sm text-blue-600"
+                  className="form-checkbox"
                 />
               </label>
             ))}
@@ -314,7 +314,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
               type="checkbox"
               checked={getCurrentValue('report_review_required')}
               onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
-              className="bg-theme-input-bg border-theme-input-border focus:ring-theme-focus-ring h-5 w-5 rounded-sm text-blue-600"
+              className="form-checkbox"
             />
           </label>
 
@@ -450,7 +450,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                           setDraft({ ...draft, rating_scale_labels: updated });
                         }}
                         placeholder={DEFAULT_COMPETENCY_LABELS[String(level)]}
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                       />
                     </div>
                   );

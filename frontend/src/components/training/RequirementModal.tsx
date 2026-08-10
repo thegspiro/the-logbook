@@ -853,7 +853,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       type="checkbox"
                       checked={formData.allows_external_credit}
                       onChange={(e) => setFormData({ ...formData, allows_external_credit: e.target.checked })}
-                      className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring mt-0.5 h-5 w-5 rounded-sm text-red-700 dark:text-red-500"
+                      className="form-checkbox mt-0.5"
                     />
                     <span className="text-theme-text-secondary text-sm">
                       Accept external / imported training credit for this requirement
@@ -882,7 +882,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       ...(e.target.checked ? { required_membership_types: [] } : {}),
                     })
                   }
-                  className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring h-5 w-5 rounded-sm text-red-700 dark:text-red-500"
+                  className="form-checkbox"
                 />
                 <span className="text-theme-text-secondary">Applies to all members</span>
               </label>
@@ -919,7 +919,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                               : [...prev.required_membership_types, memberType.value],
                           }));
                         }}
-                        className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring h-4 w-4 rounded-sm text-red-700 dark:text-red-500"
+                        className="form-checkbox"
                       />
                       <span className="text-sm">{memberType.label}</span>
                     </label>

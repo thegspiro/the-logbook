@@ -8,9 +8,38 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.notification import (
+    NotificationCategory,
+    NotificationChannel,
+    NotificationTrigger,
+)
 from app.schemas.base import UTCResponseBase
+
+# trigger / category / channel map to strict MySQL ENUM columns, but were typed as
+# free str and stored raw (create_rule's **rule_data, update_rule's setattr loop) —
+# an out-of-set value passed Pydantic, reached MySQL, and 500'd (NOTIF2-4, the B1
+# latent-500 class). Validate at the request schema so a bad value is a clean 422.
+_TRIGGERS = {e.value for e in NotificationTrigger}
+_CATEGORIES = {e.value for e in NotificationCategory}
+_CHANNELS = {e.value for e in NotificationChannel}
+
+
+def _rule_enum_validator(valid: set, field: str):
+    def _check(value):
+        if value is None:
+            return value
+        normalized = value.lower() if isinstance(value, str) else value
+        if normalized not in valid:
+            raise ValueError(
+                f"Invalid {field} '{value}'. Must be one of: "
+                f"{', '.join(sorted(valid))}"
+            )
+        return normalized
+
+    return _check
+
 
 # ============================================
 # Notification Rule Schemas
@@ -28,6 +57,16 @@ class NotificationRuleCreate(BaseModel):
     enabled: bool = True
     config: Optional[Any] = None
 
+    _check_trigger = field_validator("trigger")(
+        _rule_enum_validator(_TRIGGERS, "trigger")
+    )
+    _check_category = field_validator("category")(
+        _rule_enum_validator(_CATEGORIES, "category")
+    )
+    _check_channel = field_validator("channel")(
+        _rule_enum_validator(_CHANNELS, "channel")
+    )
+
 
 class NotificationRuleUpdate(BaseModel):
     """Schema for updating a notification rule"""
@@ -39,6 +78,16 @@ class NotificationRuleUpdate(BaseModel):
     channel: Optional[str] = None
     enabled: Optional[bool] = None
     config: Optional[Any] = None
+
+    _check_trigger = field_validator("trigger")(
+        _rule_enum_validator(_TRIGGERS, "trigger")
+    )
+    _check_category = field_validator("category")(
+        _rule_enum_validator(_CATEGORIES, "category")
+    )
+    _check_channel = field_validator("channel")(
+        _rule_enum_validator(_CHANNELS, "channel")
+    )
 
 
 class NotificationRuleResponse(UTCResponseBase):

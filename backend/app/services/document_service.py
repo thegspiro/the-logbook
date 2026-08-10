@@ -36,7 +36,7 @@ class DocumentService:
         existing = await self.db.execute(
             select(func.count(DocumentFolder.id))
             .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.is_system == True)  # noqa: E712
+            .where(DocumentFolder.is_system.is_(True))
         )
         if (existing.scalar() or 0) > 0:
             return await self.list_folders(organization_id)

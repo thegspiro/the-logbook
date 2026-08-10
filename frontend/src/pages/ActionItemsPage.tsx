@@ -107,11 +107,7 @@ const ActionItemsPage: React.FC = () => {
       <div className="mb-6 flex flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <Filter className="text-theme-text-muted h-4 w-4" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md border px-3 py-1.5 text-sm max-md:min-h-[44px]"
-          >
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input-sm">
             <option value="">All Statuses</option>
             <option value="open">Open</option>
             <option value="pending">Pending</option>
@@ -124,7 +120,7 @@ const ActionItemsPage: React.FC = () => {
             type="checkbox"
             checked={assignedToMe}
             onChange={(e) => setAssignedToMe(e.target.checked)}
-            className="border-theme-input-border bg-theme-input-bg rounded-sm"
+            className="form-checkbox"
           />
           Assigned to me
         </label>

@@ -16,7 +16,7 @@ import { apiClient } from '../services/api-client';
 
 const inputClass =
   'w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-const labelClass = 'block text-xs font-medium text-theme-text-secondary mb-1';
+const labelClass = 'form-label-sm';
 
 const makeStation = (): OnboardingStationDraft => ({
   // crypto.randomUUID is available in every browser that meets the app's

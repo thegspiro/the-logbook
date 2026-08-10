@@ -834,7 +834,10 @@ async def mark_pr_paid(
     service = FinanceService(db)
     try:
         return await service.mark_pr_paid(
-            pr_id, str(current_user.organization_id), actual_amount
+            pr_id,
+            str(current_user.organization_id),
+            actual_amount,
+            acted_by=str(current_user.id),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -875,8 +878,15 @@ async def list_expense_reports(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
+    # A plain finance.view holder sees only their own reimbursement submissions;
+    # finance managers see the whole queue (FIN-5).
+    restrict = (
+        None
+        if user_has_permission(current_user, "finance.manage")
+        else str(current_user.id)
+    )
     results = await service.list_expense_reports(
-        str(current_user.organization_id), status
+        str(current_user.organization_id), status, restrict_to_user=restrict
     )
     return results[pagination.skip : pagination.skip + pagination.limit]
 
@@ -917,7 +927,14 @@ async def get_expense_report(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    er = await service.get_expense_report(er_id, str(current_user.organization_id))
+    restrict = (
+        None
+        if user_has_permission(current_user, "finance.manage")
+        else str(current_user.id)
+    )
+    er = await service.get_expense_report(
+        er_id, str(current_user.organization_id), restrict_to_user=restrict
+    )
     if not er:
         raise HTTPException(status_code=404, detail="Expense report not found")
     return await _with_approval_steps(
@@ -1005,7 +1022,10 @@ async def mark_expense_paid(
     service = FinanceService(db)
     try:
         return await service.mark_expense_paid(
-            er_id, str(current_user.organization_id), payment_method
+            er_id,
+            str(current_user.organization_id),
+            payment_method,
+            acted_by=str(current_user.id),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1126,7 +1146,10 @@ async def issue_check(
     service = FinanceService(db)
     try:
         return await service.issue_check(
-            cr_id, str(current_user.organization_id), check_number
+            cr_id,
+            str(current_user.organization_id),
+            check_number,
+            acted_by=str(current_user.id),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

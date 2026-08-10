@@ -50,7 +50,7 @@ const EMPTY: FormState = {
   hat_size: '',
 };
 
-const labelClass = 'block text-xs font-medium text-theme-text-primary mb-1';
+const labelClass = 'form-label-sm';
 const inputClass = 'form-input w-full';
 
 export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOpen, onClose, userId, memberName }) => {

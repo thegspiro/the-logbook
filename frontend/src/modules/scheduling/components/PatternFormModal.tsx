@@ -82,7 +82,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
           className="space-y-4 p-6"
         >
           <div>
-            <label htmlFor="pattern-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="pattern-name" className="form-label">
               Name <span aria-hidden="true">*</span>
             </label>
             <input
@@ -90,7 +90,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
               type="text"
               value={formData.name}
               onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+              className="form-input"
               placeholder="e.g., 24/48 Rotation"
               required
               aria-required="true"
@@ -98,21 +98,21 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
           </div>
 
           <div>
-            <label htmlFor="pattern-description" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="pattern-description" className="form-label">
               Description
             </label>
             <textarea
               id="pattern-description"
               value={formData.description}
               onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+              className="form-input"
               rows={2}
               placeholder="Optional description"
             />
           </div>
 
           <div>
-            <label htmlFor="pattern-type" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="pattern-type" className="form-label">
               Pattern Type <span aria-hidden="true">*</span>
             </label>
             <select
@@ -121,7 +121,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, pattern_type: e.target.value as PatternFormData['pattern_type'] }))
               }
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+              className="form-input"
               required
             >
               {PATTERN_TYPES.map((pt) => (
@@ -133,14 +133,14 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
           </div>
 
           <div>
-            <label htmlFor="pattern-template" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="pattern-template" className="form-label">
               Shift Template
             </label>
             <select
               id="pattern-template"
               value={formData.template_id}
               onChange={(e) => setFormData((prev) => ({ ...prev, template_id: e.target.value }))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+              className="form-input"
             >
               <option value="">No template</option>
               {templates.map((t) => (
@@ -154,7 +154,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
           {(formData.pattern_type === 'platoon' || formData.pattern_type === 'custom') && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
-                <label htmlFor="pattern-rotation" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                <label htmlFor="pattern-rotation" className="form-label">
                   Rotation Days
                 </label>
                 <input
@@ -162,13 +162,13 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                   type="number"
                   value={formData.rotation_days}
                   onChange={(e) => setFormData((prev) => ({ ...prev, rotation_days: e.target.value }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                  className="form-input"
                   min="1"
                   placeholder="e.g., 3"
                 />
               </div>
               <div>
-                <label htmlFor="pattern-days-on" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                <label htmlFor="pattern-days-on" className="form-label">
                   Days On
                 </label>
                 <input
@@ -176,13 +176,13 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                   type="number"
                   value={formData.days_on}
                   onChange={(e) => setFormData((prev) => ({ ...prev, days_on: e.target.value }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                  className="form-input"
                   min="1"
                   placeholder="e.g., 1"
                 />
               </div>
               <div>
-                <label htmlFor="pattern-days-off" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                <label htmlFor="pattern-days-off" className="form-label">
                   Days Off
                 </label>
                 <input
@@ -190,7 +190,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                   type="number"
                   value={formData.days_off}
                   onChange={(e) => setFormData((prev) => ({ ...prev, days_off: e.target.value }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                  className="form-input"
                   min="1"
                   placeholder="e.g., 2"
                 />
@@ -200,7 +200,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="pattern-start-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              <label htmlFor="pattern-start-date" className="form-label">
                 Start Date <span aria-hidden="true">*</span>
               </label>
               <input
@@ -208,12 +208,12 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                 type="date"
                 value={formData.start_date}
                 onChange={(e) => setFormData((prev) => ({ ...prev, start_date: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                className="form-input"
                 required
               />
             </div>
             <div>
-              <label htmlFor="pattern-end-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              <label htmlFor="pattern-end-date" className="form-label">
                 End Date
               </label>
               <input
@@ -221,7 +221,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                 type="date"
                 value={formData.end_date}
                 onChange={(e) => setFormData((prev) => ({ ...prev, end_date: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                className="form-input"
               />
             </div>
           </div>

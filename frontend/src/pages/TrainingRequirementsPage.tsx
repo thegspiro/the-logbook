@@ -288,7 +288,7 @@ const TrainingRequirementsPage: React.FC = () => {
                 id="source-filter"
                 value={filterSource}
                 onChange={(e) => setFilterSource(e.target.value as FilterSource)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2 focus:outline-hidden"
+                className="form-input"
               >
                 <option value="all">All Sources</option>
                 <option value="department">Department</option>

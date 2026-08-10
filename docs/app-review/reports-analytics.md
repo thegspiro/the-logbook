@@ -1,7 +1,7 @@
 # Application Review — Reports & Analytics (Tier B)
 
 **Prefix:** `RPT2` · **Iteration:** B16 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
 
 **Backend:** `endpoints/reports.py` (7), `analytics.py` (3), `platform_analytics.py`
 (1), `services/reports_service.py` (1,952 L)
@@ -9,6 +9,67 @@
 **Prior audit:** `docs/module-audit/reports-analytics.md` (iteration 16) — RPT-1
 (HIGH cross-org leak) and RPT-2 (500 on bad filter) fixed; RPT-3 (PII at
 `reports.view`), RPT-4 (org-id typing), RPT-5 (aggregate correctness) left open.
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; RPT-7 reconfirmed defensive-only
+
+Re-verified: RPT-1 (cross-org aggregate leak) and RPT-2 (`_safe_int` filter
+guards) hold; RPT-3 PII gate (`_enforce_report_pii_permission`) intact on
+`/generate` and `/saved/{id}/run`; `SavedReport` has no enum columns (latent-500
+lens N/A); both files E712-free.
+
+**RPT-7 re-examined and deliberately left flagged.** The candidate was adding the
+`except ValueError → 400` wrapper to `/generate` and `/run`. Traced both paths:
+`generate_report` returns a dict and the endpoint already maps `"error"` → 400
+(reports.py 106); dates/filters are Pydantic-validated (422, not a handler
+`ValueError`); the generators return `{"error": …}` rather than raising. So there
+is **no `ValueError` path today** — the wrapper would be dead code, which
+CLAUDE.md's anti-speculation guidance argues against. It stays a
+defensive-consistency item for a future robustness sweep (best paired with a
+generator that actually raises), not a rotation-tick addition.
+
+**Still flagged (unchanged):** RPT-6 (completion % can exceed 100% in the
+shared-requirement double-enrollment case — the numerator fix risks skewing the
+common case), RPT-5c (inventory float→Decimal, with FIN-7).
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
+
+---
+
+## Pass 3 (2026-08-09) — RPT-3 confirmed resolved; 4 E712 swept
+
+Re-verified the module: RPT-1 (cross-org aggregate leak) and RPT-2 (`_safe_int`
+filter guards) hold; **RPT-3 confirmed RESOLVED** — the PII-report gate landed
+earlier this session via the owner read-permission decision
+(`PII_REPORT_PERMISSIONS` + `_enforce_report_pii_permission` on `/generate` and
+`/saved/{id}/run`, `/available` filters the catalog). Update-bypass stays clean
+(`SavedReportUpdate` exposes no org/`created_by`/`report_type`).
+
+**Latent-500 lens clean:** `SavedReport` (the analytics model) has **no** enum
+columns — `report_type`/`schedule_frequency` are `String`, so no free-string→ENUM
+path; the report generators return `{"error": …}` handled explicitly at the endpoint.
+
+### RPT2-1 — NIT — 4 boolean-column E712 swept — ✅ FIXED
+
+`reports.py` (`SavedReport.is_active`) and `platform_analytics.py`
+(`Event.is_cancelled` ×2, `EventRSVP.checked_in`) carried `== True/False  # noqa: E712`
+comparisons; converted to `.is_(...)`. Both files are now E712-free.
+
+### Still flagged (unchanged)
+
+- **RPT-6** — `requirement_breakdown` completion % can exceed 100% in the
+  shared-requirement + double-enrollment case; the numerator fix risks skewing the
+  common-case metric, so it stays flagged rather than auto-applied.
+- **RPT-7** — `/generate` and `/run` lack the `except ValueError→400` wrapper; no
+  generator raises `ValueError` deterministically today (they return `{"error"}`), so
+  it's a defensive-consistency item for a robustness sweep, not a live fault.
+- **RPT-5c** — inventory float→Decimal (with FIN-7), other polish.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · report/analytics tests **108 passed** (DB-free; the
+`db_session` errors are unrelated files matched by the `-k` substring).
 
 ---
 
@@ -36,11 +97,14 @@ a reporting module:
 
 ### Flagged (no drive-by fix)
 
-- **RPT-3 (unchanged)** — `/available` + `/generate` gate only on `reports.view`,
-  but `member_roster` returns email + membership_number and `pipeline_overview`
-  returns applicant name/email/PII, so a `reports.view` holder without
-  `members.view`/`pipeline.view` reads PII they couldn't fetch directly. A
-  permission-granularity **product decision** (KNOWN_LIMITATIONS), not mechanical.
+- **RPT-3 — ✅ RESOLVED (owner decision, 2026-08-09)** — `member_roster` returns
+  email + membership_number and `pipeline_overview` returns applicant name/email/PII,
+  so a `reports.view` holder without `members.view`/`prospective_members.view` could
+  read PII they couldn't fetch directly. `reports.py` now maps those two report types
+  to their source-record read permission (`PII_REPORT_PERMISSIONS`) and enforces it
+  in `/generate` and `/saved/{id}/run` via `_enforce_report_pii_permission` (403 if
+  missing); `/available` hides PII reports the caller can't run. Aggregate reports
+  stay at `reports.view`. Covered by `tests/test_read_permission_gates.py`.
 - **RPT-6 (new, LOW) — `requirement_breakdown` completion % can exceed 100%.** The
   numerator counts `RequirementProgress` rows while the denominator counts
   `distinct(ProgramEnrollment.user_id)`; with no unique `(user_id, program_id)`

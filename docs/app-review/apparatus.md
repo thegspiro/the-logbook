@@ -1,7 +1,99 @@
 # Application Review — Apparatus (Tier B)
 
 **Prefix:** `AP2` · **Iteration:** B2 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — invariants re-verified; no code change
+
+Pass 3 closed every open code item on this module (AP2-2 FK validation on both
+paths, the full E712 sweep, the latent-500 lens). Pass 4 re-verified the landed
+state holds and found nothing to change:
+
+- **FK validation intact** — `assert_in_org` is wired at **17** sites across
+  `apparatus_service.py` (create + update for apparatus type/status/station, EVOC
+  level, maintenance component/service-provider, component-note provider). The
+  create-path (AP-1) and update-path (AP2-1/AP2-2) FK classes remain closed.
+- **E712-free** — 0 `# noqa: E712` in `apparatus_service.py`.
+- **Latent-500 lens clean** — `fuel_type` is `Optional[FuelTypeEnum]` on both
+  `ApparatusCreate`/`Update` and enum-typed on the response; the component-note
+  enums are enum-typed. No free-string→ENUM write path.
+
+The only open items remain the ones flagged since pass 2 — a MySQL-backed
+apparatus-service integration test (blocked by the no-DB sandbox) and a future
+depth read of the maintenance-scheduling / EVOC business logic as its own focused
+iteration. Neither is a defect.
+
+**Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
+`tsc --noEmit` n/a.
+
+---
+
+## Pass 3 (2026-08-09) — closed the open AP2-2 item; E712 sweep; latent-500 lens
+
+Re-verified the landed fixes hold: **AP-1** create-path FK validation intact;
+**AP2-1** update-path FK re-validation intact on all three eager-loaded paths
+(`update_apparatus` type/status/station, `update_operator` evoc, and
+`update_maintenance_record` maintenance-type). All 83 endpoints still carry an auth
+dependency; the service report resolves `service_provider_id` names **org-scoped**
+(`ApparatusServiceProvider.organization_id == organization_id`), confirming pass-2's
+call that the AP2-2 FKs are integrity-only, not read-leaks.
+
+### AP2-2 — LOW — Dangling (non-projected) FKs unvalidated on create/update — ✅ FIXED
+
+Pass 2 left this open and recommended "a follow-up sweep validating them via the
+shared `assert_in_org` on both paths." Done. The four integrity-only FKs — none
+projected into any response, so they could only dangle — are now validated in-org
+on **both** the create and update paths, reusing `assert_in_org(..., allow_none=True)`:
+
+| FK | Target model (org-scoped) | Paths hardened |
+|---|---|---|
+| `apparatus.required_evoc_level_id` | `EvocLevel` | `create_apparatus`, `update_apparatus` |
+| `maintenance.component_id` | `ApparatusComponent` | `create_maintenance_record`, `update_maintenance_record` |
+| `maintenance.service_provider_id` | `ApparatusServiceProvider` | `create_maintenance_record`, `update_maintenance_record` |
+| `component_note.service_provider_id` | `ApparatusServiceProvider` | `create_component_note`, `update_component_note` |
+
+All six endpoints already convert `ValueError → 400` via `safe_error_detail`, so the
+rejections surface cleanly. `ApparatusComponentNoteUpdate` omits `component_id`, so a
+note can't be re-pointed to a foreign component via update (no gap there). No
+behavior change for valid callers (the frontend selects these ids from org-scoped
+dropdowns); a foreign/garbage id that previously stored a dangling reference is now
+refused. **4 tests added** (`TestUpdateMaintenanceFKValidation` component/provider,
+`TestUpdateApparatusEvocFKValidation`, `TestUpdateComponentNoteFKValidation`);
+`test_apparatus_service.py` now 10 (was 6). **AP2-2 is closed on both paths** — the
+XC-1 create/update FK class is now fully resolved for this module.
+
+### AP2-3 — NIT — `== True`/`== False` E712 suppressions swept — ✅ FIXED
+
+The remaining 11 `col == True/False  # noqa: E712` comparisons in
+`apparatus_service.py` (boolean-column WHERE clauses in `get_maintenance_due`, the
+archive queries, `generate_service_report`, etc.) were converted to `.is_(True)` /
+`.is_(False)` per Pitfall #10, removing every `# noqa: E712` from the file
+(behavior-neutral for boolean columns). flake8 stays clean.
+
+### Latent-500 lens (the B1 finding) — checked, clean here
+
+The B1 class (a request field typed as free `str` mapping to a strict `Enum`
+column) does **not** recur: the only enum column across the apparatus/maintenance
+models is `Apparatus.fuel_type`, and `ApparatusCreate.fuel_type` is typed
+`Optional[FuelTypeEnum]` (validated); the component-note enums
+(`note_type`/`severity`/`status`) are likewise enum-typed in the schema. No
+free-string→ENUM write path.
+
+### Flagged / future (unchanged)
+
+- **No apparatus-service integration test against a real DB** — the FK-scoping now
+  rests on `assert_in_org`'s own unit tests plus these mocked-session tests; a
+  MySQL-backed integration test would lock the wiring once CI has a DB.
+- **83 endpoints / ~5.7k lines reviewed at the invariant level across three passes**
+  — a future depth read of the maintenance-scheduling and EVOC business logic
+  (beyond tenant isolation) is the next increment, as its own focused iteration.
+
+**Completion gate (pass 3):** `flake8 app/ tests/` 0 · `black --check` clean ·
+`tsc --noEmit` 0 (no frontend change) · eslint unaffected (no frontend change) ·
+`test_apparatus_service.py` **10 passed** (6 + 4 new; all DB-free). DB-backed
+pytest remains the known no-MySQL sandbox limitation.
 
 ---
 

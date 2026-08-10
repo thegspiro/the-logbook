@@ -204,7 +204,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
           className="space-y-4 p-6"
         >
           <div>
-            <label htmlFor="template-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="template-name" className="form-label">
               Name <span aria-hidden="true">*</span>
             </label>
             <input
@@ -212,7 +212,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               type="text"
               value={formData.name}
               onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+              className="form-input"
               placeholder="e.g., Day Shift A"
               required
               aria-required="true"
@@ -220,14 +220,14 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
           </div>
 
           <div>
-            <label htmlFor="template-description" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="template-description" className="form-label">
               Description
             </label>
             <textarea
               id="template-description"
               value={formData.description}
               onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+              className="form-input"
               rows={2}
               placeholder="Optional description"
             />
@@ -235,7 +235,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
           {/* Category */}
           <div>
-            <label className="text-theme-text-secondary mb-1.5 block text-sm font-medium">Category</label>
+            <label className="form-label mb-1.5">Category</label>
             <div className="grid grid-cols-3 gap-2">
               {TEMPLATE_CATEGORIES.map((cat) => {
                 const CatIcon = cat.icon;
@@ -274,10 +274,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
           {/* Vehicle (for standard & specialty templates) */}
           {(formData.category === 'standard' || formData.category === 'specialty') && (
             <div>
-              <label
-                htmlFor="template-apparatus-type"
-                className="text-theme-text-secondary mb-1 block text-sm font-medium"
-              >
+              <label htmlFor="template-apparatus-type" className="form-label">
                 <span className="flex items-center gap-1.5">
                   <Truck className="h-4 w-4" />
                   {apparatusSource === 'default' ? 'Vehicle Type' : 'Vehicle'}
@@ -308,7 +305,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                     }));
                   }
                 }}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                className="form-input"
                 required={formData.category === 'specialty'}
               >
                 <option value="">
@@ -344,7 +341,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
             <>
               {/* Event Type */}
               <div>
-                <label className="text-theme-text-secondary mb-1.5 block text-sm font-medium">Event Type</label>
+                <label className="form-label mb-1.5">Event Type</label>
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   {EVENT_TYPES.map((et) => {
                     const ETIcon = et.icon;
@@ -377,7 +374,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               {/* Quick-start from pre-built templates */}
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <label className="text-theme-text-secondary block text-sm font-medium">
+                  <label className="form-label mb-0">
                     <span className="flex items-center gap-1.5">
                       <Copy className="h-4 w-4" /> Quick Start
                     </span>
@@ -426,7 +423,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
               {/* Resources / Units */}
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                <label className="form-label">
                   <span className="flex items-center gap-1.5">
                     <Users className="h-4 w-4" /> Resources &amp; Staffing
                   </span>
@@ -545,31 +542,31 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label htmlFor="template-start" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              <label htmlFor="template-start" className="form-label">
                 Start Time <span aria-hidden="true">*</span>
               </label>
               <TimeQuarterHour
                 id="template-start"
                 value={formData.start_time_of_day}
                 onChange={(e) => setFormData((prev) => ({ ...prev, start_time_of_day: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                className="form-input"
                 required
               />
             </div>
             <div>
-              <label htmlFor="template-end" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              <label htmlFor="template-end" className="form-label">
                 End Time <span aria-hidden="true">*</span>
               </label>
               <TimeQuarterHour
                 id="template-end"
                 value={formData.end_time_of_day}
                 onChange={(e) => setFormData((prev) => ({ ...prev, end_time_of_day: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                className="form-input"
                 required
               />
             </div>
             <div>
-              <label htmlFor="template-duration" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              <label htmlFor="template-duration" className="form-label">
                 Duration (hrs) <span aria-hidden="true">*</span>
               </label>
               <input
@@ -577,7 +574,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                 type="number"
                 value={formData.duration_hours}
                 onChange={(e) => setFormData((prev) => ({ ...prev, duration_hours: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                className="form-input"
                 min="0.5"
                 step="0.5"
                 required
@@ -587,7 +584,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="template-color" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              <label htmlFor="template-color" className="form-label">
                 Color
               </label>
               <div className="flex items-center gap-2">
@@ -602,10 +599,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               </div>
             </div>
             <div>
-              <label
-                htmlFor="template-min-staffing"
-                className="text-theme-text-secondary mb-1 block text-sm font-medium"
-              >
+              <label htmlFor="template-min-staffing" className="form-label">
                 Min Staffing <span aria-hidden="true">*</span>
               </label>
               <input
@@ -613,7 +607,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                 type="number"
                 value={formData.min_staffing}
                 onChange={(e) => setFormData((prev) => ({ ...prev, min_staffing: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                className="form-input"
                 min="1"
                 required
               />
@@ -623,7 +617,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
           {/* Crew Positions (not shown for event templates — they use resources editor) */}
           {formData.category !== 'event' && (
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              <label className="form-label">
                 <span className="flex items-center gap-1.5">
                   <Users className="h-4 w-4" aria-hidden="true" /> Crew Positions
                 </span>
@@ -643,7 +637,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                           updated[i] = { ...entry, position: e.target.value };
                           setFormData((prev) => ({ ...prev, positions: updated }));
                         }}
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-1 focus:outline-hidden"
+                        className="form-input-sm flex-1 rounded-lg"
                       >
                         {positionOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>

@@ -137,3 +137,75 @@ class TestUpdateItemCompartmentValidation:
             await service.update_item("item-1", "org-1", {"name": "SCBA cylinder"})
         mock_get_comp.assert_not_awaited()
         mock_db.commit.assert_awaited_once()
+
+
+class TestItemFkValidation:
+    """EC2-4/EC2-3: inventory_item_id (name-projected in get_my_checklists) and
+    equipment_id must be validated in-org on add_item / update_item."""
+
+    async def test_add_item_rejects_foreign_inventory_item(self, service, mock_db):
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ), patch(
+            "app.services.equipment_check_service.is_in_org",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            with pytest.raises(ValueError, match="Invalid inventory item"):
+                await service.add_item(
+                    "comp-1", "org-1", {"inventory_item_id": "foreign-inv"}
+                )
+        mock_db.commit.assert_not_awaited()
+
+    async def test_add_item_rejects_foreign_equipment(self, service, mock_db):
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ), patch(
+            "app.services.equipment_check_service.is_in_org",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            with pytest.raises(ValueError, match="Invalid equipment"):
+                await service.add_item(
+                    "comp-1", "org-1", {"equipment_id": "foreign-equip"}
+                )
+        mock_db.commit.assert_not_awaited()
+
+    async def test_update_item_rejects_foreign_inventory_item(self, service, mock_db):
+        with patch.object(
+            service, "_get_item", new_callable=AsyncMock, return_value=MagicMock()
+        ), patch(
+            "app.services.equipment_check_service.is_in_org",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            with pytest.raises(ValueError, match="Invalid inventory item"):
+                await service.update_item(
+                    "item-1", "org-1", {"inventory_item_id": "foreign-inv"}
+                )
+        mock_db.commit.assert_not_awaited()
+
+
+class TestCompartmentParentValidation:
+    """EC2-3: a reassigned parent_compartment_id must be in-org."""
+
+    async def test_update_compartment_rejects_foreign_parent(self, service, mock_db):
+        # 1st _get_compartment: the compartment itself (in-org). 2nd: the foreign
+        # parent (None) -> rejected.
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            side_effect=[MagicMock(), None],
+        ):
+            with pytest.raises(ValueError, match="Invalid parent compartment"):
+                await service.update_compartment(
+                    "comp-1", "org-1", {"parent_compartment_id": "foreign-comp"}
+                )
+        mock_db.commit.assert_not_awaited()

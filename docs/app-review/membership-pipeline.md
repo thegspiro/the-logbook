@@ -1,7 +1,107 @@
 # Application Review — Membership Pipeline (Tier B)
 
 **Prefix:** `MP2` · **Iteration:** B9 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+
+---
+
+## Pass 4 (2026-08-09) — MP2-5: two client-FK gaps the MP-5 sweep missed
+
+Pass 4 ran the INV-4-style FK audit across the whole module (a sub-agent mapped
+every create/update/advance/bulk path). Everything MP-5/MP2-2 hardened holds —
+`referred_by`, `pipeline_id`, `election_id`, `event_id`, `role_ids`,
+`interviewer_id` (server-set to `current_user`), and the advance/regress targets
+(computed from the prospect's own pipeline) are all validated or server-derived.
+The audit found **two** client-supplied FK writes the earlier MP-5 sweep missed.
+
+### MP2-5 — LOW/MED — Two client-supplied FKs stored without an in-org check — ✅ FIXED
+
+1. **`add_prospect_document.step_id`** — the one MP-5 sibling that was skipped.
+   `create_interview` and `create_election_package` both reject a `step_id` that
+   isn't in the prospect's own pipeline, but `add_prospect_document` stored it raw
+   (and then drove `_try_auto_advance_step` off it). Added the same
+   `step in prospect.pipeline.steps` guard → `ValueError` ("Step does not belong to
+   this prospect's pipeline") on a foreign/other-pipeline step.
+
+2. **`email_template_id` on the step writers** (`create_pipeline` inline steps,
+   `add_step`, `update_step`) — a client-supplied FK to the **org-scoped**
+   `EmailTemplate` (used when the stage email fires), stored with no check and
+   **not** in `_STEP_PROTECTED_FIELDS`, so `update_step`'s generic `setattr` could
+   re-point it too. Added a shared `_assert_email_template_in_org` helper
+   (`assert_in_org(..., allow_none=True, label="email template")`) on all three
+   writers (present-key-guarded on update).
+
+**Latent-500 corrected along the way:** the `create_pipeline`, `add_step`, and
+`update_step` **endpoints had no `ValueError` handling** (only `reorder_steps` and
+the prospect endpoints did), so the new guards — and any future service
+`ValueError` — would have surfaced as 500s. All three gained the module-standard
+`except ValueError → 400 + safe_error_detail` (the same latent-500 shape closed in
+B7). No behavior change for valid callers (the pipeline builder selects templates
+from an org-scoped list); a foreign id is now a clean 400. **6 tests added**
+(`TestStepEmailTemplateValidation`, `TestProspectDocumentStepValidation`).
+
+### Still flagged (unchanged)
+
+- **MP-7 message generalization** (product call, `KNOWN_LIMITATIONS.md`).
+- **Step-in-pipeline check helper** — now that `add_prospect_document` joins
+  `complete_step`/`create_interview`/`create_election_package` as a fourth caller
+  of the same `step in prospect.pipeline.steps` idiom, a shared helper is a
+  reasonable small DRY follow-up (not done this pass — the inline form is clear and
+  each call site reads its own error).
+
+**Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
+n/a (no frontend change) · `test_membership_pipeline_service.py` **10 passed**
+(4 + 6 new) + `test_membership_pipeline_enum_validation.py` unchanged (all DB-free).
+
+---
+
+## Pass 3 (2026-08-09) — latent-500 on step/status enums; E712 swept
+
+Re-verified the landed fixes hold (MP2-1 `pipeline_name` set in `get_prospect`;
+MP2-2 `referred_by` `assert_in_org` on create+update; MP-6 sensitive-field activity
+log records `{"changed": True}`). The B1 latent-500 lens then surfaced a genuine
+recurrence — and a couple of false positives that a read cleared.
+
+### MP2-3 — LOW/MED — `step_type` / `action_type` / prospect `status` 500 on a bad value — ✅ FIXED
+
+**What:** these three fields were typed as free `str` on their request schemas but
+map to **strict MySQL ENUM** columns, and are inserted **raw** — `create_step`/
+`update_step` build/`setattr` `step_type`+`action_type` (service 148-149, 316-317,
+and the un-protected `update_step` setattr loop), and `update_prospect` setattrs
+`status` (line 934; `status` is **not** in `_PROSPECT_PROTECTED_FIELDS`). So an
+out-of-set value passed Pydantic, reached MySQL, and 500'd (or stored `''` under
+non-strict mode). The B1 class.
+
+**Fix:** `@field_validator`s on `ProspectUpdate.status` (→ `ProspectStatus`) and
+`PipelineStep{Create,Update}.{step_type,action_type}` (→ `PipelineStepType` /
+`ActionType`), each deriving its value set from the model enum, lowercase-normalizing
+and rejecting unknowns → 422. Request-only, so responses are untouched; the pipeline
+builder and applicant forms send only valid values, so no valid caller is affected.
+**10 tests added.**
+
+**Two lens false positives, cleared by reading (no change):**
+- `Interview{Create,Update}.recommendation` — flagged, but `create_interview` derives
+  it via `InterviewRecommendation(recommendation)` (a `ValueError` the interview
+  endpoints already convert to 400), so it's a clean 400 today, not a 500. Left as-is.
+- `ElectionPackageUpdate.status` — flagged, but `ProspectElectionPackage.status` is a
+  plain **String** column, not an ENUM, so there's no 500 path. Left as-is.
+
+### MP2-4 — NIT — 4 `== True/False  # noqa: E712` swept — ✅ FIXED
+
+Converted the 4 boolean-column E712 comparisons in
+`membership_pipeline_service.py` (`is_template`, `is_default` ×2,
+`TrainingProgram.active`) to `.is_(...)`, removing every E712 noqa.
+
+### Still flagged (unchanged)
+
+- **MP-7 message generalization** — whether the 409 "existing member" message should
+  name the archived member at all (product call, `KNOWN_LIMITATIONS.md`).
+- **Step-in-pipeline check helper** — minor DRY if a fourth caller appears.
+
+**Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit` 0
+(no frontend change) · eslint unaffected · new enum-validation tests **10 passed** +
+existing MP tests **16 passed** (all DB-free; the `db_session` errors are the known
+no-MySQL fixture failures).
 
 ---
 

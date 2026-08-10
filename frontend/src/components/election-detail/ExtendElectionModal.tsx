@@ -80,7 +80,7 @@ const ExtendElectionModal: React.FC<ExtendElectionModalProps> = ({
                 id="extend-new-end-time"
                 value={newEndDate}
                 onChange={(val) => setNewEndDate(val)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
               />
 
               <div className="mt-2">

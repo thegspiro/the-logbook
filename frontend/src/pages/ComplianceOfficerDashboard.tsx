@@ -149,11 +149,7 @@ const AnnualReportSection: React.FC = () => {
           <p className="text-theme-text-muted mt-1 text-sm">Generated {formatDate(report.generated_at, tz)}</p>
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md border px-3 py-1.5 text-sm"
-          >
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="form-input-sm">
             {[0, 1, 2].map((offset) => {
               const y = new Date().getFullYear() - offset;
               return (

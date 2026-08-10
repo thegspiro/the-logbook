@@ -8,9 +8,46 @@ from datetime import date, datetime, time
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.meeting import ActionItemStatus, MeetingStatus, MeetingType
 from app.schemas.base import UTCResponseBase
+
+# Meeting.meeting_type/status and MeetingActionItem.status are strict MySQL ENUMs;
+# SQLAlchemy doesn't validate the string on bind (validate_strings=False), so a
+# value outside the set reaches MySQL and 500s (or stores '' under non-strict
+# mode). The update paths (`MeetingsService.update_meeting`/`update_action_item`)
+# apply these via a blind `setattr`, so — unlike the MinuteService paths that
+# coerce through the enum constructor — nothing rejects a bad value before the
+# bind. Validate them at the request schema so a bad value is a clean 422
+# instead (MM2-2/MM2-3, the B1 latent-500 class).
+_MEETING_TYPES = {e.value for e in MeetingType}
+_MEETING_STATUSES = {e.value for e in MeetingStatus}
+_ACTION_ITEM_STATUSES = {e.value for e in ActionItemStatus}
+
+
+def _validate_enum(value: Optional[str], valid: set, field: str) -> Optional[str]:
+    if value is None:
+        return value
+    normalized = value.lower() if isinstance(value, str) else value
+    if normalized not in valid:
+        raise ValueError(
+            f"Invalid {field} '{value}'. Must be one of: " f"{', '.join(sorted(valid))}"
+        )
+    return normalized
+
+
+def _validate_meeting_type(value: Optional[str]) -> Optional[str]:
+    return _validate_enum(value, _MEETING_TYPES, "meeting_type")
+
+
+def _validate_meeting_status(value: Optional[str]) -> Optional[str]:
+    return _validate_enum(value, _MEETING_STATUSES, "status")
+
+
+def _validate_action_item_status(value: Optional[str]) -> Optional[str]:
+    return _validate_enum(value, _ACTION_ITEM_STATUSES, "status")
+
 
 # ============================================
 # Meeting Attendee Schemas
@@ -63,6 +100,8 @@ class ActionItemUpdate(BaseModel):
     priority: Optional[int] = Field(None, ge=0, le=2)
     completion_notes: Optional[str] = None
 
+    _check_status = field_validator("status")(_validate_action_item_status)
+
 
 class ActionItemResponse(UTCResponseBase):
     """Schema for action item response"""
@@ -105,6 +144,8 @@ class MeetingCreate(BaseModel):
     attendees: Optional[List[MeetingAttendeeCreate]] = None
     action_items: Optional[List[ActionItemCreate]] = None
 
+    _check_meeting_type = field_validator("meeting_type")(_validate_meeting_type)
+
 
 class MeetingUpdate(BaseModel):
     """Schema for updating a meeting"""
@@ -120,6 +161,9 @@ class MeetingUpdate(BaseModel):
     agenda: Optional[str] = None
     notes: Optional[str] = None
     motions: Optional[str] = None
+
+    _check_meeting_type = field_validator("meeting_type")(_validate_meeting_type)
+    _check_status = field_validator("status")(_validate_meeting_status)
 
 
 class MeetingResponse(UTCResponseBase):

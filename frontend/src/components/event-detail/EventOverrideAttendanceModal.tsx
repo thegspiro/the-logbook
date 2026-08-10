@@ -69,7 +69,7 @@ const EventOverrideAttendanceModal: React.FC<EventOverrideAttendanceModalProps> 
                     id="override_check_in"
                     value={overrideCheckIn}
                     onChange={(val) => onOverrideCheckInChange(val)}
-                    className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                    className="form-input mt-1 shadow-xs sm:text-sm"
                   />
                 </div>
 
@@ -81,7 +81,7 @@ const EventOverrideAttendanceModal: React.FC<EventOverrideAttendanceModalProps> 
                     id="override_check_out"
                     value={overrideCheckOut}
                     onChange={(val) => onOverrideCheckOutChange(val)}
-                    className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                    className="form-input mt-1 shadow-xs sm:text-sm"
                   />
                 </div>
 

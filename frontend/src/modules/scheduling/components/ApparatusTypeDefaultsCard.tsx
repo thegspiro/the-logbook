@@ -73,7 +73,7 @@ export const ApparatusTypeDefaultsCard: React.FC<ApparatusTypeDefaultsCardProps>
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+    <div className="card-secondary p-5">
       <h3 className="text-theme-text-primary mb-1 text-base font-semibold">Apparatus Type Defaults</h3>
       <p className="text-theme-text-muted mb-4 text-xs">
         Define default crew positions and minimum staffing per vehicle type. These defaults are used when creating new
@@ -118,7 +118,7 @@ export const ApparatusTypeDefaultsCard: React.FC<ApparatusTypeDefaultsCardProps>
                       min={1}
                       max={20}
                       onChange={(e) => setEditMinStaffing(parseInt(e.target.value, 10) || 1)}
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-24 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+                      className="form-input-sm w-24"
                     />
                   </div>
                   <PositionListEditor

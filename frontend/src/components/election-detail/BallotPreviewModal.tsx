@@ -153,7 +153,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
                           type="text"
                           disabled
                           placeholder="Enter name or option..."
-                          className="border-theme-surface-border bg-theme-input-bg text-theme-text-muted mt-2 ml-7 block w-[calc(100%-1.75rem)] cursor-not-allowed rounded-md border px-3 py-2 text-sm opacity-50"
+                          className="form-input text-theme-text-muted mt-2 ml-7 w-[calc(100%-1.75rem)] cursor-not-allowed opacity-50"
                         />
                       </div>
                     )}

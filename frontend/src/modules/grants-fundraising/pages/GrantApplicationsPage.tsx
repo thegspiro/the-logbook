@@ -395,15 +395,11 @@ export const GrantApplicationsPage: React.FC = () => {
               placeholder="Search programs, agencies, assignees..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="border-theme-input-border bg-theme-input-bg text-theme-text-primary placeholder:text-theme-text-secondary w-full rounded-lg border py-2 pr-4 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none"
+              className="form-input pr-4 pl-10"
             />
           </div>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
-          >
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input">
             <option value="">All Statuses</option>
             {PIPELINE_COLUMNS.map((s) => (
               <option key={s} value={s}>
@@ -412,11 +408,7 @@ export const GrantApplicationsPage: React.FC = () => {
             ))}
           </select>
 
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
-            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
-          >
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="form-input">
             <option value="">All Priorities</option>
             {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>

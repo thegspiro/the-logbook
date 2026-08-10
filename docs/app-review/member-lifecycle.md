@@ -1,6 +1,39 @@
 # Application Review — Member Lifecycle & Offboarding
 
-**Prefix:** `LIFE` · **Iteration:** A6 · **Reviewed:** 2026-08-05
+**Prefix:** `LIFE` · **Iteration:** A6 · **Reviewed:** 2026-08-05 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified the irreversible operations: anonymization org-scoped with a
+never-cross-tenant fetch + self-block + departed-only + idempotent; retention
+excludes documents/minutes, floors enforced twice, Pitfall-#12 deepcopy; auto-archive
+checks all four property categories; **every by-id anonymize/archive/clearance
+resolves org-scoped (XC-3 clean — an admin cannot touch another org's member)**;
+LIFE-1 (clearance total is Decimal) holds. **1 fix.**
+
+### LIFE-4 — MED (money) — Property-return letter totalled the chargeable value as float — ✅ FIXED
+
+`property_return_service.generate_report` accumulated the "Total Assessed Value" in
+the member's formal return letter as `float` (`total_value = 0.0`;
+`float(item.current_value …)`) — the exact LIFE-1 bug class, unfixed in this sibling.
+The letter renders this figure and the involuntary notice states the member may be
+pursued for "the cost of unreturned or damaged items," so it is a legally chargeable
+liability computed through float. **Fix:** accumulate as `Decimal` (mirroring the
+clearance service), verified safe across all consumers — `:,.2f` formatters, the
+FastAPI response encoder, and the audit path (`json.dumps(..., default=str)`) all
+handle `Decimal`; the valuation *methodology* (flagged separately) was left untouched.
+Existing 23 property-return tests pass.
+
+**Flagged (unchanged / new):** LIFE-2 (per-unit float division — FIN-7 refactor).
+New: pool-issuance valuation charges the **full** item value × qty in the return
+letter while the clearance service values it **per-unit** — the two member-facing
+figures disagree; a methodology reconciliation for the owner, not a drive-by. Also
+noted: `generate_report`'s member fetch has no org filter (both callers pre-verify
+org, so not live — DiD), and the anonymization file-before-row delete ordering is the
+accepted DOC-1 tradeoff.
+
+---
 
 **Backend:** `app/services/departure_clearance_service.py` (572 L),
 `property_return_service.py` (529 L), `member_archive_service.py` (322 L),

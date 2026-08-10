@@ -25,6 +25,7 @@ from app.models.training import TrainingRequirement
 from app.models.user import Organization, Position
 from app.services.compliance_officer_service import AnnualComplianceReportService
 from app.services.email_service import EmailService
+from app.utils.external_recipients import audit_external_recipients
 
 
 class ComplianceConfigService:
@@ -192,7 +193,7 @@ class ComplianceConfigService:
         result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == organization_id)
-            .where(TrainingRequirement.active == True)  # noqa: E712
+            .where(TrainingRequirement.active.is_(True))
             .order_by(TrainingRequirement.name)
         )
         requirements = result.scalars().all()
@@ -292,7 +293,12 @@ class ComplianceReportService:
 
             # Email the report if requested
             if send_email:
-                await self._email_report(report, organization_id, additional_recipients)
+                await self._email_report(
+                    report,
+                    organization_id,
+                    additional_recipients,
+                    sent_by=generated_by,
+                )
 
             await self.db.refresh(report)
             return report
@@ -311,6 +317,7 @@ class ComplianceReportService:
         report: ComplianceReport,
         organization_id: str,
         additional_recipients: Optional[List[str]] = None,
+        sent_by: Optional[str] = None,
     ) -> None:
         """Email a completed report to configured recipients."""
         # Get organization for email service
@@ -339,6 +346,18 @@ class ComplianceReportService:
         if not recipients:
             logger.info("No recipients configured for compliance report email")
             return
+
+        # The report carries member-by-member compliance data; any recipient
+        # outside the org's membership is an external send and must be audited
+        # (owner decision 2026-08-09). Sending to external addresses is allowed —
+        # only the audit trail is required.
+        await audit_external_recipients(
+            self.db,
+            organization_id=organization_id,
+            recipients=recipients,
+            context=f"compliance_report:{report.report_type}",
+            user_id=sent_by or report.generated_by,
+        )
 
         summary = report.summary or {}
         compliance_pct = summary.get("overall_compliance_pct", 0)
@@ -507,6 +526,7 @@ class ComplianceReportService:
         report_id: str,
         organization_id: str,
         recipients: List[str],
+        sent_by: Optional[str] = None,
     ) -> None:
         """Re-send an existing report to specified recipients."""
         report = await self.get_report(report_id, organization_id)
@@ -515,4 +535,4 @@ class ComplianceReportService:
         if report.status != ReportStatus.COMPLETED.value:
             raise ValueError("Cannot email a report that is not completed")
 
-        await self._email_report(report, organization_id, recipients)
+        await self._email_report(report, organization_id, recipients, sent_by=sent_by)

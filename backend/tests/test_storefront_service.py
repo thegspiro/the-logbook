@@ -585,6 +585,9 @@ class TestPayments:
     async def test_mark_paid_settles_the_whole_balance(self, db_session):
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)
+        # Separation of duties: the person recording the payment must not be the
+        # order's own member, so a second officer acts here.
+        officer = await _make_member(db_session, org, first="Casey", last="Officer")
         service = StorefrontService(db_session)
         await _enable_store(service, org)
         product = await _make_product(db_session, org, price=Decimal("45.00"))
@@ -592,7 +595,7 @@ class TestPayments:
         order = await service.create_order(org.id, member, _cart(product.id, 2))
 
         updated = await service.mark_order_paid(
-            order.id, org.id, str(member.id), notify_member=False
+            order.id, org.id, str(officer.id), notify_member=False
         )
         assert updated.amount_paid == Decimal("90.00")
         assert updated.payment_status == StorePaymentStatus.PAID
@@ -601,6 +604,7 @@ class TestPayments:
     async def test_mark_paid_tops_up_a_partial_payment(self, db_session):
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)
+        officer = await _make_member(db_session, org, first="Casey", last="Officer")
         service = StorefrontService(db_session)
         await _enable_store(service, org)
         product = await _make_product(db_session, org, price=Decimal("45.00"))
@@ -611,7 +615,7 @@ class TestPayments:
         )
 
         updated = await service.mark_order_paid(
-            order.id, org.id, str(member.id), notify_member=False
+            order.id, org.id, str(officer.id), notify_member=False
         )
         # Pays the remaining 25, not another full 45.
         assert updated.amount_paid == Decimal("45.00")
@@ -620,17 +624,18 @@ class TestPayments:
     async def test_mark_paid_on_a_settled_order_is_a_no_op(self, db_session):
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)
+        officer = await _make_member(db_session, org, first="Casey", last="Officer")
         service = StorefrontService(db_session)
         await _enable_store(service, org)
         product = await _make_product(db_session, org, price=Decimal("45.00"))
         await _make_open_window(db_session, org)
         order = await service.create_order(org.id, member, _cart(product.id))
         await service.mark_order_paid(
-            order.id, org.id, str(member.id), notify_member=False
+            order.id, org.id, str(officer.id), notify_member=False
         )
 
         again = await service.mark_order_paid(
-            order.id, org.id, str(member.id), notify_member=False
+            order.id, org.id, str(officer.id), notify_member=False
         )
         assert again.amount_paid == Decimal("45.00")
 
@@ -667,6 +672,7 @@ class TestPayments:
     async def test_waiving_collects_nothing_but_clears_the_order(self, db_session):
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)
+        officer = await _make_member(db_session, org, first="Casey", last="Officer")
         service = StorefrontService(db_session)
         await _enable_store(service, org)
         product = await _make_product(db_session, org, price=Decimal("45.00"))
@@ -674,7 +680,7 @@ class TestPayments:
         order = await service.create_order(org.id, member, _cart(product.id))
 
         waived = await service.waive_order_payment(
-            order.id, org.id, str(member.id), reason="Comped", notify_member=False
+            order.id, org.id, str(officer.id), reason="Comped", notify_member=False
         )
         assert waived.payment_status == StorePaymentStatus.WAIVED
         assert waived.status == StoreOrderStatus.PAID
@@ -745,6 +751,9 @@ class TestPayments:
     async def test_refund_cannot_exceed_what_was_paid(self, db_session):
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)
+        # A distinct officer refunds (separation of duties) so the test reaches
+        # the amount check rather than the self-action guard.
+        officer = await _make_member(db_session, org, first="Casey", last="Officer")
         service = StorefrontService(db_session)
         await _enable_store(service, org)
         product = await _make_product(db_session, org, price=Decimal("45.00"))
@@ -758,7 +767,7 @@ class TestPayments:
             await service.refund_order(
                 order.id,
                 org.id,
-                str(member.id),
+                str(officer.id),
                 amount=Decimal("99.00"),
                 notify_member=False,
             )

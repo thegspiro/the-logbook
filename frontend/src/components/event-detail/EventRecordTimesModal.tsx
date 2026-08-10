@@ -77,7 +77,7 @@ const EventRecordTimesModal: React.FC<EventRecordTimesModalProps> = ({
                     id="actual_start_time"
                     value={actualStartTime}
                     onChange={(val) => onActualStartTimeChange(val)}
-                    className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                    className="form-input mt-1 shadow-xs sm:text-sm"
                   />
                   {currentActualStartTime && (
                     <p className="text-theme-text-muted mt-1 text-xs">
@@ -94,7 +94,7 @@ const EventRecordTimesModal: React.FC<EventRecordTimesModalProps> = ({
                     id="actual_end_time"
                     value={actualEndTime}
                     onChange={(val) => onActualEndTimeChange(val)}
-                    className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                    className="form-input mt-1 shadow-xs sm:text-sm"
                   />
                   {currentActualEndTime && (
                     <p className="text-theme-text-muted mt-1 text-xs">
