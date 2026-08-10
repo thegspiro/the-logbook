@@ -90,6 +90,59 @@ export function clickByName(name) {
 }
 
 /**
+ * Navigate to a public room-display route.
+ *
+ * Both the kiosk and the guest sign-in page are addressed by the *location's*
+ * display code plus, for the sign-in page, the event id — neither of which the
+ * manifest can know, since the seeder mints the code and the event afresh. The
+ * lookup runs against the public display API rather than a signed-in one: these
+ * shots have no session, which is the point of the feature.
+ *
+ * `routeFor` receives (displayCode, eventId).
+ */
+export function withDisplayCode(routeFor) {
+  return async (page, { lookupPage }) => {
+    const admin = await lookupPage();
+    const codes = await admin.evaluate(async () => {
+      const response = await fetch("/api/v1/locations", {
+        credentials: "include",
+      });
+      if (!response.ok) return [];
+      const body = await response.json();
+      const rows = Array.isArray(body) ? body : body.locations || [];
+      return rows
+        .map((row) => row.display_code || row.displayCode)
+        .filter(Boolean);
+    });
+    for (const code of codes) {
+      const event = await page.evaluate(async (displayCode) => {
+        const response = await fetch(`/api/public/v1/display/${displayCode}`);
+        if (!response.ok) return null;
+        const body = await response.json();
+        // Guest check-in is the whole subject of these shots, so a room whose
+        // live event does not have it on is the wrong room, not a fallback.
+        return (
+          (body.current_events || []).find((e) => e.allow_guest_check_in) ??
+          null
+        );
+      }, code);
+      if (event) {
+        await page.goto(
+          `${new URL(page.url()).origin}${routeFor(code, event.event_id)}`,
+          {
+            waitUntil: "domcontentloaded",
+          },
+        );
+        return;
+      }
+    }
+    throw new Error(
+      "withDisplayCode: no room display has a live event with guest check-in on",
+    );
+  };
+}
+
+/**
  * Open the first shift report card in whichever view is showing.
  *
  * A report card is a collapsed summary; everything a reviewer acts on — the
@@ -2042,6 +2095,53 @@ export const SHOTS = [
       (id) => `/events/${id}/monitoring`,
       "events",
       isInProgress,
+    ),
+    fullPage: true,
+  },
+
+  // ── Guest check-in ─────────────────────────────────────────────────
+  //
+  // The room display lists only events inside their check-in window, so all of
+  // these depend on the seeder's Volunteer Interest Night, which it slides
+  // forward on every run. The display and the sign-in page are public: they are
+  // reached by the location's display code and take no session, which is the
+  // whole point of the feature — a visitor has no account.
+  {
+    id: "04-30-room-display-guest-qr",
+    doc: "04-events-meetings.md",
+    line: 122,
+    anchor: "The room display (`/display/:code`) for an event that",
+    alt: "A room display showing the member and guest QR codes side by side under the event name",
+    route: "/login",
+    auth: "anonymous",
+    prepare: withDisplayCode((code) => `/display/${code}`),
+  },
+  {
+    id: "04-31-guest-check-in-settings",
+    doc: "04-events-meetings.md",
+    line: 139,
+    anchor: "The Check-In Settings section of the Edit Event form",
+    alt: "Check-In Settings on the event form with both guest toggles switched on",
+    route: "/events",
+    prepare: openFirstFromApi(
+      "/events?limit=100",
+      (id) => `/events/${id}/edit`,
+      "events",
+      (event) => event.title === "Volunteer Interest Night",
+    ),
+    fullPage: true,
+  },
+  {
+    id: "04-32-guest-sign-in-form",
+    doc: "04-events-meetings.md",
+    line: 163,
+    anchor: "The guest sign-in page as a visitor sees it on a",
+    alt: "The guest sign-in form on a phone, with the event name above the name and contact fields",
+    route: "/login",
+    auth: "anonymous",
+    viewport: "mobile",
+    prepare: withDisplayCode(
+      (code, eventId) => `/display/${code}/events/${eventId}/guest`,
     ),
     fullPage: true,
   },

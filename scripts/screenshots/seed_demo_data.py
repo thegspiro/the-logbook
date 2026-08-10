@@ -854,6 +854,91 @@ class Seeder:
             )
         return created
 
+    GUEST_EVENT_TITLE = "Volunteer Interest Night"
+
+    def seed_guest_check_in_event(self, locations: list[dict]) -> dict | None:
+        """An open house with guest check-in on, live right now.
+
+        The room display lists only events inside their check-in window, so
+        this one is slid forward on every run the way the in-progress drill is
+        — an open house that ended yesterday shows the kiosk an empty screen
+        and the guest sign-in page a 404.
+
+        It is pinned to a location by `location_id`, not by the free-text
+        `location` field the other events use: the display is reached by the
+        *location's* code, and an event carrying only a location name is not
+        attached to any location the kiosk can be opened from.
+        """
+        # The training centre by preference. One of the seeded locations carries
+        # the department's own name, and a kiosk headed "Oakville Fire
+        # Department — Oakville Fire Department" reads as a bug rather than as a
+        # room.
+        with_codes = [
+            loc
+            for loc in locations
+            if pick(loc, "display_code", "displayCode") and pick(loc, "id")
+        ]
+        room = next(
+            (loc for loc in with_codes if "Training" in str(pick(loc, "name"))),
+            with_codes[0] if with_codes else None,
+        )
+        if not room:
+            self.blocked.append("guest check-in: no location has a display code")
+            return None
+
+        start = (NOW - timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        window = {
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=4)),
+        }
+        guest_settings = {
+            "allow_guest_check_in": True,
+            "guest_check_in_creates_prospect": True,
+            # `location_id` only, deliberately no free-text `location`. The
+            # kiosk and the guest sign-in page both read the linked location's
+            # own name, so the string adds nothing — and the event form opens in
+            # "Other (off-site)" mode whenever it finds one, which clears the
+            # link on the next save. Picking a location in the app sets the id
+            # and leaves the string empty; the seeder matches that.
+            "location_id": pick(room, "id"),
+            "location": None,
+        }
+
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=100"), "events")
+                if e.get("title") == self.GUEST_EVENT_TITLE
+            ),
+            None,
+        )
+        if existing and pick(existing, "id"):
+            ends = str(pick(existing, "end_datetime", "endDatetime") or "")
+            updates = dict(guest_settings)
+            if ends and ends < iso(NOW):
+                updates.update(window)
+            self.api.patch(f"/events/{pick(existing, 'id')}", updates)
+            return existing
+
+        return self.api.post(
+            "/events",
+            {
+                "title": self.GUEST_EVENT_TITLE,
+                "description": (
+                    "An open evening for anyone thinking about joining. Tour the "
+                    "station, meet the crew, and ask whatever you like — no "
+                    "commitment, and no application to fill in on the night."
+                ),
+                "event_type": "public_education",
+                "requires_rsvp": False,
+                "is_mandatory": False,
+                "send_reminders": False,
+                "is_draft": False,
+                **window,
+                **guest_settings,
+            },
+        )
+
     # -- scheduling --------------------------------------------------
 
     SHIFT_TEMPLATES = [
@@ -5461,6 +5546,10 @@ class Seeder:
         self.step("evoc levels", self.seed_evoc_levels)
         self.step("apparatus activity", lambda: self.seed_apparatus_activity(apparatus))
         events = self.step("events", self.seed_events) or []
+        self.step(
+            "guest check-in event",
+            lambda: self.seed_guest_check_in_event(stations),
+        )
         self.step(
             "event rsvps",
             lambda: self.seed_event_rsvps(self.base_url, events, members),

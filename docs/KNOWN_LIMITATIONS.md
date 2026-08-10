@@ -704,6 +704,41 @@ an election configured to open itself could not be told to stop.
 `tests/test_election_update_allowlist.py` now checks the invariant, since the
 pattern cannot report its own omissions.
 
+## Events — Guest Check-In Switched Itself Off On Every Read (2026-08-10)
+
+Fixed 2026-08-10. `_build_event_response` names each field it passes rather
+than validating from the ORM row, and it never named `allow_guest_check_in` or
+`guest_check_in_creates_prospect`. Pydantic filled the schema default, which
+for both is `False`.
+
+The column held `1`; every read said `false`. Worse than a display bug, because
+the edit form loads from that same endpoint: opening an event with guest
+check-in on and saving _any_ other change wrote the false back and turned the
+feature off. Nothing reported it — the write succeeded, the response was 200,
+and the checkbox had simply been unticked all along.
+
+`recurrence_exceptions` and `rolling_recurrence` were omitted the same way and
+are now passed too.
+
+`tests/test_event_response_completeness.py` asserts the builder names every
+field `EventResponse` declares, minus the per-request aggregates callers supply
+through `**extra_fields`. A per-field test would not have helped: the next
+field added to the schema has exactly this failure mode.
+
+## Events — The Event Form Prefers Free Text Over A Linked Location (2026-08-10)
+
+`EventForm` decides its location mode with `initialData?.location ? 'other' :
+'select'`, so an event carrying both a `location_id` and a free-text `location`
+opens in "Other (off-site / enter manually)" — and saving from there clears the
+`location_id`, since the "other" branch sends it as `undefined`.
+
+The app's own flow never produces that combination: picking a location sets the
+id and blanks the string. Only an API client that sets both walks into it,
+which is how the demo seeder found it. Left as-is rather than reordering the
+precedence, since a saved free-text location is a real signal for genuinely
+off-site events; the seeder now sets `location_id` alone, matching what the
+form itself writes.
+
 ## Equipment Checks — A Checklist Only Reaches Its Own Apparatus Type (2026-08-10)
 
 `_resolve_templates` matches a template to a shift by `apparatus_id` or by

@@ -119,24 +119,21 @@ where most of the room has no account and no reason to make one just to sign in.
 An event can now show a **second QR code** for guests. The two sit side by side
 on the room display. A guest scans theirs, types their name, and is signed in.
 
-> **[SCREENSHOT NEEDED]:** _The room display (`/display/:code`) for an event that
-> has guest check-in switched on, showing both QR codes side by side — the member
-> code labelled for members and the guest code labelled for visitors — with the
-> event name and room above them._
+![A room display showing the member and guest QR codes side by side under the event name](./images/04-30-room-display-guest-qr.png)
 
 ### Switching it on
 
 Both settings live on **Edit Event → Check-In Settings**, and both start off.
 
-| Setting                                         | What it does                                                                                |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Allow guest check-in**                        | Adds the guest QR code to the room display and opens the public sign-in page for this event |
-| **Create a prospective member from each guest** | Also opens a record in the recruitment pipeline for every guest who leaves an email address |
+| Setting                                            | What it does                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Allow guest (non-member) sign-in**               | Adds the guest QR code to the room display and opens the public sign-in page for this event |
+| **Add guests to the prospective members pipeline** | Also opens a record in the recruitment pipeline for every guest who leaves an email address |
 
-> **[SCREENSHOT NEEDED]:** _The Check-In Settings section of the Edit Event form
-> showing the existing check-in window fields together with the two new guest
-> toggles, with "Allow guest check-in" ticked and "Create a prospective member
-> from each guest" ticked beneath it._
+The second only appears once the first is ticked — it is nested underneath it,
+since a pipeline record can only come from a guest who signed in.
+
+![Check-In Settings on the event form with both guest toggles switched on](./images/04-31-guest-check-in-settings.png)
 
 > **Only switch this on for outreach events.** Turning on guest check-in means
 > anyone who can reach that QR code can write to your event's attendance list
@@ -147,17 +144,17 @@ Both settings live on **Edit Event → Check-In Settings**, and both start off.
 
 ### What the guest fills in
 
-Name is required. Everything else is optional: email, phone, the organization
-they are with, and why they came.
+Name is required. Everything else is optional: email, phone, and why they came.
+
+The API also accepts an `organization_name` for a guest who arrives with a
+neighbouring department or a partner agency, but the sign-in page does not ask
+for it — record it by hand on the external attendee afterwards if you need it.
 
 The form is deliberately short. A walk-in at an interest night should be asked
 for the minimum needed to follow up, not for a membership application — the real
 application form is what your follow-up email links to.
 
-> **[SCREENSHOT NEEDED]:** _The guest sign-in page as a visitor sees it on a
-> phone, showing the event name, date and room at the top, then the first name,
-> last name, email, phone, organization and "what brings you here" fields, with
-> the sign-in button below._
+![The guest sign-in form on a phone, with the event name above the name and contact fields](./images/04-32-guest-sign-in-form.png)
 
 > **[SCREENSHOT NEEDED]:** _The confirmation state after a guest signs in,
 > showing the "thanks for signing in" message with the event name._
@@ -192,7 +189,7 @@ review you can see which open house each lead walked in from.
 | **A busy night can hit the daily ceiling** — 300 sign-ins per event per day by default                                                           | Sized for an open house, not a stadium. Past that is abuse rather than attendance. Ask your administrator if you genuinely need it raised                                |
 
 > **Troubleshooting: the guest QR code is missing from the display.** Check three
-> things, in this order: the event has **Allow guest check-in** ticked; the event
+> things, in this order: the event has **Allow guest (non-member) sign-in** ticked; the event
 > is actually assigned to **that room**; and the display is showing the event you
 > think it is. The guest code is drawn per event, not per room, so an event
 > without the setting simply shows the member code alone.
