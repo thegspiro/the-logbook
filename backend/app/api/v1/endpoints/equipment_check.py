@@ -39,6 +39,7 @@ from app.schemas.equipment_check import (
     EquipmentCheckTemplateUpdate,
     FailureLogResponse,
     ItemDeployment,
+    ItemQuantityRequest,
     ItemRestockStateResponse,
     ItemTrendResponse,
     ItemUsedRequest,
@@ -1343,7 +1344,43 @@ async def report_item_used(
         organization_id=str(current_user.organization_id),
         user=current_user,
         note=data.note,
+        quantity_used=data.quantity_used,
     )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result
+
+
+@router.put(
+    "/items/{template_item_id}/quantity",
+    response_model=ItemRestockStateResponse,
+)
+async def set_item_quantity(
+    template_item_id: str,
+    data: ItemQuantityRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
+    ),
+):
+    """Set how many of this item are on the truck right now.
+
+    A recount rather than a consumption: the crew saying what is actually in
+    the compartment, which is also how a drifted count gets put right without
+    inventing a use that never happened.
+    """
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.set_item_quantity(
+            template_item_id=template_item_id,
+            organization_id=str(current_user.organization_id),
+            user=current_user,
+            quantity=data.quantity,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if result is None:
         raise HTTPException(status_code=404, detail="Checklist item not found")
     return result
@@ -1427,6 +1464,7 @@ async def swap_item_lot(
             inventory_lot_id=data.inventory_lot_id,
             organization_id=str(current_user.organization_id),
             user=current_user,
+            quantity=data.quantity,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

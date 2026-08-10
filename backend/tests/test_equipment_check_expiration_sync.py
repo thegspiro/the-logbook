@@ -178,6 +178,61 @@ class TestApplyFoundValuesToTemplate:
 
 
 class TestCreateCheckItems:
+    async def test_a_check_recount_becomes_the_on_truck_figure(self, service, mock_db):
+        tmpl_item = _template_item(
+            expected_quantity=4, quantity_on_truck=4, restock_needed=False
+        )
+        items_data = [
+            {
+                "template_item_id": "ti-1",
+                "item_name": "4x4 Gauze",
+                "status": "pass",
+                "quantity_found": 2,
+            }
+        ]
+
+        await service._create_check_items("check-1", items_data, {"ti-1": tmpl_item})
+
+        # A crew standing at the compartment counting outranks a running total
+        # that has drifted.
+        assert tmpl_item.quantity_on_truck == 2
+
+    async def test_a_full_check_count_settles_a_standing_report(self, service, mock_db):
+        tmpl_item = _template_item(
+            expected_quantity=4,
+            quantity_on_truck=1,
+            restock_needed=True,
+            restock_note="used three",
+        )
+        items_data = [
+            {
+                "template_item_id": "ti-1",
+                "item_name": "4x4 Gauze",
+                "status": "pass",
+                "quantity_found": 4,
+            }
+        ]
+
+        await service._create_check_items("check-1", items_data, {"ti-1": tmpl_item})
+
+        assert tmpl_item.quantity_on_truck == 4
+        assert tmpl_item.restock_needed is False
+
+    async def test_an_uncounted_position_ignores_quantity_found(self, service, mock_db):
+        tmpl_item = _template_item(required_quantity=None, expected_quantity=None)
+        items_data = [
+            {
+                "template_item_id": "ti-1",
+                "item_name": "Halligan",
+                "status": "pass",
+                "quantity_found": 9,
+            }
+        ]
+
+        await service._create_check_items("check-1", items_data, {"ti-1": tmpl_item})
+
+        assert tmpl_item.quantity_on_truck is None
+
     async def test_submitted_expiration_reaches_the_template(self, service, mock_db):
         tmpl_item = _template_item()
         items_data = [
@@ -304,6 +359,81 @@ class TestSwapItemLot:
         assert item.restock_needed is False
         assert item.restock_note is None
         assert result["restock_needed"] is False
+
+    async def test_restocking_several_draws_them_all_off_the_lot(
+        self, service, mock_db
+    ):
+        item = _template_item(
+            inventory_item_id="inv-1",
+            expected_quantity=4,
+            quantity_on_truck=1,
+            restock_needed=True,
+        )
+        lot = MagicMock(
+            id="lot-1",
+            inventory_item_id="inv-1",
+            quantity=10,
+            lot_number="LOT-NEW",
+            expiration_date=NEXT_YEAR,
+        )
+        self._wire(mock_db, item, lot)
+
+        result = await service.swap_item_lot("ti-1", "lot-1", "org-1", quantity=3)
+
+        assert lot.quantity == 7
+        assert item.quantity_on_truck == 4
+        # Back to the target, so the shortfall report is settled.
+        assert item.restock_needed is False
+        assert result["quantity_on_truck"] == 4
+
+    async def test_a_partial_restock_keeps_the_item_on_the_worklist(
+        self, service, mock_db
+    ):
+        item = _template_item(
+            inventory_item_id="inv-1",
+            expected_quantity=4,
+            quantity_on_truck=0,
+            restock_needed=True,
+        )
+        lot = MagicMock(
+            id="lot-1",
+            inventory_item_id="inv-1",
+            quantity=2,
+            lot_number="LOT-NEW",
+            expiration_date=NEXT_YEAR,
+        )
+        self._wire(mock_db, item, lot)
+
+        result = await service.swap_item_lot("ti-1", "lot-1", "org-1", quantity=2)
+
+        assert item.quantity_on_truck == 2
+        # Still two short: dropping it off the list here would close the gap on
+        # paper only.
+        assert item.restock_needed is True
+        assert result["restock_needed"] is True
+
+    async def test_a_lot_short_of_the_requested_quantity_is_refused(
+        self, service, mock_db
+    ):
+        item = _template_item(inventory_item_id="inv-1", expected_quantity=4)
+        lot = MagicMock(
+            id="lot-1",
+            inventory_item_id="inv-1",
+            quantity=2,
+            lot_number="LOT-NEW",
+            expiration_date=NEXT_YEAR,
+        )
+        self._wire(mock_db, item, lot)
+
+        with pytest.raises(ValueError, match="only 2 on hand"):
+            await service.swap_item_lot("ti-1", "lot-1", "org-1", quantity=5)
+
+        assert lot.quantity == 2
+        mock_db.commit.assert_not_awaited()
+
+    async def test_a_zero_quantity_restock_is_refused(self, service, mock_db):
+        with pytest.raises(ValueError, match="at least 1"):
+            await service.swap_item_lot("ti-1", "lot-1", "org-1", quantity=0)
 
     async def test_swap_without_a_user_still_succeeds(self, service, mock_db):
         item = _template_item(inventory_item_id="inv-1")
@@ -499,6 +629,111 @@ class TestReportItemUsed:
         assert item.restock_note is None
         assert item.restock_reported_by is None
         assert item.restock_reported_at is None
+
+
+class TestQuantityOnTruck:
+    """The live count: how many are aboard, as against how many should be."""
+
+    def _wire(self, mock_db, item):
+        result = MagicMock()
+        result.first.return_value = (item, "tmpl-1")
+        mock_db.execute = AsyncMock(return_value=result)
+        mock_db.flush = AsyncMock()
+
+    def test_an_uncounted_item_reads_as_its_target(self, service):
+        item = _template_item(expected_quantity=4, quantity_on_truck=None)
+        # NULL means nobody has counted, not that the bracket is empty.
+        assert service._on_truck(item) == 4
+        assert service._is_short(item) is False
+
+    def test_required_quantity_outranks_expected(self, service):
+        item = _template_item(required_quantity=6, expected_quantity=4)
+        assert service._target_quantity(item) == 6
+
+    def test_a_position_with_no_target_is_never_short(self, service):
+        item = _template_item(required_quantity=None, expected_quantity=None)
+        assert service._target_quantity(item) is None
+        assert service._is_short(item) is False
+
+    async def test_use_takes_the_count_down_and_reports_it(self, service, mock_db):
+        item = _template_item(expected_quantity=4, quantity_on_truck=4)
+        self._wire(mock_db, item)
+        user = MagicMock(id="u-1", first_name="Dana", last_name="Reed")
+
+        result = await service.report_item_used("ti-1", "org-1", user, quantity_used=2)
+
+        assert item.quantity_on_truck == 2
+        assert result["quantity_on_truck"] == 2
+        assert result["is_short"] is True
+        assert item.restock_needed is True
+
+    async def test_use_floors_at_zero(self, service, mock_db):
+        item = _template_item(expected_quantity=4, quantity_on_truck=1)
+        self._wire(mock_db, item)
+
+        # A crew reporting more than the record held is telling you the record
+        # was wrong; a negative count is not a fact about any truck.
+        await service.report_item_used(
+            "ti-1",
+            "org-1",
+            MagicMock(id="u-1", first_name="A", last_name="B"),
+            quantity_used=5,
+        )
+
+        assert item.quantity_on_truck == 0
+
+    async def test_use_without_a_quantity_leaves_the_count_alone(
+        self, service, mock_db
+    ):
+        item = _template_item(expected_quantity=4, quantity_on_truck=4)
+        self._wire(mock_db, item)
+
+        await service.report_item_used(
+            "ti-1", "org-1", MagicMock(id="u-1", first_name="A", last_name="B")
+        )
+
+        assert item.quantity_on_truck == 4
+        assert item.restock_needed is True
+
+    async def test_recount_settles_a_report_once_the_truck_is_full(
+        self, service, mock_db
+    ):
+        item = _template_item(
+            expected_quantity=4, quantity_on_truck=1, restock_needed=True
+        )
+        self._wire(mock_db, item)
+
+        result = await service.set_item_quantity(
+            "ti-1", "org-1", MagicMock(id="u-1", first_name="A", last_name="B"), 4
+        )
+
+        assert item.quantity_on_truck == 4
+        assert item.restock_needed is False
+        assert result["is_short"] is False
+
+    async def test_a_partial_recount_leaves_the_report_standing(self, service, mock_db):
+        item = _template_item(
+            expected_quantity=4, quantity_on_truck=0, restock_needed=True
+        )
+        self._wire(mock_db, item)
+
+        await service.set_item_quantity(
+            "ti-1", "org-1", MagicMock(id="u-1", first_name="A", last_name="B"), 2
+        )
+
+        # Two of four back is still a truck that is short two.
+        assert item.restock_needed is True
+
+    async def test_recount_rejects_a_negative(self, service, mock_db):
+        with pytest.raises(ValueError, match="negative"):
+            await service.set_item_quantity("ti-1", "org-1", MagicMock(), -1)
+
+    async def test_recount_rejects_an_uncounted_position(self, service, mock_db):
+        item = _template_item(required_quantity=None, expected_quantity=None)
+        self._wire(mock_db, item)
+
+        with pytest.raises(ValueError, match="does not carry a quantity"):
+            await service.set_item_quantity("ti-1", "org-1", MagicMock(), 3)
 
 
 class TestItemDeployments:

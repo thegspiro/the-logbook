@@ -784,10 +784,17 @@ export const schedulingService = {
     const response = await api.get<ApparatusInventory>(`/equipment-checks/apparatus/${apparatusId}/inventory`);
     return response.data;
   },
-  async reportItemUsed(templateItemId: string, note?: string): Promise<ItemRestockState> {
+  async reportItemUsed(templateItemId: string, note?: string, quantityUsed?: number): Promise<ItemRestockState> {
     const response = await api.post<ItemRestockState>(`/equipment-checks/items/${templateItemId}/used`, {
       // Create payload: a blank note is omitted rather than sent as "".
       note: note?.trim() || undefined,
+      quantity_used: quantityUsed || undefined,
+    });
+    return response.data;
+  },
+  async setItemQuantity(templateItemId: string, quantity: number): Promise<ItemRestockState> {
+    const response = await api.put<ItemRestockState>(`/equipment-checks/items/${templateItemId}/quantity`, {
+      quantity,
     });
     return response.data;
   },
@@ -799,9 +806,10 @@ export const schedulingService = {
     const response = await api.get<ItemDeployment[]>(`/equipment-checks/supply/item-deployments/${inventoryItemId}`);
     return response.data;
   },
-  async swapItemLot(templateItemId: string, inventoryLotId: string): Promise<LotSwapResult> {
+  async swapItemLot(templateItemId: string, inventoryLotId: string, quantity = 1): Promise<LotSwapResult> {
     const response = await api.post<LotSwapResult>(`/equipment-checks/items/${templateItemId}/swap`, {
       inventory_lot_id: inventoryLotId,
+      quantity,
     });
     return response.data;
   },

@@ -91,6 +91,7 @@ class CheckTemplateItemResponse(UTCResponseBase):
     image_url: Optional[str] = None
     equipment_id: Optional[str] = None
     inventory_item_id: Optional[str] = None
+    quantity_on_truck: Optional[int] = None
     has_expiration: bool
     expiration_date: Optional[date] = None
     expiration_warning_days: int
@@ -612,6 +613,9 @@ class SupplyExpiringItem(BaseModel):
     restock_needed: bool = False
     restock_note: Optional[str] = None
     restock_reported_at: Optional[datetime] = None
+    quantity_on_truck: Optional[int] = None
+    target_quantity: Optional[int] = None
+    is_short: bool = False
     inventory_item_id: Optional[str] = None
     inventory_item_name: Optional[str] = None
     ready_stock: int = 0
@@ -636,7 +640,13 @@ class ApparatusInventoryItem(BaseModel):
     template_item_id: str
     item_name: str
     check_type: Optional[str] = None
-    expected_quantity: Optional[int] = None
+    # What the position should hold, and what it actually holds. The second is
+    # NULL-backed on the model but never null here: an uncounted item reads as
+    # its target, because the record of what was stocked is the best answer
+    # until a crew contradicts it.
+    target_quantity: Optional[int] = None
+    quantity_on_truck: Optional[int] = None
+    is_short: bool = False
     serial_number: Optional[str] = None
     lot_number: Optional[str] = None
     expiration_date: Optional[date] = None
@@ -679,10 +689,19 @@ class ItemUsedRequest(BaseModel):
     """Report that a checklist item was used or pulled off the truck."""
 
     note: Optional[str] = Field(None, max_length=500)
+    # Omitted for a position that is not counted (a single tool, a pass/fail
+    # inspection), where the report itself is the whole message.
+    quantity_used: Optional[int] = Field(None, ge=1)
+
+
+class ItemQuantityRequest(BaseModel):
+    """Set the on-truck count outright — a recount, or a hand restock."""
+
+    quantity: int = Field(..., ge=0)
 
 
 class ItemRestockStateResponse(BaseModel):
-    """The restock report currently standing against a checklist item."""
+    """Where a checklist item stands after a use, restock or recount."""
 
     model_config = _camel_config
 
@@ -690,6 +709,9 @@ class ItemRestockStateResponse(BaseModel):
     restock_needed: bool = False
     restock_note: Optional[str] = None
     restock_reported_at: Optional[datetime] = None
+    quantity_on_truck: Optional[int] = None
+    target_quantity: Optional[int] = None
+    is_short: bool = False
 
 
 class ItemDeployment(BaseModel):
@@ -718,9 +740,11 @@ class ItemDeployment(BaseModel):
 
 
 class LotSwapRequest(BaseModel):
-    """Swap a ready-stock lot onto the apparatus for a checklist item."""
+    """Move units from a ready-stock lot onto the apparatus."""
 
     inventory_lot_id: str
+    # Defaults to one, which is the whole story for a single-unit bracket.
+    quantity: int = Field(1, ge=1)
 
 
 class LotSwapResponse(BaseModel):
@@ -732,5 +756,7 @@ class LotSwapResponse(BaseModel):
     lot_number: Optional[str] = None
     expiration_date: Optional[date] = None
     remaining_quantity: int = 0
-    # Fresh stock in the bracket settles any outstanding restock report.
+    # A full restock settles the report; a partial one leaves it standing,
+    # because the truck is still short.
     restock_needed: bool = False
+    quantity_on_truck: Optional[int] = None

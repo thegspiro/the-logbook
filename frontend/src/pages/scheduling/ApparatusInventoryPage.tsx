@@ -44,6 +44,7 @@ const ApparatusInventoryPage: React.FC = () => {
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [usedTarget, setUsedTarget] = useState<ApparatusInventoryItem | null>(null);
   const [swapTarget, setSwapTarget] = useState<ApparatusInventoryItem | null>(null);
+  const [swapQuantity, setSwapQuantity] = useState(1);
 
   useEffect(() => {
     void (async () => {
@@ -82,7 +83,7 @@ const ApparatusInventoryPage: React.FC = () => {
   };
 
   const items = useMemo(() => inventory?.compartments.flatMap((c) => c.items) ?? [], [inventory]);
-  const needingRestock = items.filter((i) => i.restockNeeded).length;
+  const needingRestock = items.filter((i) => i.restockNeeded || i.isShort).length;
   const expiring = items.filter((i) => i.isExpired || (i.daysUntilExpiration ?? 999) <= 30).length;
 
   const reportUsed = async (item: ApparatusInventoryItem, note: string) => {
@@ -93,6 +94,31 @@ const ApparatusInventoryPage: React.FC = () => {
       await load(selectedId);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to report the item'));
+    } finally {
+      setBusyItemId(null);
+    }
+  };
+
+  /**
+   * One tap = one unit on or off the truck.
+   *
+   * Down is consumption and files a restock report with it, so the supply
+   * officer sees the shortfall without the member opening anything. Up is a
+   * hand restock, which the server settles the report against once the truck
+   * is back to its target — a partial restock leaves it standing.
+   */
+  const adjustCount = async (item: ApparatusInventoryItem, delta: number) => {
+    const current = item.quantityOnTruck ?? item.targetQuantity ?? 0;
+    setBusyItemId(item.templateItemId);
+    try {
+      if (delta < 0) {
+        await schedulingService.reportItemUsed(item.templateItemId, undefined, -delta);
+      } else {
+        await schedulingService.setItemQuantity(item.templateItemId, current + delta);
+      }
+      await load(selectedId);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update the count'));
     } finally {
       setBusyItemId(null);
     }
@@ -111,10 +137,10 @@ const ApparatusInventoryPage: React.FC = () => {
     }
   };
 
-  const swapLot = async (item: ApparatusInventoryItem, lot: ReadyLot) => {
+  const swapLot = async (item: ApparatusInventoryItem, lot: ReadyLot, quantity: number) => {
     setBusyItemId(item.templateItemId);
     try {
-      await schedulingService.swapItemLot(item.templateItemId, lot.id);
+      await schedulingService.swapItemLot(item.templateItemId, lot.id, quantity);
       toast.success('Fresh stock is on the truck');
       setSwapTarget(null);
       await load(selectedId);
@@ -150,6 +176,13 @@ const ApparatusInventoryPage: React.FC = () => {
                   <PackageX className="h-3 w-3" /> Needs restock
                 </span>
               )}
+              {/* Shown without a report behind it too: a check that counted two
+                  of four is the same shortfall as a crew reporting one. */}
+              {item.isShort && !item.restockNeeded && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                  <PackageX className="h-3 w-3" /> Short
+                </span>
+              )}
             </div>
             <div className="text-theme-text-muted mt-0.5 flex flex-wrap gap-x-3 text-xs">
               {item.lotNumber && (
@@ -158,7 +191,11 @@ const ApparatusInventoryPage: React.FC = () => {
                 </span>
               )}
               {item.expirationDate && <span>Exp {formatDate(item.expirationDate, tz)}</span>}
-              {item.expectedQuantity != null && <span>Carries {item.expectedQuantity}</span>}
+              {item.targetQuantity != null && (
+                <span className={item.isShort ? 'font-medium text-orange-600 dark:text-orange-400' : ''}>
+                  {item.quantityOnTruck ?? item.targetQuantity} of {item.targetQuantity} aboard
+                </span>
+              )}
               {item.inventoryItemId && (
                 <span className={item.readyStock > 0 ? 'text-green-700 dark:text-green-400' : ''}>
                   {item.readyStock} ready in stock
@@ -176,6 +213,31 @@ const ApparatusInventoryPage: React.FC = () => {
 
           <div className="flex shrink-0 items-center gap-2">
             {busy && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />}
+            {item.targetQuantity != null && (
+              <div className="border-theme-surface-border flex items-center gap-1 rounded-lg border px-1">
+                <button
+                  type="button"
+                  disabled={busy || (item.quantityOnTruck ?? item.targetQuantity) <= 0}
+                  onClick={() => void adjustCount(item, -1)}
+                  className="btn-icon disabled:opacity-40"
+                  aria-label={`Record one ${item.itemName} used`}
+                >
+                  &minus;
+                </button>
+                <span className="text-theme-text-primary w-6 text-center text-sm font-semibold tabular-nums">
+                  {item.quantityOnTruck ?? item.targetQuantity}
+                </span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void adjustCount(item, 1)}
+                  className="btn-icon disabled:opacity-40"
+                  aria-label={`Add one ${item.itemName} to the truck`}
+                >
+                  +
+                </button>
+              </div>
+            )}
             {item.restockNeeded ? (
               <button
                 type="button"
@@ -192,14 +254,24 @@ const ApparatusInventoryPage: React.FC = () => {
                 onClick={() => setUsedTarget(item)}
                 className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50"
               >
-                <PackageX className="h-3.5 w-3.5" aria-hidden="true" /> Used
+                {/* On a counted position the minus button is what records use,
+                    so this is the place to say *why* — damaged, contaminated,
+                    missing — without pretending a unit was consumed. */}
+                <PackageX className="h-3.5 w-3.5" aria-hidden="true" />
+                {item.targetQuantity != null ? 'Flag' : 'Used'}
               </button>
             )}
             {item.inventoryItemId && (
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => setSwapTarget(item)}
+                onClick={() => {
+                  setSwapTarget(item);
+                  // Default to the shortfall: filling the gap is what the
+                  // member came here to do, so it should need no arithmetic.
+                  const short = (item.targetQuantity ?? 1) - (item.quantityOnTruck ?? item.targetQuantity ?? 0);
+                  setSwapQuantity(Math.max(1, short));
+                }}
                 className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
               >
                 <Repeat className="h-3.5 w-3.5" aria-hidden="true" /> Swap
@@ -289,11 +361,19 @@ const ApparatusInventoryPage: React.FC = () => {
 
       <PromptDialog
         isOpen={usedTarget !== null}
-        title={`Report ${usedTarget?.itemName ?? 'item'} used`}
-        message="This puts the item on the supply officer's worklist right away. A note helps whoever restocks it."
+        title={
+          usedTarget?.targetQuantity != null
+            ? `Flag ${usedTarget.itemName}`
+            : `Report ${usedTarget?.itemName ?? 'item'} used`
+        }
+        message={
+          usedTarget?.targetQuantity != null
+            ? 'Puts this on the supply officer\u2019s worklist without changing the count \u2014 use the minus button for units actually used.'
+            : "This puts the item on the supply officer's worklist right away. A note helps whoever restocks it."
+        }
         label="Note (optional)"
         placeholder="e.g. used two on a call"
-        confirmLabel="Report used"
+        confirmLabel={usedTarget?.targetQuantity != null ? 'Flag it' : 'Report used'}
         multiline
         required={false}
         onClose={() => setUsedTarget(null)}
@@ -322,6 +402,21 @@ const ApparatusInventoryPage: React.FC = () => {
               </button>
             </div>
             <div className="space-y-2 overflow-auto px-4 py-3">
+              {swapTarget.targetQuantity != null && swapTarget.readyLots.length > 0 && (
+                <div className="flex items-center justify-between gap-3 pb-1">
+                  <label htmlFor="swap-quantity" className="text-theme-text-secondary text-xs">
+                    How many to put on the truck
+                  </label>
+                  <input
+                    id="swap-quantity"
+                    type="number"
+                    min="1"
+                    className="form-input w-20"
+                    value={swapQuantity}
+                    onChange={(e) => setSwapQuantity(Math.max(1, Number(e.target.value) || 1))}
+                  />
+                </div>
+              )}
               {swapTarget.readyLots.length === 0 ? (
                 <p className="text-theme-text-muted py-8 text-center text-sm">
                   No in-date stock on hand. Report it used so the supply officer knows to order it.
@@ -343,8 +438,8 @@ const ApparatusInventoryPage: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      disabled={busyItemId === swapTarget.templateItemId}
-                      onClick={() => void swapLot(swapTarget, lot)}
+                      disabled={busyItemId === swapTarget.templateItemId || lot.quantity < swapQuantity}
+                      onClick={() => void swapLot(swapTarget, lot, swapQuantity)}
                       className="btn-primary btn-sm inline-flex shrink-0 items-center gap-1 disabled:opacity-50"
                     >
                       <PackageCheck className="h-4 w-4" /> Swap in

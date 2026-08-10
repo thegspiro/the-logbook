@@ -7,6 +7,7 @@ const mockGetApparatusInventory = vi.fn();
 const mockReportItemUsed = vi.fn();
 const mockClearItemRestock = vi.fn();
 const mockSwapItemLot = vi.fn();
+const mockSetItemQuantity = vi.fn();
 const mockGetApparatusList = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
@@ -15,6 +16,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     reportItemUsed: (...a: unknown[]) => mockReportItemUsed(...a) as unknown,
     clearItemRestock: (...a: unknown[]) => mockClearItemRestock(...a) as unknown,
     swapItemLot: (...a: unknown[]) => mockSwapItemLot(...a) as unknown,
+    setItemQuantity: (...a: unknown[]) => mockSetItemQuantity(...a) as unknown,
   },
 }));
 
@@ -47,6 +49,7 @@ const makeItem = (overrides = {}) => ({
   checkType: 'quantity',
   isExpired: false,
   restockNeeded: false,
+  isShort: false,
   readyStock: 0,
   readyLots: [],
   ...overrides,
@@ -69,6 +72,7 @@ describe('ApparatusInventoryPage', () => {
     mockReportItemUsed.mockResolvedValue({ templateItemId: 'ti-1', restockNeeded: true });
     mockClearItemRestock.mockResolvedValue({ templateItemId: 'ti-1', restockNeeded: false });
     mockSwapItemLot.mockResolvedValue({ templateItemId: 'ti-1', remainingQuantity: 4, restockNeeded: false });
+    mockSetItemQuantity.mockResolvedValue({ templateItemId: 'ti-1', restockNeeded: false, isShort: false });
   });
 
   /** Choose the one apparatus in the fleet, which triggers the inventory load. */
@@ -150,7 +154,9 @@ describe('ApparatusInventoryPage', () => {
     await user.click(await screen.findByRole('button', { name: /Swap in/ }));
 
     await waitFor(() => {
-      expect(mockSwapItemLot).toHaveBeenCalledWith('ti-1', 'lot-1');
+      // An uncounted bracket takes one unit — the default that covers
+      // everything that is not a multi-unit position.
+      expect(mockSwapItemLot).toHaveBeenCalledWith('ti-1', 'lot-1', 1);
     });
   });
 
@@ -165,6 +171,111 @@ describe('ApparatusInventoryPage', () => {
     await user.click(screen.getByRole('button', { name: /Swap/ }));
     expect(await screen.findByText(/No in-date stock on hand/)).toBeInTheDocument();
     expect(mockSwapItemLot).not.toHaveBeenCalled();
+  });
+
+  it('records one used when a counted item is decremented', async () => {
+    mockGetApparatusInventory.mockResolvedValue(inventory([makeItem({ targetQuantity: 4, quantityOnTruck: 4 })]));
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    expect(screen.getByText('4 of 4 aboard')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Record one 4x4 Gauze used/ }));
+
+    // Down is consumption, so it files the report as well as moving the count.
+    await waitFor(() => {
+      expect(mockReportItemUsed).toHaveBeenCalledWith('ti-1', undefined, 1);
+    });
+    expect(mockSetItemQuantity).not.toHaveBeenCalled();
+  });
+
+  it('records a hand restock when a counted item is incremented', async () => {
+    mockGetApparatusInventory.mockResolvedValue(
+      inventory([makeItem({ targetQuantity: 4, quantityOnTruck: 2, isShort: true })])
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    await user.click(screen.getByRole('button', { name: /Add one 4x4 Gauze to the truck/ }));
+
+    // Up is a recount, not a consumption — it must not file a report.
+    await waitFor(() => {
+      expect(mockSetItemQuantity).toHaveBeenCalledWith('ti-1', 3);
+    });
+    expect(mockReportItemUsed).not.toHaveBeenCalled();
+  });
+
+  it('will not decrement a position already at zero', async () => {
+    mockGetApparatusInventory.mockResolvedValue(
+      inventory([makeItem({ targetQuantity: 4, quantityOnTruck: 0, isShort: true })])
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    expect(screen.getByRole('button', { name: /Record one 4x4 Gauze used/ })).toBeDisabled();
+  });
+
+  it('shows a shortfall even with no report behind it', async () => {
+    mockGetApparatusInventory.mockResolvedValue(
+      inventory([makeItem({ targetQuantity: 4, quantityOnTruck: 2, isShort: true, restockNeeded: false })])
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    expect(screen.getByText('Short')).toBeInTheDocument();
+    expect(screen.getByText('2 of 4 aboard')).toBeInTheDocument();
+  });
+
+  it('defaults a restock to the size of the shortfall', async () => {
+    mockGetApparatusInventory.mockResolvedValue(
+      inventory([
+        makeItem({
+          inventoryItemId: 'inv-1',
+          targetQuantity: 4,
+          quantityOnTruck: 1,
+          isShort: true,
+          readyStock: 12,
+          readyLots: [{ id: 'lot-1', lotNumber: 'LOT-A', quantity: 12 }],
+        }),
+      ])
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    await user.click(screen.getByRole('button', { name: /Swap/ }));
+    // Filling the gap is what the member came for; it should need no arithmetic.
+    expect(await screen.findByLabelText(/How many to put on the truck/)).toHaveValue(3);
+
+    await user.click(screen.getByRole('button', { name: /Swap in/ }));
+    await waitFor(() => {
+      expect(mockSwapItemLot).toHaveBeenCalledWith('ti-1', 'lot-1', 3);
+    });
+  });
+
+  it('will not draw more than a lot holds', async () => {
+    mockGetApparatusInventory.mockResolvedValue(
+      inventory([
+        makeItem({
+          inventoryItemId: 'inv-1',
+          targetQuantity: 10,
+          quantityOnTruck: 0,
+          isShort: true,
+          readyStock: 2,
+          readyLots: [{ id: 'lot-1', lotNumber: 'LOT-A', quantity: 2 }],
+        }),
+      ])
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    await user.click(screen.getByRole('button', { name: /Swap/ }));
+    // Defaulted to the shortfall of 10, but the lot only has 2.
+    expect(await screen.findByRole('button', { name: /Swap in/ })).toBeDisabled();
   });
 
   it('offers no swap for an item that is not linked to inventory', async () => {

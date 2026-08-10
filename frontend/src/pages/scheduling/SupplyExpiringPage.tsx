@@ -37,7 +37,7 @@ type SortBy = 'soonest' | 'apparatus';
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'restock', label: 'Needs restock' },
-  { key: 'reported', label: 'Reported used' },
+  { key: 'reported', label: 'Used or short' },
   { key: 'expired', label: 'Expired' },
 ];
 
@@ -80,7 +80,7 @@ const SupplyExpiringPage: React.FC = () => {
   const visibleItems = useMemo(() => {
     let list = items;
     if (filter === 'restock') list = list.filter((i) => i.readyStock <= 0);
-    else if (filter === 'reported') list = list.filter((i) => i.restockNeeded);
+    else if (filter === 'reported') list = list.filter((i) => i.restockNeeded || i.isShort);
     else if (filter === 'expired') list = list.filter((i) => i.isExpired);
 
     const sorted = [...list];
@@ -254,6 +254,14 @@ const SupplyExpiringPage: React.FC = () => {
                       {item.restockNeeded && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
                           <PackageX className="h-3 w-3" /> Reported used
+                        </span>
+                      )}
+                      {/* The number is the point: a box down to its last unit
+                          and one just opened are both "needs restock" without
+                          it, and they are not the same job. */}
+                      {item.isShort && item.targetQuantity != null && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                          {item.quantityOnTruck ?? 0} of {item.targetQuantity} aboard
                         </span>
                       )}
                     </div>

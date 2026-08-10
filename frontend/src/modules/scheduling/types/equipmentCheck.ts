@@ -474,6 +474,9 @@ export interface SupplyExpiringItem {
   restockNeeded?: boolean;
   restockNote?: string;
   restockReportedAt?: string;
+  quantityOnTruck?: number;
+  targetQuantity?: number;
+  isShort?: boolean;
   inventoryItemId?: string;
   inventoryItemName?: string;
   readyStock: number;
@@ -496,7 +499,11 @@ export interface ApparatusInventoryItem {
   templateItemId: string;
   itemName: string;
   checkType?: string;
-  expectedQuantity?: number;
+  /** What the position should hold. Absent when it is not a counted position. */
+  targetQuantity?: number;
+  /** What it holds now — falls back to the target until someone counts. */
+  quantityOnTruck?: number;
+  isShort: boolean;
   serialNumber?: string;
   lotNumber?: string;
   expirationDate?: string;
@@ -529,6 +536,9 @@ export interface ItemRestockState {
   restockNeeded: boolean;
   restockNote?: string;
   restockReportedAt?: string;
+  quantityOnTruck?: number;
+  targetQuantity?: number;
+  isShort: boolean;
 }
 
 /**
@@ -557,8 +567,9 @@ export interface LotSwapResult {
   lotNumber?: string;
   expirationDate?: string;
   remainingQuantity: number;
-  /** Fresh stock in the bracket settles any outstanding restock report. */
+  /** A full restock settles the report; a partial one leaves it standing. */
   restockNeeded?: boolean;
+  quantityOnTruck?: number;
 }
 
 // ─── Template Change Log ────────────────────────────────────────────────────

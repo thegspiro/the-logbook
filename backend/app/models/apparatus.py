@@ -2152,6 +2152,12 @@ class CheckTemplateItem(Base):
     required_quantity = Column(Integer, nullable=True)
     expected_quantity = Column(Integer, nullable=True)
     critical_minimum_quantity = Column(Integer, nullable=True)
+    # How many are on the truck right now, as against required/expected, which
+    # say how many *should* be. NULL means nobody has counted since the item
+    # was defined, and the template's expected figure stands in — the record of
+    # what was stocked is the best available answer until a crew contradicts it,
+    # and reading NULL as zero would report every untouched truck as empty.
+    quantity_on_truck = Column(Integer, nullable=True)
     min_level = Column(Float, nullable=True)
     level_unit = Column(String(50), nullable=True)  # psi, %, gallons, etc.
     serial_number = Column(String(100), nullable=True)

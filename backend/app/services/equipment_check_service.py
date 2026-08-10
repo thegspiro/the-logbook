@@ -666,12 +666,25 @@ class EquipmentCheckService:
             lot_found = item_data.get("lot_found")
             expiration_found = item_data.get("expiration_found")
 
+            tmpl_item = template_items_map.get(tmpl_item_id) if tmpl_item_id else None
             updated_serial = self._apply_found_values_to_template(
-                template_items_map.get(tmpl_item_id) if tmpl_item_id else None,
+                tmpl_item,
                 serial_found=serial_found,
                 lot_found=lot_found,
                 expiration_found=expiration_found,
             )
+            # A check is a recount. quantity_found is a crew standing at the
+            # compartment counting, so it outranks whatever the running total
+            # had drifted to, and it settles a shortfall report if the truck is
+            # back to full.
+            found_qty = item_data.get("quantity_found")
+            if (
+                tmpl_item is not None
+                and found_qty is not None
+                and self._target_quantity(tmpl_item) is not None
+            ):
+                tmpl_item.quantity_on_truck = max(0, int(found_qty))
+                self._sync_restock_after_restocking(tmpl_item)
 
             check_item = ShiftEquipmentCheckItem(
                 id=generate_uuid(),
@@ -1443,6 +1456,18 @@ class EquipmentCheckService:
                         CheckTemplateItem.expiration_date <= cutoff,
                     ),
                     CheckTemplateItem.restock_needed.is_(True),
+                    # A counted position below its target belongs here whether
+                    # or not anyone filed a report — a check that recorded two
+                    # of four is the same shortfall as a crew reporting it.
+                    and_(
+                        CheckTemplateItem.quantity_on_truck.isnot(None),
+                        CheckTemplateItem.quantity_on_truck
+                        < func.coalesce(
+                            CheckTemplateItem.required_quantity,
+                            CheckTemplateItem.expected_quantity,
+                            0,
+                        ),
+                    ),
                 ),
             )
             .order_by(CheckTemplateItem.expiration_date.asc())
@@ -1505,6 +1530,9 @@ class EquipmentCheckService:
                     "restock_needed": bool(item.restock_needed),
                     "restock_note": item.restock_note,
                     "restock_reported_at": item.restock_reported_at,
+                    "quantity_on_truck": self._on_truck(item),
+                    "target_quantity": self._target_quantity(item),
+                    "is_short": self._is_short(item),
                     "inventory_item_id": item.inventory_item_id,
                     "inventory_item_name": (
                         item_names.get(item.inventory_item_id)
@@ -1623,8 +1651,9 @@ class EquipmentCheckService:
                     "template_item_id": item.id,
                     "item_name": item.name,
                     "check_type": item.check_type,
-                    "expected_quantity": item.expected_quantity
-                    or item.required_quantity,
+                    "target_quantity": self._target_quantity(item),
+                    "quantity_on_truck": self._on_truck(item),
+                    "is_short": self._is_short(item),
                     "serial_number": item.serial_number,
                     "lot_number": item.lot_number,
                     "expiration_date": exp,
@@ -1659,24 +1688,74 @@ class EquipmentCheckService:
             "compartments": compartments,
         }
 
+    @staticmethod
+    def _target_quantity(item: CheckTemplateItem) -> Optional[int]:
+        """How many this position should hold, or None if it is not counted.
+
+        ``required_quantity`` is the state-mandated floor and outranks the
+        department's own ``expected_quantity`` where both are set — being short
+        of the legal minimum is the fact that matters.
+        """
+        return item.required_quantity or item.expected_quantity
+
+    @classmethod
+    def _on_truck(cls, item: CheckTemplateItem) -> Optional[int]:
+        """The live count, falling back to what the item was stocked with.
+
+        A NULL ``quantity_on_truck`` means nobody has counted since the item was
+        defined, not that the bracket is empty; the template's target is the
+        best available answer until a crew contradicts it.
+        """
+        if item.quantity_on_truck is not None:
+            return item.quantity_on_truck
+        return cls._target_quantity(item)
+
+    @classmethod
+    def _is_short(cls, item: CheckTemplateItem) -> bool:
+        """True when a counted position holds less than it should."""
+        target = cls._target_quantity(item)
+        on_truck = cls._on_truck(item)
+        if target is None or on_truck is None:
+            return False
+        return on_truck < target
+
+    @classmethod
+    def _sync_restock_after_restocking(cls, item: CheckTemplateItem) -> None:
+        """Settle the restock report if the shortfall it described is gone.
+
+        A partial restock leaves the report standing: two of the four back on
+        the truck is still a truck that is short two, and clearing the flag
+        there would drop it off the worklist with the gap still open.
+        """
+        if not cls._is_short(item):
+            cls._clear_restock(item)
+
     async def report_item_used(
         self,
         template_item_id: str,
         organization_id: str,
         user: User,
         note: Optional[str] = None,
+        quantity_used: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Flag a checklist item as needing restock, from whoever used it.
+        """Record consumption against a checklist item, from whoever used it.
 
         Raised at the moment of use rather than discovered at the next check.
-        The flag puts the item on the supply worklist immediately, and a swap
-        of fresh stock clears it.
+        For a counted position the on-truck figure comes down by the number
+        used, so the worklist can say how short the truck is rather than only
+        that something is needed. The count floors at zero: a crew reporting
+        more than the record thought was there is telling you the record was
+        wrong, and a negative count is not a fact about any truck.
         """
         item, template_id = await self._get_item_with_template(
             template_item_id, organization_id
         )
         if item is None:
             return None
+
+        before = self._on_truck(item)
+        if quantity_used and self._target_quantity(item) is not None:
+            item.quantity_on_truck = max(0, (before or 0) - quantity_used)
 
         item.restock_needed = True
         item.restock_reported_at = datetime.now(timezone.utc)
@@ -1689,7 +1768,50 @@ class EquipmentCheckService:
             item,
             user,
             action="restock_needed",
-            changes={"note": item.restock_note},
+            changes={
+                "note": item.restock_note,
+                "quantity_used": quantity_used,
+                "quantity_on_truck": item.quantity_on_truck,
+            },
+        )
+        await self.db.commit()
+        return self._restock_state(item)
+
+    async def set_item_quantity(
+        self,
+        template_item_id: str,
+        organization_id: str,
+        user: User,
+        quantity: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Set the on-truck count outright — a recount, or a hand restock.
+
+        Distinct from reporting use: this is the crew saying what is actually
+        in the compartment, which is also how a count that drifted gets put
+        right without inventing a consumption that never happened.
+        """
+        if quantity < 0:
+            raise ValueError("Quantity cannot be negative")
+
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
+        )
+        if item is None:
+            return None
+        if self._target_quantity(item) is None:
+            raise ValueError("This item does not carry a quantity")
+
+        previous = self._on_truck(item)
+        item.quantity_on_truck = quantity
+        self._sync_restock_after_restocking(item)
+
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            item,
+            user,
+            action="counted",
+            changes={"from": previous, "to": quantity},
         )
         await self.db.commit()
         return self._restock_state(item)
@@ -1731,13 +1853,16 @@ class EquipmentCheckService:
         item.restock_reported_by = None
         item.restock_note = None
 
-    @staticmethod
-    def _restock_state(item: CheckTemplateItem) -> Dict[str, Any]:
+    @classmethod
+    def _restock_state(cls, item: CheckTemplateItem) -> Dict[str, Any]:
         return {
             "template_item_id": item.id,
             "restock_needed": bool(item.restock_needed),
             "restock_note": item.restock_note,
             "restock_reported_at": item.restock_reported_at,
+            "quantity_on_truck": cls._on_truck(item),
+            "target_quantity": cls._target_quantity(item),
+            "is_short": cls._is_short(item),
         }
 
     async def _get_item_with_template(
@@ -1870,14 +1995,20 @@ class EquipmentCheckService:
         inventory_lot_id: str,
         organization_id: str,
         user: Optional[User] = None,
+        quantity: int = 1,
     ) -> Optional[Dict[str, Any]]:
-        """Swap a ready-stock lot onto the apparatus for a checklist item.
+        """Move units from a ready-stock lot onto the apparatus.
 
-        Decrements the lot's on-hand quantity by one and updates the deployed
-        checklist item's lot number and expiration to the new lot's values, so
-        the truck now reflects the fresher unit. Raises ValueError on a
-        mismatched or empty lot.
+        Draws ``quantity`` off the lot and updates the deployed checklist item's
+        lot number and expiration to the new stock, so the truck reflects what
+        is now in the bracket. For a counted position the on-truck figure goes
+        up by the same number, which is what makes a two-of-four restock
+        expressible; ``quantity`` defaults to 1 for the single-unit case that
+        covers everything else. Raises ValueError on a mismatched, empty or
+        expired lot.
         """
+        if quantity < 1:
+            raise ValueError("Restock quantity must be at least 1")
         item, template_id = await self._get_item_with_template(
             template_item_id, organization_id
         )
@@ -1900,8 +2031,12 @@ class EquipmentCheckService:
             raise ValueError("Stock lot not found")
         if item.inventory_item_id and lot.inventory_item_id != item.inventory_item_id:
             raise ValueError("This stock lot is for a different inventory item")
-        if lot.quantity < 1:
-            raise ValueError("No stock available in this lot")
+        if lot.quantity < quantity:
+            raise ValueError(
+                f"This lot has only {lot.quantity} on hand"
+                if lot.quantity
+                else "No stock available in this lot"
+            )
         if lot.expiration_date and lot.expiration_date < date.today():
             # Deploying expired stock would fail the item on the next check and
             # put expired supplies in service; refuse rather than record it.
@@ -1914,7 +2049,7 @@ class EquipmentCheckService:
             ),
         }
 
-        lot.quantity -= 1
+        lot.quantity -= quantity
         # Establish the catalog link if this was the item's first swap.
         if not item.inventory_item_id:
             item.inventory_item_id = lot.inventory_item_id
@@ -1923,11 +2058,13 @@ class EquipmentCheckService:
         if lot.expiration_date is not None:
             item.has_expiration = True
             item.expiration_date = lot.expiration_date
-        # Fresh stock is in the bracket, so whatever was reported used is no
-        # longer outstanding — leaving the flag up would keep the item on the
-        # supply worklist after it had been dealt with.
+        # Stock is going into the bracket, so raise the count by what was put
+        # there before deciding whether the shortfall is settled. A partial
+        # restock keeps the report standing — the truck is still short.
         was_restock = bool(item.restock_needed)
-        self._clear_restock(item)
+        if self._target_quantity(item) is not None:
+            item.quantity_on_truck = (self._on_truck(item) or 0) + quantity
+        self._sync_restock_after_restocking(item)
 
         # A swap rewrites the same safety-critical template row that every
         # manual edit logs, and it is the one change nobody typed — without an
@@ -1947,7 +2084,9 @@ class EquipmentCheckService:
                 entity_name=item.name,
                 changes={
                     "inventory_lot_id": inventory_lot_id,
-                    "cleared_restock": was_restock,
+                    "quantity": quantity,
+                    "quantity_on_truck": item.quantity_on_truck,
+                    "cleared_restock": was_restock and not item.restock_needed,
                     "from": previous,
                     "to": {
                         "lot_number": item.lot_number,
@@ -1967,7 +2106,8 @@ class EquipmentCheckService:
             "lot_number": item.lot_number,
             "expiration_date": item.expiration_date,
             "remaining_quantity": lot.quantity,
-            "restock_needed": False,
+            "restock_needed": bool(item.restock_needed),
+            "quantity_on_truck": self._on_truck(item),
         }
 
     # ------------------------------------------------------------------
