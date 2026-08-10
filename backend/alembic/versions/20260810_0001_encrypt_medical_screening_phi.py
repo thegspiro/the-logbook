@@ -22,9 +22,9 @@ an ``InvalidToken`` read, the application keeps working whether or not this
 backfill has run — but the backfill is what actually protects the *existing*
 PHI, so it is part of the upgrade rather than left to encrypt-on-next-write.
 
-Revision ID: 20260809_0001
-Revises: 20260808_0001
-Create Date: 2026-08-09 00:00:00.000000
+Revision ID: 20260810_0001
+Revises: 20260809_0001
+Create Date: 2026-08-10 00:00:00.000000
 
 """
 
@@ -32,8 +32,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260809_0001"
-down_revision = "20260808_0001"
+revision = "20260810_0001"
+down_revision = "20260809_0001"
 branch_labels = None
 depends_on = None
 
