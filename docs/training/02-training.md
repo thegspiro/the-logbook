@@ -914,7 +914,9 @@ Before filing shift reports, officers should **finalize the shift**. This create
 1. Navigate to the **Shift Detail Panel** for a past shift
 2. Click **"Finalize Shift"** — a pre-finalization checklist modal appears
 3. The checklist validates:
-   - **End-of-shift equipment checks** must be completed (blocking requirement)
+   - **End-of-shift equipment checks** — flagged when outstanding, and
+     blocking only if the department requires them before finalizing
+     (off by default)
    - Attendance count and call count displayed for reference
 4. On confirmation, the system:
    - Snapshots `call_count` and `total_hours` on the shift record
@@ -924,9 +926,9 @@ Before filing shift reports, officers should **finalize the shift**. This create
    - Sends a notification to the officer listing the number of drafts created
 5. After finalization, a green badge shows "Shift finalized on [date]"
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the pre-finalization checklist modal showing the equipment check validation, attendance count, call count, and the Finalize button._
+![The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button](./images/02-39-finalize-checklist.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ShiftDetailPanel after finalization showing the green "Finalized" badge with timestamp._
+![A finalized shift showing the green finalized badge with its date and the pass-down note](./images/02-43-finalized-badge.png)
 
 ### Auto-Population from Shift Data
 

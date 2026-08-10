@@ -2581,6 +2581,81 @@ export const SHOTS = [
     selector: 'div:has(> h3:text("My Shift Progress"))',
   },
 
+  // ── Shift finalization ─────────────────────────────────────────────
+  //
+  // Two states of the same control, which one shift cannot show: closing a
+  // shift hides its Finalize button for good. The seeder closes the *oldest*
+  // crewed past shift and leaves the rest open, so the badge shot has a
+  // finalized shift to find and the checklist shot still has an open one.
+  {
+    id: "03-45-finalize-checklist",
+    doc: "03-scheduling.md",
+    line: 807,
+    anchor:
+      "Screenshot of the pre-finalization checklist modal showing the equipment check validation status",
+    alt: "The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button",
+    route: "/scheduling",
+    prepare: async (page) => {
+      // An engine shift specifically. Equipment-check templates resolve by
+      // apparatus type, and the demo department writes its checklists for
+      // engines — on a ladder or brush shift the pre-finalization modal has no
+      // checklist to report on and omits its equipment row entirely.
+      await openStaffedShift(
+        (shift) =>
+          !shift.is_finalized &&
+          !shift.is_cancelled &&
+          /^Engine/i.test(shift.apparatus_name || ""),
+      )(page);
+      await clickByName(/^Finalize$/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-46-finalized-badge",
+    doc: "03-scheduling.md",
+    line: 829,
+    anchor:
+      "Screenshot of the ShiftDetailPanel after finalization showing the green",
+    alt: "A finalized shift showing the green finalized badge with its date, the Reopen link and the pass-down note",
+    route: "/scheduling",
+    prepare: openStaffedShift((shift) => shift.is_finalized),
+    fullPage: true,
+  },
+  {
+    id: "02-39-finalize-checklist",
+    doc: "02-training.md",
+    line: 927,
+    anchor:
+      "Screenshot of the pre-finalization checklist modal showing the equipment check validation, attendance count",
+    alt: "The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button",
+    route: "/scheduling",
+    prepare: async (page) => {
+      // An engine shift specifically. Equipment-check templates resolve by
+      // apparatus type, and the demo department writes its checklists for
+      // engines — on a ladder or brush shift the pre-finalization modal has no
+      // checklist to report on and omits its equipment row entirely.
+      await openStaffedShift(
+        (shift) =>
+          !shift.is_finalized &&
+          !shift.is_cancelled &&
+          /^Engine/i.test(shift.apparatus_name || ""),
+      )(page);
+      await clickByName(/^Finalize$/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "02-43-finalized-badge",
+    doc: "02-training.md",
+    line: 929,
+    anchor:
+      "Screenshot of the ShiftDetailPanel after finalization showing the green",
+    alt: "A finalized shift showing the green finalized badge with its date, the Reopen link and the pass-down note",
+    route: "/scheduling",
+    prepare: openStaffedShift((shift) => shift.is_finalized),
+    fullPage: true,
+  },
+
   // ── Seventh batch: shift detail panel ──────────────────────────────
   {
     id: "03-02-shift-detail-panel",

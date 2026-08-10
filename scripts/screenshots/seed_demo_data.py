@@ -2137,6 +2137,87 @@ class Seeder:
                 )
             )
 
+        def close_out_template_for(apparatus_type: str) -> dict:
+            """Get or create the end-of-shift template for an apparatus type.
+
+            Two reasons this is per-type rather than one shared template.
+            `_resolve_templates` matches a template to a shift only by
+            `apparatus_id` or `apparatus_type` — there is no "applies to every
+            apparatus" form — so a single Engine template leaves the ladder and
+            brush shifts with no checklist at all, and the pre-finalization
+            modal then omits its equipment row entirely rather than showing the
+            green tick or red cross the guides describe. And the check create
+            endpoint rejects a second check against a template already used on
+            that shift, whatever the timing, so the close-out cannot reuse the
+            morning template.
+            """
+            existing = next(
+                (
+                    t
+                    for t in templates
+                    if pick(t, "check_timing", "checkTiming") == "end_of_shift"
+                    and pick(t, "apparatus_type", "apparatusType") == apparatus_type
+                ),
+                None,
+            )
+            if existing is not None:
+                return existing
+            created = self.api.post(
+                "/equipment-checks/templates",
+                {
+                    "name": f"{apparatus_type.replace('_', ' ').title()} Close-Out",
+                    "description": (
+                        "End-of-shift verification before the crew is relieved."
+                    ),
+                    "check_timing": "end_of_shift",
+                    "apparatus_type": apparatus_type,
+                    "is_active": True,
+                    "compartments": [
+                        {
+                            "name": "Cab",
+                            "sort_order": 0,
+                            "items": [
+                                {
+                                    "name": item,
+                                    "sort_order": order,
+                                    "check_type": "presence",
+                                    "is_required": True,
+                                    "expected_quantity": 1,
+                                }
+                                for order, item in enumerate(
+                                    ["Portable radio", "Thermal imaging camera"]
+                                )
+                            ],
+                        }
+                    ],
+                },
+            )
+            templates.append(created)
+            return created
+
+        def apparatus_type_of(shift: dict) -> str | None:
+            """The shift's apparatus type, which neither shift payload carries.
+
+            The list and the detail response both stop at the apparatus id and
+            name, so the type — the only thing a template matches on — has to
+            come from the apparatus record itself.
+            """
+            detail = self.api.get(f"/scheduling/shifts/{pick(shift, 'id')}")
+            apparatus_id = pick(detail, "apparatus_id", "apparatusId")
+            if not apparatus_id:
+                return None
+            try:
+                apparatus = self.api.get(f"/apparatus/{apparatus_id}")
+            except ApiError:
+                return None
+            # `apparatusType` is the joined type *record*, not the slug a
+            # template matches on — its `code` is what `_resolve_templates`
+            # compares against.
+            type_record = pick(apparatus, "apparatus_type", "apparatusType")
+            if isinstance(type_record, dict):
+                return pick(type_record, "code", "default_type", "defaultType")
+            return type_record if isinstance(type_record, str) else None
+
         template = templates[0]
         template_id = pick(template, "id")
         if not template_id:
@@ -2150,16 +2231,24 @@ class Seeder:
         if not target_shifts:
             return {"templates": templates, "checks": []}
         checks = []
+        existing_by_shift: dict[str, set] = {}
         for shift in target_shifts:
-            checks.extend(
-                items(
-                    self.api.get(
-                        f"/equipment-checks/shifts/{pick(shift, 'id')}/checks"
-                    ),
-                    "checks",
-                )
+            found = items(
+                self.api.get(f"/equipment-checks/shifts/{pick(shift, 'id')}/checks"),
+                "checks",
             )
-        if checks:
+            checks.extend(found)
+            existing_by_shift[str(pick(shift, "id"))] = {
+                pick(c, "check_timing", "checkTiming") for c in found
+            }
+        # Keyed on the *timings* present, not on whether any check exists. A
+        # bare truthiness guard meant a database seeded before end-of-shift
+        # checks were added here never grew them, and the pre-finalization
+        # checklist's equipment row stayed absent through every re-seed.
+        if all(
+            {"start_of_shift", "end_of_shift"} <= timings
+            for timings in existing_by_shift.values()
+        ):
             return {"templates": templates, "checks": checks}
 
         # The template response carries the ids the check has to reference, so
@@ -2203,27 +2292,134 @@ class Seeder:
             # equipment-check screenshots went unfilled for two days without
             # anyone noticing the feature was broken.
             shift_items = items_for(shift_index)
-            check = self.api.post(
+            already = existing_by_shift.get(str(pick(shift, "id")), set())
+            if "start_of_shift" not in already:
+                check = self.api.post(
+                    f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
+                    {
+                        "template_id": template_id,
+                        "check_timing": "start_of_shift",
+                        "items": shift_items,
+                    },
+                )
+                checks.append(check)
+                # A check only counts toward the compliance report once
+                # completed.
+                check_id = pick(check, "id")
+                if check_id:
+                    try:
+                        self.api.put(
+                            f"/equipment-checks/checks/{check_id}/complete",
+                            {"items": shift_items},
+                        )
+                    except ApiError as exc:
+                        if exc.code not in (400, 409):
+                            raise
+            if "end_of_shift" in already:
+                continue
+
+            # An end-of-shift check as well as the start-of-shift one. The
+            # pre-finalization checklist's equipment row — the green tick or the
+            # red cross the guides describe — is rendered only when the shift
+            # has end-of-shift checks to report on; with none, the row is absent
+            # altogether and the modal says nothing about equipment either way.
+            shift_type = apparatus_type_of(shift)
+            if not shift_type:
+                continue
+            end_template_id = pick(close_out_template_for(shift_type), "id")
+            if not end_template_id:
+                continue
+            end_detail = self.api.get(f"/equipment-checks/templates/{end_template_id}")
+            end_items = [
+                {
+                    "template_item_id": pick(item, "id"),
+                    "compartment_name": pick(compartment, "name"),
+                    "item_name": pick(item, "name"),
+                    "status": "pass",
+                    "quantity_found": 1,
+                    "required_quantity": 1,
+                }
+                for compartment in items(end_detail, "compartments")
+                for item in items(compartment, "items")
+            ]
+            end_check = self.api.post(
                 f"/equipment-checks/shifts/{pick(shift, 'id')}/checks",
                 {
-                    "template_id": template_id,
-                    "check_timing": "start_of_shift",
-                    "items": shift_items,
+                    "template_id": end_template_id,
+                    "check_timing": "end_of_shift",
+                    "items": end_items,
                 },
             )
-            checks.append(check)
-            # A check only counts toward the compliance report once completed.
-            check_id = pick(check, "id")
-            if check_id:
+            checks.append(end_check)
+            end_id = pick(end_check, "id")
+            # The last one is left outstanding on purpose: the red "checks
+            # incomplete" state has to be reachable too, and a department where
+            # every check is always complete cannot picture it.
+            if end_id and shift_index < len(target_shifts) - 1:
                 try:
                     self.api.put(
-                        f"/equipment-checks/checks/{check_id}/complete",
-                        {"items": shift_items},
+                        f"/equipment-checks/checks/{end_id}/complete",
+                        {"items": end_items},
                     )
                 except ApiError as exc:
                     if exc.code not in (400, 409):
                         raise
         return {"templates": templates, "checks": checks}
+
+    # -- shift finalization ------------------------------------------
+
+    def seed_finalized_shift(self) -> dict | None:
+        """Close out one past shift, and leave the rest open.
+
+        Finalizing is a one-way door in the UI (a finalized shift hides its
+        Finalize button and locks attendance), so the two states the guides
+        picture — the pre-finalization checklist and the finalized badge —
+        cannot come from the same shift. One is closed here; the other 70-odd
+        past shifts stay open for the checklist shot.
+
+        The oldest past shift is the one chosen. A closed shift stops offering
+        the roster edits and the Finalize control, so taking the most recent
+        one would quietly strip those from every other shift-detail screenshot,
+        which all reach for the newest shift they can find.
+        """
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        if any(pick(s, "is_finalized", "isFinalized") for s in shifts):
+            return next(s for s in shifts if pick(s, "is_finalized", "isFinalized"))
+
+        past = sorted(
+            (
+                s
+                for s in shifts
+                if pick(s, "id")
+                and str(pick(s, "shift_date", "shiftDate") or "") < str(TODAY)
+                and not pick(s, "is_cancelled", "isCancelled")
+            ),
+            key=lambda s: str(pick(s, "shift_date", "shiftDate")),
+        )
+        for shift in past:
+            crew = items(
+                self.api.get(f"/scheduling/shifts/{pick(shift, 'id')}/assignments"),
+                "assignments",
+            )
+            if not crew:
+                continue
+            try:
+                return self.api.post(
+                    f"/scheduling/shifts/{pick(shift, 'id')}/finalize",
+                    {
+                        "override_incomplete_checks": True,
+                        "pass_down_notes": (
+                            "Engine 1 due for a pump service — booked for "
+                            "Thursday. Hydrant at Oak and 3rd still out of "
+                            "service, city notified."
+                        ),
+                    },
+                )
+            except ApiError as exc:
+                self.blocked.append(f"finalize shift: {exc}")
+                return None
+        self.blocked.append("finalize shift: no crewed past shift to close out")
+        return None
 
     # -- shift completion reports ------------------------------------
 
@@ -5347,6 +5543,10 @@ class Seeder:
         self.step("check requests", lambda: self.seed_check_requests(finance))
         self.step("equipment checks", self.seed_equipment_checks)
         self.step("shift reports", lambda: self.seed_shift_reports(members))
+        # After the reports: finalizing auto-creates drafts for attendees, and
+        # doing it first would put a second batch of drafts in the way of the
+        # ones seed_shift_reports files deliberately.
+        self.step("finalized shift", self.seed_finalized_shift)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

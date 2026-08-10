@@ -804,10 +804,15 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
 1. Open the **Shift Detail Panel** for a past, un-finalized shift
 2. Click **"Finalize Shift"** — a pre-finalization checklist modal appears
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the pre-finalization checklist modal showing the equipment check validation status (green checkmark or red X), attendance count, call count, and the Finalize button at the bottom._
+![The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button](./images/03-45-finalize-checklist.png)
 
 3. The checklist validates:
-   - **End-of-shift equipment checks** must be completed (blocks finalization if incomplete)
+   - **End-of-shift equipment checks** — outstanding checks are called out,
+     but they only _block_ finalization when the department has turned on
+     **require end-of-shift checks before finalizing** in Scheduling
+     Settings → Close-out rules. It is off by default, so the modal warns
+     and lets the officer proceed; with it on, finalizing needs a
+     logged override reason
    - Attendance summary and call count shown for reference
 4. Click **Finalize** to confirm
 
@@ -821,9 +826,12 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
 | **Draft reports created**  | ShiftCompletionReport drafts auto-created for all attendees with active training program enrollments                         |
 | **Notification sent**      | Officer receives notification with count of drafts created                                                                   |
 
-After finalization, a green badge shows "Shift finalized on [date]".
+After finalization, a green badge shows "Shift finalized on [date]" with a
+**Reopen** link beside it, and the pass-down note entered at close-out is
+shown underneath. The Finalize control is gone, but the crew roster keeps its
+remove buttons — reopening is what unlocks the shift, not the badge alone.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ShiftDetailPanel after finalization showing the green "Finalized" badge with timestamp and the locked state (no edit buttons)._
+![A finalized shift showing the green finalized badge with its date, the Reopen link and the pass-down note](./images/03-46-finalized-badge.png)
 
 #### Shift Finalization Edge Cases
 

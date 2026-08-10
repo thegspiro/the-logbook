@@ -704,6 +704,30 @@ an election configured to open itself could not be told to stop.
 `tests/test_election_update_allowlist.py` now checks the invariant, since the
 pattern cannot report its own omissions.
 
+## Equipment Checks — A Checklist Only Reaches Its Own Apparatus Type (2026-08-10)
+
+`_resolve_templates` matches a template to a shift by `apparatus_id` or by
+`apparatus_type`, and by nothing else. There is no "applies to every apparatus"
+form, so a department that writes one engine checklist has _no_ checklist on its
+ladder, brush and rescue shifts — those shifts return an empty checklist list
+rather than an unmet one.
+
+That silence propagates. The pre-finalization checklist renders its equipment
+row — the green tick or the red cross — only when the shift has end-of-shift
+checks to report on, so on a ladder shift the modal says nothing about
+equipment at all, and an officer sees a checklist that looks complete because
+the section simply is not there. The compliance report has the same blind spot:
+apparatus with no matching template are absent, not failing.
+
+Not changed here, because "one template covers everything" is a real modelling
+decision rather than a bug fix — a department may well want per-type lists. The
+gap worth closing is the reporting one: a shift with no applicable template
+should say so, rather than omit the row.
+
+The demo seeder now writes a close-out template per apparatus type it
+encounters, which is why the finalization screenshots have an equipment row at
+all.
+
 ## Screenshot Harness — A Stale Line Number Filled Its Neighbour (2026-08-10)
 
 Fixed 2026-08-10. `apply_placeholders.py` locates a placeholder by line number
