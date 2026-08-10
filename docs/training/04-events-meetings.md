@@ -1144,14 +1144,25 @@ To enable rolling recurrence:
 Officers can now delete an entire recurring event series at once:
 
 1. Navigate to any event in the series
-2. Click **More > Delete Series**
-3. A confirmation dialog shows the total number of events that will be removed
-4. Confirm to delete all events in the series (past and future)
+2. Click **More > Delete Event**
+3. Because the event recurs, the confirmation dialog offers a choice:
+   **Delete only this event** or **Delete all events in this series**. Pick the
+   second
+4. The confirm button changes to **Delete Entire Series**; click it. **Go Back**
+   leaves everything alone
 
-> **Screenshot needed:**
-> _[Screenshot of the delete series confirmation dialog showing "This will permanently delete 24 events in this series. This action cannot be undone." with Cancel and Delete buttons]_
+> **Corrected 2026-08-10.** There is no "Delete Series" menu item — the choice
+> lives inside the Delete Event dialog, and only appears on a recurring event.
+> The dialog does not count the occurrences; it warns that RSVPs and attendance
+> records go with them.
 
-> **Edge case:** Deleting a series removes all events including past ones. If you need to keep historical records, use "Delete Future Events" instead to preserve past occurrences.
+> **Edge case:** Deleting a series removes all events including past ones, and
+> there is no "delete future occurrences only" option — the dialog offers
+> exactly two scopes. To keep the historical record, **Cancel Entire Series**
+> from the More menu instead: cancelled events stay on the calendar with their
+> attendance intact.
+
+![The Delete Event dialog on a recurring event, with the single/series choice](./images/04-39-delete-event-series.png)
 
 ### "End Event" — Bulk Checkout
 
@@ -1162,23 +1173,29 @@ The new **End Event** button on the event detail page checks out all currently c
 3. Confirm the bulk checkout
 4. All checked-in attendees are marked as checked out with the current timestamp
 
-> **Screenshot needed:**
-> _[Screenshot of the event detail page showing the "End Event" button in the action area, with a tooltip explaining "Check out all attendees at once"]_
+![The End Event action on an event that is currently running](./images/04-40-end-event.png)
 
 > **Edge case:** If no attendees are currently checked in, the button shows an informational message ("No attendees to check out") and performs no action.
 
 ### Compact Event Create Form
 
-The event creation form has been redesigned with a **2-column grid layout**:
+The event creation form pairs several of its **sections** two-up on desktop to
+cut scrolling, while staying a single column on mobile:
 
-- Left column: Title, type, category, description
-- Right column: Date, time, location, settings
-- Settings and recurrence sections pair side-by-side
+- **Attendance** beside **RSVP Settings**
+- **Check-In Settings** beside **Notifications**
+- Within Event Details, **Start Date & Time** beside **End Date & Time**
 
-This reduces scrolling significantly on desktop while remaining single-column on mobile.
+Everything else — Start from a Template, Event Details, Location, Recurrence —
+is a full-width card in a single column.
 
-> **Screenshot needed:**
-> _[Screenshot of the redesigned event creation form showing the 2-column layout with the title and type fields on the left, date/time fields on the right, and the recurrence section below spanning both columns]_
+> **Corrected 2026-08-10.** This described a two-column grid with "title, type,
+> category, description" on the left and "date, time, location, settings" on
+> the right. The form has never been laid out that way: the title and
+> description are full width, and it is whole sections that pair up rather
+> than fields.
+
+![Attendance and RSVP settings side by side on the event creation form](./images/04-41-event-create-layout.png)
 
 ### Event-to-Admin-Hours Integration
 
@@ -1214,8 +1231,10 @@ Dashboard notification cards now include **clear** and **dismiss** buttons, allo
 - **Dismiss**: Hides the notification from your dashboard (personal action, doesn't affect others)
 - **Clear**: Marks the notification as read
 
-> **Screenshot needed:**
-> _[Screenshot of the Dashboard notifications section showing notification cards with dismiss (X) and clear (checkmark) buttons on each card]_
+The dashboard panel is pictured under
+[Administration & Reports → Dashboard Notification Management](./08-admin-reports.md#dashboard-notification-management);
+this guide does not repeat the screenshot. Each card carries one control, the
+✕, which marks it read; **Clear All** in the panel header does the lot.
 
 ### Department Messages
 
@@ -1235,8 +1254,10 @@ The Notifications page now includes a **channel filter** to view notifications b
 - **In-App** — Only in-app notifications
 - **SMS** — Only SMS notifications (when Twilio is enabled)
 
-> **Screenshot needed:**
-> _[Screenshot of the Notifications page showing the channel filter tabs (All, Email, In-App, SMS) at the top, with the In-App filter active showing only in-app notification entries]_
+The filter is pictured under
+[Administration & Reports → Notification Channel Filter](./08-admin-reports.md#notification-channel-filter);
+this guide does not repeat the screenshot. Note that it offers three channels
+— All, Email and In-App — not four; SMS sends are not written to the log.
 
 ---
 

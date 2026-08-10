@@ -1180,7 +1180,57 @@ class Seeder:
                     },
                 )
             )
+
+        created.extend(self._seed_recurring_series(titles))
         return created
+
+    RECURRING_SERIES_TITLE = "Monthly Officers Meeting"
+
+    def _seed_recurring_series(self, titles: set) -> list[dict]:
+        """One genuine recurring series.
+
+        Every event the seeder made was a one-off, so `is_recurring` was False
+        across the whole calendar. That leaves the guide's recurrence sections
+        unillustratable — the delete dialog's single-versus-series choice, the
+        More menu's "Cancel Entire Series", the series badge on a card — and,
+        worse, means nothing exercised the recurrence expansion at all.
+
+        Monthly by weekday rather than a fixed date, because that is the
+        pattern a department actually uses for a standing meeting and the one
+        with the most arithmetic behind it.
+        """
+        if self.RECURRING_SERIES_TITLE in titles:
+            return []
+        start = datetime.combine(
+            TODAY - timedelta(days=TODAY.day - 1), time(19, 0)
+        ).replace(tzinfo=timezone.utc)
+        try:
+            return items(
+                self.api.post(
+                    "/events/recurring",
+                    {
+                        "title": self.RECURRING_SERIES_TITLE,
+                        "description": (
+                            "Standing officers meeting — second Tuesday of "
+                            "each month, Station 1 conference room."
+                        ),
+                        "event_type": "business_meeting",
+                        "location": "Station 1 - Headquarters",
+                        "start_datetime": iso(start),
+                        "end_datetime": iso(start + timedelta(hours=2)),
+                        "recurrence_pattern": "monthly_weekday",
+                        "recurrence_weekday": 1,
+                        "recurrence_week_ordinal": 2,
+                        "recurrence_end_date": iso(start + timedelta(days=365)),
+                        "is_mandatory": True,
+                        "send_reminders": True,
+                    },
+                ),
+                "events",
+            )
+        except ApiError as exc:
+            self.blocked.append(f"recurring series: {exc}")
+            return []
 
     GUEST_EVENT_TITLE = "Volunteer Interest Night"
 

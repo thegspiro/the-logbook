@@ -1076,6 +1076,128 @@ export const SHOTS = [
     selector: "div.border-l-2:has(#recurrence-pattern)",
   },
   {
+    id: "04-39-delete-event-series",
+    doc: "04-events-meetings.md",
+    line: 1151,
+    anchor: "Screenshot of the delete series confirmation dialog",
+    alt: "The Delete Event dialog on a recurring event, with the single/series choice",
+    route: "/events",
+    prepare: async (page) => {
+      // The series choice only renders on a recurring event, so the shot has
+      // to open one of those rather than whatever the list returns first.
+      await openFirstFromApi(
+        "/events?limit=100",
+        (id) => `/events/${id}`,
+        "events",
+        (event) =>
+          Boolean(
+            event.is_recurring ??
+            event.isRecurring ??
+            event.recurrence_pattern ??
+            event.recurrencePattern,
+          ),
+      )(page);
+      await clickByName(/^More$|^Actions$/)(page).catch(async () => {
+        // The menu button has no label of its own — it is an icon — so fall
+        // back to the control that sits beside End Event / Edit.
+        await page
+          .locator("button:has(svg)")
+          .filter({ hasNot: page.locator("span") })
+          .last()
+          .click({ timeout: 10_000 });
+      });
+      await page.waitForTimeout(600);
+      await page
+        .getByRole("button", { name: /^Delete Event$/ })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+      await page
+        .getByText("Delete all events in this series")
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.bg-theme-surface-modal.relative",
+  },
+  {
+    id: "04-40-end-event",
+    doc: "04-events-meetings.md",
+    line: 1176,
+    anchor:
+      'Screenshot of the event detail page showing the "End Event" button',
+    alt: "The End Event action on an event that is currently running",
+    route: "/events",
+    prepare: async (page) => {
+      // In progress *and* staffed. The guest open house is also live — the
+      // seeder keeps it that way for the room-display shots — but nobody has
+      // checked into it, and a bulk-checkout button over "Attendance (0)"
+      // illustrates the opposite of the feature.
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/events?limit=100", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body)
+          ? body
+          : body.events || body.items || [];
+        const now = new Date().toISOString();
+        for (const event of rows) {
+          const start = event.start_datetime ?? event.startDatetime ?? "";
+          const end = event.end_datetime ?? event.endDatetime ?? "";
+          if (!(start <= now && end >= now)) continue;
+          const stats = await fetch(`/api/v1/events/${event.id}/stats`, {
+            credentials: "include",
+          });
+          if (!stats.ok) continue;
+          const body2 = await stats.json();
+          if ((body2.checked_in_count ?? body2.checkedInCount ?? 0) > 0) {
+            return event.id;
+          }
+        }
+        return null;
+      });
+      if (!id) throw new Error("04-40: no running event has anyone checked in");
+      await page.goto(new URL(`/events/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      await page.waitForTimeout(1200);
+    },
+    fullPage: false,
+  },
+  {
+    id: "04-41-event-create-layout",
+    doc: "04-events-meetings.md",
+    line: 1199,
+    anchor:
+      "Screenshot of the Attendance and RSVP Settings sections sitting side by side",
+    alt: "Attendance and RSVP settings side by side on the event creation form",
+    route: "/events/admin?tab=create",
+    prepare: async (page) => {
+      await page
+        .getByPlaceholder("e.g., Monthly Business Meeting")
+        .fill("Quarterly Safety Stand-Down", { timeout: 15_000 });
+      await page.waitForTimeout(500);
+      // The paired sections are the layout the guide is describing; the top
+      // of the form is a single column of full-width cards. Both sections
+      // collapse to a single checkbox until their options are switched on,
+      // so the pairing is only visible with something turned on in each.
+      await page.getByText("Mandatory attendance", { exact: true }).click();
+      await page.getByText("Require RSVP", { exact: true }).click();
+      await page.waitForTimeout(700);
+      await page
+        .getByText("Attendance", { exact: true })
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    selector:
+      "div.grid:has(span:text-is('Attendance')):has(span:text-is('RSVP Settings'))",
+    // Wider than the default: at 1440 the RSVP deadline's meridiem select
+    // overflows its column and the clip cuts it in half.
+    viewport: { width: 1800, height: 1300 },
+  },
+  {
     id: "05-59-impact-planner-results",
     doc: "05-inventory.md",
     line: 1652,
