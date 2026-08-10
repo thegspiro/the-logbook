@@ -483,7 +483,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           }
                         }}
                         placeholder="email@example.com"
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                       />
                       <button
                         onClick={declineCc.add}
@@ -579,7 +579,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           }
                         }}
                         placeholder="email@example.com"
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                       />
                       <button
                         onClick={assignCc.add}
@@ -660,7 +660,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                         lookahead_hours: Number(e.target.value),
                       });
                     }}
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-green-500 focus:outline-hidden"
+                    className="form-input-sm"
                   >
                     <option value={1}>1 hour</option>
                     <option value={2}>2 hours</option>
@@ -703,7 +703,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           }
                         }}
                         placeholder="email@example.com"
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-green-500 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                       />
                       <button
                         onClick={reminderCc.add}
@@ -844,7 +844,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           }
                         }}
                         placeholder="email@example.com"
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-red-500 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                       />
                       <button
                         onClick={equipCc.add}

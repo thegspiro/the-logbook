@@ -1355,7 +1355,7 @@ const SchedulingPage: React.FC = () => {
                                       defaultTemplate;
                                     return tmpl?.start_time_of_day || '';
                                   })()}
-                                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-violet-500 focus:outline-hidden"
+                                  className="form-input"
                                 />
                               </div>
                               <div>
@@ -1363,7 +1363,7 @@ const SchedulingPage: React.FC = () => {
                                 <TimeQuarterHour
                                   value={shiftForm.customEndTime}
                                   onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
-                                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-violet-500 focus:outline-hidden"
+                                  className="form-input"
                                 />
                               </div>
                             </div>

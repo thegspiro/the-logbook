@@ -109,7 +109,7 @@ const EventRSVPModal: React.FC<EventRSVPModalProps> = ({
                       max="10"
                       value={guestCount}
                       onChange={(e) => onGuestCountChange(parseInt(e.target.value))}
-                      className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                      className="form-input mt-1 shadow-xs sm:text-sm"
                     />
                   </div>
                 )}
@@ -123,7 +123,7 @@ const EventRSVPModal: React.FC<EventRSVPModalProps> = ({
                     rows={3}
                     value={rsvpNotes}
                     onChange={(e) => onRsvpNotesChange(e.target.value)}
-                    className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                    className="form-input mt-1 shadow-xs sm:text-sm"
                     placeholder="Any special requests or comments"
                   />
                 </div>
@@ -137,7 +137,7 @@ const EventRSVPModal: React.FC<EventRSVPModalProps> = ({
                     id="dietary_restrictions"
                     value={rsvpDietaryRestrictions}
                     onChange={(e) => onRsvpDietaryRestrictionsChange(e.target.value)}
-                    className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                    className="form-input mt-1 shadow-xs sm:text-sm"
                     placeholder="e.g., Vegetarian, Nut allergy"
                     maxLength={500}
                   />
@@ -152,7 +152,7 @@ const EventRSVPModal: React.FC<EventRSVPModalProps> = ({
                     id="accessibility_needs"
                     value={rsvpAccessibilityNeeds}
                     onChange={(e) => onRsvpAccessibilityNeedsChange(e.target.value)}
-                    className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                    className="form-input mt-1 shadow-xs sm:text-sm"
                     placeholder="e.g., Wheelchair access"
                     maxLength={500}
                   />

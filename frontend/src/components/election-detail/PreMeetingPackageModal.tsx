@@ -213,7 +213,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
                 }}
                 placeholder="Add an email address (members or outside contacts)"
                 aria-label="Add an email address"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring flex-1 rounded-md border px-3 py-1.5 text-sm focus:outline-hidden"
+                className="form-input-sm flex-1"
               />
               <button
                 type="button"
@@ -260,7 +260,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
               onChange={(e) => setMessage(e.target.value)}
               rows={3}
               placeholder="Included at the top of the email"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:outline-hidden"
+              className="form-input"
             />
           </div>
 

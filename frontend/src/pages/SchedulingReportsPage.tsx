@@ -76,7 +76,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
           type="date"
           value={startDate}
           onChange={(e) => onStartChange(e.target.value)}
-          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+          className="form-input"
           required
         />
       </div>
@@ -89,7 +89,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
           type="date"
           value={endDate}
           onChange={(e) => onEndChange(e.target.value)}
-          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+          className="form-input"
           required
         />
       </div>
@@ -636,7 +636,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   id="call-group-by"
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value)}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                  className="form-input"
                 >
                   <option value="day">Day</option>
                   <option value="week">Week</option>
@@ -884,7 +884,7 @@ export const SchedulingReportsPage: React.FC = () => {
                 type="date"
                 value={complianceRefDate}
                 onChange={(e) => setComplianceRefDate(e.target.value)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <button type="submit" disabled={loading} className="btn-primary flex items-center gap-2">

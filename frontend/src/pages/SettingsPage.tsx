@@ -704,7 +704,7 @@ export const SettingsPage: React.FC = () => {
                   type="text"
                   value={profile?.name || ''}
                   onChange={(e) => updateProfileField('name', e.target.value)}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input"
                 />
               </div>
               <div>
@@ -712,7 +712,7 @@ export const SettingsPage: React.FC = () => {
                 <select
                   value={profile?.timezone || 'America/New_York'}
                   onChange={(e) => updateProfileField('timezone', e.target.value)}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input"
                 >
                   {COMMON_TIMEZONES.map((tz) => (
                     <option key={tz} value={tz}>
@@ -736,7 +736,7 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.phone || ''}
                     onChange={(e) => updateProfileField('phone', e.target.value)}
                     placeholder="(555) 123-4567"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                 </div>
                 <div>
@@ -746,7 +746,7 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.email || ''}
                     onChange={(e) => updateProfileField('email', e.target.value)}
                     placeholder="info@firedept.org"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                 </div>
                 <div>
@@ -756,7 +756,7 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.website || ''}
                     onChange={(e) => updateProfileField('website', e.target.value)}
                     placeholder="https://firedept.org"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                 </div>
                 <div>
@@ -765,7 +765,7 @@ export const SettingsPage: React.FC = () => {
                     type="text"
                     value={profile?.county || ''}
                     onChange={(e) => updateProfileField('county', e.target.value)}
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                 </div>
               </div>
@@ -782,14 +782,14 @@ export const SettingsPage: React.FC = () => {
                   value={profile?.mailing_address?.line1 || ''}
                   onChange={(e) => updateAddressField('line1', e.target.value)}
                   placeholder="Address line 1"
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input"
                 />
                 <input
                   type="text"
                   value={profile?.mailing_address?.line2 || ''}
                   onChange={(e) => updateAddressField('line2', e.target.value)}
                   placeholder="Address line 2 (optional)"
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input"
                 />
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <input
@@ -797,21 +797,21 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.mailing_address?.city || ''}
                     onChange={(e) => updateAddressField('city', e.target.value)}
                     placeholder="City"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                   <input
                     type="text"
                     value={profile?.mailing_address?.state || ''}
                     onChange={(e) => updateAddressField('state', e.target.value)}
                     placeholder="State"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                   <input
                     type="text"
                     value={profile?.mailing_address?.zip || ''}
                     onChange={(e) => updateAddressField('zip', e.target.value)}
                     placeholder="ZIP"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                 </div>
               </div>
@@ -838,14 +838,14 @@ export const SettingsPage: React.FC = () => {
                     value={profile?.physical_address?.line1 || ''}
                     onChange={(e) => updatePhysicalAddressField('line1', e.target.value)}
                     placeholder="Address line 1"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                   <input
                     type="text"
                     value={profile?.physical_address?.line2 || ''}
                     onChange={(e) => updatePhysicalAddressField('line2', e.target.value)}
                     placeholder="Address line 2 (optional)"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <input
@@ -853,21 +853,21 @@ export const SettingsPage: React.FC = () => {
                       value={profile?.physical_address?.city || ''}
                       onChange={(e) => updatePhysicalAddressField('city', e.target.value)}
                       placeholder="City"
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input"
                     />
                     <input
                       type="text"
                       value={profile?.physical_address?.state || ''}
                       onChange={(e) => updatePhysicalAddressField('state', e.target.value)}
                       placeholder="State"
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input"
                     />
                     <input
                       type="text"
                       value={profile?.physical_address?.zip || ''}
                       onChange={(e) => updatePhysicalAddressField('zip', e.target.value)}
                       placeholder="ZIP"
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                      className="form-input"
                     />
                   </div>
                 </div>
@@ -1117,7 +1117,7 @@ export const SettingsPage: React.FC = () => {
                         value={membershipId.prefix}
                         onChange={(e) => setMembershipId((s) => ({ ...s, prefix: e.target.value }))}
                         placeholder="e.g. FD-"
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-40 rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input w-40"
                       />
                     </div>
 
@@ -1134,7 +1134,7 @@ export const SettingsPage: React.FC = () => {
                           onChange={(e) =>
                             setMembershipId((s) => ({ ...s, next_number: Math.max(1, parseInt(e.target.value) || 1) }))
                           }
-                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-40 rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                          className="form-input w-40"
                         />
                       </div>
                     )}

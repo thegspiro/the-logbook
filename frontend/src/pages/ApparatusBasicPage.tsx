@@ -231,7 +231,7 @@ export default function ApparatusBasicPage() {
     APPARATUS_TYPES.find((t) => t.value === type) || APPARATUS_TYPES[APPARATUS_TYPES.length - 1];
   const inputCls =
     'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
+  const labelCls = 'form-label';
 
   return (
     <div className="space-y-6">
@@ -453,7 +453,7 @@ export default function ApparatusBasicPage() {
                       <select
                         value={pos}
                         onChange={(e) => updatePosition(i, e.target.value)}
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input flex-1"
                       >
                         {POSITION_OPTIONS.map((o) => (
                           <option key={o} value={o}>

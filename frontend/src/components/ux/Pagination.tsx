@@ -73,7 +73,7 @@ export const Pagination: React.FC<PaginationProps> = ({
               id="page-size"
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-2 py-1.5 text-sm focus:ring-1 focus:outline-hidden"
+              className="form-input-sm"
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>

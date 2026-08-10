@@ -74,7 +74,7 @@ const EventCancelModal: React.FC<EventCancelModalProps> = ({ submitting, submitE
                   maxLength={500}
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
-                  className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
+                  className="form-input mt-1 shadow-xs sm:text-sm"
                   placeholder="Please provide a reason for cancelling this event..."
                 />
                 <p className="text-theme-text-muted mt-1 text-xs">{cancelReason.length}/500 characters (minimum 10)</p>

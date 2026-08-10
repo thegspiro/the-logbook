@@ -194,7 +194,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter templates..."
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted w-full rounded-lg border py-1.5 pr-3 pl-8 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+              className="form-input-sm pr-3 pl-8"
             />
           </div>
           {hasInactive && (

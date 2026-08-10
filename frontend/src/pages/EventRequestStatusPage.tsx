@@ -324,7 +324,7 @@ const EventRequestStatusPage: React.FC = () => {
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
                     placeholder="Reason for cancelling (optional)"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   />
                   <div className="flex gap-2">
                     <button

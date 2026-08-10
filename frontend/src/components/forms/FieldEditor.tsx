@@ -391,7 +391,7 @@ const FieldEditor = ({
                     value={width}
                     onChange={(e) => setWidth(e.target.value)}
                     aria-label="Field width"
-                    className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                    className="form-input"
                   >
                     {WIDTH_OPTIONS.map((w) => (
                       <option key={w.value} value={w.value}>
@@ -419,7 +419,7 @@ const FieldEditor = ({
                         value={minLength ?? ''}
                         onChange={(e) => setMinLength(e.target.value ? Number(e.target.value) : undefined)}
                         min={0}
-                        className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                        className="form-input"
                       />
                     </div>
                     <div className="flex-1">
@@ -435,7 +435,7 @@ const FieldEditor = ({
                         value={maxLength ?? ''}
                         onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : undefined)}
                         min={0}
-                        className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                        className="form-input"
                       />
                     </div>
                   </div>
@@ -460,7 +460,7 @@ const FieldEditor = ({
                           setValidationPattern(preset);
                         }
                       }}
-                      className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                      className="form-input"
                     >
                       {VALIDATION_PRESETS.map((p) => (
                         <option key={p.value} value={p.value}>
@@ -505,7 +505,7 @@ const FieldEditor = ({
                       type="number"
                       value={minValue ?? ''}
                       onChange={(e) => setMinValue(e.target.value ? Number(e.target.value) : undefined)}
-                      className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                      className="form-input"
                       placeholder="No minimum"
                     />
                   </div>
@@ -518,7 +518,7 @@ const FieldEditor = ({
                       type="number"
                       value={maxValue ?? ''}
                       onChange={(e) => setMaxValue(e.target.value ? Number(e.target.value) : undefined)}
-                      className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                      className="form-input"
                       placeholder="No maximum"
                     />
                   </div>
@@ -540,7 +540,7 @@ const FieldEditor = ({
                           onChange={(e) => updateOption(i, 'label', e.target.value)}
                           placeholder="Option label"
                           aria-label={`Option ${i + 1} label`}
-                          className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring placeholder-theme-text-muted text-theme-text-primary flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2"
+                          className="form-input-sm flex-1"
                         />
                         <input
                           type="text"
@@ -548,7 +548,7 @@ const FieldEditor = ({
                           onChange={(e) => updateOption(i, 'value', e.target.value)}
                           placeholder="value"
                           aria-label={`Option ${i + 1} value`}
-                          className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring placeholder-theme-text-muted text-theme-text-primary w-28 rounded-lg border px-3 py-1.5 text-sm focus:ring-2"
+                          className="form-input-sm w-28"
                         />
                         <button
                           type="button"
@@ -602,7 +602,7 @@ const FieldEditor = ({
                         setConditionValue('');
                       }
                     }}
-                    className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                    className="form-input"
                   >
                     <option value="">No condition (always show)</option>
                     {conditionTargets.map((f) => (
@@ -630,7 +630,7 @@ const FieldEditor = ({
                           setConditionValue('');
                         }
                       }}
-                      className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                      className="form-input"
                     >
                       {CONDITION_OPERATORS.map((op) => (
                         <option key={op.value} value={op.value}>
@@ -652,7 +652,7 @@ const FieldEditor = ({
                         id="condition-value"
                         value={conditionValue}
                         onChange={(e) => setConditionValue(e.target.value)}
-                        className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                        className="form-input"
                       >
                         <option value="">Select a value...</option>
                         {selectedConditionField.options.map((opt) => (
@@ -668,7 +668,7 @@ const FieldEditor = ({
                         value={conditionValue}
                         onChange={(e) => setConditionValue(e.target.value)}
                         placeholder="e.g., yes"
-                        className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring placeholder-theme-text-muted text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
+                        className="form-input"
                       />
                     )}
                   </div>

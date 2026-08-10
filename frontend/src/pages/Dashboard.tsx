@@ -1244,7 +1244,7 @@ const Dashboard: React.FC = () => {
                           <select
                             value={dashboardSignupPosition}
                             onChange={(e) => setDashboardSignupPosition(e.target.value)}
-                            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-md border px-2 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden sm:flex-1"
+                            className="form-input sm:flex-1"
                           >
                             {dashboardEligiblePositions.map((pos) => (
                               <option key={pos} value={pos}>

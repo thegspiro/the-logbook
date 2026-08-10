@@ -219,15 +219,10 @@ const GrantsReportsPage: React.FC = () => {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none"
+            className="form-input-sm"
           />
           <span className="text-theme-text-secondary text-sm">to</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none"
-          />
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="form-input-sm" />
         </div>
       </div>
 

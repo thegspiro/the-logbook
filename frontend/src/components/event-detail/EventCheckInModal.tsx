@@ -138,7 +138,7 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
                 onChange={(e) => onMemberSearchChange(e.target.value)}
                 aria-label="Search by name or email..."
                 placeholder="Search by name or email..."
-                className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring block w-full rounded-md shadow-xs sm:text-sm"
+                className="form-input shadow-xs sm:text-sm"
               />
             </div>
 

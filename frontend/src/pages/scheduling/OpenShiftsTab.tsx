@@ -129,7 +129,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
             aria-label="Filter open shifts from date"
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden sm:flex-none"
+            className="form-input flex-1 sm:flex-none"
           />
         </div>
         <button
@@ -298,7 +298,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                         id="signup-position"
                         value={signupPosition}
                         onChange={(e) => setSignupPosition(e.target.value)}
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden"
+                        className="form-input"
                       >
                         {eligiblePositions.map((pos) => (
                           <option key={pos} value={pos}>

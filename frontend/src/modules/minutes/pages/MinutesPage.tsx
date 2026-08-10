@@ -304,7 +304,7 @@ const MinutesPage: React.FC = () => {
                 id="type-filter"
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden max-md:min-h-[44px]"
+                className="form-input"
               >
                 <option value="all">All Types</option>
                 {MEETING_TYPES.map((t) => (

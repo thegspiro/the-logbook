@@ -219,11 +219,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
             className="border-theme-surface-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-secondary w-full rounded-lg border py-2 pr-4 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none"
           />
         </div>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
-        >
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="form-input">
           <option value="">All Categories</option>
           {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
             <option key={key} value={key}>

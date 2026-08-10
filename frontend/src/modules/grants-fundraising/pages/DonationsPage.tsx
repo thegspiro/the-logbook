@@ -103,11 +103,7 @@ const DonationsPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <Filter className="text-theme-text-secondary h-4 w-4" />
-          <select
-            value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value)}
-            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
-          >
+          <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className="form-input">
             <option value="">All Methods</option>
             {Object.entries(PAYMENT_METHOD_LABELS).map(([key, label]) => (
               <option key={key} value={key}>

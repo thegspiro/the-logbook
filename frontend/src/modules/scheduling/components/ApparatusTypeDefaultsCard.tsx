@@ -118,7 +118,7 @@ export const ApparatusTypeDefaultsCard: React.FC<ApparatusTypeDefaultsCardProps>
                       min={1}
                       max={20}
                       onChange={(e) => setEditMinStaffing(parseInt(e.target.value, 10) || 1)}
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-24 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+                      className="form-input-sm w-24"
                     />
                   </div>
                   <PositionListEditor
