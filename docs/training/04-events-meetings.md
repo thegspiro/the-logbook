@@ -362,8 +362,8 @@ raw markdown stays visible as you type and is rendered when the event is shown.
 | Link        | `[text](url)` |
 
 Underline, numbered lists and headings have no button. The hint beside the
-toolbar — "Supports \*\*bold\*\*, \*italic\*, - lists, [links](url)" — is the
-full list of what the field supports.
+toolbar — `Supports **bold**, *italic*, - lists, [links](url)` — is the full
+list of what the field supports.
 
 ![The event description field with its markdown toolbar and syntax hint](./images/04-36-description-markdown.png)
 
