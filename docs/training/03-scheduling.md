@@ -701,8 +701,7 @@ Admin functionality has been extracted into dedicated pages for better navigatio
 
 Each page has back navigation to the main scheduling hub. Access requires `scheduling.manage` permission.
 
-> **Screenshot needed:**
-> _[Screenshot of one of the scheduling admin sub-pages (e.g., Templates) showing the page header with back navigation arrow, and the content area below]_
+![A scheduling admin sub-page with its back arrow and page header](./images/03-51-admin-subpage-header.png)
 
 ### Equipment Check System
 
@@ -730,12 +729,11 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 
 6. Items can track serial numbers, lot numbers, expiration dates (with warning windows), and required quantities
 7. Use **drag-and-drop** to reorder compartments and items
-8. Use **vehicle check presets** to import common inspection categories for engine, ladder, or ambulance types
+8. On a **vehicle** or **combined** template, **Load Vehicle Preset** offers nine pre-built checks — Engine/Pumper, Ladder/Tower, Ambulance/Rescue, Tanker/Water Tender, Rescue/Heavy Rescue, Brush/Wildland, Boat/Watercraft, Utility/Command and Generic Vehicle — each showing how many sections and items it will add before you pick it
 
 ![Equipment check template builder with the template header and sections](./images/03-22-equipment-check-builder.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the vehicle check preset picker showing preset categories (Engine, Ladder, Ambulance) with preview of included compartments and items]_
+![The vehicle preset picker listing each pre-built check with its section and item counts](./images/03-50-vehicle-preset-picker.png)
 
 #### For Members: Submitting Equipment Checks
 

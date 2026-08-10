@@ -529,6 +529,42 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "03-50-vehicle-preset-picker",
+    doc: "03-scheduling.md",
+    line: 736,
+    anchor:
+      "Screenshot of the vehicle check preset picker showing the pre-built",
+    alt: "The vehicle preset picker listing each pre-built check with its section and item counts",
+    route: "/scheduling/equipment-check-templates/new",
+    prepare: async (page) => {
+      // A new template starts as "equipment", and Load Vehicle Preset only
+      // renders on a vehicle or combined one.
+      await page
+        .locator("select")
+        .filter({ hasText: /Vehicle/i })
+        .first()
+        .selectOption("vehicle", { timeout: 10_000 });
+      await page.waitForTimeout(600);
+      await page
+        .getByRole("button", { name: /Load Vehicle Preset/i })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    selector: "div.border-orange-500\\/20",
+  },
+  {
+    id: "03-51-admin-subpage-header",
+    doc: "03-scheduling.md",
+    line: 703,
+    anchor: "Screenshot of one of the scheduling admin sub-pages",
+    alt: "A scheduling admin sub-page with its back arrow and page header",
+    // Patterns rather than Templates: the guide already pictures Templates
+    // 460 lines above, and the point here is the header the four sub-pages
+    // share, not that particular page.
+    route: "/scheduling/patterns",
+    fullPage: false,
+  },
+  {
     id: "05-60-admin-hub-groups",
     doc: "05-inventory.md",
     line: 1279,
