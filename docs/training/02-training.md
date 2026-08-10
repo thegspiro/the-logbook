@@ -150,8 +150,7 @@ Each class shows the gap since the one before it — **"Next day"**, **"2 days l
 
 > **Hint:** If your course meets on a regular cadence, don't count days by hand. Click **Fill from pattern**, pick the meeting days (e.g. Tuesday and Thursday), say which weekday the course starts on, and every class is spaced out for you. You can still adjust individual days afterwards.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Course Syllabus Builder showing an ordered list of recruit-school classes, each with its day number, gap label ("Next day", "2 days later"), start time and credit hours, with the "Fill from pattern" weekday selector expanded above]_
+![The syllabus builder listing a recruit school's classes with their day offsets and gaps](./images/02-85-syllabus-builder.png)
 
 ### Generating a Cohort
 
@@ -180,7 +179,9 @@ Generating creates **one training event per class**, each with a linked training
 
 Open a cohort to see its **Classes** timeline and its **Roster**.
 
-The class timeline shows each class with its date, instructor, how many members are signed up, and how many actually attended. From here you can:
+The class timeline numbers each class and shows its date and start time, its
+status, credit hours, instructor, how many members are signed up, and an
+**Event** link through to the calendar entry. From here you can:
 
 | Action                    | What it does                                                                                                                              |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -192,8 +193,11 @@ The class timeline shows each class with its date, instructor, how many members 
 
 The **Roster** tab lists each member with their progress through the pipeline, a link to their full progression, and a **Remove** action.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Cohort Detail page's Classes tab, showing a numbered class timeline with dates, credit hours, "12 signed up / 11 attended" counts, an Event link on each row, and the Reschedule / Cancel actions on the right]_
+> **Reschedule** and **Cancel class** are the two icon buttons at the right of
+> each row. **Create missing events** only appears while some class has no
+> event — on a healthy cohort it is absent, which is the state pictured below.
+
+![A cohort's class timeline with dates, credit hours and sign-up counts](./images/02-86-cohort-classes.png)
 
 ### Cohorts vs. Recurring Sessions
 

@@ -871,6 +871,45 @@ export const SHOTS = [
     selector: "div.fixed.inset-0 > div",
   },
   {
+    id: "02-85-syllabus-builder",
+    doc: "02-training.md",
+    line: 153,
+    anchor: "Screenshot of the Course Syllabus Builder showing an ordered list",
+    alt: "The syllabus builder listing a recruit school's classes with their day offsets and gaps",
+    route: "/training/admin?tab=courses",
+    prepare: async (page) => {
+      const open = page.locator(
+        'button[aria-label="Manage classes for Recruit School"]',
+      );
+      await open.waitFor({ timeout: 15_000 });
+      await open.click();
+      await page.waitForTimeout(1200);
+    },
+    // Clipped to the panel, on a viewport tall enough to hold every class:
+    // at 900px the fifth row falls below the fold and the course library
+    // shows through above and below the modal.
+    selector: "div.fixed.inset-0 > div",
+    viewport: { width: 1440, height: 1400 },
+  },
+  {
+    id: "02-86-cohort-classes",
+    doc: "02-training.md",
+    line: 201,
+    anchor:
+      "Screenshot of a cohort's Classes tab, showing the numbered class timeline",
+    alt: "A cohort's class timeline with dates, credit hours and sign-up counts",
+    route: "/training/admin?tab=cohorts",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/cohorts",
+        (id) => `/training/cohorts/${id}`,
+        "cohorts",
+      )(page);
+      await page.waitForTimeout(1500);
+    },
+    fullPage: false,
+  },
+  {
     id: "02-80-session-course-autopopulate",
     doc: "02-training.md",
     line: 1728,

@@ -1809,6 +1809,152 @@ class Seeder:
             "requirements": requirements,
         }
 
+    RECRUIT_COURSE_NAME = "Recruit School"
+    RECRUIT_COHORT_NAME = "Recruit School — Fall Class"
+
+    # (catalog course name, section, day offset, start time, minutes)
+    RECRUIT_SYLLABUS = [
+        ("Firefighter I", "Orientation & Safety", 0, "18:30", 180),
+        ("SCBA Confidence Course", "Orientation & Safety", 1, "18:30", 180),
+        ("Hazmat Awareness", "Fireground Skills", 3, "18:30", 240),
+        ("Aerial Operations", "Fireground Skills", 7, "09:00", 480),
+        ("CPR / BLS Provider", "Medical", 10, "18:30", 240),
+        ("EMT-Basic Refresher", "Medical", 14, "18:30", 180),
+    ]
+
+    def seed_course_cohort(self, members: list[dict]) -> dict:
+        """A recruit school: a multi-class course and one dated cohort of it.
+
+        Nothing in the demo had ever exercised this. The cohorts list was
+        empty, so the syllabus builder, the cohort wizard's preview step and
+        the cohort detail page's class timeline could none of them be opened
+        against real data — and a feature with no rows is a feature nobody has
+        run end to end.
+        """
+        courses = items(self.api.get("/training/courses?limit=100"), "courses")
+        by_name = {c.get("name"): pick(c, "id") for c in courses}
+
+        parent_id = by_name.get(self.RECRUIT_COURSE_NAME)
+        if not parent_id:
+            parent = self.api.post(
+                "/training/courses",
+                {
+                    "name": self.RECRUIT_COURSE_NAME,
+                    "code": "RS-100",
+                    "training_type": "certification",
+                    "credit_hours": 40,
+                    "description": (
+                        "Six-class entry course for probationary members, run "
+                        "twice a year."
+                    ),
+                },
+            )
+            parent_id = pick(parent, "id")
+
+        # Keyed on the classes already on the syllabus rather than "does the
+        # course exist", so a partial run fills in the rest.
+        existing = items(
+            self.api.get(f"/training/courses/{parent_id}/classes"), "classes"
+        )
+        placed = {
+            (pick(row, "day_offset", "dayOffset"), pick(row, "title"))
+            for row in existing
+        }
+        for course_name, section, day, start, minutes in self.RECRUIT_SYLLABUS:
+            class_course_id = by_name.get(course_name)
+            if not class_course_id or (day, course_name) in placed:
+                continue
+            try:
+                existing.append(
+                    self.api.post(
+                        f"/training/courses/{parent_id}/classes",
+                        {
+                            "class_course_id": class_course_id,
+                            "section_name": section,
+                            "title": course_name,
+                            "day_offset": day,
+                            "start_time": start,
+                            "duration_minutes": minutes,
+                            # Explicit, not inherited: a class row left blank
+                            # takes the catalog course's hours, so a 3-hour
+                            # evening session on the Firefighter I course
+                            # showed "160 credits" and the syllabus totalled
+                            # 220 hours over 15 days.
+                            "credit_hours": round(minutes / 60, 1),
+                            "location": "Training & Administration Center",
+                        },
+                    )
+                )
+            except ApiError as exc:
+                self.blocked.append(f"syllabus class {course_name}: {exc}")
+
+        cohorts = items(self.api.get("/training/cohorts"), "cohorts")
+        if any(c.get("name") == self.RECRUIT_COHORT_NAME for c in cohorts):
+            return {"course_id": parent_id, "classes": existing, "cohorts": cohorts}
+
+        # The recruits, so the roster is people rather than a count. Started
+        # three weeks back: the first classes have happened, which is what the
+        # timeline's signed-up/attended columns need.
+        roster = [
+            pick(m, "id")
+            for m in members
+            if pick(m, "username") in RECRUIT_USERNAMES and pick(m, "id")
+        ]
+        try:
+            # Started eight days back, so the first four classes have run and
+            # the last two are still to come. A cohort entirely in the past
+            # has nothing upcoming to reschedule or sign up for; one entirely
+            # in the future has no attendance to show.
+            cohort = self.api.post(
+                "/training/cohorts",
+                {
+                    "course_id": parent_id,
+                    "name": self.RECRUIT_COHORT_NAME,
+                    "code": "RS-2026-F",
+                    "start_date": str(TODAY - timedelta(days=8)),
+                    "location": "Training & Administration Center",
+                    "member_user_ids": roster,
+                    "generate_program": True,
+                },
+            )
+            cohorts.append(cohort)
+            self._fill_cohort_classes(pick(cohort, "id"), roster)
+        except ApiError as exc:
+            self.blocked.append(f"cohort: {exc}")
+        return {"course_id": parent_id, "classes": existing, "cohorts": cohorts}
+
+    def _fill_cohort_classes(self, cohort_id: str | None, roster: list[str]) -> None:
+        """Give the cohort's classes events and sign the roster up.
+
+        Creating a cohort does not create calendar events for classes whose
+        date has already passed, which leaves the detail page reading "No
+        event" on every row under a red "Create N missing events" button — the
+        repair prompt, not the normal state. Running the regenerate endpoint is
+        exactly what that button does.
+        """
+        if not cohort_id:
+            return
+        try:
+            self.api.post(f"/training/cohorts/{cohort_id}/regenerate", {})
+        except ApiError as exc:
+            self.blocked.append(f"cohort events: {exc}")
+            return
+
+        detail = self.api.get(f"/training/cohorts/{cohort_id}")
+        for row in items(detail, "classes"):
+            event_id = pick(row, "event_id", "eventId")
+            if not event_id:
+                continue
+            for user_id in roster:
+                try:
+                    self.api.post(
+                        f"/events/{event_id}/rsvp",
+                        {"user_id": user_id, "status": "going"},
+                    )
+                except ApiError as exc:
+                    if exc.code not in (400, 409):
+                        raise
+
     # -- inventory ---------------------------------------------------
 
     INVENTORY_CATEGORIES = [
@@ -6617,6 +6763,7 @@ class Seeder:
         )
         self.step("shift calls", self.seed_shift_calls)
         training = self.step("training", self.seed_training) or {}
+        self.step("course cohort", lambda: self.seed_course_cohort(members))
         self.step(
             "training records",
             lambda: self.seed_training_records(members, training.get("courses", [])),
