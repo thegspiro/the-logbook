@@ -1852,6 +1852,56 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "05-53-items-variant-capsules",
+    doc: "05-inventory.md",
+    line: 1423,
+    anchor:
+      "Screenshot of the Inventory Items List showing several item cards, with variant items",
+    alt: "The inventory items list with size, colour and style capsules on the variant items",
+    route: "/inventory/items",
+    fullPage: true,
+  },
+  {
+    id: "05-54-admin-hub-assign",
+    doc: "05-inventory.md",
+    line: 1485,
+    anchor:
+      'Screenshot of the Inventory Admin Hub showing the "Assign to Member" button',
+    alt: "The inventory admin hub with Assign to Member in the header above the navigation cards",
+    route: "/inventory/admin",
+    fullPage: true,
+  },
+  {
+    id: "05-55-member-picker",
+    doc: "05-inventory.md",
+    line: 1487,
+    anchor: "Screenshot of the member picker modal showing the search field",
+    alt: "The member picker opened from Assign to Member, with its search field and roster",
+    route: "/inventory/admin",
+    prepare: clickByName(/Assign to Member/i),
+  },
+  {
+    id: "05-56-item-barcode-value",
+    doc: "05-inventory.md",
+    line: 1556,
+    anchor:
+      "Screenshot of an item's Basic Info card showing the sequential barcode value",
+    alt: "An item's Basic Info card, its sequential barcode value beside the asset tag",
+    route: "/inventory/items",
+    prepare: openFirstFromApi(
+      "/inventory/items?limit=50",
+      (id) => `/inventory/items/${id}`,
+      "items",
+      // The barcode sidebar only has something to show for an item that has
+      // one, and not every seeded item is barcoded.
+      (item) => Boolean(item.barcode ?? item.barcode_value),
+    ),
+    // Clipped to the Basic Info card. The placeholder is about one field, and
+    // a whole-page shot buries it — the detail page is already pictured in
+    // full by 05-06.
+    selector: 'div:has(> h3:text("Basic Info"))',
+  },
+  {
     id: "05-31-equipment-kits",
     doc: "05-inventory.md",
     line: 1250,

@@ -1420,7 +1420,7 @@ Inventory items that belong to a variant group now display compact **colored pil
 
 These capsules appear on inventory item cards across all pages: Items List, Item Detail, My Equipment, Pool Items, and Variant Groups. They provide an at-a-glance understanding of which variant an item represents without opening the detail view.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Inventory Items List showing several item cards, with variant items displaying colored capsule badges (e.g., a "Turnout Coat" card showing blue "L" capsule, purple "Navy" capsule, and amber "Regular" capsule)._
+![The inventory items list with size, colour and style capsules on the variant items](./images/05-53-items-variant-capsules.png)
 
 ### Stock Matrix on Variant Groups Page
 
@@ -1451,10 +1451,12 @@ These filters work alongside existing category, status, condition, and location 
 ### Barcode Label Improvements
 
 - **Layout fixes**: Corrected content overflow on Dymo 30334 and Rollo 4×6 label formats. Fixed quiet zone spacing on Code128 barcodes
-- **Content customization**: Before generating labels, you can now choose which fields appear on each label: item name, serial number, asset tag, barcode, category, and location. This lets you create compact labels with only essential info for small thermal printers
+- **Content customization**: The item name, its barcode and its asset tag always print. Under **Additional info on label** you can add up to three more — **Location**, **Category** and **Condition** — as toggles, so a small thermal label can carry only what fits
 - **Print preview**: A live preview shows the label layout before generating the final PDF, so you can verify the content fits your chosen label size
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the InventoryBarcodePrintPage showing the content customization checkboxes (Name, Serial, Asset Tag, Category, Location), the label format dropdown, and a live preview of a barcode label._
+The label size is chosen from a grid of presets rather than a dropdown, and
+**Custom size** at the end of it takes exact dimensions for any sticker printer.
+The page is pictured under [Label printing](#label-printing) above.
 
 ### Edge Cases
 
@@ -1480,9 +1482,9 @@ The Inventory Admin Hub now includes a **quick "Assign to Member" action** for s
 
 This workflow is designed for events like annual PPE distribution where you need to process many members quickly — scan their badge, then scan the items they're receiving.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Inventory Admin Hub showing the "Assign to Member" button in the header, and below it the standard admin navigation cards._
+![The inventory admin hub with Assign to Member in the header above the navigation cards](./images/05-54-admin-hub-assign.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the member picker modal showing the search field and a list of members with name, rank, and station. Show the badge scan icon next to the search field._
+![The member picker opened from Assign to Member, with its search field and roster](./images/05-55-member-picker.png)
 
 ### Edge Cases
 
@@ -1551,7 +1553,7 @@ Inventory barcodes now use a **per-organization sequential scheme** instead of r
 - Barcodes are assigned at **item creation time** (no longer lazily on first read)
 - Migration `20260610_0001` reassigned existing items and seeded each org's counter
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of an inventory item detail page showing the sequential barcode value (e.g., "INV-000042") displayed in the barcode sidebar._
+![An item's Basic Info card, its sequential barcode value beside the asset tag](./images/05-56-item-barcode-value.png)
 
 ### Edge Cases
 
