@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.apparatus import CheckTemplateItem
+from app.models.apparatus import CheckTemplateItem, TemplateChangeLog
 from app.services.equipment_check_service import EquipmentCheckService
 
 YESTERDAY = date.today() - timedelta(days=1)
@@ -203,9 +203,10 @@ class TestSwapItemLot:
 
     def _wire(self, mock_db, item, lot):
         result = MagicMock()
-        result.scalars.return_value.first.return_value = item
+        result.first.return_value = (item, "tmpl-1")
         mock_db.execute = AsyncMock(return_value=result)
         mock_db.scalar = AsyncMock(return_value=lot)
+        mock_db.flush = AsyncMock()
 
     async def test_expired_lot_is_refused(self, service, mock_db):
         item = _template_item(inventory_item_id="inv-1")
@@ -251,6 +252,102 @@ class TestSwapItemLot:
 
         await service.swap_item_lot("ti-1", "lot-1", "org-1")
         assert lot.quantity == 1
+
+    async def test_swap_is_recorded_in_the_template_changelog(self, service, mock_db):
+        item = _template_item(inventory_item_id="inv-1", lot_number="LOT-OLD")
+        lot = MagicMock(
+            id="lot-1",
+            inventory_item_id="inv-1",
+            quantity=3,
+            lot_number="LOT-NEW",
+            expiration_date=NEXT_YEAR,
+        )
+        self._wire(mock_db, item, lot)
+        user = MagicMock(id="u-1", first_name="Dana", last_name="Reed")
+
+        await service.swap_item_lot("ti-1", "lot-1", "org-1", user=user)
+
+        entries = [
+            call.args[0]
+            for call in mock_db.add.call_args_list
+            if isinstance(call.args[0], TemplateChangeLog)
+        ]
+        assert len(entries) == 1
+        assert entries[0].action == "swap"
+        assert entries[0].user_name == "Dana Reed"
+        # Both sides recorded: a lot number appearing on a truck with no prior
+        # value and no source lot is not an audit trail.
+        assert entries[0].changes["from"]["lot_number"] == "LOT-OLD"
+        assert entries[0].changes["to"]["lot_number"] == "LOT-NEW"
+        assert entries[0].changes["inventory_lot_id"] == "lot-1"
+
+    async def test_swap_without_a_user_still_succeeds(self, service, mock_db):
+        item = _template_item(inventory_item_id="inv-1")
+        lot = MagicMock(
+            id="lot-1",
+            inventory_item_id="inv-1",
+            quantity=1,
+            lot_number="LOT-9",
+            expiration_date=NEXT_YEAR,
+        )
+        self._wire(mock_db, item, lot)
+
+        await service.swap_item_lot("ti-1", "lot-1", "org-1")
+
+        assert not [
+            call.args[0]
+            for call in mock_db.add.call_args_list
+            if isinstance(call.args[0], TemplateChangeLog)
+        ]
+
+
+class TestItemDeployments:
+    """The supply link read from the item's side — which trucks carry this."""
+
+    async def test_rows_carry_apparatus_and_expiry(self, service, mock_db):
+        item = _template_item(lot_number="LOT-2")
+        compartment_name = "Compartment 1"
+        template = MagicMock(id="tmpl-1", apparatus_id="app-1", apparatus_type=None)
+        template.name = "Engine 1 Daily"
+
+        rows = MagicMock()
+        rows.all.return_value = [(item, compartment_name, template)]
+        names = MagicMock()
+        names.all.return_value = [("app-1", "Engine 1")]
+        mock_db.execute = AsyncMock(side_effect=[rows, names])
+
+        result = await service.get_item_deployments("inv-1", "org-1")
+
+        assert len(result) == 1
+        assert result[0]["apparatus_name"] == "Engine 1"
+        assert result[0]["compartment_name"] == "Compartment 1"
+        assert result[0]["lot_number"] == "LOT-2"
+        assert result[0]["is_expired"] is True
+
+    async def test_untracked_expiration_is_not_reported_as_expired(
+        self, service, mock_db
+    ):
+        item = _template_item(has_expiration=False)
+        template = MagicMock(id="tmpl-1", apparatus_id=None, apparatus_type="engine")
+        template.name = "Engine Daily"
+
+        rows = MagicMock()
+        rows.all.return_value = [(item, "Compartment 1", template)]
+        mock_db.execute = AsyncMock(side_effect=[rows])
+
+        result = await service.get_item_deployments("inv-1", "org-1")
+
+        assert result[0]["expiration_date"] is None
+        assert result[0]["is_expired"] is False
+        # A type-level template names no vehicle; the type keeps the row usable.
+        assert result[0]["apparatus_type"] == "engine"
+
+    async def test_no_deployments_returns_empty(self, service, mock_db):
+        rows = MagicMock()
+        rows.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=rows)
+
+        assert await service.get_item_deployments("inv-1", "org-1") == []
 
 
 class TestCloneCompartment:

@@ -37,6 +37,7 @@ from app.schemas.equipment_check import (
     EquipmentCheckTemplateResponse,
     EquipmentCheckTemplateUpdate,
     FailureLogResponse,
+    ItemDeployment,
     ItemTrendResponse,
     LotSwapRequest,
     LotSwapResponse,
@@ -1280,6 +1281,30 @@ async def get_supply_expiring_items(
     return await service.get_supply_overview(
         organization_id=str(current_user.organization_id),
         days_ahead=days_ahead,
+    )
+
+
+@router.get(
+    "/supply/item-deployments/{inventory_item_id}",
+    response_model=list[ItemDeployment],
+)
+async def get_item_deployments(
+    inventory_item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "inventory.view")
+    ),
+):
+    """Which apparatus checklists carry this inventory item, and what is on
+    each of them now.
+
+    The reverse of /supply/expiring-items: worked from an item in hand (a
+    recall, an expiring lot) rather than from a truck.
+    """
+    service = EquipmentCheckService(db)
+    return await service.get_item_deployments(
+        inventory_item_id=inventory_item_id,
+        organization_id=str(current_user.organization_id),
     )
 
 

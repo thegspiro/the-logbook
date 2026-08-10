@@ -483,6 +483,27 @@ export interface SupplyOverview {
   items: SupplyExpiringItem[];
 }
 
+/**
+ * A checklist position on an apparatus that an inventory item fills — the
+ * supply link read from the item's side rather than the truck's, which is the
+ * direction a recall or an expiring lot is worked from.
+ */
+export interface ItemDeployment {
+  templateItemId: string;
+  itemName: string;
+  compartmentName?: string;
+  templateId?: string;
+  templateName?: string;
+  apparatusId?: string;
+  apparatusName?: string;
+  apparatusType?: string;
+  lotNumber?: string;
+  serialNumber?: string;
+  expirationDate?: string;
+  daysUntilExpiration?: number;
+  isExpired: boolean;
+}
+
 export interface LotSwapResult {
   templateItemId: string;
   lotNumber?: string;

@@ -3609,8 +3609,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       add: 'text-green-600',
                       update: 'text-blue-600',
                       delete: 'text-red-600',
+                      swap: 'text-violet-600',
                     };
-                    const actionLabels: Record<string, string> = { add: 'Added', update: 'Updated', delete: 'Removed' };
+                    const actionLabels: Record<string, string> = {
+                      add: 'Added',
+                      update: 'Updated',
+                      delete: 'Removed',
+                      // A swap is logged by the check screen, not typed here —
+                      // labelling it "Updated" would hide where it came from.
+                      swap: 'Swapped fresh stock onto',
+                    };
                     return (
                       <div key={entry.id} className="border-theme-surface-border rounded-md border p-3">
                         <div className="flex items-start justify-between gap-2">

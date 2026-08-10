@@ -65,6 +65,7 @@ import type {
   ItemTrendResponse,
   TemplateChangeLogResponse,
   SupplyOverview,
+  ItemDeployment,
   LotSwapResult,
 } from '../types/equipmentCheck';
 
@@ -775,6 +776,10 @@ export const schedulingService = {
     const response = await api.get<SupplyOverview>('/equipment-checks/supply/expiring-items', {
       params: { days_ahead: daysAhead },
     });
+    return response.data;
+  },
+  async getItemDeployments(inventoryItemId: string): Promise<ItemDeployment[]> {
+    const response = await api.get<ItemDeployment[]>(`/equipment-checks/supply/item-deployments/${inventoryItemId}`);
     return response.data;
   },
   async swapItemLot(templateItemId: string, inventoryLotId: string): Promise<LotSwapResult> {

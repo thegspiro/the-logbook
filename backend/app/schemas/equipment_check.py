@@ -622,6 +622,31 @@ class SupplyOverviewResponse(BaseModel):
     items: List[SupplyExpiringItem] = []
 
 
+class ItemDeployment(BaseModel):
+    """A checklist position on an apparatus that an inventory item fills.
+
+    The supply view answers "what is expiring on my trucks"; this answers the
+    same link from the other side — "which trucks carry this item" — which is
+    the direction a recall or an expiring lot is actually worked from.
+    """
+
+    model_config = _camel_config
+
+    template_item_id: str
+    item_name: str
+    compartment_name: Optional[str] = None
+    template_id: Optional[str] = None
+    template_name: Optional[str] = None
+    apparatus_id: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    apparatus_type: Optional[str] = None
+    lot_number: Optional[str] = None
+    serial_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    days_until_expiration: Optional[int] = None
+    is_expired: bool = False
+
+
 class LotSwapRequest(BaseModel):
     """Swap a ready-stock lot onto the apparatus for a checklist item."""
 

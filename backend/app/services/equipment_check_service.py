@@ -1525,6 +1525,81 @@ class EquipmentCheckService:
 
         return {"days_ahead": days_ahead, "total": len(items), "items": items}
 
+    async def get_item_deployments(
+        self, inventory_item_id: str, organization_id: str
+    ) -> List[Dict[str, Any]]:
+        """Every apparatus checklist position this inventory item fills.
+
+        The supply view reads apparatus -> item; this is the same link read the
+        other way, which is the direction a recall or an expiring lot is worked
+        from: the officer is holding the item and needs to know which trucks
+        carry it and what is on each of them right now.
+        """
+        today = date.today()
+        result = await self.db.execute(
+            select(
+                CheckTemplateItem,
+                CheckTemplateCompartment.name,
+                EquipmentCheckTemplate,
+            )
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.inventory_item_id == inventory_item_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+            .order_by(CheckTemplateItem.expiration_date.asc())
+        )
+        rows = result.all()
+        if not rows:
+            return []
+
+        apparatus_ids = {t.apparatus_id for (_, _, t) in rows if t.apparatus_id}
+        apparatus_names: Dict[str, str] = {}
+        if apparatus_ids:
+            ares = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            apparatus_names = {aid: name for aid, name in ares.all()}
+
+        deployments: List[Dict[str, Any]] = []
+        for item, compartment_name, tmpl in rows:
+            exp = item.expiration_date if item.has_expiration else None
+            deployments.append(
+                {
+                    "template_item_id": item.id,
+                    "item_name": item.name,
+                    "compartment_name": compartment_name,
+                    "template_id": tmpl.id,
+                    "template_name": tmpl.name,
+                    "apparatus_id": tmpl.apparatus_id,
+                    "apparatus_name": (
+                        apparatus_names.get(tmpl.apparatus_id)
+                        if tmpl.apparatus_id
+                        else None
+                    ),
+                    # A template defined for an apparatus *type* rather than one
+                    # vehicle has no apparatus_id to name; say which type so the
+                    # row is still actionable.
+                    "apparatus_type": tmpl.apparatus_type,
+                    "lot_number": item.lot_number,
+                    "serial_number": item.serial_number,
+                    "expiration_date": exp,
+                    "days_until_expiration": (exp - today).days if exp else None,
+                    "is_expired": bool(exp and exp < today),
+                }
+            )
+        return deployments
+
     async def swap_item_lot(
         self,
         template_item_id: str,
@@ -1540,7 +1615,7 @@ class EquipmentCheckService:
         mismatched or empty lot.
         """
         result = await self.db.execute(
-            select(CheckTemplateItem)
+            select(CheckTemplateItem, EquipmentCheckTemplate.id)
             .join(
                 CheckTemplateCompartment,
                 CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
@@ -1554,9 +1629,10 @@ class EquipmentCheckService:
                 EquipmentCheckTemplate.organization_id == organization_id,
             )
         )
-        item = result.scalars().first()
-        if not item:
+        row = result.first()
+        if not row:
             return None
+        item, template_id = row
 
         # Lock the lot row for the read-check-decrement so two concurrent
         # swaps of the same unit can't both pass the stock guard and
@@ -1581,6 +1657,13 @@ class EquipmentCheckService:
             # put expired supplies in service; refuse rather than record it.
             raise ValueError("This stock lot has expired and cannot be deployed")
 
+        previous = {
+            "lot_number": item.lot_number,
+            "expiration_date": (
+                item.expiration_date.isoformat() if item.expiration_date else None
+            ),
+        }
+
         lot.quantity -= 1
         # Establish the catalog link if this was the item's first swap.
         if not item.inventory_item_id:
@@ -1590,6 +1673,36 @@ class EquipmentCheckService:
         if lot.expiration_date is not None:
             item.has_expiration = True
             item.expiration_date = lot.expiration_date
+
+        # A swap rewrites the same safety-critical template row that every
+        # manual edit logs, and it is the one change nobody typed — without an
+        # entry the changelog shows a lot number appearing on an apparatus with
+        # no author and no source lot.
+        if user is not None:
+            first = getattr(user, "first_name", "") or ""
+            last = getattr(user, "last_name", "") or ""
+            await self.log_template_change(
+                organization_id=organization_id,
+                template_id=str(template_id),
+                user_id=str(user.id),
+                user_name=f"{first} {last}".strip() or "Unknown",
+                action="swap",
+                entity_type="item",
+                entity_id=str(item.id),
+                entity_name=item.name,
+                changes={
+                    "inventory_lot_id": inventory_lot_id,
+                    "from": previous,
+                    "to": {
+                        "lot_number": item.lot_number,
+                        "expiration_date": (
+                            item.expiration_date.isoformat()
+                            if item.expiration_date
+                            else None
+                        ),
+                    },
+                },
+            )
 
         await self.db.commit()
 
