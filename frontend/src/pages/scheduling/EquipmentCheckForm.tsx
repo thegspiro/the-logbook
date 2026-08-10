@@ -545,20 +545,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         for (const comp of compartments) {
           for (const item of comp.items) {
             const prev = data[item.id];
-            if (!prev) continue;
-            if (item.checkType === 'quantity' && prev.quantity_found != null) {
-              const required = item.requiredQuantity ?? item.expectedQuantity;
-              seed[item.id] = {
-                status: required != null ? (prev.quantity_found >= required ? 'pass' : 'fail') : 'pass',
-                quantityFound: prev.quantity_found,
-              };
-            } else if ((item.checkType === 'level' || item.checkType === 'reading') && prev.level_reading != null) {
-              const belowMin =
-                item.checkType === 'level' && item.minLevel != null && prev.level_reading < item.minLevel;
-              seed[item.id] = {
-                status: belowMin ? 'fail' : 'pass',
-                levelReading: prev.level_reading,
-              };
+            // The running on-truck count outranks the last check's number: it
+            // carries everything used since, so a crew that pulled two at 03:00
+            // opens this at 2 rather than at the 4 the last check recorded.
+            const known = item.quantityOnTruck ?? prev?.quantity_found;
+            if (item.checkType === 'quantity' && known != null) {
+              // Seeded WITHOUT a status. The number is a starting point, not a
+              // check — marking it pass/fail here would let a crew submit a
+              // complete report having looked at nothing, and the progress
+              // counter would agree with them.
+              seed[item.id] = { status: 'not_checked', quantityFound: known };
+            } else if ((item.checkType === 'level' || item.checkType === 'reading') && prev?.level_reading != null) {
+              seed[item.id] = { status: 'not_checked', levelReading: prev.level_reading };
             }
           }
         }
@@ -1045,10 +1043,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const isAtPar = required != null && currentQty >= required;
         const isCritical = criticalMin != null && currentQty <= criticalMin;
         const hasBeenSet = result?.quantityFound != null;
+        // Seeded from the running count but not yet affirmed by this crew. The
+        // number is shown so they only correct what changed; it is not a check.
+        const isCarriedOver = hasBeenSet && currentStatus === 'not_checked';
+        const unit = item.unitOfMeasure;
         const prevQty = lastCheckData?.[item.id]?.quantity_found;
 
         const getQtyColor = () => {
-          if (!hasBeenSet) return 'text-theme-text-muted';
+          if (!hasBeenSet || isCarriedOver) return 'text-theme-text-muted';
           if (isCritical) return 'text-red-600 dark:text-red-400 font-bold';
           if (!isAtPar) return 'text-orange-500 dark:text-orange-400 font-medium';
           return 'text-green-600 dark:text-green-400 font-medium';
@@ -1067,8 +1069,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             <div className="min-w-0 space-y-0.5 text-xs">
               {expected != null && (
                 <span className={`block ${getQtyColor()}`}>
-                  {hasBeenSet ? currentQty : '—'}/{expected} Expected
+                  {hasBeenSet ? currentQty : '—'}/{expected}
+                  {unit ? ` ${unit}` : ''}
                 </span>
+              )}
+              {isCarriedOver && (
+                <button
+                  type="button"
+                  onClick={() => setQuantity(currentQty)}
+                  className="block text-[10px] font-medium text-blue-600 hover:text-blue-700"
+                >
+                  Carried over — tap to confirm
+                </button>
               )}
               {hasBeenSet && isCritical && (
                 <span className="block text-[10px] font-semibold text-red-600 dark:text-red-400">

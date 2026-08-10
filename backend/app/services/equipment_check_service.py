@@ -95,7 +95,43 @@ class EquipmentCheckService:
                 )
             )
         )
-        return result.scalars().first()
+        template = result.scalars().first()
+        if template is not None:
+            await self._attach_unit_labels(
+                organization_id,
+                [i for c in template.compartments for i in c.items],
+            )
+        return template
+
+    async def _attach_unit_labels(
+        self,
+        organization_id: str,
+        items: List[CheckTemplateItem],
+    ) -> None:
+        """Hang each item's unit of measure on it for the response schema.
+
+        "2/4" does not tell a crew whether it is looking for two boxes or two
+        gloves, and the catalog already knows which. Read from the linked
+        inventory item rather than stored again on the checklist, so a
+        department that relabels a unit does not have to re-enter it on every
+        truck that carries it.
+        """
+        inv_ids = [i.inventory_item_id for i in items if i.inventory_item_id]
+        if not inv_ids:
+            return
+        # Org-scoped: inventory_item_id is a client-supplied FK, and an
+        # unfiltered read here would render a foreign org's label (EC2-4).
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.unit_of_measure).where(
+                InventoryItem.id.in_(inv_ids),
+                InventoryItem.organization_id == organization_id,
+            )
+        )
+        units = {iid: unit for iid, unit in result.all()}
+        for item in items:
+            item.unit_of_measure = (
+                units.get(item.inventory_item_id) if item.inventory_item_id else None
+            )
 
     async def list_templates(
         self,
@@ -1621,6 +1657,7 @@ class EquipmentCheckService:
         reporter_names = await self._get_user_name_map(
             [i.restock_reported_by for (i, _, _) in rows if i.restock_reported_by]
         )
+        await self._attach_unit_labels(organization_id, [i for (i, _, _) in rows])
 
         compartments: List[Dict[str, Any]] = []
         by_compartment: Dict[str, Dict[str, Any]] = {}
@@ -1654,6 +1691,7 @@ class EquipmentCheckService:
                     "target_quantity": self._target_quantity(item),
                     "quantity_on_truck": self._on_truck(item),
                     "is_short": self._is_short(item),
+                    "unit_of_measure": getattr(item, "unit_of_measure", None),
                     "serial_number": item.serial_number,
                     "lot_number": item.lot_number,
                     "expiration_date": exp,

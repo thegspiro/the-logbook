@@ -112,6 +112,10 @@ export interface CheckTemplateItem {
   imageUrl?: string;
   equipmentId?: string;
   inventoryItemId?: string;
+  /** The running on-truck count, including anything used since the last check. */
+  quantityOnTruck?: number;
+  /** Projected from the linked catalog item — "Each", "Box", "Lot". */
+  unitOfMeasure?: string;
   hasExpiration: boolean;
   expirationDate?: string;
   expirationWarningDays: number;
@@ -504,6 +508,7 @@ export interface ApparatusInventoryItem {
   /** What it holds now — falls back to the target until someone counts. */
   quantityOnTruck?: number;
   isShort: boolean;
+  unitOfMeasure?: string;
   serialNumber?: string;
   lotNumber?: string;
   expirationDate?: string;

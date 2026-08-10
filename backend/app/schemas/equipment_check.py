@@ -92,6 +92,9 @@ class CheckTemplateItemResponse(UTCResponseBase):
     equipment_id: Optional[str] = None
     inventory_item_id: Optional[str] = None
     quantity_on_truck: Optional[int] = None
+    # Projected from the linked catalog item: "2/4" alone does not say whether
+    # a crew is looking for two boxes or two gloves.
+    unit_of_measure: Optional[str] = None
     has_expiration: bool
     expiration_date: Optional[date] = None
     expiration_warning_days: int
@@ -647,6 +650,7 @@ class ApparatusInventoryItem(BaseModel):
     target_quantity: Optional[int] = None
     quantity_on_truck: Optional[int] = None
     is_short: bool = False
+    unit_of_measure: Optional[str] = None
     serial_number: Optional[str] = None
     lot_number: Optional[str] = None
     expiration_date: Optional[date] = None

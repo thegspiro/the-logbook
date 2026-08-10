@@ -193,7 +193,8 @@ const ApparatusInventoryPage: React.FC = () => {
               {item.expirationDate && <span>Exp {formatDate(item.expirationDate, tz)}</span>}
               {item.targetQuantity != null && (
                 <span className={item.isShort ? 'font-medium text-orange-600 dark:text-orange-400' : ''}>
-                  {item.quantityOnTruck ?? item.targetQuantity} of {item.targetQuantity} aboard
+                  {item.quantityOnTruck ?? item.targetQuantity} of {item.targetQuantity}
+                  {item.unitOfMeasure ? ` ${item.unitOfMeasure}` : ''} aboard
                 </span>
               )}
               {item.inventoryItemId && (

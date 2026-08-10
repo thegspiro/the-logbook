@@ -455,14 +455,52 @@ class TestSwapItemLot:
         ]
 
 
+class TestUnitLabels:
+    """ "2/4" does not say whether a crew is looking for boxes or gloves."""
+
+    async def test_labels_come_from_the_linked_catalog_item(self, service, mock_db):
+        linked = _template_item(id="ti-1", inventory_item_id="inv-1")
+        unlinked = _template_item(id="ti-2", inventory_item_id=None)
+        result = MagicMock()
+        result.all.return_value = [("inv-1", "Box")]
+        mock_db.execute = AsyncMock(return_value=result)
+
+        await service._attach_unit_labels("org-1", [linked, unlinked])
+
+        assert linked.unit_of_measure == "Box"
+        assert unlinked.unit_of_measure is None
+
+    async def test_a_foreign_item_resolves_to_no_label(self, service, mock_db):
+        # EC2-4: the org-scoped lookup returns nothing for another org's item,
+        # so its label never renders here.
+        item = _template_item(inventory_item_id="other-org-item")
+        result = MagicMock()
+        result.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=result)
+
+        await service._attach_unit_labels("org-1", [item])
+
+        assert item.unit_of_measure is None
+
+    async def test_nothing_linked_skips_the_query(self, service, mock_db):
+        mock_db.execute = AsyncMock()
+
+        await service._attach_unit_labels("org-1", [_template_item()])
+
+        mock_db.execute.assert_not_awaited()
+
+
 class TestApparatusInventory:
     """The standing view: what a truck carries, read at any hour, no check."""
 
-    def _wire(self, mock_db, rows, apparatus=MagicMock(id="app-1")):
+    def _wire(self, mock_db, rows, units=(), apparatus=MagicMock(id="app-1")):
+        """Rows first, then the unit-label lookup that follows it."""
         rows_result = MagicMock()
         rows_result.all.return_value = rows
+        units_result = MagicMock()
+        units_result.all.return_value = list(units)
         mock_db.scalar = AsyncMock(return_value=apparatus)
-        mock_db.execute = AsyncMock(return_value=rows_result)
+        mock_db.execute = AsyncMock(side_effect=[rows_result, units_result])
 
     def _compartment(self, name="Compartment 1", cid="c-1"):
         compartment = MagicMock(id=cid)
@@ -531,7 +569,9 @@ class TestApparatusInventory:
     ):
         template = MagicMock(id="tmpl-1")
         item = _template_item(inventory_item_id="inv-1")
-        self._wire(mock_db, [(item, self._compartment(), template)])
+        self._wire(
+            mock_db, [(item, self._compartment(), template)], units=[("inv-1", "Box")]
+        )
 
         fresh = MagicMock(id="lot-1", quantity=5, expiration_date=NEXT_YEAR)
         stale = MagicMock(id="lot-2", quantity=9, expiration_date=YESTERDAY)
@@ -548,6 +588,7 @@ class TestApparatusInventory:
         # a swap that fails.
         assert row["ready_stock"] == 5
         assert [lot["id"] for lot in row["ready_lots"]] == ["lot-1"]
+        assert row["unit_of_measure"] == "Box"
 
 
 class TestReportItemUsed:
