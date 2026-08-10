@@ -1050,9 +1050,9 @@ Separate from trainee visibility, officers can control which **optional sections
 | `form_show_tasks_performed`       | On      | Structured tasks checklist on the form     |
 | `form_show_call_types`            | On      | Call type selection on the form            |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports Settings panel showing the "Report Form Sections" card with toggle switches for each section (performance rating, strengths, improvement, narrative, skills, tasks, call types), showing some toggled on and some toggled off._
+![The shift report form's optional sections, each with its own toggle](./images/02-76-report-form-sections.png)
 
-These toggles are managed in **Scheduling > Settings > Shift Reports**. When a section is toggled off, it is hidden from the report creation form entirely — officers do not see it and cannot enter data for it. The trainee visibility settings (above) are separate and control what trainees see after a report is filed.
+These are checkboxes, not switches, and live under **Scheduling > Settings > Shift Reports > Form Sections**. All seven start on. When a section is toggled off, it is hidden from the report creation form entirely — officers do not see it and cannot enter data for it. The trainee visibility settings (above) are separate and control what trainees see after a report is filed.
 
 ### Per-Apparatus-Type Skills and Tasks _(2026-04-04)_
 
@@ -1060,12 +1060,16 @@ The report form can auto-populate skills and tasks relevant to the specific appa
 
 **How it works:**
 
-1. Navigate to **Scheduling > Settings > Shift Reports** to configure per-apparatus-type mappings
-2. Expand an apparatus type (e.g., Engine, Ladder, Ambulance) in the accordion
-3. Add or remove skills and tasks specific to that apparatus type
-4. When an officer files a report linked to a shift with that apparatus type, the form pre-populates the relevant skills and tasks
+1. Navigate to **Scheduling > Settings > Shift Reports** and open **Apparatus Skills**
+2. Pick an apparatus type from the row of chips across the top — each carries a
+   count of the skills already assigned to it (Ambulance, Boat, Brush, Chief,
+   Engine, Hazmat, Ladder, Rescue, Tanker)
+3. Skills and tasks appear as chips below. The pencil renames one, the × removes
+   it, and the field underneath adds another
+4. Click **Save Apparatus Skills & Tasks**
+5. When an officer files a report linked to a shift with that apparatus type, the form pre-populates the relevant skills and tasks
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports Settings panel showing the "Per-Apparatus Skills & Tasks" accordion, with one type (e.g., "Engine") expanded showing a list of skills like "Pump operations", "Hose deployment", "Hydrant connection" with add/remove buttons._
+![Per-apparatus-type skills and tasks, with one type expanded](./images/02-77-apparatus-skills.png)
 
 If no mapping exists for the shift's apparatus type, the system falls back to the org-wide default skills and tasks lists. If neither exists, the skills/tasks sections are empty (but still visible unless toggled off via form section toggles).
 

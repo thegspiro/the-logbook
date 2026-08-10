@@ -529,6 +529,35 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "02-76-report-form-sections",
+    doc: "02-training.md",
+    line: 1053,
+    anchor:
+      "Screenshot of the Form Sections panel listing the seven optional report",
+    alt: "The shift report form's optional sections, each with its own toggle",
+    route: "/scheduling/settings?tab=shift-reports",
+    // The section list renders twice — a bare-label strip for phones and a
+    // sidebar whose accessible name carries the description too. Anchoring
+    // the regex at the start matches both; `$` matched only the hidden
+    // phone copy and timed out.
+    prepare: clickByName(/^Form Sections/),
+    fullPage: true,
+  },
+  {
+    id: "02-77-apparatus-skills",
+    doc: "02-training.md",
+    line: 1068,
+    anchor:
+      "Screenshot of the Apparatus Skills panel with one apparatus type selected",
+    alt: "Per-apparatus-type skills and tasks, with one type expanded",
+    route: "/scheduling/settings?tab=shift-reports",
+    // The panel opens on the first apparatus type alphabetically (Ambulance),
+    // which is as good an illustration as any — every type carries its own
+    // skills and tasks.
+    prepare: clickByName(/^Apparatus Skills/),
+    fullPage: true,
+  },
+  {
     id: "00-19-change-password",
     doc: "00-getting-started.md",
     line: 58,
