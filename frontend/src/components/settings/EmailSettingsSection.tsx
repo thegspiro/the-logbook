@@ -30,7 +30,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
       <button
         type="button"
         onClick={onChange}
-        className={`${bg} focus:ring-theme-focus-ring relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden`}
+        className={`${bg} focus:ring-theme-focus-ring toggle-track-md`}
         role="switch"
         aria-checked={checked}
       >
@@ -108,7 +108,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
             value={emailSettings.from_email || ''}
             onChange={(e) => onEmailSettingsChange((s) => ({ ...s, from_email: e.target.value }))}
             placeholder="notifications@yourdomain.com"
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+            className="form-input"
           />
         </div>
         <div>
@@ -118,7 +118,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
             value={emailSettings.from_name || ''}
             onChange={(e) => onEmailSettingsChange((s) => ({ ...s, from_name: e.target.value }))}
             placeholder={profileName || 'Department Name'}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+            className="form-input"
           />
         </div>
       </div>
@@ -135,7 +135,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                 value={emailSettings.google_client_id || ''}
                 onChange={(e) => onEmailSettingsChange((s) => ({ ...s, google_client_id: e.target.value }))}
                 placeholder="123456789-abc.apps.googleusercontent.com"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -146,7 +146,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                   value={emailSettings.google_client_secret || ''}
                   onChange={(e) => onEmailSettingsChange((s) => ({ ...s, google_client_secret: e.target.value }))}
                   placeholder="GOCSPX-xxxxxxxxxxxxx"
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input pr-10"
                 />
                 <button
                   type="button"
@@ -165,7 +165,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
               value={emailSettings.google_app_password || ''}
               onChange={(e) => onEmailSettingsChange((s) => ({ ...s, google_app_password: e.target.value }))}
               placeholder="xxxx xxxx xxxx xxxx"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden sm:w-1/2"
+              className="form-input sm:w-1/2"
             />
           </div>
         </div>
@@ -182,7 +182,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                 value={emailSettings.microsoft_tenant_id || ''}
                 onChange={(e) => onEmailSettingsChange((s) => ({ ...s, microsoft_tenant_id: e.target.value }))}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -192,7 +192,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                 value={emailSettings.microsoft_client_id || ''}
                 onChange={(e) => onEmailSettingsChange((s) => ({ ...s, microsoft_client_id: e.target.value }))}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
           </div>
@@ -204,7 +204,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                 value={emailSettings.microsoft_client_secret || ''}
                 onChange={(e) => onEmailSettingsChange((s) => ({ ...s, microsoft_client_secret: e.target.value }))}
                 placeholder="Client secret value"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input pr-10"
               />
               <button
                 type="button"
@@ -229,7 +229,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                 value={emailSettings.smtp_host || ''}
                 onChange={(e) => onEmailSettingsChange((s) => ({ ...s, smtp_host: e.target.value }))}
                 placeholder="mail.yourdomain.com"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -238,7 +238,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                 type="number"
                 value={emailSettings.smtp_port}
                 onChange={(e) => onEmailSettingsChange((s) => ({ ...s, smtp_port: parseInt(e.target.value) || 587 }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -246,7 +246,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
               <select
                 value={emailSettings.smtp_encryption}
                 onChange={(e) => onEmailSettingsChange((s) => ({ ...s, smtp_encryption: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               >
                 <option value="tls">TLS (STARTTLS)</option>
                 <option value="ssl">SSL</option>
@@ -262,7 +262,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                 value={emailSettings.smtp_user || ''}
                 onChange={(e) => onEmailSettingsChange((s) => ({ ...s, smtp_user: e.target.value }))}
                 placeholder="notifications@yourdomain.com"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -272,7 +272,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                   type={emailPasswordVisible ? 'text' : 'password'}
                   value={emailSettings.smtp_password || ''}
                   onChange={(e) => onEmailSettingsChange((s) => ({ ...s, smtp_password: e.target.value }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input pr-10"
                 />
                 <button
                   type="button"
@@ -298,7 +298,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                 value={emailSettings.cloudflare_account_id || ''}
                 onChange={(e) => onEmailSettingsChange((s) => ({ ...s, cloudflare_account_id: e.target.value }))}
                 placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -309,7 +309,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                   value={emailSettings.cloudflare_api_token || ''}
                   onChange={(e) => onEmailSettingsChange((s) => ({ ...s, cloudflare_api_token: e.target.value }))}
                   placeholder="API token with email sending permission"
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input pr-10"
                 />
                 <button
                   type="button"

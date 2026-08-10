@@ -1181,7 +1181,7 @@ export const ElectionDetailPage: React.FC = () => {
                       : ''
                 }
                 onChange={(e) => void handleMeetingChange(e.target.value)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:outline-hidden"
+                className="form-input shadow-xs"
               >
                 <option value="">No linked meeting</option>
                 {upcomingEvents.map((event) => (
@@ -1782,7 +1782,7 @@ export const ElectionDetailPage: React.FC = () => {
                       onChange={(e) => setVoidVoteId(e.target.value)}
                       placeholder="Vote ID (UUID)"
                       aria-label="Vote ID (UUID)"
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring flex-1 rounded-md border px-3 py-2 text-sm shadow-xs focus:outline-hidden"
+                      className="form-input flex-1 shadow-xs"
                     />
                     <input
                       type="text"
@@ -1790,7 +1790,7 @@ export const ElectionDetailPage: React.FC = () => {
                       onChange={(e) => setVoidVoteReason(e.target.value)}
                       placeholder="Reason for voiding"
                       aria-label="Reason for voiding"
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring flex-1 rounded-md border px-3 py-2 text-sm shadow-xs focus:outline-hidden"
+                      className="form-input flex-1 shadow-xs"
                     />
                     <button
                       onClick={() => {

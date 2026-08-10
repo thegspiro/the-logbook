@@ -97,7 +97,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
                   value={counts[candidate.id] ?? ''}
                   onChange={(e) => setCounts({ ...counts, [candidate.id]: e.target.value })}
                   placeholder="0"
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-24 rounded-md border px-3 py-1.5 text-right focus:outline-hidden"
+                  className="form-input-sm w-24 text-right"
                 />
               </div>
             ))}
@@ -113,7 +113,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder="e.g. Paper ballots collected at the March business meeting"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+              className="form-input mt-1 shadow-xs"
             />
           </div>
 

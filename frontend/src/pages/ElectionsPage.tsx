@@ -592,7 +592,7 @@ export const ElectionsPage: React.FC = () => {
                       aria-required="true"
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                      className="form-input mt-1 shadow-xs"
                     />
                   </div>
 
@@ -605,7 +605,7 @@ export const ElectionsPage: React.FC = () => {
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       rows={3}
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                      className="form-input mt-1 shadow-xs"
                     />
                   </div>
 
@@ -623,7 +623,7 @@ export const ElectionsPage: React.FC = () => {
                             : ''
                       }
                       onChange={(e) => handleMeetingChange(e.target.value)}
-                      className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                      className="form-input mt-1 shadow-xs"
                     >
                       <option value="">No linked meeting</option>
                       {upcomingEvents.map((event) => (
@@ -659,7 +659,7 @@ export const ElectionsPage: React.FC = () => {
                         required
                         value={formData.start_date}
                         onChange={(val) => handleStartDateChange(val)}
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                        className="form-input mt-1 shadow-xs"
                       />
                     </div>
 
@@ -672,7 +672,7 @@ export const ElectionsPage: React.FC = () => {
                         required
                         value={formData.end_date}
                         onChange={(val) => setFormData({ ...formData, end_date: val })}
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                        className="form-input mt-1 shadow-xs"
                       />
 
                       {formData.start_date && (
@@ -744,7 +744,7 @@ export const ElectionsPage: React.FC = () => {
                             placeholder="Select or type a position..."
                             aria-label="Position name"
                             autoComplete="off"
-                            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                            className="form-input shadow-xs"
                           />
                           {showPositionDropdown &&
                             (() => {
@@ -862,7 +862,7 @@ export const ElectionsPage: React.FC = () => {
                           victory_threshold: undefined,
                         });
                       }}
-                      className="bg-theme-input-bg border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-white shadow-xs focus:outline-hidden"
+                      className="form-input mt-1 text-white shadow-xs"
                     >
                       <option value="simple_majority|most_votes">Most Votes Wins (Plurality)</option>
                       <option value="simple_majority|majority">Majority Required (&gt;50%)</option>
@@ -908,7 +908,7 @@ export const ElectionsPage: React.FC = () => {
                           }
                           placeholder="e.g., 10 votes required"
                           aria-label="Numerical threshold"
-                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                          className="form-input mt-1 shadow-xs"
                         />
                         <p className="text-theme-text-muted mt-1 text-xs">Minimum votes needed to win</p>
                       </div>
@@ -934,7 +934,7 @@ export const ElectionsPage: React.FC = () => {
                           }
                           placeholder="e.g., 60%"
                           aria-label="Percentage threshold"
-                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                          className="form-input mt-1 shadow-xs"
                         />
                         <p className="text-theme-text-muted mt-1 text-xs">Percentage of votes needed to win</p>
                       </div>
@@ -961,7 +961,7 @@ export const ElectionsPage: React.FC = () => {
                             victory_percentage: e.target.value ? parseInt(e.target.value) : 67,
                           })
                         }
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                        className="form-input mt-1 shadow-xs"
                       />
                       <p className="text-theme-text-muted mt-1 text-xs">
                         Percentage of votes needed (typically 67% for 2/3 majority)
@@ -994,7 +994,7 @@ export const ElectionsPage: React.FC = () => {
                             id="election-runoff-type"
                             value={formData.runoff_type}
                             onChange={(e) => setFormData({ ...formData, runoff_type: e.target.value })}
-                            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                            className="form-input mt-1 shadow-xs"
                           >
                             <option value="top_two">Top Two (top 2 candidates advance)</option>
                             <option value="eliminate_lowest">Eliminate Lowest (remove lowest, others continue)</option>
@@ -1020,7 +1020,7 @@ export const ElectionsPage: React.FC = () => {
                             onChange={(e) =>
                               setFormData({ ...formData, max_runoff_rounds: parseInt(e.target.value) || 3 })
                             }
-                            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                            className="form-input mt-1 shadow-xs"
                           />
                           <p className="text-theme-text-muted mt-1 text-xs">
                             Maximum number of runoff rounds before declaring winner
@@ -1094,7 +1094,7 @@ export const ElectionsPage: React.FC = () => {
                               reminder_hours_before_close: e.target.value ? Number(e.target.value) : undefined,
                             })
                           }
-                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                          className="form-input mt-1 shadow-xs"
                         >
                           <option value="">No automatic reminder</option>
                           <option value="2">2 hours before close</option>
@@ -1125,7 +1125,7 @@ export const ElectionsPage: React.FC = () => {
                             tie_policy: e.target.value as ElectionCreate['tie_policy'],
                           })
                         }
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+                        className="form-input mt-1 shadow-xs"
                       >
                         <option value="co_winners">Declare all tied candidates winners</option>
                         <option value="runoff">Hold a runoff round</option>

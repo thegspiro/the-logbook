@@ -339,7 +339,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search by name, email, or membership type..."
                     aria-label="Search members"
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-md border py-2 pr-3 pl-9 text-sm focus:outline-hidden"
+                    className="form-input pr-3 pl-9"
                   />
                 </div>
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter members by status">

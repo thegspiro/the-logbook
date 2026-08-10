@@ -760,7 +760,7 @@ export const EventsPage: React.FC = () => {
               placeholder="Search events..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border py-2 pr-4 pl-10 text-sm focus:ring-2 focus:outline-hidden max-md:min-h-[44px]"
+              className="form-input pr-4 pl-10"
             />
           </div>
           <div className="relative">
@@ -771,7 +771,7 @@ export const EventsPage: React.FC = () => {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'date' | 'title' | 'rsvp_count')}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring appearance-none rounded-lg border py-2 pr-8 pl-9 text-sm focus:ring-2 focus:outline-hidden max-md:min-h-[44px]"
+              className="form-input appearance-none pr-8 pl-9"
             >
               <option value="date">Sort by Date</option>
               <option value="title">Sort by Title</option>
@@ -819,7 +819,7 @@ export const EventsPage: React.FC = () => {
                           }
                         }}
                         placeholder="Preset name..."
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-md border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                         autoFocus
                       />
                       <button

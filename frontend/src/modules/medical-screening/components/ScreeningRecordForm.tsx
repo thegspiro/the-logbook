@@ -17,7 +17,7 @@ interface ScreeningRecordFormProps {
 }
 
 const inputClass = 'form-input';
-const labelClass = 'text-theme-text-secondary mb-2 block text-sm font-medium';
+const labelClass = 'form-label mb-2';
 
 export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record, requirements, onSave, onClose }) => {
   const [screeningType, setScreeningType] = useState<string>(record?.screening_type ?? ScreeningType.PHYSICAL_EXAM);

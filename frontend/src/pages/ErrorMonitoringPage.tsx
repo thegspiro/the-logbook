@@ -122,11 +122,7 @@ const ErrorMonitoringPage: React.FC = () => {
       <div className="bg-theme-surface mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg p-4 shadow-md backdrop-blur-xs">
         <div className="flex items-center gap-2">
           <label className="text-theme-text-secondary text-sm font-medium">Filter:</label>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="border-theme-input-border text-theme-text-primary bg-theme-input-bg focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
-          >
+          <select value={filter} onChange={(e) => setFilter(e.target.value)} className="form-input">
             <option value="all">All Errors</option>
             {stats &&
               Object.keys(stats.byType).map((type) => (

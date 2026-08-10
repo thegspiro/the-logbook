@@ -786,7 +786,7 @@ const EXPOSURE_TYPE_OPTIONS = [
   'other',
 ];
 
-const nfpaLabelClass = 'block text-xs font-medium text-theme-text-primary mb-1';
+const nfpaLabelClass = 'form-label-sm';
 const nfpaInputClass = 'form-input w-full';
 
 /** Trim an ISO date/datetime string down to the YYYY-MM-DD a date input expects. */

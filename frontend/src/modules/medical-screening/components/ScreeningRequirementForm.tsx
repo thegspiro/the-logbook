@@ -16,7 +16,7 @@ interface ScreeningRequirementFormProps {
 }
 
 const inputClass = 'form-input';
-const labelClass = 'text-theme-text-secondary mb-2 block text-sm font-medium';
+const labelClass = 'form-label mb-2';
 
 export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> = ({ requirement, onSave, onClose }) => {
   const [name, setName] = useState(requirement?.name ?? '');

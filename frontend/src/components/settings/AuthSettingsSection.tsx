@@ -76,7 +76,7 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
                 value={authSettings.google_client_id || ''}
                 onChange={(e) => onAuthSettingsChange((s) => ({ ...s, google_client_id: e.target.value }))}
                 placeholder="123456789-abc.apps.googleusercontent.com"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -86,7 +86,7 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
                   type={authSecretVisible ? 'text' : 'password'}
                   value={authSettings.google_client_secret || ''}
                   onChange={(e) => onAuthSettingsChange((s) => ({ ...s, google_client_secret: e.target.value }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input pr-10"
                 />
                 <button
                   type="button"
@@ -113,7 +113,7 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
                 value={authSettings.microsoft_tenant_id || ''}
                 onChange={(e) => onAuthSettingsChange((s) => ({ ...s, microsoft_tenant_id: e.target.value }))}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -123,7 +123,7 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
                 value={authSettings.microsoft_client_id || ''}
                 onChange={(e) => onAuthSettingsChange((s) => ({ ...s, microsoft_client_id: e.target.value }))}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
           </div>
@@ -134,7 +134,7 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
                 type={authSecretVisible ? 'text' : 'password'}
                 value={authSettings.microsoft_client_secret || ''}
                 onChange={(e) => onAuthSettingsChange((s) => ({ ...s, microsoft_client_secret: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input pr-10"
               />
               <button
                 type="button"
@@ -159,7 +159,7 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
               value={authSettings.authentik_url || ''}
               onChange={(e) => onAuthSettingsChange((s) => ({ ...s, authentik_url: e.target.value }))}
               placeholder="https://auth.yourdomain.com"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden sm:w-1/2"
+              className="form-input sm:w-1/2"
             />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -169,7 +169,7 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
                 type="text"
                 value={authSettings.authentik_client_id || ''}
                 onChange={(e) => onAuthSettingsChange((s) => ({ ...s, authentik_client_id: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input"
               />
             </div>
             <div>
@@ -179,7 +179,7 @@ const AuthSettingsSection: React.FC<AuthSettingsSectionProps> = ({
                   type={authSecretVisible ? 'text' : 'password'}
                   value={authSettings.authentik_client_secret || ''}
                   onChange={(e) => onAuthSettingsChange((s) => ({ ...s, authentik_client_secret: e.target.value }))}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input pr-10"
                 />
                 <button
                   type="button"

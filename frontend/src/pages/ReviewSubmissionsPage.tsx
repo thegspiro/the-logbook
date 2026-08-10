@@ -184,7 +184,7 @@ const ApplyToPipelinePicker: React.FC<{
                 <select
                   value={enrollmentId}
                   onChange={(e) => selectEnrollment(e.target.value)}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+                  className="form-input-sm"
                 >
                   <option value="">Select a program…</option>
                   {enrollments.map((enr) => (
@@ -200,7 +200,7 @@ const ApplyToPipelinePicker: React.FC<{
                   <select
                     value={requirementId}
                     onChange={(e) => selectRequirement(e.target.value)}
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+                    className="form-input-sm"
                   >
                     <option value="">Select a requirement…</option>
                     {requirements.map((rp) => (
@@ -383,7 +383,7 @@ const ReviewPanel: React.FC<{
                   value={overrideHours ?? ''}
                   onChange={(e) => setOverrideHours(e.target.value ? parseFloat(e.target.value) : undefined)}
                   placeholder={String(submission.hours_completed)}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+                  className="form-input-sm"
                   min={0}
                   step={0.5}
                 />
@@ -393,7 +393,7 @@ const ReviewPanel: React.FC<{
                 <select
                   value={overrideType || ''}
                   onChange={(e) => setOverrideType((e.target.value as TrainingType) || undefined)}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+                  className="form-input-sm"
                 >
                   <option value="">No change</option>
                   {Object.entries(TRAINING_TYPE_LABELS).map(([val, label]) => (
@@ -511,7 +511,7 @@ const EditRecordPanel: React.FC<{
             type="text"
             value={fields.course_name}
             onChange={(e) => setFields({ ...fields, course_name: e.target.value })}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+            className="form-input-sm"
           />
         </div>
         <div>
@@ -519,7 +519,7 @@ const EditRecordPanel: React.FC<{
           <select
             value={fields.training_type}
             onChange={(e) => setFields({ ...fields, training_type: e.target.value as TrainingType })}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+            className="form-input-sm"
           >
             {Object.entries(TRAINING_TYPE_LABELS).map(([val, label]) => (
               <option key={val} value={val}>
@@ -534,7 +534,7 @@ const EditRecordPanel: React.FC<{
             type="number"
             value={fields.hours_completed}
             onChange={(e) => setFields({ ...fields, hours_completed: parseFloat(e.target.value) || 0 })}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+            className="form-input-sm"
             min={0}
             step={0.5}
           />
@@ -545,7 +545,7 @@ const EditRecordPanel: React.FC<{
             type="date"
             value={fields.completion_date}
             onChange={(e) => setFields({ ...fields, completion_date: e.target.value })}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+            className="form-input-sm"
           />
         </div>
         <div>
@@ -554,7 +554,7 @@ const EditRecordPanel: React.FC<{
             type="text"
             value={fields.certification_number}
             onChange={(e) => setFields({ ...fields, certification_number: e.target.value })}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+            className="form-input-sm"
             placeholder="Optional"
           />
         </div>
@@ -564,7 +564,7 @@ const EditRecordPanel: React.FC<{
             type="text"
             value={fields.issuing_agency}
             onChange={(e) => setFields({ ...fields, issuing_agency: e.target.value })}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+            className="form-input-sm"
             placeholder="Optional"
           />
         </div>
@@ -574,7 +574,7 @@ const EditRecordPanel: React.FC<{
             type="date"
             value={fields.expiration_date}
             onChange={(e) => setFields({ ...fields, expiration_date: e.target.value })}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+            className="form-input-sm"
           />
         </div>
         <div>
@@ -583,7 +583,7 @@ const EditRecordPanel: React.FC<{
             type="text"
             value={fields.instructor}
             onChange={(e) => setFields({ ...fields, instructor: e.target.value })}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-2 py-1.5 text-sm"
+            className="form-input-sm"
             placeholder="Optional"
           />
         </div>
@@ -843,7 +843,7 @@ const ConfigEditor: React.FC<{
                   value={autoApproveHours ?? ''}
                   onChange={(e) => setAutoApproveHours(e.target.value ? parseFloat(e.target.value) : undefined)}
                   placeholder="Disabled"
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-3 py-1.5 text-sm"
+                  className="form-input-sm"
                   min={0}
                   step={0.5}
                 />
@@ -855,7 +855,7 @@ const ConfigEditor: React.FC<{
                   type="number"
                   value={deadlineDays}
                   onChange={(e) => setDeadlineDays(parseInt(e.target.value) || 14)}
-                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-sm border px-3 py-1.5 text-sm"
+                  className="form-input-sm"
                   min={1}
                   max={90}
                 />
@@ -900,7 +900,7 @@ const ConfigEditor: React.FC<{
             value={maxHours ?? ''}
             onChange={(e) => setMaxHours(e.target.value ? parseFloat(e.target.value) : undefined)}
             placeholder="No limit"
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-48 rounded-sm border px-3 py-1.5 text-sm"
+            className="form-input-sm w-48"
             min={0.5}
             step={0.5}
           />
@@ -951,7 +951,7 @@ const ConfigEditor: React.FC<{
                   type="checkbox"
                   checked={fc.required}
                   onChange={(e) => updateField(name, 'required', e.target.checked)}
-                  className="border-theme-input-border bg-theme-input-bg focus:ring-theme-focus-ring h-3.5 w-3.5 rounded-sm text-blue-600"
+                  className="form-checkbox"
                   disabled={!fc.visible}
                 />
                 <span className="text-theme-text-muted text-xs">Required</span>
@@ -1118,11 +1118,7 @@ const ReviewSubmissionsPage: React.FC = () => {
         {activeView === 'all' && (
           <div className="mb-4 flex items-center space-x-2">
             <Filter className="text-theme-text-muted h-4 w-4" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
-            >
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input-sm">
               <option value="">All statuses</option>
               <option value={SubmissionStatus.PENDING_REVIEW}>Pending Review</option>
               <option value={SubmissionStatus.APPROVED}>Approved</option>

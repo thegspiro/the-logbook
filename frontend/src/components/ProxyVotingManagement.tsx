@@ -187,7 +187,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
                 type="text"
                 value={formData.delegating_user_id}
                 onChange={(e) => setFormData((prev) => ({ ...prev, delegating_user_id: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
                 placeholder="User ID of the absent member"
               />
             </div>
@@ -199,7 +199,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
                 type="text"
                 value={formData.proxy_user_id}
                 onChange={(e) => setFormData((prev) => ({ ...prev, proxy_user_id: e.target.value }))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
                 placeholder="User ID of the proxy voter"
               />
             </div>
@@ -213,7 +213,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
                     proxy_type: e.target.value as 'single_election' | 'regular',
                   }))
                 }
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
               >
                 <option value="single_election">Single Election</option>
                 <option value="regular">Regular (Ongoing)</option>
@@ -225,7 +225,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ el
                 value={formData.reason}
                 onChange={(e) => setFormData((prev) => ({ ...prev, reason: e.target.value }))}
                 rows={2}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
+                className="form-input mt-1 shadow-xs"
                 placeholder="Reason for proxy authorization (e.g., medical leave, out of town)"
               />
             </div>

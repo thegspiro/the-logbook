@@ -342,7 +342,7 @@ export const ElectionsSettingsPage: React.FC = () => {
                 id="paper_ballot_attestations_required"
                 value={settings.paper_ballot_attestations_required ?? 2}
                 onChange={(e) => updateField('paper_ballot_attestations_required', parseInt(e.target.value, 10))}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md border px-2 py-1 text-sm"
+                className="form-input-sm"
               >
                 <option value={0}>None — counts immediately</option>
                 <option value={1}>1 attestation</option>

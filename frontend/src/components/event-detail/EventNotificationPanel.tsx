@@ -74,7 +74,7 @@ export const EventNotificationPanel: React.FC<EventNotificationPanelProps> = ({
             id="notification-type"
             value={notificationType}
             onChange={(e) => onNotificationTypeChange(e.target.value as NotificationType)}
-            className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring block w-full rounded-md shadow-xs sm:text-sm"
+            className="form-input shadow-xs sm:text-sm"
           >
             <option value="announcement">Announcement</option>
             <option value="reminder">Pre-Event Reminder</option>
@@ -115,7 +115,7 @@ export const EventNotificationPanel: React.FC<EventNotificationPanelProps> = ({
             maxLength={2000}
             value={notificationMessage}
             onChange={(e) => onNotificationMessageChange(e.target.value)}
-            className="bg-theme-input-bg text-theme-text-primary border-theme-input-border focus:ring-theme-focus-ring focus:border-theme-focus-ring block w-full rounded-md shadow-xs sm:text-sm"
+            className="form-input shadow-xs sm:text-sm"
             placeholder="Add a custom message to include with the notification..."
           />
         </div>

@@ -510,6 +510,38 @@
   @apply toggle-knob h-5 w-5;
 }
 
+@utility toggle-track {
+  /* The switch body that toggle-knob rides in. Call sites supply only the
+     on/off background colour. Hand-assembled copies of this had drifted into
+     four different class strings — some with the disabled treatment, some
+     without, some without the focus ring the rest of the app's controls carry.
+     (Keyboard focus is themed globally by *:focus-visible; the focus classes
+     here match how btn-* and form-input state it explicitly.) */
+  @apply focus:ring-theme-focus-ring relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility toggle-track-sm {
+  /* Pairs with toggle-knob-sm: knob translates x-1 (off) to x-6 (on). */
+  @apply toggle-track;
+}
+
+@utility toggle-track-md {
+  /* Pairs with toggle-knob-md: the transparent border insets the larger knob,
+     which translates x-0 (off) to x-5 (on). */
+  @apply toggle-track border-2 border-transparent;
+}
+
+/* --- Settings Navigation --- */
+@utility settings-nav-item {
+  /* Section button in the settings sidebar / mobile tab strip. Shared by every
+     settings screen through SettingsLayout. */
+  @apply focus:ring-theme-focus-ring text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary transition-colors focus:ring-2 focus:outline-hidden;
+}
+
+@utility settings-nav-item-active {
+  @apply bg-theme-accent-blue-muted text-theme-accent-blue;
+}
+
 /* --- QR Code Container --- */
 @utility qr-container {
   /* QR codes require a white background for scanner contrast, regardless of theme */

@@ -65,7 +65,7 @@ const CloneElectionModal: React.FC<CloneElectionModalProps> = ({ sourceTitle, cl
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring mt-1 mb-4 block w-full rounded-md border px-3 py-2 focus:outline-hidden"
+            className="form-input mt-1 mb-4"
           />
 
           <div className="grid grid-cols-2 gap-3">
@@ -78,7 +78,7 @@ const CloneElectionModal: React.FC<CloneElectionModalProps> = ({ sourceTitle, cl
                 type="datetime-local"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 focus:outline-hidden"
+                className="form-input mt-1"
               />
             </div>
             <div>
@@ -90,7 +90,7 @@ const CloneElectionModal: React.FC<CloneElectionModalProps> = ({ sourceTitle, cl
                 type="datetime-local"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 focus:outline-hidden"
+                className="form-input mt-1"
               />
             </div>
           </div>

@@ -517,7 +517,7 @@ export const WaiverManagementPage: React.FC = () => {
                   <select
                     value={formData.user_id}
                     onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
-                    className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                     required
                   >
                     <option value="">Select a member...</option>
@@ -535,7 +535,7 @@ export const WaiverManagementPage: React.FC = () => {
                   <select
                     value={formData.waiver_type}
                     onChange={(e) => setFormData({ ...formData, waiver_type: e.target.value })}
-                    className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                   >
                     {WAIVER_TYPES.map((t) => (
                       <option key={t.value} value={t.value}>
@@ -592,7 +592,7 @@ export const WaiverManagementPage: React.FC = () => {
                         type="date"
                         value={formData.start_date}
                         onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                        className="form-input"
                         required
                       />
                     </div>
@@ -603,7 +603,7 @@ export const WaiverManagementPage: React.FC = () => {
                           type="date"
                           value={formData.end_date}
                           onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                          className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                          className="form-input"
                           required
                         />
                       </div>
@@ -633,7 +633,7 @@ export const WaiverManagementPage: React.FC = () => {
                     value={formData.reason}
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     rows={3}
-                    className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input"
                     placeholder="Reason for the waiver..."
                   />
                 </div>

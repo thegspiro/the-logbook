@@ -38,7 +38,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           value={pipeline.default_assignee_id || ''}
           onChange={(e) => onUpdateDefaultAssignee(e.target.value || null)}
           disabled={saving}
-          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full max-w-md rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+          className="form-input max-w-md"
         >
           <option value="">No default (manually assign)</option>
           {members.map((m) => (
@@ -65,7 +65,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           type="button"
           onClick={onTogglePublicVisibility}
           disabled={saving}
-          className={`focus:ring-theme-focus-ring relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`focus:ring-theme-focus-ring toggle-track-md ${
             pipeline.public_progress_visible ? 'bg-green-500' : 'bg-theme-surface-hover'
           }`}
           role="switch"
@@ -95,7 +95,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
                 onUpdateLeadTime(val);
               }
             }}
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-20 rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+            className="form-input w-20"
           />
           <span className="text-theme-text-muted text-sm">
             days ({Math.floor(pipeline.min_lead_time_days / 7)} weeks)

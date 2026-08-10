@@ -98,7 +98,7 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
               <select
                 value={slot.position}
                 onChange={(e) => handleChangeName(i, e.target.value)}
-                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+                className="form-input-sm flex-1"
               >
                 {availablePositions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -156,11 +156,7 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
         {positions.map((pos, i) => (
           <div key={i} className="flex items-center gap-2">
             <span className="text-theme-text-muted w-5 text-right text-xs">{i + 1}.</span>
-            <select
-              value={pos}
-              onChange={(e) => handleChange(i, e.target.value)}
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
-            >
+            <select value={pos} onChange={(e) => handleChange(i, e.target.value)} className="form-input-sm flex-1">
               {availablePositions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}

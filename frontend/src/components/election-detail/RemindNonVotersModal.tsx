@@ -70,7 +70,7 @@ const RemindNonVotersModal: React.FC<RemindNonVotersModalProps> = ({
               rows={3}
               placeholder="This is a reminder to cast your vote. The voting window will be closing soon."
               aria-label="Reminder message"
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
+              className="form-input mt-1 shadow-xs"
             />
           </div>
 

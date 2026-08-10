@@ -141,7 +141,7 @@ export const PlatoonRosterPanel: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search members…"
-            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted w-full rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden"
+            className="form-input pr-3 pl-9"
           />
         </div>
         <button

@@ -351,7 +351,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   };
 
   return (
-    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+    <div className="card-secondary p-5">
       <div className="mb-1 flex items-center gap-2">
         <Bell className="h-4 w-4 text-violet-500" />
         <h3 className="text-theme-text-primary text-base font-semibold">Scheduling Notifications</h3>
@@ -396,7 +396,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                     void handleToggle(preset);
                   }}
                   disabled={isCreating}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                  className={`toggle-track-sm ${
                     enabled ? 'bg-violet-600' : 'bg-theme-surface-border'
                   } ${isCreating ? 'opacity-50' : ''}`}
                 >
@@ -504,7 +504,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           }
                         }}
                         placeholder="email@example.com"
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                       />
                       <button
                         onClick={declineCc.add}
@@ -600,7 +600,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           }
                         }}
                         placeholder="email@example.com"
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                       />
                       <button
                         onClick={assignCc.add}
@@ -681,7 +681,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                         lookahead_hours: Number(e.target.value),
                       });
                     }}
-                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-green-500 focus:outline-hidden"
+                    className="form-input-sm"
                   >
                     <option value={1}>1 hour</option>
                     <option value={2}>2 hours</option>
@@ -724,7 +724,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           }
                         }}
                         placeholder="email@example.com"
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-green-500 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                       />
                       <button
                         onClick={reminderCc.add}
@@ -865,7 +865,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           }
                         }}
                         placeholder="email@example.com"
-                        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-2 py-1 text-sm focus:ring-1 focus:ring-red-500 focus:outline-hidden"
+                        className="form-input-sm flex-1"
                       />
                       <button
                         onClick={equipCc.add}

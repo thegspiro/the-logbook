@@ -137,7 +137,7 @@ function useAsyncSave(): [(fn: () => Promise<void>, successMsg: string, errorMsg
   return [run, isSaving];
 }
 
-const checkboxClass = 'w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500';
+const checkboxClass = 'form-checkbox';
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export const ShiftReportsSettingsPanel: React.FC = () => {
@@ -581,7 +581,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                         }
                       }}
                       disabled={saving}
-                      className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-20 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
+                      className="form-input-sm w-20 rounded-lg"
                     />
                   </div>
                 </>
@@ -897,7 +897,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                       );
                     }}
                     disabled={savingTraining}
-                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
+                    className="form-input-sm rounded-lg"
                   >
                     <option value="training_officer">Training Officer</option>
                     <option value="captain">Captain</option>
@@ -969,7 +969,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     'Failed to update'
                   );
                 }}
-                className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-64 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
+                className="form-input-sm w-64 rounded-lg"
               />
             </div>
 
@@ -994,7 +994,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                               [key]: e.target.value,
                             }))
                           }
-                          className="border-theme-surface-border bg-theme-surface text-theme-text-primary flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
+                          className="form-input-sm flex-1 rounded-lg"
                           placeholder={`Level ${key} label`}
                         />
                         <button
@@ -1226,7 +1226,7 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
           }
         }}
         placeholder={placeholder}
-        className="border-theme-surface-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-none"
+        className="form-input-sm flex-1 rounded-lg"
       />
       <button
         type="button"

@@ -159,7 +159,7 @@ function LocationSetupWizard({
 
   const inputCls =
     'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
+  const labelCls = 'form-label';
 
   /* ── Step navigation ── */
   const totalSteps = 4;
@@ -1188,7 +1188,7 @@ export default function LocationsPage() {
 
   const inputCls =
     'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
+  const labelCls = 'form-label';
 
   const isSingleStation = stationMode === 'single_station';
 

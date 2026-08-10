@@ -663,7 +663,7 @@ const StepRequirements: React.FC<{
                           type="checkbox"
                           checked={req.is_required}
                           onChange={(e) => onUpdateRequirement(phase.key, req.id, 'is_required', e.target.checked)}
-                          className="bg-theme-input-bg border-theme-input-border h-3 w-3 rounded-sm text-red-500"
+                          className="form-checkbox"
                         />
                         <span>Required to complete the phase</span>
                       </label>
@@ -737,7 +737,7 @@ const StepRequirements: React.FC<{
                           type="checkbox"
                           checked={req.is_required}
                           onChange={(e) => onUpdateRequirement(phase.key, req.id, 'is_required', e.target.checked)}
-                          className="bg-theme-input-bg border-theme-input-border h-3 w-3 rounded-sm text-red-500"
+                          className="form-checkbox"
                         />
                         <span>Required to complete the phase</span>
                       </label>
@@ -762,7 +762,7 @@ const StepRequirements: React.FC<{
                               onChange={(e) =>
                                 onUpdateRequirement(phase.key, req.id, 'allows_external_credit', e.target.checked)
                               }
-                              className="bg-theme-input-bg border-theme-input-border mt-0.5 h-3 w-3 rounded-sm text-red-500"
+                              className="form-checkbox mt-0.5"
                             />
                             <span>Accept external / imported training credit</span>
                           </label>

@@ -861,7 +861,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               value={editingNotesValue}
               onChange={(e) => setEditingNotesValue(e.target.value)}
               placeholder="Assignment notes..."
-              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-sm border px-2 py-1 text-xs focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
+              className="form-input-sm flex-1 text-xs"
               autoFocus
               aria-label="Assignment notes"
               onKeyDown={(e) => {
