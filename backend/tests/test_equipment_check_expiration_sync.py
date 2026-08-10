@@ -14,7 +14,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.apparatus import CheckTemplateItem, TemplateChangeLog
+from app.models.apparatus import (
+    CheckItemDeployedLot,
+    CheckTemplateItem,
+    TemplateChangeLog,
+)
 from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_service import InventoryService
 
@@ -453,6 +457,119 @@ class TestSwapItemLot:
             for call in mock_db.add.call_args_list
             if isinstance(call.args[0], TemplateChangeLog)
         ]
+
+
+def _deployed(lot_id, quantity, expiration, lot_number=None):
+    return CheckItemDeployedLot(
+        id=lot_id,
+        organization_id="org-1",
+        template_item_id="ti-1",
+        lot_number=lot_number or lot_id.upper(),
+        expiration_date=expiration,
+        quantity=quantity,
+    )
+
+
+class TestDeployedLots:
+    """A four-slot bracket can hold units from several lots with several dates.
+    The count is their sum and the exposure is the earliest of them."""
+
+    def test_count_is_the_sum_of_what_is_aboard(self, service):
+        item = _template_item(expected_quantity=4, quantity_on_truck=99)
+        item.deployed_lots = [
+            _deployed("lot-a", 1, NEXT_YEAR),
+            _deployed("lot-b", 2, TOMORROW),
+        ]
+        # The lots outrank the scalar: they are actual units with actual dates.
+        assert service._on_truck(item) == 3
+        assert service._is_short(item) is True
+
+    def test_exposure_is_the_soonest_date_aboard(self, service):
+        item = _template_item(expiration_date=NEXT_YEAR)
+        item.deployed_lots = [
+            _deployed("lot-a", 1, NEXT_YEAR),
+            _deployed("lot-b", 1, TOMORROW),
+        ]
+        # Not the newest unit's date — the truck is exposed by its oldest.
+        assert service._soonest_expiration(item) == TOMORROW
+
+    def test_undated_lots_sort_last(self, service):
+        item = _template_item()
+        item.deployed_lots = [
+            _deployed("lot-a", 1, None),
+            _deployed("lot-b", 1, TOMORROW),
+        ]
+        assert [lot.id for lot in service._deployed_lots(item)] == ["lot-b", "lot-a"]
+        assert service._soonest_expiration(item) == TOMORROW
+
+    def test_empty_lots_are_not_aboard(self, service):
+        item = _template_item(expected_quantity=4)
+        item.deployed_lots = [
+            _deployed("lot-a", 0, TOMORROW),
+            _deployed("lot-b", 2, NEXT_YEAR),
+        ]
+        assert service._on_truck(item) == 2
+        # A lot counted to nothing must not keep dragging its date along.
+        assert service._soonest_expiration(item) == NEXT_YEAR
+
+    def test_an_item_with_no_lots_keeps_its_own_reading(self, service):
+        item = _template_item(expected_quantity=4, quantity_on_truck=3)
+        item.deployed_lots = []
+        assert service._on_truck(item) == 3
+        assert service._soonest_expiration(item) == YESTERDAY
+
+    def test_consumption_draws_from_the_soonest_first(self, service):
+        item = _template_item(expected_quantity=4)
+        soon = _deployed("lot-a", 2, TOMORROW)
+        later = _deployed("lot-b", 2, NEXT_YEAR)
+        item.deployed_lots = [later, soon]
+
+        drawn = service._consume_deployed(item, 3)
+
+        assert drawn == 3
+        assert soon.quantity == 0
+        assert later.quantity == 1
+
+    def test_units_already_aboard_get_a_row_before_the_first_lot_joins(self, service):
+        # Without this the lot sum becomes the authority the moment any lot
+        # exists, and the three units nobody had recorded a lot for vanish.
+        item = _template_item(
+            expected_quantity=4, quantity_on_truck=3, lot_number="OLD-1"
+        )
+        item.deployed_lots = []
+
+        service._materialize_untracked_units(item, "org-1")
+
+        assert len(item.deployed_lots) == 1
+        assert item.deployed_lots[0].quantity == 3
+        assert item.deployed_lots[0].lot_number == "OLD-1"
+        assert item.deployed_lots[0].expiration_date == YESTERDAY
+
+    def test_materializing_is_a_no_op_once_lots_exist(self, service):
+        item = _template_item(expected_quantity=4, quantity_on_truck=3)
+        item.deployed_lots = [_deployed("lot-a", 2, TOMORROW)]
+
+        service._materialize_untracked_units(item, "org-1")
+
+        assert len(item.deployed_lots) == 1
+
+    def test_an_empty_bracket_gets_no_phantom_row(self, service):
+        item = _template_item(expected_quantity=4, quantity_on_truck=0)
+        item.deployed_lots = []
+
+        service._materialize_untracked_units(item, "org-1")
+
+        assert item.deployed_lots == []
+
+    def test_consuming_more_than_is_aboard_takes_what_there_is(self, service):
+        item = _template_item(expected_quantity=4)
+        lot = _deployed("lot-a", 1, TOMORROW)
+        item.deployed_lots = [lot]
+
+        drawn = service._consume_deployed(item, 5)
+
+        # A correction to the record, not a negative quantity.
+        assert (drawn, lot.quantity) == (1, 0)
 
 
 class TestUnitLabels:

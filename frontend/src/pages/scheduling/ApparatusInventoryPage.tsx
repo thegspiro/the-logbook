@@ -18,13 +18,25 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
-import { AlertTriangle, Clock, Loader2, PackageCheck, PackageX, Repeat, Truck, Undo2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronRight,
+  Clock,
+  Loader2,
+  PackageCheck,
+  PackageX,
+  Repeat,
+  Truck,
+  Undo2,
+  X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import { apparatusService } from '../../modules/apparatus/services/api';
 import type {
   ApparatusInventory,
   ApparatusInventoryItem,
+  ItemDeployedLots,
   ReadyLot,
 } from '../../modules/scheduling/types/equipmentCheck';
 import type { ApparatusListItem } from '../../modules/apparatus/types';
@@ -45,6 +57,9 @@ const ApparatusInventoryPage: React.FC = () => {
   const [usedTarget, setUsedTarget] = useState<ApparatusInventoryItem | null>(null);
   const [swapTarget, setSwapTarget] = useState<ApparatusInventoryItem | null>(null);
   const [swapQuantity, setSwapQuantity] = useState(1);
+  // The lots aboard for one position, opened from its "N lots" row.
+  const [lotsTarget, setLotsTarget] = useState<ItemDeployedLots | null>(null);
+  const [lotsBusy, setLotsBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -121,6 +136,38 @@ const ApparatusInventoryPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to update the count'));
     } finally {
       setBusyItemId(null);
+    }
+  };
+
+  const openLots = async (item: ApparatusInventoryItem) => {
+    setLotsBusy(true);
+    try {
+      setLotsTarget(await schedulingService.getItemDeployedLots(item.templateItemId));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load the lots on this truck'));
+    } finally {
+      setLotsBusy(false);
+    }
+  };
+
+  /**
+   * Correct one lot's count, or take it off the truck at zero.
+   *
+   * Removal matters as much as the count: a lot counted to nothing would
+   * otherwise keep its expiration in the position's soonest-date reading and
+   * flag a truck for stock it no longer carries.
+   */
+  const setLotQuantity = async (lotId: string, quantity: number) => {
+    if (!lotsTarget) return;
+    setLotsBusy(true);
+    try {
+      const updated = await schedulingService.setDeployedLotQuantity(lotsTarget.templateItemId, lotId, quantity);
+      setLotsTarget(updated);
+      await load(selectedId);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update the lot'));
+    } finally {
+      setLotsBusy(false);
     }
   };
 
@@ -214,7 +261,18 @@ const ApparatusInventoryPage: React.FC = () => {
 
           <div className="flex shrink-0 items-center gap-2">
             {busy && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />}
-            {item.targetQuantity != null && (
+            {item.deployedLots.length > 0 ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void openLots(item)}
+                className="text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target flex items-center gap-1 text-xs font-medium disabled:opacity-50"
+              >
+                {item.deployedLots.length} lot{item.deployedLots.length === 1 ? '' : 's'}
+                <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            ) : null}
+            {item.targetQuantity != null && item.deployedLots.length === 0 && (
               <div className="border-theme-surface-border flex items-center gap-1 rounded-lg border px-1">
                 <button
                   type="button"
@@ -384,6 +442,93 @@ const ApparatusInventoryPage: React.FC = () => {
           if (target) void reportUsed(target, note);
         }}
       />
+
+      {lotsTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+          <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
+            <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
+              <div className="min-w-0">
+                <h3 className="text-theme-text-primary truncate text-sm font-semibold">{lotsTarget.itemName}</h3>
+                <p className="text-theme-text-muted truncate text-xs">
+                  {lotsTarget.quantityOnTruck ?? 0}
+                  {lotsTarget.targetQuantity != null ? `/${lotsTarget.targetQuantity}` : ''}
+                  {lotsTarget.unitOfMeasure ? ` ${lotsTarget.unitOfMeasure}` : ''} aboard
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLotsTarget(null)}
+                className="text-theme-text-muted hover:text-theme-text-primary p-1.5"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-2 overflow-auto px-4 py-3">
+              <p className="text-theme-text-muted text-xs">
+                Soonest to expire first — the order to draw from, and the order a reported use comes off.
+              </p>
+              {lotsTarget.lots.map((lot) => (
+                <div
+                  key={lot.id}
+                  className={`flex items-center justify-between gap-3 rounded-lg border p-3 ${
+                    lot.isExpired ? 'border-red-500/40 bg-red-500/5' : 'border-theme-surface-border'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="text-theme-text-primary truncate text-sm font-medium">
+                      {lot.lotNumber || 'No lot #'}
+                    </p>
+                    <p
+                      className={`text-xs ${
+                        lot.isExpired ? 'font-medium text-red-600 dark:text-red-400' : 'text-theme-text-muted'
+                      }`}
+                    >
+                      {lot.expirationDate
+                        ? `${lot.isExpired ? 'Expired' : 'Exp'} ${formatDate(lot.expirationDate, tz)}`
+                        : 'No expiration'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={lotsBusy}
+                      onClick={() => void setLotQuantity(lot.id, lot.quantity - 1)}
+                      className="btn-icon disabled:opacity-40"
+                      aria-label={`Remove one of lot ${lot.lotNumber || 'with no number'}`}
+                    >
+                      &minus;
+                    </button>
+                    <span className="text-theme-text-primary w-6 text-center text-sm font-semibold tabular-nums">
+                      {lot.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={lotsBusy}
+                      onClick={() => void setLotQuantity(lot.id, lot.quantity + 1)}
+                      className="btn-icon disabled:opacity-40"
+                      aria-label={`Add one of lot ${lot.lotNumber || 'with no number'}`}
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      disabled={lotsBusy}
+                      onClick={() => void setLotQuantity(lot.id, 0)}
+                      className="mobile-touch-target ml-1 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {lotsTarget.lots.length === 0 && (
+                <p className="text-theme-text-muted py-8 text-center text-sm">Nothing recorded aboard for this item.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {swapTarget && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">

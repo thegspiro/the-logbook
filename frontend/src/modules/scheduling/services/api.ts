@@ -66,6 +66,7 @@ import type {
   TemplateChangeLogResponse,
   SupplyOverview,
   ApparatusInventory,
+  ItemDeployedLots,
   ItemDeployment,
   ItemRestockState,
   LotSwapResult,
@@ -790,6 +791,21 @@ export const schedulingService = {
       note: note?.trim() || undefined,
       quantity_used: quantityUsed || undefined,
     });
+    return response.data;
+  },
+  async getItemDeployedLots(templateItemId: string): Promise<ItemDeployedLots> {
+    const response = await api.get<ItemDeployedLots>(`/equipment-checks/items/${templateItemId}/deployed-lots`);
+    return response.data;
+  },
+  async setDeployedLotQuantity(
+    templateItemId: string,
+    deployedLotId: string,
+    quantity: number
+  ): Promise<ItemDeployedLots> {
+    const response = await api.put<ItemDeployedLots>(
+      `/equipment-checks/items/${templateItemId}/deployed-lots/${deployedLotId}`,
+      { quantity }
+    );
     return response.data;
   },
   async setItemQuantity(templateItemId: string, quantity: number): Promise<ItemRestockState> {

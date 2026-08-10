@@ -499,6 +499,31 @@ export interface SupplyOverview {
  * Read outside any check: the standing view a crew opens mid-shift to record
  * what they used and to put fresh stock in a bracket.
  */
+/**
+ * One lot physically aboard for a checklist position.
+ *
+ * A four-slot bracket can hold units from three lots with three dates; the
+ * position's exposure is the earliest of them, which is why these are listed
+ * rather than collapsed into one number and one date.
+ */
+export interface DeployedLot {
+  id: string;
+  lotNumber?: string;
+  expirationDate?: string;
+  quantity: number;
+  isExpired: boolean;
+}
+
+export interface ItemDeployedLots {
+  templateItemId: string;
+  itemName: string;
+  targetQuantity?: number;
+  quantityOnTruck?: number;
+  isShort: boolean;
+  unitOfMeasure?: string;
+  lots: DeployedLot[];
+}
+
 export interface ApparatusInventoryItem {
   templateItemId: string;
   itemName: string;
@@ -509,6 +534,7 @@ export interface ApparatusInventoryItem {
   quantityOnTruck?: number;
   isShort: boolean;
   unitOfMeasure?: string;
+  deployedLots: DeployedLot[];
   serialNumber?: string;
   lotNumber?: string;
   expirationDate?: string;

@@ -2184,6 +2184,15 @@ class CheckTemplateItem(Base):
 
     # Relationships
     compartment = relationship("CheckTemplateCompartment", back_populates="items")
+    # lazy="selectin" rather than a per-query option: this collection is read
+    # by the count, the expiry and every screen that shows either, and a missed
+    # eager-load in an async session is a MissingGreenlet at runtime rather
+    # than a slow query. One extra select per item fetch is the cheaper risk.
+    deployed_lots = relationship(
+        "CheckItemDeployedLot",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     __table_args__ = (
         Index("idx_check_item_compartment", "compartment_id"),
@@ -2235,3 +2244,70 @@ class TemplateChangeLog(Base):
         Index("idx_tmpl_changelog_template", "template_id"),
         Index("idx_tmpl_changelog_created", "created_at"),
     )
+
+
+class CheckItemDeployedLot(Base):
+    """A lot physically on the apparatus for one checklist position.
+
+    A position that carries four of something can be carrying four units from
+    three different lots with three different expiration dates. The single
+    ``lot_number`` / ``expiration_date`` pair on ``CheckTemplateItem`` can only
+    describe one of them, so the truck's real exposure — the *soonest* date
+    aboard — was unrepresentable, and restocking a partial shortfall silently
+    overwrote the date of the units already there.
+
+    Each row is one lot's presence on one position. The position's on-truck
+    count is the sum of these, and the date that matters is the earliest.
+
+    Lot number and expiration are snapshotted rather than read through
+    ``inventory_lot_id``: shelf lots get consumed and deleted, and what is on
+    the truck must remain answerable after the shelf record is gone.
+    """
+
+    __tablename__ = "check_item_deployed_lots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    template_item_id = Column(
+        String(36),
+        ForeignKey("check_template_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # The shelf lot it was drawn from, kept for provenance. Nullable because a
+    # depleted lot may be deleted while its units are still on a truck.
+    inventory_lot_id = Column(
+        String(36),
+        ForeignKey("inventory_lots.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    lot_number = Column(String(100), nullable=True)
+    expiration_date = Column(Date, nullable=True)
+    quantity = Column(Integer, default=0, nullable=False, server_default="0")
+
+    deployed_at = Column(DateTime(timezone=True), server_default=func.now())
+    deployed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        # Serves both the per-item drill-in and the first-expiring-first-out
+        # consumption order.
+        Index("idx_deployed_lot_item_exp", "template_item_id", "expiration_date"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<CheckItemDeployedLot(item={self.template_item_id}, "
+            f"lot={self.lot_number}, qty={self.quantity})>"
+        )

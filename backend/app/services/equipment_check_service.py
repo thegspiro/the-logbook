@@ -16,6 +16,7 @@ from app.core.utils import generate_uuid
 from app.models.apparatus import (
     Apparatus,
     ApparatusEquipment,
+    CheckItemDeployedLot,
     CheckTemplateCompartment,
     CheckTemplateItem,
     EquipmentCheckTemplate,
@@ -1544,7 +1545,7 @@ class EquipmentCheckService:
 
         items: List[Dict[str, Any]] = []
         for item, comp, tmpl in rows:
-            exp = item.expiration_date
+            exp = self._soonest_expiration(item)
             lots = lots_by_item.get(item.inventory_item_id or "", [])
             items.append(
                 {
@@ -1676,7 +1677,7 @@ class EquipmentCheckService:
                 by_compartment[compartment.id] = entry
                 compartments.append(entry)
 
-            exp = item.expiration_date if item.has_expiration else None
+            exp = self._soonest_expiration(item)
             lots = lots_by_item.get(item.inventory_item_id or "", [])
             in_date = [
                 lot
@@ -1692,6 +1693,7 @@ class EquipmentCheckService:
                     "quantity_on_truck": self._on_truck(item),
                     "is_short": self._is_short(item),
                     "unit_of_measure": getattr(item, "unit_of_measure", None),
+                    "deployed_lots": self._deployed_lot_payload(item),
                     "serial_number": item.serial_number,
                     "lot_number": item.lot_number,
                     "expiration_date": exp,
@@ -1736,14 +1738,48 @@ class EquipmentCheckService:
         """
         return item.required_quantity or item.expected_quantity
 
+    @staticmethod
+    def _deployed_lots(item: CheckTemplateItem) -> List[CheckItemDeployedLot]:
+        """Lots aboard for this position, soonest to expire first.
+
+        Sorting is first-expiring-first-out, which is both the order a crew
+        should draw from and the order consumption is applied in. Lots with no
+        date sort last: an undated unit is never the one that needs using up.
+        """
+        lots = getattr(item, "deployed_lots", None) or []
+        return sorted(
+            [lot for lot in lots if lot.quantity > 0],
+            key=lambda lot: (lot.expiration_date is None, lot.expiration_date),
+        )
+
+    @classmethod
+    def _soonest_expiration(cls, item: CheckTemplateItem):
+        """The earliest date aboard — the one that actually puts a truck out.
+
+        Falls back to the item's own column for a position with no deployed
+        lots recorded, which is every position a department has not yet
+        restocked through the lot flow.
+        """
+        for lot in cls._deployed_lots(item):
+            if lot.expiration_date:
+                return lot.expiration_date
+        return item.expiration_date if item.has_expiration else None
+
     @classmethod
     def _on_truck(cls, item: CheckTemplateItem) -> Optional[int]:
         """The live count, falling back to what the item was stocked with.
 
-        A NULL ``quantity_on_truck`` means nobody has counted since the item was
-        defined, not that the bracket is empty; the template's target is the
-        best available answer until a crew contradicts it.
+        Deployed lots outrank the scalar where they exist: they are a count of
+        actual units with actual dates, and keeping the scalar as the authority
+        would let the two disagree.
+
+        A NULL ``quantity_on_truck`` with no lots means nobody has counted since
+        the item was defined, not that the bracket is empty; the template's
+        target is the best available answer until a crew contradicts it.
         """
+        lots = cls._deployed_lots(item)
+        if lots:
+            return sum(lot.quantity for lot in lots)
         if item.quantity_on_truck is not None:
             return item.quantity_on_truck
         return cls._target_quantity(item)
@@ -1756,6 +1792,53 @@ class EquipmentCheckService:
         if target is None or on_truck is None:
             return False
         return on_truck < target
+
+    @classmethod
+    def _materialize_untracked_units(
+        cls, item: CheckTemplateItem, organization_id: str
+    ) -> None:
+        """Give the units already aboard a row before the first lot joins them.
+
+        A position counted as 3 with no lot rows, restocked with 1 fresh unit,
+        would otherwise read as 1 aboard — the lot sum becomes the authority
+        the moment any lot exists, and the three units nobody had recorded a lot
+        for would vanish. They are recorded with the item's existing lot number
+        and date, which is all that was ever known about them.
+        """
+        if cls._deployed_lots(item):
+            return
+        existing_count = cls._on_truck(item)
+        if not existing_count or existing_count < 1:
+            return
+        item.deployed_lots.append(
+            CheckItemDeployedLot(
+                id=generate_uuid(),
+                organization_id=organization_id,
+                template_item_id=item.id,
+                lot_number=item.lot_number,
+                expiration_date=(item.expiration_date if item.has_expiration else None),
+                quantity=existing_count,
+            )
+        )
+
+    @classmethod
+    def _consume_deployed(cls, item: CheckTemplateItem, quantity: int) -> int:
+        """Draw units off the deployed lots, soonest to expire first.
+
+        First-expiring-first-out is the order a crew should be pulling from
+        anyway, and it is the only order that keeps a truck's remaining stock
+        as fresh as possible. Returns how many were actually drawn, which is
+        less than asked when the record held fewer than the crew used — that
+        is a correction to the record, not a negative quantity.
+        """
+        remaining = quantity
+        for lot in cls._deployed_lots(item):
+            if remaining <= 0:
+                break
+            take = min(lot.quantity, remaining)
+            lot.quantity -= take
+            remaining -= take
+        return quantity - remaining
 
     @classmethod
     def _sync_restock_after_restocking(cls, item: CheckTemplateItem) -> None:
@@ -1792,8 +1875,15 @@ class EquipmentCheckService:
             return None
 
         before = self._on_truck(item)
-        if quantity_used and self._target_quantity(item) is not None:
-            item.quantity_on_truck = max(0, (before or 0) - quantity_used)
+        if quantity_used:
+            if self._deployed_lots(item):
+                self._consume_deployed(item, quantity_used)
+                # Where lots exist their sum is the authority; the scalar is a
+                # cached mirror of it.
+                if self._target_quantity(item) is not None:
+                    item.quantity_on_truck = self._on_truck(item)
+            elif self._target_quantity(item) is not None:
+                item.quantity_on_truck = max(0, (before or 0) - quantity_used)
 
         item.restock_needed = True
         item.restock_reported_at = datetime.now(timezone.utc)
@@ -1814,6 +1904,93 @@ class EquipmentCheckService:
         )
         await self.db.commit()
         return self._restock_state(item)
+
+    def _deployed_lot_payload(self, item: CheckTemplateItem) -> List[Dict[str, Any]]:
+        """Each lot aboard, in the order a crew should draw from it."""
+        return [
+            {
+                "id": lot.id,
+                "lot_number": lot.lot_number,
+                "expiration_date": lot.expiration_date,
+                "quantity": lot.quantity,
+                "is_expired": bool(
+                    lot.expiration_date and lot.expiration_date < date.today()
+                ),
+            }
+            for lot in self._deployed_lots(item)
+        ]
+
+    async def get_item_deployed_lots(
+        self, template_item_id: str, organization_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """The lots aboard for one position, with the position's totals."""
+        item, _ = await self._get_item_with_template(template_item_id, organization_id)
+        if item is None:
+            return None
+        return {
+            "template_item_id": item.id,
+            "item_name": item.name,
+            "target_quantity": self._target_quantity(item),
+            "quantity_on_truck": self._on_truck(item),
+            "is_short": self._is_short(item),
+            "unit_of_measure": getattr(item, "unit_of_measure", None),
+            "lots": self._deployed_lot_payload(item),
+        }
+
+    async def set_deployed_lot_quantity(
+        self,
+        template_item_id: str,
+        deployed_lot_id: str,
+        organization_id: str,
+        user: User,
+        quantity: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Correct how many of one lot are aboard, or remove it at zero.
+
+        A lot counted down to nothing is not a lot the truck carries, and
+        leaving an empty row behind would keep its expiration in the position's
+        soonest-date calculation forever.
+        """
+        if quantity < 0:
+            raise ValueError("Quantity cannot be negative")
+
+        item, template_id = await self._get_item_with_template(
+            template_item_id, organization_id
+        )
+        if item is None:
+            return None
+
+        target = next(
+            (lot for lot in (item.deployed_lots or []) if lot.id == deployed_lot_id),
+            None,
+        )
+        if target is None:
+            return None
+
+        previous = target.quantity
+        if quantity == 0:
+            item.deployed_lots.remove(target)
+        else:
+            target.quantity = quantity
+
+        if self._target_quantity(item) is not None:
+            item.quantity_on_truck = self._on_truck(item)
+        self._sync_restock_after_restocking(item)
+
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            item,
+            user,
+            action="counted",
+            changes={
+                "lot_number": target.lot_number,
+                "from": previous,
+                "to": quantity,
+            },
+        )
+        await self.db.commit()
+        return await self.get_item_deployed_lots(template_item_id, organization_id)
 
     async def set_item_quantity(
         self,
@@ -2000,7 +2177,7 @@ class EquipmentCheckService:
 
         deployments: List[Dict[str, Any]] = []
         for item, compartment_name, tmpl in rows:
-            exp = item.expiration_date if item.has_expiration else None
+            exp = self._soonest_expiration(item)
             deployments.append(
                 {
                     "template_item_id": item.id,
@@ -2080,6 +2257,7 @@ class EquipmentCheckService:
             # put expired supplies in service; refuse rather than record it.
             raise ValueError("This stock lot has expired and cannot be deployed")
 
+        lot_id_value = str(lot.id)
         previous = {
             "lot_number": item.lot_number,
             "expiration_date": (
@@ -2096,12 +2274,37 @@ class EquipmentCheckService:
         if lot.expiration_date is not None:
             item.has_expiration = True
             item.expiration_date = lot.expiration_date
-        # Stock is going into the bracket, so raise the count by what was put
-        # there before deciding whether the shortfall is settled. A partial
-        # restock keeps the report standing — the truck is still short.
+        # Record the units as their own presence on the truck rather than
+        # overwriting the position's single lot/date. Restocking two of a
+        # four-slot bracket used to stamp the new date onto the two already
+        # there, hiding the older units behind a later expiration.
         was_restock = bool(item.restock_needed)
+        self._materialize_untracked_units(item, organization_id)
+        existing = next(
+            (
+                lot
+                for lot in (item.deployed_lots or [])
+                if lot.inventory_lot_id == lot_id_value
+            ),
+            None,
+        )
+        if existing is not None:
+            existing.quantity += quantity
+        else:
+            item.deployed_lots.append(
+                CheckItemDeployedLot(
+                    id=generate_uuid(),
+                    organization_id=organization_id,
+                    template_item_id=item.id,
+                    inventory_lot_id=lot_id_value,
+                    lot_number=lot.lot_number,
+                    expiration_date=lot.expiration_date,
+                    quantity=quantity,
+                    deployed_by=str(user.id) if user is not None else None,
+                )
+            )
         if self._target_quantity(item) is not None:
-            item.quantity_on_truck = (self._on_truck(item) or 0) + quantity
+            item.quantity_on_truck = self._on_truck(item)
         self._sync_restock_after_restocking(item)
 
         # A swap rewrites the same safety-critical template row that every

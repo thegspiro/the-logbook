@@ -8,6 +8,8 @@ const mockReportItemUsed = vi.fn();
 const mockClearItemRestock = vi.fn();
 const mockSwapItemLot = vi.fn();
 const mockSetItemQuantity = vi.fn();
+const mockGetItemDeployedLots = vi.fn();
+const mockSetDeployedLotQuantity = vi.fn();
 const mockGetApparatusList = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
@@ -17,6 +19,8 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     clearItemRestock: (...a: unknown[]) => mockClearItemRestock(...a) as unknown,
     swapItemLot: (...a: unknown[]) => mockSwapItemLot(...a) as unknown,
     setItemQuantity: (...a: unknown[]) => mockSetItemQuantity(...a) as unknown,
+    getItemDeployedLots: (...a: unknown[]) => mockGetItemDeployedLots(...a) as unknown,
+    setDeployedLotQuantity: (...a: unknown[]) => mockSetDeployedLotQuantity(...a) as unknown,
   },
 }));
 
@@ -52,6 +56,7 @@ const makeItem = (overrides = {}) => ({
   isShort: false,
   readyStock: 0,
   readyLots: [],
+  deployedLots: [],
   ...overrides,
 });
 
@@ -73,6 +78,26 @@ describe('ApparatusInventoryPage', () => {
     mockClearItemRestock.mockResolvedValue({ templateItemId: 'ti-1', restockNeeded: false });
     mockSwapItemLot.mockResolvedValue({ templateItemId: 'ti-1', remainingQuantity: 4, restockNeeded: false });
     mockSetItemQuantity.mockResolvedValue({ templateItemId: 'ti-1', restockNeeded: false, isShort: false });
+    mockGetItemDeployedLots.mockResolvedValue({
+      templateItemId: 'ti-1',
+      itemName: 'Epinephrine',
+      targetQuantity: 2,
+      quantityOnTruck: 2,
+      isShort: false,
+      unitOfMeasure: 'Each',
+      lots: [
+        { id: 'dl-1', lotNumber: 'LOT-A', expirationDate: '2026-11-30', quantity: 1, isExpired: false },
+        { id: 'dl-2', lotNumber: 'LOT-B', expirationDate: '2027-06-30', quantity: 1, isExpired: false },
+      ],
+    });
+    mockSetDeployedLotQuantity.mockResolvedValue({
+      templateItemId: 'ti-1',
+      itemName: 'Epinephrine',
+      targetQuantity: 2,
+      quantityOnTruck: 1,
+      isShort: true,
+      lots: [{ id: 'dl-2', lotNumber: 'LOT-B', expirationDate: '2027-06-30', quantity: 1, isExpired: false }],
+    });
   });
 
   /** Choose the one apparatus in the fleet, which triggers the inventory load. */
@@ -276,6 +301,101 @@ describe('ApparatusInventoryPage', () => {
     await user.click(screen.getByRole('button', { name: /Swap/ }));
     // Defaulted to the shortfall of 10, but the lot only has 2.
     expect(await screen.findByRole('button', { name: /Swap in/ })).toBeDisabled();
+  });
+
+  it('opens the lots aboard instead of a bare stepper', async () => {
+    mockGetApparatusInventory.mockResolvedValue(
+      inventory([
+        makeItem({
+          itemName: 'Epinephrine',
+          targetQuantity: 2,
+          quantityOnTruck: 2,
+          deployedLots: [
+            { id: 'dl-1', lotNumber: 'LOT-A', expirationDate: '2026-11-30', quantity: 1, isExpired: false },
+            { id: 'dl-2', lotNumber: 'LOT-B', expirationDate: '2027-06-30', quantity: 1, isExpired: false },
+          ],
+        }),
+      ])
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await screen.findByRole('option', { name: /E-1/ });
+    await user.selectOptions(screen.getByLabelText('Apparatus'), 'app-1');
+    await screen.findByText('Epinephrine');
+
+    // Two units with two dates cannot be moved by one +/-, so the position
+    // shows its lots rather than a stepper.
+    expect(screen.queryByRole('button', { name: /Record one/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /2 lots/ }));
+    expect(await screen.findByText('LOT-A')).toBeInTheDocument();
+    expect(screen.getByText('LOT-B')).toBeInTheDocument();
+    expect(mockGetItemDeployedLots).toHaveBeenCalledWith('ti-1');
+  });
+
+  it('takes a lot off the truck entirely', async () => {
+    mockGetApparatusInventory.mockResolvedValue(
+      inventory([
+        makeItem({
+          targetQuantity: 2,
+          deployedLots: [
+            { id: 'dl-1', lotNumber: 'LOT-A', expirationDate: '2026-11-30', quantity: 1, isExpired: true },
+          ],
+        }),
+      ])
+    );
+    // The sheet loads its own payload, so it must match the single expired lot.
+    mockGetItemDeployedLots.mockResolvedValue({
+      templateItemId: 'ti-1',
+      itemName: '4x4 Gauze',
+      targetQuantity: 2,
+      quantityOnTruck: 1,
+      isShort: true,
+      lots: [{ id: 'dl-1', lotNumber: 'LOT-A', expirationDate: '2026-11-30', quantity: 1, isExpired: true }],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    await user.click(screen.getByRole('button', { name: /1 lot/ }));
+    await user.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    // Zero is removal: a lot counted to nothing must stop contributing its
+    // date to the position's soonest-expiry reading.
+    await waitFor(() => {
+      expect(mockSetDeployedLotQuantity).toHaveBeenCalledWith('ti-1', 'dl-1', 0);
+    });
+  });
+
+  it('adjusts one lot without touching the others', async () => {
+    mockGetApparatusInventory.mockResolvedValue(
+      inventory([
+        makeItem({
+          targetQuantity: 2,
+          deployedLots: [
+            { id: 'dl-1', lotNumber: 'LOT-A', expirationDate: '2026-11-30', quantity: 1, isExpired: false },
+          ],
+        }),
+      ])
+    );
+    mockGetItemDeployedLots.mockResolvedValue({
+      templateItemId: 'ti-1',
+      itemName: '4x4 Gauze',
+      targetQuantity: 2,
+      quantityOnTruck: 1,
+      isShort: true,
+      lots: [{ id: 'dl-1', lotNumber: 'LOT-A', expirationDate: '2026-11-30', quantity: 1, isExpired: false }],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ApparatusInventoryPage />);
+    await selectApparatus(user);
+
+    await user.click(screen.getByRole('button', { name: /1 lot/ }));
+    await user.click(await screen.findByRole('button', { name: /Remove one of lot LOT-A/ }));
+
+    await waitFor(() => {
+      expect(mockSetDeployedLotQuantity).toHaveBeenCalledWith('ti-1', 'dl-1', 0);
+    });
   });
 
   it('offers no swap for an item that is not linked to inventory', async () => {

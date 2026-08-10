@@ -33,11 +33,13 @@ from app.schemas.equipment_check import (
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
     ComplianceReportResponse,
+    DeployedLotQuantityRequest,
     EquipmentCheckCompleteItems,
     EquipmentCheckTemplateCreate,
     EquipmentCheckTemplateResponse,
     EquipmentCheckTemplateUpdate,
     FailureLogResponse,
+    ItemDeployedLots,
     ItemDeployment,
     ItemQuantityRequest,
     ItemRestockStateResponse,
@@ -1348,6 +1350,66 @@ async def report_item_used(
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result
+
+
+@router.get(
+    "/items/{template_item_id}/deployed-lots",
+    response_model=ItemDeployedLots,
+)
+async def get_item_deployed_lots(
+    template_item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.view", "equipment_check.submit", "inventory.view"
+        )
+    ),
+):
+    """Which lots are on the truck for this position, and how many of each.
+
+    Listed soonest-to-expire first — the order a crew should draw from, and the
+    order consumption is applied in.
+    """
+    service = EquipmentCheckService(db)
+    result = await service.get_item_deployed_lots(
+        template_item_id=template_item_id,
+        organization_id=str(current_user.organization_id),
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result
+
+
+@router.put(
+    "/items/{template_item_id}/deployed-lots/{deployed_lot_id}",
+    response_model=ItemDeployedLots,
+)
+async def set_deployed_lot_quantity(
+    template_item_id: str,
+    deployed_lot_id: str,
+    data: DeployedLotQuantityRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+        )
+    ),
+):
+    """Correct how many of one lot are aboard. Zero removes it from the truck."""
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.set_deployed_lot_quantity(
+            template_item_id=template_item_id,
+            deployed_lot_id=deployed_lot_id,
+            organization_id=str(current_user.organization_id),
+            user=current_user,
+            quantity=data.quantity,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Deployed lot not found")
     return result
 
 

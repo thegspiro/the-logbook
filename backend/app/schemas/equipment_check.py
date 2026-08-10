@@ -635,6 +635,43 @@ class SupplyOverviewResponse(BaseModel):
     items: List[SupplyExpiringItem] = []
 
 
+class DeployedLot(BaseModel):
+    """One lot physically aboard for a checklist position.
+
+    A four-slot bracket can hold units from three lots with three dates; the
+    position's exposure is the earliest of them, which is why these are listed
+    rather than collapsed into one number and one date.
+    """
+
+    model_config = _camel_config
+
+    id: str
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    quantity: int = 0
+    is_expired: bool = False
+
+
+class ItemDeployedLots(BaseModel):
+    """The lots aboard for one position, with the position's totals."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    item_name: str
+    target_quantity: Optional[int] = None
+    quantity_on_truck: Optional[int] = None
+    is_short: bool = False
+    unit_of_measure: Optional[str] = None
+    lots: List[DeployedLot] = []
+
+
+class DeployedLotQuantityRequest(BaseModel):
+    """Correct how many of one lot are aboard. Zero removes it."""
+
+    quantity: int = Field(..., ge=0)
+
+
 class ApparatusInventoryItem(BaseModel):
     """One tracked position on an apparatus, with the stock behind it."""
 
@@ -651,6 +688,7 @@ class ApparatusInventoryItem(BaseModel):
     quantity_on_truck: Optional[int] = None
     is_short: bool = False
     unit_of_measure: Optional[str] = None
+    deployed_lots: List[DeployedLot] = []
     serial_number: Optional[str] = None
     lot_number: Optional[str] = None
     expiration_date: Optional[date] = None
