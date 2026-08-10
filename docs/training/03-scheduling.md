@@ -1118,17 +1118,35 @@ These edge cases describe system behavior during shift assignment, time-off appr
 
 When filing shift completion reports, officers can now assign a **1-5 numeric score** to each observed skill. This score is separate from the "demonstrated" checkbox and provides a quantitative assessment of the trainee's proficiency.
 
-| Score | Label      | Color             |
-| ----- | ---------- | ----------------- |
-| 1     | Needs work | Violet (muted)    |
-| 2     | Developing | Violet (muted)    |
-| 3     | Competent  | Violet (standard) |
-| 4     | Proficient | Violet (standard) |
-| 5     | Excellent  | Violet (bright)   |
+| Score | Default label | Colour            |
+| ----- | ------------- | ----------------- |
+| 1     | Needs work    | Violet (muted)    |
+| 2     | Developing    | Violet (muted)    |
+| 3     | Competent     | Violet (standard) |
+| 4     | Proficient    | Violet (standard) |
+| 5     | Excellent     | Violet (bright)   |
 
-Scores appear as interactive buttons on the report form (with tooltip labels) and as inline text in read-only views. Scores flow through to `SkillCheckoff` records and the competency score history in the Training module.
+Those are the defaults. A department that has set **Rating Scale Labels** in
+Scheduling > Settings > Shift Reports sees its own wording everywhere the scale
+appears — the screenshots in this guide come from a department ending its scale
+at "Exemplary".
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form's skills section showing 3-4 skills, each with a row of 5 violet score buttons (1-5), the "demonstrated" checkbox, and a comment field. One skill should have score 4 selected (highlighted), another score 2._
+There is no separate "demonstrated" tick: **selecting the skill is** the record
+that it was demonstrated, and the score row appears underneath once you have.
+Clicking a selected score again clears it, so a skill can be marked observed
+without being scored. The buttons themselves are numbered, not labelled — the
+label for the score you picked appears beside the row, and hovering a button
+shows its label as a tooltip.
+
+The skills section is pictured under
+[Score Labels](#score-labels).
+
+**Where the scores go.** They are stored on the report and shown in every
+read-only view of it. They are _intended_ to flow through to `SkillCheckoff`
+records and the competency score history in the Training module, and the code to
+do it is there — but it matches skill names against `SkillEvaluation` records,
+and nothing in the application creates one. See
+[Skill Linkage Status in Settings](#skill-linkage-status-in-settings).
 
 ### Batch Review
 
@@ -1183,7 +1201,14 @@ The review modal now displays the **complete report** so reviewers have full con
 - Trainee comments (if acknowledged)
 - Requirements progressed (if enrollment linked)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the review modal showing the full report content in the top section (hours, rating, narrative, skills with scores) and the review controls (Approve/Flag buttons, reviewer notes textarea) in the bottom section._
+Beneath the report are the **Redact Fields** tick-boxes — clear any field before
+approving and the trainee never sees it — a **Reviewer Comment** box labelled as
+visible to the filing officer and not to the trainee, and the three actions:
+**Cancel**, **Flag for Revision** and **Approve**. Flagging requires a comment;
+approving does not. The modal is taller than a screen, so the report content
+scrolls above the controls rather than sitting beside them.
+
+![The review modal scrolled to its foot — the redaction choices, the reviewer comment box, and Flag for Revision and Approve](./images/03-65-review-modal-full.png)
 
 ### Skill Linkage Status in Settings
 
@@ -1617,41 +1642,67 @@ The shift report creation flow has been completely redesigned. Instead of creati
 
 ### How It Works
 
-1. Navigate to **Shift Reports** and click **New Report**
-2. **Select a shift** from the dropdown — the system loads all crew members assigned to that shift
-3. Fill in **shared data** once: hours on shift, calls responded, and call types. These values apply to all crew members
-4. For each **trainee** on the crew, expand their evaluation panel to add:
-   - Performance rating (1-5)
-   - Skills observed with individual 1-5 scores
-   - Tasks performed
+1. Go to **Shift Reports** and click **New**
+2. **Pick a shift.** The picker is a scrollable list of cards for the last fortnight, each naming the rig, the date, and how many members, calls and hours it carried — not a dropdown. Choosing one loads the crew and fills the shared fields from the shift itself
+3. Check the **shared data**: hours on shift, calls responded and call types come from the shift and apply to everybody on it. Hours is the one required field. There is also an **Overall Shift Narrative** for observations about the shift rather than about a person
+4. Each **trainee** on the crew has an **Evaluate** control that opens their panel:
+   - Individual remarks
+   - Performance rating, on the department's labelled scale
    - Areas of strength and areas for improvement
-   - Officer narrative
-5. **Non-trainees** (members without active training program enrollments) appear in the crew list but only receive hours/calls credit — no evaluation section is shown for them
-6. Click **Submit All** to create reports for all crew members in a single batch
+   - Skills observed, each with a 1-5 score
+   - Tasks performed
+5. **Non-trainees** (members with no active training-programme enrolment) appear in the crew list with a remarks box and nothing else — they receive hours and calls credit, and no evaluation
+6. Untick anybody who was not actually on the shift; the button counts what is left. **Submit Reports (N)** files them all, or **Save as Draft** keeps them in the Drafts view
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the batch report creation form showing: (1) the shift selector dropdown at top with a selected shift, (2) the shared data section with hours, calls, and call type fields, (3) the crew list below with two trainees expanded showing evaluation fields and one non-trainee showing only hours/calls credit._
+![The batch shift-report form — shared hours and calls, the whole crew, and one trainee's evaluation open](./images/03-63-batch-report-form.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the submission confirmation showing "Created 5 reports, skipped 1" result after a batch submission._
+Submitting reports a count in a toast: how many were created. Crew who already
+have a report for that shift are skipped rather than duplicated, and the skipped
+count comes back from the API — though the toast shows only the number created.
 
 ### Task Defaults Pre-Population
 
-When the selected shift is linked to an apparatus type (e.g., Engine, Ladder, Ambulance), the **Add Task** dialog pre-populates from the apparatus-type task mapping configured in **Scheduling > Settings > Shift Reports**. After selecting a task, the defaults remain visible for reference.
+There is no Add Task dialog. **+ Add**, at the right of the Tasks Performed
+heading, appends a task row with its name already filled in from the
+apparatus-type task mapping configured in **Scheduling > Settings > Shift
+Reports** — the first entry for that rig class that is not already on the
+report. Add a second and you get the next one down. The name is an ordinary text
+field, so overwriting it is how you record something the mapping does not list;
+nothing is offered as a separate "custom" option.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Add Task dialog showing pre-populated tasks from the engine apparatus type mapping (e.g., "Pump test", "Hose load inventory") with an "Add Custom" option at the bottom._
+The same mapping drives the **Skills Observed** list: a ladder crew is asked
+about aerial placement and forcible entry, a medic crew about patient assessment
+and airway management. Where a rig class has no mapping the department-wide
+defaults are used instead.
+
+The pre-filled row is visible at the foot of the evaluation panel in the
+screenshot above — "Aerial inspection", the first task in this department's
+ladder mapping.
+
+> **This did not work before 2026-08-10.** The form keys both lists on the
+> shift's apparatus type, which the API computed but the shift response schema
+> did not carry, so the value reached the browser as undefined on every shift in
+> every department. Both lists silently fell back to the department-wide
+> defaults and **+ Add** appended a blank row. Configuring the mappings had no
+> visible effect. Pull latest.
 
 ### Score Labels
 
-The 1-5 skill score buttons now display descriptive label text inline next to each button:
+Selecting a skill reveals a **Score:** row of five numbered buttons beneath it.
+The buttons are numbered rather than labelled — the label for the score you pick
+appears beside the row, and hovering a button shows its label as a tooltip. The
+wording is the department's own if it has set Rating Scale Labels, and the
+defaults otherwise:
 
-| Score | Label      |
-| ----- | ---------- |
-| 1     | Needs work |
-| 2     | Developing |
-| 3     | Competent  |
-| 4     | Proficient |
-| 5     | Excellent  |
+| Score | Default label |
+| ----- | ------------- |
+| 1     | Needs work    |
+| 2     | Developing    |
+| 3     | Competent     |
+| 4     | Proficient    |
+| 5     | Excellent     |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the skills section in the evaluation panel showing three skills with 1-5 score buttons, each button labeled with its descriptive text (e.g., "3 — Competent" highlighted for "Pump Operations")._
+![Skills Observed — three skills scored 1-5, each showing the department's label for the score chosen](./images/03-64-skill-score-buttons.png)
 
 ### Review Workflow Improvements
 

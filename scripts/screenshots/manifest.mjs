@@ -634,7 +634,129 @@ function openReportView(name) {
   };
 }
 
+/**
+ * Open the New Shift Completion Report form on a past ladder shift, fill the
+ * shared data, and open the one trainee's evaluation panel with three skills
+ * scored and a task added.
+ *
+ * A ladder rather than an engine because its apparatus-type mapping is the one
+ * whose skills (aerial placement, ground ladder throw) could not be mistaken
+ * for the department-wide defaults — which is the whole point of the mapping.
+ */
+async function openBatchReportForm(page) {
+  await page
+    .getByRole("button", { name: /New/ })
+    .first()
+    .click({ timeout: 20_000 });
+  await page.waitForTimeout(2500);
+  // The shift picker is a list of cards, not a select — the first ladder shift
+  // in it is the one whose crew carries a trainee.
+  await page
+    .getByText(/Ladder 4 — \d{4}-\d{2}-\d{2}/)
+    .first()
+    .click({ timeout: 20_000 });
+  await page.waitForTimeout(3000);
+  await page
+    .getByRole("button", { name: /^Evaluate$/ })
+    .first()
+    .click({ timeout: 20_000 });
+  await page.waitForTimeout(2000);
+  // Three skills at three different scores, so the row reads as a scale rather
+  // than as a single highlighted button.
+  const scored = [
+    ["Aerial placement", "4"],
+    ["Forcible entry", "2"],
+    ["Ventilation", "3"],
+  ];
+  for (const [skill] of scored) {
+    await page
+      .getByRole("button", { name: new RegExp(`^${skill}$`) })
+      .first()
+      .click({ timeout: 15_000 });
+    await page.waitForTimeout(400);
+  }
+  for (const [skill, score] of scored) {
+    const row = page
+      .locator("div")
+      .filter({ has: page.getByRole("button", { name: `\u2713 ${skill}` }) })
+      .last();
+    await row.getByRole("button", { name: score, exact: true }).first().click();
+    await page.waitForTimeout(300);
+  }
+  // One task, to show the row the "+ Add" control appends pre-filled from the
+  // apparatus-type mapping.
+  await page
+    .getByRole("button", { name: /^Add$/ })
+    .first()
+    .click({ timeout: 15_000 });
+  await page.waitForTimeout(1200);
+}
+
 export const SHOTS = [
+  {
+    id: "03-63-batch-report-form",
+    doc: "03-scheduling.md",
+    line: 1632,
+    anchor: "Screenshot of the batch report creation form",
+    alt: "The batch shift-report form — shared hours and calls, the whole crew, and one trainee's evaluation open",
+    route: "/scheduling?tab=shift-reports",
+    prepare: openBatchReportForm,
+    fullPage: true,
+  },
+  {
+    id: "03-64-skill-score-buttons",
+    doc: "03-scheduling.md",
+    line: 1705,
+    anchor: "Screenshot of the skills section in the evaluation panel",
+    alt: "Skills Observed — three skills scored 1-5, each showing the department's label for the score chosen",
+    route: "/scheduling?tab=shift-reports",
+    prepare: openBatchReportForm,
+    // Clipped to the block: the score rows are small, and a full-page frame of
+    // the form renders them at a size the caption cannot rescue.
+    selector: "div:has(> label:text-is('Skills Observed'))",
+  },
+  {
+    id: "03-65-review-modal-full",
+    doc: "03-scheduling.md",
+    line: 1211,
+    anchor: "Screenshot of the review modal scrolled to its foot",
+    alt: "The review modal scrolled to its foot — the redaction choices, the reviewer comment box, and Flag for Revision and Approve",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Review Queue/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2500);
+      // The Review Report button is inside the opened card, not on the
+      // collapsed one — the card header is the disclosure control.
+      await page
+        .locator("div.rounded-xl > button")
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(1200);
+      await page
+        .getByRole("button", { name: /^Review Report$/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(1800);
+      // The dialog is taller than the viewport and scrolls in its own
+      // container, so neither a viewport shot nor an element clip reaches the
+      // reviewer-notes field or the Approve / Flag buttons. Scroll the dialog
+      // itself to its end: the controls are what this shot is for, and the
+      // report content above them is already pictured on the flagged card.
+      await page.evaluate(() => {
+        const dialog = document.querySelector("div.fixed.inset-0");
+        if (!dialog) return;
+        const scroller = [...dialog.querySelectorAll("*")].find(
+          (el) => el.scrollHeight > el.clientHeight + 40,
+        );
+        if (scroller) scroller.scrollTop = scroller.scrollHeight;
+      });
+      await page.waitForTimeout(700);
+    },
+    selector: "div.fixed.inset-0 > div",
+  },
   {
     id: "03-57-shift-assignment-controls",
     doc: "03-scheduling.md",

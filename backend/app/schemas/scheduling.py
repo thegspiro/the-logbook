@@ -97,6 +97,13 @@ class ShiftResponse(UTCResponseBase):
     apparatus_id: Optional[str] = None
     apparatus_name: Optional[str] = None
     apparatus_unit_number: Optional[str] = None
+    # `_enrich_shift_dict` has always computed this — resolved across both
+    # apparatus tables, lowercased — but the schema did not project it, so it
+    # was dropped on serialization and every shift reached the client with no
+    # type. The report form keys its per-apparatus skill and task defaults on
+    # it, so those mappings could never apply to any shift in any department:
+    # "+ Add" appended a blank task row on an engine and a ladder alike.
+    apparatus_type: Optional[str] = None
     platoon: Optional[str] = None
     positions: Optional[List[Any]] = None
     apparatus_positions: Optional[List[Any]] = None

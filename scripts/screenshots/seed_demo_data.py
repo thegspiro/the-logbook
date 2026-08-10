@@ -483,6 +483,105 @@ APPARATUS_SPECS = {
     },
 }
 
+# The department's own shift-report vocabulary. All of it was NULL, which is
+# indistinguishable from a configured department at a glance — the report form
+# falls back to the frontend's built-in samples — right up to the point where
+# something reads the *per-apparatus* mappings. The "+ Add" control under Tasks
+# Performed pre-fills a task name from `apparatus_type_tasks`; unset, it appends
+# a blank row on every rig.
+#
+# The rating labels are the department's, not the code's: a five-point scale
+# ending in "Exemplary" rather than "Excellent", which is the point of the
+# setting existing at all.
+RATING_SCALE_LABELS = {
+    "1": "Unsatisfactory",
+    "2": "Developing",
+    "3": "Competent",
+    "4": "Proficient",
+    "5": "Exemplary",
+}
+
+SHIFT_REVIEW_CALL_TYPES = [
+    "Structure Fire",
+    "Vehicle Fire",
+    "Brush/Wildland",
+    "EMS/Medical",
+    "Motor Vehicle Accident",
+    "Hazmat",
+    "Rescue/Extrication",
+    "Alarm Investigation",
+    "Public Assist",
+    "Mutual Aid",
+]
+
+SHIFT_REVIEW_SKILLS = [
+    "SCBA donning/doffing",
+    "Hose deployment",
+    "Ladder operations",
+    "Search and rescue",
+    "Ventilation",
+    "Pump operations",
+    "Patient assessment",
+    "Radio communications",
+    "Scene size-up",
+    "Apparatus check-off",
+]
+
+SHIFT_REVIEW_TASKS = [
+    "Apparatus check",
+    "Station duties",
+    "Hose testing",
+    "Equipment inventory",
+    "Public education",
+]
+
+# Per rig class, so an engine crew is not asked about aerial placement and a
+# medic crew is not asked about pump pressures.
+APPARATUS_TYPE_SKILLS = {
+    "engine": [
+        "Pump operations",
+        "Hose deployment",
+        "Hydrant connection",
+        "Nozzle technique",
+        "SCBA donning/doffing",
+    ],
+    "ladder": [
+        "Aerial placement",
+        "Ground ladder throw",
+        "Ventilation",
+        "Search and rescue",
+        "Forcible entry",
+    ],
+    "ambulance": [
+        "Patient assessment",
+        "Vitals monitoring",
+        "CPR/AED",
+        "Stretcher operations",
+        "Radio communications",
+    ],
+}
+
+APPARATUS_TYPE_TASKS = {
+    "engine": [
+        "Pump test",
+        "Hose load inventory",
+        "Hydrant survey",
+        "Foam level check",
+    ],
+    "ladder": [
+        "Aerial inspection",
+        "Ground ladder inventory",
+        "Saw and fan service",
+        "Rope and rigging check",
+    ],
+    "ambulance": [
+        "Narcotics count",
+        "Oxygen level check",
+        "Cot and stair-chair service",
+        "Airway kit inventory",
+    ],
+}
+
 FACILITIES = [
     ("Station 1 - Headquarters", "410 Grand Avenue", 1962, 24000, 4),
     ("Station 2 - Westside", "1820 Prairie Road", 1988, 11500, 2),
@@ -3491,6 +3590,20 @@ class Seeder:
                 # them, so the demo department is one that has turned member
                 # self-export on.
                 "allow_member_report_export": True,
+                # The department's own shift-report vocabulary. Every one of
+                # these was NULL, so the report form ran entirely on the
+                # frontend's built-in samples — which look identical to a
+                # configured department until you notice that the per-apparatus
+                # mappings are what the "+ Add" task pre-fill reads. With
+                # `apparatus_type_tasks` unset it appends a blank row on every
+                # rig, and the guide's whole "Task Defaults Pre-Population"
+                # section describes something that cannot happen.
+                "rating_scale_labels": RATING_SCALE_LABELS,
+                "shift_review_call_types": SHIFT_REVIEW_CALL_TYPES,
+                "shift_review_default_skills": SHIFT_REVIEW_SKILLS,
+                "shift_review_default_tasks": SHIFT_REVIEW_TASKS,
+                "apparatus_type_skills": APPARATUS_TYPE_SKILLS,
+                "apparatus_type_tasks": APPARATUS_TYPE_TASKS,
             },
         )
 
