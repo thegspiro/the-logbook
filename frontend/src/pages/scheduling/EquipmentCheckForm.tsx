@@ -1103,6 +1103,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
         const getQtyColor = () => {
           if (!hasBeenSet || isCarriedOver) return 'text-theme-text-muted';
+          // Expired outranks the count. Two of two expired units meet the
+          // number and are still nothing the crew can use, so this must not
+          // read as the healthy state.
+          if (isExpired) return 'text-red-600 dark:text-red-400 font-bold';
           if (isCritical) return 'text-red-600 dark:text-red-400 font-bold';
           if (!isAtPar) return 'text-orange-500 dark:text-orange-400 font-medium';
           return 'text-green-600 dark:text-green-400 font-medium';
@@ -1562,7 +1566,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               the serial/lot update panel. Without this, an expired item of any
               other type could never record its replacement and would fail
               every check until an admin edited the template. */}
-          {item.checkType !== 'date_lot' && item.hasExpiration && (
+          {item.checkType !== 'date_lot' && item.hasExpiration && (item.lotsAboard?.length ?? 0) === 0 && (
             <button
               type="button"
               onClick={() => toggleSerialUpdate(item.id)}
@@ -1574,23 +1578,26 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             </button>
           )}
         </div>
-        {item.checkType !== 'date_lot' && item.hasExpiration && expandedSerialUpdate.has(item.id) && (
-          <div className="space-y-1 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
-            <label
-              htmlFor={`replaced-expiration-${item.id}`}
-              className="block text-xs text-blue-700 dark:text-blue-400"
-            >
-              Expiration on the replacement — the template will be updated to match.
-            </label>
-            <input
-              id={`replaced-expiration-${item.id}`}
-              type="date"
-              className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none sm:w-56"
-              value={result?.expirationFound ?? ''}
-              onChange={(e) => updateResult(item.id, { expirationFound: e.target.value })}
-            />
-          </div>
-        )}
+        {item.checkType !== 'date_lot' &&
+          item.hasExpiration &&
+          (item.lotsAboard?.length ?? 0) === 0 &&
+          expandedSerialUpdate.has(item.id) && (
+            <div className="space-y-1 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+              <label
+                htmlFor={`replaced-expiration-${item.id}`}
+                className="block text-xs text-blue-700 dark:text-blue-400"
+              >
+                Expiration on the replacement — the template will be updated to match.
+              </label>
+              <input
+                id={`replaced-expiration-${item.id}`}
+                type="date"
+                className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none sm:w-56"
+                value={result?.expirationFound ?? ''}
+                onChange={(e) => updateResult(item.id, { expirationFound: e.target.value })}
+              />
+            </div>
+          )}
         {(item.lotsAboard?.length ?? 0) > 0 && (
           <div className="border-theme-surface-border space-y-2 rounded-lg border p-3">
             <p className="text-theme-text-secondary text-xs font-medium">
@@ -1915,7 +1922,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       {/* Lot swap modal — pick a ready replacement to put on the apparatus */}
       {swapTarget && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
           <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
@@ -1931,7 +1938,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-2 overflow-auto px-4 py-3">
+            <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
               {swapLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />

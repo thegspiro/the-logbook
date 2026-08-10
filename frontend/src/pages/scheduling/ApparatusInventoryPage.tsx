@@ -46,6 +46,9 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { formatDate, formatDateTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 
+/** The list endpoint's ceiling; asking for more is rejected outright. */
+const FLEET_PAGE_SIZE = 100;
+
 const ApparatusInventoryPage: React.FC = () => {
   const tz = useTimezone();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -65,8 +68,16 @@ const ApparatusInventoryPage: React.FC = () => {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await apparatusService.getApparatusList({ pageSize: 200 });
-        setFleet(res.items);
+        // The endpoint caps page_size at 100 and 422s above it, so a fleet
+        // larger than one page has to be walked rather than asked for at once
+        // — asking for 200 returned nothing at all and left the picker empty.
+        const first = await apparatusService.getApparatusList({ pageSize: FLEET_PAGE_SIZE });
+        const all = [...first.items];
+        for (let page = 2; page <= first.totalPages; page += 1) {
+          const next = await apparatusService.getApparatusList({ pageSize: FLEET_PAGE_SIZE, page });
+          all.push(...next.items);
+        }
+        setFleet(all);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load apparatus'));
       }
@@ -100,7 +111,10 @@ const ApparatusInventoryPage: React.FC = () => {
 
   const items = useMemo(() => inventory?.compartments.flatMap((c) => c.items) ?? [], [inventory]);
   const needingRestock = items.filter((i) => i.restockNeeded || i.isShort).length;
-  const expiring = items.filter((i) => i.isExpired || (i.daysUntilExpiration ?? 999) <= 30).length;
+  // Expired and expiring are counted apart. Lumping them reads as "two items
+  // want attention some time soon" when one of them is unusable right now.
+  const expired = items.filter((i) => i.isExpired).length;
+  const expiring = items.filter((i) => !i.isExpired && (i.daysUntilExpiration ?? 999) <= 30).length;
 
   const reportUsed = async (item: ApparatusInventoryItem, note: string) => {
     setBusyItemId(item.templateItemId);
@@ -399,6 +413,11 @@ const ApparatusInventoryPage: React.FC = () => {
             <span className="flex items-center gap-1.5">
               <PackageCheck className="h-4 w-4" /> {items.length} tracked
             </span>
+            {expired > 0 && (
+              <span className="flex items-center gap-1.5 font-medium text-red-600 dark:text-red-400">
+                <AlertTriangle className="h-4 w-4" /> {expired} expired
+              </span>
+            )}
             {needingRestock > 0 && (
               <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400">
                 <PackageX className="h-4 w-4" /> {needingRestock} need restock
@@ -450,7 +469,7 @@ const ApparatusInventoryPage: React.FC = () => {
       />
 
       {lotsTarget && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
           <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
@@ -470,7 +489,7 @@ const ApparatusInventoryPage: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-2 overflow-auto px-4 py-3">
+            <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
               <LotsAboardPanel
                 lots={lotsTarget.lots}
                 busy={lotsBusy}
@@ -484,7 +503,7 @@ const ApparatusInventoryPage: React.FC = () => {
       )}
 
       {swapTarget && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
           <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
@@ -500,7 +519,7 @@ const ApparatusInventoryPage: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-2 overflow-auto px-4 py-3">
+            <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
               {swapTarget.targetQuantity != null && swapTarget.readyLots.length > 0 && (
                 <div className="flex items-center justify-between gap-3 pb-1">
                   <label htmlFor="swap-quantity" className="text-theme-text-secondary text-xs">

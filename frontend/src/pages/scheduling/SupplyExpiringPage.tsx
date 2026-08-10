@@ -243,7 +243,7 @@ const SupplyExpiringPage: React.FC = () => {
                           <AlertTriangle className="h-3 w-3" /> Expired
                         </span>
                       )}
-                      {!item.isExpired && days != null && (
+                      {!item.isExpired && days != null && days <= daysAhead && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
                           <Clock className="h-3 w-3" />
                           {days}d left
