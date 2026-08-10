@@ -143,6 +143,35 @@ to a training officer if you need help catching up."]**
 > training, ask about an upcoming session, or reach out to an officer. The
 > earlier you flag it, the easier it is to fix."
 
+**[SCREEN: An enrollment showing the Expired status.]**
+
+> "And if the date does pass, your enrollment goes to **Expired** — and you'll be
+> told, as will your training officers. That's not the end of it: an officer can
+> **reopen** it, usually with a new deadline. Everything you'd already finished
+> is still there. Nothing you did gets thrown away." _(added 2026-08-09)_
+
+### CHECKLIST STEPS YOU CAN ACTUALLY READ (added 2026-08-09)
+
+**[SCREEN: A checklist requirement on the member's progress page, expanded to
+show the individual steps with their ticked state and the "+2 more steps your
+officer records" line.]**
+
+> "One more thing on this page. If you've got a **checklist** requirement — a
+> station orientation, say — you can now read the actual steps and see which ones
+> are signed off. It used to be a title and nothing else, so you had to ask what
+> was on it."
+
+> "They're signed off one at a time too, so working through six of eight steps
+> shows as six of eight instead of sitting at zero until the last one."
+
+**[CALLOUT: "+2 more steps your officer records"]**
+
+> "If you see a line like that at the bottom — that's steps your officer handles
+> on their side. References, background checks, that sort of thing. They still
+> count toward the total, which is why the number of steps you can see might not
+> add up to the total shown. That's deliberate: it stops a requirement reading a
+> hundred percent while something's genuinely still outstanding."
+
 **[TRANSITION: Advancing and leaving]**
 
 ---

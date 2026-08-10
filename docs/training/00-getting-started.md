@@ -77,6 +77,33 @@ The Logbook uses a sidebar navigation layout. The main areas of the screen are:
 
 ![Dashboard showing the sidebar navigation, main content, and header](./images/00-04-dashboard-overview.png)
 
+### Confirmations look like the app, not like the browser _(2026-08-09)_
+
+When The Logbook asks you to confirm something — deleting a record, discarding
+unsaved changes, ending a session — it now uses its **own dialog**, styled like
+the rest of the app, rather than the grey browser box that used to appear at the
+top of the screen.
+
+Two practical differences:
+
+- **The buttons say what they do.** "Keep it" and "Delete", "Stay here" and
+  "Discard changes", "Leave it running" and "End session" — rather than OK and
+  Cancel, where which one was which depended on reading the question carefully.
+- **The message has room to tell you the consequence.** Deactivating an
+  administrative-hours category leaves already-logged hours alone; force-ending a
+  session moves the entry to pending review rather than throwing it away; leaving
+  a checklist keeps your draft. The dialogs say so now.
+
+> **If you had "prevent this page from creating further dialogs" ticked, unstick
+> it.** Some browsers offer that checkbox on repeated pop-ups, and until this
+> change ticking it made confirmations **silently do nothing** — the app could not
+> tell a suppressed dialog from you pressing Cancel. That failure mode is gone,
+> but the browser setting may still be remembered from before.
+
+> **[SCREENSHOT NEEDED]:** _An in-app confirmation dialog over a dimmed page,
+> showing the question, the consequence sentence beneath it, and the two named
+> buttons ("Keep it" and "Delete") rather than OK/Cancel._
+
 ---
 
 ## Navigation Sidebar

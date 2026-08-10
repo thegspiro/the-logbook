@@ -8,6 +8,7 @@ The Events module manages department events with QR code check-in, recurring eve
 
 - **Event Creation** — Create one-time or recurring events with location, time, and attendance tracking
 - **QR Code Check-In** — Generate unique QR codes for event check-in; members scan to register attendance
+- **Guest Check-In** — *(2026-08-09)* Opt-in **second** QR code on the room display that a **non-member** can scan to sign themselves in, with no account and no login. Built for outreach — volunteer interest nights, open houses. Optionally opens a prospective-member record for each guest who leaves an email. See [Guest Check-In](#guest-check-in-2026-08-09) below
 - **Recurring Events** — Daily, weekly, monthly, monthly-by-weekday (e.g., "2nd Tuesday"), and annual recurrence patterns with end dates and series management
 - **Event Templates** — Save and reuse event configurations
 - **RSVP Management** — Going/Maybe/Not Going with RSVP overrides for admins
@@ -52,6 +53,83 @@ POST   /api/v1/events/{id}/attendees         # Add attendee
 POST   /api/v1/events/{id}/duplicate         # Duplicate event
 GET    /api/v1/events/{id}/qr-code           # Get QR code
 ```
+
+---
+
+## Guest Check-In _(2026-08-09)_
+
+A room display used to show **one** QR code, pointing at `/events/{id}/check-in`
+— a member route behind authentication. A visitor at a volunteer interest night
+who scanned it was bounced to the login page, so their attendance was recorded by
+hand or not at all.
+
+An event can now opt in to a **second, guest-specific** QR code. The two stay
+separate rather than one code serving both: the member flow is untouched,
+including **check-out**, which is meaningless for a walk-in.
+
+### Turning it on
+
+Both switches are on **Edit Event → Check-In Settings**, and both default to off.
+
+| Setting                                     | Field                             | Effect                                                                            |
+| ------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------- |
+| Allow guest check-in                        | `allow_guest_check_in`            | Shows the guest QR code on the room display and opens the public sign-in page      |
+| Create a prospective member from each guest | `guest_check_in_creates_prospect` | Also opens a pipeline record for each guest who supplies an email                  |
+
+> **Off by default is deliberate.** Turning the first one on exposes an
+> **unauthenticated write path**. It belongs on outreach events and should stay
+> off for business meetings and training sessions, whose attendance drives
+> records that only apply to members.
+
+### What the guest sees
+
+`/display/:code/events/:eventId/guest` — a public sign-in form, outside the app
+shell. It asks for first and last name (required) and, optionally, email, phone,
+the organization they are with, and why they came. Nothing more: a walk-in should
+be asked for the minimum needed to follow up, not for a membership application.
+The real application form is what the follow-up email links to.
+
+The page is addressed through the **room's display code** so the backend can
+resolve the department without a session, and it uses bare `fetch` rather than
+the shared axios instance — that instance's 401 interceptor would redirect the
+very visitors the page exists for.
+
+### What gets written
+
+| Record                    | When                                                                     |
+| ------------------------- | ------------------------------------------------------------------------- |
+| `event_external_attendees` | Always. `source = 'kiosk_qr'`, distinguishing a self-recorded sign-in from one a staff member typed in |
+| `prospective_members`      | Only when the event opts in **and** the guest supplied an email            |
+| `prospect_event_links`     | Links that prospect to the event, `referral_source = "Attended: {title}"`  |
+
+`event_external_attendees.prospect_id` ties the two together with
+`ON DELETE SET NULL`, so purging a prospect never destroys the record of who was
+in the room — that is the event's history, not the prospect's.
+
+### How it is protected
+
+- The department is resolved from the **display code**, never from the request,
+  and the event must actually be held in that room.
+- **Per-IP rate limiting** and a **per-event daily ceiling**
+  (`GUEST_CHECK_IN_DAILY_LIMIT`, default 300; `0` disables it). Per-IP limiting
+  alone cannot stop a distributed flood, and each sign-in can create a pipeline
+  record — a far more expensive side effect than a page view.
+- A **honeypot field** that a real browser leaves empty. A populated honeypot is
+  answered with a plausible success and nothing is written, so a bot gets no
+  signal to adapt to.
+
+### Edge cases
+
+| Situation | Behavior |
+|---|---|
+| Guest arrives before the check-in window opens | Refused. Guests get the organizer's window **minus the early-arrival grace** members get — a member checking in early is identifiable and correctable, an anonymous early write is neither |
+| Guest taps the QR code twice | Matched on email where one was given, on name where it was not; returns `already_checked_in` rather than a second row |
+| Two guests with the same name and no email | They collapse into one row. The weaker fallback is deliberate — a duplicate on every double-tap is the far more common problem at a kiosk |
+| Staff pre-registered the guest | The sign-in fills blanks only; anything staff deliberately typed is kept |
+| Guest is already in the pipeline | The existing active prospect is linked to the event instead of a duplicate being opened |
+| The prospect cannot be created | Logged and swallowed. The attendance is still recorded and the guest still sees a confirmation — the sign-in is the thing they came to do |
+| The prospect is later purged | The attendance row survives with `prospect_id` set to NULL |
+| Guest leaves no email | Attendance is recorded; no prospect is opened, because there is no way to follow up |
 
 ---
 

@@ -492,6 +492,16 @@ The Logbook now runs scheduled tasks (shift reminders, notification cleanup, ove
 - Overdue inventory notifications
 - Equipment check reminder generation
 - Recurring event series extension
+- **Training-program recert resets** (daily, 05:00)
+- **Training-program enrollment expiry** (daily, 05:15) — _(2026-08-09)_ moves an
+  enrollment past its target completion date to **Expired** and notifies the
+  member and their training officers. It was previously folded into the weekly
+  deadline-warning sweep, which left up to six days where an enrollment nobody
+  had opened still read "active, N days overdue". The read-time check still
+  applies too, so an enrollment somebody opens reports its true state without
+  waiting for the sweep
+- **Training-program deadline warnings** (weekly, Mondays 07:30) — sends warnings
+  only; the schedule is **per program** as of 2026-08-09, not a fixed 30/14/7
 
 **For IT administrators:**
 

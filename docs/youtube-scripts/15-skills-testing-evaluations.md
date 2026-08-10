@@ -200,6 +200,48 @@ candidate in turnouts.]**
 
 > "Save still works. You just don't have to remember it anymore."
 
+**[SCREEN: The rebuilt scoring screen — candidate name in the header, 44px
+section chips across the top, the "scored / total" count and save-status line.]**
+
+> "The whole screen was rebuilt on **August ninth** for exactly this situation.
+> The candidate's **name** is on it now — nothing used to confirm you had the
+> right person open. The tiny progress dots are gone, replaced by **section
+> chips** you can actually hit with a glove on, each showing its own state. And
+> there's a running count of how many steps you've scored, and a line telling you
+> whether it's saved." _(2026-08-09)_
+
+**[CALLOUT: "Big enough to hit with a glove on"]**
+
+**[SCREEN: The bottom bar — Prev, and a primary Next.]**
+
+> "One change worth flagging if you've used this before: the big button at the
+> bottom right is now **Next**, not Finish. It used to be the other way round —
+> the biggest, reddest button on every single section **ended the evaluation**,
+> while moving on was a small grey one next to it. That was backwards."
+
+### CLEARING A MIS-TAP (added 2026-08-09)
+
+**[SCREEN: Tap Pass, then tap Pass again to clear it. Same with a score.]**
+
+> "Tapped the wrong thing? Tap it again and it clears. Pass, fail, a score — all
+> of them. That used to be impossible: the only way out of a mis-tap was to record
+> the **opposite** verdict on a candidate."
+
+> "This matters most on a critical step, where a mis-tapped zero and a deliberate
+> zero score exactly the same and mean completely different things."
+
+**[SCREEN: A checklist criterion — tap "Candidate did none of these".]**
+
+> "Checklists got the same treatment. There's now an explicit **'Candidate did
+> none of these'** — because 'they did none of it' and 'I forgot this step' used
+> to look identical on the scorecard, and the only way to record the first one
+> was to tick a box and untick it."
+
+**[SCREEN: An unscored score-type criterion reading "—/5" in neutral grey.]**
+
+> "And an unscored step reads a neutral dash now, not a red zero. A red zero
+> reads as a fail you never recorded."
+
 ### THE TIMER (7:45 – 9:00)
 
 **[SCREEN: The timer at the top of the active test.]**
@@ -217,7 +259,21 @@ candidate in turnouts.]**
 **[SCREEN: Navigate away and back; the timer resumes at its previous value.]**
 
 > "And if you close it and come back, the timer picks up where it was instead of
-> restarting at zero."
+> restarting at zero — and it opens on the **first section you haven't finished**,
+> rather than dumping you back at section one to hunt for where you'd got to."
+> _(2026-08-09)_
+
+**[SCREEN: Time an evolution, then tap Next without pressing Stop. Come back —
+the reading is there.]**
+
+> "One more, and it's the kind of bug that only bites you on the step that
+> matters. The stopwatch reading used to only be recorded when you pressed
+> **Stop**. Time an evolution, tap **Next**, and the reading was gone — on the
+> one step whose time limit **is** the pass/fail criterion. Fixed on August
+> ninth: the reading is committed when you leave the step, Stop or no Stop."
+> _(2026-08-09)_
+
+**[CALLOUT: "Moving on no longer loses the reading"]**
 
 **[TRANSITION: Back at the desk]**
 

@@ -282,19 +282,98 @@ Wall clock is now only a fallback for a test completed with no measured value.
 Reopening an in-progress test also **restores the timer** rather than restarting
 it at 00:00.
 
+#### Moving on no longer loses the reading _(2026-08-09)_
+
+The stopwatch reading used to be recorded **only when you pressed Stop**. Sections
+are torn down when you move between them, so timing an evolution and tapping
+**Next** lost the reading entirely — on the one step whose time limit _is_ the
+pass/fail criterion.
+
+The value is now committed when the step is torn down, whether or not you pressed
+Stop. Starting a stopwatch also starts the test clock, so the two cannot disagree.
+
+#### Coming back to an interrupted test _(2026-08-09)_
+
+Reopening a test in progress now **opens at the first section with blank steps**,
+rather than dropping you back at section 1 to hunt for where you had got to. In
+the officer's **Test Records** tab an unfinished test says **Tap to resume** and
+opens on the scoring screen; a finished one still opens on its scorecard.
+
+> **[SCREENSHOT NEEDED]:** _The officer's Test Records tab showing a mix of rows —
+> an unfinished test with its "Tap to resume" affordance, a completed test, and a
+> cancelled test with its distinct status — so the three read differently at a
+> glance._
+
+#### A cancelled test is read-only _(2026-08-09)_
+
+A cancelled test used to render as a **live evaluation**: editable criteria, a
+running clock, and a **Finish** button that the server rejects. It now renders
+read-only and says plainly that **nothing was decided** — it does not show a pass
+or a fail, because there was neither. The officer panel no longer describes an
+abandoned test as counting toward the candidate's record, because it counts
+toward nothing.
+
+Cancelling a test from the Test Records tab now asks for its optional reason in a
+proper dialog. It used to use the browser's own prompt, which some browsers
+suppress — and a suppressed prompt is indistinguishable from pressing Cancel, so
+the cancellation silently did nothing.
+
 ---
 
 ## Scoring & Critical Criteria
 
 During the test, the examiner scores each criterion as the candidate performs the procedure.
 
-### Per-Section Scoring
+### The scoring screen _(rebuilt 2026-08-09)_
 
-Each section displays its criteria as a checklist. The examiner:
+The screen is built for someone standing outdoors, in gloves, watching a
+candidate rather than the tablet.
 
-- **Checks off** each step the candidate completes correctly
-- **Leaves unchecked** any steps the candidate misses or performs incorrectly
-- Notes which criteria are marked as **Required** (critical) — indicated by a red asterisk
+- **The candidate's name is on the screen.** Confirm you have the right person
+  open before you start — nothing on the old screen told you.
+- **Section chips across the top**, 44px and showing their own state, replace the
+  10px progress dots that were unhittable with a glove and silent about what was
+  left.
+- **A running "scored / total" count and a save-status line** sit with them, so
+  "am I finished?" and "did that save?" are both answerable at a glance.
+- **The primary bottom-bar button is Next**, not Finish. On the old screen the
+  biggest, reddest button on every section ended the evaluation while moving on
+  was a small grey one.
+- **Moving between sections returns you to the top of the screen**, rather than
+  dropping you halfway down the new one.
+
+> **[SCREENSHOT NEEDED]:** _The active scoring screen mid-test, showing the
+> candidate's name in the header, the 44px section chips across the top with one
+> active and two showing complete, the running "scored / total" count and
+> save-status line, a scored criterion and an unscored one below, and the bottom
+> bar with Prev and a primary Next button._
+
+### Recording a mark
+
+Each criterion type is scored differently, and each can be **undone**:
+
+| Criterion type | How you mark it                                                                | Clearing it               |
+| -------------- | ------------------------------------------------------------------------------ | ------------------------- |
+| **Pass/Fail**  | Tap Pass or Fail                                                               | Tap the same one again    |
+| **Score**      | Tap the number                                                                 | Tap the same number again |
+| **Checklist**  | Tick the boxes the candidate completed, or tap **Candidate did none of these** | **Clear this step**       |
+| **Statement**  | Marks itself — nothing to do                                                   | n/a                       |
+| **Timed**      | Start and stop the stopwatch                                                   | Re-run it                 |
+
+> **A mis-tap used to be uncorrectable.** The only way out of tapping the wrong
+> verdict was to record the opposite one on a candidate. Tapping the same value
+> again now clears it. This matters most on a critical step, where a mis-tapped
+> **0** and a deliberate **0** score identically but mean completely different
+> things.
+
+> **"Candidate did none of these" is not the same as an unscored step.** A
+> checklist used to count as scored only once a box was ticked — so the case an
+> examiner most needs to record was indistinguishable from a step they forgot,
+> and could only be entered by ticking a box and unticking it.
+
+**Add note** is a full-size labelled control, not a 12px text link. It is what
+explains a mark to whoever reads the scorecard weeks later; it should not be the
+hardest thing on the screen to hit.
 
 ### Running Score
 
@@ -304,6 +383,13 @@ As the examiner scores criteria, the interface displays:
 - **Overall running score** — total points earned / total possible points across all sections
 - **Percentage** — running percentage updated in real-time (based on points, not simple criterion count)
 
+> **Unscored steps read "—/N" in neutral type, not a red "0/N".** A red zero
+> reads as a fail the examiner never recorded.
+
+> **Statement criteria are excluded from every count.** They mark themselves, so
+> counting them showed progress on a section nobody had touched — and a section
+> could read "3 / 3" with a real step still blank.
+
 ### Critical Criteria
 
 If "Require All Critical" is enabled on the template:
@@ -311,8 +397,11 @@ If "Require All Critical" is enabled on the template:
 - Any **required** criterion that is left unchecked (not passed) will result in an **automatic FAIL**
 - This is true even if the candidate's percentage score exceeds the passing threshold
 
-> **Screenshot placeholder:**
-> _[Screenshot of the active test scoring interface showing: a top bar with candidate name, template name, timer counting up (showing "04:32"), and running score "14/18 (78%)". Below, sections are shown as accordion panels — one expanded showing criteria with checkboxes. Required criteria have a red asterisk. A completed section shows "5/5" in green. The bottom shows a prominent "Complete Test" button]_
+> **[SCREENSHOT NEEDED]:** _The active scoring screen's criteria area, showing a
+> critical criterion with its red asterisk scored Pass, an unscored score-type
+> criterion reading "—/5" in neutral type, a checklist criterion with two of four
+> boxes ticked and the "Candidate did none of these" option beneath, and the
+> timer running in the header._
 
 ---
 
@@ -321,6 +410,16 @@ If "Require All Critical" is enabled on the template:
 When the candidate finishes the procedure:
 
 1. Click **Complete Test**. The timer automatically stops.
+
+   > **If any steps are still blank, a dialog names the count** and reminds you
+   > that **an unscored critical step scores the same as a fail** — which is what
+   > actually happens. The review screen repeats it, with a button that takes you
+   > straight back to the first unfinished section.
+
+   > **[SCREENSHOT NEEDED]:** _The "finish with unscored steps" dialog naming the
+   > number of blank steps and stating that an unscored critical step counts as a
+   > fail, with its keep-scoring and finish-anyway buttons._
+
 2. The system shows a **post-completion review screen** where the examiner can:
    - Review each section's criteria and scores
    - Add **section-level notes** with feedback for specific areas
