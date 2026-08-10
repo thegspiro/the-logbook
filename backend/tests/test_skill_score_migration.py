@@ -20,12 +20,14 @@ import sqlalchemy as sa
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
 
-MIGRATION = (
-    Path(__file__).resolve().parents[1]
-    / "alembic"
-    / "versions"
-    / "20260809_0002_add_score_pass_fail_criteria.py"
-)
+# Located by suffix rather than by full name: the date prefix is renumbered
+# whenever main lands a migration that claims this one's revision id or parent,
+# which has already happened twice. Pinning the whole filename means the next
+# renumber silently breaks this test instead of the collision it guards.
+_VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+_MATCHES = sorted(_VERSIONS.glob("*_add_score_pass_fail_criteria.py"))
+assert len(_MATCHES) == 1, f"expected exactly one migration, found {_MATCHES}"
+MIGRATION = _MATCHES[0]
 
 
 def _load_migration():

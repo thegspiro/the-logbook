@@ -13,8 +13,8 @@ every percentage already on record keeps the meaning it had when it was scored.
 Tests also freeze the flag into their template snapshot at creation, so turning
 it on later never re-scores a result taken under the old rule.
 
-Revision ID: 20260809_0002
-Revises: 20260809_0001
+Revision ID: 20260810_0002
+Revises: 20260810_0001
 Create Date: 2026-08-09 12:00:00.000000
 
 """
@@ -23,8 +23,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260809_0002"
-down_revision = "20260809_0001"
+revision = "20260810_0002"
+down_revision = "20260810_0001"
 branch_labels = None
 depends_on = None
 
