@@ -915,6 +915,46 @@ that names the accepted values. Two things this does **not** cover:
   the meaning of every percentage already on record. Such a sheet scores by
   section average and says so.
 
+## Training — Nothing Creates a Skill Evaluation (2026-08-10)
+
+`SkillEvaluation` is read in two places and written in none.
+
+`GET /training/module-config/skill-names` feeds the linkage indicator on
+**Scheduling → Settings → Shift Reports**, which tags each apparatus-type skill
+green when its name matches a skill evaluation and amber when it does not.
+`ShiftCompletionService._resolve_skill_evaluations` uses the same table to turn
+a 1–5 score on a shift report into a `SkillCheckoff` and, through that, into
+competency history and pipeline progress.
+
+There is no create endpoint, no update endpoint and no screen. Searching the
+backend for a constructor finds only the model definition itself. The only path
+by which a department can acquire a row is `org_template_registry`, which copies
+the table when an organization is provisioned from a department template — and
+that merely moves rows that already exist somewhere.
+
+The consequences are quiet rather than loud, which is why this went unnoticed:
+
+- Every skill tag in the settings panel reads amber, on every department. The
+  legend explaining the two colours is gated on `skillEvalNames.size > 0`, so it
+  never renders either — the amber is not even labelled.
+- Skill scores on shift reports are stored on the report and go no further. No
+  checkoff is created, no competency score is recorded, and a pipeline
+  requirement waiting on that skill is never progressed. The officer entering
+  the score gets no indication that it stopped there.
+- `POST /training/skill-evaluations/{id}/check-evaluator`, which decides who may
+  sign a skill off, can only ever 404.
+
+Recorded rather than fixed: the missing piece is a skills-definition CRUD screen
+with an evaluator-permission editor, which is a feature rather than a repair.
+The screenshot placeholder for the linkage tags is held back until there is a
+mixed green/amber state to picture — a column of amber would document the gap
+as though it were the design — and `docs/training/03-scheduling.md` now says
+plainly that every tag reads amber and why.
+
+Note also that the matching is **case-insensitive** on both sides
+(`eval_by_lower` in the service, `item.toLowerCase()` in the panel). The guide
+previously described it as case-sensitive; corrected.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

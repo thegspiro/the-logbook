@@ -1689,7 +1689,7 @@ class Seeder:
                 self.blocked.append(f"shift officer seat: {exc}")
 
     def _align_crew_to_seats(self, shifts: list[dict]) -> None:
-        """Match a future shift's roster to the seats the crew board renders.
+        """Match each shift's roster to the seats its crew board renders.
 
         The board seats members by position name, so a crew assigned entirely
         as "firefighter" leaves the Driver/Operator seat open on every rig in
@@ -1702,17 +1702,21 @@ class Seeder:
         Both are repaired here rather than only in the create path, so an
         existing demo database is brought into line instead of needing a wipe:
         members already sitting in a seat stay put, the rest are moved into
-        whatever is still open, and anyone left over is dropped.
+        whatever is still open.
 
-        Future shifts only: a past shift's roster is what actually worked it,
-        and its attendance records hang off those assignments.
+        Anyone still left over is dropped, but on a past shift only when they
+        have no attendance record — a past roster is what actually worked the
+        shift, and the hours hang off those assignments. A past assignment with
+        no check-in is one this seeder invented; a real one is left alone, extra
+        body and all, because rigs do run over.
         """
         for shift in shifts:
             shift_id = pick(shift, "id")
             day = str(pick(shift, "shift_date", "shiftDate") or "")
             slots = pick(shift, "positions") or []
-            if not shift_id or not slots or day <= str(TODAY):
+            if not shift_id or not slots:
                 continue
+            is_past = day <= str(TODAY)
             seats = [str(pick(slot, "position") or "") for slot in slots]
             crew = [
                 row
@@ -1735,6 +1739,19 @@ class Seeder:
                     unclaimed.remove(position)
                 else:
                     unseated.append(row)
+            if not unseated:
+                continue
+
+            worked = set()
+            if is_past:
+                worked = {
+                    str(pick(row, "user_id", "userId"))
+                    for row in items(
+                        self.api.get(f"/scheduling/shifts/{shift_id}/attendance"),
+                        "attendance",
+                    )
+                    if pick(row, "checked_in_at", "checkedInAt")
+                }
 
             for row in unseated:
                 if unclaimed:
@@ -1742,7 +1759,7 @@ class Seeder:
                         f"/scheduling/assignments/{pick(row, 'id')}",
                         {"position": unclaimed.pop(0)},
                     )
-                else:
+                elif str(pick(row, "user_id", "userId")) not in worked:
                     self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
 
     def _seed_shift_attendance(self, shifts: list[dict]) -> None:
@@ -3545,7 +3562,14 @@ class Seeder:
         have = {pick(r, "review_status", "reviewStatus") for r in existing}
         months = {str(pick(r, "shift_date", "shiftDate"))[:7] for r in existing}
         if wanted <= have and len(months) >= 2:
-            return items(self.api.get("/training/shift-reports/all?limit=50"))
+            # The review states still get topped up on the way out. This return
+            # is about not re-filing reports, and a guard that only asks whether
+            # each state name appears somewhere is satisfied by a single flagged
+            # report — which is why the Flagged view stayed a queue of one on
+            # every existing demo database no matter how often it was re-seeded.
+            reports = items(self.api.get("/training/shift-reports/all?limit=50"))
+            self._flag_review_queue(reports, demo_member_id)
+            return reports
 
         shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
         past = sorted(
@@ -3729,31 +3753,50 @@ class Seeder:
                 f"/training/shift-reports/{pick(report, 'id')}/review",
                 {"review_status": "approved"},
             )
-        # Two flagged, not one: the Flagged view is a queue, and a queue of one
-        # pictures neither the batch-review bar (which needs more than one
-        # report) nor the fact that reviewers write a different reason on each.
-        flag_notes = [
-            (
-                "Hours do not match the roster for this shift — please "
-                "confirm the relief time and resubmit."
-            ),
-            (
-                "No narrative for the pump evolution. Add what was attempted "
-                "and what needed prompting, then resubmit."
-            ),
+        self._flag_review_queue(reports, demo_member_id)
+        return reports
+
+    #: Two flagged reports, not one. The Flagged view is a queue, and a queue of
+    #: one pictures neither the batch-review bar — which renders only above a
+    #: single report — nor the fact that reviewers write a different reason on
+    #: each.
+    FLAG_NOTES = (
+        (
+            "Hours do not match the roster for this shift — please confirm "
+            "the relief time and resubmit."
+        ),
+        (
+            "No narrative for the pump evolution. Add what was attempted and "
+            "what needed prompting, then resubmit."
+        ),
+    )
+
+    def _flag_review_queue(self, reports: list[dict], demo_member_id: str) -> None:
+        """Top the Flagged view up to FLAG_NOTES.
+
+        Never the demo member's own report: a trainee sees only their approved
+        reports, so flagging theirs empties the one view a member's session can
+        picture. Never the first of the others either — that one is approved,
+        so the queue keeps an example of each outcome.
+
+        Keyed on how many are already flagged, so a re-run fills the queue up
+        rather than flagging two more reports every time.
+        """
+        queued = [
+            r
+            for r in reports
+            if pick(r, "review_status", "reviewStatus") != "draft"
+            and str(pick(r, "trainee_id", "traineeId")) != demo_member_id
         ]
-        # Keyed on how many are already flagged, so a re-run tops the queue up
-        # rather than flagging two more of them every time.
-        already = [
-            r for r in others if pick(r, "review_status", "reviewStatus") == "flagged"
+        flagged = [
+            r for r in queued if pick(r, "review_status", "reviewStatus") == "flagged"
         ]
-        candidates = [r for r in others[1:] if r not in already]
-        for report, note in zip(candidates, flag_notes[len(already) :]):
+        candidates = [r for r in queued[1:] if r not in flagged]
+        for report, note in zip(candidates, self.FLAG_NOTES[len(flagged) :]):
             self.api.post(
                 f"/training/shift-reports/{pick(report, 'id')}/review",
                 {"review_status": "flagged", "reviewer_notes": note},
             )
-        return reports
 
     # -- notification rules ------------------------------------------
 

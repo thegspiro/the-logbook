@@ -573,7 +573,198 @@ export function openElectionTab(tabId, match) {
   };
 }
 
+/**
+ * Open the shift detail panel on the first future shift with exactly one seat
+ * still open.
+ *
+ * One open seat, not two: the board then shows a full set of crew rows with
+ * their own controls *and* a single Assign / Sign Up row, which is what the
+ * permission placeholders are about. The 2+-open case is already pictured by
+ * 03-54, and its board is mostly empty rows.
+ */
+function openPartStaffedShift(shotId) {
+  return async (page) => {
+    const id = await page.evaluate(async () => {
+      const response = await fetch("/api/v1/scheduling/shifts?limit=200", {
+        credentials: "include",
+      });
+      if (!response.ok) return null;
+      const body = await response.json();
+      const rows = Array.isArray(body) ? body : body.shifts || body.items || [];
+      const today = new Date().toISOString().slice(0, 10);
+      for (const shift of rows) {
+        const day = shift.shift_date ?? shift.shiftDate ?? "";
+        if (day <= today) continue;
+        const seats = (shift.positions ?? []).length;
+        if (!seats) continue;
+        const detail = await fetch(
+          `/api/v1/scheduling/shifts/${shift.id}/assignments`,
+          { credentials: "include" },
+        );
+        if (!detail.ok) continue;
+        const crew = await detail.json();
+        const list = Array.isArray(crew) ? crew : crew.assignments || [];
+        // `assignment_status`, not `status` — the latter is undefined here and
+        // silently counts cancelled members toward the crew.
+        const active = list.filter((row) =>
+          ["assigned", "confirmed"].includes(
+            row.assignment_status ?? row.assignmentStatus,
+          ),
+        );
+        if (seats - active.length === 1) return shift.id;
+      }
+      return null;
+    });
+    if (!id) throw new Error(`${shotId}: no future shift has exactly one open seat`);
+    const url = new URL(page.url());
+    url.searchParams.set("shift", id);
+    await page.goto(url.toString(), { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1800);
+  };
+}
+
+/** Open the Shift Reports tab and switch to one of its views. */
+function openReportView(name) {
+  return async (page) => {
+    await page
+      .getByRole("button", { name })
+      .first()
+      .click({ timeout: 20_000 });
+    await page.waitForTimeout(2500);
+  };
+}
+
 export const SHOTS = [
+  {
+    id: "03-57-shift-assignment-controls",
+    doc: "03-scheduling.md",
+    line: 1022,
+    anchor: "Screenshot of the shift detail panel's crew board",
+    alt: "A shift's crew board with its per-member controls, an open seat, and the Edit and Delete buttons in the header",
+    route: "/scheduling",
+    prepare: openPartStaffedShift("03-57"),
+    fullPage: false,
+  },
+  {
+    id: "03-58-assign-member-form",
+    doc: "03-scheduling.md",
+    line: 1278,
+    anchor: "Screenshot of the Assign Member form",
+    alt: "The Assign Member form on a shift, with its position and member pickers",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await openPartStaffedShift("03-58")(page);
+      // The form is behind "Assign Member" on a board with riding positions,
+      // and behind "Assign" on one without. Either name opens the same form.
+      await page
+        .getByRole("button", { name: /^Assign( Member)?$/ })
+        .first()
+        .click({ timeout: 15_000 });
+      // Wait for the member list to load rather than for a fixed pause: the
+      // select renders empty first and a fixed wait pictured it that way.
+      await page
+        .locator("#assign-member-search")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(1500);
+    },
+    // Clipped to the form. The panel scrolls in its own container, so
+    // `window.scrollBy` moves the calendar behind it and leaves the form
+    // hanging off the bottom of the frame; an element screenshot brings it
+    // into view by itself, and the form is the subject anyway.
+    selector: "div.rounded-lg:has(> h4:text-is('Assign Member'))",
+  },
+  {
+    id: "03-59-open-shifts-signup",
+    doc: "03-scheduling.md",
+    line: 1285,
+    anchor: "Screenshot of the Open Shifts tab showing shift cards",
+    alt: "The Open Shifts tab as an ordinary member sees it, each card carrying its own Sign Up button",
+    // A member, not the administrator: the placeholder is about a non-admin
+    // seeing the button at all.
+    auth: "member",
+    route: "/scheduling?tab=open-shifts",
+    prepare: async (page) => {
+      // By the aria-label, not the visible text: the label overrides it for
+      // the accessible name, and the text itself is `sm:inline` — on a narrow
+      // viewport the button is the icon alone.
+      await page
+        .getByLabel("Sign up for this shift")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-60-dashboard-my-shifts",
+    doc: "03-scheduling.md",
+    line: 1304,
+    anchor: 'Screenshot of the Dashboard "My Upcoming Shifts" panel',
+    alt: "The dashboard's My Upcoming Shifts panel, listing only shifts the member is still on",
+    auth: "member",
+    route: "/dashboard",
+    prepare: async (page) => {
+      // The heading text sits in a span inside the h3, so `text-is` on the h3
+      // does not match it; `has-text` does. Scrolled into view first because a
+      // clipped element still below the fold never settles for a screenshot.
+      const panel = page
+        .locator("div.card:has(h3:has-text('My Upcoming Shifts'))")
+        .first();
+      await panel.waitFor({ timeout: 20_000 });
+      await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(1200);
+    },
+    // Clipped to the card, trailing space and all: it is a grid cell stretched
+    // to match the notifications panel beside it. The viewport alternative puts
+    // that panel in half the frame, and it is a column of near-identical
+    // skills-test notices that reads as the subject of the shot.
+    selector: "div.card:has(h3:has-text('My Upcoming Shifts'))",
+  },
+  {
+    id: "03-61-review-queue-batch",
+    doc: "03-scheduling.md",
+    line: 1144,
+    anchor: "Screenshot of the Review Queue with some but not all reports",
+    alt: "The Review Queue with several reports selected and the batch approve and flag actions above them",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      await openReportView(/Review Queue/)(page);
+      // Select some but not all, so the picture shows a partial selection
+      // rather than a select-all that could be mistaken for the default.
+      const boxes = page.locator("input.form-checkbox");
+      await boxes.first().waitFor({ timeout: 15_000 });
+      for (const index of [1, 2, 3]) {
+        await boxes.nth(index).check({ force: true });
+      }
+      await page.waitForTimeout(900);
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-62-flagged-queue",
+    doc: "03-scheduling.md",
+    line: 1160,
+    anchor: "Screenshot of the Flagged view with one card opened",
+    alt: "The Flagged view — two reports, one expanded to its reviewer's reason and Re-Review Report button",
+    route: "/scheduling?tab=shift-reports",
+    prepare: async (page) => {
+      await openReportView(/^Flagged$/)(page);
+      // The reason and the Re-Review action are in the expanded card, not on
+      // the collapsed one; a list of collapsed cards shows only the badge.
+      await page
+        .getByRole("button", { name: /Re-Review Report/ })
+        .first()
+        .waitFor({ timeout: 20_000 })
+        .catch(async () => {
+          await page.locator("div.rounded-xl > button").first().click();
+          await page.waitForTimeout(1200);
+        });
+      await page.waitForTimeout(800);
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+    fullPage: true,
+  },
   {
     id: "03-50-vehicle-preset-picker",
     doc: "03-scheduling.md",

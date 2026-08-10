@@ -1010,8 +1010,15 @@ A user with `scheduling.assign` but not `scheduling.manage` can assign members t
 
 Self-signup (the Sign Up button on open shifts) requires no special permission — all authenticated members can sign up for shifts they are eligible for.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel showing the assignment controls (Assign Member dropdown, position change, remove button) visible to a user with scheduling.assign permission, and the Edit/Delete shift buttons visible only to a user with scheduling.manage permission]_
+The shift detail panel below is what somebody holding **both** permissions sees,
+which is the usual case for a shift officer. The two sets are easy to tell apart
+once you know where to look: `scheduling.assign` owns everything on the crew
+board — the pencil beside a member's position, the ⊗ that removes them, the
+**Assign** button on an open seat and **Assign Member** underneath — while
+`scheduling.manage` owns only the pencil and bin in the panel's own header.
+Drop either permission and that group of controls simply is not rendered.
+
+![A shift's crew board with its per-member controls, an open seat, and the Edit and Delete buttons in the header](./images/03-57-shift-assignment-controls.png)
 
 ### Calls/Incidents Section
 
@@ -1127,13 +1134,13 @@ Scores appear as interactive buttons on the report form (with tooltip labels) an
 
 Officers with `training.manage` permission can now review multiple shift reports at once:
 
-1. Navigate to the **Pending Review** or **Flagged** view in the Shift Reports tab
-2. Check individual report cards using the checkbox on each card, or use the **select-all** toggle
-3. Click **"Approve Selected"** or **"Flag Selected"** at the top of the list
-4. In the batch review modal, optionally add **reviewer notes** (applied to all selected reports)
-5. Confirm the action — the system processes up to 100 reports and returns a count of successfully reviewed vs. failed
+1. Open the **Review Queue** or **Flagged** view in the Shift Reports tab
+2. Tick the checkbox on each report you want, or use **Select all (N)** in the bar above the list
+3. The bar then reports how many are selected and offers **Approve Selected** and, in the Review Queue, **Flag Selected**. Neither button carries the count — that is the "N selected" text beside them
+4. Type a comment in the field that appears under the bar. It is applied to every selected report, and it is **required** to flag — flagging without one fails with a message rather than sending unexplained flags to trainees. Approving with one is optional
+5. Click the action. There is no confirmation step and no modal: the reports are reviewed and a toast reports how many
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Pending Review view with 5 report cards visible, 3 checked with checkboxes, the select-all toggle shown, and "Approve Selected (3)" / "Flag Selected (3)" buttons visible at the top._
+![The Review Queue with several reports selected and the batch approve and flag actions above them](./images/03-61-review-queue-batch.png)
 
 > **Hint:** Batch review does not support per-report field redaction. For reports requiring individual redaction, review them one at a time using the standard review modal.
 
@@ -1141,11 +1148,15 @@ Officers with `training.manage` permission can now review multiple shift reports
 
 Reports that reviewers flag for follow-up are now accessible from a dedicated **Flagged** tab in the Shift Reports section:
 
-- View all flagged reports with their reviewer notes and flag date
-- **Re-review** flagged reports — approve them to move to the Approved state, or add additional notes
+- Every flagged report, each collapsed card carrying the red **Flagged** badge, the officer who filed it and the reviewer who flagged it
+- Open a card and the reason is underneath the report itself, in **Reviewer Comment — Flagged**, followed by a **Review History** listing every pass the report has been through with its date and its note
+- **Re-Review Report**, at the foot of the opened card, reopens the review modal — approve to move it to Approved, or flag it again with a new note
 - When a flagged report is approved, deferred pipeline progress is triggered if the report has an enrollment linkage
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Flagged tab showing 2-3 flagged report cards with red "Flagged" badges, reviewer notes visible, and a "Re-review" button on each card._
+The reason and the re-review action are in the opened card, not on the
+collapsed one: a list of flagged reports tells you _which_, not _why_.
+
+![The Flagged view — two reports, one expanded to its reviewer's reason and Re-Review Report button](./images/03-62-flagged-queue.png)
 
 ### Trainee & Officer Names on Report Cards
 
@@ -1178,22 +1189,29 @@ The review modal now displays the **complete report** so reviewers have full con
 
 The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now shows whether each apparatus-type skill matches a formal `SkillEvaluation` record in the Training module:
 
-- **Green tag** with checkmark: Skill name matches a SkillEvaluation — scores will track competency, create checkoffs, and progress pipeline requirements
-- **Amber tag** with warning: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
-- A **legend** at the bottom of the skills section explains the color coding
+- **Green tag**: Skill name matches a SkillEvaluation — scores will track competency, create checkoffs, and progress pipeline requirements
+- **Amber tag**: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
+- A **legend** below the skills explains the two colours. It appears only once the department has at least one SkillEvaluation on file — with none, there is nothing for the colours to mean
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports settings panel's apparatus skills section (e.g., "Engine" expanded) showing 4 skills with green tags ("Pump operations" ✓, "Hose deployment" ✓) and 2 with amber tags ("Ladder placement" ⚠, "Custom skill" ⚠), plus the explanatory legend below._
+> **Every tag reads amber today.** Nothing in the application creates a
+> `SkillEvaluation`: the table is read by this indicator and by the checkoff
+> writer, and written by neither, so the only way a department acquires one is
+> to be provisioned from a department template that already had some. Scores
+> entered on shift reports are therefore recorded on the report and go no
+> further. Tracked in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md); the screenshot is held back
+> until there is a mixed state to picture rather than a column of amber.
 
 ### Edge Cases
 
-| Scenario                                   | Behavior                                                    |
-| ------------------------------------------ | ----------------------------------------------------------- |
-| Skill score outside 1-5 range via API      | Rejected by Pydantic `Field(ge=1, le=5)` with 422 error     |
-| Batch review with >100 report IDs          | Rejected by `max_length=100` constraint                     |
-| Batch review with mix of valid/invalid IDs | Valid reports processed; `failed` count returned separately |
-| Flagged report re-approved                 | Triggers deferred pipeline progress if enrollment linked    |
-| Skill name matching for linkage            | Case-sensitive exact match against `SkillEvaluation.name`   |
-| No SkillEvaluation records in org          | All apparatus-type skills show amber "unlinked" tags        |
+| Scenario                                   | Behavior                                                                                                                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Skill score outside 1-5 range via API      | Rejected by Pydantic `Field(ge=1, le=5)` with 422 error                                                                                         |
+| Batch review with >100 report IDs          | Rejected by `max_length=100` constraint                                                                                                         |
+| Batch review with mix of valid/invalid IDs | Valid reports processed; `failed` count returned separately                                                                                     |
+| Flagged report re-approved                 | Triggers deferred pipeline progress if enrollment linked                                                                                        |
+| Skill name matching for linkage            | Case-insensitive exact match against `SkillEvaluation.name` — "Pump Operations" and "pump operations" are the same skill, but "Pump ops" is not |
+| No SkillEvaluation records in org          | All apparatus-type skills show amber "unlinked" tags, and the legend is not rendered                                                            |
 
 ---
 
@@ -1243,15 +1261,25 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 
 The shift assignment UI previously required the `scheduling.manage_assignments` permission, which was more restrictive than intended. As of 2026-03-22, users with the broader `scheduling.manage` permission can assign members to shifts.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel showing the "Add Assignment" button visible for a user with `scheduling.manage` permission, with the member dropdown and position selector]_
+There is no button called "Add Assignment": the control is **Assign Member**,
+beneath the crew board on a rig with riding positions, or **Assign** in the
+Crew Roster heading on one without. Either opens the same form, which asks for
+the position first and defaults it to the first open seat.
+
+The member list is not filtered by who is qualified for that seat — it excludes
+only members who are unavailable for the shift at all (on leave, or already
+committed to a conflicting one). Put somebody in a driver's seat without the
+EVOC level the apparatus requires and the assignment is still created; what you
+get is a warning toast afterwards, alongside any overtime warning. The list is
+long on a large roster, so the search box above it filters by name.
+
+![The Assign Member form on a shift, with its position and member pickers](./images/03-58-assign-member-form.png)
 
 ### Open Shifts Self-Signup Fix
 
 The self-signup button visibility on the Open Shifts tab had a fallback permission issue where non-admin members couldn't see the Sign Up button even when their rank was eligible. This has been corrected.
 
-> **Screenshot needed:**
-> _[Screenshot of the Open Shifts tab showing shift cards with visible "Sign Up" buttons for an eligible non-admin member]_
+![The Open Shifts tab as an ordinary member sees it, each card carrying its own Sign Up button](./images/03-59-open-shifts-signup.png)
 
 ### Dashboard Shift Display
 
@@ -1262,8 +1290,14 @@ The "My Upcoming Shifts" section on the dashboard now correctly filters out:
 
 Only pending and confirmed assignments appear.
 
-> **Screenshot needed:**
-> _[Screenshot of the Dashboard "My Upcoming Shifts" section showing only pending (yellow badge) and confirmed (green badge) shifts, with no declined or cancelled entries]_
+The panel does not distinguish the two: there is no status badge on a dashboard
+row, only the date, the hours and the shift officer. Which of your shifts are
+still awaiting your confirmation is a question for **My Shifts**, where each
+card carries its badge and the bulk Confirm All / Decline All bar sits above
+them. What the dashboard promises is narrower — that everything listed is a
+shift you are still on.
+
+![The dashboard's My Upcoming Shifts panel, listing only shifts the member is still on](./images/03-60-dashboard-my-shifts.png)
 
 ### Desktop Camera Scanning
 
@@ -1622,11 +1656,14 @@ The 1-5 skill score buttons now display descriptive label text inline next to ea
 ### Review Workflow Improvements
 
 - **Require reason when flagging**: When flagging a report, the modal now requires entering a reason before submission. The "Flag" button is disabled until text is entered. This ensures trainees always receive feedback when a report is flagged
-- **Reviewer name displayed**: Report cards show the reviewer's full name next to the review status badge (e.g., "Approved by Lt. Davis")
-- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-review" action in all view modes — not just in the dedicated Flagged tab
+- **Reviewer name displayed**: Report cards carry "Reviewed by _Name_" in the metadata row beneath the trainee's name, beside the hours, calls and rating
+- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-Review Report" action in all view modes — not just in the dedicated Flagged tab. Both are inside the opened card
 - **Actual server error messages**: Toast notifications now display the server's error message instead of generic text like "Failed to submit", improving troubleshooting
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of a flagged report card showing the orange "Flagged" badge, the reviewer name, the reason text, and the "Re-review" button._
+The card is pictured under
+[Flagged Reports View](#flagged-reports-view). The badge is red rather than
+orange; orange is the ageing indicator that appears beside it once a report has
+sat unreviewed for three days.
 
 ### Edge Cases
 
