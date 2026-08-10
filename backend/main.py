@@ -2145,8 +2145,13 @@ app.include_router(
 )
 
 # Include public display API (no auth required - uses /api/public/v1/display)
+# BAD_REQUEST joined TOKEN_ADDRESSED when guest check-in landed (2026-08-09):
+# that route rejects a sign-in outside the organizer's check-in window with a
+# 400, which the read-only kiosk routes never had occasion to return.
 app.include_router(
-    public_display_router, prefix="/api", responses=public_responses.TOKEN_ADDRESSED
+    public_display_router,
+    prefix="/api",
+    responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
 )
 
 # Include public calendar ICS feed (no auth — token-protected per-user feed at
