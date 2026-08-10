@@ -22,12 +22,14 @@ import {
   Eye,
   History,
   RotateCcw,
+  PenLine,
   Send,
   UserCheck,
 } from 'lucide-react';
 import { Breadcrumbs, ConfirmDialog, SkeletonPage } from '../../../components/ux';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
 import { useOfficersStore } from '../store/officersStore';
+import { useFootersStore } from '../store/footersStore';
 import { emailTemplatesService, userService } from '../../../services/api';
 import { TemplateList } from '../components/TemplateList';
 import { TemplateEditor } from '../components/TemplateEditor';
@@ -36,6 +38,7 @@ import ScheduleEmailForm from '../components/ScheduleEmailForm';
 import ScheduledEmailList from '../components/ScheduledEmailList';
 import MessageHistoryList from '../components/MessageHistoryList';
 import OfficersPanel from '../components/OfficersPanel';
+import FootersPanel from '../components/FootersPanel';
 import type { EmailTemplateUpdate, EmailAttachment } from '../types';
 import toast from 'react-hot-toast';
 
@@ -75,8 +78,13 @@ const EmailTemplatesPage: React.FC = () => {
   const [, setIsDirty] = useState(false);
   const officerVariables = useOfficersStore((s) => s.variables);
   const fetchOfficers = useOfficersStore((s) => s.fetchOfficers);
+  const footers = useFootersStore((s) => s.footers);
+  const footerDefaultKey = useFootersStore((s) => s.defaultKey);
+  const fetchFooters = useFootersStore((s) => s.fetchFooters);
 
-  const [activeTab, setActiveTab] = useState<'templates' | 'officers' | 'scheduled' | 'history'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'footers' | 'officers' | 'scheduled' | 'history'>(
+    'templates'
+  );
   const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [members, setMembers] = useState<PreviewMember[]>([]);
@@ -92,6 +100,9 @@ const EmailTemplatesPage: React.FC = () => {
     // Loaded up front (not only on the Officers tab) so the editor's
     // signature-variable palette is populated on first render.
     void fetchOfficers();
+    // Same reason as the officers: the editor's footer picker has to be
+    // populated before anybody opens the Footers tab.
+    void fetchFooters();
     // Fetch org members for the preview dropdown
     setIsLoadingMembers(true);
     void userService
@@ -111,7 +122,7 @@ const EmailTemplatesPage: React.FC = () => {
         // Non-critical — member dropdown will just be empty
       })
       .finally(() => setIsLoadingMembers(false));
-  }, [fetchTemplates, fetchOfficers]);
+  }, [fetchTemplates, fetchOfficers, fetchFooters]);
 
   // Auto-select first template when loaded
   useEffect(() => {
@@ -281,6 +292,17 @@ const EmailTemplatesPage: React.FC = () => {
             Templates
           </button>
           <button
+            onClick={() => setActiveTab('footers')}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'footers'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
+            }`}
+          >
+            <PenLine className="h-4 w-4" />
+            Footers
+          </button>
+          <button
             onClick={() => setActiveTab('officers')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'officers'
@@ -331,6 +353,9 @@ const EmailTemplatesPage: React.FC = () => {
             </button>
           </div>
         )}
+
+        {/* Footers Tab */}
+        {activeTab === 'footers' && <FootersPanel />}
 
         {/* Officers Tab */}
         {activeTab === 'officers' && <OfficersPanel members={members} isLoadingMembers={isLoadingMembers} />}
@@ -460,6 +485,8 @@ const EmailTemplatesPage: React.FC = () => {
                           }}
                           onDirtyChange={setIsDirty}
                           officerVariables={officerVariables}
+                          footers={footers}
+                          footerDefaultKey={footerDefaultKey}
                         />
 
                         {/* Attachments section */}
@@ -586,7 +613,7 @@ const EmailTemplatesPage: React.FC = () => {
             void handleResetToDefault();
           }}
           title="Reset to Default"
-          message="This will restore the template's subject, HTML body, text body, and CSS to the system defaults. Your CC/BCC settings will be preserved. This action cannot be undone."
+          message="This will restore the template's subject, HTML body, text body, styles, and footer choice to the system defaults. Your CC/BCC settings will be preserved. This action cannot be undone."
           confirmLabel="Reset"
           variant="danger"
         />

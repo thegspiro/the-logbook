@@ -344,6 +344,8 @@ export interface EmailTemplate {
   html_body: string;
   text_body?: string;
   css_styles?: string;
+  /** Which named footer this template closes with; null/absent means the department's default. */
+  footer_key?: string | null;
   allow_attachments: boolean;
   is_active: boolean;
   default_cc?: string[];
@@ -369,6 +371,8 @@ export interface EmailTemplateUpdate {
   html_body?: string;
   text_body?: string;
   css_styles?: string;
+  /** Empty string selects the department's default footer. */
+  footer_key?: string;
   description?: string;
   is_active?: boolean;
   allow_attachments?: boolean;
@@ -380,6 +384,24 @@ export interface EmailTemplatePreview {
   subject: string;
   html_body: string;
   text_body: string;
+}
+
+export interface EmailFooter {
+  key: string;
+  name: string;
+  description?: string;
+  lines: string[];
+  show_contact: boolean;
+  show_mailing_address: boolean;
+}
+
+export interface EmailFooterLibrary {
+  default_key: string;
+  footers: EmailFooter[];
+  /** Variables a footer line may use — the organization-wide ones only. */
+  variables: TemplateVariable[];
+  /** Templates currently closing with each footer, keyed by footer key. */
+  usage: Record<string, number>;
 }
 
 export const reportsService = {
