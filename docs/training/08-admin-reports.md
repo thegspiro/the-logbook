@@ -379,9 +379,6 @@ This page shows:
 
 > **Hint:** Regular errors about failed login attempts are normal (they indicate the rate limiting is working). Focus on Critical and Error severity items for actual system issues.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Error Monitor page showing a table of recent errors with columns for timestamp, Source, severity (color-coded badges), the user-facing message with the technical message beneath it, method/path/status, and an occurrence count]_
-
 ### What Now Reaches This Page _(2026-08-07)_
 
 Before this, the page received almost nothing. Most failures were visible only to
@@ -587,14 +584,23 @@ All pages that previously used `navigate(-1)` (browser back button behavior) now
 
 ### Breadcrumb Navigation
 
-Pages in hierarchical sections now include breadcrumb trails showing the navigation path:
+Some sections carry a breadcrumb trail above the page heading, derived from the
+URL. A finance detail page reads:
 
 ```
-Dashboard > Scheduling > Shift Templates > Edit Template
+⌂ > Finance > Expenses
 ```
 
-> **Screenshot needed:**
-> _[Screenshot of a scheduling sub-page showing breadcrumb navigation at the top: "Scheduling > Templates > Edit Station 1 Template" with each segment clickable]_
+Two things about it worth knowing:
+
+- **The record itself is not a crumb.** The trail ends at the section, because
+  the last URL segment is the record's id and an id is not a label. The
+  record's name is the page heading directly beneath.
+- **It is not everywhere.** Finance, communications and a handful of other
+  sections have it; **scheduling does not** — its sub-pages use a "Back to …"
+  link instead, which every detail page has whether or not it also has a trail.
+
+![A breadcrumb trail at the top of an expense report detail page](./images/08-59-breadcrumbs.png)
 
 ---
 

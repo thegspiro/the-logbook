@@ -529,6 +529,23 @@ export function openElectionTab(tabId, match) {
 
 export const SHOTS = [
   {
+    id: "08-59-breadcrumbs",
+    doc: "08-admin-reports.md",
+    line: 596,
+    anchor: "Screenshot of a page showing its breadcrumb trail",
+    alt: "A breadcrumb trail at the top of an expense report detail page",
+    route: "/finance/expense-reports",
+    prepare: openFirstFromApi(
+      "/finance/expense-reports?limit=5",
+      (id) => `/finance/expenses/${id}`,
+      "reports",
+    ),
+    // Viewport rather than a clip of the nav itself: the trail alone is a
+    // 20px strip that says nothing about where it sits. The top of the page
+    // shows it above the record it belongs to.
+    fullPage: false,
+  },
+  {
     id: "04-36-description-markdown",
     doc: "04-events-meetings.md",
     line: 354,

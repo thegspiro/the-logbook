@@ -121,6 +121,10 @@ const ExpenseReportDetailPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* The loading and not-found branches above both render this; the loaded
+          page did not — so the trail appeared while the report was fetching
+          and vanished the moment it arrived. */}
+      <Breadcrumbs />
       <Link
         to="/finance/expenses"
         className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
