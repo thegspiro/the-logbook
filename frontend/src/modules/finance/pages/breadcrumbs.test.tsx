@@ -17,8 +17,6 @@ import { join } from 'node:path';
 
 const PAGES_DIR = __dirname;
 
-const detailPages = readdirSync(PAGES_DIR).filter((f) => f.endsWith('DetailPage.tsx') && !f.includes('.test.'));
-
 /** The component's top-level `return (` — the one that renders the loaded page. */
 const loadedPageMarkup = (source: string): string => {
   const matches = [...source.matchAll(/^ {2}return \(/gm)];
@@ -26,16 +24,20 @@ const loadedPageMarkup = (source: string): string => {
   return last?.index === undefined ? '' : source.slice(last.index);
 };
 
+// Narrowed here rather than inside the test: the rule is about pages that use
+// breadcrumbs at all, so a page that uses none is out of scope, not a case
+// that passes vacuously.
+const breadcrumbedDetailPages = readdirSync(PAGES_DIR)
+  .filter((f) => f.endsWith('DetailPage.tsx') && !f.includes('.test.'))
+  .map((file) => [file, readFileSync(join(PAGES_DIR, file), 'utf8')] as const)
+  .filter(([, source]) => source.includes('<Breadcrumbs />'));
+
 describe('finance detail page breadcrumbs', () => {
   it('finds the detail pages to check', () => {
-    expect(detailPages.length).toBeGreaterThan(0);
+    expect(breadcrumbedDetailPages.length).toBeGreaterThan(0);
   });
 
-  it.each(detailPages)('%s shows breadcrumbs on the loaded page', (file) => {
-    const source = readFileSync(join(PAGES_DIR, file), 'utf8');
-    // A page that uses breadcrumbs at all must use them where the record shows.
-    if (!source.includes('<Breadcrumbs />')) return;
-
+  it.each(breadcrumbedDetailPages)('%s shows breadcrumbs on the loaded page', (_file, source) => {
     expect(loadedPageMarkup(source)).toContain('<Breadcrumbs />');
   });
 });

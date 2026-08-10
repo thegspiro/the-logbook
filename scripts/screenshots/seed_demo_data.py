@@ -114,8 +114,7 @@ BULK_PROSPECT_TARGET = 247
 SHIFT_CONFLICT = re.compile(r"conflicting shift", re.IGNORECASE)
 
 RSVP_CLOSED = re.compile(
-    r"deadline has passed|already ended|no longer accepting"
-    r"|does not require RSVP",
+    r"deadline has passed|already ended|no longer accepting" r"|does not require RSVP",
     re.IGNORECASE,
 )
 
@@ -743,6 +742,67 @@ class Seeder:
                 )
             )
         return levels
+
+    def seed_apparatus_operators(
+        self, apparatus: list[dict], members: list[dict], levels: list[dict]
+    ) -> list[dict]:
+        """Certified drivers on each rig.
+
+        Without these the Operators tab on every apparatus is empty, the EVOC
+        dropdown has nothing to picture, and the driver-eligibility check in
+        scheduling never fires — it needs an ApparatusOperator row carrying an
+        EVOC level before it can compare one against an apparatus requirement.
+
+        Levels are spread rather than uniform: an engine crewed only by
+        EVOC-3 drivers cannot demonstrate the warning a department actually
+        sees, which is a member qualified for one rig being put on another.
+        """
+        if not apparatus or not members:
+            return []
+
+        existing = items(self.api.get("/apparatus/operators"), "operators")
+        # Keyed on the pairs already present, not on "are there any rows" — a
+        # partial run must be able to add the rigs it did not reach.
+        seeded = {
+            (pick(row, "apparatus_id", "apparatusId"), pick(row, "user_id", "userId"))
+            for row in existing
+        }
+        by_level = {
+            pick(level, "level_number", "levelNumber"): level for level in levels
+        }
+        today = date.today()
+
+        created: list[dict] = []
+        for index, rig in enumerate(apparatus[:4]):
+            rig_id = pick(rig, "id")
+            if not rig_id:
+                continue
+            for offset in range(3):
+                member = members[(index * 3 + offset) % len(members)]
+                user_id = pick(member, "id")
+                if not user_id or (rig_id, user_id) in seeded:
+                    continue
+                level = by_level.get((offset % 3) + 1)
+                payload = {
+                    "apparatus_id": rig_id,
+                    "user_id": user_id,
+                    "is_certified": True,
+                    "certification_date": str(
+                        today - timedelta(days=180 + offset * 30)
+                    ),
+                    # A year out, so nothing in the fleet reads as expired on
+                    # a screenshot taken months from now.
+                    "certification_expiration": str(today + timedelta(days=365)),
+                    "license_type_required": "CDL Class B",
+                    "license_verified": True,
+                    "license_verified_date": str(today - timedelta(days=180)),
+                    "is_active": True,
+                }
+                if level:
+                    payload["evoc_level_id"] = pick(level, "id")
+                created.append(self.api.post("/apparatus/operators", payload))
+                seeded.add((rig_id, user_id))
+        return created
 
     def seed_apparatus_activity(self, apparatus: list[dict]) -> dict[str, list[dict]]:
         if not apparatus:
@@ -4159,7 +4219,7 @@ class Seeder:
                                 ),
                                 "type": "statement",
                                 "statement_text": (
-                                    "You are the nozzle firefighter on a 1¾\" "
+                                    'You are the nozzle firefighter on a 1¾" '
                                     "line. Advance to the second floor and "
                                     "report conditions."
                                 ),
@@ -5443,7 +5503,52 @@ class Seeder:
                 )
         self._enable_public_status(pipelines)
         self._seed_election_packages(prospects)
+        self._link_prospect_events(prospects)
         return {"pipelines": pipelines, "prospects": prospects}
+
+    def _link_prospect_events(self, prospects: list[dict]) -> None:
+        """Attach an upcoming event to the prospects past the first stage.
+
+        The Linked Events panel is on the detail drawer, above the action bar,
+        so every drawer screenshot carries "No events linked yet" across it
+        while nothing is linked. Linking is also the only way to picture what
+        the panel is for: an applicant booked into the interview or orientation
+        their stage is waiting on.
+        """
+        events = [
+            event
+            for event in items(self.api.get("/events"), "events")
+            if str(pick(event, "start_datetime", "startDatetime") or "")
+            > datetime.now(timezone.utc).isoformat()
+        ]
+        if not events:
+            return
+
+        for index, prospect in enumerate(prospects):
+            prospect_id = pick(prospect, "id")
+            if not prospect_id:
+                continue
+            # Keyed on this prospect's own links, so a re-run fills in the ones
+            # a partial run missed rather than skipping the lot.
+            existing = items(
+                self.api.get(f"/prospective-members/prospects/{prospect_id}/events"),
+                "events",
+                "links",
+            )
+            if existing:
+                continue
+            event_id = pick(events[index % len(events)], "id")
+            if not event_id:
+                continue
+            try:
+                self.api.post(
+                    f"/prospective-members/prospects/{prospect_id}/events",
+                    {"event_id": event_id},
+                )
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+                self.blocked.append(f"prospect event link: {exc}")
 
     def _enable_public_status(self, pipelines: list[dict]) -> None:
         """Turn on the public application-status page.
@@ -6321,7 +6426,11 @@ class Seeder:
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
         apparatus = self.step("apparatus", lambda: self.seed_apparatus(stations)) or []
-        self.step("evoc levels", self.seed_evoc_levels)
+        evoc_levels = self.step("evoc levels", self.seed_evoc_levels) or []
+        self.step(
+            "apparatus operators",
+            lambda: self.seed_apparatus_operators(apparatus, members, evoc_levels),
+        )
         self.step("apparatus activity", lambda: self.seed_apparatus_activity(apparatus))
         events = self.step("events", self.seed_events) or []
         self.step(

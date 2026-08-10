@@ -39,6 +39,9 @@ from app.core.permissions import get_rank_default_permissions
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
+from app.models.document import Document
+from app.models.inventory import ItemAssignment, ItemIssuance
+from app.models.training import TrainingRecord as TrainingRecordModel
 from app.models.user import Role, User, UserStatus, user_roles
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.schemas.user import (
@@ -1740,49 +1743,47 @@ async def get_deletion_impact(
         )
 
     # Count training records
-    training_count = 0
-    try:
-        from app.models.training import TrainingRecord as TrainingRecordModel
+    tr_result = await db.execute(
+        select(func.count())
+        .select_from(TrainingRecordModel)
+        .where(TrainingRecordModel.user_id == str(user_id))
+    )
+    training_count = tr_result.scalar() or 0
 
-        tr_result = await db.execute(
-            select(func.count())
-            .select_from(TrainingRecordModel)
-            .where(TrainingRecordModel.user_id == str(user_id))
+    # Count inventory the member is still holding.
+    #
+    # Individually-tracked gear lives in item_assignments and pool stock in
+    # item_issuances; a member typically holds both, and a preview that counts
+    # only one of them understates what a permanent delete destroys. Each has
+    # its own "still out" column — is_active here, returned_at there — so the
+    # two cannot be folded into one query.
+    assignment_result = await db.execute(
+        select(func.count())
+        .select_from(ItemAssignment)
+        .where(
+            ItemAssignment.user_id == str(user_id),
+            ItemAssignment.is_active.is_(True),
         )
-        training_count = tr_result.scalar() or 0
-    except Exception:
-        pass
-
-    # Count inventory assignments
-    inventory_count = 0
-    try:
-        from app.models.inventory import InventoryAssignment
-
-        inv_result = await db.execute(
-            select(func.count())
-            .select_from(InventoryAssignment)
-            .where(
-                InventoryAssignment.user_id == str(user_id),
-                InventoryAssignment.returned_at.is_(None),
-            )
+    )
+    issuance_result = await db.execute(
+        select(func.count())
+        .select_from(ItemIssuance)
+        .where(
+            ItemIssuance.user_id == str(user_id),
+            ItemIssuance.returned_at.is_(None),
         )
-        inventory_count = inv_result.scalar() or 0
-    except Exception:
-        pass
+    )
+    inventory_count = (assignment_result.scalar() or 0) + (
+        issuance_result.scalar() or 0
+    )
 
     # Count uploaded documents
-    document_count = 0
-    try:
-        from app.models.document import Document
-
-        doc_result = await db.execute(
-            select(func.count())
-            .select_from(Document)
-            .where(Document.uploaded_by == str(user_id))
-        )
-        document_count = doc_result.scalar() or 0
-    except Exception:
-        pass
+    doc_result = await db.execute(
+        select(func.count())
+        .select_from(Document)
+        .where(Document.uploaded_by == str(user_id))
+    )
+    document_count = doc_result.scalar() or 0
 
     total = training_count + inventory_count + document_count
 

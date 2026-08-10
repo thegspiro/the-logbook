@@ -1516,9 +1516,25 @@ class ApparatusService:
 
         self.db.add(operator)
         await self.db.commit()
-        await self.db.refresh(operator)
 
-        return operator
+        return await self._reload_operator(operator.id)
+
+    async def _reload_operator(self, operator_id: str) -> ApparatusOperator:
+        """Re-read an operator with `evoc_level` loaded.
+
+        ApparatusOperatorResponse projects the evoc_level relationship, and
+        `db.refresh()` does not populate relationships — so serializing a
+        freshly written operator triggered a lazy load on an async session and
+        raised MissingGreenlet, turning every create or update that named an
+        EVOC level into a 500. The row was written first, so the failure looked
+        like "saving the operator failed" while the operator existed.
+        """
+        result = await self.db.execute(
+            select(ApparatusOperator)
+            .where(ApparatusOperator.id == str(operator_id))
+            .options(selectinload(ApparatusOperator.evoc_level))
+        )
+        return result.scalar_one()
 
     async def list_operators(
         self,
@@ -1586,9 +1602,8 @@ class ApparatusService:
             setattr(operator, field, value)
 
         await self.db.commit()
-        await self.db.refresh(operator)
 
-        return operator
+        return await self._reload_operator(operator.id)
 
     async def delete_operator(self, operator_id: str, organization_id: str) -> bool:
         """Delete operator"""

@@ -1023,7 +1023,7 @@ export const SHOTS = [
   {
     id: "05-57-assign-scan-modal",
     doc: "05-inventory.md",
-    line: 446,
+    line: 464,
     anchor: "Screenshot of the Assign Items modal showing the member it is",
     alt: "Assigning items to a member by scanning or searching, with two items staged",
     route: "/inventory/admin/members",
@@ -1207,6 +1207,255 @@ export const SHOTS = [
     anchor: "The Members Admin hub — Member Management, Add Member",
     alt: "The Members Admin hub — Member Management, Add Member and Import Members tabs",
     route: "/members/admin",
+  },
+  {
+    id: "01-23-print-member-badges",
+    doc: "01-membership.md",
+    line: 56,
+    anchor:
+      'Screenshot of the Members directory with several rows checked and the "Print Badges"',
+    alt: "The Members directory selection bar with Print Badges, Export Selected and Clear Selection",
+    route: "/members",
+    prepare: async (page) => {
+      // The bulk bar is `hidden md:flex` — desktop only — and only renders
+      // once something is selected, so the shot has to tick rows first.
+      // Scoped to tbody: the thead box is "Select all members", which would
+      // tick the whole page rather than the "several rows" pictured.
+      const boxes = page.locator('tbody input[type="checkbox"]:visible');
+      await boxes.first().waitFor({ timeout: 15_000 });
+      const count = Math.min(await boxes.count(), 3);
+      for (let i = 0; i < count; i += 1) await boxes.nth(i).check();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "01-24-delete-member-modal",
+    doc: "01-membership.md",
+    line: 345,
+    anchor: "Screenshot of the Remove Member dialog's Permanently Delete tab",
+    alt: "The Permanently Delete tab of the Remove Member dialog, with its impact breakdown and typed confirmation",
+    route: "/members",
+    prepare: async (page) => {
+      // Nadia Belhaj is the member the seeder kits out, so her impact
+      // breakdown has a number against every row rather than a column of
+      // zeros that reads as "deleting a member costs nothing".
+      const row = page.locator("tr").filter({ hasText: "Nadia Belhaj" });
+      await row.first().waitFor({ timeout: 15_000 });
+      await row.locator('button[title="Delete"]').first().click();
+      await page.waitForTimeout(800);
+      // The permanent-deletion warning and the typed confirmation this
+      // section is about are on the second tab; the dialog opens on the
+      // reversible Deactivate one.
+      await page
+        .getByRole("tab", { name: /Permanently Delete/i })
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    selector: "div.fixed.inset-0",
+  },
+  {
+    id: "01-25-applicant-action-bar",
+    doc: "01-membership.md",
+    line: 432,
+    anchor: "Screenshot of the applicant detail drawer's action bar",
+    alt: "The applicant drawer's action bar — Interview, Back, Withdraw, Hold, Skip, Reject and Advance",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      // Back only renders off the first stage, so the shot has to open an
+      // applicant who has moved on. Rather than opening drawers in turn until
+      // one has the button — which fails as soon as a drawer refuses to close
+      // and covers the board — the column position picks the applicant: any
+      // card outside the leftmost stage is past stage one by construction.
+      const columns = page.locator("div.shrink-0.w-64, div.shrink-0.sm\\:w-72");
+      await columns.first().waitFor({ timeout: 15_000 });
+      const total = await columns.count();
+      for (let i = 1; i < total; i += 1) {
+        const card = columns.nth(i).locator("[role='button'][aria-label]");
+        if (await card.count()) {
+          await card.first().click({ timeout: 15_000 });
+          await page.waitForTimeout(1200);
+          return;
+        }
+      }
+      throw new Error("01-25: no applicant is past the first stage");
+    },
+  },
+  {
+    id: "01-26-print-applicant-badges",
+    doc: "01-membership.md",
+    line: 446,
+    anchor:
+      'Screenshot of the Prospective Members pipeline with several applicants selected and the "Print Badges"',
+    alt: "The prospective members bulk-action bar with Print Badges, Advance All and the rest",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      // Each kanban card carries its own "Select <name>" checkbox; the bulk
+      // bar appears above the board once any of them is ticked.
+      const boxes = page.locator(
+        'input[type="checkbox"][aria-label^="Select "]:visible',
+      );
+      await boxes.first().waitFor({ timeout: 15_000 });
+      const count = Math.min(await boxes.count(), 3);
+      for (let i = 0; i < count; i += 1) await boxes.nth(i).check();
+      await page.waitForTimeout(400);
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+  },
+  {
+    id: "01-27-stage-type-picker",
+    doc: "01-membership.md",
+    line: 500,
+    anchor:
+      "Screenshot of the Stage Configuration Modal showing the stage type selector",
+    alt: "The stage type picker in the Stage Configuration modal, showing all twelve stage types",
+    route: "/prospective-members/settings",
+    prepare: async (page) => {
+      // The page opens on "Select a pipeline" — the stage builder, and with
+      // it Add Stage, only renders once one is chosen from the left list.
+      const pipeline = page
+        .locator("button, li, div[role='button']")
+        .filter({ hasText: /stages · \d+ applicants/ })
+        .first();
+      await pipeline.waitFor({ timeout: 15_000 });
+      await pipeline.click();
+      await page.waitForTimeout(1000);
+      const add = page.getByRole("button", { name: /Add Stage/i }).first();
+      await add.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await add.click({ timeout: 15_000 });
+      await page.waitForTimeout(700);
+      // The picker is below the name/description fields inside the modal's
+      // own scroll container, so scrolling the page does nothing.
+      await page
+        .getByText("Stage Type *", { exact: true })
+        .scrollIntoViewIfNeeded({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
+    // Clipped to the picker's own block. The modal scrolls internally, so a
+    // viewport shot of it shows six of the twelve types and cuts the rest off
+    // at the fold — which is the one thing this placeholder is counting.
+    selector: "div:has(> label:text-is('Stage Type *'))",
+  },
+  {
+    id: "01-28-stage-email-config",
+    doc: "01-membership.md",
+    line: 534,
+    anchor:
+      "Screenshot of the email configuration panel in the Stage Config Modal",
+    alt: "The automated-email stage configuration with its subject, welcome message and custom sections",
+    route: "/prospective-members/settings",
+    prepare: async (page) => {
+      // The page opens on "Select a pipeline" — the stage builder, and with
+      // it Add Stage, only renders once one is chosen from the left list.
+      const pipeline = page
+        .locator("button, li, div[role='button']")
+        .filter({ hasText: /stages · \d+ applicants/ })
+        .first();
+      await pipeline.waitFor({ timeout: 15_000 });
+      await pipeline.click();
+      await page.waitForTimeout(1000);
+      const add = page.getByRole("button", { name: /Add Stage/i }).first();
+      await add.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await add.click({ timeout: 15_000 });
+      await page.waitForTimeout(700);
+      await page
+        .locator("button")
+        .filter({ hasText: "Automated Email" })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+      // The custom section this placeholder pictures does not exist until it
+      // is added; the panel opens with only the four built-in sections.
+      await page
+        .getByRole("button", { name: /Add custom section/i })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+      await page
+        .getByText("Email Subject", { exact: false })
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
+    // Clipped past the type picker — which 01-27 already pictures — to the
+    // configuration block the automated-email section is actually about.
+    selector: "div:has(> h3:text-is('Stage Configuration'))",
+    // Taller than the block, so the modal's own overflow still clips it. At
+    // 900px the block runs past the modal and the element shot painted a strip
+    // of the settings page showing through underneath it.
+    viewport: { width: 1440, height: 1200 },
+  },
+  {
+    id: "01-29-status-change-modal",
+    doc: "01-membership.md",
+    line: 583,
+    anchor:
+      "Screenshot of the Change Member Status dialog with a drop status selected",
+    alt: "The Change Member Status dialog with a drop status selected and its property-return note",
+    route: "/members",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/users?limit=1",
+        (id) => `/members/${id}`,
+        "users",
+      )(page);
+      const badge = page
+        .locator('button[title="Change status"]:visible')
+        .first();
+      await badge.waitFor({ timeout: 15_000 });
+      await badge.click();
+      await page.waitForTimeout(600);
+      // Picking a drop status is what reveals the property-return note, and
+      // it also enables Update Status — which stays disabled while the
+      // selection still matches the member's current status.
+      await page
+        .locator("select")
+        .filter({ hasText: "Dropped Voluntary" })
+        .first()
+        .selectOption({ label: "Dropped Voluntary" });
+      await page.waitForTimeout(400);
+    },
+    // Clipped to the dialog: the profile behind it is a different section's
+    // subject, and the panel it happens to sit over is an empty table.
+    selector: "div.fixed.inset-0 > div",
+  },
+  {
+    id: "01-30-evoc-operator-modal",
+    doc: "01-membership.md",
+    line: 897,
+    anchor: "Screenshot of an operator record on an apparatus's Operators tab",
+    alt: "An apparatus operator's record with its EVOC Certification Level, certification dates and licence fields",
+    route: "/apparatus",
+    prepare: async (page) => {
+      // Edit rather than Add: the add form opens with every field blank and
+      // "No EVOC level" selected, which pictures the control without
+      // picturing what it holds.
+      const rig = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/apparatus/operators", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body) ? body : body.operators || [];
+        const withLevel = rows.find((row) => row.evoc_level || row.evocLevel);
+        return withLevel
+          ? withLevel.apparatus_id || withLevel.apparatusId
+          : null;
+      });
+      if (!rig)
+        throw new Error("01-30: no seeded operator holds an EVOC level");
+      await page.goto(new URL(`/apparatus/${rig}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      await clickByName(/^Operators$/)(page);
+      await page.waitForTimeout(1000);
+      await page
+        .locator('button[title="Edit operator"]:visible')
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    },
   },
 
   // ── 02 Training ─────────────────────────────────────────────────────
