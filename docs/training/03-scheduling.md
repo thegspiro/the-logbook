@@ -1301,8 +1301,11 @@ When you have 2 or more pending shift assignments, checkboxes appear on each pen
 
 The UI updates immediately (optimistic update). If the API call fails for any shift, that shift reverts to its previous state and a toast notification shows the error.
 
-> **Screenshot needed:**
-> _[Screenshot of the My Shifts tab showing 3 pending shift cards with checkboxes selected, the "Select All" toggle enabled, and the "Confirm All" / "Decline All" bulk action buttons visible in the action bar above]_
+Only assignments still awaiting an answer carry a checkbox. Once confirmed, a
+card shows a green **Confirmed** badge and drops out of the selection entirely,
+so the count in the bar always matches what is still outstanding.
+
+![The My Shifts bulk bar — every pending assignment selected, with Confirm All and Decline All](./images/03-56-bulk-confirm-shifts.png)
 
 > **Edge case:** If you select 5 shifts and "Confirm All" but one fails (e.g., shift was cancelled by an officer), that one reverts to pending while the other 4 remain confirmed.
 

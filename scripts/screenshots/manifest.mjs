@@ -637,6 +637,27 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "03-56-bulk-confirm-shifts",
+    doc: "03-scheduling.md",
+    line: 1308,
+    anchor:
+      "Screenshot of the My Shifts tab with the outstanding assignments selected",
+    alt: "The My Shifts bulk bar — every pending assignment selected, with Confirm All and Decline All",
+    // A member's own assignments; the bar is about confirming your own shifts.
+    auth: "member",
+    route: "/scheduling?tab=my-shifts",
+    prepare: async (page) => {
+      // The bar renders only with more than one pending assignment, and the
+      // buttons only once something is selected.
+      const selectAll = page.getByText(/Select all \d+ pending/).first();
+      await selectAll.waitFor({ timeout: 15_000 });
+      await selectAll.click();
+      await page.waitForTimeout(700);
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+    fullPage: false,
+  },
+  {
     id: "03-55-staffing-status-cards",
     doc: "03-scheduling.md",
     line: 1331,
