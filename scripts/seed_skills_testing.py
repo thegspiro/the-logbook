@@ -12,9 +12,10 @@ covering every state the UI has a distinct rendering for:
 
 The last of those needs a *non-officer* examiner — an officer's own completion
 validates in the same step, so an officer can never leave a test pending. Pass
-``--examiner-username`` / ``--examiner-password`` for a plain member account to
-seed it; without them the script says so and skips that one state rather than
-leaving you to wonder why the validation queue is empty.
+``--examiner-username`` for a plain member account to seed it; without one the
+script says so and skips that state rather than leaving you to wonder why the
+validation queue is empty. Passwords are read from the environment or from a
+hidden interactive prompt, never from command-line arguments.
 
 Everything goes through the public API as a logged-in administrator, so the
 result is exactly what the application itself would produce — the seeder cannot
@@ -26,14 +27,15 @@ skipped entirely if any already exist, so it is safe to re-run.
 Usage:
     python scripts/seed_skills_testing.py \\
         --base-url http://127.0.0.1:3001 \\
-        --username admin --password '...'
+        --username admin
 
     # …plus the pending-validation record:
-    python scripts/seed_skills_testing.py --username admin --password '...' \\
-        --examiner-username jdoe --examiner-password '...'
+    python scripts/seed_skills_testing.py --username admin \\
+        --examiner-username jdoe
 
 Credentials may also come from LOGBOOK_BASE_URL / LOGBOOK_USERNAME /
-LOGBOOK_PASSWORD in the environment.
+LOGBOOK_PASSWORD / LOGBOOK_EXAMINER_USERNAME / LOGBOOK_EXAMINER_PASSWORD in the
+environment. Environment passwords suppress the corresponding secure prompt.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from getpass import getpass
 from http.cookiejar import CookieJar
 from pathlib import Path
 from time import sleep
@@ -306,7 +309,6 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("LOGBOOK_BASE_URL", "http://127.0.0.1:3001"),
     )
     parser.add_argument("--username", default=os.environ.get("LOGBOOK_USERNAME", ""))
-    parser.add_argument("--password", default=os.environ.get("LOGBOOK_PASSWORD", ""))
     parser.add_argument(
         "--examiner-username",
         default=os.environ.get("LOGBOOK_EXAMINER_USERNAME", ""),
@@ -314,10 +316,6 @@ def parse_args() -> argparse.Namespace:
             "A non-officer member account used as examiner for the "
             "pending-validation record. Omit to skip that one state."
         ),
-    )
-    parser.add_argument(
-        "--examiner-password",
-        default=os.environ.get("LOGBOOK_EXAMINER_PASSWORD", ""),
     )
     parser.add_argument(
         "--templates-only",
@@ -366,17 +364,32 @@ def seed_pending_validation(
 
 def main() -> int:
     args = parse_args()
-    if not args.username or not args.password:
+    password = os.environ.get("LOGBOOK_PASSWORD", "")
+    if args.username and not password:
+        try:
+            password = getpass("Administrator password: ")
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+
+    examiner_password = os.environ.get("LOGBOOK_EXAMINER_PASSWORD", "")
+    if args.examiner_username and not examiner_password:
+        try:
+            examiner_password = getpass("Examiner password: ")
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+
+    if not args.username or not password:
         print(
             "ERROR: administrator credentials required "
-            "(--username/--password or LOGBOOK_USERNAME/LOGBOOK_PASSWORD)",
+            "(--username or LOGBOOK_USERNAME, plus a password prompt or "
+            "LOGBOOK_PASSWORD)",
             file=sys.stderr,
         )
         return 2
 
     api = Api(args.base_url)
     try:
-        api.login_as(args.username, args.password)
+        api.login_as(args.username, password)
     except ApiError as exc:
         print(f"ERROR: login failed — {exc}", file=sys.stderr)
         return 1
@@ -470,7 +483,7 @@ def main() -> int:
 
     print(f"  tests: {len(seeded)} created ({', '.join(seeded)})")
 
-    if args.examiner_username and args.examiner_password:
+    if args.examiner_username and examiner_password:
         pending_sheet = sheets["Bleeding Control and Shock Management"]
         pending_template = templates.get(pending_sheet["name"])
         if pending_template:
@@ -500,7 +513,7 @@ def main() -> int:
                 seed_pending_validation(
                     args.base_url,
                     args.examiner_username,
-                    args.examiner_password,
+                    examiner_password,
                     pending_template,
                     pending_sheet,
                     candidate,
@@ -508,9 +521,9 @@ def main() -> int:
                 print("  tests: 1 created (pending_validation)")
     else:
         print(
-            "  tests: pending_validation SKIPPED — pass "
-            "--examiner-username/--examiner-password for a non-officer "
-            "member to seed the officer review queue."
+            "  tests: pending_validation SKIPPED — pass --examiner-username "
+            "for a non-officer member and provide its password at the prompt "
+            "or through LOGBOOK_EXAMINER_PASSWORD."
         )
 
     print("Done.")
