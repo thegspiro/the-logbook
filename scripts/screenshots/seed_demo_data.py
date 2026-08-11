@@ -3174,11 +3174,14 @@ class Seeder:
                     "status": "available",
                     "tracking_type": "pool",
                     # Not the real count. On-hand for a lot-stocked item comes
-                    # from its in-date lots; `quantity` is the fallback for
-                    # items with none, and is left at zero here so a screenshot
-                    # of the two-ledger Qty column cannot be read as the two
-                    # agreeing by luck.
-                    "quantity": 0,
+                    # from its in-date lots; `quantity` is only the fallback
+                    # for items with none. It is deliberately a value no lot
+                    # total shares (the smallest seeded lot is 6), so a
+                    # screenshot of the two-ledger Qty column cannot be read as
+                    # the two agreeing by luck. Zero would say that more
+                    # plainly but `create_item` rejects it — a pool item must
+                    # carry a quantity of at least 1.
+                    "quantity": 1,
                     "asset_tag": f"SUP-{2000 + index}",
                 }
                 if category_id:
@@ -3306,14 +3309,31 @@ class Seeder:
         whose real exposure is the earlier of them. Going through the swap
         endpoint rather than writing rows directly also exercises the decrement
         on the shelf lot, so the ready-stock figures stay honest.
+
+        Each position is counted to zero first and then filled to its par. A
+        position nobody has counted reports its **target** as the units aboard
+        — a NULL count means "not counted since this was defined", not "empty"
+        — and the first swap turns that assumption into a real undated lot row
+        before adding the swapped units on top. Skipping the zero left every
+        truck holding roughly double its par behind a phantom lot with no
+        number and no date, which is both wrong and the one thing these screens
+        exist to rule out.
         """
+        targets = {
+            position: target
+            for _, contents in self.MEDIC_COMPARTMENTS
+            for position, _catalog_name, target in contents
+            if target
+        }
         for position, item_id in positions.items():
             aboard = self.api.get(f"/equipment-checks/items/{item_id}/deployed-lots")
             if items(aboard, "lots"):
                 continue
             catalog_item = catalog.get(position)
-            if not catalog_item:
+            target = targets.get(position)
+            if not catalog_item or not target:
                 continue
+            self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 0})
             lots = items(
                 self.api.get(f"/inventory/items/{pick(catalog_item, 'id')}/lots"),
                 "lots",
@@ -3336,13 +3356,28 @@ class Seeder:
             if not usable:
                 continue
             take = usable[:2] if position == "Naloxone 4mg Nasal" else usable[:1]
-            for lot in take:
+            # Fill to par, split evenly across the lots taken. Par rather than a
+            # fixed two so the truck starts the story at full: the positions
+            # that end up short are the ones `_leave_one_short` and
+            # `_report_one_used` make short, and a screenshot where everything
+            # is under par cannot tell a shortfall from the starting state.
+            share, extra = divmod(target, len(take))
+            for index, lot in enumerate(take):
+                # Clamped to the shelf lot rather than redistributed: every
+                # seeded lot comfortably covers its share, and a seeder that
+                # quietly rebalances would hide the day one stops.
+                quantity = min(
+                    share + (1 if index < extra else 0),
+                    int(pick(lot, "quantity") or 0),
+                )
+                if quantity < 1:
+                    continue
                 try:
                     self.api.post(
                         f"/equipment-checks/items/{item_id}/swap",
                         {
                             "inventory_lot_id": pick(lot, "id"),
-                            "quantity": 1 if len(take) > 1 else 2,
+                            "quantity": quantity,
                         },
                     )
                 except ApiError as exc:

@@ -836,10 +836,15 @@ permission is the thing that leaves the bracket empty until morning.
 
 ![Apparatus Inventory on a phone — counted positions with what is aboard against par, the short ones called out](./images/03-95-apparatus-inventory.png)
 
-The header counts the truck twice: **how many positions are tracked**, and **how
-many need restock**. A position at par states its count plainly — "6 of 6
-aboard" — and a position under it carries an amber **Short** badge with the gap
-spelled out, so the two are told apart at a glance rather than by shade.
+The header counts the truck three ways: **how many positions are tracked**, how
+many **need restock**, and how many are **expiring**. A position at par states
+its count plainly — "2 of 2 Box aboard" — and a position under it carries an
+amber **Short** badge and prints its count in amber too — "18 of 24 Box aboard"
+— so the two are told apart at a glance rather than by shade alone.
+
+The lot number beside a position is **the lot the date belongs to**, not the
+last one swapped aboard. On a position carrying several lots those are
+different lots, and the one that matters is the one expiring soonest.
 
 > **A tracked position comes from a checklist bound to _that_ apparatus.** A
 > template that applies to every engine — bound by apparatus **type** — supplies
@@ -857,8 +862,12 @@ Each position offers up to five actions, and they mean different things:
 | **Flag** | Damaged, contaminated, missing or recalled — **on a counted position, where − already records use.** It is the honest way to say "this needs attention" without pretending a unit was consumed |
 | **Lots** | Opens the lots aboard. A position carrying lots opens them **instead of** offering a stepper — two units with two dates cannot be moved by one plus or minus                                   |
 
-> **Screenshot needed:**
-> _[Screenshot of the lots sheet open over the Apparatus Inventory page on a phone, showing two lots for one position with different expiration dates, each with its own count field and a Remove control, and the sheet sitting clear of the bottom tab bar]_
+![The lots-aboard sheet on a phone — two lots on one position, each with its own count and expiry](./images/03-96-lots-aboard-sheet.png)
+
+The sheet lists lots **soonest to expire first**, which is both the order a crew
+should draw from and the order a reported use comes off. **Correct** fixes a
+miscounted or mistyped lot; **Remove** takes it off the truck entirely. A lot
+drawn down to nothing disappears on its own — it is no longer aboard.
 
 **Headers and free-text lines do not appear here.** They are checklist
 scaffolding — "Check all seals", "Officer's compartment" — not things anyone
@@ -879,11 +888,13 @@ and the officer plans the week around which one each row is.
 | Filter     | All · Needs restock · Used or short · Expired |
 | Sort       | Soonest expiry · By apparatus                 |
 
-Three summary pills sit above the list: how many rows need attention, how many
-have ready stock behind them, and how many need ordering.
+Two summary pills sit above the list — how many rows need attention, and how
+many have ready stock behind them. A third, in red, appears **only when
+something has no ready stock to draw on**: `N need restock`. A department whose
+shelves cover every row never sees it, and that absence is the answer to "is
+there anything I have to order this week".
 
-> **Screenshot needed:**
-> _[Screenshot of the Expiring on Apparatus page with the three summary pills visible, the 30/60/90 window selector, and at least four rows: one expiring with ready stock, one expired and struck through, one flagged "needs restock" from a crew report, and one short of its target showing "2/4"]_
+![Expiring on Apparatus: the summary pills, the 30/60/90 window, and three rows — one expiring, one reported used, one short of par](./images/03-59-supply-worklist.png)
 
 **Expired shelf stock is struck through and cannot be swapped.** Offering it
 would put expired supplies in service and fail the item on the very next check,

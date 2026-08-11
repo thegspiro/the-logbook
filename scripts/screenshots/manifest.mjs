@@ -3578,43 +3578,11 @@ export const SHOTS = [
   },
 
   {
-    id: "03-57-apparatus-inventory",
-    doc: "03-scheduling.md",
-    line: 827,
-    anchor: "Screenshot of the Apparatus Inventory page on a phone with an engine",
-    alt: "Apparatus Inventory on a phone: compartments with per-position counts and the lots aboard",
-    // Shot from a crew member's session, not the chief's. The page opens on
-    // `equipment_check.submit` — the default member position — and that is the
-    // whole claim the feature makes about who records what they used.
-    auth: "member",
-    route: "/scheduling/apparatus-inventory",
-    viewport: "mobile",
-    prepare: async (page) => {
-      // The page opens on "Select an apparatus…", which is an empty state
-      // rather than the screen. M-3 is the rig `seed_supply_tracking` stocks.
-      const select = page.locator("#apparatus-select");
-      await select.waitFor({ timeout: 20_000 });
-      // By the option's own value rather than its label: the label is
-      // "M-3 — Medic 3", built from two fields, and matching it as a string
-      // breaks the moment either changes.
-      const value = await page
-        .locator("#apparatus-select option")
-        .filter({ hasText: "M-3" })
-        .first()
-        .getAttribute("value");
-      if (value) {
-        await select.selectOption(value);
-        await page.waitForTimeout(1_200);
-      }
-    },
-    fullPage: false,
-  },
-  {
     id: "03-59-supply-worklist",
     doc: "03-scheduling.md",
-    line: 866,
+    line: 894,
     anchor: "Screenshot of the Expiring on Apparatus page with the three summary pills",
-    alt: "Expiring on Apparatus: summary pills, the window selector, and rows in four different states",
+    alt: "Expiring on Apparatus: the summary pills, the 30/60/90 window, and three rows — one expiring, one reported used, one short of par",
     route: "/scheduling/supply/expiring",
     fullPage: true,
   },
@@ -6601,33 +6569,66 @@ export const SHOTS = [
     line: 837,
     anchor: "the Apparatus Inventory page on a phone",
     alt: "Apparatus Inventory on a phone — counted positions with what is aboard against par, the short ones called out",
+    // Shot from a crew member's session, not the chief's. The page opens on
+    // `equipment_check.submit` — the default member position — and that is the
+    // whole claim the feature makes about who records what they used.
+    auth: "member",
+    route: "/scheduling/apparatus-inventory",
+    // A tall phone rather than `viewport: "mobile"` + `fullPage`. The bottom
+    // tab bar is `position: fixed`, and a full-page shot paints it once at its
+    // viewport offset — across the middle of the list, over the one row whose
+    // count ("18 of 24") the surrounding prose quotes. A frame tall enough to
+    // hold the three compartments leaves the bar where a phone puts it.
+    viewport: { width: 414, height: 1500 },
+    prepare: async (page) => {
+      // The page opens on "Select an apparatus…", which is an empty state
+      // rather than the screen. M-3 is the rig `seed_supply_tracking` stocks.
+      const select = page.locator("#apparatus-select");
+      await select.waitFor({ timeout: 20_000 });
+      // By the option's own value rather than its label: the label is
+      // "M-3 — Medic 3", built from two fields, and matching it as a string
+      // breaks the moment either changes.
+      const value = await page
+        .locator("#apparatus-select option")
+        .filter({ hasText: "M-3" })
+        .first()
+        .getAttribute("value");
+      if (value) {
+        await select.selectOption(value);
+        await page.waitForTimeout(1_200);
+      }
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-96-lots-aboard-sheet",
+    doc: "03-scheduling.md",
+    line: 866,
+    anchor: "Screenshot of the lots sheet open over the Apparatus Inventory page",
+    alt: "The lots-aboard sheet on a phone — two lots on one position, each with its own count and expiry",
+    auth: "member",
     route: "/scheduling/apparatus-inventory",
     viewport: "mobile",
     prepare: async (page) => {
-      await page.waitForTimeout(2500);
-      // The page reads the truck from ?apparatus=; the seeder stocks exactly
-      // one, so ask the API which rather than clicking through the fleet.
-      const apparatusId = await page.evaluate(async () => {
-        const response = await fetch("/api/v1/apparatus?page_size=50", {
-          credentials: "include",
-        });
-        if (!response.ok) return null;
-        const body = await response.json();
-        const rows = Array.isArray(body) ? body : (body.apparatus ?? body.items ?? []);
-        const wanted = rows.find((row) => row.name === "Engine 1");
-        return wanted ? wanted.id : null;
-      });
-      if (!apparatusId) throw new Error("03-95: Engine 1 not found");
-      await page.goto(
-        new URL(
-          `/scheduling/apparatus-inventory?apparatus=${apparatusId}`,
-          page.url(),
-        ).toString(),
-        { waitUntil: "domcontentloaded" },
-      );
-      await page.waitForTimeout(3000);
+      const select = page.locator("#apparatus-select");
+      await select.waitFor({ timeout: 20_000 });
+      const value = await page
+        .locator("#apparatus-select option")
+        .filter({ hasText: "M-3" })
+        .first()
+        .getAttribute("value");
+      if (!value) throw new Error("03-96: M-3 not in the apparatus picker");
+      await select.selectOption(value);
+      // The sheet only exists for a position carrying more than one lot, and
+      // Naloxone is the one `seed_supply_tracking` stocks that way — the whole
+      // reason the sheet exists is a bracket holding two expiration dates.
+      await page
+        .getByRole("button", { name: /^2 lots$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(1_200);
     },
-    fullPage: true,
+    fullPage: false,
   },
   {
     id: "09-20-result-disclosure-settings",

@@ -1016,25 +1016,39 @@ through **Start a Check** did not get as far as the template picker either.
 Reaching it needs the seeding above, or a member session whose own shift carries
 an unstarted checklist.
 
-## Screenshot Seeding — Apparatus Inventory Is Empty For Every Truck (2026-08-11)
+## Screenshot Seeding — Apparatus Inventory Was Empty For Every Truck (2026-08-11, resolved)
 
-Deferred, with a plan. `03-scheduling.md` documents the Apparatus Inventory page
-— counted positions, a short position in amber, lots aboard with their dates —
-and the demo shows nothing at all: `GET /equipment-checks/apparatus/{id}/inventory`
-returns `compartments: []` for all seven apparatus.
+Resolved the same day by `seed_supply_tracking`, which stocks **M-3** with a
+catalog of dated consumables, a checklist bound to that apparatus by id, and
+deployed-lot rows saying what is aboard. Recorded here because the diagnosis
+still applies to any department whose inventory page is bare:
 
-Not a defect. The endpoint joins template compartments to an apparatus by
-`EquipmentCheckTemplate.apparatus_id`, and both seeded templates are bound by
-`apparatus_type` instead, which is what a checklist that applies to every engine
-looks like. Nothing in the demo is stocked _on a particular truck_.
+`GET /equipment-checks/apparatus/{id}/inventory` joins template compartments to
+an apparatus by `EquipmentCheckTemplate.apparatus_id`. A checklist bound by
+`apparatus_type` — what a template that applies to every engine looks like —
+supplies checklists for shifts but stocks no particular truck, and a rig with
+only type-bound templates shows an empty inventory. That is documented in
+`03-scheduling.md` as a callout rather than left for the reader to discover.
 
-Filling it means a third template bound to one apparatus by id, carrying counted
-positions — one at par, one short, one with lots — and that is where the care is
-needed: `_resolve_templates` matches a shift's checklists by `apparatus_id`
-**or** `apparatus_type`, so an id-bound template attaches to that apparatus's
-shifts as well and can change the checklist counts in the equipment-check shots
-already published. Seed it, then re-capture the neighbouring shots and diff the
-images before applying.
+Two things the seeding turned up, both now fixed:
+
+- A position nobody has counted reports its **target** as the units aboard — a
+  NULL count means "not counted since this was defined", not "empty" — and the
+  first swap materializes that assumption as a real undated lot row before
+  adding the swapped units on top. A seeder that fills a fresh position without
+  counting it to zero first leaves the truck holding roughly double its par
+  behind a phantom lot with no number and no date.
+- The lot number a position reported came from `CheckTemplateItem.lot_number`,
+  the scalar left over from the last swap, while the date beside it came from
+  the soonest-expiring deployed lot. On a position carrying several lots those
+  are different lots, and the pair reads as one false fact about a specific lot.
+  Both now come from the same row (`_soonest_lot_number`).
+
+An id-bound template also attaches to that apparatus's **shifts**, because
+`_resolve_templates` matches by `apparatus_id` **or** `apparatus_type`. M-3
+carries no seeded shift checklists, so nothing already published moved; a future
+template bound to a rig that does needs the neighbouring equipment-check shots
+re-captured and diffed before applying.
 
 ## Prospective Members — A Configured Checklist Stage Cannot Be Passed (2026-08-11)
 

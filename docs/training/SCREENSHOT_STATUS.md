@@ -9,14 +9,14 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**357 of 488 placeholders filled** (131 remaining).
+**359 of 488 placeholders filled** (129 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
 | [00-getting-started.md](./00-getting-started.md) | 11 | 2 |
 | [01-membership.md](./01-membership.md) | 23 | 4 |
 | [02-training.md](./02-training.md) | 65 | 12 |
-| [03-scheduling.md](./03-scheduling.md) | 52 | 18 |
+| [03-scheduling.md](./03-scheduling.md) | 54 | 16 |
 | [04-events-meetings.md](./04-events-meetings.md) | 27 | 14 |
 | [05-inventory.md](./05-inventory.md) | 39 | 15 |
 | [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 14 | 7 |
@@ -32,5 +32,5 @@ regenerated wholesale, so that audit cannot live here.
 | [16-integrations.md](./16-integrations.md) | 4 | 8 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 2 | 0 |
 | [18-storefront.md](./18-storefront.md) | 4 | 1 |
-| **Total** | **357** | **131** |
+| **Total** | **359** | **129** |
 
