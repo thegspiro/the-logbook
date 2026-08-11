@@ -2,7 +2,13 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // ES2022.Error is pulled in on top of ES2020 for the `new Error(msg,
+    // { cause })` overload. ESLint's `preserve-caught-error` rule (part of
+    // eslint:recommended as of @eslint/js 10) requires a rethrown error to
+    // carry the original as its `cause`, and that is the only standard way to
+    // attach it. Error cause is a runtime API rather than syntax, so it needs
+    // no change to `target`.
+    "lib": ["ES2020", "ES2022.Error", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
 

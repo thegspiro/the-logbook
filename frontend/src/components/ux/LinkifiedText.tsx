@@ -60,7 +60,7 @@ export const LinkifiedText: React.FC<LinkifiedTextProps> = ({ text, linkClassNam
   }
 
   if (lastIndex < text.length) {
-    nodes.push(<React.Fragment key={key++}>{text.slice(lastIndex)}</React.Fragment>);
+    nodes.push(<React.Fragment key={key}>{text.slice(lastIndex)}</React.Fragment>);
   }
 
   return <>{nodes}</>;

@@ -166,7 +166,7 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to place your order');
       set({ isSubmitting: false, error: message });
-      throw new Error(message);
+      throw new Error(message, { cause: err });
     }
   },
 
