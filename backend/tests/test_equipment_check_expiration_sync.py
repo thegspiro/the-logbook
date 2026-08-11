@@ -13,12 +13,15 @@ from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
+from app.api.v1.endpoints.equipment_check import update_deployed_lot
 from app.models.apparatus import (
     CheckItemDeployedLot,
     CheckTemplateItem,
     TemplateChangeLog,
 )
+from app.schemas.equipment_check import DeployedLotUpdateRequest
 from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_service import InventoryService
 
@@ -55,12 +58,12 @@ def _template_item(**kwargs) -> CheckTemplateItem:
 
 
 class TestResolveExpiration:
-    def test_found_date_supersedes_template(self, service):
+    def test_found_date_does_not_supersede_template(self, service):
         item = _template_item()
         resolved = service._resolve_expiration(
             {"template_item_id": "ti-1", "expiration_found": NEXT_YEAR}, item
         )
-        assert resolved == NEXT_YEAR
+        assert resolved == YESTERDAY
 
     def test_template_beats_client_supplied_date(self, service):
         item = _template_item()
@@ -101,7 +104,7 @@ class TestComputeCheckStatus:
         assert items[0]["is_expired"] is True
         assert (total, completed, failed, overall) == (1, 1, 1, "fail")
 
-    def test_replacement_date_clears_the_auto_fail(self, service):
+    def test_replacement_date_cannot_clear_the_auto_fail(self, service):
         items = [
             {
                 "template_item_id": "ti-1",
@@ -112,10 +115,10 @@ class TestComputeCheckStatus:
         _, _, failed, overall = service._compute_check_status(
             items, {"ti-1": _template_item()}
         )
-        assert items[0]["status"] == "pass"
-        assert items[0]["is_expired"] is False
-        assert items[0]["expiration_date"] == NEXT_YEAR
-        assert (failed, overall) == (0, "pass")
+        assert items[0]["status"] == "fail"
+        assert items[0]["is_expired"] is True
+        assert items[0]["expiration_date"] == YESTERDAY
+        assert (failed, overall) == (1, "fail")
 
     def test_item_expiring_today_is_not_yet_expired(self, service):
         items = [{"template_item_id": "ti-1", "status": "pass"}]
@@ -149,23 +152,44 @@ class TestComputeCheckStatus:
         )
         assert (failed, overall) == (1, "fail")
 
+    def test_not_applicable_is_complete_without_failing(self, service):
+        items = [{"template_item_id": "ti-1", "status": "not_applicable"}]
+        total, completed, failed, overall = service._compute_check_status(items)
+        assert (total, completed, failed, overall) == (1, 1, 0, "pass")
+
+    def test_out_of_service_is_complete_and_fails_check(self, service):
+        items = [{"template_item_id": "ti-1", "status": "out_of_service"}]
+        total, completed, failed, overall = service._compute_check_status(items)
+        assert (total, completed, failed, overall) == (1, 1, 1, "fail")
+
+
+class TestTrendOutcomeBuckets:
+    def test_new_outcomes_are_not_misreported_as_unchecked(self, service):
+        assert service._trend_bucket_for_status("not_applicable") == (
+            "not_applicable_count"
+        )
+        assert service._trend_bucket_for_status("out_of_service") == "fail_count"
+        assert service._trend_bucket_for_status("not_checked") == "not_checked_count"
+
 
 class TestApplyFoundValuesToTemplate:
-    def test_expiration_written_back_to_template(self, service):
+    def test_expiration_is_not_written_back_to_template(self, service):
         item = _template_item()
         changed = service._apply_found_values_to_template(
             item, lot_found="LOT-77", expiration_found=NEXT_YEAR
         )
         assert changed is True
         assert item.lot_number == "LOT-77"
-        assert item.expiration_date == NEXT_YEAR
+        assert item.expiration_date == YESTERDAY
         assert item.has_expiration is True
 
-    def test_expiration_turns_on_tracking_for_an_untracked_item(self, service):
+    def test_expiration_does_not_turn_on_tracking_for_an_untracked_item(self, service):
         item = _template_item(has_expiration=False, expiration_date=None)
-        assert service._apply_found_values_to_template(item, expiration_found=TOMORROW)
-        assert item.has_expiration is True
-        assert item.expiration_date == TOMORROW
+        assert not service._apply_found_values_to_template(
+            item, expiration_found=TOMORROW
+        )
+        assert item.has_expiration is False
+        assert item.expiration_date is None
 
     def test_unchanged_values_do_not_flag_an_update(self, service):
         item = _template_item(lot_number="LOT-1")
@@ -257,7 +281,7 @@ class TestCreateCheckItems:
         created = await service._create_check_items(
             "check-1", items_data, {"ti-1": tmpl_item}, "org-1"
         )
-        assert tmpl_item.expiration_date == NEXT_YEAR
+        assert tmpl_item.expiration_date == YESTERDAY
         assert created[0].expiration_found == NEXT_YEAR
         # Flags the result so the report shows the truck's record was changed.
         assert created[0].updated_serial is True
@@ -745,6 +769,81 @@ class TestUpdateDeployedLot:
         )
 
         assert result is None
+
+
+class TestUpdateDeployedLotAuthorization:
+    """Counts are crew corrections; compliance metadata is privileged."""
+
+    @staticmethod
+    def _user():
+        return MagicMock(organization_id="org-1")
+
+    async def test_submitter_cannot_rewrite_expiration(self, mock_db):
+        with patch(
+            "app.api.v1.endpoints.equipment_check._collect_user_permissions",
+            return_value={"equipment_check.submit"},
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await update_deployed_lot(
+                    "ti-1",
+                    "dl-1",
+                    DeployedLotUpdateRequest(
+                        quantity=1, expiration_date=date(2099, 1, 1)
+                    ),
+                    mock_db,
+                    self._user(),
+                )
+
+        assert exc.value.status_code == 403
+
+    async def test_submitter_can_still_correct_quantity(self, mock_db):
+        with (
+            patch(
+                "app.api.v1.endpoints.equipment_check._collect_user_permissions",
+                return_value={"equipment_check.submit"},
+            ),
+            patch(
+                "app.api.v1.endpoints.equipment_check.EquipmentCheckService"
+            ) as service_class,
+        ):
+            service_class.return_value.update_deployed_lot = AsyncMock(
+                return_value={"lots": []}
+            )
+            await update_deployed_lot(
+                "ti-1",
+                "dl-1",
+                DeployedLotUpdateRequest(quantity=1),
+                mock_db,
+                self._user(),
+            )
+
+        service_class.return_value.update_deployed_lot.assert_awaited_once()
+
+    async def test_inventory_manager_can_rewrite_expiration(self, mock_db):
+        with (
+            patch(
+                "app.api.v1.endpoints.equipment_check._collect_user_permissions",
+                return_value={"inventory.manage"},
+            ),
+            patch(
+                "app.api.v1.endpoints.equipment_check.EquipmentCheckService"
+            ) as service_class,
+        ):
+            service_class.return_value.update_deployed_lot = AsyncMock(
+                return_value={"lots": []}
+            )
+            await update_deployed_lot(
+                "ti-1",
+                "dl-1",
+                DeployedLotUpdateRequest(quantity=1, expiration_date=None),
+                mock_db,
+                self._user(),
+            )
+
+        updates = service_class.return_value.update_deployed_lot.await_args.kwargs[
+            "updates"
+        ]
+        assert updates == {"quantity": 1, "expiration_date": None}
 
 
 class TestUnitLabels:

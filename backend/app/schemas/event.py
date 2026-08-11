@@ -554,10 +554,6 @@ class GuestCheckInResponse(BaseModel):
     attendee_id: str
     event_name: str
     checked_in_at: str
-    prospect_created: bool = Field(
-        default=False,
-        description="Whether a prospective-member record was opened",
-    )
     message: str
 
 

@@ -1627,6 +1627,7 @@ export interface TaskPerformed {
   task: string;
   description?: string | undefined;
   comment?: string;
+  equipment_check_id?: string;
 }
 
 export interface ShiftCompletionReportCreate {

@@ -56,6 +56,7 @@ const statusBadge = (status: string) => {
       );
     case 'failed':
     case 'fail':
+    case 'out_of_service':
       return (
         <span
           className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
@@ -63,7 +64,7 @@ const statusBadge = (status: string) => {
           aria-live="polite"
         >
           <XCircle className="h-3 w-3" aria-hidden="true" />
-          Failed
+          {status === 'out_of_service' ? 'Out of service' : 'Failed'}
         </span>
       );
     case 'not_applicable':

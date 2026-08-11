@@ -155,6 +155,7 @@ export const PatternsTab: React.FC = () => {
       ]);
       setPatterns(patternsData);
       setTemplates(templatesData);
+      setExpandedId((current) => current ?? patternsData[0]?.id ?? null);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load patterns'));
     } finally {

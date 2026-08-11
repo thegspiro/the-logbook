@@ -43,6 +43,7 @@ class TaskPerformed(BaseModel):
     task: str
     description: Optional[str] = None
     comment: Optional[str] = None  # Officer comment on this specific task
+    equipment_check_id: Optional[str] = None
 
 
 class RequirementProgressEntry(BaseModel):

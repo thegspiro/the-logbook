@@ -1,7 +1,7 @@
 # Script 3: IT Manager / System Admin — Complete Platform Guide
 
 **Video Type:** Role-Based Guide (Long-Form)
-**Estimated Length:** 30–40 minutes
+**Estimated Length:** 40–45 minutes
 **Target Audience:** IT Managers, System Owners, technically responsible personnel
 **Role:** IT Manager (wildcard `*` permission — full system access)
 **Chapters:** 11 (each designed as a standalone clip)
@@ -457,19 +457,55 @@ thresholds]**
 
 ---
 
-## CHAPTER 7: External Integrations (22:00 – 25:00)
+## CHAPTER 7: External Integrations (22:00 – 27:00)
 
-### INTEGRATIONS DASHBOARD (22:00 – 23:00)
+### INTEGRATIONS DASHBOARD (22:00 – 22:30)
 
 **[SCREEN: Navigate to Integrations (IntegrationsPage)]**
 
 > "The Integrations module connects The Logbook with external services.
-> Currently supported integrations include Google Calendar sync, email service
-> providers, SMS via Twilio, and monitoring via Sentry."
+> The dashboard includes calendar connections, messaging and notification
+> providers, Salesforce CRM, document signing, scheduling, payments, weather,
+> and other organization-level connections."
 
 **[SCREEN: Show the integrations dashboard with available/connected services]**
 
-### EMAIL CONFIGURATION (23:00 – 24:00)
+### SALESFORCE SERVICE-ACCOUNT SYNC (22:30 – 24:30)
+
+**[SCREEN: Open the Salesforce card. Highlight Instance URL, Client ID, Client
+Secret, Refresh Token, sync direction, readiness, and preview controls.]**
+
+> "Salesforce supports two connection methods. **Connect with Salesforce** is
+> the interactive choice: an administrator signs in and the encrypted refresh
+> token renews access automatically. For unattended scheduled sync, use a
+> Salesforce Connected App with **OAuth 2.0 Client Credentials Flow** enabled
+> and a dedicated **Run As** integration user."
+
+**[SCREEN: Salesforce Setup → Connected App policies. Highlight Client
+Credentials Flow and Run As user, but blur all credentials.]**
+
+> "For the service-account method, enter the org's My Domain URL — something
+> like `yourorg.my.salesforce.com` — and the Connected App client ID and secret.
+> Leave Refresh Token empty. Never paste the Run As user's password here; The
+> Logbook doesn't need or store it."
+
+**[CALLOUT: "Dedicated Run As user · API Enabled · least privilege"]**
+
+> "Give that user API Enabled and only the Contact, Task, Event, and field
+> permissions your selected sync types need. Then run **Readiness** and
+> **Preview** before the first write. Create the recommended `Logbook_*__c`
+> external-ID fields: Contact can fall back to email, but Tasks and Events can
+> duplicate without stable external IDs."
+
+**[SCREEN: Set sync direction, then show a successful readiness result and
+member preview.]**
+
+> "Direction is the conflict control: push, pull, or both. There is no separate
+> Salesforce-wins or Logbook-wins policy. Rate limits retry with bounded
+> backoff, and if a later page of a pull fails, the pull fails rather than
+> applying an incomplete result set."
+
+### EMAIL CONFIGURATION (24:30 – 25:30)
 
 > "If you didn't set up email during onboarding, this is where you do it. Go
 > to **Administration > Organization Settings**, click the **Email** tab, and
@@ -506,13 +542,13 @@ thresholds]**
 > attachments. If your department sends compliance reports or other files
 > by email, use one of the SMTP-based platforms instead."
 
-### CALENDAR SYNC (24:00 – 24:30)
+### CALENDAR SYNC (25:30 – 26:00)
 
 > "The calendar sync integration lets members export their events and shifts
 > to their personal Google Calendar, Apple Calendar, or Outlook. This is a
 > one-way sync — events from The Logbook appear in their external calendar."
 
-### WEB PUSH NOTIFICATIONS (24:30 – 25:00)
+### WEB PUSH NOTIFICATIONS (26:00 – 26:30)
 
 **[SCREEN: A `.env` file; `PUSH_ENABLED`, `VAPID_PUBLIC_KEY`,
 `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.]**
@@ -572,7 +608,7 @@ printing the two `.env` lines.]**
 > in a VPC or a service mesh, and forcing it on would refuse to start a perfectly
 > secure setup. That makes it your call, which is why it's worth making."
 
-### MONITORING WITH SENTRY (24:30 – 25:00)
+### MONITORING WITH SENTRY (26:30 – 27:00)
 
 > "If you want error monitoring and performance tracking, enable the Sentry
 > integration. This sends frontend and backend errors to Sentry for analysis.
@@ -586,9 +622,9 @@ printing the two `.env` lines.]**
 
 ---
 
-## CHAPTER 8: Platform Analytics & Monitoring (25:00 – 28:00)
+## CHAPTER 8: Platform Analytics & Monitoring (27:00 – 30:00)
 
-### PLATFORM ANALYTICS (25:00 – 26:00)
+### PLATFORM ANALYTICS (27:00 – 28:00)
 
 **[SCREEN: Navigate to Admin → Platform Analytics (PlatformAnalyticsPage)]**
 
@@ -602,7 +638,7 @@ printing the two `.env` lines.]**
 > or training. If Events has high engagement, you know that module is delivering
 > value."
 
-### ERROR MONITORING (26:00 – 27:00)
+### ERROR MONITORING (28:00 – 29:00)
 
 **[SCREEN: Navigate to Admin → Error Monitoring (ErrorMonitoringPage)]**
 
@@ -659,7 +695,7 @@ row.]**
 > generation — don't report here, because a worker has no request to resolve a
 > department from. Those are in the server logs."
 
-### DEPARTMENT SETUP & CONFIGURATION (27:00 – 28:00)
+### DEPARTMENT SETUP & CONFIGURATION (29:00 – 30:00)
 
 **[SCREEN: Navigate to Admin → Department Setup (DepartmentSetupPage)]**
 
@@ -677,9 +713,9 @@ row.]**
 
 ---
 
-## CHAPTER 9: Maintenance & Operations (28:00 – 33:00)
+## CHAPTER 9: Maintenance & Operations (30:00 – 35:00)
 
-### REGULAR MAINTENANCE TASKS (28:00 – 29:00)
+### REGULAR MAINTENANCE TASKS (30:00 – 31:00)
 
 > "Let's talk about what you should be doing regularly as the IT Manager."
 
@@ -705,7 +741,7 @@ row.]**
 > the change rather than locking the department out — but you don't want to
 > discover that on the day your only admin retires."
 
-### WHEN THE APP REFUSES TO START (29:00 – 29:30)
+### WHEN THE APP REFUSES TO START (31:00 – 31:30)
 
 **[SCREEN: Show a startup log with a CRITICAL security line]**
 
@@ -725,7 +761,7 @@ row.]**
 
 **[CALLOUT: "The app failing to start IS the safety feature"]**
 
-### UPDATING THE LOGBOOK (29:30 – 31:00)
+### UPDATING THE LOGBOOK (31:30 – 33:00)
 
 > "When a new version of The Logbook is released, updating is straightforward
 > with Docker."
@@ -762,7 +798,7 @@ docker compose exec mysql mysqldump -u root -p intranet_db > backup_$(date +%Y%m
 > "This creates a timestamped SQL dump. If anything goes wrong with the update,
 > you can restore from this backup."
 
-### BACKUP STRATEGY (31:00 – 33:00)
+### BACKUP STRATEGY (33:00 – 35:00)
 
 > "Speaking of backups, let's talk strategy. You need to back up two things:
 > the database and the uploaded files."
@@ -837,9 +873,9 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 
 ---
 
-## CHAPTER 10: Privacy, Retention & Member Data Rights (33:00 – 37:00)
+## CHAPTER 10: Privacy, Retention & Member Data Rights (35:00 – 39:00)
 
-### RECORDS RETENTION (33:00 – 34:30)
+### RECORDS RETENTION (35:00 – 36:30)
 
 **[SCREEN: Settings → Organization → Retention]**
 
@@ -868,7 +904,7 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 
 **[CALLOUT: "Documents & minutes: never auto-deleted, by design"]**
 
-### MEMBER DATA RIGHTS (34:30 – 36:00)
+### MEMBER DATA RIGHTS (36:30 – 38:00)
 
 **[SCREEN: A member's Settings → Security page showing Privacy Choices and Your Data]**
 
@@ -896,7 +932,7 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 > "When someone asks 'what do you have on me,' that used to be your afternoon.
 > Now it's their thirty seconds."
 
-### ANONYMIZING A DEPARTED MEMBER (36:00 – 37:00)
+### ANONYMIZING A DEPARTED MEMBER (38:00 – 39:00)
 
 **[SCREEN: An archived member's record showing the Anonymize action]**
 
@@ -931,9 +967,9 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 
 ---
 
-## CHAPTER 11: Common Admin Tasks Quick Reference (37:00 – 40:00)
+## CHAPTER 11: Common Admin Tasks Quick Reference (39:00 – 42:00)
 
-### QUICK REFERENCE (37:00 – 40:00)
+### QUICK REFERENCE (39:00 – 42:00)
 
 > "Let me wrap up with a quick-reference of the most common tasks you'll perform
 > as IT Manager."
@@ -989,10 +1025,11 @@ docker compose exec backup bash /scripts/verify_backup.sh \
 | Customizing Permissions       | 10:00–14:00 | "Position & Permission Management Explained"   |
 | Setting Up 2FA                | 14:00–15:30 | "Enabling Two-Factor Authentication"           |
 | IP Security Setup             | 15:30–16:30 | "Restricting Access with IP Security"          |
-| Email Configuration           | 23:00–24:00 | "Setting Up Email Notifications"               |
-| Updating The Logbook          | 29:30–31:00 | "How to Update The Logbook (Docker)"           |
-| Backup Strategy               | 31:00–33:00 | "Backing Up Your Logbook Data"                 |
-| Records Retention             | 33:00–34:30 | "How Long Does The Logbook Keep Your Records?" |
-| Member Data Rights            | 34:30–36:00 | "Privacy Choices & Data Export for Members"    |
-| Anonymizing a Departed Member | 36:00–37:00 | "Removing a Former Member's Personal Data"     |
-| Admin Quick Reference         | 37:00–40:00 | "IT Manager Quick Reference Guide"             |
+| Salesforce Service Account    | 22:30–24:30 | "Secure Salesforce Service-Account Sync"       |
+| Email Configuration           | 24:30–25:30 | "Setting Up Email Notifications"               |
+| Updating The Logbook          | 31:30–33:00 | "How to Update The Logbook (Docker)"           |
+| Backup Strategy               | 33:00–35:00 | "Backing Up Your Logbook Data"                 |
+| Records Retention             | 35:00–36:30 | "How Long Does The Logbook Keep Your Records?" |
+| Member Data Rights            | 36:30–38:00 | "Privacy Choices & Data Export for Members"    |
+| Anonymizing a Departed Member | 38:00–39:00 | "Removing a Former Member's Personal Data"     |
+| Admin Quick Reference         | 39:00–42:00 | "IT Manager Quick Reference Guide"             |

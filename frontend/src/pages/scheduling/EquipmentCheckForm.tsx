@@ -1202,8 +1202,28 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       </button>
     );
 
+    // Counts as answered but also as a failure: the item was looked at and
+    // found unusable. Withheld for an expired item for the same reason as
+    // "Not on truck" — the server force-fails those on its own record.
+    const outOfServiceButton = isExpired ? null : (
+      <button
+        type="button"
+        data-action="out_of_service"
+        onClick={() => updateResultAndAdvance(item.id, { status: 'out_of_service' })}
+        className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
+          effectiveStatus === 'out_of_service'
+            ? 'bg-amber-600 text-white'
+            : 'border-theme-surface-border text-theme-text-muted border hover:border-amber-600 hover:text-amber-700'
+        }`}
+        title="On the truck but unusable — counts as a failed item"
+      >
+        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        Out of service
+      </button>
+    );
+
     const passFailButtons = (
-      <div className="flex items-center gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           data-action="pass"
@@ -1232,6 +1252,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           Fail
         </button>
         {notApplicableButton}
+        {outOfServiceButton}
       </div>
     );
 
@@ -1270,6 +1291,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               Missing
             </button>
             {notApplicableButton}
+            {outOfServiceButton}
           </div>
         );
 
@@ -2029,7 +2051,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
         {/* Overall notes + submit */}
         {!previewMode && (
-          <div className="space-y-3 pt-2">
+          <div className="bg-theme-background border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
             <div>
               <label htmlFor="overall-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Overall Notes
@@ -2156,6 +2178,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {checkedItems}/{totalItems}
           </span>
         </div>
+
+        {shiftContext && (
+          <p className="text-theme-text-muted pl-11 text-xs">
+            {shiftContext.apparatusName} ·{' '}
+            {formatCalendarDate(shiftContext.shiftDate, {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })}{' '}
+            · {shiftContext.checkTiming === 'start_of_shift' ? 'Start of shift' : 'End of shift'}
+          </p>
+        )}
 
         {/* Progress bar */}
         <div

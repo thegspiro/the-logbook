@@ -637,6 +637,13 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                             title={`Not checked: ${entry.notCheckedCount}`}
                           />
                         )}
+                        {notApplicableH > 0 && (
+                          <div
+                            className="w-full rounded-t-sm bg-slate-400"
+                            style={{ height: notApplicableH }}
+                            title={`Not applicable: ${entry.notApplicableCount}`}
+                          />
+                        )}
                       </div>
                       <span className="text-theme-text-muted max-w-[40px] truncate text-[10px]">{entry.period}</span>
                     </div>
@@ -644,6 +651,9 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                 })}
               </div>
               <div className="text-theme-text-muted mt-3 flex items-center gap-4 text-xs">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-sm bg-slate-400" /> Not applicable
+                </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-sm bg-green-500" /> Pass
                 </span>
@@ -695,13 +705,15 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                               h.status === 'pass'
                                 ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                                : h.status === 'fail'
+                                : h.status === 'fail' || h.status === 'out_of_service'
                                   ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                                   : 'bg-theme-surface-hover text-theme-text-muted'
                             }`}
                           >
                             {h.status === 'pass' ? <CheckCircle className="h-3 w-3" /> : null}
-                            {h.status === 'fail' ? <XCircle className="h-3 w-3" /> : null}
+                            {h.status === 'fail' || h.status === 'out_of_service' ? (
+                              <XCircle className="h-3 w-3" />
+                            ) : null}
                             {/* Never the raw token: an item answered
                                 "not_applicable" printed as itself here. */}
                             {CHECK_ITEM_STATUS_LABELS[h.status] ?? h.status}

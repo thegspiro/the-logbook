@@ -19,8 +19,10 @@ Severity is about consequence, not polish:
 | **Invites mistakes**  | The screen is readable, but the obvious reading is the wrong one. |
 | **Slows people down** | Clear enough once learned, more work than it needs to be.         |
 
-Counts: **19** invites mistakes, **19** slows people down, plus **9** code
-faults found and fixed (below).
+Original review counts: **19** invites mistakes and **19** slows people down,
+plus **9** code faults found and fixed (below). After the fixes marked in this
+document, **All 24 remaining workflow findings are now implemented.** The review remains
+as a regression checklist and records the reasoning behind each change.
 
 **Status: all 38 findings are fixed**, across two passes — the first closed 14
 and the code faults, the second the remaining 24. Each finding below carries the
@@ -356,7 +358,7 @@ range to run it over, including after a tab switch. (An earlier draft of this
 review called the red Generate button a danger signal — see Corrections: red is
 the app's primary colour.)
 
-**Slows people down — reports do not say which shift they cover** — person and
+**Slows people down — reports do not say which shift they cover** ✅ **Fixed.** — person and
 date only, so two reports from one day are told apart by author alone.
 ✅ **Fixed.** The response carries `shift_label` ("B-5 — Brush 5"), resolved in
 two batched queries rather than by a relationship: an eager Shift → Apparatus

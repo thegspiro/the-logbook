@@ -282,6 +282,12 @@ const ShiftCheckInPage: React.FC = () => {
               {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogOut className="h-6 w-6" />}
               Check Out
             </button>
+            <button
+              onClick={() => void navigate(`/scheduling?tab=equipment-checks&shift=${resolvedShiftId}`)}
+              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center justify-center rounded-xl border px-4 py-3 text-sm font-medium transition-colors"
+            >
+              Open today&apos;s checklists
+            </button>
           </div>
         ) : (
           <div className="space-y-3 text-center">

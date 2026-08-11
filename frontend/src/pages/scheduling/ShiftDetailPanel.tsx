@@ -509,6 +509,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     setMemberSearch('');
     setShowBulkAssign(false);
     setShowAssignForm(true);
+    window.setTimeout(() => assignFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
 
   const openBulkAssign = () => {
@@ -1071,6 +1072,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           {/* Readiness — present vs assigned, staffing, outstanding start checks */}
           {!shift.is_finalized &&
             !isCancelled &&
+            !(!isPast && shift.shift_date > getTodayLocalDate(tz)) &&
             activeAssignments.length > 0 &&
             (() => {
               const checkedInIds = new Set(allAttendance.filter((a) => a.checked_in_at).map((a) => a.user_id));
@@ -1216,7 +1218,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
                     <div>
                       <span className="font-medium text-red-700 dark:text-red-400">
-                        End-of-shift equipment checks incomplete
+                        Must fix before close-out: end-of-shift equipment checks incomplete
                       </span>
                       <p className="mt-0.5 text-xs text-red-600 dark:text-red-300">
                         {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
@@ -1361,7 +1363,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                       <span className="text-amber-700 dark:text-amber-400">
-                        Ran understaffed — {activeAssignments.length} of {target} positions filled.
+                        Recorded warning (does not block close-out): ran understaffed — {activeAssignments.length} of{' '}
+                        {target} positions filled.
                       </span>
                     </div>
                   );

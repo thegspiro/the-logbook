@@ -14,7 +14,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.apparatus import Apparatus
+from app.models.apparatus import Apparatus, EquipmentCheckTemplate
 from app.models.notification import (
     NotificationCategory,
     NotificationChannel,
@@ -35,6 +35,7 @@ from app.models.training import (
     ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
+    ShiftEquipmentCheck,
     SkillCheckoff,
     SkillEvaluation,
     TrainingRequirement,
@@ -47,6 +48,48 @@ class ShiftCompletionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _get_trainee_equipment_checks_from_shift(
+        self, shift_id: str, trainee_id: str
+    ) -> list[dict]:
+        """Return completed shift checks performed by this trainee.
+
+        Equipment checks are operational records first, but when the member is
+        on a training assignment the evaluator also needs them in the linked
+        shift report. Keeping the check id in the task payload makes the
+        provenance auditable without duplicating checklist answers in training.
+        """
+        result = await self.db.execute(
+            select(ShiftEquipmentCheck, EquipmentCheckTemplate.name)
+            .outerjoin(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == ShiftEquipmentCheck.template_id,
+            )
+            .where(
+                ShiftEquipmentCheck.shift_id == shift_id,
+                ShiftEquipmentCheck.checked_by == trainee_id,
+                ShiftEquipmentCheck.overall_status.in_(["pass", "fail"]),
+            )
+            .order_by(ShiftEquipmentCheck.checked_at)
+        )
+        tasks = []
+        for check, template_name in result.all():
+            timing = (
+                "Start of shift"
+                if check.check_timing == "start_of_shift"
+                else "End of shift"
+            )
+            tasks.append(
+                {
+                    "task": template_name or "Equipment check",
+                    "description": (
+                        f"{timing} equipment check — "
+                        f"{check.overall_status.replace('_', ' ').title()}"
+                    ),
+                    "equipment_check_id": str(check.id),
+                }
+            )
+        return tasks
 
     async def validate_shift_ownership(
         self,
@@ -240,6 +283,16 @@ class ShiftCompletionService:
             if actual_hours:
                 hours_on_shift = actual_hours
                 data_sources["hours_on_shift"] = "shift_attendance"
+
+            if tasks_performed is None:
+                equipment_check_tasks = (
+                    await self._get_trainee_equipment_checks_from_shift(
+                        shift_id, trainee_id
+                    )
+                )
+                if equipment_check_tasks:
+                    tasks_performed = equipment_check_tasks
+                    data_sources["tasks_performed"] = "shift_equipment_checks"
 
         # `None` only ever meant "the officer did not supply one"; past this
         # point it is a number that gets stored and counted against call-type
@@ -1104,6 +1157,7 @@ class ShiftCompletionService:
             raise ValueError("Only the filing officer can update this report")
 
         was_draft = report.review_status == "draft"
+        was_released = report.review_status == "approved"
 
         # Prevent regression to draft once pipeline has run
         new_status = updates.get("review_status")
@@ -1114,11 +1168,9 @@ class ShiftCompletionService:
             if field in UPDATABLE_FIELDS:
                 setattr(report, field, value)
 
-        # Trigger training progress when a draft is completed
-        if was_draft and report.review_status in (
-            "approved",
-            "pending_review",
-        ):
+        # Training credit is earned only when an officer releases the report.
+        # Pending review is still provisional and may be flagged or corrected.
+        if not was_released and report.review_status == "approved":
             await self._trigger_deferred_progress(report, officer_id)
 
         await self.db.commit()
@@ -1236,6 +1288,7 @@ class ShiftCompletionService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         limit: int = 50,
+        released_only: bool = False,
     ) -> List[ShiftCompletionReport]:
         """Get shift completion reports for a specific trainee."""
         query = (
@@ -1251,6 +1304,8 @@ class ShiftCompletionService:
             query = query.where(ShiftCompletionReport.shift_date >= start_date)
         if end_date:
             query = query.where(ShiftCompletionReport.shift_date <= end_date)
+        if released_only:
+            query = query.where(ShiftCompletionReport.review_status == "approved")
 
         result = await self.db.execute(query)
         return await self._attach_shift_labels(
@@ -1322,6 +1377,7 @@ class ShiftCompletionService:
             not report
             or report.trainee_id != trainee_id
             or report.organization_id != str(organization_id)
+            or report.review_status != "approved"
         ):
             return None
 
@@ -1364,15 +1420,14 @@ class ShiftCompletionService:
     ) -> Optional[ShiftCompletionReport]:
         """Review a shift completion report: approve, flag, or redact fields.
 
-        When transitioning from draft to approved/pending_review,
-        triggers training pipeline progress that was deferred at
-        draft creation time.
+        Training pipeline progress is triggered only when the report is
+        approved and released to the trainee.
         """
         report = await self.get_report(report_id, organization_id)
         if not report or report.organization_id != str(organization_id):
             return None
 
-        was_draft = report.review_status == "draft"
+        was_released = report.review_status == "approved"
 
         # Redact specified fields before approving (clear sensitive content)
         REDACTABLE_FIELDS = {
@@ -1405,11 +1460,9 @@ class ShiftCompletionService:
         existing_history.append(history_entry)
         report.review_history = existing_history
 
-        # Trigger deferred training progress when draft is activated
-        if was_draft and review_status in (
-            "approved",
-            "pending_review",
-        ):
+        # Pending review is provisional: do not credit requirements until the
+        # reviewer approves the report and releases it to the trainee.
+        if not was_released and review_status == "approved":
             await self._trigger_deferred_progress(
                 report,
                 reviewer_id,
@@ -1452,6 +1505,7 @@ class ShiftCompletionService:
         trainee_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        released_only: bool = False,
     ) -> dict:
         """Get aggregate stats for a trainee's shift completion reports."""
         base_filter = [
@@ -1459,6 +1513,8 @@ class ShiftCompletionService:
             ShiftCompletionReport.trainee_id == trainee_id,
             ShiftCompletionReport.review_status != "draft",
         ]
+        if released_only:
+            base_filter[-1] = ShiftCompletionReport.review_status == "approved"
         if start_date:
             base_filter.append(ShiftCompletionReport.shift_date >= start_date)
         if end_date:

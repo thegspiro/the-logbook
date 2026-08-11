@@ -309,8 +309,11 @@ export interface EquipmentCheckTemplateUpdate {
  * off the truck used to have to be filed as a failure, which the compliance
  * reports then counted as one. It counts as answered wherever completeness is
  * measured, and never toward failures.
+ *
+ * `out_of_service` also counts as answered, but does count as a failure —
+ * the item was looked at and found unusable.
  */
-export type CheckItemStatus = 'pass' | 'fail' | 'not_checked' | 'not_applicable';
+export type CheckItemStatus = 'pass' | 'fail' | 'not_checked' | 'not_applicable' | 'out_of_service';
 
 /** How each answer reads on screen. Never print the raw token. */
 export const CHECK_ITEM_STATUS_LABELS: Record<string, string> = {
@@ -318,6 +321,7 @@ export const CHECK_ITEM_STATUS_LABELS: Record<string, string> = {
   fail: 'Fail',
   not_checked: 'Not checked',
   not_applicable: 'Not on truck',
+  out_of_service: 'Out of service',
 };
 
 export interface CheckItemResultSubmit {
