@@ -119,18 +119,25 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
     reset();
   };
 
-  const addLinked = async (result: CatalogResult) => {
-    // Only asked once the crew has actually chosen an item, so the cost lands
-    // on a deliberate act rather than on every keystroke.
-    let hasExpiration = false;
+  /**
+   * Whether the catalog item carries dated stock.
+   *
+   * Asked only once the crew has actually chosen an item, so the round trip
+   * lands on a deliberate act rather than on every keystroke. A failed lookup
+   * answers "no" rather than propagating: expiration can be switched on by
+   * hand afterwards, but an item that never got added cannot.
+   */
+  const hasDatedStock = async (itemId: string): Promise<boolean> => {
     try {
-      const lots = await inventoryService.getItemLots(result.id);
-      hasExpiration = lots.some((lot) => Boolean(lot.expiration_date));
+      const lots = await inventoryService.getItemLots(itemId);
+      return lots.some((lot) => Boolean(lot.expiration_date));
     } catch {
-      // A failed lookup should not block the add — expiration tracking can be
-      // switched on by hand, but an item that never got added cannot.
-      hasExpiration = false;
+      return false;
     }
+  };
+
+  const addLinked = async (result: CatalogResult) => {
+    const hasExpiration = await hasDatedStock(result.id);
 
     await onAdd({
       // The catalog's name, not the typed one: two records that read
