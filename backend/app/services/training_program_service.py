@@ -893,6 +893,7 @@ class TrainingProgramService:
                         phase_id=phase_id,
                         requirement_id=str(req_input.requirement_id),
                         is_required=req_input.is_required,
+                        is_prerequisite=getattr(req_input, "is_prerequisite", False),
                         sort_order=req_input.sort_order or idx,
                         owns_requirement=False,
                     )
@@ -941,6 +942,7 @@ class TrainingProgramService:
                     phase_id=phase_id,
                     requirement_id=requirement.id,
                     is_required=req_input.is_required,
+                    is_prerequisite=getattr(req_input, "is_prerequisite", False),
                     sort_order=req_input.sort_order or idx,
                     # The requirement was created just above for this program,
                     # so unlinking it may clean it up.

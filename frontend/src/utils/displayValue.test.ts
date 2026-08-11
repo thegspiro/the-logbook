@@ -55,9 +55,28 @@ describe('enumLabel', () => {
     expect(enumLabel('scba_donning')).toBe('SCBA Donning');
   });
 
+  // Apparatus types reach the client lowercased so they can be matched against
+  // the skill mappings, which left the manual shift-report form offering
+  // "Engine 1 (E-1) — ladder truck".
+  it('capitalises every word of a multi-word value', () => {
+    expect(enumLabel('ladder truck')).toBe('Ladder Truck');
+    expect(enumLabel('brush truck')).toBe('Brush Truck');
+  });
+
+  it('capitalises across a slash without breaking the pair apart', () => {
+    expect(enumLabel('brush/wildland')).toBe('Brush/Wildland');
+    expect(enumLabel('rescue/extrication')).toBe('Rescue/Extrication');
+  });
+
+  it('collapses repeated separators rather than emitting blanks', () => {
+    expect(enumLabel('heavy  rescue')).toBe('Heavy Rescue');
+    expect(enumLabel('  engine  ')).toBe('Engine');
+  });
+
   it('returns an empty string for nothing', () => {
     expect(enumLabel(undefined)).toBe('');
     expect(enumLabel(null)).toBe('');
     expect(enumLabel('')).toBe('');
+    expect(enumLabel('   ')).toBe('');
   });
 });

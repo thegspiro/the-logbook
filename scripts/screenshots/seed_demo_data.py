@@ -426,6 +426,13 @@ RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 # firefighters while a two-person brush truck asks for an officer and a driver.
 SHIFT_POSITIONS = ["officer", "driver", "firefighter", "firefighter", "ems"]
 
+# The requirement each programme makes members finish before the rest of its
+# phase. Chosen among the requirements the seeded members have *not* finished,
+# so the lock has siblings left to hold back.
+PROGRAM_GATE_REQUIREMENTS = {
+    "Probationary Firefighter Pipeline": "Hose Deployment",
+}
+
 # Steps behind a checklist requirement, keyed on the requirement name.
 CHECKLIST_ITEMS = {
     "Station Duties Checklist": [
@@ -4531,8 +4538,45 @@ class Seeder:
                     {"program_id": program_id, "user_id": user_id},
                 )
         self._strip_phase_number_prefixes(programs)
+        self._flag_gating_requirements(programs)
         self._advance_pipeline_progress(programs)
         return programs
+
+    def _flag_gating_requirements(self, programs: list[dict]) -> None:
+        """Mark one requirement per programme as the one to do first.
+
+        Requirement prerequisites lock the rest of a phase until the gate is
+        finished, and nothing seeded one — so every pipeline showed the officer
+        a row of "Any order" chips and every member an unlocked list, with the
+        whole feature invisible.
+
+        The gate is a requirement whose siblings are *not* already finished for
+        the seeded members, so the lock has something to act on: locking behind
+        work that is already done shows nothing either.
+        """
+        for program in programs:
+            program_id = pick(program, "id")
+            gate_name = PROGRAM_GATE_REQUIREMENTS.get(str(pick(program, "name") or ""))
+            if not program_id or not gate_name:
+                continue
+            links = items(
+                self.api.get(
+                    f"/training/programs/programs/{program_id}/requirements"
+                ),
+                "requirements",
+            )
+            for link in links:
+                requirement = pick(link, "requirement") or {}
+                if str(pick(requirement, "name") or "") != gate_name:
+                    continue
+                if pick(link, "is_prerequisite"):
+                    break
+                self.api.patch(
+                    f"/training/programs/programs/{program_id}"
+                    f"/requirements/{pick(link, 'id')}",
+                    {"is_prerequisite": True},
+                )
+                break
 
     def _strip_phase_number_prefixes(self, programs: list[dict]) -> None:
         """Drop a "Phase N — " prefix a phase carries in its own name.

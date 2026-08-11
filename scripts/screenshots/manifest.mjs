@@ -1953,6 +1953,128 @@ export const SHOTS = [
     selector: "div.fixed.inset-0 > div",
   },
   {
+    id: "02-98-requirement-prerequisite",
+    doc: "02-training.md",
+    line: 445,
+    anchor: "The pipeline detail page with one requirement set to be done first",
+    alt: "A phase on the pipeline detail page — one requirement chipped 'Do this first', the rest 'Any order'",
+    route: "/training/programs",
+    prepare: async (page) => {
+      const programId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/training/programs/programs", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const list = Array.isArray(rows) ? rows : [];
+        const wanted =
+          list.find((row) => /Probationary/.test(row.name || "")) || list[0];
+        return wanted ? wanted.id : null;
+      });
+      if (!programId) throw new Error("02-98: no training programme to open");
+      await page.goto(
+        new URL(`/training/programs/${programId}`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(3000);
+      // Every phase is expanded once the page loads, so there is nothing to
+      // open — clicking the phase header here *collapsed* the requirements this
+      // shot is of.
+      // The gate is seeded, not toggled here: clicking the chip would flip it
+      // back off on the next run.
+      const gate = page.getByText("Do this first").first();
+      await gate.waitFor({ timeout: 20_000 });
+      await gate.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    // The phase card the gate sits in, so its siblings and their chips are in
+    // the frame alongside it.
+    selector: "div.rounded-lg.border:has(h3:text-is('Basic Skills'))",
+  },
+  {
+    id: "02-99-member-locked-requirement",
+    doc: "02-training.md",
+    line: 452,
+    anchor: "The member's view of a requirement held back by the gate",
+    alt: "A member's progression view — the gated requirement greyed out and reading 'Locked until you finish Hose Deployment'",
+    // The member's own: the progression view is reachable only as the member
+    // whose enrollment it is.
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      await page
+        .getByText(/View full progress/)
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByText(/You are here/)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1500);
+      const locked = page.getByText(/Locked until you finish/).first();
+      await locked.waitFor({ timeout: 20_000 });
+      await locked.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    // The phase the gate belongs to: the locked row means nothing without the
+    // requirement it is waiting on in the same frame.
+    selector: "div.rounded-lg:has(> div > h2:text-is('Phase 2: Basic Skills'))",
+  },
+  {
+    id: "02-97-manual-entry-apparatus",
+    doc: "02-training.md",
+    line: 1173,
+    anchor: "The manual entry form's apparatus, times and computed duration",
+    alt: "The manual shift report form — an apparatus chosen from the department's units, the shift's start and end, and the duration the page works out from them",
+    route: "/training/log-shift",
+    prepare: async (page) => {
+      await page.waitForTimeout(2500);
+      const select = page.locator("select").first();
+      await select.waitFor({ timeout: 20_000 });
+      // Pick a real unit rather than the placeholder option, so the field shows
+      // how the units are labelled — name, unit number and type.
+      const value = await select.evaluate((el) => {
+        const option = [...el.options].find((o) => o.value);
+        return option ? option.value : "";
+      });
+      if (!value) throw new Error("02-97: no apparatus to choose");
+      await select.selectOption(value);
+      // An overnight shift: the end date is the following day, which is what
+      // the duration below has to reckon with.
+      await page.locator('input[type="time"]').first().fill("19:00");
+      await page.locator('input[type="time"]').nth(1).fill("07:00");
+      const dates = page.locator('input[type="date"]');
+      const start = await dates.first().inputValue();
+      const [y, m, d] = start.split("-").map(Number);
+      const next = new Date(Date.UTC(y, m - 1, d + 1));
+      await dates.nth(1).fill(next.toISOString().slice(0, 10));
+      await page.locator('input[type="number"]').first().fill("3");
+      await page
+        .getByText(/^Structure Fire$|^EMS$/)
+        .first()
+        .click()
+        .catch(() => {});
+      // Two of the crew, so the section shows the row and its Evaluate control
+      // rather than the "search and add members above" it starts at. Adding a
+      // member is client-side only — nothing is filed until Submit.
+      for (const name of ["Belhaj", "Solberg"]) {
+        const search = page.getByPlaceholder(/Search members to add/);
+        await search.fill(name);
+        await page.waitForTimeout(900);
+        await page
+          .locator("button", { hasText: /@/ })
+          .first()
+          .click()
+          .catch(() => {});
+        await page.waitForTimeout(500);
+      }
+      await page.waitForTimeout(800);
+    },
+    // The viewport, not the whole card: the subject is the top of the form, and
+    // the card runs on past the crew list to the submit buttons.
+    viewport: { width: 1180, height: 1000 },
+  },
+  {
     id: "02-95-knowledge-test-entry",
     doc: "02-training.md",
     line: 379,

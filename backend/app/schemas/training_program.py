@@ -744,6 +744,10 @@ class ProgramBuildRequirementInput(BaseModel):
     )
     allows_external_credit: bool = False
     is_required: bool = True
+    # Every other path that creates a link — create, clone, import — carries the
+    # prerequisite flag. Build did not, so a program assembled in one call came
+    # out with its gating requirements ungated and had to be patched afterwards.
+    is_prerequisite: bool = False
     sort_order: int = Field(default=0, ge=0)
 
     @field_validator("checklist_items", mode="before")

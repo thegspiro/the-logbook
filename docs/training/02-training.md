@@ -433,18 +433,28 @@ that is what force is for.
 
 Inside a phase — or inside the program-level list, for a program with no phases —
 a requirement can be flagged **prerequisite**. The rest of the requirements in
-that same scope are then **locked** until it is done. Toggle the flag per
-requirement on the pipeline detail page.
+that same scope are then **locked** until it is done.
+
+The flag is a chip on each requirement row of the pipeline detail page, and it
+is a toggle: it reads **Any order** until you click it, and **Do this first**
+afterwards. Every other requirement in the phase keeps its own chip, so the
+phase says at a glance which single item gates it — there is no separate
+prerequisites screen to consult.
+
+![A phase on the pipeline detail page — one requirement chipped 'Do this first', the rest 'Any order'](./images/02-98-requirement-prerequisite.png)
 
 - An officer trying to sign off a locked requirement is **refused, with the
   blocking requirement named**.
 - The member sees the step **greyed out with the same wording** rather than hidden
   — a step you cannot see yet is indistinguishable from a step that does not
-  exist.
+  exist. This greying is on the member's own progression view, not on the
+  pipeline page above: what the officer sees there is the chip.
 
-> **[SCREENSHOT NEEDED]:** _The pipeline detail page showing a requirement with
-> its "prerequisite" toggle on, and the sibling requirements beneath it rendered
-> greyed-out with the "locked until … is complete" note._
+![A member's progression view — the gated requirement greyed out and reading 'Locked until you finish Hose Deployment'](./images/02-99-member-locked-requirement.png)
+
+A requirement the member has **already finished** is never greyed, whatever the
+gate says — the lock holds back work not yet done, and does not retract credit
+already given.
 
 **Edge cases**
 
@@ -1154,35 +1164,53 @@ For departments that do not use the Scheduling module, The Logbook provides a st
 
 ### Filing a Manual Shift Report
 
-1. Navigate to **Training Admin > Shift Reports** and click **Manual Entry**, or go directly to `/training/log-shift`
-2. Select the **shift date** and enter **start time** and **end time** (handles midnight crossover for overnight shifts)
-3. Optionally select an **apparatus** — this auto-populates relevant skills and tasks for the evaluation
-4. The system auto-calculates **hours** from the start/end times
-5. Enter **calls responded** count and select **call types** from the tag selector
-6. Add a **shift narrative** (overall shift assessment)
-7. Search and select **crew members** from the member directory (checkbox list)
-8. For each crew member who needs an evaluation, expand their section and add:
-   - Performance rating (1-5 star scale)
-   - Areas of strength
+1. Go to **Training Admin → Records → Shift Reports**, open the **New Report**
+   tab and click **Log Shift Report**, or go straight to `/training/log-shift`.
+   (With the Scheduling module enabled that tab points at Shift Scheduling
+   instead, which is the flow the rest of this section describes.)
+2. Choose the **apparatus**. It is **required unless an administrator turns that
+   off** — see the settings below — and the list is the department's own units,
+   each labelled with its unit number and type.
+3. Enter the **start date and time** and the **end date and time**. An overnight
+   shift is entered as what it is: you set the end date to the following day,
+   rather than the page inferring a crossover from the clock.
+4. The **shift duration** is worked out from those four fields and shown beneath
+   them.
+5. Enter **calls responded** and pick **call types** from the tag row.
+6. Add an **overall shift narrative**.
+7. **Search for each crew member and click them to add them.** A member you add
+   arrives ticked; the tick box controls who a report is filed for, and the **✕**
+   removes the member from the list entirely.
+8. For each crew member who needs one, click **Evaluate** to open their section:
+   - Performance rating (1–5 stars)
+   - Strengths
    - Areas for improvement
-   - Individual remarks
-9. Click **Submit Report** or **Save as Draft**
+   - Remarks
+9. Click **Save as Draft** or **Submit Report** — the submit button counts the
+   selection when it is more than one, e.g. **Submit Reports (2)**.
 
 ![Manual Shift Report page with date, apparatus, and hours entry](./images/02-38-manual-shift-report.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the apparatus selector on the manual entry form, showing the dropdown with apparatus types and the auto-populated skills section below it._
+![The manual shift report form — an apparatus chosen from the department's units, the shift's start and end, and the duration the page works out from them](./images/02-97-manual-entry-apparatus.png)
+
+> **The apparatus does not bring skills or tasks with it.** This page files
+> hours, calls and a written evaluation; the skills and tasks checklist belongs
+> to the shift-linked report form covered above, which reads the apparatus from
+> the scheduled shift. What the manual form does with your choice is record it at
+> the head of the shift narrative — "Apparatus: Brush 5 (B-5)" — so the report
+> says which unit the crew was on.
 
 ### Admin Configuration
 
 Administrators can configure manual shift entry via the **ManualEntrySettingsPanel** on the Training Admin page:
 
-| Setting                 | Description                                                        |
-| ----------------------- | ------------------------------------------------------------------ |
-| **Enable Manual Entry** | Toggle the feature on/off for the department                       |
-| **Require Apparatus**   | Make apparatus selection mandatory on the manual form              |
-| **Allowed Apparatus**   | Restrict which apparatus types are available (leave empty for all) |
-| **Default Start Time**  | Pre-fill the start time field (e.g., "07:00")                      |
-| **Default Duration**    | Pre-fill the shift duration, auto-calculating the end time         |
+| Setting                 | Description                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| **Enable Manual Entry** | Toggle the feature on/off for the department                                              |
+| **Require Apparatus**   | Make apparatus selection mandatory on the manual form                                     |
+| **Allowed Apparatus**   | Tick the individual units the form offers — not types (leave all unticked for every unit) |
+| **Default Start Time**  | Pre-fill the start time field (e.g., "07:00")                                             |
+| **Default Duration**    | Pre-fill the shift duration, auto-calculating the end time                                |
 
 **Everything except the enable checkbox is hidden while the feature is off**,
 which is how it ships — the apparatus rules and the shift defaults appear only
@@ -1193,10 +1221,11 @@ single unticked checkbox is the feature disabled, not a broken page.
 
 ### Edge Cases
 
-- **Manual report for a date with a scheduled shift**: A warning is shown, but the officer can proceed — manual and scheduled reports are independent
-- **Apparatus type with no skill/task mappings**: Form shows empty skills/tasks sections; officer can manually add entries
-- **Zero-hour shift (same start/end time)**: Validation prevents submission; minimum 15-minute shift duration required
-- **Midnight crossover**: If end time is earlier than start time, the system assumes the shift crosses midnight and calculates hours accordingly (e.g., 19:00 to 07:00 = 12 hours)
+- **Manual report for a date with a scheduled shift**: Nothing stops you and nothing warns you — the manual form does not consult the schedule. Manual and scheduled reports are independent, so a shift reported both ways is credited twice
+- **A shift that ends before it starts**: The duration reads zero and submission is refused with "End time must be after start time". There is no minimum length beyond that, and no maximum until the backend's 48-hour ceiling
+- **Overnight shift**: Set the **end date** to the next day — 19:00 on the 11th to 07:00 on the 12th is 12 hours. The page does not infer a crossover from the times alone, so leaving the end date on the start date is what produces the zero above
+- **A default duration that runs past midnight**: If an administrator sets a 07:00 start and a 24-hour default, the form opens with the end date already on the following day _(2026-08-11)_
+- **A future shift date**: Rejected by the API — a report cannot be filed for a shift that has not happened
 
 ---
 

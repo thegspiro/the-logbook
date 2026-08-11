@@ -25,6 +25,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatDateCustom, localToUTC } from '../utils/dateFormatting';
+import { enumLabel } from '../utils/displayValue';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
 import type { ShiftRecord, ShiftTemplateRecord } from '../modules/scheduling';
 import { resolveTemplatePositions } from '../modules/scheduling/services/api';
@@ -1123,8 +1124,8 @@ const SchedulingPage: React.FC = () => {
                                   {standard.map((t) => (
                                     <option key={t.id} value={t.id}>
                                       {t.name}
-                                      {t.apparatus_type ? ` — ${t.apparatus_type}` : ''} ({t.start_time_of_day} -{' '}
-                                      {t.end_time_of_day})
+                                      {t.apparatus_type ? ` — ${enumLabel(t.apparatus_type)}` : ''} (
+                                      {t.start_time_of_day} - {t.end_time_of_day})
                                     </option>
                                   ))}
                                 </optgroup>
@@ -1202,8 +1203,8 @@ const SchedulingPage: React.FC = () => {
                             {tmpl.apparatus_type && (
                               <p className="text-theme-text-muted flex items-center gap-1 text-xs">
                                 <Truck className="h-3 w-3" /> Vehicle type:{' '}
-                                <span className="text-theme-text-primary font-medium capitalize">
-                                  {tmpl.apparatus_type}
+                                <span className="text-theme-text-primary font-medium">
+                                  {enumLabel(tmpl.apparatus_type)}
                                 </span>
                               </p>
                             )}
