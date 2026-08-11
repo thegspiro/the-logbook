@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDate, formatTime } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 
 const ShiftCheckInPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -150,7 +150,11 @@ const ShiftCheckInPage: React.FC = () => {
         <div className="text-center">
           <h1 className="text-theme-text-primary text-xl font-bold">Shift Check-In</h1>
           <p className="text-theme-text-muted mt-1 text-sm">
-            {shift.apparatus_name || 'Shift'} &mdash; {formatDate(shift.shift_date, tz)}
+            {/* `shift_date` is a calendar date, not an instant — formatting it in
+                the org timezone shifted it a day earlier for anywhere west of
+                UTC, so the check-in card named yesterday's date. */}
+            {shift.apparatus_name || 'Shift'} &mdash;{' '}
+            {formatCalendarDate(shift.shift_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}
           </p>
           <p className="text-theme-text-muted text-xs">
             {formatTime(shift.start_time, tz)}

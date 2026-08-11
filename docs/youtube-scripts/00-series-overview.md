@@ -1,5 +1,12 @@
 # The Logbook — YouTube Tutorial Series Overview
 
+> **Before recording anything, read
+> [SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md).** It tracks which scripts have gone
+> out of date against the application and what has to change before the take —
+> which is the cheap moment to fix it. As of **2026-08-11** it flags corrections
+> in scripts **04**, **06** and **07**, a possible addition to **03**, and five
+> proposed new shorts.
+
 ## Series Structure
 
 This document outlines the complete YouTube tutorial series for The Logbook, an

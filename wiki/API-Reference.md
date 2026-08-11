@@ -147,6 +147,67 @@ GET    /api/v1/equipment-checks/reports/trends               # Item trend histor
 GET    /api/v1/equipment-checks/reports/export               # CSV/PDF export
 ```
 
+### Supply & Deployed Lots _(2026-08-10)_
+
+The bridge between Inventory and the Equipment Check system. **Reads** accept
+`equipment_check.view` or `inventory.view`; **writes** accept
+`equipment_check.submit` — the default member position — as well as
+`equipment_check.manage` / `inventory.manage`. Recording what you just used is
+crew work; gating it behind a manage permission is what leaves the gap for the
+next morning's check to find.
+
+```
+GET    /api/v1/equipment-checks/supply/expiring-items                        # ?days_ahead=30 (1-365)
+GET    /api/v1/equipment-checks/supply/item-deployments/{inventory_item_id}  # Reverse lookup
+GET    /api/v1/equipment-checks/apparatus/{apparatus_id}/inventory           # Standing view of one truck
+
+POST   /api/v1/equipment-checks/items/{item_id}/used                # Report used/pulled  → restock report
+DELETE /api/v1/equipment-checks/items/{item_id}/used                # Withdraw the report
+PUT    /api/v1/equipment-checks/items/{item_id}/quantity            # Recount the position
+POST   /api/v1/equipment-checks/items/{item_id}/swap                # Move a ready lot onto the truck
+
+GET    /api/v1/equipment-checks/items/{item_id}/deployed-lots           # Lots aboard, soonest first
+PUT    /api/v1/equipment-checks/items/{item_id}/deployed-lots/{lot_id}  # Correct count + number + date
+
+GET    /api/v1/equipment-checks/templates/{id}/inventory-matches    # Propose catalog links (read-only)
+POST   /api/v1/equipment-checks/templates/{id}/inventory-links      # Apply a reviewed set of links
+```
+
+| Behaviour               | Detail                                                                                                                                                                      |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Derived values**      | A position's count is the **sum** of its deployed lots; its expiration is the **earliest**. Neither is read from `check_template_items` any more                            |
+| **Consumption order**   | First-expiring-first-out. Undated lots sort last                                                                                                                            |
+| **Expiry**              | Recomputed **server-side** from the soonest date aboard. A client-supplied `is_expired` is ignored — that flag is what force-fails a safety-critical item                   |
+| **Expired shelf stock** | Excluded from `ready_stock`, flagged in the payload, and **`POST .../swap` refuses it** with a 400                                                                          |
+| **Partial updates**     | `PUT .../deployed-lots/{lot_id}` uses `exclude_unset`: an omitted field is left alone, an explicit `null` clears, and `quantity: 0` removes the lot                         |
+| **Match confidence**    | `inventory-matches` returns `exact` / `strong` / `weak`. Only `exact` is pre-selected client-side — "Oxygen Mask" scores high against both the adult and the pediatric mask |
+| **404 vs 400**          | An unknown template/item/lot is a 404; a business-rule refusal (expired lot, over-draw, cross-org FK) is a 400 via `safe_error_detail()`                                    |
+
+### Inventory bulk write paths _(2026-08-10)_
+
+```
+POST   /api/v1/inventory/items/bulk    # inventory.manage — existing names skipped and reported
+POST   /api/v1/inventory/lots/bulk     # inventory.manage — receive a delivery, all lines or none
+```
+
+`items/bulk` returns `{created, skipped[], item_ids[]}`. `lots/bulk` returns the
+created lots. **Both are all-or-nothing on validation failure**: a partly applied
+delivery is worse than a rejected one, because the caller cannot tell which lines
+landed and re-entering it would double-count whatever did.
+
+### Email footer library _(2026-08-10)_
+
+```
+GET    /api/v1/email-templates/footers   # settings.manage OR organization.update_settings
+PUT    /api/v1/email-templates/footers   # Replaces the library whole
+```
+
+`GET` seeds the library on first read and returns a live per-footer **usage
+count**, so the screen can say "3 templates use this" before one is deleted. A
+template's `footer_key` of NULL counts toward the library's `default_key`. `PUT`
+replaces the library **whole** — a per-footer save could leave `default_key`
+naming a footer the same request deleted.
+
 ## Shift Completion Reports _(2026-03-28)_
 
 ```

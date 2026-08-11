@@ -1081,6 +1081,64 @@ phase, and the hours are recorded — so the documentation is no longer wrong. T
 feature itself is a real one worth having, but it is a change to the RSVP path
 across the API and the UI, not a screenshot, and building it here would have
 been a feature shipped under cover of a documentation task.
+## Scheduling — The Compliance Report Counts Member-Requirement Pairs (2026-08-10)
+
+`SchedulingReportsPage.tsx` computes the **Total Members** card as
+`complianceData.reduce((sum, r) => sum + r.total_members, 0)` — a sum of
+**per-requirement cohorts**. A member counted under three requirements counts
+three times, so the demo department's 22 members render as "Total Members 66".
+The Compliant and Non-Compliant cards sum the same way: the values are
+member-requirement pairs and the labels claim members.
+
+**Not fixed.** The payload carries no distinct-member count, so correcting it
+means either relabelling the three cards or adding a field to the API — a
+product decision rather than a display one. The captured screenshot
+(`03-14`) accurately shows current behaviour; this row exists so the guide does
+not silently endorse the number.
+
+## Equipment Checks — Two Legacy Columns Still Written, No Longer Authoritative (2026-08-10)
+
+`check_template_items.lot_number` and `.expiration_date` predate
+`check_item_deployed_lots`. Since 2026-08-10 a position's expiration is the
+**earliest date across its deployed lots** and its count is their **sum**, and
+every reader — the supply worklist, the apparatus view, the check form, the
+item-to-apparatus lookup — uses those derivations. The two columns are still
+written on the single-lot paths and still carry the legacy value the data
+migration was seeded from.
+
+**Accepted for now.** Dropping them means auditing every write path in one
+change, and they are harmless while nothing reads them for a decision. The risk
+is the obvious one: a future reader that reaches for
+`item.expiration_date` because it is right there will get whichever lot was
+restocked last, which is exactly the bug the table was added to remove. If you
+are adding a reader, take the derived value.
+
+## Frontend — ESLint And `tsc` Run Different TypeScript Versions (2026-08-10)
+
+`typescript-eslint` is held at `^8.65.0` rather than the dependabot group's
+`^8.66.0`. Bumping it forces npm to re-resolve the package, and **no
+`typescript-eslint` release accepts the TypeScript 7.0.2 this repo pins** —
+every version caps its peer at `<6.1.0`. The tree resolves today only because
+the lockfile carries a second TypeScript (5.9.3) at the root for the linter's
+own use.
+
+So the linter type-checks against 5.9.3 while `tsc --noEmit` runs 7.0.2. In
+practice that means a type-aware lint rule can disagree with the build, in
+either direction.
+
+Neither an explicit root `typescript` pin (still refused by npm) nor
+`--legacy-peer-deps` (drops the root copy and hands the linter an unsupported
+TypeScript) fixes it honestly. Pulling that thread needs its own change.
+
+Two related facts worth carrying:
+
+- **The lockfile must be regenerated with npm 11** — the version
+  `frontend/package.json` requires and both Dockerfile stages install. npm 10
+  and npm 11 hoist this tree differently, so a lock built by npm 10 installs a
+  different tree under the npm 11 that actually runs in CI and in the image.
+- **npm keeps a per-workspace copy of each declared range inside the lock and
+  trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
+  tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
 
 ## Skills Testing — Offline Support (2026-08-07)
 

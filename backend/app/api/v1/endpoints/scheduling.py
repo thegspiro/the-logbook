@@ -437,7 +437,11 @@ async def get_shift(
             ShiftAttendance.shift_id == str(shift_id)
         )
     )
-    total_min = total_min_result.scalar() or 0
+    # MySQL's SUM() over an integer column comes back as DECIMAL, and Decimal
+    # does not support division by a float — dividing straight through raises
+    # TypeError and 500s the whole shift detail response. The list endpoint
+    # above coerces for the same reason.
+    total_min = float(total_min_result.scalar() or 0)
     total_hours = round(total_min / 60.0, 1) if total_min > 0 else None
 
     attendees = await service.enrich_attendance_records(

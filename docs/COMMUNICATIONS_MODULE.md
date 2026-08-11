@@ -151,6 +151,27 @@ Message create, update, delete, and acknowledgment are audit-logged.
 - `20260720_0002_backfill_department_message_role_ids.py` — role names → ids.
 - `20260720_0003_add_department_message_scheduled_at.py` — `scheduled_at` + index.
 
+## Email templates & footers _(2026-08-10)_
+
+Templates and the department's **footer library** are documented in the wiki
+rather than here, because this page is scoped to Department Messages. In short:
+
+- The footer used to be copy-pasted into all 35 default bodies. It is now a
+  named library on `Organization.settings` — **Internal** (the default),
+  **Public** and **Official notice** — with each template naming its footer via
+  `email_templates.footer_key` (NULL = the library's default).
+- It reaches every render path as `{{footer_html}}` / `{{footer_text}}`, injected
+  by `build_context` and resolved **a step before** the template body, because
+  rendering is a single substitution pass.
+- `GET` / `PUT /api/v1/email-templates/footers`, behind `settings.manage` **or**
+  `organization.update_settings`.
+- Nine more `{{organization_*}}` variables were added (tax ID, the three
+  department identifiers with their scheme label, county, founded year, fax,
+  description, type).
+
+Full detail:
+[Communications module → Email Footer Library](../wiki/Module-Communications.md#email-footer-library-2026-08-10).
+
 ## User documentation
 
 Member/officer how-to:

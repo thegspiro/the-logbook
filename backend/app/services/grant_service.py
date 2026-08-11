@@ -134,6 +134,11 @@ class GrantService:
             {"opportunity_id": opportunity.id, "name": opportunity.name},
             user_id=user_id,
         )
+        # Server-side `created_at` / `updated_at` stay expired after the flush,
+        # and the response_model requires both. Pydantic reads attributes
+        # synchronously, so the lazy reload raises MissingGreenlet and the POST
+        # 500s on a row it did create.
+        await self.db.refresh(opportunity)
         return opportunity
 
     async def update_opportunity(

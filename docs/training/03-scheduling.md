@@ -20,7 +20,8 @@ The Scheduling module manages duty rosters, shift assignments, attendance tracki
 12. [Shift Reports and Compliance](#shift-reports-and-compliance)
 13. [How Shift Hours Feed Training Compliance](#how-shift-hours-feed-training-compliance)
 14. [Realistic Example: Setting Up a 24/48 Platoon Rotation](#realistic-example-setting-up-a-2448-platoon-rotation)
-15. [Troubleshooting](#troubleshooting)
+15. [Supply Tracking: Keeping the Truck and the Shelf in Step](#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -794,16 +795,251 @@ Reports can be exported as **CSV** or **PDF**.
 
 #### Equipment Check Edge Cases
 
-| Scenario                          | Behavior                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| No template assigned to apparatus | No checklist appears for that shift                                      |
-| Position-based template           | Only members in assigned positions see the checklist                     |
-| Expired item submitted as "Pass"  | Auto-fails with "expired" reason                                         |
-| Item below required quantity      | Auto-fails with "under required quantity" reason                         |
-| All items pass                    | Clears apparatus deficiency flag if previously set                       |
-| Photo upload                      | Max 3 per item, max 10 MB each, auto-converted to WebP                   |
-| Template cloning                  | Deep clones compartments and items to another apparatus                  |
-| Serial/lot number update          | Submitting new serial/lot updates the template item for future reference |
+| Scenario                          | Behavior                                                                                                                                                                                           |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No template assigned to apparatus | No checklist appears for that shift                                                                                                                                                                |
+| Position-based template           | Only members in assigned positions see the checklist                                                                                                                                               |
+| Expired item submitted as "Pass"  | Auto-fails with "expired" reason                                                                                                                                                                   |
+| Item below required quantity      | Auto-fails with "under required quantity" reason                                                                                                                                                   |
+| All items pass                    | Clears apparatus deficiency flag if previously set                                                                                                                                                 |
+| Photo upload                      | Max 3 per item, max 10 MB each, auto-converted to WebP                                                                                                                                             |
+| Template cloning                  | Deep clones compartments and items to another apparatus                                                                                                                                            |
+| Serial/lot number update          | Submitting new serial/lot updates the template item for future reference                                                                                                                           |
+| Expiration read off a replacement | Recorded as `expiration_found` and written back to the template item, exactly as the lot number is _(2026-08-10)_                                                                                  |
+| Expiry verdict                    | Recomputed **server-side** from the soonest date aboard, not taken from the form. A client-supplied "expired" flag is what force-fails a safety-critical item, so it is not trusted _(2026-08-10)_ |
+| Quantity item on the form         | Arrives carrying the **running on-truck count** and with **no** pass/fail status, so the progress counter reflects what was actually looked at _(2026-08-10)_                                      |
+
+### Supply Tracking: Keeping the Truck and the Shelf in Step _(2026-08-10)_
+
+An equipment check is a **scheduled, signed pass over a whole apparatus that
+produces a report**. That is what it is for, and it is a poor fit for "we just
+used two of these at three in the morning."
+
+Until this release it was also the _only_ way anything about a truck's stock
+could be written down. A crew that used the last of something either wrote a
+note somewhere or left it for the next morning's check to discover — which is
+exactly the window in which a truck runs a call short.
+
+There are now two screens that live outside a check, and a set of rules that keep
+them and the check form telling the same story.
+
+#### Apparatus Inventory — what the truck is carrying, right now
+
+Open **Scheduling → Equipment Checks → Apparatus Inventory**, pick a rig, and you
+see its tracked positions compartment by compartment: what is aboard, the lots
+and expiration dates on each one, and the ready stock on the shelf behind it.
+
+**No check is required and no shift is required.** It is readable at any hour by
+any member with `equipment_check.submit` — the default member position — because
+recording what you just used is crew work, and putting it behind an officer
+permission is the thing that leaves the bracket empty until morning.
+
+> **Screenshot needed:**
+> _[Screenshot of the Apparatus Inventory page on a phone with an engine selected, showing two compartments expanded — one position at full count in green, one short with an amber count, and one showing a lots-aboard chip with two dates]_
+
+Each position offers up to five actions, and they mean different things:
+
+| Action   | What it records                                                                                                                                                                                |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **−**    | **Consumption.** The count comes down and a restock report goes up with it, so the shortfall reaches the supply officer without anyone opening a form                                          |
+| **+**    | A hand restock — you put units back yourself                                                                                                                                                   |
+| **Swap** | Draws units off a shelf lot and puts them on the truck. It defaults to the shortfall, so filling a gap needs no arithmetic                                                                     |
+| **Flag** | Damaged, contaminated, missing or recalled — **on a counted position, where − already records use.** It is the honest way to say "this needs attention" without pretending a unit was consumed |
+| **Lots** | Opens the lots aboard. A position carrying lots opens them **instead of** offering a stepper — two units with two dates cannot be moved by one plus or minus                                   |
+
+> **Screenshot needed:**
+> _[Screenshot of the lots sheet open over the Apparatus Inventory page on a phone, showing two lots for one position with different expiration dates, each with its own count field and a Remove control, and the sheet sitting clear of the bottom tab bar]_
+
+**Headers and free-text lines do not appear here.** They are checklist
+scaffolding — "Check all seals", "Officer's compartment" — not things anyone
+stocks.
+
+#### Expiring on Apparatus — the supply officer's worklist
+
+Open **Scheduling → Supply** (the tile carries a count badge when there is
+anything on it), or reach it from the **Inventory Admin Hub**.
+
+The page lists checklist positions that need attention **together with the ready
+replacement stock for each**, because "swap it" and "order it" are different jobs
+and the officer plans the week around which one each row is.
+
+| Control    | Options                                       |
+| ---------- | --------------------------------------------- |
+| Look-ahead | 30 / 60 / 90 days                             |
+| Filter     | All · Needs restock · Used or short · Expired |
+| Sort       | Soonest expiry · By apparatus                 |
+
+Three summary pills sit above the list: how many rows need attention, how many
+have ready stock behind them, and how many need ordering.
+
+> **Screenshot needed:**
+> _[Screenshot of the Expiring on Apparatus page with the three summary pills visible, the 30/60/90 window selector, and at least four rows: one expiring with ready stock, one expired and struck through, one flagged "needs restock" from a crew report, and one short of its target showing "2/4"]_
+
+**Expired shelf stock is struck through and cannot be swapped.** Offering it
+would put expired supplies in service and fail the item on the very next check,
+so the swap refuses it. For the same reason it is not counted as ready stock: a
+count that includes expired units hides the shortage most in need of ordering.
+
+#### Recording what you used, and the report it raises
+
+Tapping **−** (or **Flag**) raises a **restock report** against that position. The
+report carries who raised it, when, and an optional note, and it appears on the
+supply worklist beside the expiring items — to a supply officer, "expires
+Thursday" and "the crew used it last night" are the same job.
+
+> **Screenshot needed:**
+> _[Screenshot of the "report used" sheet on a phone showing the quantity stepper, the optional note field, and the confirm button, with the position's name and current count visible above it]_
+
+**A report is settled only when the truck is back at its target.** Two of four
+back is still a truck short two, and clearing the flag there would close the gap
+on paper while leaving it open on the apparatus. A swap of fresh stock clears the
+report because the item has been dealt with; clearing also drops the reporter and
+the note, so a stale name is never attached to the next report.
+
+#### Lots aboard: why one date was not enough
+
+A position that carries four of something can be carrying units from three
+different lots with three different expiration dates.
+
+The checklist item itself has room for **one** lot number and **one** expiration
+date, so only one of them could ever be recorded — and the one recorded was
+whichever was restocked last. Restocking two of a four-slot bracket stamped the
+new date onto the two already there, hiding older units behind a later
+expiration. The truck's real exposure, the **soonest date aboard**, could not be
+written down at all.
+
+Each lot aboard is now recorded separately:
+
+- A position's **count** is the sum of its lots.
+- A position's **expiration** is the earliest of them, and that is the date every
+  screen shows and the date the expiry verdict is taken from.
+- **Consumption draws first-expiring-first-out** — the order a crew should be
+  pulling from, and the only order that keeps what remains as fresh as possible.
+- **Undated lots sort last.** An undated unit is never the one that needs using
+  up.
+
+Correcting a lot sets its **count, lot number and expiration together**, from the
+apparatus view or from inside a check. That matters for a changed-out medication:
+a crew swapping a box in could previously record that one was there without
+recording when it expires, leaving the application confidently asserting an
+expiration for a unit that had left the bag.
+
+#### Linking a checklist position to the catalog
+
+Everything above hangs off one thing: the checklist item's **link to an inventory
+item**. An unlinked position has no expiration tracking, no lots, no ready stock
+and no restock reporting.
+
+Setting that link used to be a separate act, three clicks deep in the item's
+advanced panel, so on a real rig checklist almost nothing was linked. There are
+now two paths:
+
+1. **While adding a position.** The template builder's quick-add bar searches the
+   catalog as you type. Picking a result links it and inherits what the catalog
+   knows — its name, whether it is counted or serialized, whether it carries
+   dated stock. Typing a name nobody stocks still adds a plain checklist line,
+   because plenty of lines are not stock and never will be. If the search finds
+   nothing, the bar offers to **create the item in inventory and link it in one
+   step** (this option needs `inventory.manage`).
+2. **For checklists you already have.** A bulk pass proposes a catalog item for
+   every unlinked position on the template. Read down the list once and apply it.
+
+> **Screenshot needed:**
+> _[Screenshot of the template builder's quick-add bar with a partial search term typed and a dropdown of three catalog matches below it, each showing the item name and its tracking type, plus the "create in inventory" option at the bottom]_
+
+> **Screenshot needed:**
+> _[Screenshot of the bulk inventory-match dialog listing six unlinked positions with proposed catalog items, two pre-selected with an "exact" badge and the rest showing "strong"/"weak" confidence chips left unselected, with the linked/unlinked coverage count in the header]_
+
+**Only exact name matches are pre-selected.** A close match is deliberately never
+pre-selected: "Oxygen Mask" scores high against both the adult and the pediatric
+mask, and quietly picking one would put the wrong expiry on a truck. The template
+toolbar now shows a **linked / unlinked count**, so the holes are visible at all.
+
+#### What the crew sees on the check form
+
+Three things changed about how a quantity item arrives:
+
+- **It carries the running on-truck count**, not the last check's number. A crew
+  that pulled two at 03:00 used to open the morning check at the four the last
+  check had seen — the exact drift this feature set removes, reintroduced at the
+  screen where it matters most.
+- **It arrives with no pass/fail status.** A pre-filled number is a starting point
+  to correct, not an assertion. Before this, a crew could open a sixty-item check,
+  submit it untouched, and file a complete report against a truck nobody had
+  looked at, with the progress counter agreeing.
+- **The count reads against par with the unit beside it** — "2/4 Box" rather than
+  "2/4 Expected" — projected from the linked catalog item, so a department that
+  relabels a unit does not re-enter it on every truck that carries it.
+
+A line at the top of the form says once that counts have been carried over, and
+**retires itself** as soon as nothing is still carried. Touching a quantity field
+is what confirms a number you agree with — the same single tap, without a
+"carried over" label printed sixty times.
+
+> **Screenshot needed:**
+> _[Screenshot of the equipment check form on a phone showing the carry-over banner at the top, a compartment with three quantity items reading "4/4 Each", "2/4 Box" and "1/1 Each", none of them yet marked pass or fail, and the progress counter in the header]_
+
+#### Confirm Counts vs. Set All to Par
+
+These are **different claims**, and only the second used to have a button:
+
+| Button             | The claim it files                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------ |
+| **Confirm Counts** | "The numbers shown are right." Cannot record stock nobody has. It leads, because it is the common case |
+| **Set All to Par** | "It is all full." Writes the required quantity over whatever is showing                                |
+
+Set All to Par is still there and still means what it meant, but it now **names
+the items whose count it is about to raise** before doing it. On a truck carrying
+eighteen of twenty-four gauze, one tap used to record twenty-four — six on the
+record that are not in the bag — with no signal it had done so. A compartment
+already at par is untouched by the warning and stays one tap.
+
+Status still comes from the number, so confirming eighteen of twenty-four files a
+**failure** rather than quietly passing it.
+
+> **Screenshot needed:**
+> _[Screenshot of the "Set All to Par" confirmation dialog naming two items whose counts would be raised (e.g. "Gauze 4x4 — 18 → 24") with Cancel and Set to Par buttons]_
+
+#### Working from the item instead of the truck
+
+The supply worklist answers "what is expiring on my trucks". A recall, or a lot
+you are holding in your hand, is worked from the other direction.
+
+An inventory item's **stock tab** now lists the checklist positions it fills —
+which apparatus, which compartment, and what that truck is carrying right now.
+It is pictured in
+[Inventory → Which trucks carry this item](./05-inventory.md#dated-stock-lots-and-receiving-2026-08-10),
+rather than repeated here.
+
+#### Alerts
+
+A weekly **expiring supplies** alert reports both ends of the loop together,
+splitting the deployed items by whether an in-date lot is actually behind them.
+
+It is weekly rather than daily on purpose: an item that has **already** expired
+force-fails its apparatus on every check and notifies through that path, so this
+alert exists to get ahead of the date rather than to repeat what the check
+already says.
+
+#### Supply Tracking Edge Cases
+
+| Scenario                                                         | Behavior                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nobody has ever counted a position                               | Its count reads as **not counted**, and the required/expected target stands in. It is _not_ reported as zero — that would show every untouched truck as stripped                                                                  |
+| A crew reports more used than the record held                    | It draws what was there. That is a correction to the record, not a negative count                                                                                                                                                 |
+| A position holds units with no lot recorded, then a lot is added | The existing units get a lot row of their own **first**, or they would vanish behind the new lot's count                                                                                                                          |
+| A recount comes out **over** the record                          | The surplus lands in an **undated** row — the honest answer to when found stock expires is that nobody knows                                                                                                                      |
+| A recount comes out **under** the record                         | The difference comes off soonest-expiring-first, like any other consumption                                                                                                                                                       |
+| A lot is counted down to zero                                    | The lot is removed, so a spent box stops contributing its date to the position's reading                                                                                                                                          |
+| A restock puts the truck part-way back                           | The restock report **stays open**. Two of four back is still a truck short two                                                                                                                                                    |
+| A counted position is below target with no report behind it      | It reaches the supply worklist anyway, showing the numbers rather than only that something is needed                                                                                                                              |
+| Shelf stock has expired                                          | Excluded from the ready-stock count, struck through in the list, and **refused by the swap**                                                                                                                                      |
+| Everything on a position has expired                             | Counted as **expired** and reported apart from _expiring_ — one wants attention soon, the other is unusable now. The count renders **red**, because two of two expired units meet the number and are still nothing a crew can use |
+| An item is replaced from untracked stock during a check          | Record the new expiration in the "replaced — new date" control. Without it the old date survives the replacement, the item is force-failed on every submission, and it holds the apparatus in a deficiency state forever          |
+| A position carries lots **and** you are inside a check           | You get the per-lot **Correct** control only. The older single-date "replaced — new date" affordance appears only where there are no lots to correct, so one fact never has two contradictory inputs                              |
+| A template is cloned to a second rig                             | The catalog link comes with it. It used to be dropped silently, which is how a department stands up its second engine with nothing tracked                                                                                        |
+| A shelf lot is deleted while units from it are on a truck        | The truck's record survives. Lot number and expiration are copied onto the deployed record rather than read through the shelf lot                                                                                                 |
+| A member has `equipment_check.submit` but not `inventory.manage` | They can report use, recount, swap and correct lots. They cannot create a new catalog item from the quick-add bar                                                                                                                 |
 
 ### Shift Finalization _(2026-03-28)_
 

@@ -24,14 +24,15 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 16. [Label Printing](#label-printing)
 17. [Maintenance Tracking](#maintenance-tracking)
 18. [Low Stock Alerts](#low-stock-alerts)
-19. [Departure Clearance](#departure-clearance)
-20. [Members Inventory View (Admin)](#members-inventory-view-admin)
-21. [Inventory Admin Hub](#inventory-admin-hub)
-22. [Equipment Kits Admin Page](#equipment-kits-admin-page)
-23. [Variant Groups Admin Page](#variant-groups-admin-page)
-24. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
-25. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
-26. [Troubleshooting](#troubleshooting)
+19. [Dated Stock Lots and Receiving](#dated-stock-lots-and-receiving-2026-08-10)
+20. [Departure Clearance](#departure-clearance)
+21. [Members Inventory View (Admin)](#members-inventory-view-admin)
+22. [Inventory Admin Hub](#inventory-admin-hub)
+23. [Equipment Kits Admin Page](#equipment-kits-admin-page)
+24. [Variant Groups Admin Page](#variant-groups-admin-page)
+25. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
+26. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
+27. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -625,6 +626,128 @@ The **Inventory Summary** (available from the inventory dashboard) shows:
 - Items currently checked out and overdue for return
 
 ![Inventory dashboard with low-stock, maintenance, and assignment alert cards](./images/05-02-inventory-dashboard.png)
+
+---
+
+## Dated Stock Lots and Receiving _(2026-08-10)_
+
+Consumables — gauze, saline, medications, batteries — are not one flat count.
+They arrive in batches with expiration dates, and which batch a unit came from is
+the whole question when something is recalled or about to run out.
+
+A **lot** is one dated batch of a consumable: a lot number, an expiration date, a
+quantity, and the date it was received.
+
+### Where "on hand" comes from
+
+This is the part worth reading twice, because a number can now come from two
+different ledgers:
+
+| Item                  | On-hand figure                          |
+| --------------------- | --------------------------------------- |
+| Has lots              | The sum of its **in-date** lots         |
+| Has no lots           | The item's own **Quantity** field       |
+| Has lots, all expired | **Zero** — not the stale Quantity value |
+
+**Expired stock counts as nothing.** The equipment-check swap refuses it anyway,
+so counting it would hide the shortage most in need of ordering.
+
+The items grid labels the figure **"in-date lots"** so it is not mistaken for the
+pool count beside it, and the CSV export carries the same number in its own
+**Ready Lot Stock** column. The low-stock alert reads the same figure and says
+which ledger it came from, so a number that disagrees with the item's Quantity
+field reads as the count that matters rather than as a bug.
+
+> **Screenshot needed:**
+> _[Screenshot of the inventory items grid with two consumable rows visible — one showing a Qty figure annotated "in-date lots" and one showing a plain pool figure — so the two ledgers can be told apart]_
+
+> **Why the two disagree.** For anything kept as dated stock, the item's
+> **Quantity** field is not maintained at all: receiving a lot does not touch it,
+> and an equipment-check swap decrements only the lot. Before this release the
+> grid showed Quantity, which meant it was reporting whatever the number happened
+> to be on the day the item was created.
+
+### Receiving a delivery
+
+**Required Permission:** `inventory.manage`
+
+Recording a delivery used to be a page at a time — open each item's detail page,
+add one lot, go back. That is a large part of why the stock a crew went looking
+for often did not exist.
+
+1. Go to **Inventory** (`/inventory`, or **Inventory → Manage Items** at
+   `/inventory/admin/items` — the same screen).
+2. Click **Receive Stock**.
+3. Add one line per item in the delivery: **item**, **lot number**,
+   **expiration**, **quantity**.
+4. Set the **received date** once, for the whole delivery.
+5. Review and submit.
+
+> **Screenshot needed:**
+> _[Screenshot of the Receive Stock modal with four delivery lines filled in — different items, lot numbers, expirations and quantities — and the single received-date field above them]_
+
+**The whole delivery lands, or none of it does.** A partly applied delivery is
+worse than a rejected one: you cannot tell which lines landed, and re-entering it
+would double-count whatever did. If any line fails validation, nothing is
+written and the errors are shown against the offending lines.
+
+### Adding many catalog items at once
+
+**Required Permission:** `inventory.manage`
+
+Stocking the catalog is list-shaped work, and it only ever had a
+one-item-at-a-time modal.
+
+1. Go to **Inventory**.
+2. Click **Add Several**.
+3. Paste or type one item per line.
+4. Review the parsed preview and submit.
+
+> **Screenshot needed:**
+> _[Screenshot of the Add Several modal with eight pasted lines in the input and the parsed preview beside it, showing two lines marked as already existing in the catalog]_
+
+**Names already in the catalog are skipped and reported, not rejected**, so you
+can re-paste a list after it grows and only the new lines are created. As with
+receiving, any validation failure writes nothing at all.
+
+The **Import CSV** button beside them is the third path. It goes to
+`/inventory/import`, which was built and routed but previously reachable only by
+typing the URL.
+
+> **CSV files are parsed properly now** _(2026-08-10)_. A supply catalog is
+> exactly the data that breaks a naive comma split: `"Gauze Pads, 4x4 Sterile"`
+> is **one** field. The old readers split on every comma, which shifted every
+> column after it — so the import preview disagreed with what the import would
+> actually do.
+
+### Which trucks carry this item
+
+Open any item's **Stock** tab. Below the ready lots you now see **Deployed on
+apparatus**: the checklist positions this item fills, which apparatus and
+compartment each one is, what that truck is carrying right now, and the soonest
+expiration aboard.
+
+> **Screenshot needed:**
+> _[Screenshot of an inventory item's Stock tab showing the ready-lots table above a "Deployed on apparatus" list of three checklist positions, each naming its apparatus, compartment, on-truck count and soonest expiration]_
+
+This is the direction a **recall** is worked from — you are holding the item and
+need to know which rigs to go to. The opposite direction ("what is expiring on my
+trucks") is the supply worklist at **Scheduling → Supply**; see
+[Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step-2026-08-10).
+
+### Stock Lot Edge Cases
+
+| Scenario                                                 | Behavior                                                                                                                          |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| A lot passes its expiration date                         | It stops counting toward on hand, is flagged in the list, and the equipment-check swap **refuses** it                             |
+| Every lot for an item has expired                        | On hand reads **zero**, not the item's stale Quantity value                                                                       |
+| An item has no lots at all                               | Untouched — it keeps reporting its issued/total pool figure                                                                       |
+| A lot is drawn to zero by a swap                         | The lot row is removed. What went onto the truck keeps its own copy of the lot number and expiration                              |
+| A lot is deleted while units from it are on an apparatus | The truck's record survives; the deployed record's link to the shelf lot is cleared but its lot number and expiration are its own |
+| One line of a Receive Stock batch fails validation       | **Nothing is written.** Fix the line and resubmit the whole delivery                                                              |
+| An Add Several line names an item that already exists    | Skipped and reported. The rest of the list is still created                                                                       |
+| A CSV field contains a comma                             | Quote it (`"Gauze Pads, 4x4 Sterile"`). It is parsed as one field                                                                 |
+| A lot has no expiration date                             | It counts toward on hand, and it sorts **last** for consumption — an undated unit is never the one that needs using up            |
 
 ---
 
