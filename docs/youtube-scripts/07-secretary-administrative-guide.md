@@ -386,6 +386,24 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 
 ### EMAIL TEMPLATES — FINDING THINGS, AND SIGNING THEM (15:20 – 15:45)
 
+> **⚠️ SCRIPT UPDATE NEEDED (2026-08-11) — incomplete, and the B-roll is wrong.**
+> Two things shipped on 2026-08-10 that belong in this chapter, and one that
+> invalidates its screen capture. See
+> [SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md#07--secretary--administrative-officer-guide).
+>
+> 1. **The Footers tab.** The footer used to be copy-pasted into all 35 default
+>    template bodies — changing the wording meant opening 35 templates one at a
+>    time. It is now a named library (**Internal**, **Public**, **Official
+>    notice**) that a secretary edits once. This is exactly this audience's job.
+> 2. **Nine new `{{organization_*}}` variables** — tax ID, county, founded year,
+>    fax, and `{{organization_identifier}}` / `{{organization_identifier_label}}`,
+>    which give you "FDID 12345" that is _right about which identifier that is_.
+> 3. **The email design changed.** Any preview in shot shows the retired
+>    full-bleed red band; outgoing mail is now a white card on a grey page.
+>
+> This 25-second beat now has three subjects. Grow it to ~2 minutes, or split the
+> footer library out as short **8AA**.
+
 **[SCREEN: Administration → Email Templates. The sidebar shows seven collapsible
 categories with counts.]**
 

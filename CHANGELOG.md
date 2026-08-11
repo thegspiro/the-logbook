@@ -7,6 +7,776 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Supplies: the shelf and the truck are now one loop (2026-08-10)
+
+The largest single change in this release. An inventory item's ready stock and a
+checklist position's contents were two records with no arithmetic between them,
+so nothing could answer the two questions a supply officer actually asks: _what
+is about to expire on my trucks_, and _which trucks carry this item_. Everything
+below is that loop being closed.
+
+**Added**
+
+- **`check_item_deployed_lots` — one row per lot's presence on one position.**
+  A position that carries four of something can be carrying units from three
+  lots with three expiration dates. `CheckTemplateItem` holds a single
+  `lot_number` / `expiration_date` pair, so only one of them could ever be
+  recorded — and the one recorded was whichever was restocked last. The truck's
+  real exposure, the **soonest date aboard**, was unrepresentable.
+
+  A position's on-truck count is now the **sum** of its deployed lots, and its
+  expiration is the **earliest** of them. All four surfaces that read a date —
+  the supply worklist, the apparatus inventory page, the equipment-check form
+  and the item-to-apparatus lookup — read that derived minimum rather than the
+  column.
+
+  Lot number and expiration are **snapshotted** onto the deployed-lot row rather
+  than read through `inventory_lot_id`. Shelf lots get consumed and deleted, and
+  what is on a truck has to remain answerable after the shelf record is gone.
+
+  Existing single-lot data migrates across (`20260810_0008`): any item carrying a
+  lot number or expiration becomes one deployed-lot row, so nothing already
+  recorded is lost and every derived count matches what the item reported before.
+
+- **`check_template_items.quantity_on_truck` — how many are actually aboard.**
+  The row recorded how many an apparatus *should* carry (`required_quantity`,
+  the state-mandated floor, and `expected_quantity`, the department's own
+  target) but never how many it has. "Used two of the four" had nowhere to go,
+  so a box down to its last unit and one just opened looked identical.
+
+  **NULL means nobody has counted since the item was defined**, and the target
+  stands in. Reading NULL as zero would report every untouched truck as stripped.
+
+  Four things move the count, and they mean different things:
+
+  | Action | Meaning |
+  | ------ | ------- |
+  | **Minus** on the apparatus page | Consumption — the count drops *and* a restock report goes up with it |
+  | **Plus** | A hand restock |
+  | **Swap** | Draws N units off a shelf lot and puts N on the truck; defaults to the shortfall, so filling a gap needs no arithmetic |
+  | **An equipment check** | A recount — a crew standing at the compartment outranks a running total that has drifted |
+
+- **`check_template_items.restock_needed` — a report raised at the moment of
+  use.** The only writes to a checklist item came from an equipment check, so a
+  crew that used the last of something at 03:00 either left a note somewhere or
+  left it for the next morning's check to discover — which is exactly the window
+  in which a truck runs a call short.
+
+  The report carries who raised it, when, and an optional note
+  (`restock_reported_by` / `restock_reported_at` / `restock_note`). It shows on
+  the supply worklist **beside** the expiring items rather than in a list of its
+  own, because to a supply officer "expires Thursday" and "the crew used it last
+  night" are the same job.
+
+- **`shift_equipment_check_items.expiration_found` — the missing counterpart to
+  `serial_found` / `lot_found`.** A crew replacing a unit in the field could
+  already write back the new serial and lot number, but not the new expiration.
+  The old date survived the replacement — and because an expired item is
+  force-failed on every submission, the item then **failed forever**, held its
+  apparatus in a deficiency state, and never left the supply worklist. The found
+  date is written back onto the template item on submit, exactly as the lot
+  number already was.
+
+- **Apparatus Inventory (`/scheduling/apparatus-inventory`) — a standing view of
+  a truck, outside any check.** An equipment check is a scheduled, signed pass
+  over a whole apparatus that produces a report; until now it was also the only
+  way anything about a truck's stock could be written down. The new page lists
+  what an apparatus is carrying compartment by compartment, with the lots aboard
+  and the ready stock behind each position, and it is readable at any hour.
+
+  Reached from **My Equipment Checklists → Apparatus Inventory**. It is gated on
+  `equipment_check.submit` / `equipment_check.view` / `inventory.view` —
+  crew-level, not officer-level, because recording what you just used is the
+  whole point and gating it behind a manage permission is what leaves the gap.
+
+- **Receive Stock — a whole delivery in one pass.** Pre-stocking was a page at a
+  time: recording a delivery meant opening each item's detail page and adding
+  one lot, which is a large part of why the stock a crew went looking for often
+  did not exist. The Receive Stock screen takes item, lot number, expiration and
+  quantity per line with one received date for the lot of it, through
+  `POST /inventory/lots/bulk`, which validates every item is in the caller's org
+  and **applies all lines or none**. A partly applied delivery is worse than a
+  rejected one: the officer cannot tell which lines landed, and re-entering it
+  would double-count whatever did.
+
+- **Add Several — paste a catalog in.** Stocking the catalog is list-shaped
+  work that only had a one-item-at-a-time modal.
+  `POST /inventory/items/bulk` creates many at once; **names already in the
+  catalog are skipped and reported, not rejected**, so a list can be re-pasted
+  after it grows. Any validation failure writes nothing. The CSV import that was
+  built, routed and unreachable from the items page is now surfaced beside it.
+
+- **Catalog linking while an item is being added.** Expiration, lot and restock
+  tracking all hang off a checklist item's `inventory_item_id`. Setting it was a
+  separate act from adding the item and lived three clicks deep inside the item's
+  advanced panel, so on a real rig checklist almost nothing was linked and almost
+  nothing was tracked. Every bulk path made it worse — quick add, bulk paste,
+  Add Kit presets and CSV import all posted a name and nothing else.
+
+  The quick-add bar now searches the catalog as you type; picking a result links
+  it and inherits what the catalog knows (name, counted-vs-serialized, whether it
+  carries dated stock). Typing a name nobody stocks still adds a plain checklist
+  line, because plenty of lines are not stock and never will be. When the search
+  finds nothing, the bar offers to **create the item in inventory and link it in
+  one step** — gated on `inventory.manage`, since a scheduling officer without it
+  would only get a 403 they cannot act on.
+
+- **A reviewed bulk link pass for checklists that already exist.**
+  `GET /equipment-checks/templates/{id}/inventory-matches` proposes a catalog
+  item for every unlinked position;
+  `POST /equipment-checks/templates/{id}/inventory-links` applies the reviewed
+  set. **Only exact name matches are pre-selected.** A close match is
+  deliberately never pre-selected — "Oxygen Mask" scores high against both the
+  adult and the pediatric mask, and quietly picking one would put the wrong
+  expiry on a truck. The template toolbar now carries a linked/unlinked count so
+  the holes are visible at all.
+
+- **`GET /equipment-checks/supply/item-deployments/{inventory_item_id}` — the
+  link read backwards.** The supply worklist answers "what is expiring on my
+  trucks"; there was no way to ask "which trucks carry this item", which is the
+  direction a recall or an expiring lot is actually worked from — the officer is
+  holding the item. The stock tab on an inventory item now lists the checklist
+  positions it fills, each with what that truck is carrying right now.
+
+- **A weekly expiring-supply alert.** There are alerts for certifications, low
+  stock, overdue checkouts and NFPA retirement; the supply worklist was
+  pull-only. `supply_expiration_alerts` reports **both ends of the same
+  shelf-to-truck loop together**, which is the part neither module can do alone:
+  it splits the deployed items by whether an in-date lot is actually behind them,
+  because "swap it" and "order it" are different jobs and the officer plans the
+  week around which one each row is.
+
+  **Weekly rather than daily** — an item that has already expired fails its
+  apparatus on every check and notifies through that path, so this alert exists
+  to get ahead of the date, not to repeat what the check already says.
+
+**Changed**
+
+- **On-hand now comes from in-date lots.** Lots and `InventoryItem.quantity` were
+  separate ledgers that never spoke: adding a lot did not touch `quantity`, and a
+  swap decremented only the lot. The reorder alert read `quantity`, so a
+  consumable stocked purely through lots — which is what the supply-officer
+  screens create — could sit at **zero ready units and never trip it**, while one
+  whose `quantity` column was never maintained tripped it every day.
+
+  On-hand is now the sum of in-date lots for any item that has them, and
+  `quantity` for the rest. One shared helper backs the alert, the items grid and
+  the CSV export, so the three cannot disagree. The Qty column labels the figure
+  **"in-date lots"** so it is not mistaken for the pool count beside it, and the
+  export carries it in its own **Ready Lot Stock** column. The alert says which
+  ledger each figure came from, so a number that disagrees with the item's own
+  `quantity` reads as the count that matters rather than as a bug.
+
+- **Expired shelf stock is no longer ready stock.** A lot past its own date was
+  counted in `ready_stock`, offered in the swap list, and **accepted by the swap
+  endpoint** — which would have put expired supplies in service and failed the
+  item on the next check. It is now excluded from the count, flagged in the
+  payload, struck through in the supply view, and refused by the swap. An item
+  whose lots have all expired reads as **zero**, not as its stale `quantity`:
+  counting expired stock would hide the shortage most in need of ordering.
+
+- **Expiry is decided by the server.** It was taken from a client-supplied
+  `is_expired` flag — which is what force-fails a safety-critical item. It is now
+  recomputed from the template item, or from the replacement just logged, and
+  from the **soonest date actually aboard** rather than the position's column.
+  The frontend badge switched to a calendar-day comparison in the organization's
+  timezone to match, instead of parsing the date-only string at UTC midnight and
+  calling an item expired a day early.
+
+- **Swapping is no longer gated on the date.** The swap action only appeared when
+  an item was expired or expiring, but expiry is one reason a unit comes off a
+  truck — used, damaged, contaminated, missing and recalled are the others. A
+  crew holding an empty bracket had ready stock on the shelf and no way to reach
+  it. The action now shows for any item linked to inventory, emphasised only when
+  the date is the reason.
+
+- **A lot swap is now in the changelog every manual edit writes to.**
+  `swap_item_lot` took a `user` parameter and never used it, so the one change to
+  a check template that nobody typed was also the only one with no author — a lot
+  number would appear on an apparatus from nowhere. It now logs a `swap` entry
+  carrying the previous and new lot/expiration and the shelf lot it came from.
+
+- **A quantity item arrives on the check form carrying the running count, and
+  arrives unchecked.** It used to be seeded from the *last check's* count, which
+  is the wrong memory now that a running one exists: a crew that pulled two at
+  03:00 opened the morning check at the four the last check had seen — the exact
+  drift this work removes, reintroduced at the screen where it matters most. The
+  running on-truck count is now the source, with the last check's number as the
+  fallback for items never counted.
+
+  More seriously, seeding also set each item to **pass or fail**. A crew could
+  open a sixty-item check, submit it untouched, and file a complete report
+  against a truck nobody had looked at, with the progress counter agreeing. Items
+  now seed with **no status**, so a pre-filled number is a starting point to
+  correct rather than an assertion, and the counter reflects what was actually
+  looked at. An unchanged count still takes one tap to affirm.
+
+- **"Confirm Counts" leads; "Set All to Par" warns before it claims stock.**
+  Set All to Par wrote the required quantity over whatever each position was
+  showing. On a truck carrying eighteen of twenty-four gauze, one tap recorded
+  twenty-four — six on the record that are not in the bag — with no signal it had
+  done so. Carrying counts over from the last recorded count made that worse,
+  because the number being overwritten is now usually real.
+
+  "The numbers are right" and "it is all full" are different claims, and only the
+  second had a button. **Confirm Counts is now its own action and it
+  leads**: it is the common case and it cannot record stock nobody has. Status
+  still comes from the number, so confirming eighteen of twenty-four files a
+  failure rather than quietly passing it. Set All to Par keeps its meaning and
+  its place but names the items whose count it is about to raise; a compartment
+  already at par is untouched and stays one tap.
+
+- **Consumption draws first-expiring-first-out.** That is the order a crew should
+  be pulling from and the only order that keeps what remains as fresh as
+  possible. Undated lots sort **last** — an undated unit is never the one that
+  needs using up.
+
+- **A restock report is settled only when the truck is back at its target.** Two
+  of four back is still a truck short two, and clearing the flag there would
+  close the gap on paper while leaving it open on the apparatus. A counted
+  position below target reaches the supply worklist on its own, with or without a
+  report behind it, and the row shows the numbers rather than only that something
+  is needed.
+
+- **On a counted position the old "Used" action became "Flag".** The minus button
+  is what records use there, so "Flag" covers damaged, contaminated or missing
+  without pretending a unit was consumed.
+
+- **The equipment-check form lists every lot's date.** A bag holding three boxes
+  with three dates was described by whichever was restocked last. The form now
+  receives the lots and lists each with its own date, and the expiry verdict is
+  taken from the soonest date aboard. The verdict **recomputes the minimum**
+  rather than trusting the payload's order, because it is not a decision that
+  should depend on how a list arrived.
+
+- **Count, lot number and date travel together in one correction.** Correcting a
+  lot could only set a count, so a crew swapping a box in could record that one
+  was there without recording when it expires — leaving the application
+  confidently asserting an expiration for a unit that had left the bag. The
+  correction is now available from inside the check as well as from the apparatus
+  view, and both screens render the **same panel** rather than two lot lists that
+  would drift. Omitted fields are left alone and an explicit `null` clears; zero
+  quantity removes the lot, so a spent box stops contributing its date.
+
+- **The "item swapped?" panel exists for every check type that can carry an
+  expiration**, not only `date_lot`. Types that could carry a date but not
+  `date_lot` had no route to record a replacement at all; they get a
+  "replaced — new date" control of their own — shown only where there are no lots
+  to correct, so one fact never has two contradictory inputs.
+
+- **Three hand-rolled `split(',')` CSV readers replaced with a real RFC 4180
+  parser.** A supply catalog is exactly the data that breaks them —
+  `"Gauze Pads, 4x4 Sterile"` is one field, and splitting on commas shifted every
+  column after it, so the import preview disagreed with what the import would
+  actually do.
+
+**Fixed**
+
+- **A swap stamped the incoming lot's date onto the units already aboard.** The
+  item's `lot_number` and `expiration_date` were overwritten before the existing
+  units were given a deployed-lot row of their own, so they were recorded
+  carrying the new lot's date — the exact substitution the deployed-lot table was
+  added to prevent, moved one step along. The existing units are now given their
+  row first.
+- **A recount was silently discarded on any position carrying lots.** Both the
+  apparatus recount and an equipment check's `quantity_found` wrote
+  `quantity_on_truck`, which stops being what anything reads the moment lots
+  exist. A counted total now reconciles against the lots: short of the record
+  comes off soonest-first like any other consumption; over the record lands in an
+  **undated** row, because the honest answer to when found stock expires is that
+  nobody knows.
+- **The supply worklist matched only the item's own expiration column** while
+  displaying the soonest date aboard, so a position whose column read next year
+  while it carried a lot expiring this week never appeared — precisely the case
+  the table was added for.
+- **A lot drawn down to nothing stayed on the record**, accumulating dead rows
+  against every position a truck ever restocked and holding a spent lot's foreign
+  key for no reader.
+- **Cloning a template dropped `inventory_item_id`**, silently severing the
+  catalog link on the copy — which is how a department stands up its second
+  engine.
+- **Completing an incomplete check stored found values but never propagated them
+  to the template**, so which write path a crew took decided whether the truck's
+  record was updated.
+- **The template builder sent blanks as omitted keys on update**, so clearing an
+  expiration date or unlinking an inventory item reported success and changed
+  nothing (CLAUDE.md pitfall #1, update half).
+- **`InventoryItem.assigned_to_user_id` is `String(36)` and the endpoint passed a
+  `UUID`.** "Everything issued to this member" answered "nothing", for every
+  member, silently, with a 200 and an empty list. Every other id filter in the
+  same query already cast with `str()`. Four tests pin the rule for all four id
+  filters.
+- **The apparatus picker was always empty.** The page asked for 200 apparatus and
+  the endpoint caps `page_size` at 100, so every load 422'd. The fleet is now
+  walked a page at a time.
+- **The lots sheet was cut off by the mobile tab bar** — a position carrying two
+  lots showed the first and hid the second behind the fixed bottom navigation,
+  which is exactly the case the sheet exists for. Both sheets now sit above the
+  bar and pad their scroll area clear of it.
+- **An expired item counted as neither short nor needing restock**, so an
+  apparatus carrying two expired naloxone and nothing else summarised as fully
+  stocked. Expired is now counted, and reported **apart from** expiring: lumping
+  them reads as "two things want attention some time soon" when one of them is
+  unusable now.
+- **An expired position rendered its count in green.** Two of two expired units
+  meet the number and are still nothing a crew can use; the count now reads red.
+- **The supply worklist showed a "300d left" countdown against an item listed for
+  being short**, which reads as an expiry warning for something ten months out.
+- **Ranks rendered as "Deputy_chief"** on the impact planner's member table. CSS
+  `capitalize` uppercases the first letter of each *word*, and a snake_case value
+  is one word. `enumLabel` already solved this but lived in the facilities
+  module's types file; it moved to `utils/displayValue.ts` and is re-exported from
+  `facilities/types` so the 27 existing imports keep working.
+
+**Edge cases worth knowing**
+
+- **A crew reporting more used than the record held draws what was there.** That
+  is a correction to the record, not a negative quantity.
+- **A position carrying units with no lot row gets one before the first lot joins
+  them**, or the lot sum would become the authority and the units nobody had
+  recorded a lot for would vanish.
+- **Headers and free-text lines are left out of the apparatus view.** They are
+  checklist scaffolding, not things anyone stocks.
+- **Clearing a restock report drops the reporter and note too**, so a stale name
+  is never attached to the next report. A swap of fresh stock clears the report
+  on its own, since the item has been dealt with.
+- **A position with lots aboard opens them rather than offering a stepper.** Two
+  units with two dates cannot be moved by one plus or minus. Each lot carries its
+  own count and a Remove.
+- **Deleting a shelf lot does not erase what is on a truck.** `inventory_lot_id`
+  is `ON DELETE SET NULL` and the lot number and expiration are snapshotted.
+
+**Migrations** — `20260810_0005` (`expiration_found`), `20260810_0006`
+(`restock_needed` and its three companion columns, plus
+`idx_check_item_restock`), `20260810_0007` (`quantity_on_truck`), `20260810_0008`
+(`check_item_deployed_lots` and its data migration). They were renumbered from
+`0003`–`0006` after `main` landed the email-template pair at those ids: two
+revision IDs with two files each is not a merge conflict git can see — it is a
+chain Alembic refuses to load, and the backend crashes on startup rather than at
+review.
+
+---
+
+### Communications: one email design, and a footer library instead of 35 copies (2026-08-10)
+
+**Added**
+
+- **A named footer library on the organization.** The footer was copy-pasted into
+  all 35 default bodies: 32 copies of "This is an automated message from …" and
+  25 of the contact line. Changing the wording meant opening 35 templates one at
+  a time — and once a template had been edited by hand, the only way back was
+  Reset, which discards the rest of that template's edits too.
+
+  It is now a library, with each template naming the footer it closes with.
+  **Named rather than singular** because a department does not want to say the
+  same thing to everybody:
+
+  | Footer | Who gets it |
+  | ------ | ----------- |
+  | **Internal** | Members. The routine "do not reply" close. The default. |
+  | **Public** | Outside the department. Invites a reply and carries the mailing address — telling somebody who asked the station to visit their school not to reply was wrong. Event requesters and applicants get this one. |
+  | **Official notice** | On the record: separations, property return, election results. |
+
+  Departments can rename, reword, add and delete these; a footer names its own
+  lines and toggles the contact and address blocks. Managed at
+  **Communications → Email Templates → Footers**
+  (`GET` / `PUT /email-templates/footers`, `settings.manage` or
+  `organization.update_settings`).
+
+  Mechanically the footer is two more variables, `{{footer_html}}` and
+  `{{footer_text}}`, that `build_context` injects like the organization ones — so
+  every render path picks it up, including the code defaults behind a template
+  row and the one-off bodies `wrap_email_body` builds for scheduled tasks. It is
+  resolved **a step before** the template body, because rendering is a single
+  substitution pass: a `{{organization_name}}` sitting inside an
+  already-substituted `{{footer_html}}` would mail as those literal braces.
+
+- **Nine more `{{organization_*}}` variables.** Seven fields a department fills in
+  on Organization Settings could not be put in an email or a footer: fax, county,
+  founded year, tax ID, and the three department identifiers (FDID, state ID,
+  department ID). The description and the organization type were missing too.
+
+  | Variable | Why it exists |
+  | -------- | ------------- |
+  | `organization_tax_id` | A 501(c)(3) asking for money is expected to state its EIN on the message that asks |
+  | `organization_identifier` / `organization_identifier_label` | Whichever of the three identifiers the department nominated, **with the name of the scheme**, so an official notice can read "FDID 12345" and be right about which one that is |
+  | `organization_founded_year`, `organization_county` | The "Serving X County since 1923" line departments write by hand today |
+  | `organization_fax`, `organization_description`, `organization_type` | Completeness |
+
+  Which columns reach templates is now a **two-map ledger** —
+  `ORGANIZATION_FIELD_VARIABLES` for the ones offered and
+  `ORGANIZATION_FIELDS_WITHOUT_VARIABLES` for the ones deliberately withheld and
+  why. A column in neither is one nobody ruled on, and the catalogue test says so
+  by name; that is the part that keeps the gap from silently regrowing the next
+  time a column is added.
+
+- **Template rows for three notices that had none.** `shift_assignment`,
+  `shift_decline` and `shift_reminder` were listed by the enum and by the Email
+  Templates screen but composed in code, so **the mail departments send most
+  often was the mail they could not reword**. Each now has a default body, a
+  documented variable list and sample data, and each send site renders through
+  the department's template with the code default behind it.
+  `ballot_eligibility_summary` had a template but neither variables nor samples,
+  so its editor palette was empty and its preview rendered blanks.
+
+**Changed**
+
+- **One stylesheet, one document shell, one table style.** `app/services/email_theme.py`
+  is now shared by the template service, the storefront and the election report,
+  replacing three copies with drifting hex codes. The design is a white card on a
+  grey page — system font stack, rounded header band, consistent paragraph
+  rhythm, light table headers — in place of the full-bleed red band over a grey
+  slab.
+- **Untouched templates track the built-in stylesheet.** `create_template` copied
+  `DEFAULT_CSS` into every row, so an organization's templates were frozen on
+  whatever stylesheet shipped the day they signed up, and improving the default
+  reached new departments only. The service now stores NULL and falls back at
+  render time. Migration `20260810_0003` NULLs the rows still holding a
+  **verbatim** copy of one of the two stylesheets ever shipped as a default; a
+  department that edited its CSS matches neither string and is left alone.
+- **The preview endpoint runs the inliner**, so what an admin approves is what
+  ships.
+- **Two lines that were genuinely per-notice rather than boilerplate** — "A copy
+  has been placed in your member file" and "Please retain this email for your
+  records" — moved into the notice itself or into the official footer.
+
+**Fixed**
+
+- **The CSS inliner styled the first paragraph of every email and nothing after
+  it.** `".parent child"` rules stopped at the first closing tag inside the
+  parent, so `.content p` matched once. Gmail strips `<style>`, so that was the
+  spacing most recipients actually saw. It now scopes by element depth, and
+  declarations are normalised so a quoted font name cannot close the style
+  attribute it lands in.
+- **`items_removed_html` and `recipients_html` were missing from
+  `_RAW_HTML_VARIABLES`**, so the inventory notice's removed-items list and the
+  eligibility summary's recipient list were escaped and mailed as visible angle
+  brackets.
+- **The code-default fallback never filled in the organization variables.** That
+  path is the normal one until somebody opens the Email Templates screen — which
+  is the only thing that creates the rows — so those departments were receiving
+  footers reading a literal `{{organization_phone}}`.
+- **The event-request status notice labelled Scheduled Date, Reason and Message
+  unconditionally**, and most status changes carry only one of them. A member of
+  the public who asked the department to attend their event was getting bare
+  "Reason:" lines. The optional blocks are now assembled by the sender.
+- **The event-request fallback fed each value to `re.sub` as a replacement
+  string**, so a backslash in a public contact name was read as a group
+  reference. It goes through `_render_with_fallback` like everything else — which
+  also gets these sends into Message History for the first time.
+- **The duplicate-application notice printed its contact line twice.**
+- **Three header colours failed WCAG AA against their white text** (`#f59e0b` at
+  2.2:1, `#d97706` at 3.2:1, `#059669` at 3.8:1), as did the 11px `#9ca3af`
+  contact line in every footer.
+- **"Send Test Email to Me" posted a blank recipient.** SMTP rejected it, the
+  endpoint returned 200, and the UI reported success for an email nobody
+  received.
+- **The mailing/physical address composer read every column except country**, so
+  an address outside the US lost its last line. The country is appended except
+  when it is the `"USA"` the column defaults to — printing it unconditionally
+  would put a line of noise under every US department's own address.
+
+**Edge cases worth knowing**
+
+- **Which footer a template uses is `email_templates.footer_key`, NULL meaning
+  "the one marked default"** — so a department that changes its default reaches
+  every template that has not overridden it, without a data migration.
+- **An unrecognised key resolves to the default rather than to nothing.**
+  Deleting a footer should cost the templates naming it their *choice*, not their
+  footer. The Footers screen says how many templates use each one before you
+  delete it.
+- **The library lives in `Organization.settings`**, like the officer directory and
+  for the same reason: rendering is synchronous and already receives the
+  organization, so it needs no extra query on any send path.
+- **Malformed settings fall back to the seeded library rather than raising.** Mail
+  has to keep going out.
+- **Footer text is admin-entered**, so it is escaped before its variables are
+  substituted, and the substituted values are escaped too.
+- **The library saves whole.** A per-footer save could leave `default_key` naming
+  a footer the same request deleted.
+
+**Migrations** — `20260810_0003` (clear verbatim default CSS copies),
+`20260810_0004` (`email_templates.footer_key`).
+
+---
+
+### Twenty-two defects found by photographing the application (2026-08-10)
+
+Every item below was found while capturing screenshots for the training guides —
+by opening the resulting image and comparing it with the caption. None was
+reported by a test.
+
+**Fixed**
+
+- **One training attachment made the whole records list return 500.**
+  `POST /training/records/{id}/attachments` stores a **dict** per file while
+  `TrainingRecordResponse` declared `attachments: Optional[List[str]]`, so the
+  moment anybody attached a certificate, `GET /training/records` failed response
+  validation for the **entire list**. The response now uses a
+  `TrainingAttachment` schema listing only client-safe fields — the stored dict
+  carries the absolute path of the file on the server's disk and the uploader's
+  id, so widening the type to `List[dict]` would have started leaking
+  `/app/uploads/...` to every caller. A validator stamps each attachment with its
+  index (the download route addresses them that way; they have no id) and carries
+  legacy bare-string attachments through as file names.
+- **Setting a required EVOC level on an apparatus returned 500 — and took the
+  whole fleet list with it.** `ApparatusResponse` and `ApparatusListItem` both
+  project `required_evoc_level`, but the detail query, the list query and the
+  update path all left it unloaded. The gap was invisible while every apparatus
+  had a NULL `required_evoc_level_id`, because SQLAlchemy returns None for a null
+  FK without touching the database; the moment a value existed, response
+  validation lazy-loaded on an async session and raised `MissingGreenlet`. **One
+  unloaded row was enough to fail the entire page.** This is why no apparatus in
+  the demo data had a requirement: the feature could not be used.
+- **Adding or editing an apparatus operator with an EVOC level returned 500.**
+  Same shape — both write paths ended on `db.refresh()`, which repopulates
+  columns and not relationships. The row was committed first, so the UI reported
+  a failure over an operator that had in fact been created. Both paths now reload
+  with `selectinload`.
+- **The Operators tab labelled every row "Operator ID: a8c2c854-…".** The
+  operator's user has always been eager-loaded but never projected;
+  `ApparatusOperatorResponse` now carries `user_name`. The add form asked for that
+  UUID by hand in a free-text box — nothing in the UI shows a member's id — so it
+  is now a member picker.
+- **The member-deletion impact preview reported 0 inventory items for every
+  member in the system.** `get_deletion_impact` imported `InventoryAssignment`
+  from `app.models.inventory`, a class that has never existed there (the models
+  are `ItemAssignment` and `ItemIssuance`). The `ImportError` was swallowed by a
+  bare `except Exception: pass` and the count stayed at its initialized zero, so
+  **an administrator about to permanently delete a member was told the deletion
+  would cost nothing.** Now counts both models, with the swallows removed and the
+  imports hoisted to module scope where a bad name fails at import.
+- **Creating a cohort's classes failed with "Training course not found", for a
+  course that plainly existed.** `TrainingCourse.id` is `String(36)` but
+  `course_id` arrives from the schema as a `UUID`, and both course lookups in
+  `TrainingSessionService` bound it raw. The path is only reached with
+  `use_existing_course=True`, which is how cohort classes are created. The visible
+  result was a cohort detail page reading "No event" on every row under a red
+  "Create 5 missing events" button — the repair prompt shown as though it were
+  the normal state.
+- **The Create Training Session wizard shifted its own date/time fields on every
+  render.** `DateTimeQuarterHour` emits a local wall-clock string, but the value
+  bindings sent it back out through `formatForDateTimeInput()`, which parses a
+  bare string as an *instant* and re-renders it in the organization's timezone.
+  The field lost the org's UTC offset **once per interaction, compounding**:
+  setting 15 September 9:00 AM and then adjusting the hour, minute and meridiem in
+  turn left 14 September 9:00 PM behind.
+- **The event detail page leaked scheduler bookkeeping to members.**
+  `custom_fields` was dumped verbatim under "Event Details", excluding only the
+  training keys the block above renders — and that column is also where the
+  scheduled tasks record what they have already sent. Any member opening an event
+  the scheduler had touched was shown "Validation Notification Sent: true" beside
+  the description. The three bookkeeping keys are filtered out, and the card is
+  gated on there being something visible left.
+- **Guest check-in switched itself off on any other edit.** `_build_event_response`
+  names each field it passes rather than validating from the ORM row, and it named
+  neither guest flag. The column held 1, every read said false, and because the
+  edit form loads from that endpoint, opening an event with guest check-in on and
+  saving any other change wrote the false back. `recurrence_exceptions` and
+  `rolling_recurrence` were missing the same way. **A completeness test now
+  asserts the builder names every field the schema declares**, minus the
+  per-request aggregates callers supply — a per-field test would not have caught
+  the next one.
+- **The room display drew its headings with a hard-coded `text-white` over a
+  theme gradient whose middle stop is light.** The event name — the one thing a
+  kiosk exists to show — was white on white for any department that had not
+  switched the display to dark.
+- **The Send Log marked in-app notifications "Not delivered"** — a red mark and an
+  error tooltip — for notifications the member had already opened and read.
+  `NotificationLog.delivered` defaults to False and six write sites that create
+  in-app rows never set it; there is no send step for the in-app channel, because
+  **the row is the delivery**. The default is now a callable returning True for
+  the in-app channel, while an explicit `delivered=` still wins, which is what
+  email needs for a bounce.
+- **`?tab=` addressed one of the four notification tabs.** `?tab=log`,
+  `?tab=templates` and `?tab=rules` all fell through to the rules tab, and
+  switching tabs deleted the parameter rather than updating it — so the Send Log,
+  the one screen anyone has cause to send a colleague a link to, could not be
+  linked at all. All four now round-trip, still gated on the permission that shows
+  them.
+- **The member audit history's Event Type dropdown was inert.** It speaks a
+  coarser vocabulary than the stored event types — "Profile Updates" covers
+  `user_profile_updated`, `user_updated` and the two photo events — but the
+  endpoint compared the dropdown's value for **equality** against the stored type.
+  Every option except "All Events" emptied the page and then advised the reader to
+  clear the filter, as though the member had no such history. An unrecognised
+  value still falls through to an exact match so a caller can name a stored type
+  directly. **"Logins" is gone from the dropdown**: this endpoint returns
+  member-management events only, so that option could never match anything however
+  the filter was wired. Logins live in the security audit log.
+- **Expanding an audit entry showed two raw UUIDs** — the member's id and the
+  editor's id, 36 characters each, both for people the row already names. Those
+  keys are filtered out, and an entry left with nothing else to show no longer
+  offers a details toggle at all.
+- **Three finance detail pages showed breadcrumbs only while loading.**
+  `<Breadcrumbs />` was rendered in the loading-skeleton and not-found branches of
+  `ExpenseReportDetailPage`, `PurchaseRequestDetailPage` and `BudgetDetailPage`
+  and **not** in the branch that renders the record, so the one state nobody looks
+  at was the only state with navigation. The test asserts against the source
+  rather than a render — the defect is a missing line in the last of three sibling
+  branches, and a render test would only exercise whichever branch its mocks
+  produced. It walks every `*DetailPage.tsx` in the folder, and found
+  `BudgetDetailPage` on its first run.
+- **The Dashboard's Open Shifts panel rendered every open shift in the next 30
+  days.** Its siblings are all capped; this one mapped the whole fetch. On a
+  22-member department that is 48 rows, which turned the member dashboard into a
+  6,930px page with events, activity, ID card and equipment pushed off the bottom
+  — while carrying a "View Schedule" link that is the affordance for seeing them
+  all. Capped at five with a line saying how many more there are.
+- **The facility inspection's inspecting organization was collected, searchable,
+  and rendered nowhere.** `inspector_organization` is a form field and one of the
+  four fields the search matches, so you could find a record by typing
+  "Commonwealth Mutual" and then read a row that named that firm nowhere. Both
+  list surfaces now print it beside the inspector.
+- **A cancelled skills test offered a way back in.** The "Tap to start / Tap to
+  resume" affordance and the `/active` route were gated on `completed_at`, and a
+  cancelled test has no completion date either — so it read as unfinished and
+  routed the officer to the scoring screen for an evaluation that is closed. Gated
+  on status now, positively.
+- **The skills-testing criterion type was a free string.** The scorer and the
+  examiner screen each recognise five values; anything else fell through to a
+  fallback that rendered plausibly and **carried no points**, so a scorecard
+  reported "No percentage could be calculated" with every section marked as not
+  counting, on a sheet that looked fully scored. The schema validates the type on
+  the way in and names the accepted values.
+- **Reloading a skills test reset which section you were on.** `loadTest` wrote
+  `activeSectionIndex: 0` unconditionally, and a second in-flight load resolved
+  after the scoring screen had jumped to the first section with blank steps and
+  undid it — so a half-scored evaluation reopened at section 1 with no clue why.
+  Only a *different* test starts at the top now.
+- **The prospect drawer's Linked Events badge read "public Education".** The badge
+  is an inline span butted against the date before it, so `capitalize` saw
+  "AMpublic education" as one word. `inline-block` gives it its own line-box start.
+- **The course preview card rendered the raw enum — "Type: skills_practice".**
+  Two divergent copies of a `TRAINING_TYPE_LABELS` map already existed (one saying
+  "Skills practice", the other "Skills Practice") while this third site had none.
+  One map now lives in `constants/enums.ts`.
+- **`create_report` overwrote the officer's call count whenever a shift was
+  linked.** The field is editable, pre-filled from the run log, badged "(auto)",
+  and the guide tells officers they may correct it — and the correction never
+  survived the request. It now fills a blank and leaves a supplied value alone,
+  distinguishing "omitted" from "zero". The batch path passes `None` explicitly
+  and keeps deriving per trainee: its form collects one count for the shift, not
+  per crew member, so fanning it out would credit every rider with every run.
+- **Both monthly shift-report charts drew nothing.** The bars size by percentage
+  inside a column with no height, so they collapsed and left a month label under
+  empty space.
+- **`apply_placeholders` stamped images into the wrong section.** It trusted its
+  line hint whenever that line held any placeholder, without checking the anchor
+  agreed — so a prose edit above one pushed it down, the stale number landed on
+  its neighbour, and a review modal was published under a caption about
+  re-review buttons, **reported as a successful replacement**.
+
+**Known, recorded rather than changed**
+
+- **The Review Queue and Flagged views render only while review is required**, so
+  a flagged shift report becomes unreachable if that setting is later turned off.
+- **An event carrying both a `location_id` and a free-text `location` opens in
+  "Other" and loses its link on save.** The form treats free text as proof the
+  event is off-site. Only an API client can produce that pair.
+- **A prospect's "Attended: `<event>`" referral stamp is reachable only from an
+  export or the API** — nothing renders it. The provenance is visible by another
+  route, in the drawer's Linked Events panel.
+- **Auto-progressed training requirements are stored but never rendered.**
+- **The Scheduling Compliance report's Total Members card sums per-requirement
+  cohorts**, so a member counted under three requirements counts three times. The
+  Compliant and Non-Compliant cards sum the same way: the values are
+  member-requirement pairs, the labels claim members. The payload carries no
+  distinct-member count, so correcting it means relabelling the cards or adding an
+  API field — a product decision, not a screenshot one.
+
+---
+
+### Scheduling: four defects the crew board and dashboard were showing (2026-08-10)
+
+**Fixed**
+
+- **A designated shift officer held no seat.** `_sync_officer_assignment` decided
+  whether the board had an "officer" position by reading `BasicApparatus.positions`
+  alone, while the response builder resolves the same list differently — the
+  apparatus's riding positions when it has them, the shift's own otherwise — and
+  the panel renders from that. The two disagreed on **exactly the departments
+  running the full Apparatus module**, which deliberately does not model riding
+  positions: there the sync returned before seating anybody while the board
+  rendered happily from the shift's own positions. The panel named a Shift Officer
+  who appeared on no roster and counted toward no staffing total. The sync now
+  resolves seats the same way the response does.
+- **Today's shift read as yesterday's.** `shift_date` is a calendar date — no
+  time, no timezone. Padding it to `"2026-08-10T00:00:00"` and handing it to a
+  timezone-aware formatter parses local midnight and re-renders it in the
+  department's zone, so "My Upcoming Shifts" showed Aug 10 as "Sun, Aug 9" for any
+  viewer west of the browser's offset. Adds **`formatCalendarDate`**, which anchors
+  and formats in UTC so the day written in the string is the day shown, and uses it
+  for shift dates and leave-of-absence ranges.
+- **Two filter controls painted over their neighbours.** `form-input` carries
+  `w-full`; pinned with `sm:flex-none` and no width of its own, that resolves
+  against the whole row rather than the space left beside the icon and label
+  preceding it. The Open Shifts date filter overflowed by exactly that width and
+  covered the Refresh button; the Requests status filter spilled past the page's
+  right edge. Both now declare a desktop width.
+- **"1 calls".** Pluralised on the report card and in the review modal.
+
+---
+
+### Dependencies (2026-08-10 → 2026-08-11)
+
+**Changed**
+
+- **Backend** — `starlette` 1.3.1 → 1.4.1, `uvicorn` 0.52.0 → 0.52.1,
+  `pydantic-settings` 2.14.2 → 2.15.0, `alembic` 1.18.5 → 1.19.0, `hiredis`
+  3.4.0 → 3.4.1, `pywebpush` 2.0.3 → 2.4.0, `boto3` 1.43.61 → 1.43.67,
+  `google-auth` 2.56.2 → 2.56.3, `hypothesis` 6.164.0 → 6.165.2,
+  `redis` 5.2.1 → **8.1.0**, `websockets` 14.2 → **17.0.1**,
+  `google-cloud-storage` 2.19.0 → **3.13.1**, `tzdata` → 2026.3.
+- **Frontend** — `eslint` 9.39.3 → **10.8.0**, `@eslint/js` 9.39.3 → **10.0.1**,
+  `@vitejs/plugin-react` 5.1.4 → **6.0.5**, `concurrently` 8.2.2 → **10.0.4**,
+  plus the npm minor/patch group (11 of 12).
+
+**Fixed**
+
+- **`@eslint/js` 10 ships an updated `eslint:recommended`**, whose two new rules
+  flagged three real defects: `LinkifiedText` pushed its trailing text fragment
+  with `key={key++}`, an increment nothing reads (`no-useless-assignment`); and
+  `reportsStore` and `storefrontStore` rethrew a normalized message with
+  `new Error(message)`, discarding the axios error behind it
+  (`preserve-caught-error`). Both now pass it as `cause`, which needs the ES2022
+  Error overload — `ES2022.Error` was added to tsconfig `lib` **on top of** ES2020
+  rather than replacing it, since Error cause is a runtime API and needs no change
+  to `target`.
+- **The npm-minor-patch group could not install at all.** The lockfile was missing
+  the `@rolldown/*` platform bindings the bumped Vite pulls in, so `npm ci` failed
+  before any job could run. Regenerating it also surfaced that **npm keeps a
+  per-workspace copy of each declared range inside the lock and trusts it over the
+  manifest** — that copy had gone stale for `lucide-react`, so npm believed
+  `^1.30.0` was already met by 1.28.0 and silently refused to re-resolve: `npm ls`
+  reported the tree as invalid while `npm ci` still exited 0.
+- **The root `overrides` block pinned `vite` at `^7.3.1` and `esbuild` at
+  `^0.27.0`** while the frontend pins vite 8 and esbuild `^0.28.1`. `plugin-react`
+  6 imports `vite/internal`, which resolved to the root's vite 7 and failed with
+  `ERR_PACKAGE_PATH_NOT_EXPORTED`; and with vite hoisted to the root and esbuild
+  left nested under `frontend/`, vite could not resolve esbuild at all. **Both must
+  hoist together.** They now track the frontend's own pins.
+
+**Known**
+
+- **`typescript-eslint` is deliberately held at `^8.65.0`** rather than the
+  group's `^8.66.0`. Bumping it forces npm to re-resolve the package, and no
+  `typescript-eslint` release accepts the TypeScript 7.0.2 this repo pins — every
+  version caps its peer at `<6.1.0`. The tree only resolves today because the
+  lockfile carries a second TypeScript (5.9.3) at the root for the linter's own
+  use, **so ESLint and `tsc` are running different TypeScript versions.** Neither
+  an explicit root `typescript` pin nor `--legacy-peer-deps` fixes that honestly.
+  Pulling that thread needs its own change.
+- **The lockfile must be regenerated with npm 11**, the version
+  `frontend/package.json` requires and both Dockerfile stages install. npm 10 and
+  npm 11 hoist this tree differently, so a lock built by npm 10 installs a
+  different tree under the npm 11 that actually runs in CI and in the image — which
+  is what failed the Docker frontend production build. Worth knowing independently:
+  regenerating the lockfile with npm 11 resolves the frontend to vite 7.3.6 against
+  its own 8.2.1 pin; npm 10's hoisting is the only thing hiding that.
+
+---
+
 ### Events: visitors can sign themselves in at an open house (2026-08-09)
 
 **Added**

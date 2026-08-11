@@ -74,6 +74,11 @@ The Equipment Check system provides structured vehicle and equipment inspections
 - **Deficiency Flag** — Failed checks auto-set `has_deficiency` and `deficiency_since` on the apparatus; passing checks auto-clear the flag
 - **Failure Notifications** — In-app and optional email alerts to shift officers and configurable roles on check failures
 - **Reports** — Compliance dashboard, failure log, and item trend history with CSV and PDF export
+- **Catalog Linking** — *(2026-08-10)* The quick-add bar searches the inventory catalog as you type, so adding a position and linking it are one act; picking a result inherits the catalog's name, counted-vs-serialized setting and dated-stock flag. A reviewed bulk pass proposes a link for every unlinked position on an existing template, and the toolbar shows a linked/unlinked count. Everything below hangs off `inventory_item_id`
+- **Live On-Truck Counts** — *(2026-08-10)* A position records `quantity_on_truck` against its target. **NULL means never counted**, and the target stands in
+- **Restock Reports** — *(2026-08-10)* A crew reports an item used or pulled *at the time they use it*, rather than leaving the gap for the next morning's check. Behind `equipment_check.submit`, the default member position
+- **Deployed Lots** — *(2026-08-10)* `check_item_deployed_lots` records each lot aboard a position separately, so a four-slot bracket holding three lots with three dates reports its **soonest** date rather than whichever was restocked last
+- **Standing Apparatus View** — *(2026-08-10)* `/scheduling/apparatus-inventory` shows what a truck is carrying outside any check, with the ready stock behind each position
 
 ### Pages
 
@@ -81,7 +86,9 @@ The Equipment Check system provides structured vehicle and equipment inspections
 |-----|------|------------|
 | `/scheduling/equipment-check-templates/new` | Template Builder | `equipment_check.manage` |
 | `/scheduling/equipment-check-templates/:templateId` | Edit Template | `equipment_check.manage` |
-| `/scheduling/equipment-check-reports` | Reports Dashboard | `equipment_check.manage` |
+| `/scheduling/equipment-check-reports` | Reports Dashboard | `scheduling.manage` |
+| `/scheduling/supply/expiring` | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `equipment_check.view`, `inventory.view` |
+| `/scheduling/apparatus-inventory` | Apparatus Inventory *(2026-08-10)* | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
 
 ### API Endpoints — Equipment Checks
 
@@ -107,6 +114,17 @@ GET    /api/v1/equipment-checks/items/{id}/history               # Item history
 GET    /api/v1/equipment-checks/my-checklists                    # Member pending checklists
 GET    /api/v1/equipment-checks/my-checklists/history            # Member check history
 POST   /api/v1/equipment-checks/checks/{id}/items/{item_id}/photos  # Upload photos
+GET    /api/v1/equipment-checks/supply/expiring-items             # Supply worklist (2026-08-10)
+GET    /api/v1/equipment-checks/supply/item-deployments/{item_id} # Which trucks carry this item
+GET    /api/v1/equipment-checks/apparatus/{id}/inventory          # Standing view of one truck
+POST   /api/v1/equipment-checks/items/{id}/used                   # Report used  → restock report
+DELETE /api/v1/equipment-checks/items/{id}/used                   # Withdraw the report
+PUT    /api/v1/equipment-checks/items/{id}/quantity               # Recount the position
+POST   /api/v1/equipment-checks/items/{id}/swap                   # Swap a ready lot onto the truck
+GET    /api/v1/equipment-checks/items/{id}/deployed-lots          # Lots aboard, soonest first
+PUT    /api/v1/equipment-checks/items/{id}/deployed-lots/{lot_id} # Correct count + number + date
+GET    /api/v1/equipment-checks/templates/{id}/inventory-matches  # Propose catalog links
+POST   /api/v1/equipment-checks/templates/{id}/inventory-links    # Apply reviewed links
 GET    /api/v1/equipment-checks/reports/compliance               # Compliance stats
 GET    /api/v1/equipment-checks/reports/failures                 # Failure log
 GET    /api/v1/equipment-checks/reports/item-trends              # Item trends

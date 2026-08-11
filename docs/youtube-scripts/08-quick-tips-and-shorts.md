@@ -831,6 +831,28 @@ non-compliant]**
 
 ---
 
+## Proposed Shorts — not yet written (2026-08-11)
+
+Five single-action pieces from the 2026-08-10 supply and email work. Each is one
+action, which is what this format is for. Full rationale in
+[SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md#08--quick-tips--shorts).
+
+| ID      | Title                                                | The one action                                                                                          |
+| ------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **8AA** | Change Your Email Footer Once, Not Thirty-Five Times | Communications → Email Templates → **Footers** → edit → save                                            |
+| **8AB** | You Used the Last One — Tell the Truck               | Scheduling → Equipment Checks → **Apparatus Inventory** → find the item → tap **−**                     |
+| **8AC** | Log a Whole Delivery in One Screen                   | Inventory → Manage Items → **Receive Stock** — four lines, one received date                            |
+| **8AD** | Why Your Reorder Alert Never Fired                   | On-hand comes from **in-date lots** for anything stocked that way, and expired stock counts as **zero** |
+| **8AE** | Three Boxes, Three Expiry Dates, One Bracket         | The lots sheet on a position — and why the date shown is the **soonest** aboard                         |
+
+**8AD is the highest-value one here.** A consumable stocked purely through dated
+lots used to sit at zero ready units and never trip its reorder alert, because
+the alert read a `Quantity` field that nobody maintains for lot-tracked stock.
+Departments that have been quietly running out of things will recognise the
+symptom before the title card finishes.
+
+---
+
 ## Production Notes for Shorts
 
 ### Format Guidelines
