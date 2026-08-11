@@ -4222,19 +4222,52 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
-    id: "10-13-mobile-top-bar",
+    id: "10-14-scan-camera-denied",
     doc: "10-mobile-pwa.md",
-    line: 538,
-    anchor:
-      "Screenshot of the mobile top navigation bar showing the hamburger menu, page title",
-    alt: "Mobile top bar with the menu button, page title and notification badge",
+    line: 547,
+    anchor: "Screenshot of the MemberScanPage on a mobile device showing a camera error banner",
+    alt: "Member ID scan on a phone after the camera is refused — the red banner naming the failure, with Start Scanning still offered",
+    route: "/members/scan",
+    // A tall phone rather than `viewport: "mobile"` + `fullPage`: the bottom
+    // tab bar is `position: fixed`, and a full-page shot paints it once at its
+    // viewport offset — across the "How to use" card that tells a member what
+    // to do next, which is half the point of picturing the failure.
+    viewport: { width: 414, height: 1100 },
+    prepare: async (page) => {
+      // No fake media device is configured, so `getUserMedia` rejects and the
+      // page renders its own failure banner. That is the point of the shot:
+      // the state a member reaches by declining the permission prompt is the
+      // one the guide has to describe, and it is the only camera state this
+      // harness can reach honestly — a webcam feed cannot be photographed on a
+      // headless runner, and faking one would picture a scan that never
+      // happened.
+      await page
+        .getByRole("button", { name: /^Start Scanning$/ })
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2_500);
+    },
+    fullPage: false,
+  },
+  {
+    id: "10-15-mobile-menu-notifications",
+    doc: "10-mobile-pwa.md",
+    line: 578,
+    anchor: "Screenshot of the mobile top navigation bar showing the hamburger menu",
+    alt: "The phone menu open, with the unread count on the Notifications entry",
     route: "/dashboard",
     viewport: "mobile",
-    selector: "header",
-    allowEmptyState: true,
-    holdBack:
-      "the phone top bar is logo, department name and hamburger — the bell and " +
-      "its unread badge are inside the menu, not on the bar the placeholder describes",
+    prepare: async (page) => {
+      // Where the unread count actually lives on a phone. The collapsed bar
+      // carries no bell — it is logo, department name and hamburger — so the
+      // badge is only reachable with the menu open, and a shot of the bar
+      // alone would picture the absence rather than the feature.
+      await page
+        .getByRole("button", { name: /Open (main|navigation) menu/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(1_200);
+    },
+    fullPage: false,
   },
   {
     id: "10-04-mobile-dashboard",
