@@ -111,6 +111,11 @@ BULK_PROSPECT_TARGET = 247
 # The scheduling module refuses to double-book a member across overlapping
 # shifts. That is the rule working, not a seeding error — matched on the message
 # because the status code is a plain 400.
+# A phase whose own name repeats the number the progress view already puts
+# in front of it — "Phase 1 — Orientation" rendering as "Phase 1: Phase 1 —
+# Orientation".
+PHASE_NUMBER_PREFIX = re.compile(r"^\s*Phase\s+\d+\s*[—–-]\s*")
+
 SHIFT_CONFLICT = re.compile(r"conflicting shift", re.IGNORECASE)
 
 RSVP_CLOSED = re.compile(
@@ -4303,9 +4308,13 @@ class Seeder:
                 "Probationary Firefighter Pipeline",
                 "PROB-FF",
                 "Firefighter",
+                # Phase names carry no "Phase N —" prefix of their own: the
+                # progress view numbers them itself, so a phase called
+                # "Phase 1 — Orientation" renders as "Phase 1: Phase 1 —
+                # Orientation" in its heading and again under "Current phase".
                 [
                     (
-                        "Phase 1 — Orientation",
+                        "Orientation",
                         [
                             ("Department Orientation", "hours", 8),
                             ("PPE Familiarization", "hours", 4),
@@ -4314,7 +4323,7 @@ class Seeder:
                         ],
                     ),
                     (
-                        "Phase 2 — Basic Skills",
+                        "Basic Skills",
                         [
                             ("Hose Deployment", "hours", 12),
                             ("Ladder Evolutions", "hours", 12),
@@ -4325,7 +4334,7 @@ class Seeder:
                         ],
                     ),
                     (
-                        "Phase 3 — Certification",
+                        "Certification",
                         [
                             ("Firefighter I Written Exam", "knowledge_test", None),
                             ("Practical Skills Evaluation", "skills_evaluation", None),
@@ -4340,14 +4349,14 @@ class Seeder:
                 "Driver",
                 [
                     (
-                        "Phase 1 — Classroom",
+                        "Classroom",
                         [
                             ("Pump Theory", "hours", 16),
                             ("Hydraulics Calculations", "hours", 8),
                         ],
                     ),
                     (
-                        "Phase 2 — Behind the Wheel",
+                        "Behind the Wheel",
                         [
                             ("Supervised Driving Hours", "hours", 20),
                             ("Pump Panel Evolutions", "shifts", 6),
@@ -4459,7 +4468,147 @@ class Seeder:
                     "/training/programs/enrollments",
                     {"program_id": program_id, "user_id": user_id},
                 )
+        self._strip_phase_number_prefixes(programs)
+        self._advance_pipeline_progress(programs)
         return programs
+
+    def _strip_phase_number_prefixes(self, programs: list[dict]) -> None:
+        """Drop a "Phase N — " prefix a phase carries in its own name.
+
+        The progress view numbers phases itself, so a phase named
+        "Phase 1 — Orientation" renders as "Phase 1: Phase 1 — Orientation" in
+        its heading and again under "Current phase". Fixed in the blueprint
+        above for new databases and repaired here for existing ones, which the
+        create path skips.
+        """
+        for program in programs:
+            program_id = pick(program, "id")
+            if not program_id:
+                continue
+            phases = items(
+                self.api.get(f"/training/programs/programs/{program_id}/phases"),
+                "phases",
+            )
+            for phase in phases:
+                name = str(pick(phase, "name") or "")
+                stripped = PHASE_NUMBER_PREFIX.sub("", name)
+                if stripped == name or not stripped:
+                    continue
+                self.api.patch(
+                    f"/training/programs/programs/{program_id}"
+                    f"/phases/{pick(phase, 'id')}",
+                    {"name": stripped},
+                )
+
+    def _advance_pipeline_progress(self, programs: list[dict]) -> None:
+        """Move every enrollment partway through its programme.
+
+        A fresh enrollment is 0% with every phase "not started", and that is
+        what all of them stayed at: the guides describe a progress view with a
+        "You are here" marker on a live phase, a filled progress bar, phases
+        ticked off behind it and requirements in flight ahead — none of which an
+        untouched enrollment can show. The officer-side progress detail is the
+        same screen from the other side, with its Complete / In Progress /
+        Verify controls acting on rows that all read the same.
+
+        Roughly the first third of each member's requirements are completed and
+        the next two set in progress, so a programme shows finished work,
+        current work and work not yet begun at once. Completed rows go through
+        the officer's own PATCH, which is what stamps `verified_by` and
+        recalculates the enrollment's overall percentage — writing the rows
+        directly would leave the percentage at zero and the screens unchanged.
+
+        Keyed on the enrollment already having progress, so a re-run leaves a
+        demo database that has been clicked through by hand alone.
+        """
+        for program in programs:
+            program_id = pick(program, "id")
+            if not program_id:
+                continue
+            enrollments = items(
+                self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+                "enrollments",
+            )
+            for enrollment in enrollments:
+                enrollment_id = pick(enrollment, "id")
+                if not enrollment_id:
+                    continue
+                detail = self.api.get(f"/training/programs/enrollments/{enrollment_id}")
+                rows = items(detail, "requirement_progress")
+                if not rows:
+                    continue
+                # Keyed on a *completed* requirement, not on any row having
+                # moved. An enrollment part-way through a previous run has rows
+                # at in_progress, and a guard that counted those as progress
+                # skipped the enrollment for ever after — leaving it at 0%,
+                # which is the state this step exists to get past.
+                if any(pick(row, "status") == "completed" for row in rows):
+                    continue
+                # Only the requirements the member has actually reached. A
+                # requirement in a phase behind a gate is refused by the API,
+                # which is the phase gate working — driving it from a slice of
+                # the row order instead completed one requirement in six and
+                # left the rest silently rejected.
+                locked = {
+                    str(rid) for rid in (pick(detail, "locked_requirements") or [])
+                }
+                open_rows = [
+                    row
+                    for row in rows
+                    if str(pick(row, "requirement_id", "requirementId")) not in locked
+                ]
+                if not open_rows:
+                    continue
+                done = max(1, len(open_rows) * 2 // 3)
+                for index, row in enumerate(open_rows):
+                    progress_id = pick(row, "id")
+                    if not progress_id:
+                        continue
+                    requirement = pick(row, "requirement") or {}
+                    # A checklist is never completed here. Its steps are the
+                    # record, and marking the status complete without ticking
+                    # them reads "Completed · 0 / 3 steps · Verified" — a tick
+                    # and a zero in the same line. Left in progress, which is
+                    # what the checklist screens are for anyway.
+                    is_checklist = (
+                        pick(requirement, "requirement_type", "requirementType")
+                        == "checklist"
+                    )
+                    # Complete the *count* as well as the status. Setting the
+                    # status alone leaves a requirement reading "Completed ·
+                    # 0 / 12 shifts · Verified", a tick and a zero side by side.
+                    target = next(
+                        (
+                            requirement.get(key)
+                            for key in (
+                                "required_shifts",
+                                "required_hours",
+                                "required_calls",
+                            )
+                            if requirement.get(key)
+                        ),
+                        None,
+                    )
+                    complete = index < done and not is_checklist
+                    payload: dict[str, Any] = (
+                        {"status": "completed"}
+                        if complete
+                        else {"status": "in_progress"}
+                    )
+                    if complete and target:
+                        payload["progress_value"] = target
+                    try:
+                        self.api.patch(
+                            f"/training/programs/progress/{progress_id}", payload
+                        )
+                    except ApiError as exc:
+                        if exc.code not in (400, 403):
+                            raise
+                        # Recorded rather than swallowed: a refusal here means
+                        # the reason is something other than the phase gate,
+                        # and a step that quietly does nothing is worse than no
+                        # step at all.
+                        self.blocked.append(f"pipeline progress: {exc}")
 
     # -- advanced training (Training Admin > Advanced / Compliance) ----
 

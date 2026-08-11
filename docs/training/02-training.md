@@ -498,7 +498,7 @@ From **Training > My Training**, find your program under **Active Program Enroll
 - Your **next milestones**
 - **Every requirement grouped by phase**, with each requirement's completion status
 
-> **[SCREENSHOT NEEDED]:** _The member's full progress view showing the phase timeline with a "You are here" marker on the current phase, an overall progress bar, time remaining, upcoming milestones, and requirements listed under each phase._
+![A member's full pipeline progress — the current phase marked You are here, with milestones and every requirement](./images/02-93-member-full-progress.png)
 
 ### Attendance Warning for an Unreached Phase
 

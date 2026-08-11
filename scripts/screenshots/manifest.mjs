@@ -1894,6 +1894,30 @@ export const SHOTS = [
     viewport: { width: 1800, height: 1300 },
   },
   {
+    id: "02-93-member-full-progress",
+    doc: "02-training.md",
+    line: 501,
+    anchor: "The member's full progress view showing the phase timeline",
+    alt: "A member's full pipeline progress — the current phase marked You are here, with milestones and every requirement",
+    // The member's own, because the view is reachable only as the member whose
+    // enrollment it is.
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      await page
+        .getByText(/View full progress/)
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByText(/You are here/)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1200);
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+    fullPage: true,
+  },
+  {
     id: "02-91-session-confirmation-toggle",
     doc: "02-training.md",
     line: 715,
