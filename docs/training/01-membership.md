@@ -1049,9 +1049,19 @@ Alex discovers OFD's recruitment page and submits an interest form through the *
 4. Alex clicks the link, fills out the interest form online, and submits it.
 5. The stage has **auto-advance** enabled, so Alex's card automatically moves to **Stage 2: Application Review**.
 
-**Edge case — duplicate detection:** When Lt. Morrison creates the prospect, the system detects an archived member with the last name "Rivera" but a different email address. A duplicate warning banner appears on the prospect drawer. Lt. Morrison reviews the archived record, confirms this is a different person, and dismisses the warning. The prospect proceeds normally.
+**Edge case — duplicate detection:** The check runs **before the applicant
+exists**, not after. When Lt. Morrison clicks **Add to Pipeline**, the email and
+name are matched against the membership; a match stops the save and asks, naming
+how many members it found. **Go back** returns her to the form with everything
+she typed still in it; **Create anyway** proceeds, which is the right answer when
+the match is a different person of the same name.
 
-> **[SCREENSHOT NEEDED]:** _The Prospective Members Kanban board showing Alex Rivera's card in Stage 2: Application Review, with the duplicate warning banner visible at the top of the prospect detail drawer._
+![The duplicate warning — the name and email match an existing member, with Create anyway and Go back](./images/01-32-duplicate-applicant-warning.png)
+
+There is no banner on the drawer afterwards and nothing to dismiss later: the
+question is asked once, at the moment it can still be answered cheaply. The
+board itself is pictured in
+[Prospective Members Pipeline](./15-prospective-members.md#the-kanban-board).
 
 ---
 
@@ -1125,18 +1135,36 @@ When Alex reaches the **Election/Vote** stage, the system automatically creates 
    - Helmet
    - Gloves
    - Boots
-7. Alex's sizes are not on file. Lt. Walsh clicks **"Request Sizes"** next to Alex's name. The system sends Alex a notification asking them to enter size preferences.
+7. Alex's sizes are not on file. The results say so — **"_N_ members need the
+   item but have no size on file"** — and the **Request sizes** button beside
+   that line notifies **all of them at once**, not one member at a time. There
+   is no per-member request: the planner works on the whole analysis, and the
+   button reports back how many were notified.
 8. Alex logs in for the first time, changes their password, and navigates to **My Equipment > Size Preferences**. Alex enters:
    - Coat: L Regular
    - Pants: 34x32
    - Helmet: 7 1/4
    - Gloves: XL
    - Boots: 11 Wide
-9. Lt. Walsh returns to the Impact Planner, sees Alex's sizes are now on file, and clicks **Issue PPE Kit**. The system matches available inventory to Alex's size preferences and creates assignment records.
+9. Lt. Walsh re-runs the analysis, sees the sizes are now on file, and clicks
+   **Issue on-hand stock**. It confirms first — "one matching-size item to each
+   member who needs it and has stock available" — and reports back what it did:
+   **"Issued to 6 members, 2 skipped"**, naming each member skipped and why.
 
-**Edge case — stock shortage:** XL gloves are out of stock. The system issues a partial kit (coat, pants, helmet, boots) and flags gloves as **"Pending — Out of Stock"**. An automatic reorder request is created in the Inventory module, and Lt. Walsh receives a notification. Alex's equipment profile shows 4 of 5 items assigned with the gloves line item showing a yellow "Backordered" badge.
+**Edge case — stock shortage:** the planner issues what it can and skips the
+rest, **per member and per item**, with the reason beside each name ("no
+matching stock", "no size on file"). There is no partial-kit record and no
+"Backordered" badge: a member who could not be issued gloves simply has no
+gloves assignment, and still appears in the next analysis as needing one.
 
-> **[SCREENSHOT NEEDED]:** _The Impact Planner results showing Alex Rivera with "Needs item" status for five PPE categories, with the "Request Sizes" button visible and size preference fields partially filled._
+The shortfall itself is handled separately, from the same results — **the
+purchase list and the draft purchase orders raised from it**, described in
+[Inventory](./05-inventory.md).
+
+The planner's results — the per-member "Needs item" rows, the sizes to purchase
+and the shortfall — are pictured in
+[Inventory](./05-inventory.md#impact-planner--demand-forecasting--bulk-operations-2026-06-22). This section covers what a new
+member's first kit looks like through them; it does not repeat the screens.
 
 ---
 

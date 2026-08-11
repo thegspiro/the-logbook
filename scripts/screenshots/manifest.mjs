@@ -3027,6 +3027,41 @@ export const SHOTS = [
     selector: "div.fixed.inset-0",
   },
   {
+    id: "01-32-duplicate-applicant-warning",
+    doc: "01-membership.md",
+    line: 1055,
+    anchor: "The duplicate check shown before an applicant is created",
+    alt: "The duplicate warning — the name and email match an existing member, with Create anyway and Go back",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      await page.waitForTimeout(2500);
+      await page
+        .getByRole("button", { name: /Add Applicant|Add Prospect/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(1200);
+      const modal = page.locator("div.fixed.inset-0 > div").first();
+      // A serving member's own name and address, which is what makes the check
+      // fire. The dialog is raised *before* anything is written, so this stops
+      // one click short of creating the duplicate it is warning about.
+      const inputs = modal.locator("input");
+      await inputs.nth(0).fill("Nadia");
+      await inputs.nth(1).fill("Belhaj");
+      await inputs.nth(2).fill("nbelhaj@oakvillefd.example.org");
+      await page.waitForTimeout(400);
+      await modal
+        .getByRole("button", { name: /Add to Pipeline/ })
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2000);
+      await page
+        .getByText(/This may be a duplicate/)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    selector: "div[role='dialog'], div.fixed.inset-0 > div",
+  },
+  {
     id: "01-31-applicant-documents",
     doc: "01-membership.md",
     line: 422,
