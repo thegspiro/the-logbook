@@ -70,6 +70,7 @@ interface SkillsTestingState {
   deleteTest: (id: string) => Promise<void>;
   discardPracticeTest: (id: string) => Promise<void>;
   voidTest: (id: string, reason: string) => Promise<SkillTest>;
+  returnTest: (id: string, reason: string) => Promise<SkillTest>;
   cancelTest: (id: string, reason?: string) => Promise<SkillTest>;
   validateTest: (id: string) => Promise<SkillTest>;
   releaseTest: (id: string) => Promise<SkillTest>;
@@ -331,6 +332,36 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
       return voided;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to void test');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
+  returnTest: async (id: string, reason: string) => {
+    set({ error: null });
+    try {
+      const returned = await skillsTestingService.returnTest(id, reason);
+      // The row leaves the review queue but stays in the list: it is back with
+      // its examiner at in_progress, not withdrawn. Patched in place with the
+      // reopened status so a queue filtered to pending drops it on the next
+      // render without a refetch.
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.map((t: SkillTestListItem) =>
+          t.id === id
+            ? {
+                ...t,
+                status: returned.status,
+                result: returned.result,
+                completed_at: returned.completed_at,
+                pending_validation: false,
+              }
+            : t
+        ),
+        currentTest: state.currentTest?.id === id ? returned : state.currentTest,
+      }));
+      return returned;
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to return test');
       set({ error: msg });
       throw err;
     }

@@ -1345,6 +1345,13 @@ export const skillsTestingService = {
     return response.data;
   },
 
+  /** Send a submission back to its examiner rather than accepting or voiding
+   *  it. Reopens the test at in_progress with every mark intact. */
+  async returnTest(testId: string, reason: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/return`, { reason });
+    return response.data;
+  },
+
   async emailTestResults(testId: string): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/training/skills-testing/tests/${testId}/email-results`);
     return response.data;

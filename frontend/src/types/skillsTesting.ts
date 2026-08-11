@@ -319,6 +319,16 @@ export interface SkillTest {
   /** The arithmetic behind `overall_score`. Present only once the test is
    *  final and the reader is permitted to see the outcome. */
   score_breakdown?: ScoreBreakdown | undefined;
+  /** Set while a submission is back with its examiner for correction, and kept
+   *  after they resubmit so the reviewing officer can check the request was
+   *  addressed. */
+  returned_at?: string | null | undefined;
+  returned_by?: string | null | undefined;
+  returned_by_name?: string | null | undefined;
+  return_reason?: string | null | undefined;
+  /** How many times this test has been sent back. One is a slip; a third is a
+   *  training conversation. */
+  return_count?: number | undefined;
 }
 
 export interface SkillTestCreate {
@@ -377,7 +387,11 @@ export interface SkillTestListItem {
    *  score is optional, and exactOptionalPropertyTypes rejects a bare `?:`. */
   overall_score?: number | undefined;
   started_at?: string;
-  completed_at?: string;
+  /** Widened for the same reason as overall_score above: returning a test to
+   *  its examiner clears the completion time, and the store patches this row
+   *  from that response — exactOptionalPropertyTypes rejects assigning
+   *  undefined to a bare `?:`. */
+  completed_at?: string | undefined;
   created_at: string;
   /** Set once an officer has released the result to the candidate. */
   released_at?: string | undefined;

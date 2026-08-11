@@ -41,6 +41,7 @@ from app.schemas.skills_testing import (
     SkillTestingSummaryResponse,
     SkillTestListResponse,
     SkillTestResponse,
+    SkillTestReturnRequest,
     SkillTestUpdate,
     SkillTestViewerCreate,
     SkillTestViewerResponse,
@@ -2430,6 +2431,137 @@ async def void_test(
     )
 
 
+@router.post("/tests/{test_id}/return", response_model=SkillTestResponse)
+async def return_test_for_correction(
+    test_id: UUID,
+    return_data: SkillTestReturnRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Send a submitted result back to its examiner instead of accepting it.
+
+    The third exit from a pending submission, beside ``/validate`` and
+    ``/void``. Voiding is the right instrument for a result that was *wrong* —
+    the record survives with its reason, which is what a candidate who sat the
+    evaluation is owed. It is the wrong one for a result that was simply not
+    finished properly: "the captain mis-scored step 4, have him redo it" should
+    not cost a permanent, candidate-visible withdrawal and a second test.
+
+    A return spends no void. The test reopens to its examiner at
+    ``in_progress`` with every mark intact, so they correct the step rather than
+    re-running the evolution, and complete it again for review.
+
+    **Only an unvalidated submission can be returned.** Once an officer has
+    validated a result it has credited its requirement, spent an attempt and
+    become visible to the candidate — undoing that is a void, which releases all
+    three. Returning it would silently strip a result the candidate has already
+    been shown.
+
+    Practice attempts are never validated, so there is nothing to send back.
+
+    The candidate is deliberately **not** notified. Nothing has been claimed
+    about them yet — the submission never counted — and "your evaluation was
+    returned to the examiner" discloses both that they were tested and that
+    something was wrong with it, which is the officer's business with the
+    examiner until a result actually stands.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == current_user.organization_id)
+    )
+    test = result.scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    if test.is_practice:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Practice attempts are not reviewed, so there is nothing to return",
+        )
+
+    if test.status != SkillTestStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only a completed test awaiting review can be returned",
+        )
+
+    if test.validated_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This result has already been validated. Void it instead — "
+                "that releases the requirement it credited and the attempt it "
+                "spent."
+            ),
+        )
+
+    test.status = SkillTestStatus.IN_PROGRESS.value
+    # The outcome goes with the status. Leaving a stale pass/fail on a reopened
+    # test would report a verdict for a submission nobody has accepted, and
+    # complete_test recomputes it from the marks anyway.
+    test.result = SkillTestResult.INCOMPLETE.value
+    test.completed_at = None
+    test.version = (test.version or 1) + 1
+    test.returned_at = datetime.now(timezone.utc)
+    test.returned_by = str(current_user.id)
+    test.return_reason = return_data.reason
+    test.return_count = (test.return_count or 0) + 1
+
+    await db.commit()
+    await db.refresh(test)
+
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
+    examiner = examiner_result.scalar_one_or_none()
+
+    await log_audit_event(
+        db=db,
+        event_type="skill_test_returned",
+        event_category="training",
+        severity="info",
+        event_data={
+            "test_id": str(test_id),
+            "template_name": template.name if template else None,
+            "candidate_id": test.candidate_id,
+            "candidate_name": _format_user_name(candidate) if candidate else None,
+            "examiner_id": test.examiner_id,
+            "examiner_name": _format_user_name(examiner) if examiner else None,
+            "reason": return_data.reason,
+            # The count is the part a reader needs: one return is a slip, a
+            # third is a training conversation.
+            "return_count": test.return_count,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _build_test_response(
+        test,
+        template,
+        candidate,
+        examiner,
+        org_config=await _org_training_config(db, current_user.organization_id),
+        returner=current_user,
+    )
+
+
 @router.post("/tests/{test_id}/email-results")
 async def email_test_results(
     test_id: UUID,
@@ -3123,6 +3255,7 @@ def _build_test_response(
     view: str = ResultDisclosure.FULL.value,
     validator: User | None = None,
     org_config: object | None = None,
+    returner: User | None = None,
 ) -> SkillTestResponse:
     """Build a SkillTestResponse with denormalized names and template structure.
 
@@ -3173,6 +3306,11 @@ def _build_test_response(
         voided_at=_ensure_utc(test.voided_at),
         voided_by=test.voided_by,
         void_reason=test.void_reason,
+        returned_at=_ensure_utc(test.returned_at),
+        returned_by=test.returned_by,
+        returned_by_name=_format_user_name(returner) if returner else None,
+        return_reason=test.return_reason,
+        return_count=test.return_count or 0,
         validated_at=_ensure_utc(test.validated_at),
         validated_by=test.validated_by,
         pending_validation=is_pending_validation(test),

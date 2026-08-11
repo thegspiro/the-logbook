@@ -296,6 +296,18 @@ class SkillTestCancelRequest(BaseModel):
     reason: Optional[str] = Field(None, max_length=1000)
 
 
+class SkillTestReturnRequest(BaseModel):
+    """Send a submitted result back to its examiner instead of accepting it.
+
+    The reason is mandatory and non-trivial for the same purpose as a void's,
+    but a different audience: a void explains a withdrawal to whoever reads the
+    candidate's record later, while this tells the examiner what to fix. An
+    examiner who reopens a test to "please correct" has learned nothing.
+    """
+
+    reason: str = Field(..., min_length=10, max_length=1000)
+
+
 class SkillTestVoidRequest(BaseModel):
     """Schema for voiding an official test result.
 
@@ -350,6 +362,15 @@ class SkillTestResponse(UTCResponseBase):
     voided_at: Optional[datetime] = None
     voided_by: Optional[UUID] = None
     void_reason: Optional[str] = None
+
+    # Return trail — populated while a submission is back with its examiner for
+    # correction, and cleared on the next completion. The examiner screen reads
+    # these to show what the officer asked to be fixed.
+    returned_at: Optional[datetime] = None
+    returned_by: Optional[UUID] = None
+    returned_by_name: Optional[str] = None
+    return_reason: Optional[str] = None
+    return_count: int = 0
 
     # Validation trail — an official result counts only once a training officer
     # signs it off. Unset while a member-run test awaits review; set in the same
