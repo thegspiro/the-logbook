@@ -30,12 +30,12 @@ _rules_ and the member notification inbox are covered under
 
 ## Pages
 
-| Page                        | Route                             | Audience    | Permission                                                             |
-| --------------------------- | --------------------------------- | ----------- | ---------------------------------------------------------------------- |
-| Messages (inbox)            | `/messages`                       | All members | Authenticated                                                          |
-| Department Messages (admin) | `/communications/messages`        | Officers    | `notifications.manage`                                                 |
-| Email Templates             | `/communications/email-templates` | Admins      | `settings.manage`                                                      |
-| ↳ **Footers** tab           | `/communications/email-templates` | Admins      | `settings.manage` **or** `organization.update_settings` _(2026-08-10)_ |
+| Page                        | Route                                         | Audience    | Permission                                                                                  |
+| --------------------------- | --------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
+| Messages (inbox)            | `/messages`                                   | All members | Authenticated                                                                               |
+| Department Messages (admin) | `/communications/messages`                    | Officers    | `notifications.manage`                                                                      |
+| Email Templates             | `/communications/email-templates`             | Admins      | `settings.manage`                                                                           |
+| ↳ **Footers** tab           | `/communications/email-templates?tab=footers` | Admins      | `settings.manage` **or** `organization.update_settings` _(2026-08-10; linkable 2026-08-11)_ |
 
 Members also see recent messages on the **dashboard** "Department Messages" card
 and in the notification **bell**.
@@ -195,6 +195,13 @@ substitution pass: a `{{organization_name}}` sitting inside an already-substitut
 - The library itself lives in `Organization.settings`, like the officer directory
   and for the same reason: rendering is synchronous and already receives the
   organization, so it needs no extra query on any send path.
+
+> **All five tabs on this page are addressable** as of 2026-08-11:
+> `?tab=templates`, `?tab=footers`, `?tab=officers`, `?tab=scheduled`,
+> `?tab=history`. They were plain component state, so the footer library — the
+> tab a colleague is most likely to be pointed at — could not be linked, and the
+> screenshot harness could only ever capture the default. Same fix as the
+> Notifications page took on 2026-08-10, and for the same two reasons.
 
 ```
 GET    /api/v1/email-templates/footers        # The library, seeded on first read,

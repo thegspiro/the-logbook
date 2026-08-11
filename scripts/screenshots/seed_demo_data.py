@@ -2823,6 +2823,454 @@ class Seeder:
                 )
         return {"variant_groups": groups, "reorder_requests": requests}
 
+    # -- supply tracking: catalog links, lots aboard, restock reports --
+
+    # Consumables a medic unit carries, as dated stock. Deliberately separate
+    # from INVENTORY_ITEMS: those are individually-tracked gear and pool
+    # uniforms, and none of them expires. The supply screens have nothing to
+    # show without stock that goes out of date.
+    #
+    # name, unit of measure, unit price
+    SUPPLY_ITEMS = [
+        ("Naloxone 4mg Nasal", "Box", 42.00),
+        ("Epinephrine 1:1000", "Box", 28.00),
+        ("Gauze 4x4 Sterile", "Box", 6.50),
+        ("Nitrile Gloves — Large", "Box", 11.00),
+        ("Normal Saline 1000mL", "Bag", 3.75),
+    ]
+
+    # lot number, days until expiry (negative = already expired), quantity
+    SUPPLY_LOTS = {
+        # Two in-date lots, because one bracket holding units from both is the
+        # whole reason `check_item_deployed_lots` exists.
+        "Naloxone 4mg Nasal": [("NLX-2405", 24, 6), ("NLX-2411", 213, 8)],
+        "Epinephrine 1:1000": [("EPI-3382", 61, 10)],
+        "Gauze 4x4 Sterile": [("GZ-9910", 402, 60)],
+        # One already expired. It has to be on the shelf, struck through and
+        # refused by the swap — an expired lot that is simply absent proves
+        # nothing about the guard.
+        "Nitrile Gloves — Large": [("GLV-7741", -12, 20), ("GLV-8106", 300, 24)],
+        "Normal Saline 1000mL": [("NS-5520", 148, 18)],
+    }
+
+    # compartment -> [(position name, catalog item or None, target quantity)]
+    #
+    # The None entries are load-bearing. A template where every position is
+    # linked cannot picture the toolbar's coverage count or the bulk-match
+    # dialog, both of which exist for the holes — and plenty of real checklist
+    # lines are not stock and never will be.
+    MEDIC_COMPARTMENTS = [
+        (
+            "Drug Bag",
+            [
+                ("Naloxone 4mg Nasal", "Naloxone 4mg Nasal", 2),
+                ("Epinephrine 1:1000", "Epinephrine 1:1000", 2),
+                ("Controlled substance seal intact", None, None),
+            ],
+        ),
+        (
+            "Trauma Bag",
+            [
+                ("Gauze 4x4 Sterile", "Gauze 4x4 Sterile", 24),
+                ("Nitrile Gloves — Large", "Nitrile Gloves — Large", 4),
+                ("Trauma shears", None, None),
+            ],
+        ),
+        (
+            "IV Compartment",
+            [
+                ("Normal Saline 1000mL", "Normal Saline 1000mL", 6),
+                ("Sharps container below fill line", None, None),
+            ],
+        ),
+    ]
+
+    def seed_supply_tracking(self, apparatus: list[dict]) -> dict[str, Any]:
+        """Dated shelf stock, linked positions, and lots actually on a truck.
+
+        Everything the supply screens show is derived from three things that
+        have to exist together: a catalog item with dated lots, a checklist
+        position pointing at it, and deployed-lot rows saying what is aboard.
+        Miss any one and the pages render truthfully and picture nothing —
+        which is the failure mode `SCREENSHOT_CURRENCY.md` documents at length.
+
+        The end state is deliberately mixed, because each filter on the supply
+        worklist needs a row and a screenshot of one uniform state teaches
+        nothing:
+
+        - one position carrying **two lots with two dates**, so the "soonest
+          aboard" rule is visible rather than asserted;
+        - one position **short of par** (18 of 24), which is also the only thing
+          that makes the Set All to Par warning fire;
+        - one **restock report** raised by an ordinary member, so the row names
+          a real person rather than the administrator who seeded it;
+        - one **expired** lot on the shelf, struck through and refused by the
+          swap;
+        - several positions left **unlinked**, so coverage is not 100%.
+        """
+        medic = next(
+            (
+                a
+                for a in apparatus
+                if str(pick(a, "unit_number", "unitNumber") or "") == "M-3"
+            ),
+            None,
+        )
+        if not medic:
+            return {"skipped": "no M-3 apparatus"}
+
+        catalog = self._seed_supply_catalog(self._supply_category())
+        if not catalog:
+            return {"skipped": "no supply catalog"}
+
+        template = self._medic_supply_template(medic)
+        if not template:
+            return {"skipped": "no medic template"}
+
+        positions = self._link_supply_positions(template, catalog)
+        if not positions:
+            return {"skipped": "no linked positions"}
+
+        self._deploy_lots(positions, catalog)
+        self._leave_one_short(positions)
+        self._report_one_used(positions, str(pick(medic, "id")))
+        return {
+            "template_id": pick(template, "id"),
+            "apparatus_id": pick(medic, "id"),
+            "linked_positions": len(positions),
+        }
+
+    def _supply_category(self) -> str | None:
+        """A consumable category, created if the department has none."""
+        categories = items(self.api.get("/inventory/categories"), "categories")
+        existing = next(
+            (c for c in categories if c.get("name") == "Medical Supplies"), None
+        )
+        if existing:
+            return pick(existing, "id")
+        created = self.api.post(
+            "/inventory/categories",
+            {
+                "name": "Medical Supplies",
+                "description": "Dated consumables carried on the medic unit.",
+                "item_type": "consumable",
+                "requires_assignment": False,
+                # A consumable has no serial. Flagging this category
+                # `requires_serial_number` would reject every lot-stocked item
+                # the supply screens are built on.
+                "requires_serial_number": False,
+                "requires_maintenance": False,
+                "low_stock_threshold": 4,
+            },
+        )
+        return pick(created, "id")
+
+    def _seed_supply_catalog(self, category_id: str | None) -> dict[str, dict]:
+        """Catalog rows for the consumables, each with dated shelf stock."""
+        existing = {
+            i.get("name"): i
+            for i in items(self.api.get("/inventory/items?limit=200"), "items")
+        }
+        catalog: dict[str, dict] = {}
+        for index, (name, unit, price) in enumerate(self.SUPPLY_ITEMS):
+            item = existing.get(name)
+            if item is None:
+                payload = {
+                    "name": name,
+                    "description": f"{name} — carried on the medic unit.",
+                    "unit_of_measure": unit,
+                    "purchase_price": price,
+                    "replacement_cost": price,
+                    "condition": "good",
+                    "status": "available",
+                    "tracking_type": "pool",
+                    # Not the real count. On-hand for a lot-stocked item comes
+                    # from its in-date lots; `quantity` is the fallback for
+                    # items with none, and is left at zero here so a screenshot
+                    # of the two-ledger Qty column cannot be read as the two
+                    # agreeing by luck.
+                    "quantity": 0,
+                    "asset_tag": f"SUP-{2000 + index}",
+                }
+                if category_id:
+                    payload["category_id"] = category_id
+                item = self.api.post("/inventory/items", payload)
+            catalog[name] = item
+            self._seed_lots_for(name, pick(item, "id"))
+        return catalog
+
+    def _seed_lots_for(self, name: str, item_id: str | None) -> None:
+        if not item_id:
+            return
+        have = {
+            pick(lot, "lot_number", "lotNumber")
+            for lot in items(self.api.get(f"/inventory/items/{item_id}/lots"), "lots")
+        }
+        for lot_number, days, quantity in self.SUPPLY_LOTS.get(name, []):
+            if lot_number in have:
+                continue
+            self.api.post(
+                f"/inventory/items/{item_id}/lots",
+                {
+                    "lot_number": lot_number,
+                    "expiration_date": str(TODAY + timedelta(days=days)),
+                    "quantity": quantity,
+                    "received_date": str(TODAY - timedelta(days=30)),
+                },
+            )
+
+    def _medic_supply_template(self, medic: dict) -> dict | None:
+        """A counted, catalog-linked checklist for the medic unit.
+
+        Assigned to the apparatus itself rather than to the `ambulance` *type*,
+        so it cannot collide with the per-type close-out template
+        `seed_equipment_checks` creates — the check-create endpoint refuses a
+        second check against a template already used on a shift.
+        """
+        name = "Medic 3 Supply Check"
+        existing = next(
+            (
+                t
+                for t in items(self.api.get("/equipment-checks/templates"), "templates")
+                if pick(t, "name") == name
+            ),
+            None,
+        )
+        if existing:
+            return self.api.get(f"/equipment-checks/templates/{pick(existing, 'id')}")
+        created = self.api.post(
+            "/equipment-checks/templates",
+            {
+                "name": name,
+                "description": "Dated consumables and counted stock on the medic.",
+                "check_timing": "start_of_shift",
+                "apparatus_id": pick(medic, "id"),
+                "is_active": True,
+                "compartments": [
+                    {
+                        "name": compartment,
+                        "sort_order": order,
+                        "items": [
+                            {
+                                "name": position,
+                                "sort_order": position_order,
+                                # A counted position is what the on-truck count,
+                                # the lots sheet and the par warning all hang
+                                # off. A pass/fail line has no number to be
+                                # short of, which is why the unlinked entries
+                                # are that type.
+                                "check_type": "quantity" if target else "pass_fail",
+                                "is_required": True,
+                                "required_quantity": target,
+                                "expected_quantity": target,
+                                "has_expiration": bool(catalog_name),
+                                "expiration_warning_days": 30,
+                            }
+                            for position_order, (
+                                position,
+                                catalog_name,
+                                target,
+                            ) in enumerate(contents)
+                        ],
+                    }
+                    for order, (compartment, contents) in enumerate(
+                        self.MEDIC_COMPARTMENTS
+                    )
+                ],
+            },
+        )
+        return self.api.get(f"/equipment-checks/templates/{pick(created, 'id')}")
+
+    def _link_supply_positions(
+        self, template: dict, catalog: dict[str, dict]
+    ) -> dict[str, str]:
+        """Point each counted position at its catalog item.
+
+        Returns position name -> template item id, for the linked ones only.
+        The link is what every supply feature reads: an unlinked position has no
+        expiration tracking, no lots, no ready stock and no restock reporting.
+        """
+        linked: dict[str, str] = {}
+        for compartment in items(template, "compartments"):
+            for item in items(compartment, "items"):
+                position = str(pick(item, "name") or "")
+                item_id = pick(item, "id")
+                # The seeded positions are named after their catalog item, so
+                # the lookup is the name itself — the unlinked scaffolding lines
+                # ("Trauma shears") are simply absent from the catalog.
+                if not item_id or position not in catalog:
+                    continue
+                linked[position] = str(item_id)
+                if pick(item, "inventory_item_id", "inventoryItemId"):
+                    continue
+                self.api.put(
+                    f"/equipment-checks/items/{item_id}",
+                    {"inventory_item_id": pick(catalog[position], "id")},
+                )
+        return linked
+
+    def _deploy_lots(self, positions: dict[str, str], catalog: dict[str, dict]) -> None:
+        """Swap shelf lots onto the truck, so positions carry dated stock.
+
+        Naloxone takes **both** its lots. That is the case the deployed-lot
+        table was added for: one bracket, two expiration dates, and a position
+        whose real exposure is the earlier of them. Going through the swap
+        endpoint rather than writing rows directly also exercises the decrement
+        on the shelf lot, so the ready-stock figures stay honest.
+        """
+        for position, item_id in positions.items():
+            aboard = self.api.get(f"/equipment-checks/items/{item_id}/deployed-lots")
+            if items(aboard, "lots"):
+                continue
+            catalog_item = catalog.get(position)
+            if not catalog_item:
+                continue
+            lots = items(
+                self.api.get(f"/inventory/items/{pick(catalog_item, 'id')}/lots"),
+                "lots",
+            )
+            # Soonest-expiring first, and never an expired one: the swap refuses
+            # those, and a seeder that asks for one is testing the guard rather
+            # than building a picture.
+            usable = sorted(
+                (
+                    lot
+                    for lot in lots
+                    if str(pick(lot, "expiration_date", "expirationDate") or "")
+                    > str(TODAY)
+                    and int(pick(lot, "quantity") or 0) > 0
+                ),
+                key=lambda lot: str(
+                    pick(lot, "expiration_date", "expirationDate") or ""
+                ),
+            )
+            if not usable:
+                continue
+            take = usable[:2] if position == "Naloxone 4mg Nasal" else usable[:1]
+            for lot in take:
+                try:
+                    self.api.post(
+                        f"/equipment-checks/items/{item_id}/swap",
+                        {
+                            "inventory_lot_id": pick(lot, "id"),
+                            "quantity": 1 if len(take) > 1 else 2,
+                        },
+                    )
+                except ApiError as exc:
+                    # A lot drawn to nothing between the read and the swap, or
+                    # one that expired in between. Neither is worth failing the
+                    # whole seed over — the remaining positions still build.
+                    if exc.code != 400:
+                        raise
+                    self.blocked.append(
+                        f"supply: {position} refused lot "
+                        f"{pick(lot, 'lot_number', 'lotNumber')}"
+                    )
+
+    def _leave_one_short(self, positions: dict[str, str]) -> None:
+        """Record 18 of 24 gauze.
+
+        Two screens need a truck that is short. The supply worklist needs a row
+        that is under par rather than merely expiring, and **Set All to Par**
+        needs something whose count it would raise — its warning is suppressed
+        on a compartment already full, so a fully stocked demo department cannot
+        picture the guard at all.
+        """
+        item_id = positions.get("Gauze 4x4 Sterile")
+        if not item_id:
+            return
+        self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 18})
+
+    def _report_one_used(self, positions: dict[str, str], apparatus_id: str) -> None:
+        """Raise a restock report as an ordinary member, not as the chief.
+
+        Reported by the member on purpose. The worklist row names its reporter,
+        and one where every report is signed by the administrator who seeded the
+        database pictures the opposite of the point: this is crew work, open to
+        `equipment_check.submit`, and the member's session is what demonstrates
+        that rather than asserting it.
+        """
+        item_id = positions.get("Normal Saline 1000mL")
+        if not item_id:
+            return
+        # Restock state is not on the deployed-lots payload; the apparatus view
+        # is where a position reports it.
+        inventory = self.api.get(
+            f"/equipment-checks/apparatus/{apparatus_id}/inventory"
+        )
+        for compartment in items(inventory, "compartments"):
+            for position in items(compartment, "items"):
+                if str(pick(position, "template_item_id", "templateItemId")) == item_id:
+                    if pick(position, "restock_needed", "restockNeeded"):
+                        return
+
+        session = None
+        member = next(
+            (
+                m
+                for m in items(self.api.get("/users?limit=200"), "users")
+                if pick(m, "username") == DEMO_MEMBER_USERNAME
+            ),
+            None,
+        )
+        if member:
+            try:
+                session = self.member_session(
+                    self.base_url, str(pick(member, "id")), DEMO_MEMBER_USERNAME
+                )
+            except ApiError:
+                session = None
+        # Falls back to the administrator rather than skipping: a worklist with
+        # no report at all pictures less than one signed by the wrong person.
+        caller = session or self.api
+        try:
+            caller.post(
+                f"/equipment-checks/items/{item_id}/used",
+                {
+                    "quantity_used": 2,
+                    "note": "Used two bags on the 0300 call — bracket is down to four.",
+                },
+            )
+        except ApiError as exc:
+            if exc.code not in (400, 403, 409):
+                raise
+            self.blocked.append(
+                f"supply: restock report refused ({exc.code}) for Normal Saline"
+            )
+
+    def _repair_check_types(self) -> None:
+        """Rewrite checklist items this seeder stored under a type nothing reads.
+
+        Earlier runs wrote ``"check_type": "presence"``. The column is a free
+        `String(30)`, and the API used to accept anything that fit — but the
+        types the check form recognises spell it ``present``, and an
+        unrecognised value falls through the form's switch to the pass/fail
+        branch. Every seeded item therefore rendered **Pass / Fail** buttons
+        under a guide that describes Present / Missing, and nothing anywhere
+        reported a problem.
+
+        The API now validates ``check_type`` against the set the template
+        builder offers, so no new row can be written this way from any client.
+        This stays for the long-lived demo databases that still hold the old
+        rows: re-seeding does not touch a template that already exists by name,
+        so nothing else would ever correct them.
+        """
+        for template in items(
+            self.api.get("/equipment-checks/templates"), "templates"
+        ):
+            template_id = pick(template, "id")
+            if not template_id:
+                continue
+            detail = self.api.get(f"/equipment-checks/templates/{template_id}")
+            for compartment in items(detail, "compartments"):
+                for item in items(compartment, "items"):
+                    if pick(item, "check_type", "checkType") != "presence":
+                        continue
+                    self.api.put(
+                        f"/equipment-checks/items/{pick(item, 'id')}",
+                        {"check_type": "present"},
+                    )
+
     # -- events: check-ins -------------------------------------------
 
     def seed_event_check_ins(
@@ -3117,8 +3565,17 @@ class Seeder:
 
     def seed_equipment_checks(self) -> dict[str, Any]:
         """A template plus completed checks, which the reports page aggregates."""
+        self._repair_check_types()
         templates = items(self.api.get("/equipment-checks/templates"), "templates")
-        if not templates:
+        # By name, not `templates[0]`. Any other step that creates a template
+        # first — `seed_supply_tracking` creates the medic's — would otherwise
+        # both suppress this one and become the template every seeded check is
+        # submitted against, silently rewriting what the equipment-check
+        # screenshots picture.
+        engine_daily = next(
+            (t for t in templates if pick(t, "name") == "Engine Daily Check"), None
+        )
+        if engine_daily is None:
             compartments = [
                 (
                     "Cab",
@@ -3133,35 +3590,34 @@ class Seeder:
                     ['1 3/4" attack line', '2 1/2" supply line', "Nozzle"],
                 ),
             ]
-            templates.append(
-                self.api.post(
-                    "/equipment-checks/templates",
-                    {
-                        "name": "Engine Daily Check",
-                        "description": "Start-of-shift inventory for engine companies.",
-                        "check_timing": "start_of_shift",
-                        "apparatus_type": "engine",
-                        "is_active": True,
-                        "compartments": [
-                            {
-                                "name": name,
-                                "sort_order": order,
-                                "items": [
-                                    {
-                                        "name": item,
-                                        "sort_order": item_order,
-                                        "check_type": "present",
-                                        "is_required": True,
-                                        "expected_quantity": 1,
-                                    }
-                                    for item_order, item in enumerate(contents)
-                                ],
-                            }
-                            for order, (name, contents) in enumerate(compartments)
-                        ],
-                    },
-                )
+            engine_daily = self.api.post(
+                "/equipment-checks/templates",
+                {
+                    "name": "Engine Daily Check",
+                    "description": "Start-of-shift inventory for engine companies.",
+                    "check_timing": "start_of_shift",
+                    "apparatus_type": "engine",
+                    "is_active": True,
+                    "compartments": [
+                        {
+                            "name": name,
+                            "sort_order": order,
+                            "items": [
+                                {
+                                    "name": item,
+                                    "sort_order": item_order,
+                                    "check_type": "present",
+                                    "is_required": True,
+                                    "expected_quantity": 1,
+                                }
+                                for item_order, item in enumerate(contents)
+                            ],
+                        }
+                        for order, (name, contents) in enumerate(compartments)
+                    ],
+                },
             )
+            templates.append(engine_daily)
 
         def close_out_template_for(apparatus_type: str) -> dict:
             """Get or create the end-of-shift template for an apparatus type.
@@ -3244,7 +3700,7 @@ class Seeder:
                 return pick(type_record, "code", "default_type", "defaultType")
             return type_record if isinstance(type_record, str) else None
 
-        template = templates[0]
+        template = engine_daily
         template_id = pick(template, "id")
         if not template_id:
             return {"templates": templates, "checks": []}
@@ -7185,6 +7641,11 @@ class Seeder:
         self.step("expense reports", lambda: self.seed_expense_reports(finance))
         self.step("check requests", lambda: self.seed_check_requests(finance))
         self.step("equipment checks", self.seed_equipment_checks)
+        # After the equipment checks, not before. This creates a template of its
+        # own, and `seed_equipment_checks` needs to have claimed the Engine
+        # Daily Check first — it selects by name now, but ordering that does not
+        # depend on that fix is one less thing to get wrong later.
+        self.step("supply tracking", lambda: self.seed_supply_tracking(apparatus))
         self.step("shift reports", lambda: self.seed_shift_reports(members))
         # After the reports: finalizing auto-creates drafts for attendees, and
         # doing it first would put a second batch of drafts in the way of the
