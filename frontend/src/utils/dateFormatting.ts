@@ -385,6 +385,27 @@ export const hoursBetweenTimesOfDay = (
 };
 
 /**
+ * Whole days between a calendar date ("YYYY-MM-DD") and today.
+ *
+ * Negative in the past, 0 today, positive in the future. Both sides are
+ * anchored at UTC midnight on purpose: only *today* depends on the viewer's
+ * timezone, and running the target date through a zone as well moves it a day
+ * for anywhere west of UTC — the same trap `formatCalendarDate` documents.
+ *
+ * Prefer this over `daysBetween` for a shift date, a due date or any other
+ * date-only value; `daysBetween` parses its input as an instant.
+ *
+ * @returns Day count, or null if the value is not a calendar date
+ */
+export const calendarDaysFromToday = (dateOnly: string | null | undefined, timezone?: string): number | null => {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(dateOnly ?? '')) return null;
+  const target = Date.parse((dateOnly ?? '').slice(0, 10) + 'T00:00:00Z');
+  const base = Date.parse(getTodayLocalDate(timezone) + 'T00:00:00Z');
+  if (isNaN(target) || isNaN(base)) return null;
+  return Math.round((target - base) / 86400000);
+};
+
+/**
  * Format a number for display (currency, counts, measurements).
  * Use this instead of `value.toLocaleString()` to avoid ESLint
  * conflicts with the date-method restrictions.

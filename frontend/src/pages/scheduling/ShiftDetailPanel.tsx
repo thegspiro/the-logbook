@@ -49,7 +49,14 @@ import type { Assignment } from '../../types/scheduling';
 import type { ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
+import {
+  calendarDaysFromToday,
+  formatCalendarDate,
+  formatTime,
+  getTodayLocalDate,
+  formatDateCustom,
+  localToUTC,
+} from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
@@ -1015,14 +1022,32 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
         <div className="space-y-5 p-4 sm:space-y-6 sm:p-6">
           {/* Handoff from the previous crew on this apparatus */}
-          {handoff?.pass_down_notes && (
-            <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
-              <p className="mb-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
-                Handoff from previous shift{handoff.shift_date ? ` (${handoff.shift_date})` : ''}
-              </p>
-              <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{handoff.pass_down_notes}</p>
-            </div>
-          )}
+          {/* The date arrived raw ("2026-08-01") two lines under "Wednesday,
+              August 12, 2026", eleven days stale, with nothing marking it as
+              old — so a note left by a crew a week and a half ago read as
+              yesterday's. Written out, and told how long ago it was. */}
+          {handoff?.pass_down_notes &&
+            (() => {
+              const age = calendarDaysFromToday(handoff.shift_date, tz);
+              const ageWords = age === null || age >= 0 ? null : age === -1 ? 'yesterday' : `${Math.abs(age)} days ago`;
+              return (
+                <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
+                  <p className="mb-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                    Handoff from the previous shift
+                    {handoff.shift_date
+                      ? ` — ${formatCalendarDate(handoff.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}`
+                      : ''}
+                    {ageWords ? ` (${ageWords})` : ''}
+                  </p>
+                  {age !== null && age <= -3 && (
+                    <p className="mb-1 text-[11px] text-sky-700/80 dark:text-sky-300/80">
+                      This is the most recent pass-down on this apparatus, not a note from the last crew on duty.
+                    </p>
+                  )}
+                  <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{handoff.pass_down_notes}</p>
+                </div>
+              );
+            })()}
 
           {/* Readiness — present vs assigned, staffing, outstanding start checks */}
           {!shift.is_finalized &&
@@ -1158,28 +1183,56 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 <CheckCircle2 className="h-4 w-4 text-green-600" /> Before you close this shift
               </h4>
 
-              <div className="space-y-2 text-sm">
-                {/* Equipment checks — blocks if incomplete */}
-                {hasIncompleteEquipmentChecks ? (
+              {/* Green and amber were equally passable, so an officer had no way
+                  to tell a row that stops the close-out from one that is merely
+                  recorded against the shift — which trains people to ignore
+                  both. Two headed groups instead, and the pending-checks row
+                  only claims to block when enforcement is actually on. */}
+              {hasIncompleteEquipmentChecks && requireEndOfShiftChecks && (
+                <div className="space-y-2 text-sm">
+                  <p className="text-[11px] font-semibold tracking-wide text-red-700 uppercase dark:text-red-400">
+                    Must be resolved first
+                  </p>
                   <div className="flex items-start gap-2 rounded-md border border-red-500/20 bg-red-500/10 p-2">
-                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
                     <div>
                       <span className="font-medium text-red-700 dark:text-red-400">
                         End-of-shift equipment checks incomplete
                       </span>
                       <p className="mt-0.5 text-xs text-red-600 dark:text-red-300">
                         {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. These
-                        must be completed before you can close the shift.
+                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. Complete
+                        them, or override below with a reason that goes on the record.
                       </p>
                     </div>
                   </div>
-                ) : endOfShiftChecks.length > 0 ? (
+                </div>
+              )}
+
+              <div className="space-y-2 text-sm">
+                <p className="text-theme-text-muted text-[11px] font-semibold tracking-wide uppercase">
+                  Noted on the record
+                </p>
+                {hasIncompleteEquipmentChecks && !requireEndOfShiftChecks ? (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                    <div>
+                      <span className="font-medium text-amber-700 dark:text-amber-400">
+                        End-of-shift equipment checks incomplete
+                      </span>
+                      <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
+                        {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
+                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. The
+                        shift will close with them outstanding.
+                      </p>
+                    </div>
+                  </div>
+                ) : endOfShiftChecks.length > 0 && !hasIncompleteEquipmentChecks ? (
                   <div className="flex items-center gap-2 rounded-md border border-green-500/20 bg-green-500/10 p-2">
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
                     <span className="text-green-700 dark:text-green-400">
                       {completedEquipmentChecks.length} equipment check
-                      {completedEquipmentChecks.length !== 1 ? 's' : ''} completed
+                      {completedEquipmentChecks.length === 1 ? '' : 's'} completed
                     </span>
                   </div>
                 ) : null}

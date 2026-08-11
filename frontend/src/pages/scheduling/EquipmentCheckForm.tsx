@@ -409,20 +409,27 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   }).length;
   const progressPercent = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
 
-  /** "Brush 5 · Start of shift · Sat, Aug 16" — whichever of the three we know. */
+  /**
+   * "Brush 5 · Sat, Aug 16" beside a timing badge — whichever of the three we
+   * know. The timing is a badge rather than more grey text because the
+   * end-of-shift checklist was otherwise indistinguishable from the
+   * start-of-shift one: same layout, same buttons, same Submit, only the
+   * template name differing. The colours match the cards these are opened from.
+   */
   const shiftContextLine = [
     shiftContext?.apparatusName,
-    shiftContext?.checkTiming === 'start_of_shift'
-      ? 'Start of shift'
-      : shiftContext?.checkTiming === 'end_of_shift'
-        ? 'End of shift'
-        : undefined,
     shiftContext?.shiftDate
       ? formatCalendarDate(shiftContext.shiftDate, { weekday: 'short', month: 'short', day: 'numeric' })
       : undefined,
   ]
     .filter(Boolean)
     .join(' · ');
+  const timingLabel =
+    shiftContext?.checkTiming === 'start_of_shift'
+      ? 'Start of shift'
+      : shiftContext?.checkTiming === 'end_of_shift'
+        ? 'End of shift'
+        : null;
 
   const unansweredRequiredCount = checkableItems.filter((item) => {
     if (!item.isRequired) return false;
@@ -2109,7 +2116,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               </button>
             )}
             <div className="min-w-0">
-              <h1 className="text-theme-text-primary truncate text-lg font-bold">{template.name}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-theme-text-primary truncate text-lg font-bold">{template.name}</h1>
+                {timingLabel && (
+                  <span
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                      shiftContext?.checkTiming === 'start_of_shift'
+                        ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                        : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                    }`}
+                  >
+                    {timingLabel}
+                  </span>
+                )}
+              </div>
               {shiftContextLine && <p className="text-theme-text-muted truncate text-xs">{shiftContextLine}</p>}
             </div>
           </div>

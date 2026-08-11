@@ -21,7 +21,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftEquipmentCheckRecord, EquipmentCheckTemplate } from '../../modules/scheduling/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../../modules/scheduling/services/api';
-import { formatCalendarDate, formatDate, formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
+import { calendarDaysFromToday, formatCalendarDate, formatDate, formatTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useAuthStore } from '../../stores/authStore';
@@ -103,22 +103,6 @@ const statusBadge = (status: string) => {
   }
 };
 
-/**
- * Whole days between a calendar date and today, both written as "YYYY-MM-DD".
- *
- * Deliberately string arithmetic anchored at UTC midnight: a shift date belongs
- * to no timezone, and `daysBetween` runs its input through the viewer's zone,
- * which moves a date west of UTC back a day. Same trap `formatCalendarDate`
- * documents.
- */
-const daysUntilCalendarDate = (dateOnly: string | undefined, today: string): number | null => {
-  if (!/^\d{4}-\d{2}-\d{2}/.test(dateOnly ?? '')) return null;
-  const target = Date.parse((dateOnly ?? '').slice(0, 10) + 'T00:00:00Z');
-  const base = Date.parse(today + 'T00:00:00Z');
-  if (isNaN(target) || isNaN(base)) return null;
-  return Math.round((target - base) / 86400000);
-};
-
 /** "Today", "Tomorrow", "In 5 days", "3 days ago" — when this check is due. */
 const dueLabel = (days: number): string => {
   if (days === 0) return 'Today';
@@ -145,7 +129,6 @@ export const MyChecklistsPage: React.FC = () => {
 
   const [searchParams] = useSearchParams();
   const highlightShiftId = searchParams.get('shift') || undefined;
-  const today = getTodayLocalDate(timezone);
 
   // Active checklists
   const [loading, setLoading] = useState(true);
@@ -553,7 +536,7 @@ export const MyChecklistsPage: React.FC = () => {
                 return timingRank(a.checkTiming) - timingRank(b.checkTiming);
               })
               .map((checklist) => {
-                const days = daysUntilCalendarDate(checklist.shiftDate, today);
+                const days = calendarDaysFromToday(checklist.shiftDate, timezone);
                 const isDueNow = days !== null && days <= 0;
                 const total = checklist.totalItems ?? 0;
                 const completed = checklist.completedItems ?? 0;
