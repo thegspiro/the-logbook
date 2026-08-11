@@ -92,10 +92,10 @@ export const AssignmentActions: React.FC<AssignmentActionsProps> = ({
       {canAssign && !isCurrentUser && !confirmingRemove && (
         <button
           onClick={() => setConfirmingRemove(true)}
-          className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-1.5 transition-colors hover:text-red-500 dark:hover:text-red-400"
+          className="text-theme-text-muted flex min-h-[44px] items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs transition-colors hover:text-red-500 dark:hover:text-red-400"
           aria-label="Remove assignment"
         >
-          <XCircle className="h-4 w-4" />
+          <XCircle className="h-4 w-4" /> Remove
         </button>
       )}
       {confirmingRemove && (

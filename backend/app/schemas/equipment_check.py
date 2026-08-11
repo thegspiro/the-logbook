@@ -291,7 +291,9 @@ class CheckItemResultSubmit(BaseModel):
     compartment_name: str = Field(..., max_length=200)
     item_name: str = Field(..., max_length=200)
     check_type: Optional[str] = Field(None, max_length=30)
-    status: str = Field(..., pattern=r"^(pass|fail|not_checked)$")
+    status: str = Field(
+        ..., pattern=r"^(pass|fail|not_applicable|out_of_service|not_checked)$"
+    )
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
@@ -560,6 +562,7 @@ class ItemTrendEntry(BaseModel):
     period: str
     pass_count: int = 0
     fail_count: int = 0
+    not_applicable_count: int = 0
     not_checked_count: int = 0
 
 

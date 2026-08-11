@@ -167,7 +167,8 @@ const ShiftCheckInPage: React.FC = () => {
           <AlertCircle className="mx-auto mb-3 h-12 w-12 text-red-500" />
           <h1 className="text-theme-text-primary mb-1 text-xl font-bold">Shift Not Found</h1>
           <p className="text-theme-text-muted mb-4 text-sm">
-            This QR code may be invalid or you may not have access to this shift.
+            We could not open this shift. Return to Scheduling to choose a current shift, or ask an officer to confirm
+            that you have been assigned.
           </p>
           <button
             onClick={() => void navigate('/scheduling')}
@@ -246,6 +247,12 @@ const ShiftCheckInPage: React.FC = () => {
             >
               {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogOut className="h-6 w-6" />}
               Check Out
+            </button>
+            <button
+              onClick={() => void navigate(`/scheduling?tab=equipment-checks&shift=${resolvedShiftId}`)}
+              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center justify-center rounded-xl border px-4 py-3 text-sm font-medium transition-colors"
+            >
+              Open today&apos;s checklists
             </button>
           </div>
         ) : (
