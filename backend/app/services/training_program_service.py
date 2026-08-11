@@ -2380,6 +2380,14 @@ class TrainingProgramService:
                     None,
                     "Only a training officer can check off a checklist step",
                 )
+            if (
+                updates.progress_notes is not None
+                and "checklist_done" in updates.progress_notes
+            ):
+                return (
+                    None,
+                    "Only a training officer can update checklist progress notes",
+                )
             if updates.test_score is not None:
                 return None, "Only a training officer can record a test score"
             if updates.progress_value is not None:
