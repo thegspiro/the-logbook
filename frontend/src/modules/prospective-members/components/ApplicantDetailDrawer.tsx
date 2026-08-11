@@ -39,6 +39,7 @@ import { toDisplayString } from '../../../utils/displayValue';
 import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
 import ElectionPackageSection from './ElectionPackageSection';
 import LinkedEventsSection from './LinkedEventsSection';
+import ApplicantDocumentsSection from './ApplicantDocumentsSection';
 import { ApplicantActionPanels } from './ApplicantActionPanels';
 
 /** Maps snake_case backend field keys to human-readable labels. */
@@ -574,6 +575,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
               {/* Linked Events */}
               <LinkedEventsSection applicant={applicant} tz={tz} />
+
+              {/* Documents */}
+              <ApplicantDocumentsSection applicant={applicant} tz={tz} />
 
               {/* Checklist Stage Section */}
               {applicant.current_stage_type === StageTypeEnum.CHECKLIST &&

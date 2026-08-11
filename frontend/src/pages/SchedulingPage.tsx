@@ -19,12 +19,15 @@ import {
   ExternalLink,
   Truck,
   ChevronDown,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatDateCustom, localToUTC } from '../utils/dateFormatting';
+import { enumLabel } from '../utils/displayValue';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
 import type { ShiftRecord, ShiftTemplateRecord } from '../modules/scheduling';
 import { resolveTemplatePositions } from '../modules/scheduling/services/api';
@@ -588,24 +591,30 @@ const SchedulingPage: React.FC = () => {
             {/* Summary Stats */}
             {summary && (
               <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+                {/* Each label names its own window and whose figure it is. Three
+                    of these count scheduled shifts over different spans and the
+                    fourth sums hours the department actually worked; under
+                    "Scheduled Shifts" / "This Month" the first and third read as
+                    the same measure, and matched exactly whenever every shift on
+                    record happened to fall in the current month. */}
                 <div className="card p-3 sm:p-4">
-                  <p className="text-theme-text-muted text-xs sm:text-sm">Scheduled Shifts</p>
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Shifts on record (all dates)</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">{summary.shifts_scheduled}</p>
                 </div>
                 <div className="card p-3 sm:p-4">
-                  <p className="text-theme-text-muted text-xs sm:text-sm">This Week</p>
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Shifts this week</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
                     {summary.shifts_scheduled_this_week}
                   </p>
                 </div>
                 <div className="card p-3 sm:p-4">
-                  <p className="text-theme-text-muted text-xs sm:text-sm">This Month</p>
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Shifts this month</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
                     {summary.shifts_scheduled_this_month}
                   </p>
                 </div>
                 <div className="card p-3 sm:p-4">
-                  <p className="text-theme-text-muted text-xs sm:text-sm">Hours Worked This Month</p>
+                  <p className="text-theme-text-muted text-xs sm:text-sm">Department hours this month</p>
                   <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">
                     {summary.hours_worked_this_month}
                   </p>
@@ -662,6 +671,33 @@ const SchedulingPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+              {/* What the colours and the ratio mean. Every cell below is
+                  shorthand — a unit code, a filled/target ratio and a coloured
+                  icon — and none of it is guessable without being told once. */}
+              <dl className="border-theme-surface-border text-theme-text-muted mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" aria-hidden="true" />
+                  <dt className="sr-only">Green tick</dt>
+                  <dd>Fully crewed</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                  <dt className="sr-only">Amber triangle</dt>
+                  <dd>Short-staffed</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                  <dt className="sr-only">Crew count</dt>
+                  <dd>Positions filled of the minimum</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Truck className="h-3.5 w-3.5" aria-hidden="true" />
+                  <dt className="sr-only">Unit code</dt>
+                  {/* Not "hover for the name" — half the people reading this are
+                      on a phone, which has no hover. */}
+                  <dd>Apparatus unit</dd>
+                </div>
+              </dl>
             </div>
 
             {/* Error State */}
@@ -1123,8 +1159,8 @@ const SchedulingPage: React.FC = () => {
                                   {standard.map((t) => (
                                     <option key={t.id} value={t.id}>
                                       {t.name}
-                                      {t.apparatus_type ? ` — ${t.apparatus_type}` : ''} ({t.start_time_of_day} -{' '}
-                                      {t.end_time_of_day})
+                                      {t.apparatus_type ? ` — ${enumLabel(t.apparatus_type)}` : ''} (
+                                      {t.start_time_of_day} - {t.end_time_of_day})
                                     </option>
                                   ))}
                                 </optgroup>
@@ -1202,8 +1238,8 @@ const SchedulingPage: React.FC = () => {
                             {tmpl.apparatus_type && (
                               <p className="text-theme-text-muted flex items-center gap-1 text-xs">
                                 <Truck className="h-3 w-3" /> Vehicle type:{' '}
-                                <span className="text-theme-text-primary font-medium capitalize">
-                                  {tmpl.apparatus_type}
+                                <span className="text-theme-text-primary font-medium">
+                                  {enumLabel(tmpl.apparatus_type)}
                                 </span>
                               </p>
                             )}

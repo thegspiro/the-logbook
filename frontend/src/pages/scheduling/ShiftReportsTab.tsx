@@ -59,6 +59,7 @@ import {
   DEFAULT_CALL_TYPE_OPTIONS,
   DEFAULT_COMPETENCY_LABELS,
   REVIEW_STATUS_STYLES,
+  shiftHoursForOneMember,
 } from '../../modules/scheduling/constants/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -84,10 +85,17 @@ export const ShiftReportsTab: React.FC = () => {
   const linkedShiftId = searchParams.get('shift') || undefined;
   const linkedReportId = searchParams.get('report') || undefined;
 
+  // Views an officer may be sent straight to. `create` is how the training
+  // module hands off — its "Go to Shift Reports" button links to
+  // ?tab=shift-reports&view=create — and only `drafts` was ever honoured, so
+  // that hand-off landed on the list of reports already filed.
+  const OFFICER_VIEWS: ViewMode[] = ['create', 'drafts', 'filed-by-me', 'pending-review', 'flagged'];
+
   const initialView = (): ViewMode => {
     if (linkedShiftId && canManage) return 'create';
-    const viewParam = searchParams.get('view');
-    if (viewParam === 'drafts' && canManage) return 'drafts';
+    const viewParam = searchParams.get('view') as ViewMode | null;
+    if (viewParam === 'my-reports') return 'my-reports';
+    if (viewParam && canManage && OFFICER_VIEWS.includes(viewParam)) return viewParam;
     return canManage ? 'filed-by-me' : 'my-reports';
   };
 
@@ -229,16 +237,7 @@ export const ShiftReportsTab: React.FC = () => {
         const shiftDate = shift.shift_date ?? getTodayLocalDate(tz);
         setLinkedShiftLabel(`${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`);
         setShiftApparatusType(shift.apparatus_type ?? null);
-        let hours = 0;
-        if (shift.total_hours && shift.total_hours > 0) {
-          hours = Math.round(shift.total_hours * 100) / 100;
-        } else if (shift.start_time && shift.end_time) {
-          const start = new Date(shift.start_time).getTime();
-          const end = new Date(shift.end_time).getTime();
-          if (end > start) {
-            hours = Math.round(((end - start) / 3600000) * 100) / 100;
-          }
-        }
+        const hours = shiftHoursForOneMember(shift);
         setForm((prev) => ({
           ...prev,
           shift_id: linkedShiftId,
@@ -332,7 +331,7 @@ export const ShiftReportsTab: React.FC = () => {
         end_date: getTodayLocalDate(tz),
         limit: 50,
       })
-      .then((res) => setShiftList(res.shifts))
+      .then((res) => setShiftList(res.shifts ?? []))
       .catch(() => {
         /* shifts not critical */
       })
@@ -460,7 +459,7 @@ export const ShiftReportsTab: React.FC = () => {
       ...prev,
       shift_id: shift.id,
       shift_date: shift.shift_date,
-      hours_on_shift: shift.total_hours || 0,
+      hours_on_shift: shiftHoursForOneMember(shift),
       calls_responded: shift.call_count || 0,
     }));
     setLinkedShiftLabel(`${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shift.shift_date}`);
@@ -751,6 +750,24 @@ export const ShiftReportsTab: React.FC = () => {
     return Object.keys(ratingScaleLabels).length || 5;
   }, [ratingScaleLabels]);
 
+  /**
+   * The scale being used, in words.
+   *
+   * Ratings were shown against no published rubric anywhere they appear — a
+   * column headed "Avg Rating" reading 3, and stars with nothing to say what
+   * three of them means. The department configures this under Scheduling
+   * Settings → Shift Reports → Rating Scale; this states whatever it chose.
+   */
+  const ratingScaleKey = useMemo(() => {
+    if (ratingScaleType === 'stars') return 'Rated 1–5 stars, 5 being the strongest.';
+    const levels = Object.keys(ratingScaleLabels)
+      .map(Number)
+      .filter((n) => !Number.isNaN(n))
+      .sort((a, b) => a - b);
+    if (levels.length === 0) return null;
+    return levels.map((n) => `${n} = ${ratingScaleLabels[String(n)]}`).join(' · ');
+  }, [ratingScaleType, ratingScaleLabels]);
+
   const renderTraineeDashboard = () => {
     if (!traineeStats || traineeStats.total_reports === 0) return null;
     const maxHours = Math.max(...traineeStats.monthly.map((m) => m.hours), 1);
@@ -855,21 +872,33 @@ export const ShiftReportsTab: React.FC = () => {
           )}
         </div>
 
-        {/* Per-trainee table */}
+        {ratingScaleKey && (
+          <p className="text-theme-text-muted mb-3 text-xs">
+            <span className="font-medium">Rating scale:</span> {ratingScaleKey}
+          </p>
+        )}
+
+        {/* Per-crew-member table */}
         {officerAnalytics.trainees.length > 0 && (
           <div>
+            {/* "Trainee" is the wrong word for this list: a shift report covers
+                everyone who worked the shift, and training evaluations are a
+                separate opt-in per the scheduling settings. The API field names
+                still say trainee. */}
             <p className="text-theme-text-secondary mb-2 flex items-center gap-1 text-xs font-medium">
-              <Users className="h-3.5 w-3.5" /> Trainee Summary
+              <Users className="h-3.5 w-3.5" /> Crew summary
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-theme-text-muted border-theme-surface-border border-b text-xs">
-                    <th className="pb-2 text-left font-medium">Trainee</th>
+                    <th className="pb-2 text-left font-medium">Crew member</th>
                     <th className="pb-2 pl-4 text-center font-medium">Reports</th>
                     <th className="pb-2 pl-4 text-center font-medium">Hours</th>
                     <th className="pb-2 pl-4 text-center font-medium">Calls</th>
-                    <th className="pb-2 pl-4 text-center font-medium">Avg Rating</th>
+                    <th className="pb-2 pl-4 text-center font-medium" title={ratingScaleKey ?? undefined}>
+                      Avg rating
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-theme-surface-border divide-y">
@@ -962,7 +991,9 @@ export const ShiftReportsTab: React.FC = () => {
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
-                  <Clock className="h-3 w-3" /> {report.hours_on_shift}h
+                  {/* One decimal, like the summary table above. Raw, the same
+                      record read 11.87h here and 11.9 up there. */}
+                  <Clock className="h-3 w-3" /> {Number(report.hours_on_shift).toFixed(1)}h
                 </span>
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
                   <Phone className="h-3 w-3" /> {report.calls_responded} call{report.calls_responded === 1 ? '' : 's'}
@@ -1001,14 +1032,16 @@ export const ShiftReportsTab: React.FC = () => {
                   </span>
                 );
               })()}
-            {/* Review status badge */}
-            {report.review_status !== SubmissionStatus.APPROVED && (
-              <span
-                className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} rounded-full border border-current/20`}
-              >
-                {statusStyle.label}
-              </span>
-            )}
+            {/* Review status badge, approved included. Suppressing it there made
+                the most important state the *absence* of a badge: a finished
+                report looked the same as one whose status had not loaded, and
+                the reader had to know that blank meant approved. The style was
+                already defined and never reachable. */}
+            <span
+              className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} rounded-full border border-current/20`}
+            >
+              {statusStyle.label}
+            </span>
             {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
               <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
                 Needs Acknowledgment
@@ -1353,8 +1386,12 @@ export const ShiftReportsTab: React.FC = () => {
                 ? 'bg-violet-600 text-white'
                 : 'text-theme-text-secondary hover:text-theme-text-primary'
             }`}
+            title="Reports other people wrote about your shifts"
           >
-            My Reports
+            {/* "My Reports" and "Filed by Me" are reports *about* you and reports
+                you *wrote* — a distinction neither label carried, and both
+                readings fit both labels. */}
+            About me
           </button>
           {canManage && (
             <button
@@ -1364,8 +1401,9 @@ export const ShiftReportsTab: React.FC = () => {
                   ? 'bg-violet-600 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
+              title="Reports you wrote about your crew"
             >
-              Filed by Me
+              Written by me
             </button>
           )}
           {canManage && config?.report_review_required && (

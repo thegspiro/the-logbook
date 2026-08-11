@@ -450,6 +450,14 @@ async def get_shift(
 
     platoon_roster = await service.get_platoon_roster_for_shift(shift)
 
+    # Whether check-in is open, decided by the same helper the check-in endpoint
+    # enforces with. Published so the check-in screen can disable its own button
+    # and say why, rather than offering an action the API will refuse — and so
+    # the rule has one implementation rather than one per side.
+    checkin_closed_reason = await service.checkin_closed_reason(
+        shift, current_user.organization_id
+    )
+
     return {
         **d,
         "attendees": attendees,
@@ -457,6 +465,8 @@ async def get_shift(
         "call_count": call_count,
         "total_hours": total_hours,
         "platoon_roster": platoon_roster,
+        "checkin_open": checkin_closed_reason is None,
+        "checkin_closed_reason": checkin_closed_reason,
     }
 
 

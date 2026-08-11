@@ -13,6 +13,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 const ShiftCheckInPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -65,14 +66,52 @@ const ShiftCheckInPage: React.FC = () => {
     void load();
   }, [paramShiftId, paramApparatusId]);
 
+  /**
+   * Re-read the shift when the page comes back into view.
+   *
+   * `checkin_open` is a verdict about *now*, taken once on load. A phone that
+   * scanned the sticker and went back in a pocket would otherwise still show
+   * the button it had when the window was shut — or an enabled one after the
+   * window closed. Refreshing on visibility covers the way this page is
+   * actually used without polling a timer against the clock.
+   */
+  useEffect(() => {
+    if (!resolvedShiftId) return;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      void schedulingService
+        .getShift(resolvedShiftId)
+        .then(setShift)
+        .catch(() => {
+          /* Leave the last known state; the action itself still reports. */
+        });
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [resolvedShiftId]);
+
   const handleCheckIn = async () => {
     setProcessing(true);
     try {
       const result = await schedulingService.checkIn(resolvedShiftId);
       setAttendance(result);
       toast.success('Checked in successfully');
-    } catch {
-      toast.error('Failed to check in');
+    } catch (err: unknown) {
+      // Show what the server said. A bare "Failed to check in" threw away the
+      // one sentence that explains it — "This shift ended too long ago to check
+      // in to. Ask an officer to record your attendance." — and left the member
+      // with nothing to act on.
+      toast.error(getErrorMessage(err, 'Failed to check in'));
+      // The refusal may be the window having moved since the page loaded, so
+      // re-read the shift and let the button and its reason catch up.
+      void schedulingService
+        .getShift(resolvedShiftId)
+        .then(setShift)
+        .catch(() => {});
     } finally {
       setProcessing(false);
     }
@@ -85,8 +124,8 @@ const ShiftCheckInPage: React.FC = () => {
       setAttendance(result);
       const hrs = Math.round(((result.duration_minutes ?? 0) / 60) * 10) / 10;
       toast.success(`Checked out - ${hrs} hours recorded`);
-    } catch {
-      toast.error('Failed to check out');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to check out'));
     } finally {
       setProcessing(false);
     }
@@ -150,10 +189,15 @@ const ShiftCheckInPage: React.FC = () => {
         <div className="text-center">
           <h1 className="text-theme-text-primary text-xl font-bold">Shift Check-In</h1>
           <p className="text-theme-text-muted mt-1 text-sm">
-            {/* `shift_date` is a calendar date, not an instant — formatting it in
-                the org timezone shifted it a day earlier for anywhere west of
-                UTC, so the check-in card named yesterday's date. */}
-            {shift.apparatus_name || 'Shift'} &mdash;{' '}
+            {/* Either identifier names the rig — `unit_number` is required and
+                `name` an optional nickname — so falling back on the name alone
+                left the generic word "Shift" on the one screen whose whole job
+                is confirming which truck you are checking in to.
+
+                `shift_date` is a calendar date, not an instant — formatting it
+                in the org timezone shifted it a day earlier for anywhere west
+                of UTC, so this card named yesterday's date. */}
+            {[shift.apparatus_unit_number, shift.apparatus_name].filter(Boolean).join(' — ') || 'Shift'} &mdash;{' '}
             {formatCalendarDate(shift.shift_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}
           </p>
           <p className="text-theme-text-muted text-xs">
@@ -164,16 +208,23 @@ const ShiftCheckInPage: React.FC = () => {
 
         {/* Status and action */}
         {!attendance?.checked_in_at ? (
-          <button
-            onClick={() => {
-              void handleCheckIn();
-            }}
-            disabled={processing || shift.is_finalized}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-          >
-            {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogIn className="h-6 w-6" />}
-            Check In
-          </button>
+          <>
+            <button
+              onClick={() => {
+                void handleCheckIn();
+              }}
+              disabled={processing || shift.is_finalized || shift.checkin_open === false}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+            >
+              {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogIn className="h-6 w-6" />}
+              Check In
+            </button>
+            {/* Say why it is unavailable. Offering a live-looking button that the
+                API then refuses is the state this replaces. */}
+            {shift.checkin_closed_reason && !shift.is_finalized && (
+              <p className="text-center text-xs text-amber-600 dark:text-amber-400">{shift.checkin_closed_reason}</p>
+            )}
+          </>
         ) : !attendance?.checked_out_at ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3">

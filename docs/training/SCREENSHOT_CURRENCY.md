@@ -271,19 +271,48 @@ placeholders** for screens that have never been photographed:
 | `06-apparatus-facilities.md` | The Operators tab, the Add Operator member picker                                                                                                                                                                                         |
 | `08-admin-reports.md`        | The Footers tab, the footer selector in the template editor, the Organization variable palette, the new email preview design                                                                                                              |
 
-**None of these have manifest entries yet.** Two of them —
+**Four now have manifest entries** _(2026-08-11)_ —
+`03-95-apparatus-inventory`, `03-59-supply-worklist`,
+`05-53-items-grid-lot-stock` and `08-64-email-footers-tab`. Three are plain
+route visits; the apparatus one selects M-3 from the picker by the option's
+**value** rather than its label, since the label is built from two fields and
+matching it as a string breaks the moment either changes.
+
+`08-64` only became possible on 2026-08-11: the Email Templates page held its
+tab in plain state, so a shot of the Footers tab would have silently captured
+the Templates tab — the same way `02-21`/`02-41` and `04-20`/`17-01` came to be
+byte-identical images under different captions. `?tab=` now round-trips all
+five tabs, with a test pinning every call site.
+
+**The remaining fourteen still have no manifest entry.** Two of them —
 `/scheduling/apparatus-inventory` and `/scheduling/supply/expiring` — are plain
 route visits and are the cheapest to add; the rest need `prepare` steps to open a
 modal or a sheet, and several need seed data that does not exist (a position
 carrying two lots with two dates, a truck below par, a restock report raised by a
 member).
 
-**The seeder needs work before most of these can be shot.** Specifically it needs
-to: link some checklist positions to catalog items, put more than one lot on at
-least one position, leave at least one position short of par, and raise at least
-one restock report. Without those, the pages render truthfully but picture
-nothing the sections describe — which is the failure mode the top of this file
-documents at length.
+**The seeder gap is closed** _(2026-08-11)_. `seed_supply_tracking` in
+`scripts/screenshots/seed_demo_data.py` now builds the state these sections
+describe, on the medic unit:
+
+| What it seeds                                                                              | Which screenshot needs it                                                                                                                                    |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Five dated consumables with shelf lots, one of them **already expired**                    | The struck-through row on the worklist; the two-ledger Qty column                                                                                            |
+| Catalog links on the counted positions, **and three positions deliberately left unlinked** | The toolbar's coverage count; the bulk-match dialog                                                                                                          |
+| Naloxone from **two lots with two dates** on one bracket                                   | The lots sheet, and the "soonest aboard" rule                                                                                                                |
+| Gauze at **18 of 24**                                                                      | The amber short count, and the Set All to Par warning — which is suppressed on a compartment already at par, so a fully stocked department cannot picture it |
+| A restock report raised **by the demo member**, not the administrator                      | The worklist row naming a real reporter, which is the whole claim about who can record use                                                                   |
+
+**A defect the wiring exposed.** The seeder had been writing
+`"check_type": "presence"` on every equipment-check item. The column is a free
+`String(30)` so the API accepted it, but the eight types the check form
+recognises spell it **`present`** — and an unrecognised value falls through the
+form's switch to the pass/fail branch. So every seeded item rendered **Pass /
+Fail** buttons under a guide describing Present / Missing, and nothing reported
+a problem. Fixed, with a `_repair_check_types` pass for rows a long-lived demo
+database already holds. Same shape as the skills-testing `"checkbox"` criterion
+type recorded in `KNOWN_LIMITATIONS.md`; worth assuming there are more of these
+wherever a type is stored as a free string.
 
 ---
 

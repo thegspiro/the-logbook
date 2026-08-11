@@ -525,6 +525,11 @@ class GrantService:
         item = GrantBudgetItem(application_id=application_id, **data)
         self.db.add(item)
         await self.db.flush()
+        # A full refresh, not just the timestamps: these models carry other
+        # server-side defaults too (Donor alone has country, total_donated,
+        # donation_count, is_anonymous and active), and every unloaded one
+        # raises MissingGreenlet when the response model reads it.
+        await self.db.refresh(item)
         return item
 
     async def update_budget_item(
@@ -640,6 +645,10 @@ class GrantService:
         if expenditure.budget_item_id:
             await self._update_budget_item_spent(expenditure.budget_item_id)
 
+        # Refreshed last, after the spend rollup above, which flushes again.
+        # created_at / updated_at are server-side defaults, and the response
+        # model requires both.
+        await self.db.refresh(expenditure)
         return expenditure
 
     async def update_expenditure(
@@ -761,6 +770,11 @@ class GrantService:
         )
         self.db.add(task)
         await self.db.flush()
+        # A full refresh, not just the timestamps: these models carry other
+        # server-side defaults too (Donor alone has country, total_donated,
+        # donation_count, is_anonymous and active), and every unloaded one
+        # raises MissingGreenlet when the response model reads it.
+        await self.db.refresh(task)
         return task
 
     async def update_compliance_task(
@@ -886,6 +900,11 @@ class GrantService:
         )
         self.db.add(note)
         await self.db.flush()
+        # A full refresh, not just the timestamps: these models carry other
+        # server-side defaults too (Donor alone has country, total_donated,
+        # donation_count, is_anonymous and active), and every unloaded one
+        # raises MissingGreenlet when the response model reads it.
+        await self.db.refresh(note)
         return note
 
     # ------------------------------------------------------------------

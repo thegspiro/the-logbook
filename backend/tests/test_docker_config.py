@@ -372,6 +372,28 @@ class TestDockerCompose:
         assert not missing, f"Backend missing required environment vars: {missing}"
 
 
+class TestProductionComposeSecuritySwitches:
+    """The bundled plaintext services must not be paired with forced TLS flags."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.content = _read(ROOT_DIR / "docker-compose.prod.yml")
+
+    @pytest.mark.parametrize(
+        "setting",
+        [
+            "DB_SSL",
+            "REDIS_SSL",
+            "SECURITY_REQUIRE_TLS",
+            "GEOIP_FAIL_CLOSED",
+        ],
+    )
+    def test_prerequisite_dependent_security_switch_is_operator_configurable(
+        self, setting: str
+    ):
+        assert f"{setting}: ${{{setting}:-false}}" in self.content
+
+
 class TestDockerComposeMinimal:
     """Validate docker-compose.minimal.yml override file."""
 

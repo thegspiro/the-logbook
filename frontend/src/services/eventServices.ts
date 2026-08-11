@@ -1007,6 +1007,7 @@ export interface EquipmentKitItem {
   item_name: string;
   quantity: number;
   size_selectable: boolean;
+  optional: boolean;
   sort_order: number;
 }
 
@@ -1021,6 +1022,7 @@ export interface EquipmentKitCreate {
     item_name: string;
     quantity?: number | undefined;
     size_selectable?: boolean | undefined;
+    optional?: boolean | undefined;
   }>;
 }
 

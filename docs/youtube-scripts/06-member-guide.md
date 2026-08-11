@@ -40,7 +40,7 @@ tablet, checking training status on a laptop.]**
 
 ---
 
-## CHAPTER 2: Logging In & Your Dashboard (1:30 – 4:00)
+## CHAPTER 2: Logging In & Your Dashboard (1:30 – 4:30)
 
 ### FIRST LOGIN (1:30 – 2:30)
 
@@ -61,46 +61,28 @@ tablet, checking training status on a laptop.]**
 > "If this is your first login, I'd recommend immediately going to your User
 > Settings to change your password and set up 2FA if it's not already required."
 
-### THE MEMBER DASHBOARD (2:30 – 4:00)
+### THE MEMBER DASHBOARD (2:30 – 4:30)
 
-> **⚠️ SCRIPT UPDATE NEEDED (2026-08-11) — the widget tour below is wrong.** See
-> [SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md#06--the-member-experience).
->
-> - **There is no "Training Status" widget.** The dashboard has an hours row,
->   department messages, notifications, **two** shift panels, upcoming events,
->   recent activity, an ID card and an equipment panel. Rewrite the tour against
->   the real page before recording.
-> - **"My Shifts" is two panels**, not one: My Upcoming Shifts and Open Shifts.
->   The Open Shifts panel is capped at five with an "N more" line as of
->   2026-08-10; before that it rendered every open shift in the next 30 days, so
->   older B-roll shows a page thousands of pixels tall.
->
-> **Also missing from this guide: a chapter on reporting supplies you used**
-> (Scheduling → Equipment Checks → **Apparatus Inventory** → tap **−**). It is
-> member-facing crew work that needs no officer permission — which is the whole
-> point of it — and it currently appears in no script. Two to three minutes,
-> placed after the shift chapter.
+**[SCREEN: The main Dashboard loads, from an ordinary member's account — not an
+officer's. Scroll slowly from top to bottom once before narrating.]**
 
-**[SCREEN: The main Dashboard loads. Show it from a member's perspective —
-fewer widgets than the Chief's view but still informative.]**
+> "This is your home screen. It's built to answer three questions before you've
+> clicked anything: what's next, what needs me, and what's about to expire."
 
-> "Welcome to your dashboard. This is your home screen. Let's see what's here."
+**[SCREEN: Point to the greeting line and the summary sentence beneath it]**
 
-**[SCREEN: Point to each widget]**
+> "Right at the top — your name, and a one-line summary of what's coming."
 
-> "**Upcoming Events** — the next few events you need to know about. You'll see
-> the event name, date, time, and your RSVP status. Green check means you've
-> RSVPed yes. If there's no status, you haven't responded yet."
+**[SCREEN: Point to the red certification banner, if the demo account has one]**
 
-> "**My Shifts** — your upcoming shift assignments. If scheduling is enabled,
-> you'll see when you're on duty."
+> "If any of your certifications have expired, or expire in the next sixty
+> days, you get this red banner. **It's not always there** — that's the point.
+> An empty dashboard means nothing needs you. If you see red, tap it and it
+> takes you straight to My Training."
 
-> "**Training Status** — a quick view of your certification health. Green means
-> everything's current. Yellow means something's expiring soon. Red means
-> something's expired."
+**[SCREEN: Point to the Log Training button]**
 
-> "**Notifications** — any messages, reminders, or action items that need your
-> attention."
+> "The big button is Log Training, because it's the thing members do most."
 
 **[SCREEN: Point to the four hours cards — Total Hours, Training, Standby,
 Administrative]**
@@ -113,15 +95,59 @@ Administrative]**
 > "If you're looking for your hours going all the way back, that's on **My
 > Training**, not here. This card is the current month only."
 
+**[SCREEN: Scroll to Department Messages and Notifications, side by side]**
+
+> "**Department Messages** — announcements from leadership. Some of these ask
+> you to acknowledge that you've read them, and those stay put until you do."
+
+> "**Notifications** — reminders and alerts. The ✕ on a card marks it read.
+> There's a Clear All in the header if you want the lot gone."
+
+**[SCREEN: Scroll to the two shift panels]**
+
+> "Shifts come in **two** panels, and they're different things."
+
+> "**My Upcoming Shifts** is what you're signed up for. **Open Shifts** is what
+> nobody's covering yet — that's where you pick up an extra."
+
+**[SCREEN: Point to the "and N more" line under Open Shifts]**
+
+> "Open Shifts shows five. If there are more, you'll see a line telling you how
+> many — tap View Schedule for the full list. It's deliberately short so it
+> doesn't push everything else off the bottom of your screen."
+
+**[SCREEN: Scroll through Upcoming Events, Recent Activity, My ID Card]**
+
+> "**Upcoming Events** with your RSVP status. **Recent Activity** — what's been
+> happening in the department. And **My ID Card**, which is the one to know
+> about on your phone: it's your department ID with a scannable code, and it
+> works without signal once the app's installed."
+
+**[SCREEN: Scroll to My Training Progress, then My Equipment]**
+
+> "If you're enrolled in a training pipeline — a recruit school, an officer
+> track — **My Training Progress** shows where you are in it and what's next.
+> **This panel only appears if you're enrolled in something**, so don't worry if
+> you don't have it."
+
+> "And **My Equipment** is everything the department has issued you. We'll come
+> back to that one."
+
 **[CALLOUT: "Your dashboard = your personal fire department briefing"]**
+
+**[PRODUCTION NOTE: Shoot this chapter against a member account that has (a) at
+least one certification inside the 60-day window so the red banner appears, and
+(b) an active pipeline enrolment so the Training Progress panel renders. Both
+are conditional, and a dashboard missing them is a shorter page than the one
+this narration walks. The demo seeder produces both.]**
 
 **[TRANSITION: Events section]**
 
 ---
 
-## CHAPTER 3: Events & RSVPs (4:00 – 8:00)
+## CHAPTER 3: Events & RSVPs (4:30 – 8:30)
 
-### VIEWING EVENTS (4:00 – 5:00)
+### VIEWING EVENTS (4:30 – 5:30)
 
 **[SCREEN: Navigate to Events (EventsPage)]**
 
@@ -134,7 +160,7 @@ Administrative]**
 > "Each event card shows the name, date, time, location, and how many people
 > have RSVPed. Click on any event to see the full details."
 
-### RSVPING TO AN EVENT (5:00 – 6:00)
+### RSVPING TO AN EVENT (5:30 – 6:30)
 
 **[SCREEN: Click into an event detail page (EventDetailPage)]**
 
@@ -152,7 +178,7 @@ Administrative]**
 
 **[CALLOUT: "RSVP in 5 seconds — no more group text chains"]**
 
-### QR CODE CHECK-IN (6:00 – 7:00)
+### QR CODE CHECK-IN (6:30 – 7:30)
 
 **[SCREEN: Show the Event Self Check-In page (EventSelfCheckInPage)]**
 
@@ -167,7 +193,7 @@ Administrative]**
 > "If you don't have your phone, a Captain or officer with manage access can
 > manually check you in."
 
-### PAST EVENTS & YOUR HISTORY (7:00 – 8:00)
+### PAST EVENTS & YOUR HISTORY (7:30 – 8:30)
 
 **[SCREEN: Navigate to Past Events tab (PastEventsTab)]**
 
@@ -184,9 +210,9 @@ Administrative]**
 
 ---
 
-## CHAPTER 4: Your Training & Certifications (8:00 – 12:00)
+## CHAPTER 4: Your Training & Certifications (8:30 – 12:30)
 
-### MY TRAINING PAGE (8:00 – 9:30)
+### MY TRAINING PAGE (8:30 – 10:00)
 
 **[SCREEN: Navigate to My Training (MyTrainingPage)]**
 
@@ -246,7 +272,7 @@ empty.]**
 > person on a crew and you're checking somebody off, you don't need officer
 > permissions to do it — you run the sheet, and an officer signs the result."
 
-### SUBMITTING EXTERNAL TRAINING (9:30 – 11:00)
+### SUBMITTING EXTERNAL TRAINING (10:00 – 11:30)
 
 **[SCREEN: Navigate to Submit Training (SubmitTrainingPage)]**
 
@@ -276,7 +302,7 @@ empty.]**
 
 **[CALLOUT: "Always upload your certificate — it speeds up approval"]**
 
-### TRAINING PROGRAMS & COURSE LIBRARY (11:00 – 12:00)
+### TRAINING PROGRAMS & COURSE LIBRARY (11:30 – 12:30)
 
 **[SCREEN: Navigate to Course Library (CourseLibraryPage)]**
 
@@ -293,7 +319,7 @@ empty.]**
 
 ---
 
-## CHAPTER 5: Scheduling & Shift Swaps (12:00 – 15:00)
+## CHAPTER 5: Scheduling, Shifts & Your Gear (12:30 – 17:30)
 
 **[SCREEN: The Events calendar showing a run of training events titled
 "Recruit School — Fall 2026: …"]**
@@ -304,7 +330,7 @@ empty.]**
 > list, and you check into each one with the QR code the same as any other
 > event. Miss one and it's just that class you make up, not the whole course."
 
-### VIEWING YOUR SCHEDULE (12:00 – 12:45)
+### VIEWING YOUR SCHEDULE (12:30 – 13:15)
 
 **[SCREEN: Navigate to Scheduling (SchedulingPage)]**
 
@@ -317,7 +343,7 @@ empty.]**
 > "Toggle between week and month view. Click on any shift to see who else is
 > assigned and what the coverage looks like."
 
-### SUBSCRIBE TO YOUR SHIFTS (12:45 – 13:15)
+### SUBSCRIBE TO YOUR SHIFTS (13:15 – 13:45)
 
 **[SCREEN: Open the My Shifts tab]**
 
@@ -336,7 +362,7 @@ Copy button, and Reset link]**
 > "If you ever need to, hit 'Reset link' and the old one stops working
 > immediately."
 
-### REQUESTING A SHIFT SWAP (13:15 – 14:30)
+### REQUESTING A SHIFT SWAP (13:45 – 15:00)
 
 > "Need to swap a shift? Maybe you have a family commitment or a schedule
 > conflict. The Logbook handles this digitally — no more calling around to find
@@ -360,7 +386,7 @@ Copy button, and Reset link]**
 
 > "You'll be notified when the swap is approved, declined, or claimed."
 
-### MY EQUIPMENT (14:30 – 15:00)
+### MY EQUIPMENT (15:00 – 15:30)
 
 **[SCREEN: Navigate to My Equipment (MyEquipmentPage)]**
 
@@ -369,13 +395,91 @@ Copy button, and Reset link]**
 > If your department tracks equipment assignments, you can see exactly what's
 > checked out to you."
 
+**[TRANSITION: From your gear to the truck's]**
+
+### RECORDING WHAT YOU USED (15:30 – 17:30)
+
+**[SCREEN: A phone. Scheduling → Equipment Checks tab.]**
+
+> "That's your gear. This next bit is the truck's — and it's the part of the
+> system most people never get shown, so stay with me."
+
+> "You know the situation. Three in the morning, you use the last of something
+> off the rig. What happens to that fact?"
+
+**[BEAT]**
+
+> "Usually: nothing. Maybe you tell someone. Maybe you write it on a whiteboard.
+> Mostly it waits to be found by whoever does the morning check — which is
+> exactly the window where the truck goes out on a call short."
+
+**[SCREEN: Point to the Apparatus Inventory button in the header, beside
+"Start a Check"]**
+
+> "You don't have to start a whole equipment check to record it. **Apparatus
+> Inventory** is a standing view of the truck — open any time, no shift
+> required."
+
+**[SCREEN: Tap it. Pick the rig from the dropdown. The compartments load.]**
+
+> "Pick your rig. You get every tracked position on it, compartment by
+> compartment — what's supposed to be there, what's actually there, and how much
+> of it."
+
+**[SCREEN: Point to a position at full count, then to one reading short in
+amber]**
+
+> "Green means the count matches. Amber means the truck is short."
+
+**[SCREEN: Tap the minus on a position]**
+
+> "You used two? Tap minus twice. That's it."
+
+**[SCREEN: The count drops; the position now shows as needing restock]**
+
+> "Two things just happened. The count came down, and a **restock report** went
+> up to whoever handles supply — with your name on it and the time you did it.
+> You can add a note if there's something worth saying."
+
+**[CALLOUT: "Tap minus. That's the whole job."]**
+
+> "You don't need to find an officer. You don't need a permission you haven't
+> got. **Any member can do this** — that's deliberate, because the person who
+> used the last one is the person who knows."
+
+**[SCREEN: Tap a position that shows a lots chip with two dates. The lots sheet
+opens.]**
+
+> "One more thing worth knowing, and it matters most on a medic unit. A single
+> bracket can hold boxes from **different lots with different expiry dates**."
+
+> "Tap the position and you'll see each one — its lot number, its date, how many
+> of it. If you swap a box out, you change it here, and the date goes with it.
+> That's what stops the system confidently telling everyone a drug expires next
+> year when the box in the bag says next week."
+
+**[SCREEN: Point to the plus button, and to the Swap button]**
+
+> "Plus is if you **put** something back. Swap is if you're putting **fresh
+> stock** on from the shelf — it'll pull from the supply room's record and take
+> the oldest in-date lot first."
+
+**[CALLOUT: "Used it → minus. Replaced it → swap. Both take one tap."]**
+
+**[PRODUCTION NOTE: Shoot from the demo member's account, not the chief's — the
+point of this section is that it needs no officer permission, and a session
+badged "Chief" undercuts it on screen. The seeder's `seed_supply_tracking` step
+puts naloxone from two lots on Medic 3's Drug Bag and leaves the Trauma Bag's
+gauze at 18 of 24, which is what makes the two-date sheet and the amber count
+appear.]**
+
 **[TRANSITION: Documents and directory]**
 
 ---
 
-## CHAPTER 6: Documents, Directory & Elections (15:00 – 18:00)
+## CHAPTER 6: Documents, Directory & Elections (17:30 – 20:30)
 
-### DOCUMENTS & SOPs (15:00 – 15:30)
+### DOCUMENTS & SOPs (17:30 – 18:00)
 
 **[SCREEN: Navigate to Documents (DocumentsPage)]**
 
@@ -385,7 +489,7 @@ Copy button, and Reset link]**
 
 **[SCREEN: Browse folders, search for a document, open and download one]**
 
-### MEMBER DIRECTORY (15:30 – 16:00)
+### MEMBER DIRECTORY (18:00 – 18:30)
 
 **[SCREEN: Navigate to Members list]**
 
@@ -395,7 +499,7 @@ Copy button, and Reset link]**
 
 **[SCREEN: Show the directory with search and filtering]**
 
-### VOTING IN ELECTIONS (16:00 – 17:00)
+### VOTING IN ELECTIONS (18:30 – 19:30)
 
 **[SCREEN: Navigate to Elections. Show an active election.]**
 
@@ -421,7 +525,7 @@ Copy button, and Reset link]**
 
 **[CALLOUT: "Your vote is confidential — only aggregate results are published. Save your receipt!"]**
 
-### MEETING MINUTES (17:00 – 17:30)
+### MEETING MINUTES (19:30 – 20:00)
 
 **[SCREEN: Navigate to Minutes (MinutesPage)]**
 
@@ -430,7 +534,7 @@ Copy button, and Reset link]**
 
 **[SCREEN: Show browsing and searching minutes]**
 
-### NOTIFICATIONS (17:30 – 18:00)
+### NOTIFICATIONS (20:00 – 20:30)
 
 **[SCREEN: Navigate to Notifications (NotificationsPage)]**
 
@@ -453,9 +557,9 @@ Copy button, and Reset link]**
 
 ---
 
-## CHAPTER 7: Your Profile & Personal Settings (18:00 – 21:30)
+## CHAPTER 7: Your Profile & Personal Settings (20:30 – 24:00)
 
-### USER SETTINGS (18:00 – 19:00)
+### USER SETTINGS (20:30 – 21:30)
 
 **[SCREEN: Navigate to User Settings (UserSettingsPage)]**
 
@@ -477,7 +581,7 @@ Copy button, and Reset link]**
 > "Dark mode is nice for using The Logbook during night shifts or in low-light
 > environments."
 
-### YOUR PRIVACY CHOICES & YOUR DATA (19:00 – 20:00)
+### YOUR PRIVACY CHOICES & YOUR DATA (21:30 – 22:30)
 
 **[SCREEN: Settings → Security, scrolled to the Privacy Choices section]**
 
@@ -523,7 +627,7 @@ Copy button, and Reset link]**
 > "One tip: if you're ever leaving the department, download this _before_ your
 > account is closed. It's much easier than asking for it afterward."
 
-### YOUR MEMBER PROFILE (20:00 – 20:30)
+### YOUR MEMBER PROFILE (22:30 – 23:00)
 
 **[SCREEN: Navigate to your own Member Profile (MemberProfilePage)]**
 
@@ -543,7 +647,7 @@ Copy button, and Reset link]**
 > have no login here to take themselves back out. So the system treats them as
 > theirs, not just yours."
 
-### MOBILE ACCESS (20:30 – 21:00)
+### MOBILE ACCESS (23:00 – 23:30)
 
 > "The Logbook is a Progressive Web App — which means it works on your phone's
 > browser just like a native app. On most phones, you can 'Add to Home Screen'
@@ -578,7 +682,7 @@ My Account > Notifications, showing the Push notifications toggle.]**
 
 **[CALLOUT: "Add to Home Screen = full app experience on your phone"]**
 
-### WRAP-UP (21:00 – 21:30)
+### WRAP-UP (23:30 – 24:00)
 
 > "That's everything you need as a member. RSVP to events, check your training,
 > view the schedule, swap shifts, vote in elections, and access documents — all
@@ -595,13 +699,14 @@ My Account > Notifications, showing the Push notifications toggle.]**
 
 | Clip                         | Timecode    | Standalone Title                                   |
 | ---------------------------- | ----------- | -------------------------------------------------- |
-| How to RSVP                  | 5:00–6:00   | "How to RSVP for an Event in 30 Seconds"           |
-| QR Code Check-In             | 6:00–7:00   | "Checking In with a QR Code"                       |
-| Checking Training Status     | 8:00–9:30   | "Checking Your Training Compliance Status"         |
-| Submitting External Training | 9:30–11:00  | "Submitting External Training for Credit"          |
-| Subscribe to Your Shifts     | 12:45–13:15 | "Put Your Shifts in Your Phone Calendar"           |
-| Requesting a Shift Swap      | 13:15–14:30 | "How to Request a Shift Swap"                      |
-| Voting in an Election        | 16:00–17:00 | "How to Vote in a Department Election"             |
-| Setting Up Dark Mode         | 18:00–19:00 | "Customizing Your Logbook (Dark Mode & More)"      |
-| Privacy Choices & Your Data  | 19:00–20:00 | "Your Privacy Choices — and Downloading Your Data" |
-| Adding to Home Screen        | 20:30–21:00 | "Add The Logbook to Your Phone's Home Screen"      |
+| How to RSVP                  | 5:30–6:30   | "How to RSVP for an Event in 30 Seconds"           |
+| QR Code Check-In             | 6:30–7:30   | "Checking In with a QR Code"                       |
+| Checking Training Status     | 8:30–10:00  | "Checking Your Training Compliance Status"         |
+| Submitting External Training | 10:00–11:30 | "Submitting External Training for Credit"          |
+| Subscribe to Your Shifts     | 13:15–13:45 | "Put Your Shifts in Your Phone Calendar"           |
+| Requesting a Shift Swap      | 13:45–15:00 | "How to Request a Shift Swap"                      |
+| Recording What You Used      | 15:30–17:30 | "You Used the Last One — Tell the Truck"           |
+| Voting in an Election        | 18:30–19:30 | "How to Vote in a Department Election"             |
+| Setting Up Dark Mode         | 20:30–21:30 | "Customizing Your Logbook (Dark Mode & More)"      |
+| Privacy Choices & Your Data  | 21:30–22:30 | "Your Privacy Choices — and Downloading Your Data" |
+| Adding to Home Screen        | 23:00–23:30 | "Add The Logbook to Your Phone's Home Screen"      |
