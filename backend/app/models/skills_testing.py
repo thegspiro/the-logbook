@@ -310,23 +310,6 @@ class SkillTest(Base):
         nullable=True,
     )
 
-    # How many times scoring was picked up again after the screen was left.
-    #
-    # The clock lives in memory and is restored from elapsed_seconds, so a
-    # resumed evaluation counts on from the last save rather than from a
-    # stopwatch that ran continuously. Everything between that save and the
-    # interruption is missing, and everything the examiner spent getting back
-    # into the test is not. For an untimed sheet that is immaterial; for a
-    # timed evolution — where the duration may itself be the criterion — the
-    # recorded seconds are no longer evidence.
-    #
-    # So the fact is recorded rather than the number silently trusted: a
-    # non-zero count marks the duration as unverified wherever it is shown.
-    # Deliberately not an attempt to correct the figure. There is no honest way
-    # to reconstruct what the stopwatch would have read, and a corrected-looking
-    # number is worse than one openly marked as uncertain.
-    resume_count = Column(Integer, nullable=False, default=0, server_default="0")
-
     # Return trail — set when an officer sends a submitted result back to its
     # examiner instead of accepting or voiding it.
     #

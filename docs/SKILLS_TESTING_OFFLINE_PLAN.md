@@ -1,17 +1,6 @@
 # Skills Testing — Offline Support Implementation Plan
 
-> Status: **Scoping document for review. Phases 1–3 are unimplemented.**
->
-> **Decided (2026-08-11):** scope is **A+B** — the department's failure mode
-> includes arriving at a facility with no coverage at all, so §6 is answered
-> and the queue must be keyed on **client ids**.
->
-> **Shipped (2026-08-11):** §5's first option, the logout guard, which the
-> table below notes should ship regardless of the other two. See §5.3. The
-> larger §5 question — whether to encrypt the queue at rest or accept the
-> shared-profile exposure as a recorded decision — is **still open and still
-> blocks Phase 1**, because A+B is what puts a named member's scorecard in
-> IndexedDB in the first place.
+> Status: **Scoping document for review. No implementation code has been written.**
 > Autosave for the active test screen already shipped (`useAutoSave` wired into
 > `ActiveSkillTestPage`) and covers the common data-loss case — a locked phone
 > or a killed tab while the device still has signal. This document scopes the
@@ -194,57 +183,35 @@ Three ways forward, in rough order of cost:
 | Encrypt the skills queue at rest          | Reduces shared-profile exposure; key management on a browser is genuinely hard and partly theatre without a server-held key | High                                                                        |
 | Accept the risk, documented               | Matches how equipment-check photos are already handled                                                                      | None, but should be a recorded decision in [COMPLIANCE.md](./COMPLIANCE.md) |
 
-**This is an owner decision.** The implementation cannot sensibly pick for you,
-and the first option is cheap enough that it should probably ship regardless of
-which of the other two is chosen.
+**This is an owner decision.** The implementation cannot sensibly pick for you.
 
-### 5.3 Shipped — the logout guard
+### 5.3 The first option was built and reverted
 
-Built ahead of the rest, on the reasoning above: it is cheap, it is correct
-whichever way the retention question goes, and the loss it prevents already
-happens today without any offline queue at all.
+A logout guard was implemented on the reasoning above — cheap, correct
+whichever way the retention question goes. It was reverted on the owner's call,
+and the reasoning is worth keeping:
 
-- `utils/pendingSkillsWork.ts` is the registry logout consults. Deliberately a
-  description of *what* is unsaved rather than a boolean about one screen, so
-  the Phase 1/2 queue registers through it unchanged.
-- `ActiveSkillTestPage` registers on the **failed** save state — a save in
-  flight is not yet a loss, and warning on it would train examiners to click
-  through the dialog — and clears it when a save lands. Scoped by test id, so
-  opening a second evaluation cannot clear the first one's warning.
-- The screen now says so plainly. "Not saved" was a status word beside a timer
-  the examiner is watching for other reasons, which meant the one state where
-  work can actually be lost said the least. It is now a banner naming the
-  consequence, with a retry.
-- `AppLayout` names the evaluation in the logout confirmation and offers
-  **Stay signed in** / **Sign out and lose it**, rather than the generic
-  "unsaved changes may be lost". The registration is cleared on a confirmed
-  logout, so the next member on that shared terminal is not warned about work
-  that is already gone.
+> An examiner offline enough to be signing out mid-drill has larger problems
+> than a dialog, and those problems get handled in person.
 
-What this does *not* do is save the work. It converts a silent loss into an
-informed choice, which is the whole of what it claims.
+The loss it prevented is also smaller than it looked. Everything up to the last
+successful save is on the server, and the records list offers the test straight
+back — `loadTest` restores the clock from `elapsed_seconds` and the section
+index returns the examiner to the step they had reached. Re-entry, not
+prevention, is the supported path, and it already works.
 
-### 5.4 The related half — resumption, and the clock
+The same call was made about **annotating a resumed test's timing**: a
+`resume_count` column and "timing not verified" markings across the examiner
+screen, scorecard, printed record and export were built and reverted. A skills
+evaluation is two people in an apparatus bay; when an evolution is interrupted,
+the examiner and the training officer settle it face to face. They already have
+free-text notes on the test and on every criterion, and the officer reviews
+before validating. A system that annotates its own uncertainty invites an
+officer to trust a badge instead of asking.
 
-Logout is the rare case. The common one is simply leaving the screen and coming
-back, which already worked: the records list offers an in-progress test and the
-examiner screen restores the clock from `elapsed_seconds`.
-
-What nothing said was that the restored clock is no longer a stopwatch reading.
-It counts on from the last save, so time before the interruption is missing and
-time spent getting back into the test is not. `skill_tests.resume_count`
-now records the pickup, and the duration is marked unverified wherever it is
-shown — the examiner screen, the scorecard, the printed record and the CSV
-export.
-
-Deliberately marked rather than corrected. There is no honest way to
-reconstruct what the stopwatch would have read, and a number that looks
-adjusted is worse than one openly uncertain — particularly on a timed evolution
-where the duration is itself the criterion.
-
-This matters for Phases 1–2 too: a queued write replayed on reconnect carries
-whatever `elapsed_seconds` the device held, so the same marking applies to work
-that syncs late.
+This does not change the case for Phases 1–3 — losing a *whole evaluation* to
+no signal is a different problem from a clock that drifted — but it does set
+the bar: sync the work, do not editorialize about it.
 
 ---
 

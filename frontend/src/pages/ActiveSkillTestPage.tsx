@@ -47,7 +47,6 @@ import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
-import { clearPendingSkillsWork, setPendingSkillsWork } from '../utils/pendingSkillsWork';
 import { TestViewersPanel } from '../components/training/TestViewersPanel';
 import { SkillTestOfficerActions } from '../components/training/SkillTestOfficerActions';
 import { ScoreBreakdownPanel } from '../components/training/ScoreBreakdownPanel';
@@ -1059,10 +1058,6 @@ export const ActiveSkillTestPage: React.FC = () => {
   // Nobody presses Save on a screen they are using with gloves on, so the
   // examiner needs to be told, without asking, that their scoring is safe.
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
-  // Read by the unmount cleanup, which must not re-run on every save.
-  const saveStateRef = useRef(saveState);
-  saveStateRef.current = saveState;
-  const currentTestIdRef = useRef<string | null>(null);
 
   // Load the test
   useEffect(() => {
@@ -1150,10 +1145,6 @@ export const ActiveSkillTestPage: React.FC = () => {
   // Runs once per test id, and never while the clock is running, so it can't
   // stamp on a live count.
   const hydratedTimerForTestRef = useRef<string | undefined>(undefined);
-  // Set when a restored clock means this is a resumption; consumed by the next
-  // save. A ref rather than state: it must not re-render, and it must survive
-  // until a save actually lands.
-  const pendingResumeRef = useRef(false);
   const loadedTestId = currentTest?.id;
   const loadedElapsedSeconds = currentTest?.elapsed_seconds;
   useEffect(() => {
@@ -1165,12 +1156,6 @@ export const ActiveSkillTestPage: React.FC = () => {
     // the test, not something to redo when the examiner starts or pauses.
     if (!useSkillsTestingStore.getState().activeTestRunning && loadedElapsedSeconds) {
       setActiveTestTimer(loadedElapsedSeconds);
-      // Scoring is being picked up again, not started. The clock counts on from
-      // the last save, so time before the interruption is missing and time
-      // spent getting back into the test is not — the recorded duration stops
-      // being a stopwatch reading. Reported once, on the next save, so the
-      // record can say so rather than presenting the number as evidence.
-      pendingResumeRef.current = true;
     }
   }, [loadedTestId, loadedElapsedSeconds, setActiveTestTimer]);
 
@@ -1227,41 +1212,6 @@ export const ActiveSkillTestPage: React.FC = () => {
     saved: 'Saved',
     failed: 'Not saved',
   }[saveState];
-
-  // Tell the logout guard there is work only this browser is holding.
-  //
-  // 'Not saved' as a status word was the only signal that an evaluation existed
-  // solely in memory, and logout purges every local store on a shared station
-  // profile — so an examiner who lost signal mid-drill and signed out lost the
-  // evaluation, on a candidate who had already gone home.
-  //
-  // Registered on the failed state rather than on every keystroke: a save in
-  // flight is not yet a loss, and warning on it would train examiners to click
-  // through the dialog.
-  useEffect(() => {
-    if (!currentTest) return;
-    currentTestIdRef.current = currentTest.id;
-    if (saveState !== 'failed') {
-      clearPendingSkillsWork(currentTest.id);
-      return;
-    }
-    setPendingSkillsWork({
-      testId: currentTest.id,
-      label: `${currentTest.template_name ?? 'Skills evaluation'} for ${currentTest.candidate_name ?? 'a candidate'}`,
-    });
-  }, [saveState, currentTest?.id, currentTest?.template_name, currentTest?.candidate_name, currentTest]);
-
-  // Leaving the screen does not make the work safe, so the registration
-  // deliberately outlives this component — it is cleared when a save lands, or
-  // when the member discards it at logout. Scoped by id so opening a second
-  // evaluation cannot clear the first one's warning.
-  useEffect(
-    () => () => {
-      const id = currentTestIdRef.current;
-      if (id && saveStateRef.current !== 'failed') clearPendingSkillsWork(id);
-    },
-    []
-  );
 
   /** Set the clock running, and stamp the test as under way the first time.
    *
@@ -1342,17 +1292,11 @@ export const ActiveSkillTestPage: React.FC = () => {
     async (updates: SkillTestUpdate) => {
       if (!currentTest) return;
       setSaveState('saving');
-      const reportingResume = pendingResumeRef.current;
       try {
         await updateTest(currentTest.id, {
           ...updates,
-          ...(reportingResume ? { resumed: true } : {}),
           expected_version: currentTest.version,
         });
-        // Cleared only once the write lands. A failed save that dropped the
-        // flag would leave the resumption unrecorded — which is exactly the
-        // case (a dropped connection) where it matters most.
-        if (reportingResume) pendingResumeRef.current = false;
         setSaveState('saved');
       } catch (err: unknown) {
         setSaveState('failed');
@@ -2276,41 +2220,6 @@ export const ActiveSkillTestPage: React.FC = () => {
           >
             Reload current results
           </button>
-        </div>
-      )}
-
-      {/* An evaluation only this browser is holding. 'Not saved' as a status
-          word was the only signal, and it sits beside a timer an examiner is
-          watching for other reasons — so the one state where the work can
-          actually be lost said the least. Logout purges every local store on a
-          shared station profile, which is what makes this worth a banner
-          rather than a colour change. */}
-      {saveState === 'failed' && !conflict && (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20">
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Not saving — keep scoring</p>
-          <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
-            The connection dropped. Everything up to the last save is on the server and this test can be picked up again
-            from the records list. Marks made since then are only on this device.
-          </p>
-          <button
-            onClick={() => void handleSaveProgress()}
-            className="mt-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700"
-          >
-            Try saving now
-          </button>
-        </div>
-      )}
-
-      {/* Picked up again rather than run straight through. The clock was
-          restored from the last save, so it is not a stopwatch reading — said
-          here because the examiner is the one person who can add the context
-          the number is missing. */}
-      {(currentTest.resume_count ?? 0) > 0 && isTestLive(currentTest.status) && (
-        <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/20">
-          <p className="text-sm text-blue-900 dark:text-blue-100">
-            <span className="font-medium">Resumed evaluation.</span> The clock carried on from the last save, so the
-            recorded time is not an exact stopwatch reading. Note anything the duration needs explained.
-          </p>
         </div>
       )}
 

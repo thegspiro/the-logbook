@@ -329,13 +329,6 @@ export interface SkillTest {
   /** How many times this test has been sent back. One is a slip; a third is a
    *  training conversation. */
   return_count?: number | undefined;
-  /** How many times scoring was picked up again after the screen was left. */
-  resume_count?: number | undefined;
-  /** Whether the recorded duration is a trustworthy stopwatch reading. False
-   *  once a test has been resumed: the clock counts on from the last save, so
-   *  time before the interruption is missing and time spent getting back in is
-   *  not. Server-derived, so every surface agrees about it. */
-  timing_verified?: boolean | undefined;
 }
 
 export interface SkillTestCreate {
@@ -348,10 +341,6 @@ export interface SkillTestCreate {
 }
 
 export interface SkillTestUpdate {
-  /** Reported once by the examiner screen when scoring is picked up again on a
-   *  test that already had time on the clock. The server increments its own
-   *  counter; the client never sets it. */
-  resumed?: boolean | undefined;
   status?: SkillTestStatus;
   section_results?: SectionResult[];
   overall_score?: number;

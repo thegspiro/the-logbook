@@ -262,14 +262,6 @@ const SkillTestScorecardPrintPage: React.FC = () => {
                   {test.elapsed_seconds != null
                     ? `${Math.floor(test.elapsed_seconds / 60)}m ${test.elapsed_seconds % 60}s`
                     : '—'}
-                  {/* A resumed test's clock carried on from the last save, so
-                      the figure is not a stopwatch reading. Marked rather than
-                      corrected: there is no honest way to reconstruct what the
-                      stopwatch would have shown, and a corrected-looking number
-                      is worse than one openly uncertain. */}
-                  {test.timing_verified === false && (
-                    <span style={{ color: '#b00', fontSize: '8pt' }}> — not verified</span>
-                  )}
                 </td>
               </tr>
               <tr>
@@ -288,23 +280,6 @@ const SkillTestScorecardPrintPage: React.FC = () => {
               </tr>
             </tbody>
           </table>
-
-          {test.timing_verified === false && (
-            <div
-              style={{
-                border: '1pt solid #333',
-                padding: '5pt 8pt',
-                marginBottom: '10pt',
-                fontSize: '9pt',
-                background: '#fafafa',
-              }}
-            >
-              <strong>Timing not verified.</strong> Scoring was picked up again after the screen was left
-              {test.resume_count && test.resume_count > 1 ? ` (${test.resume_count} times)` : ''}, so the clock carried
-              on from the last save rather than running continuously. Treat the elapsed time as approximate — and, on a
-              timed evolution, as not evidence of the time limit being met.
-            </div>
-          )}
 
           {/* The arithmetic, section by section. Printed from the server's own
               breakdown rather than recomputed, so the working on paper is the

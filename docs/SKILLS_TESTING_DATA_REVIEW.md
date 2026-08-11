@@ -393,8 +393,7 @@ seed data; the import path (§3c) is the next one to cover.
 | 9 | ~~No starter template library~~ (§3b) | — | **Built** — copy-on-demand, lands as a draft |
 | 10 | ~~Return for correction~~ (§5c) | — | **Built** — approved by the owner; third exit from a pending result |
 | 11 | ~~Viewers panel used a roster `<select>`~~ (§4d) | — | **Fixed** — same typeahead as the candidate picker |
-| 12 | ~~Resumed evaluations silently reported an unreliable clock~~ (§4a) | — | **Fixed** — `resume_count`, duration marked unverified everywhere it is shown |
-| 13 | **Offline (§4a)** | L | **Partly started.** Scope decided (A+B); resumption + logout guard shipped; Phases 1–3 blocked on §5 |
+| 12 | **Offline (§4a)** | L | **Not started.** Scope decided (plan options A+B); §5 still open — see below |
 
 ### What offline still needs
 
@@ -402,49 +401,46 @@ The owner has chosen **plan options A+B**: persist an in-progress evaluation
 locally and replay writes in order on reconnect, *and* allow starting a test
 from a device that has never had signal for it.
 
-**Resumption, not a louder warning.** The first pass here overweighted logout:
-an examiner offline enough to be signing out mid-drill has larger problems than
-a dialog, and the evaluation was never as lost as the warning claimed —
-everything up to the last successful save is on the server, and the records
-list already offers the test back with "Tap to resume".
+One thing that decision does not settle, and implementation should not start
+without it: **§5, shared-station devices.** Logout purges every offline store,
+and A+B means a named member's scorecard sits in IndexedDB on a browser profile
+the whole watch shares. That is a new exposure on a module carrying PHI-adjacent
+data, and it is a retention policy question rather than an engineering one.
 
-What was actually missing was honesty about the **clock**. The timer lives in
-memory and is restored from `elapsed_seconds`, so a resumed evaluation counts
-on from the last save: time between that save and the interruption is missing,
-and time spent getting back into the test is not. For an untimed sheet that is
-immaterial. For a timed evolution — where the duration may itself be the
-criterion — the recorded seconds stop being evidence, and an officer validating
-one had no way to know.
-
-So `resume_count` is recorded and the duration is **marked**, not corrected.
-There is no honest way to reconstruct what the stopwatch would have read, and a
-corrected-looking number is worse than one openly uncertain. The examiner sees
-it while scoring, the scorecard and printed record carry a "Timing not
-verified" note, and the CSV export has a `Timing Verified` column so an audit
-packet cannot present a resumed reading as a clean one.
-
-The logout guard stays, scaled to what it actually is: the banner now says the
-marks *since the last save* are on this device — not that the evaluation is
-lost — and logout still names the evaluation before discarding it.
-
-What still blocks Phases 1–3 is the rest of **§5, shared-station devices.**
-A+B means a named member's scorecard sits in IndexedDB on a browser profile the
-whole watch shares, which is a new exposure on a module carrying PHI-adjacent
-data. Encrypt the queue at rest, or accept the exposure as a decision recorded
-in COMPLIANCE.md? That is a retention policy question, not an engineering one,
-and it should be answered before implementation rather than during it.
-
-Two things have already narrowed the gap this feature was closing:
+Two things already narrow the gap:
 
 - **The printable blank sheet** (§5d) covers the no-coverage case today. An
   examiner at a county training ground has a working fallback rather than a
   screen that cannot save.
-- **Autosave plus optimistic concurrency** already covers the common
-  same-signal loss: a locked phone, a killed tab, a second examiner on the
-  same test.
+- **Autosave, plus resumption.** A locked phone, a call, a walk back to the
+  apparatus: `loadTest` restores the clock from `elapsed_seconds` and
+  `resumedTestRef` drops the examiner back on the step they had reached rather
+  than at section 1. Re-entry is already the supported path.
 
-What remains uncovered is the signal *dropping mid-evolution*, which is what
-A+B is for.
+### Deliberately not built: interruption bookkeeping
+
+A first pass added a `resume_count` column, a derived `timing_verified` flag,
+and "timing not verified" notes on the examiner screen, the scorecard, the
+printed record and the CSV export — on the reasoning that a resumed clock is no
+longer a stopwatch reading, so the app should say so.
+
+**Reverted, on the owner's call, and worth recording rather than rediscovering.**
+A skills evaluation is two people standing in an apparatus bay. If an evolution
+gets interrupted, the examiner and the training officer settle it in person —
+that conversation is the control, and it is a better one than a flag. The app's
+job is to record what they decide and stay out of the way; a system that
+annotates its own uncertainty across four surfaces is adjudicating something it
+cannot see, and invites an officer to trust a badge instead of asking.
+
+What the humans already have is sufficient: the test reopens where they left
+it, the examiner has a free-text note on the test and on every criterion, and
+an officer reviews before validating. An examiner whose timing was disrupted
+writes that down; the officer reads it.
+
+The same reasoning applies to logout. A guard was built and reverted: an
+examiner offline enough to be signing out mid-drill has larger problems than a
+dialog, everything up to the last save is on the server, and the records list
+offers the test straight back.
 
 ### Not fixed, noted while passing
 

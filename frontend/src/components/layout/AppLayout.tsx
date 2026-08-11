@@ -16,7 +16,6 @@ import { usePullToRefreshContext } from '../../contexts/PullToRefreshContext';
 import { useScrollToTopOnNavigate } from '../../hooks/useScrollToTopOnNavigate';
 import { PullToRefreshIndicator } from '../PullToRefreshIndicator';
 import { BottomNavigation } from './BottomNavigation';
-import { getPendingSkillsWork, setPendingSkillsWork } from '../../utils/pendingSkillsWork';
 
 /** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS.
  *  Only safe raster image data URIs are allowed — SVG can contain embedded JS. */
@@ -118,25 +117,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     return () => window.removeEventListener('branding-updated', onBrandingUpdate);
   }, []);
 
-  // Read when the dialog opens rather than subscribed to, so the message
-  // describes the state at the moment the member asked to leave.
-  const [pendingSkills, setPendingSkills] = useState<string | null>(null);
-
   const handleLogoutClick = () => {
-    // Logout purges every local store — fire stations run on shared computers,
-    // and anything left in the browser profile is readable by whoever sits down
-    // next. Right for an equipment check, and wrong for a scored evaluation: an
-    // examiner who lost signal mid-drill and signed out lost the evaluation, on
-    // a candidate who had already gone home.
-    setPendingSkills(getPendingSkillsWork()?.label ?? null);
     setShowLogoutModal(true);
   };
 
   const handleLogoutConfirm = async () => {
-    // The member has been told and chose to go. Cleared here rather than left
-    // to the examiner screen's unmount, so the next person to sign in on this
-    // shared terminal is not warned about work that is already gone.
-    setPendingSkillsWork(null);
     await logout();
     sessionStorage.clear();
     void navigate('/login');
@@ -239,16 +224,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           void handleLogoutConfirm();
         }}
         onClose={handleLogoutCancel}
-        title={pendingSkills ? 'A skills evaluation has not been saved' : 'Confirm Logout'}
-        message={
-          pendingSkills
-            ? `"${pendingSkills}" is only on this device — the connection dropped before it could be saved. ` +
-              'Signing out clears it from this computer and the marks are gone for good. Stay signed in until it ' +
-              'saves, or sign out and lose it.'
-            : 'Are you sure you want to log out? Any unsaved changes may be lost.'
-        }
-        confirmLabel={pendingSkills ? 'Sign out and lose it' : 'Logout'}
-        {...(pendingSkills ? { cancelLabel: 'Stay signed in' } : {})}
+        title="Confirm Logout"
+        message="Are you sure you want to log out? Any unsaved changes may be lost."
+        confirmLabel="Logout"
         variant="danger"
       />
     </div>
