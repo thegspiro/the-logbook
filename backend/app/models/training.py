@@ -1988,9 +1988,10 @@ class ShiftCompletionReport(Base):
         if not self.shift:
             return None
         apparatus = self.shift.apparatus
-        if not apparatus:
-            return None
-        return apparatus.name or apparatus.unit_number
+        if apparatus:
+            return apparatus.unit_number or apparatus.name
+        basic = self.shift.basic_apparatus
+        return (basic.unit_number or basic.name) if basic else None
 
     @property
     def shift_start_time(self):
@@ -2969,6 +2970,13 @@ class Shift(Base):
     apparatus = relationship(
         "Apparatus",
         primaryjoin="foreign(Shift.apparatus_id) == Apparatus.id",
+        viewonly=True,
+        lazy="joined",
+        uselist=False,
+    )
+    basic_apparatus = relationship(
+        "BasicApparatus",
+        primaryjoin="foreign(Shift.apparatus_id) == BasicApparatus.id",
         viewonly=True,
         lazy="joined",
         uselist=False,

@@ -1175,6 +1175,7 @@ async def export_csv(
                 "Period",
                 "Pass",
                 "Fail",
+                "Not Applicable",
                 "Not Checked",
             ]
         )
@@ -1184,6 +1185,7 @@ async def export_csv(
                     t.get("period", ""),
                     t.get("pass_count", 0),
                     t.get("fail_count", 0),
+                    t.get("not_applicable_count", 0),
                     t.get("not_checked_count", 0),
                 ]
             )

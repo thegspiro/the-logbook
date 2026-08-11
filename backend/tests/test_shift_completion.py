@@ -976,6 +976,26 @@ class TestShiftDataPreview:
 
 
 class TestEquipmentCheckTrainingLink:
+    def test_report_identity_supports_onboarding_apparatus(self):
+        from app.models.apparatus import Apparatus
+        from app.models.training import (
+            BasicApparatus,
+            Shift,
+            ShiftCompletionReport,
+        )
+
+        apparatus = BasicApparatus(unit_number="E-1", name="Engine 1")
+        shift = Shift()
+        shift.basic_apparatus = apparatus
+        report = ShiftCompletionReport()
+        report.shift = shift
+
+        assert report.apparatus_name == "E-1"
+
+        shift.basic_apparatus = None
+        shift.apparatus = Apparatus(unit_number="T-2", name="Old Reliable")
+        assert report.apparatus_name == "T-2"
+
     async def test_trainee_checks_become_auditable_report_tasks(self):
         check = SimpleNamespace(
             id="check-1",

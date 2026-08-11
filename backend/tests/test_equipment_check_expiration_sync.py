@@ -160,6 +160,15 @@ class TestComputeCheckStatus:
         assert (total, completed, failed, overall) == (1, 1, 1, "fail")
 
 
+class TestTrendOutcomeBuckets:
+    def test_new_outcomes_are_not_misreported_as_unchecked(self, service):
+        assert service._trend_bucket_for_status("not_applicable") == (
+            "not_applicable_count"
+        )
+        assert service._trend_bucket_for_status("out_of_service") == "fail_count"
+        assert service._trend_bucket_for_status("not_checked") == "not_checked_count"
+
+
 class TestApplyFoundValuesToTemplate:
     def test_expiration_written_back_to_template(self, service):
         item = _template_item()

@@ -488,6 +488,7 @@ export interface ItemTrendEntry {
   period: string;
   passCount: number;
   failCount: number;
+  notApplicableCount: number;
   notCheckedCount: number;
 }
 

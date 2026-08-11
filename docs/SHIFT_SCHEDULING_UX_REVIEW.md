@@ -432,6 +432,16 @@ in a screen-only review:
    source-id deduplication so a retry cannot award it twice. Likewise, a trainee
    cannot acknowledge a draft, pending-review or flagged report by calling the
    acknowledgement endpoint directly.
+8. **New outcomes must remain distinct in analytics.** The first implementation
+   correctly treated Out of service as a failure in readiness and deficiency
+   reports, but the item-trend fallback grouped Not applicable with Not checked.
+   Trend responses, charts and CSV exports now carry a separate Not applicable
+   count, and history renders human-readable labels for both new outcomes.
+9. **Shift apparatus identity is polymorphic.** Scheduling can reference either
+   a full Apparatus record or the lightweight BasicApparatus created during
+   onboarding. Report identity initially resolved only the full module record;
+   it now resolves both, matching the apparatus options and equipment-check
+   paths instead of dropping the unit label for onboarding-only departments.
 
 ### Next controls for review quality
 
