@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import { getPendingSkillsWork, setPendingSkillsWork } from '../utils/pendingSkillsWork';
 import ActiveSkillTestPage from './ActiveSkillTestPage';
 
 // Mock the store
@@ -970,6 +971,76 @@ describe('ActiveSkillTestPage', () => {
       await user.click(screen.getByRole('button', { name: /leave this test/i }));
 
       expect(mockNavigate).toHaveBeenCalledWith('/training/skills-testing');
+    });
+  });
+
+  // Logout purges every local store on a shared station profile, so an
+  // evaluation only this browser is holding is the one state where the work can
+  // actually be lost — and it was signalled by the words "Not saved" beside a
+  // timer the examiner is watching for other reasons.
+  describe('Work only this device is holding', () => {
+    beforeEach(() => setPendingSkillsWork(null));
+
+    it('says plainly that the evaluation is not on the server', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      mockUpdateTest.mockRejectedValue(new Error('Network Error'));
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(await screen.findByText(/only on this device/i)).toBeInTheDocument();
+      expect(screen.getByText(/Do not sign out or close this tab/i)).toBeInTheDocument();
+    });
+
+    it('registers the work so logout can warn about it by name', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      mockUpdateTest.mockRejectedValue(new Error('Network Error'));
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      await waitFor(() => expect(getPendingSkillsWork()).not.toBeNull());
+      expect(getPendingSkillsWork()?.testId).toBe('test-1');
+      expect(getPendingSkillsWork()?.label).toContain('SCBA');
+    });
+
+    it('clears the warning once a save lands', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      mockUpdateTest.mockRejectedValue(new Error('Network Error'));
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+      await waitFor(() => expect(getPendingSkillsWork()).not.toBeNull());
+
+      mockUpdateTest.mockResolvedValue(mockTestWithSections);
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      await waitFor(() => expect(getPendingSkillsWork()).toBeNull());
+      expect(screen.queryByText(/only on this device/i)).not.toBeInTheDocument();
+    });
+
+    // A save in flight is not yet a loss, and warning on it would train
+    // examiners to click through the dialog.
+    it('does not warn while saves are landing normally', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockTestWithSections;
+      mockUpdateTest.mockResolvedValue(mockTestWithSections);
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: 'PASS' }));
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      // The save landing is what matters, not its exact payload — the point is
+      // that a successful write leaves nothing registered as at risk.
+      await waitFor(() => expect(getPendingSkillsWork()).toBeNull());
+      expect(mockUpdateTest).toHaveBeenCalledWith('test-1', expect.any(Object));
+      expect(screen.queryByText(/only on this device/i)).not.toBeInTheDocument();
     });
   });
 });

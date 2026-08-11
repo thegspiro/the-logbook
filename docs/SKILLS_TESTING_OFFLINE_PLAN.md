@@ -1,6 +1,17 @@
 # Skills Testing — Offline Support Implementation Plan
 
-> Status: **Scoping document for review. No implementation code has been written.**
+> Status: **Scoping document for review. Phases 1–3 are unimplemented.**
+>
+> **Decided (2026-08-11):** scope is **A+B** — the department's failure mode
+> includes arriving at a facility with no coverage at all, so §6 is answered
+> and the queue must be keyed on **client ids**.
+>
+> **Shipped (2026-08-11):** §5's first option, the logout guard, which the
+> table below notes should ship regardless of the other two. See §5.3. The
+> larger §5 question — whether to encrypt the queue at rest or accept the
+> shared-profile exposure as a recorded decision — is **still open and still
+> blocks Phase 1**, because A+B is what puts a named member's scorecard in
+> IndexedDB in the first place.
 > Autosave for the active test screen already shipped (`useAutoSave` wired into
 > `ActiveSkillTestPage`) and covers the common data-loss case — a locked phone
 > or a killed tab while the device still has signal. This document scopes the
@@ -186,6 +197,32 @@ Three ways forward, in rough order of cost:
 **This is an owner decision.** The implementation cannot sensibly pick for you,
 and the first option is cheap enough that it should probably ship regardless of
 which of the other two is chosen.
+
+### 5.3 Shipped — the logout guard
+
+Built ahead of the rest, on the reasoning above: it is cheap, it is correct
+whichever way the retention question goes, and the loss it prevents already
+happens today without any offline queue at all.
+
+- `utils/pendingSkillsWork.ts` is the registry logout consults. Deliberately a
+  description of *what* is unsaved rather than a boolean about one screen, so
+  the Phase 1/2 queue registers through it unchanged.
+- `ActiveSkillTestPage` registers on the **failed** save state — a save in
+  flight is not yet a loss, and warning on it would train examiners to click
+  through the dialog — and clears it when a save lands. Scoped by test id, so
+  opening a second evaluation cannot clear the first one's warning.
+- The screen now says so plainly. "Not saved" was a status word beside a timer
+  the examiner is watching for other reasons, which meant the one state where
+  work can actually be lost said the least. It is now a banner naming the
+  consequence, with a retry.
+- `AppLayout` names the evaluation in the logout confirmation and offers
+  **Stay signed in** / **Sign out and lose it**, rather than the generic
+  "unsaved changes may be lost". The registration is cleared on a confirmed
+  logout, so the next member on that shared terminal is not warned about work
+  that is already gone.
+
+What this does *not* do is save the work. It converts a silent loss into an
+informed choice, which is the whole of what it claims.
 
 ---
 

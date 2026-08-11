@@ -393,7 +393,7 @@ seed data; the import path (§3c) is the next one to cover.
 | 9 | ~~No starter template library~~ (§3b) | — | **Built** — copy-on-demand, lands as a draft |
 | 10 | ~~Return for correction~~ (§5c) | — | **Built** — approved by the owner; third exit from a pending result |
 | 11 | ~~Viewers panel used a roster `<select>`~~ (§4d) | — | **Fixed** — same typeahead as the candidate picker |
-| 12 | **Offline (§4a)** | L | **Not started.** Scope decided (plan options A+B); §5 still open — see below |
+| 12 | **Offline (§4a)** | L | **Partly started.** Scope decided (A+B); the logout guard shipped; Phases 1–3 blocked on §5 — see below |
 
 ### What offline still needs
 
@@ -401,13 +401,20 @@ The owner has chosen **plan options A+B**: persist an in-progress evaluation
 locally and replay writes in order on reconnect, *and* allow starting a test
 from a device that has never had signal for it.
 
-One thing that decision does not settle, and implementation should not start
-without it: **§5, shared-station devices.** Logout currently purges unsynced
-work, and A+B means a named member's scorecard sits in IndexedDB on a browser
-profile the whole watch shares. That is a new exposure on a module that carries
-PHI-adjacent data, and it is a retention policy question rather than an
-engineering one. The plan's cheapest mitigation — block logout while skills
-work is pending — is worth shipping whichever way the larger question goes.
+**The logout guard has shipped** (plan §5.3). It was the one piece worth
+building ahead of the rest: cheap, correct whichever way the retention question
+goes, and it prevents a loss that already happens today with no offline queue
+at all. An examiner whose saves are failing now gets a banner naming the
+consequence rather than the words "Not saved", and logout names the evaluation
+and offers *Stay signed in* / *Sign out and lose it*. It does not save the
+work — it converts a silent loss into an informed choice.
+
+What still blocks Phases 1–3 is the rest of **§5, shared-station devices.**
+A+B means a named member's scorecard sits in IndexedDB on a browser profile the
+whole watch shares, which is a new exposure on a module carrying PHI-adjacent
+data. Encrypt the queue at rest, or accept the exposure as a decision recorded
+in COMPLIANCE.md? That is a retention policy question, not an engineering one,
+and it should be answered before implementation rather than during it.
 
 Two things have already narrowed the gap this feature was closing:
 

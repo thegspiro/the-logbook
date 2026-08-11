@@ -47,6 +47,7 @@ import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
+import { clearPendingSkillsWork, setPendingSkillsWork } from '../utils/pendingSkillsWork';
 import { TestViewersPanel } from '../components/training/TestViewersPanel';
 import { SkillTestOfficerActions } from '../components/training/SkillTestOfficerActions';
 import { ScoreBreakdownPanel } from '../components/training/ScoreBreakdownPanel';
@@ -1058,6 +1059,10 @@ export const ActiveSkillTestPage: React.FC = () => {
   // Nobody presses Save on a screen they are using with gloves on, so the
   // examiner needs to be told, without asking, that their scoring is safe.
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  // Read by the unmount cleanup, which must not re-run on every save.
+  const saveStateRef = useRef(saveState);
+  saveStateRef.current = saveState;
+  const currentTestIdRef = useRef<string | null>(null);
 
   // Load the test
   useEffect(() => {
@@ -1212,6 +1217,41 @@ export const ActiveSkillTestPage: React.FC = () => {
     saved: 'Saved',
     failed: 'Not saved',
   }[saveState];
+
+  // Tell the logout guard there is work only this browser is holding.
+  //
+  // 'Not saved' as a status word was the only signal that an evaluation existed
+  // solely in memory, and logout purges every local store on a shared station
+  // profile — so an examiner who lost signal mid-drill and signed out lost the
+  // evaluation, on a candidate who had already gone home.
+  //
+  // Registered on the failed state rather than on every keystroke: a save in
+  // flight is not yet a loss, and warning on it would train examiners to click
+  // through the dialog.
+  useEffect(() => {
+    if (!currentTest) return;
+    currentTestIdRef.current = currentTest.id;
+    if (saveState !== 'failed') {
+      clearPendingSkillsWork(currentTest.id);
+      return;
+    }
+    setPendingSkillsWork({
+      testId: currentTest.id,
+      label: `${currentTest.template_name ?? 'Skills evaluation'} for ${currentTest.candidate_name ?? 'a candidate'}`,
+    });
+  }, [saveState, currentTest?.id, currentTest?.template_name, currentTest?.candidate_name, currentTest]);
+
+  // Leaving the screen does not make the work safe, so the registration
+  // deliberately outlives this component — it is cleared when a save lands, or
+  // when the member discards it at logout. Scoped by id so opening a second
+  // evaluation cannot clear the first one's warning.
+  useEffect(
+    () => () => {
+      const id = currentTestIdRef.current;
+      if (id && saveStateRef.current !== 'failed') clearPendingSkillsWork(id);
+    },
+    []
+  );
 
   /** Set the clock running, and stamp the test as under way the first time.
    *
@@ -2219,6 +2259,30 @@ export const ActiveSkillTestPage: React.FC = () => {
             className="mt-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700"
           >
             Reload current results
+          </button>
+        </div>
+      )}
+
+      {/* An evaluation only this browser is holding. 'Not saved' as a status
+          word was the only signal, and it sits beside a timer an examiner is
+          watching for other reasons — so the one state where the work can
+          actually be lost said the least. Logout purges every local store on a
+          shared station profile, which is what makes this worth a banner
+          rather than a colour change. */}
+      {saveState === 'failed' && !conflict && (
+        <div className="border-b border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-900/20">
+          <p className="text-sm font-medium text-red-900 dark:text-red-100">
+            Not saved — this evaluation is only on this device
+          </p>
+          <p className="mt-1 text-sm text-red-800 dark:text-red-200">
+            Keep scoring; it will save as soon as the connection is back. Do not sign out or close this tab until it
+            does, or the marks are lost.
+          </p>
+          <button
+            onClick={() => void handleSaveProgress()}
+            className="mt-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+          >
+            Try saving now
           </button>
         </div>
       )}
