@@ -594,19 +594,13 @@ class EquipmentCheckService:
         item_data: Dict[str, Any],
         tmpl_item: Optional[CheckTemplateItem],
     ) -> Optional[date]:
-        """The expiration that governs this item result, newest source wins.
+        """Resolve the authoritative expiration for this item result.
 
-        ``expiration_found`` is what the crew read off a unit they replaced
-        during the check and therefore supersedes the template's stored date.
-        Otherwise the template is authoritative: it is the department's record
-        of what is on the truck, and it is what the supply worklist and the
-        next check will both read. The client's own ``expiration_date`` is only
-        consulted when no template item resolves (a check submitted with no
-        template linkage at all).
+        The template is authoritative because changes to its expiration must
+        go through the validated inventory-lot swap flow. ``expiration_found``
+        remains part of the check result as an observation, but a check
+        submitter cannot use it to clear an expired equipment record.
         """
-        found = item_data.get("expiration_found")
-        if found:
-            return found
         if tmpl_item is not None:
             return tmpl_item.expiration_date if tmpl_item.has_expiration else None
         return item_data.get("expiration_date")
@@ -621,9 +615,9 @@ class EquipmentCheckService:
 
         Expiry is recomputed here rather than taken from the submitted
         ``is_expired`` flag: it decides whether a safety-critical item is
-        force-failed, so it must come from the department's own record (or from
-        the replacement the crew just logged), not from whatever the client
-        asserted. ``item["is_expired"]`` and ``item["expiration_date"]`` are
+        force-failed, so it must come from the department's own record, not
+        from whatever the client asserted. ``item["is_expired"]`` and
+        ``item["expiration_date"]`` are
         normalized in place so the stored result agrees with the verdict.
 
         Returns (total, completed, failed, overall_status).
@@ -665,11 +659,9 @@ class EquipmentCheckService:
     ) -> bool:
         """Write a swapped-in unit's identifiers back onto the template item.
 
-        The template row is the department's record of what is physically on
-        the apparatus, so a replacement logged during a check has to land there
-        — the next check, the expiry auto-fail and the supply worklist all read
-        it. The expiration in particular: without it a replaced unit keeps the
-        old date and fails every check from then on.
+        Serial and lot observations remain synchronized for existing behavior.
+        Expiration observations are deliberately not applied here: only the
+        validated inventory-lot swap flow may change the authoritative date.
 
         Returns True when the template actually changed.
         """
@@ -679,19 +671,13 @@ class EquipmentCheckService:
             tmpl_item.serial_number or ""
         )
         lot_changed = lot_found and lot_found != (tmpl_item.lot_number or "")
-        expiration_changed = (
-            expiration_found and expiration_found != tmpl_item.expiration_date
-        )
-        if not (serial_changed or lot_changed or expiration_changed):
+        if not (serial_changed or lot_changed):
             return False
 
         if serial_found:
             tmpl_item.serial_number = serial_found
         if lot_found:
             tmpl_item.lot_number = lot_found
-        if expiration_found:
-            tmpl_item.has_expiration = True
-            tmpl_item.expiration_date = expiration_found
         return True
 
     async def _create_check_items(
@@ -798,6 +784,7 @@ class EquipmentCheckService:
         self,
         items_data: List[Dict[str, Any]],
         organization_id: str,
+        template_id: str,
     ) -> Dict[str, CheckTemplateItem]:
         """Load CheckTemplateItem records referenced by the submitted items.
 
@@ -823,6 +810,7 @@ class EquipmentCheckService:
                 .where(
                     CheckTemplateItem.id.in_(template_item_ids),
                     EquipmentCheckTemplate.organization_id == organization_id,
+                    EquipmentCheckTemplate.id == template_id,
                 )
             )
             for ti in tmpl_result.scalars().all():
@@ -887,7 +875,7 @@ class EquipmentCheckService:
         # from the template item (see _compute_check_status), so the map has to
         # exist before any item can be force-failed.
         template_items_map = await self._load_template_items_map(
-            items_data, organization_id
+            items_data, organization_id, template_id
         )
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map
@@ -1034,8 +1022,12 @@ class EquipmentCheckService:
         # See submit_check: the template map decides expiry, so it is loaded
         # before the status computation rather than just before the write.
         template_items_map = await self._load_template_items_map(
-            items_data, organization_id
+            items_data, organization_id, template_id
         )
+        submitted_ids = {item["template_item_id"] for item in items_data}
+        invalid = submitted_ids - template_items_map.keys()
+        if invalid:
+            raise ValueError(f"Items do not belong to template: {', '.join(invalid)}")
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map
         )
@@ -1118,7 +1110,7 @@ class EquipmentCheckService:
         # the template too — otherwise which write path the crew happened to
         # take decides whether the truck's record gets updated.
         template_items_map = await self._load_template_items_map(
-            items_data, organization_id
+            items_data, organization_id, check.template_id
         )
         today = date.today()
 
