@@ -1007,6 +1007,35 @@ valuable half. Worth another attempt with a fresh idea about which of the
 member's shifts carry an unclaimed checklist — the first pass drove it from
 `/scheduling/my-shifts`, whose result did not line up with what the page lists.
 
+The same scoping blocks the **incomplete-check warning** ("Submit an incomplete
+check? — _N_ of _M_ items have not been checked"), which is raised from the
+check form before anything is written and would otherwise be a
+straightforward capture. Two attempts to reach the form failed: the checklist
+rows are empty for the administrator the harness signs in as, and driving it
+through **Start a Check** did not get as far as the template picker either.
+Reaching it needs the seeding above, or a member session whose own shift carries
+an unstarted checklist.
+
+## Screenshot Seeding — Apparatus Inventory Is Empty For Every Truck (2026-08-11)
+
+Deferred, with a plan. `03-scheduling.md` documents the Apparatus Inventory page
+— counted positions, a short position in amber, lots aboard with their dates —
+and the demo shows nothing at all: `GET /equipment-checks/apparatus/{id}/inventory`
+returns `compartments: []` for all seven apparatus.
+
+Not a defect. The endpoint joins template compartments to an apparatus by
+`EquipmentCheckTemplate.apparatus_id`, and both seeded templates are bound by
+`apparatus_type` instead, which is what a checklist that applies to every engine
+looks like. Nothing in the demo is stocked _on a particular truck_.
+
+Filling it means a third template bound to one apparatus by id, carrying counted
+positions — one at par, one short, one with lots — and that is where the care is
+needed: `_resolve_templates` matches a shift's checklists by `apparatus_id`
+**or** `apparatus_type`, so an id-bound template attaches to that apparatus's
+shifts as well and can change the checklist counts in the equipment-check shots
+already published. Seed it, then re-capture the neighbouring shots and diff the
+images before applying.
+
 ## Prospective Members — A Configured Checklist Stage Cannot Be Passed (2026-08-11)
 
 Blocking, for any department that fills in a checklist stage's item list.
@@ -1081,6 +1110,7 @@ phase, and the hours are recorded — so the documentation is no longer wrong. T
 feature itself is a real one worth having, but it is a change to the RSVP path
 across the API and the UI, not a screenshot, and building it here would have
 been a feature shipped under cover of a documentation task.
+
 ## Scheduling — The Compliance Report Counts Member-Requirement Pairs (2026-08-10)
 
 `SchedulingReportsPage.tsx` computes the **Total Members** card as
