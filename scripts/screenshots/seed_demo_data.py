@@ -7846,6 +7846,107 @@ class Seeder:
 
     # -- facilities: maintenance & inspections -----------------------
 
+    # name, description, membership types, priority, how many requirements
+    COMPLIANCE_PROFILES = [
+        (
+            "Line Officers",
+            "Officers carry the full requirement set and are held to it strictly.",
+            ["active"],
+            10,
+            3,
+        ),
+        (
+            "Probationary Members",
+            "A probationary member is graded on the core set only, until release.",
+            ["probationary"],
+            5,
+            1,
+        ),
+    ]
+
+    def seed_compliance_profiles(self) -> dict[str, Any]:
+        """Save a compliance configuration, then the profiles it unlocks.
+
+        The Profiles tab refuses to build anything until a threshold
+        configuration has been saved — "Save the compliance thresholds first
+        before creating profiles" — and a department that has only ever *looked*
+        at the Thresholds tab has not saved one: the numbers it shows before a
+        first save are the code's defaults, not a stored row. So the tab renders
+        that notice and nothing else, which is a truthful screen of an
+        unconfigured department and a useless one for documenting profiles.
+        """
+        config = self.api.get("/compliance/config")
+        if not config:
+            config = self.api.post(
+                "/compliance/config/initialize",
+                {
+                    "threshold_type": "percentage",
+                    "compliant_threshold": 100,
+                    "at_risk_threshold": 75,
+                    "grace_period_days": 0,
+                    "notify_on_non_compliant": False,
+                    "reminder_days": [30, 14, 7],
+                },
+            )
+
+        existing = {p.get("name") for p in items(config, "profiles")}
+        # One id per *distinct name*. The department carries three separate
+        # requirements all called "Aerial Operations" — one per program — and
+        # the picker returns only id, name, type, source and frequency, so
+        # nothing at any layer tells them apart. Three identical chips on a
+        # profile read as a rendering bug when they are the honest answer, and
+        # they teach nothing about what a profile is for.
+        seen_names: set[str] = set()
+        requirement_ids = []
+        for requirement in items(
+            self.api.get("/compliance/config/requirements"), "requirements"
+        ):
+            name = str(pick(requirement, "name") or "")
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            requirement_ids.append(pick(requirement, "id"))
+        created = 0
+        for name, description, types, priority, wanted in self.COMPLIANCE_PROFILES:
+            if name in existing:
+                continue
+            self.api.post(
+                "/compliance/config/profiles",
+                {
+                    "name": name,
+                    "description": description,
+                    "membership_types": types,
+                    # Sliced from whatever the department actually has rather
+                    # than named: requirement ids are per-install, and a profile
+                    # naming one that does not exist is refused.
+                    "required_requirement_ids": requirement_ids[:wanted],
+                    "is_active": True,
+                    "priority": priority,
+                },
+            )
+            created += 1
+
+        reports = self.api.get("/compliance/reports?limit=20")
+        if not items(reports, "reports"):
+            # One generated report, so Report History is a history rather than
+            # its own empty state. Last month rather than this one: a report for
+            # a month still in progress grades everyone against requirements
+            # they still have time to meet, which is not what the screen is for.
+            first_of_month = TODAY.replace(day=1)
+            previous = first_of_month - timedelta(days=1)
+            self.api.post(
+                "/compliance/reports/generate",
+                {
+                    "report_type": "monthly",
+                    "year": previous.year,
+                    "month": previous.month,
+                    # Never true here. Generating a report is safe to seed;
+                    # mailing one to every officer in the demo department is not.
+                    "send_email": False,
+                },
+            )
+        return {"profiles_created": created}
+
     def seed_facility_activity(self, facilities: list[dict]) -> dict[str, list[dict]]:
         maintenance = items(self.api.get("/facilities/maintenance"), "maintenance")
         inspections = items(self.api.get("/facilities/inspections"), "inspections")
@@ -8325,6 +8426,7 @@ class Seeder:
             )
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
+        self.step("compliance profiles", self.seed_compliance_profiles)
         self.step("facility activity", lambda: self.seed_facility_activity(facilities))
         self.step("storefront", self.seed_storefront)
         finance = self.step("finance", self.seed_finance) or {}

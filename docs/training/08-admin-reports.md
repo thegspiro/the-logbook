@@ -467,9 +467,6 @@ Scheduled tasks run automatically on a schedule:
 | **Process Scheduled Emails**          | Send pending pipeline automated emails (polls every 60 seconds) _(added 2026-03-13)_ |
 | **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                      |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Scheduled Tasks page showing a list of tasks with name, frequency, last run time, next run time, and enabled toggle switches]_
-
 **Not yet built:** there is no **Administration > Scheduled Tasks** page. The
 tasks above are real and do run — see the in-process runner below — but the
 only way to inspect them is the API: `GET /scheduled/tasks` lists every task
@@ -1052,6 +1049,19 @@ Profiles allow different compliance standards for different groups:
    - **Threshold overrides** — optionally set different thresholds for this group
 3. Set **priority** — when a member matches multiple profiles, the highest-priority profile applies
 
+![The Profiles tab: each profile with the groups it targets and the requirements it demands](./images/08-70-compliance-profiles.png)
+
+> **Profiles are refused until the thresholds have been saved once.** The tab
+> says so — "Save the compliance thresholds first before creating profiles" —
+> and the trap is that the Thresholds tab _looks_ configured before that save:
+> the numbers it shows are the code's defaults, not a stored row. Open
+> Thresholds, press **Save Configuration**, then come back.
+
+> **Requirements are picked by name, and names repeat.** A department running
+> the same requirement under several programs has several entries with the same
+> name, and the picker shows only the name — so which one a profile got is not
+> recoverable from the screen. Rename the duplicates if that matters to you.
+
 ![Compliance requirements configuration: the Thresholds tab, with its status preview and reminder schedule](./images/08-69-compliance-requirements-config.png)
 
 The page carries **four tabs** — Thresholds, Profiles, Auto Reports and Report
@@ -1075,8 +1085,25 @@ change means what was intended before saving it.
 3. Optionally check **Send via email**
 4. The report shows overall compliance rates, per-member status, and trends
 
-> **Screenshot needed:**
-> _[Screenshot of the report generation dialog showing report type selector, send via email checkbox, additional recipients field, and a preview of a generated compliance report with member status table]_
+![Generating a compliance report, and the history it lands in](./images/08-71-compliance-report-history.png)
+
+The form takes a **type**, a **year**, a **month** and an **Email report**
+switch; the additional-recipients field appears once that switch is on.
+Generated reports land in the **Report History** list beneath it, each row
+carrying its period, when it was generated, how long it took, and the headline
+compliance figure.
+
+> **Monthly and annual currently produce the same figures.** A monthly report is
+> generated from the whole year and then labelled with the month — the period
+> label, the stored month and the history row are right, the numbers behind them
+> are the year's. Read a monthly report as a year-to-date one until this is
+> resolved; it is recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+> **0% compliant is not necessarily a fault.** With the compliant threshold at
+> 100% — the default — a member missing one requirement out of the department's
+> whole set counts as non-compliant, so a department that has not tuned its
+> thresholds or built profiles will read 0%. The **At-Risk** band is what
+> separates "nearly there" from "nowhere near".
 
 ---
 

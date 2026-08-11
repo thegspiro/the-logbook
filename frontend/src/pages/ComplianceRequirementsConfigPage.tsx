@@ -10,6 +10,7 @@
 
 import type { ChangeEvent, ReactElement } from 'react';
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Settings,
   Users,
@@ -49,7 +50,8 @@ const labelClass = 'form-label';
 const checkboxClass =
   'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800';
 
-type ActiveTab = 'thresholds' | 'profiles' | 'reports' | 'schedule';
+const COMPLIANCE_CONFIG_TABS = ['thresholds', 'profiles', 'reports', 'schedule'] as const;
+type ActiveTab = (typeof COMPLIANCE_CONFIG_TABS)[number];
 
 const MEMBERSHIP_TYPES = [
   'active',
@@ -72,7 +74,21 @@ const REPORT_FREQUENCIES = [
 export default function ComplianceRequirementsConfigPage() {
   const { confirm } = useConfirm();
   const tz = useTimezone();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('thresholds');
+  // All four tabs are addressable. They were plain state, so the report
+  // history and the profile list — the two an officer has cause to send a
+  // colleague — could not be linked to, and the Back button did nothing after
+  // a tab change.
+  //
+  // Derived from the URL rather than mirrored into state: mirroring reads the
+  // parameter once, on mount, so every later URL change is ignored, which is
+  // exactly what Back is. Fourth page to get this treatment, after Email
+  // Templates, Notifications and Medical Screening.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab: ActiveTab = COMPLIANCE_CONFIG_TABS.includes(requestedTab as ActiveTab)
+    ? (requestedTab as ActiveTab)
+    : 'thresholds';
+  const setActiveTab = (tab: ActiveTab) => setSearchParams({ tab });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [config, setConfig] = useState<ComplianceConfigData | null>(null);

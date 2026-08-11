@@ -4012,6 +4012,29 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "08-70-compliance-profiles",
+    doc: "08-admin-reports.md",
+    line: 1044,
+    // Applied by hand: the placeholder this replaces was a bullet list, not a
+    // `> _[Screenshot …]_` block, so there was nothing for the anchor matcher
+    // to find.
+    anchor: "Set **priority** — when a member matches multiple profiles",
+    alt: "The Profiles tab: each profile with the groups it targets and the requirements it demands",
+    // `?tab=profiles` only started working on 2026-08-11 — plain state before
+    // that, so this shot would have silently captured the Thresholds tab.
+    route: "/training/compliance-config?tab=profiles",
+    fullPage: true,
+  },
+  {
+    id: "08-71-compliance-report-history",
+    doc: "08-admin-reports.md",
+    line: 1061,
+    anchor: "Screenshot of the report generation dialog showing report type selector",
+    alt: "Generating a compliance report: the type selector, the email switch and the extra recipients field",
+    route: "/training/compliance-config?tab=reports",
+    fullPage: true,
+  },
+  {
     id: "08-65-template-footer-selector",
     doc: "08-admin-reports.md",
     line: 1521,
