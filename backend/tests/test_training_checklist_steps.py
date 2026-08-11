@@ -13,10 +13,15 @@ signed off one at a time. Covers:
 DB mocked; no MySQL.
 """
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+from app.api.v1.endpoints.training_programs import (
+    _member_progress,
+    _member_requirement,
+)
 from app.models.training import RequirementProgressStatus, RequirementType
 from app.schemas.training_program import RequirementProgressUpdate
 from app.services.training_program_service import TrainingProgramService
@@ -91,6 +96,47 @@ class TestVisibilityAndProgress:
     def test_ticks_for_deleted_steps_are_ignored(self):
         assert checklist_progress(self.ITEMS, ["s1", "gone"]) == (1, 2)
         assert prune_done_ids(self.ITEMS, ["gone", "s2", "s2"]) == ["s2"]
+
+    @staticmethod
+    def _requirement_response_data():
+        now = datetime.now(timezone.utc)
+        return {
+            "id": uuid4(),
+            "organization_id": uuid4(),
+            "name": "Station orientation",
+            "requirement_type": "checklist",
+            "source": "department",
+            "frequency": "one_time",
+            "active": True,
+            "created_at": now,
+            "updated_at": now,
+            "checklist_items": TestVisibilityAndProgress.ITEMS,
+        }
+
+    def test_member_requirement_response_omits_officer_only_steps(self):
+        response = _member_requirement(self._requirement_response_data())
+
+        assert [item.id for item in response.checklist_items] == ["s1"]
+
+    def test_member_progress_omits_hidden_step_and_its_signoff_state(self):
+        now = datetime.now(timezone.utc)
+        response = _member_progress(
+            {
+                "id": uuid4(),
+                "enrollment_id": uuid4(),
+                "requirement_id": uuid4(),
+                "status": "in_progress",
+                "progress_value": 2,
+                "progress_percentage": 100,
+                "progress_notes": {"checklist_done": ["s1", "s2"]},
+                "requirement": self._requirement_response_data(),
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+
+        assert [item.id for item in response.requirement.checklist_items] == ["s1"]
+        assert response.progress_notes["checklist_done"] == ["s1"]
 
 
 def _progress(items, owner="u1", notes=None):
@@ -196,6 +242,24 @@ class TestCheckingOffSteps:
 
         assert out is None
         assert "training officer" in error
+
+    async def test_a_member_may_not_write_checklist_state_through_notes(self):
+        progress = _progress(self.ITEMS, owner="me", notes={"checklist_done": []})
+        svc = _svc(progress)
+
+        out, error = await svc.update_requirement_progress(
+            progress_id=uuid4(),
+            organization_id=uuid4(),
+            updates=RequirementProgressUpdate(
+                progress_notes={"checklist_done": ["s1", "s2"]}
+            ),
+            acting_user_id="me",
+            can_manage=False,
+        )
+
+        assert out is None
+        assert "training officer" in error
+        assert progress.progress_notes == {"checklist_done": []}
 
     async def test_ticks_are_rejected_on_a_non_checklist_requirement(self):
         progress = _progress(self.ITEMS)
