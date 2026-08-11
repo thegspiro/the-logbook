@@ -3705,6 +3705,12 @@ class MembershipPipelineService:
         )
 
         await self.db.commit()
+        # `created_at` / `updated_at` are server-side defaults, so the INSERT
+        # leaves them expired. The endpoint serialises this object through a
+        # response_model that requires both, and Pydantic's attribute read is
+        # synchronous — the lazy reload it triggers raises MissingGreenlet and
+        # the POST 500s on a package it did create. Load them here instead.
+        await self.db.refresh(pkg)
         return pkg
 
     _ELECTION_PKG_PROTECTED_FIELDS = frozenset(
