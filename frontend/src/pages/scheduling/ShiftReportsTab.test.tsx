@@ -99,7 +99,10 @@ describe('ShiftReportsTab — the view named in the URL', () => {
     searchParams = new URLSearchParams('view=nonsense');
     renderWithRouter(<ShiftReportsTab />);
 
-    expect(await screen.findByRole('button', { name: /Filed by Me/ })).toBeInTheDocument();
+    // The list's own empty state, not the toggle button: every view renders
+    // the whole toggle, so finding the button proved nothing about which view
+    // was selected. This string belongs to the filed list alone.
+    expect(await screen.findByText('No reports filed yet')).toBeInTheDocument();
     expect(screen.queryByText('New Shift Completion Report')).not.toBeInTheDocument();
   });
 });

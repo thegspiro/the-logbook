@@ -1048,7 +1048,7 @@ The shift report system supports a multi-stage review workflow:
 
 **For Trainees:**
 
-- Navigate to **My Reports** to see approved reports
+- Navigate to **About me** to see approved reports
 - Click **Acknowledge** to confirm you have reviewed the report
 - Add optional **comments** during acknowledgment
 - View personal statistics: total hours, calls, average rating, and monthly breakdown
@@ -1061,7 +1061,7 @@ The shift report system supports a multi-stage review workflow:
 
 ### Officer Analytics Dashboard _(2026-03-29)_
 
-The analytics sit at the top of the **Filed by Me** view — there is no separate
+The analytics sit at the top of the **Written by me** view — there is no separate
 dashboard view to switch to. They cover the whole department, not only the
 reports you filed:
 
@@ -1074,7 +1074,7 @@ reports you filed:
 
 ### Trainee Statistics Dashboard _(2026-03-29)_
 
-Trainees see a personal stats card at the top of their My Reports view:
+Trainees see a personal stats card at the top of their **About me** view:
 
 - **Total reports** received
 - **Total hours** logged across all reports

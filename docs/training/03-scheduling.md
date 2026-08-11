@@ -67,6 +67,17 @@ Click on any shift to open the **Shift Detail Panel** with full information, att
 
 ![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
 
+The panel opens with a **Readiness** line that answers the two questions an
+officer actually has — how many of the assigned crew are present, and whether
+the shift is staffed to its minimum ("1/1 present · 1/3 staffed —
+understaffed"). Any outstanding start-of-shift checks are named on the same
+line. Below it the crew board is headed by the rig it belongs to, and each open
+seat is listed by position rather than counted.
+
+A legend above the calendar says what its shift-block icons mean: **fully
+crewed**, **short-staffed**, **positions filled of the minimum**, and
+**apparatus unit**.
+
 ---
 
 ## My Shifts
@@ -1066,12 +1077,18 @@ already says.
 
 After a shift ends, officers finalize the shift to lock in data and trigger training pipeline integration.
 
-#### How to Finalize a Shift
+#### How to Close Out a Shift
 
 1. Open the **Shift Detail Panel** for a past, un-finalized shift
-2. Click **"Finalize Shift"** — a pre-finalization checklist modal appears
+2. Click **Close out shift** — a checklist headed **Before you close this
+   shift** opens in the panel
 
-![The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button](./images/03-45-finalize-checklist.png)
+> **The control is named "Close out shift", not "Finalize".** `is_finalized` is
+> still the flag underneath, and this guide and the API both use the word, but
+> the button names the thing an officer does at the end of a shift rather than
+> the column it sets.
+
+![The close-out checklist with the equipment-check block, attendance, call count, pass-down notes and the Close out shift button](./images/03-45-finalize-checklist.png)
 
 3. The checklist validates:
    - **End-of-shift equipment checks** — outstanding checks are called out,
@@ -1081,7 +1098,9 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
      and lets the officer proceed; with it on, finalizing needs a
      logged override reason
    - Attendance summary and call count shown for reference
-4. Click **Finalize** to confirm
+   - A staffing line when the shift ran under its minimum ("Ran understaffed —
+     1 of 4 positions filled")
+4. Click **Close out shift** to confirm
 
 #### What Happens on Finalization
 
@@ -1095,24 +1114,24 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
 
 After finalization, a green badge shows "Shift finalized on [date]" with a
 **Reopen** link beside it, and the pass-down note entered at close-out is
-shown underneath. The Finalize control is gone, but the crew roster keeps its
+shown underneath. The close-out control is gone, but the crew roster keeps its
 remove buttons — reopening is what unlocks the shift, not the badge alone.
 
 ![A finalized shift showing the green finalized badge with its date, the Reopen link and the pass-down note](./images/03-46-finalized-badge.png)
 
 #### Shift Finalization Edge Cases
 
-| Scenario                                 | Behavior                                                                   |
-| ---------------------------------------- | -------------------------------------------------------------------------- |
-| End-of-shift equipment checks incomplete | Finalization blocked; Finalize button disabled with tooltip explaining why |
-| Start-of-shift checks incomplete         | Does not block finalization                                                |
-| Shift has not ended yet                  | Finalize button not shown for future/in-progress shifts                    |
-| Already finalized shift                  | Finalize button replaced with finalized badge                              |
-| Editing a finalized shift                | Blocked — edit controls hidden after finalization                          |
-| Deleting a finalized shift               | Blocked — returns "Cannot delete a finalized shift" error                  |
-| Deleting a shift with completion reports | Blocked — returns "Cannot delete a shift with completion reports" error    |
-| Draft creation fails for one trainee     | Error logged; remaining trainees still get draft reports                   |
-| Attendee with no active enrollment       | No draft created for that attendee                                         |
+| Scenario                                 | Behavior                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------- |
+| End-of-shift equipment checks incomplete | Close-out blocked; the confirm button is disabled, with the reason above it |
+| Start-of-shift checks incomplete         | Does not block close-out                                                    |
+| Shift has not ended yet                  | Close-out button not shown for future/in-progress shifts                    |
+| Already finalized shift                  | Close-out button replaced with finalized badge                              |
+| Editing a finalized shift                | Blocked — edit controls hidden after finalization                           |
+| Deleting a finalized shift               | Blocked — returns "Cannot delete a finalized shift" error                   |
+| Deleting a shift with completion reports | Blocked — returns "Cannot delete a shift with completion reports" error     |
+| Draft creation fails for one trainee     | Error logged; remaining trainees still get draft reports                    |
+| Attendee with no active enrollment       | No draft created for that attendee                                          |
 
 ### Shift Reports Settings _(2026-04-04)_
 
@@ -2158,7 +2177,7 @@ Open a shift while it's active and you'll see a **readiness** strip at the top:
 Departments can require end-of-shift equipment checks to be complete before a
 shift is finalized. Turn it on in **Scheduling → Settings → Close-out rules**.
 
-- When it's on, the **Finalize** button is blocked while any end-of-shift check
+- When it's on, the **Close out shift** button is blocked while any end-of-shift check
   is outstanding. An officer can still **finalize with an override** by checking
   the box and entering a reason — the override is recorded in the audit log.
 - When it's off (the default), you can finalize freely, but you'll see a tip

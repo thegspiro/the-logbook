@@ -5736,7 +5736,12 @@ export const SHOTS = [
           !shift.is_cancelled &&
           /^Engine/i.test(shift.apparatus_name || ""),
       )(page);
-      await clickByName(/^Finalize$/i)(page);
+      // "Close out shift" since 2026-08-11 — it was "Finalize", which named the
+      // database flag rather than the thing an officer does at the end of a
+      // shift. The panel button and the checklist's confirm carry the same
+      // name, and the panel one is hidden once the checklist opens, so the
+      // first visible match is the right one either way.
+      await clickByName(/^Close out shift$/i)(page);
     },
     fullPage: true,
   },
@@ -5770,7 +5775,12 @@ export const SHOTS = [
           !shift.is_cancelled &&
           /^Engine/i.test(shift.apparatus_name || ""),
       )(page);
-      await clickByName(/^Finalize$/i)(page);
+      // "Close out shift" since 2026-08-11 — it was "Finalize", which named the
+      // database flag rather than the thing an officer does at the end of a
+      // shift. The panel button and the checklist's confirm carry the same
+      // name, and the panel one is hidden once the checklist opens, so the
+      // first visible match is the right one either way.
+      await clickByName(/^Close out shift$/i)(page);
     },
     fullPage: true,
   },
