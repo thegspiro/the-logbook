@@ -133,6 +133,37 @@ describe('SkillTemplateBuilderPage', () => {
   });
 
   describe('Validation', () => {
+    // A scored step's points come entirely from max_score — without one it is
+    // marked by the examiner and contributes nothing to the percentage. Same
+    // silent-zero shape as the unrenderable criterion type, caught here rather
+    // than in the API schema because the template PUT resends every section.
+    it('refuses to save a scored step with no max points', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await user.type(screen.getByPlaceholderText(/SCBA Proficiency Evaluation/i), 'Pump Ops');
+      await user.type(screen.getByPlaceholderText(/section name/i), 'Draft');
+      await user.type(screen.getByPlaceholderText(/dons scba/i), 'Priming technique');
+      await user.selectOptions(screen.getByDisplayValue('Pass / Fail'), 'score');
+
+      const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
+      await user.click(saveButtons[saveButtons.length - 1] as HTMLElement);
+
+      expect(screen.getByText(/Scored steps need a max points value/i)).toBeInTheDocument();
+      expect(mockCreateTemplate).not.toHaveBeenCalled();
+    });
+
+    it('warns inline while the max points box is still empty', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await user.selectOptions(screen.getByDisplayValue('Pass / Fail'), 'score');
+      expect(screen.getByText(/earns no points toward the score/i)).toBeInTheDocument();
+
+      await user.type(screen.getByPlaceholderText('3'), '5');
+      expect(screen.queryByText(/earns no points toward the score/i)).not.toBeInTheDocument();
+    });
+
     it('should show validation errors when template name is empty', async () => {
       const user = userEvent.setup();
       renderWithRouter(<SkillTemplateBuilderPage />);
@@ -468,6 +499,11 @@ describe('SkillTemplateBuilderPage', () => {
       await user.click(timingCheckbox());
       // Author changes their mind: it becomes a scored step instead.
       await user.selectOptions(screen.getByDisplayValue('Statement'), 'score');
+      // A scored step needs a maximum or it earns nothing, and saving is
+      // blocked without one. Incidental to what this test is about — the
+      // starts_timer flag not surviving the type change — but the template
+      // would not be saveable otherwise.
+      await user.type(screen.getByPlaceholderText('3'), '5');
 
       const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
       await user.click(saveButtons[saveButtons.length - 1] as HTMLElement);

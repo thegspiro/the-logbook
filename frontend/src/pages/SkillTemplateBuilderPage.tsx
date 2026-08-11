@@ -157,6 +157,16 @@ const CriterionEditor: React.FC<{
                   placeholder="3"
                   className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
+                {/* A scored step with no maximum carries no points at all —
+                    the percentage is computed from max_score, so the step is
+                    on the sheet, is marked by the examiner, and contributes
+                    nothing. Said here as well as in the save-time errors
+                    because this is where the author can still fix it. */}
+                {(criterion.max_score == null || criterion.max_score <= 0) && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    Without a maximum this step earns no points toward the score.
+                  </p>
+                )}
               </div>
               {/* A passing threshold only means anything on a critical
                   criterion: a non-critical one contributes its points to the
@@ -563,6 +573,20 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           criterion.passing_score > criterion.max_score
         ) {
           errors.push(`Section ${si + 1}, Criterion ${ci + 1}: Passing score cannot exceed max score`);
+        }
+        // A scored step's points come entirely from max_score: _criterion_point_value
+        // returns null without one, so the step is marked by the examiner and
+        // contributes nothing to the percentage — silently. That is the same
+        // shape of failure as the unrenderable criterion type, and it is caught
+        // here rather than in the API schema because the template PUT resends
+        // every section: a 422 would block edits to templates saved before this
+        // rule existed, with no way to see which step was at fault. Blocking
+        // rather than advisory, matching the checklist and statement rules
+        // below — a step that cannot score is not a step.
+        if (criterion.type === 'score' && (criterion.max_score == null || criterion.max_score <= 0)) {
+          errors.push(
+            `Section ${si + 1}, Criterion ${ci + 1}: Scored steps need a max points value, or they earn nothing`
+          );
         }
         if (criterion.type === 'checklist' && (!criterion.checklist_items || criterion.checklist_items.length === 0)) {
           errors.push(`Section ${si + 1}, Criterion ${ci + 1}: At least one checklist item is required`);

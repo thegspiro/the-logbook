@@ -83,6 +83,24 @@ def test_every_criterion_type_is_renderable(sheet):
 
 
 @pytest.mark.parametrize("sheet", SKILL_SHEETS, ids=SHEET_IDS)
+def test_no_scored_step_carries_zero_points(sheet):
+    """A ``score`` step's points come entirely from ``max_score``.
+
+    Without one, ``_criterion_point_value`` returns None: the step is on the
+    sheet, the examiner marks it, and it contributes nothing to the percentage.
+    The builder now blocks saving one, and the seeded library must not ship an
+    example of the thing the builder refuses.
+    """
+    for _si, _ci, section, criterion in iter_criteria(sheet):
+        if criterion["type"] != "score":
+            continue
+        assert criterion.get("max_score"), (
+            f"{sheet['name']} / {section['name']} / {criterion['label']} is "
+            "scored but has no max_score, so it earns nothing"
+        )
+
+
+@pytest.mark.parametrize("sheet", SKILL_SHEETS, ids=SHEET_IDS)
 def test_a_cleanly_scored_sheet_passes(sheet):
     """The regression that matters: a clean run must not score 0% and fail."""
     test = SimpleNamespace(section_results=build_section_results(sheet))

@@ -23,22 +23,16 @@ import { ArrowLeft, ClipboardCheck, Search, User, FileText, Play, Award, BookOpe
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { useAuthStore } from '../stores/authStore';
-import { skillsTestingService, trainingProgramService } from '../services/api';
+import { trainingProgramService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useMemberSearch } from '../hooks/useMemberSearch';
+import { MEMBER_SEARCH_MAX_RESULTS, MEMBER_SEARCH_MIN_CHARS } from '../constants/config';
 import type { TrainingRequirementEnhanced } from '../types/training';
 
 interface MemberOption {
   id: string;
   name: string;
 }
-
-/** Must not be below the server's own floor, or a search it refuses gets sent. */
-const MIN_SEARCH_CHARS = 2;
-/** Mirrors CANDIDATE_SEARCH_MAX_RESULTS in the endpoint — used only to tell the
- *  user their search was truncated, never to trim results client-side. */
-const MAX_SEARCH_RESULTS = 15;
-/** Long enough that typing a name is one request, not one per keystroke. */
-const MEMBER_SEARCH_DEBOUNCE_MS = 300;
 
 export const StartSkillTestPage: React.FC = () => {
   const navigate = useNavigate();
@@ -53,8 +47,6 @@ export const StartSkillTestPage: React.FC = () => {
   const isOfficer = checkPermission('training.manage');
   // Search results only — the roster is never held client-side, because the
   // endpoint behind it will not return one.
-  const [members, setMembers] = useState<MemberOption[]>([]);
-  const [membersLoading, setMembersLoading] = useState(false);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
   // The candidate the user actually picked, kept separately: it has to survive
   // the search results being replaced or cleared.
@@ -125,41 +117,20 @@ export const StartSkillTestPage: React.FC = () => {
     setSelectedCandidate({ id: user.id, name: ownName });
   }, [isOfficer, isPractice, user?.id, user?.first_name, user?.last_name, selectedCandidateId]);
 
-  // Server-side candidate search, debounced. The endpoint requires a fragment
-  // and caps its results, so this cannot be turned into a roster fetch by
-  // clearing the box — a short query simply searches for nothing.
+  // Server-side candidate search, debounced — shared with the viewers panel so
+  // both pickers over this population behave identically. The endpoint requires
+  // a fragment and caps its results, so this cannot be turned into a roster
+  // fetch by clearing the box.
+  const {
+    results: members,
+    loading: membersLoading,
+    error: membersError,
+    tooShort: searchTooShort,
+  } = useMemberSearch(memberSearch);
+
   useEffect(() => {
-    const query = memberSearch.trim();
-    if (query.length < MIN_SEARCH_CHARS) {
-      setMembers([]);
-      setMembersLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setMembersLoading(true);
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const found = await skillsTestingService.searchCandidates(query);
-          // A slower earlier request must not overwrite a later one's results.
-          if (!cancelled) setMembers(found);
-        } catch (err: unknown) {
-          if (!cancelled) {
-            setMembers([]);
-            toast.error(getErrorMessage(err, 'Failed to search members'));
-          }
-        } finally {
-          if (!cancelled) setMembersLoading(false);
-        }
-      })();
-    }, MEMBER_SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [memberSearch]);
+    if (membersError) toast.error(membersError);
+  }, [membersError]);
 
   // Load training requirements for the optional per-test override.
   useEffect(() => {
@@ -426,9 +397,9 @@ export const StartSkillTestPage: React.FC = () => {
                 <div className="flex justify-center py-4" role="status" aria-live="polite">
                   <div className="h-6 w-6 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
                 </div>
-              ) : memberSearch.trim().length < MIN_SEARCH_CHARS ? (
+              ) : searchTooShort ? (
                 <p className="text-theme-text-muted py-4 text-center text-sm">
-                  Type at least {MIN_SEARCH_CHARS} characters of a name to search
+                  Type at least {MEMBER_SEARCH_MIN_CHARS} characters of a name to search
                 </p>
               ) : (
                 <div className="max-h-48 space-y-2 overflow-y-auto">
@@ -451,9 +422,9 @@ export const StartSkillTestPage: React.FC = () => {
                   {filteredMembers.length === 0 && (
                     <p className="text-theme-text-muted py-4 text-center text-sm">No members found</p>
                   )}
-                  {filteredMembers.length === MAX_SEARCH_RESULTS && (
+                  {filteredMembers.length === MEMBER_SEARCH_MAX_RESULTS && (
                     <p className="text-theme-text-muted py-1 text-center text-xs">
-                      Showing the first {MAX_SEARCH_RESULTS} matches — type more of the name
+                      Showing the first {MEMBER_SEARCH_MAX_RESULTS} matches — type more of the name
                     </p>
                   )}
                 </div>
