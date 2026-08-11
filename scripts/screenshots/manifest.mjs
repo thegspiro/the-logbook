@@ -716,6 +716,52 @@ export const SHOTS = [
     selector: "div:has(> label:text-is('Skills Observed'))",
   },
   {
+    id: "03-66-print-report",
+    doc: "03-scheduling.md",
+    line: 1806,
+    anchor: "Screenshot of the print-formatted shift report",
+    alt: "The print layout of a shift report — its sections, the skills and tasks tables, and the two signature lines",
+    // The page needs a report id, and it calls window.print() 600ms after
+    // loading. Stubbing print has to happen before the navigation, so this
+    // shot arrives on /scheduling and then goes to the print page itself.
+    route: "/scheduling",
+    prepare: async (page) => {
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/training/shift-reports/all?limit=50", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const list = Array.isArray(rows) ? rows : rows.reports || [];
+        // A reviewed one: the printed sheet carries a reviewer block, and the
+        // guide lists it among what is included.
+        const reviewed = list.find(
+          (row) => (row.review_status ?? row.reviewStatus) === "approved",
+        );
+        return (reviewed || list[0] || {}).id ?? null;
+      });
+      if (!id) throw new Error("03-66: no shift report to print");
+      await page.addInitScript(() => {
+        // Headless Chromium does not raise a print dialog, but the page also
+        // races the screenshot against it. Stubbed so the capture is of the
+        // page rather than of whatever the browser does with a print request.
+        window.print = () => {};
+      });
+      await page.goto(
+        new URL(
+          `/scheduling/shift-reports/print?id=${id}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(2500);
+    },
+    // The letter-width sheet, not the browser tab around it. The page opens in
+    // the app shell — the print stylesheet drops the navigation, but on screen
+    // it is still there, and the sheet is what the placeholder is about.
+    selector: "div.max-w-\\[8\\.5in\\]",
+  },
+  {
     id: "03-65-review-modal-full",
     doc: "03-scheduling.md",
     line: 1211,

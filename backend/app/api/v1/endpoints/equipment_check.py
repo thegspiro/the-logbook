@@ -115,7 +115,13 @@ async def list_templates(
     apparatus_type: str | None = Query(None),
     check_timing: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    # EC-7, same reasoning as the checklists endpoint below: a member holds
+    # `equipment_check.submit` and not `.view`, and My Equipment Checklists
+    # lists the templates here to offer "Start a Check". View-only left the
+    # member's own page unable to name a single checklist they could start.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """List equipment check templates with optional filters."""
     service = EquipmentCheckService(db)
@@ -134,7 +140,13 @@ async def list_templates(
 async def get_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    # The compartments and items on a template are the check form itself.
+    # Gating this on `equipment_check.view` alone meant a member could see that
+    # a checklist was due, and be refused the moment they opened it — the whole
+    # check-performing flow, 403 at its first step. See EC-7 below.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)

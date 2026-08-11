@@ -955,6 +955,58 @@ Note also that the matching is **case-insensitive** on both sides
 (`eval_by_lower` in the service, `item.toLowerCase()` in the panel). The guide
 previously described it as case-sensitive; corrected.
 
+## Equipment Checks — A Member Could Not Open One (2026-08-11)
+
+EC-7 widened `GET /shifts/{id}/checklists` to accept `equipment_check.view` OR
+`equipment_check.submit`, on the explicit grounds that a member holds `.submit`
+and "the check-performing flow keeps working". Its siblings were not widened,
+and the compartments and items on a template _are_ the check form.
+
+So the member's own page listed every checklist due to them — rig, timing,
+date, "0/9 items", **Start Check** — and every route from that list into the
+form returned 403. `MyChecklistsPage` calls `GET /templates/{id}` to open a due
+checklist, to start an ad-hoc one and to resume a part-finished one, and
+`GET /templates` to populate its "Start a Check" picker. All four were
+`equipment_check.view` only.
+
+Fixed by accepting either permission on both reads, matching the checklists
+endpoint and for the same stated reason. The writes are deliberately untouched
+— editing a template stays a manage right — and the test guards that boundary
+as well as the widening.
+
+Found while trying to seed a completed and a part-answered checklist for the
+demo member: the seeder acts as the member for exactly the reason the product
+does, and hit the same 403.
+
+## Scheduling — The Hold-Over Roster Needs Platoons (2026-08-11)
+
+`docs/training/03-scheduling.md` described the hold-over roster as appearing
+"when a shift has a gap (member on leave or open position)". The panel is
+gated on `platoonsEnabled && shift.platoon && platoonRoster.length > 0` — it is
+the _platoon_ roster, and a department that does not run platoons never sees it
+however short a shift is. The guide now says so, and points at the crew board's
+own Assign controls as the way to fill a gap otherwise.
+
+The screenshot is held back rather than fabricated: picturing it needs platoons
+enabled and shifts generated from a platoon pattern, neither of which the demo
+department runs, and switching platoons on would put a platoon badge across
+every calendar card in the guide's other scheduling screenshots.
+
+## Screenshot Seeding — The Member's Own Checklists (2026-08-11)
+
+Deferred. My Equipment Checklists is scoped to the signed-in member's own
+shifts, and the checks the seeder files as the administrator do not appear on
+it, so every row reads "Not Started". The page documented as showing a finished
+check beside a resumable one can picture neither, and the Resume control and its
+progress bar cannot be photographed.
+
+A step to file them as the member was written and removed after two attempts: it
+ran clean and filed nothing, and a seeder step that silently does nothing is
+worse than no step. It uncovered the 403 recorded above, which was the more
+valuable half. Worth another attempt with a fresh idea about which of the
+member's shifts carry an unclaimed checklist — the first pass drove it from
+`/scheduling/my-shifts`, whose result did not line up with what the page lists.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked

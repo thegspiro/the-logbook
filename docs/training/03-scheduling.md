@@ -630,13 +630,24 @@ When generating shifts from a platoon pattern:
 
 ### Hold-Over Roster
 
-When a shift has a gap (member on leave or open position), the **Shift Detail Panel** shows a **hold-over roster** of available members:
+This is the **platoon** roster, and it appears on a narrower set of shifts than
+the name suggests. The Shift Detail Panel renders it only when **platoons are
+enabled** for the department _and_ the shift belongs to a platoon — a gap alone
+does not bring it up. Where it does appear it lists that platoon's members:
 
 - Same organization, not on leave, not already assigned that day
 - One-click **Assign** button next to each available member
 - Designed for supervisors who need to fill gaps or hold over members
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Detail Panel for a shift with one vacant position, showing the hold-over roster panel below the crew list with available members and "Assign" buttons._
+On a department that does not run platoons, the way to fill a gap is the crew
+board's **Assign** button on the open seat, or **Assign Member** beneath it —
+both pictured under
+[Permission Model](#permission-model).
+
+> **Screenshot held back.** Picturing this needs a department with platoons
+> enabled and shifts generated from a platoon pattern, which the demo
+> department does not run. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
 
 ### Platoon Badge on Shifts
 
@@ -737,7 +748,7 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 
 #### For Members: Submitting Equipment Checks
 
-During a shift, members see pending equipment checks on their dashboard or via **Scheduling > My Checklists**.
+During a shift, members see pending equipment checks on their dashboard or on **My Equipment Checklists**, which is the Equipment Checks tab of Scheduling as a member sees it.
 
 1. Open the checklist for your current shift
 2. Work through each compartment and item:
@@ -1772,26 +1783,38 @@ A new **print-formatted page** renders shift completion reports for paper output
 
 ### What's Included on the Printed Report
 
-- **Header**: Department name and logo
-- **Shift information**: Date, start/end time, apparatus, station
-- **Personnel**: Trainee name and rank, filing officer name and rank
-- **Performance data**: Hours on shift, calls responded, call types, performance rating with label
+- **Header**: "Shift Completion Report", the report's id, the date it was filed,
+  and its review status. The sheet is not branded — no department name and no
+  logo; the department's identity is on the covering paperwork, not here
+- **Shift information**: The shift date. Start and end times, apparatus and
+  station are not printed
+- **Personnel**: The member and the filing officer, by name. Ranks are not
+  printed
+- **Performance data**: Hours on shift, calls responded, call types, and the
+  rating as a bare "3 / 5" — the descriptive label is not printed alongside it
 - **Assessment**: Areas of strength, areas for improvement, officer narrative
-- **Skills observed**: Each skill with its 1-5 score and descriptive label
-- **Tasks performed**: Each task with description
-- **Reviewer information** (if reviewed): Reviewer name, review date, review status
-- **Signature lines**: Spaces for officer and trainee signatures at the bottom
+- **Skills observed**: A table of skill, score out of five, and the officer's
+  comment on each
+- **Tasks performed**: A table of task and description
+- **Reviewer information** (if reviewed): "Reviewed by _Name_ on _date_" beneath
+  the signature block
+- **Signature lines**: One for the filing officer and one for the member, the
+  latter headed "Member Acknowledgment" and marked pending until they
+  acknowledge the report in the app
 
 The page is formatted for **letter-size (8.5" × 11")** printing and automatically opens the browser's print dialog after loading.
 
 ### How to Print a Report
 
-1. Navigate to **Shift Reports** and find the report you want to print
-2. Click the **Print** button on the report card
-3. The print page opens in a new tab with the formatted report
-4. Your browser's print dialog opens automatically — select your printer and print
+1. Go to **Shift Reports** and find the report you want to print
+2. Open its card and click **Print Report**, at the foot of the opened card —
+   there is no print control on the collapsed one
+3. The print page opens with the formatted sheet
+4. Your browser's print dialog opens by itself a moment later — choose your
+   printer and print. The application's navigation is on screen around the
+   sheet but is dropped from the printed page
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the print-formatted shift report showing the letter-size layout with department branding header, structured sections, and signature lines at the bottom._
+![The print layout of a shift report — its sections, the skills and tasks tables, and the two signature lines](./images/03-66-print-report.png)
 
 ### Edge Cases
 
@@ -1817,12 +1840,12 @@ This prevents accidental submission of partially completed checks while still al
 
 Previously, if you started an equipment check but couldn't finish it, the check was stuck in an incomplete state. Now:
 
-1. Navigate to **Scheduling > My Checklists**
-2. In-progress checks show a **"Resume"** button alongside the completion percentage (e.g., "Resume — 65% complete")
-3. Click Resume to open the check form with previously answered items pre-filled
-4. Complete the remaining unanswered items and submit
+1. Open the **Equipment Checks** tab — as a member it is headed **My Equipment Checklists**
+2. Each row shows the rig, whether it is a start- or end-of-shift check, the date, and how many of its items are answered. An untouched one reads **Not Started** with a **Start Check** button; a part-answered one shows its progress and offers **Resume**
+3. Resume opens the form with the answered items already filled in
+4. Complete what is left and submit
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the My Checklists page showing two checklists: one completed (green checkmark) and one in-progress with "Resume — 65% complete" button and a progress bar._
+> **[SCREENSHOT NEEDED]:** _Screenshot of My Equipment Checklists with a finished check beside a part-answered one showing its progress and a Resume button._
 
 ### Edge Cases
 
