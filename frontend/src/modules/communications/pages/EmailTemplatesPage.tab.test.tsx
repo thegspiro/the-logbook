@@ -60,4 +60,18 @@ describe('EmailTemplatesPage tab deep links', () => {
     expect(source).toContain(`handleTabChange('${tab}')`);
     expect(source).not.toContain(`setActiveTab('${tab}')`);
   });
+
+  it('derives the active tab from the URL rather than mirroring it into state', () => {
+    // The first version of this fix read the parameter once with
+    // `useState(initialTab)`. That makes a link work and leaves the **Back
+    // button** broken: click Footers then Officers, press Back, and the URL
+    // says `?tab=footers` while the page still renders Officers.
+    //
+    // Asserting the absence of the state is the point. A sync `useEffect` would
+    // also work, but it reintroduces two sources of truth and one more ordering
+    // problem to get wrong; there is nothing for this page to hold that the URL
+    // does not already say.
+    expect(source).toMatch(/const activeTab: EmailTemplatesTab =/);
+    expect(source).not.toMatch(/useState<EmailTemplatesTab>/);
+  });
 });

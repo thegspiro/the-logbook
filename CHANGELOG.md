@@ -33,6 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole defect: that one tab silently stops round-tripping while the other four
   look fine.
 
+- **And the Back button works.** The active tab is **derived from the URL**
+  rather than mirrored into state. Reading the parameter once, on mount, makes a
+  _link_ work and leaves navigation broken: click Send Log, then Rules, press
+  Back — the address bar says `?tab=log` while the page still renders Rules.
+
+  **The Notifications page had this too**, from its 2026-08-10 fix; the Email
+  Templates page inherited it by copying the pattern. Both are now derived, so
+  there is no state left that can fall out of step with the URL. Caught in
+  review on the second PR, which is the argument for deriving rather than
+  syncing: one source of truth removes the class of bug instead of patching
+  the instance.
+
 ---
 
 ### Demo seeder: supply state, and a check type nothing could read (2026-08-11)

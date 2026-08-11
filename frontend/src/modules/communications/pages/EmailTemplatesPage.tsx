@@ -96,16 +96,21 @@ const EmailTemplatesPage: React.FC = () => {
   // All five tabs are addressable. They were plain state, so a link to the
   // Footers library — the one tab a secretary has cause to send a colleague —
   // always landed on Templates, and the screenshot harness could only ever
-  // shoot the default. Same fix as the Notifications page took on 2026-08-10.
+  // shoot the default.
+  //
+  // Derived from the URL rather than mirrored into state. Mirroring reads the
+  // parameter once, on mount, so every *later* URL change is ignored — and the
+  // Back button is exactly that: click Footers then Officers, press Back, and
+  // the address bar says `?tab=footers` while the page still renders Officers.
+  // One source of truth removes the class of bug rather than patching the
+  // instance, and there is no state left to fall out of step.
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
-  const initialTab: EmailTemplatesTab = EMAIL_TEMPLATES_TABS.includes(requestedTab as EmailTemplatesTab)
+  const activeTab: EmailTemplatesTab = EMAIL_TEMPLATES_TABS.includes(requestedTab as EmailTemplatesTab)
     ? (requestedTab as EmailTemplatesTab)
     : 'templates';
-  const [activeTab, setActiveTab] = useState<EmailTemplatesTab>(initialTab);
 
   const handleTabChange = (tab: EmailTemplatesTab) => {
-    setActiveTab(tab);
     setSearchParams({ tab });
   };
   const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
