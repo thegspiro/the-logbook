@@ -265,6 +265,12 @@ class ShiftDetailResponse(ShiftResponse):
     # Full duty-platoon roster for the shift's platoon (when set), so officers
     # can see who is on, who is on leave, and who could fill in / be held over.
     platoon_roster: List[PlatoonRosterEntry] = []
+    # Whether check-in is inside its window, and the reason when it is not.
+    # Declared so the response model does not strip them: the check-in screen
+    # disables its button on these rather than reimplementing the rule, and
+    # undeclared keys leave it offering an action the API refuses.
+    checkin_open: bool = True
+    checkin_closed_reason: Optional[str] = None
 
     model_config = _response_config
 
@@ -587,6 +593,11 @@ class EmbeddedShiftInfo(BaseModel):
     end_time: Optional[str] = None
     notes: Optional[str] = None
     apparatus_id: Optional[str] = None
+    # Resolved so a member's own shift list can name the rig. Without these the
+    # row could only show a date and a position — the id alone is not something
+    # anyone can read.
+    apparatus_name: Optional[str] = None
+    apparatus_unit_number: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
 

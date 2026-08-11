@@ -356,7 +356,16 @@ class SchedulingNotificationSettings(BaseModel):
 
 
 class ChecklistTimingSettings(BaseModel):
-    """Controls which checklist windows are active for shifts."""
+    """Controls the shift-start and shift-end windows.
+
+    The two booleans decide whether each checklist is prompted at all. The two
+    hour bounds decide how long either side of a shift a member may record
+    attendance against it: check-in used to be refused only once an officer had
+    finalised the shift, so a stale link let somebody check in to a shift that
+    had ended days earlier — and stamped the arrival time as *now*. The
+    generous defaults are deliberate: the point is to stop a link from a
+    previous week, not to police punctuality.
+    """
 
     start_of_shift_enabled: bool = Field(
         default=True,
@@ -365,6 +374,25 @@ class ChecklistTimingSettings(BaseModel):
     end_of_shift_enabled: bool = Field(
         default=True,
         description="Remind members to complete equipment checks before shift end",
+    )
+    checkin_opens_hours_before: int = Field(
+        default=2,
+        ge=0,
+        le=24,
+        description=(
+            "How early before a shift starts a member may check in. "
+            "0 means not before the start time."
+        ),
+    )
+    checkin_closes_hours_after: int = Field(
+        default=12,
+        ge=0,
+        le=72,
+        description=(
+            "How long after a shift ends a member may still check in. "
+            "0 closes check-in at the end time. Checking *out* is never "
+            "blocked — refusing it would leave the attendance record open."
+        ),
     )
 
 

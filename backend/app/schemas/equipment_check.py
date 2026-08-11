@@ -17,6 +17,39 @@ from app.schemas.base import UTCResponseBase
 # Check Template Item Schemas
 # ============================================
 
+# The kinds of check the form knows how to render. `check_type` is a plain
+# string column rather than an enum, so nothing stopped an unsupported value
+# being stored — and the check form prints the type under each item name, so an
+# unrecognised one reached the crew as a raw token ("presence" under every item,
+# because that is what the value said). Validated on the way in instead.
+# Keep in step with CHECK_TYPES in frontend/src/pages/scheduling/
+# equipmentCheckPresets.ts, which is what the template builder offers.
+CHECK_TYPES = frozenset(
+    {
+        "pass_fail",
+        "present",
+        "functional",
+        "quantity",
+        "level",
+        "date_lot",
+        "reading",
+        "text",
+        "header",
+    }
+)
+
+
+def _validate_check_type(value: Optional[str]) -> Optional[str]:
+    """Reject a check type the form has no renderer for."""
+    if value is None:
+        return value
+    if value not in CHECK_TYPES:
+        raise ValueError(
+            f"Unsupported check type '{value}'. "
+            f"Expected one of: {', '.join(sorted(CHECK_TYPES))}"
+        )
+    return value
+
 
 class CheckTemplateItemCreate(BaseModel):
     """Schema for creating a check template item."""
@@ -39,6 +72,11 @@ class CheckTemplateItemCreate(BaseModel):
     has_expiration: bool = False
     expiration_date: Optional[date] = None
     expiration_warning_days: int = 30
+
+    @field_validator("check_type")
+    @classmethod
+    def check_type_is_supported(cls, value: str) -> str:
+        return _validate_check_type(value) or value
 
 
 class CheckTemplateItemUpdate(BaseModel):
@@ -63,6 +101,11 @@ class CheckTemplateItemUpdate(BaseModel):
     has_expiration: Optional[bool] = None
     expiration_date: Optional[date] = None
     expiration_warning_days: Optional[int] = None
+
+    @field_validator("check_type")
+    @classmethod
+    def check_type_is_supported(cls, value: Optional[str]) -> Optional[str]:
+        return _validate_check_type(value)
 
 
 class CheckTemplateItemResponse(UTCResponseBase):

@@ -3242,15 +3242,18 @@ class Seeder:
         """Rewrite checklist items this seeder stored under a type nothing reads.
 
         Earlier runs wrote ``"check_type": "presence"``. The column is a free
-        `String(30)`, so the API accepted it — but the eight types the check
-        form recognises spell it ``present``, and an unrecognised value falls
-        through the form's switch to the pass/fail branch. Every seeded item
-        therefore rendered **Pass / Fail** buttons under a guide that describes
-        Present / Missing, and nothing anywhere reported a problem.
+        `String(30)`, and the API used to accept anything that fit — but the
+        types the check form recognises spell it ``present``, and an
+        unrecognised value falls through the form's switch to the pass/fail
+        branch. Every seeded item therefore rendered **Pass / Fail** buttons
+        under a guide that describes Present / Missing, and nothing anywhere
+        reported a problem.
 
-        New rows are written correctly now, but a long-lived demo database still
-        holds the old ones, and re-seeding does not touch a template that
-        already exists by name.
+        The API now validates ``check_type`` against the set the template
+        builder offers, so no new row can be written this way from any client.
+        This stays for the long-lived demo databases that still hold the old
+        rows: re-seeding does not touch a template that already exists by name,
+        so nothing else would ever correct them.
         """
         for template in items(
             self.api.get("/equipment-checks/templates"), "templates"
