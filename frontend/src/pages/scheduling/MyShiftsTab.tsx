@@ -526,11 +526,15 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                           : ''}
                       </p>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                        {shift?.apparatus_name && (
+                        {/* Keyed on either field, not on the name. `unit_number`
+                            is the required department identifier ("Engine 5")
+                            and `name` an optional nickname ("Old Reliable"), so
+                            gating on the name hid the rig entirely for any
+                            apparatus without one — the exact fact this row was
+                            changed to show. */}
+                        {(shift?.apparatus_unit_number || shift?.apparatus_name) && (
                           <p className="text-theme-text-secondary text-xs font-medium">
-                            {shift.apparatus_unit_number
-                              ? `${shift.apparatus_unit_number} — ${shift.apparatus_name}`
-                              : shift.apparatus_name}
+                            {[shift.apparatus_unit_number, shift.apparatus_name].filter(Boolean).join(' — ')}
                           </p>
                         )}
                         <p className="text-theme-text-muted text-xs capitalize">Position: {assignment.position}</p>

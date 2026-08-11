@@ -73,6 +73,18 @@ const getShiftCardAppearance = (
  * colour and icon are meaningless to anyone who has not been told what they
  * mean — this is what a reader has instead of being told.
  */
+/**
+ * The apparatus as a reader would name it, or null if it has no identifier.
+ *
+ * `unit_number` is the required department identifier ("Engine 5"); `name` is an
+ * optional nickname ("Old Reliable"). Either alone is a valid label, so neither
+ * may gate the other.
+ */
+const apparatusLabel = (shift: ShiftRecord): string | null => {
+  const parts = [shift.apparatus_unit_number, shift.apparatus_name].filter(Boolean);
+  return parts.length > 0 ? parts.join(' — ') : null;
+};
+
 const staffingTitle = (shift: ShiftRecord): string => {
   const target = getStaffingTarget(shift);
   if (target == null) {
@@ -161,15 +173,10 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
         className={`${v.button} w-full cursor-pointer text-left ${hoverRing} transition-all ${selectedRing} ${card.className} ${isCancelled ? 'opacity-50' : ''}`}
         style={card.style}
         // A month cell fits a time, a unit code and a ratio and nothing more, so
-        // everything it cannot spell out is spelled out here.
-        title={[
-          shift.apparatus_name
-            ? `${shift.apparatus_unit_number ?? shift.apparatus_name} — ${shift.apparatus_name}`
-            : null,
-          staffingTitle(shift),
-        ]
-          .filter(Boolean)
-          .join(' · ')}
+        // everything it cannot spell out is spelled out here. The apparatus part
+        // takes whichever of the two identifiers exist — the friendly name is
+        // optional, the unit number is not.
+        title={[apparatusLabel(shift), staffingTitle(shift)].filter(Boolean).join(' · ')}
       >
         <p className={`truncate font-medium ${isCancelled ? 'line-through' : ''}`}>
           {isUnderstaffed(shift) ? (
@@ -238,7 +245,7 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
             className={`flex items-center opacity-70 ${iconGap} ${variant === 'mobile' ? 'text-xs' : ''}`}
             // The cell has room for the unit number only. The name is what
             // makes it recognisable, so it goes here rather than nowhere.
-            title={shift.apparatus_name ? `${shift.apparatus_unit_number} — ${shift.apparatus_name}` : undefined}
+            title={apparatusLabel(shift) ?? undefined}
           >
             <Truck className={v.iconSize} /> {shift.apparatus_unit_number}
           </span>

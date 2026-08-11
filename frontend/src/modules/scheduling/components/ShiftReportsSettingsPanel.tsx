@@ -109,6 +109,16 @@ const SECTIONS: {
 
 // ─── Defaults ──────────────────────────────────────────────────────────────
 
+/**
+ * Bounds for the two check-in window fields, mirroring the backend's own ge/le
+ * so an out-of-range value is never sent in the first place. Module scope: a
+ * constant, and rebuilding it per render made it an unstable hook dependency.
+ */
+const CHECKIN_BOUNDS = {
+  checkin_opens_hours_before: { min: 0, max: 24 },
+  checkin_closes_hours_after: { min: 0, max: 72 },
+} as const;
+
 const DEFAULT_SETTINGS: ShiftReportSettings = {
   checklist_timing: {
     start_of_shift_enabled: true,
@@ -148,6 +158,16 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   const [activeSection, setActiveSection] = useState<SectionKey>('feature-toggles');
   const [settings, setSettings] = useState<ShiftReportSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+
+  // The two check-in bounds as typed text, so the field can be empty mid-edit
+  // without that being saved as 0. Re-synced from settings whenever those load
+  // or change, which is also what restores the field after an invalid entry.
+  const [opensDraft, setOpensDraft] = useState(String(DEFAULT_SETTINGS.checklist_timing.checkin_opens_hours_before));
+  const [closesDraft, setClosesDraft] = useState(String(DEFAULT_SETTINGS.checklist_timing.checkin_closes_hours_after));
+  useEffect(() => {
+    setOpensDraft(String(settings.checklist_timing.checkin_opens_hours_before));
+    setClosesDraft(String(settings.checklist_timing.checkin_closes_hours_after));
+  }, [settings.checklist_timing.checkin_opens_hours_before, settings.checklist_timing.checkin_closes_hours_after]);
 
   const [trainingConfig, setTrainingConfig] = useState<TrainingModuleConfig | null>(null);
   const [loadingTraining, setLoadingTraining] = useState(true);
@@ -315,6 +335,45 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   );
 
   // ── Checklist timing helpers ──
+
+  /**
+   * Commit one of the numeric window fields, if what was typed is usable.
+   *
+   * Saving straight from `onChange` was wrong three ways: `Number('')` is 0, so
+   * clearing the box to retype silently persisted "opens at the start time";
+   * every keystroke saved, so typing "12" wrote 1 and then 12; and `min`/`max`
+   * on the input do not stop `onChange`, so a typed 999 went to the server,
+   * was rejected, and stayed in state to be resubmitted with the next edit.
+   * Empty or non-numeric input restores what is saved — leaving the box blank
+   * would read as "no window at all" — and anything else is clamped into range
+   * before it is saved.
+   */
+  const commitCheckinBound = useCallback(
+    (field: keyof typeof CHECKIN_BOUNDS, raw: string, restore: (value: string) => void) => {
+      const saved = settings.checklist_timing[field];
+      const trimmed = raw.trim();
+      const parsed = Number(trimmed);
+      if (trimmed === '' || !Number.isFinite(parsed)) {
+        restore(String(saved));
+        return;
+      }
+      const { min, max } = CHECKIN_BOUNDS[field];
+      const clamped = Math.min(max, Math.max(min, Math.round(parsed)));
+      if (clamped === saved) {
+        // Nothing to save, but the box may hold "02" or an out-of-range number
+        // the clamp folded back onto the saved value.
+        restore(String(saved));
+        return;
+      }
+      const updated: ShiftReportSettings = {
+        ...settings,
+        checklist_timing: { ...settings.checklist_timing, [field]: clamped },
+      };
+      setSettings(updated);
+      void saveSettings(updated);
+    },
+    [settings, saveSettings]
+  );
 
   const updateChecklistTiming = useCallback(
     (field: keyof ShiftReportSettings['checklist_timing'], value: boolean | number) => {
@@ -525,6 +584,9 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 Outside this window the Check In button is switched off and says why. Widen it if your crews are held
                 over on long call-backs; a shift that has been closed out is always shut regardless.
               </p>
+              {/* Held as text while being edited so the box can be cleared and
+                  retyped, and committed on blur or Enter rather than per
+                  keystroke. */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label htmlFor="checkin-opens" className="form-label">
@@ -534,10 +596,14 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     <input
                       id="checkin-opens"
                       type="number"
-                      min={0}
-                      max={24}
-                      value={settings.checklist_timing.checkin_opens_hours_before}
-                      onChange={(e) => updateChecklistTiming('checkin_opens_hours_before', Number(e.target.value))}
+                      min={CHECKIN_BOUNDS.checkin_opens_hours_before.min}
+                      max={CHECKIN_BOUNDS.checkin_opens_hours_before.max}
+                      value={opensDraft}
+                      onChange={(e) => setOpensDraft(e.target.value)}
+                      onBlur={() => commitCheckinBound('checkin_opens_hours_before', opensDraft, setOpensDraft)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
                       disabled={saving}
                       className="form-input w-24"
                     />
@@ -552,10 +618,14 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                     <input
                       id="checkin-closes"
                       type="number"
-                      min={0}
-                      max={72}
-                      value={settings.checklist_timing.checkin_closes_hours_after}
-                      onChange={(e) => updateChecklistTiming('checkin_closes_hours_after', Number(e.target.value))}
+                      min={CHECKIN_BOUNDS.checkin_closes_hours_after.min}
+                      max={CHECKIN_BOUNDS.checkin_closes_hours_after.max}
+                      value={closesDraft}
+                      onChange={(e) => setClosesDraft(e.target.value)}
+                      onBlur={() => commitCheckinBound('checkin_closes_hours_after', closesDraft, setClosesDraft)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
                       disabled={saving}
                       className="form-input w-24"
                     />

@@ -13,6 +13,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 const ShiftCheckInPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -65,14 +66,52 @@ const ShiftCheckInPage: React.FC = () => {
     void load();
   }, [paramShiftId, paramApparatusId]);
 
+  /**
+   * Re-read the shift when the page comes back into view.
+   *
+   * `checkin_open` is a verdict about *now*, taken once on load. A phone that
+   * scanned the sticker and went back in a pocket would otherwise still show
+   * the button it had when the window was shut — or an enabled one after the
+   * window closed. Refreshing on visibility covers the way this page is
+   * actually used without polling a timer against the clock.
+   */
+  useEffect(() => {
+    if (!resolvedShiftId) return;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      void schedulingService
+        .getShift(resolvedShiftId)
+        .then(setShift)
+        .catch(() => {
+          /* Leave the last known state; the action itself still reports. */
+        });
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [resolvedShiftId]);
+
   const handleCheckIn = async () => {
     setProcessing(true);
     try {
       const result = await schedulingService.checkIn(resolvedShiftId);
       setAttendance(result);
       toast.success('Checked in successfully');
-    } catch {
-      toast.error('Failed to check in');
+    } catch (err: unknown) {
+      // Show what the server said. A bare "Failed to check in" threw away the
+      // one sentence that explains it — "This shift ended too long ago to check
+      // in to. Ask an officer to record your attendance." — and left the member
+      // with nothing to act on.
+      toast.error(getErrorMessage(err, 'Failed to check in'));
+      // The refusal may be the window having moved since the page loaded, so
+      // re-read the shift and let the button and its reason catch up.
+      void schedulingService
+        .getShift(resolvedShiftId)
+        .then(setShift)
+        .catch(() => {});
     } finally {
       setProcessing(false);
     }
@@ -85,8 +124,8 @@ const ShiftCheckInPage: React.FC = () => {
       setAttendance(result);
       const hrs = Math.round(((result.duration_minutes ?? 0) / 60) * 10) / 10;
       toast.success(`Checked out - ${hrs} hours recorded`);
-    } catch {
-      toast.error('Failed to check out');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to check out'));
     } finally {
       setProcessing(false);
     }
