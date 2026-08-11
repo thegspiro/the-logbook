@@ -1150,6 +1150,10 @@ export const ActiveSkillTestPage: React.FC = () => {
   // Runs once per test id, and never while the clock is running, so it can't
   // stamp on a live count.
   const hydratedTimerForTestRef = useRef<string | undefined>(undefined);
+  // Set when a restored clock means this is a resumption; consumed by the next
+  // save. A ref rather than state: it must not re-render, and it must survive
+  // until a save actually lands.
+  const pendingResumeRef = useRef(false);
   const loadedTestId = currentTest?.id;
   const loadedElapsedSeconds = currentTest?.elapsed_seconds;
   useEffect(() => {
@@ -1161,6 +1165,12 @@ export const ActiveSkillTestPage: React.FC = () => {
     // the test, not something to redo when the examiner starts or pauses.
     if (!useSkillsTestingStore.getState().activeTestRunning && loadedElapsedSeconds) {
       setActiveTestTimer(loadedElapsedSeconds);
+      // Scoring is being picked up again, not started. The clock counts on from
+      // the last save, so time before the interruption is missing and time
+      // spent getting back into the test is not — the recorded duration stops
+      // being a stopwatch reading. Reported once, on the next save, so the
+      // record can say so rather than presenting the number as evidence.
+      pendingResumeRef.current = true;
     }
   }, [loadedTestId, loadedElapsedSeconds, setActiveTestTimer]);
 
@@ -1332,11 +1342,17 @@ export const ActiveSkillTestPage: React.FC = () => {
     async (updates: SkillTestUpdate) => {
       if (!currentTest) return;
       setSaveState('saving');
+      const reportingResume = pendingResumeRef.current;
       try {
         await updateTest(currentTest.id, {
           ...updates,
+          ...(reportingResume ? { resumed: true } : {}),
           expected_version: currentTest.version,
         });
+        // Cleared only once the write lands. A failed save that dropped the
+        // flag would leave the resumption unrecorded — which is exactly the
+        // case (a dropped connection) where it matters most.
+        if (reportingResume) pendingResumeRef.current = false;
         setSaveState('saved');
       } catch (err: unknown) {
         setSaveState('failed');
@@ -2270,20 +2286,31 @@ export const ActiveSkillTestPage: React.FC = () => {
           shared station profile, which is what makes this worth a banner
           rather than a colour change. */}
       {saveState === 'failed' && !conflict && (
-        <div className="border-b border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-900/20">
-          <p className="text-sm font-medium text-red-900 dark:text-red-100">
-            Not saved — this evaluation is only on this device
-          </p>
-          <p className="mt-1 text-sm text-red-800 dark:text-red-200">
-            Keep scoring; it will save as soon as the connection is back. Do not sign out or close this tab until it
-            does, or the marks are lost.
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20">
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Not saving — keep scoring</p>
+          <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
+            The connection dropped. Everything up to the last save is on the server and this test can be picked up again
+            from the records list. Marks made since then are only on this device.
           </p>
           <button
             onClick={() => void handleSaveProgress()}
-            className="mt-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+            className="mt-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700"
           >
             Try saving now
           </button>
+        </div>
+      )}
+
+      {/* Picked up again rather than run straight through. The clock was
+          restored from the last save, so it is not a stopwatch reading — said
+          here because the examiner is the one person who can add the context
+          the number is missing. */}
+      {(currentTest.resume_count ?? 0) > 0 && isTestLive(currentTest.status) && (
+        <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/20">
+          <p className="text-sm text-blue-900 dark:text-blue-100">
+            <span className="font-medium">Resumed evaluation.</span> The clock carried on from the last save, so the
+            recorded time is not an exact stopwatch reading. Note anything the duration needs explained.
+          </p>
         </div>
       )}
 

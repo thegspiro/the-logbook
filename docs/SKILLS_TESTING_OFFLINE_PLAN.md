@@ -224,6 +224,28 @@ happens today without any offline queue at all.
 What this does *not* do is save the work. It converts a silent loss into an
 informed choice, which is the whole of what it claims.
 
+### 5.4 The related half — resumption, and the clock
+
+Logout is the rare case. The common one is simply leaving the screen and coming
+back, which already worked: the records list offers an in-progress test and the
+examiner screen restores the clock from `elapsed_seconds`.
+
+What nothing said was that the restored clock is no longer a stopwatch reading.
+It counts on from the last save, so time before the interruption is missing and
+time spent getting back into the test is not. `skill_tests.resume_count`
+now records the pickup, and the duration is marked unverified wherever it is
+shown — the examiner screen, the scorecard, the printed record and the CSV
+export.
+
+Deliberately marked rather than corrected. There is no honest way to
+reconstruct what the stopwatch would have read, and a number that looks
+adjusted is worse than one openly uncertain — particularly on a timed evolution
+where the duration is itself the criterion.
+
+This matters for Phases 1–2 too: a queued write replayed on reconnect carries
+whatever `elapsed_seconds` the device held, so the same marking applies to work
+that syncs late.
+
 ---
 
 ## 6. DECISION REQUIRED — is Option A enough?

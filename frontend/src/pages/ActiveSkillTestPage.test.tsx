@@ -981,7 +981,7 @@ describe('ActiveSkillTestPage', () => {
   describe('Work only this device is holding', () => {
     beforeEach(() => setPendingSkillsWork(null));
 
-    it('says plainly that the evaluation is not on the server', async () => {
+    it('says what is actually at risk — the marks since the last save', async () => {
       const user = userEvent.setup();
       currentMockTest = mockTestWithSections;
       mockUpdateTest.mockRejectedValue(new Error('Network Error'));
@@ -990,8 +990,11 @@ describe('ActiveSkillTestPage', () => {
       await user.click(screen.getByRole('button', { name: 'PASS' }));
       await user.click(screen.getByRole('button', { name: /^save$/i }));
 
-      expect(await screen.findByText(/only on this device/i)).toBeInTheDocument();
-      expect(screen.getByText(/Do not sign out or close this tab/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Not saving — keep scoring/i)).toBeInTheDocument();
+      // Accurate about what is actually at risk: the marks since the last
+      // save, not the evaluation, which is on the server and resumable.
+      expect(screen.getByText(/up to the last save is on the server/i)).toBeInTheDocument();
+      expect(screen.getByText(/picked up again from the records list/i)).toBeInTheDocument();
     });
 
     it('registers the work so logout can warn about it by name', async () => {
@@ -1022,7 +1025,7 @@ describe('ActiveSkillTestPage', () => {
       await user.click(screen.getByRole('button', { name: /^save$/i }));
 
       await waitFor(() => expect(getPendingSkillsWork()).toBeNull());
-      expect(screen.queryByText(/only on this device/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Not saving — keep scoring/i)).not.toBeInTheDocument();
     });
 
     // A save in flight is not yet a loss, and warning on it would train
@@ -1040,7 +1043,100 @@ describe('ActiveSkillTestPage', () => {
       // that a successful write leaves nothing registered as at risk.
       await waitFor(() => expect(getPendingSkillsWork()).toBeNull());
       expect(mockUpdateTest).toHaveBeenCalledWith('test-1', expect.any(Object));
-      expect(screen.queryByText(/only on this device/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Not saving — keep scoring/i)).not.toBeInTheDocument();
+    });
+  });
+
+  // Re-entry already worked — the records list offers an in-progress test and
+  // the clock is restored from elapsed_seconds. What nothing said was that the
+  // restored clock is no longer a stopwatch reading.
+  describe('Picking a test up again', () => {
+    const resumable = { ...mockTestWithSections, elapsed_seconds: 240 };
+
+    it('restores the clock rather than starting the evaluation over', async () => {
+      currentMockTest = resumable;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await waitFor(() => expect(mockSetActiveTestTimer).toHaveBeenCalledWith(240));
+    });
+
+    it('reports the pickup on the next save, so the record can say so', async () => {
+      const user = userEvent.setup();
+      currentMockTest = resumable;
+      mockUpdateTest.mockResolvedValue(resumable);
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      await waitFor(() =>
+        expect(mockUpdateTest).toHaveBeenCalledWith('test-1', expect.objectContaining({ resumed: true }))
+      );
+    });
+
+    it('reports it once, not on every subsequent save', async () => {
+      const user = userEvent.setup();
+      currentMockTest = resumable;
+      mockUpdateTest.mockResolvedValue(resumable);
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+      await waitFor(() => expect(mockUpdateTest).toHaveBeenCalledWith('test-1', expect.any(Object)));
+      mockUpdateTest.mockClear();
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      await waitFor(() => expect(mockUpdateTest).toHaveBeenCalledWith('test-1', expect.any(Object)));
+      for (const call of mockUpdateTest.mock.calls) {
+        expect(call[1]).not.toHaveProperty('resumed');
+      }
+    });
+
+    // A failed save that dropped the flag would leave the resumption
+    // unrecorded — exactly the case (a dropped connection) where it matters.
+    it('keeps reporting the pickup until a save actually lands', async () => {
+      const user = userEvent.setup();
+      currentMockTest = resumable;
+      mockUpdateTest.mockRejectedValue(new Error('Network Error'));
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+      await waitFor(() => expect(mockUpdateTest).toHaveBeenCalledWith('test-1', expect.any(Object)));
+
+      mockUpdateTest.mockClear();
+      mockUpdateTest.mockResolvedValue(resumable);
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      await waitFor(() =>
+        expect(mockUpdateTest).toHaveBeenCalledWith('test-1', expect.objectContaining({ resumed: true }))
+      );
+    });
+
+    it('does not report a pickup on a test started from scratch', async () => {
+      const user = userEvent.setup();
+      currentMockTest = { ...mockTestWithSections, elapsed_seconds: 0 };
+      mockUpdateTest.mockResolvedValue(mockTestWithSections);
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      await waitFor(() => expect(mockUpdateTest).toHaveBeenCalledWith('test-1', expect.any(Object)));
+      for (const call of mockUpdateTest.mock.calls) {
+        expect(call[1]).not.toHaveProperty('resumed');
+      }
+    });
+
+    it('tells the examiner the recorded time is not a stopwatch reading', async () => {
+      currentMockTest = { ...resumable, resume_count: 1 };
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(await screen.findByText(/Resumed evaluation\./)).toBeInTheDocument();
+      expect(screen.getByText(/not an exact stopwatch reading/i)).toBeInTheDocument();
+    });
+
+    it('says nothing on a test that ran straight through', () => {
+      currentMockTest = mockTestWithSections;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.queryByText(/Resumed evaluation\./)).not.toBeInTheDocument();
     });
   });
 });

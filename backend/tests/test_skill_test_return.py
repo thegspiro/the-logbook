@@ -74,6 +74,7 @@ def _test(**overrides):
         "returned_by": None,
         "return_reason": None,
         "return_count": 0,
+        "resume_count": 0,
         "version": 3,
         "section_results": [{"section_id": "section-0", "criteria_results": []}],
         "overall_score": 88.0,
