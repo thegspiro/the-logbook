@@ -1643,6 +1643,8 @@ export interface ShiftCompletionReport {
   officer_id: string;
   trainee_name?: string;
   officer_name?: string;
+  /** Which shift the report covers, e.g. "B-5 — Brush 5". */
+  shift_label?: string;
   hours_on_shift: number;
   calls_responded: number;
   call_types?: string[];

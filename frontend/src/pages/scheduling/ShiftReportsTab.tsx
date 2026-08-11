@@ -990,6 +990,9 @@ export const ShiftReportsTab: React.FC = () => {
                 {report.trainee_name ? `${report.trainee_name} — ` : ''}
                 {dateStr}
               </p>
+              {/* Person and date alone told two reports from one day apart by
+                  author, never by which shift they covered. */}
+              {report.shift_label && <p className="text-theme-text-muted truncate text-xs">{report.shift_label}</p>}
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
                   {/* One decimal, like the summary table above. Raw, the same

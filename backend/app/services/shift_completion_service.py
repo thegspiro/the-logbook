@@ -14,6 +14,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.apparatus import Apparatus
 from app.models.notification import (
     NotificationCategory,
     NotificationChannel,
@@ -1056,7 +1057,16 @@ class ShiftCompletionService:
                 ShiftCompletionReport.organization_id == str(organization_id)
             )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        report = result.scalar_one_or_none()
+        if report is not None:
+            if organization_id is not None:
+                await self._attach_shift_labels([report], organization_id)
+            else:
+                # Unscoped callers re-check org themselves; without an org we
+                # cannot resolve the label safely, so leave it empty rather
+                # than reaching across tenants for it.
+                report.shift_label = None
+        return report
 
     async def update_report(
         self,
@@ -1145,6 +1155,64 @@ class ShiftCompletionService:
         if requirements_progressed:
             report.requirements_progressed = requirements_progressed
 
+    async def _attach_shift_labels(
+        self,
+        reports: List[ShiftCompletionReport],
+        organization_id: UUID,
+    ) -> List[ShiftCompletionReport]:
+        """Name the shift each report covers.
+
+        A report carried a person and a date and nothing else, so two reports
+        filed on one day were told apart by author alone — a reader could not
+        see which truck either was about. `shift_label` is a transient
+        attribute, not a column: the response schema reads it via
+        `from_attributes` and nothing persists it.
+
+        Batched into two queries rather than a relationship: an eager
+        `Shift -> Apparatus` chain hanging off this model would load on every
+        query that touches a report, and a lazy one raises MissingGreenlet the
+        moment a response model reads it.
+        """
+        for report in reports:
+            report.shift_label = None
+        shift_ids = {r.shift_id for r in reports if r.shift_id}
+        if not shift_ids:
+            return reports
+
+        # Org-scoped even though the ids came from org-scoped reports: a
+        # by-id fetch on a client-influenced id is scoped by default here.
+        shift_rows = await self.db.execute(
+            select(Shift.id, Shift.apparatus_id).where(
+                Shift.id.in_(shift_ids),
+                Shift.organization_id == str(organization_id),
+            )
+        )
+        apparatus_by_shift = {str(row.id): row.apparatus_id for row in shift_rows}
+        apparatus_ids = {a for a in apparatus_by_shift.values() if a}
+        labels: Dict[str, str] = {}
+        if apparatus_ids:
+            apparatus_rows = await self.db.execute(
+                select(
+                    Apparatus.id,
+                    Apparatus.unit_number,
+                    Apparatus.name,
+                ).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == str(organization_id),
+                )
+            )
+            for row in apparatus_rows:
+                parts = [p for p in (row.unit_number, row.name) if p]
+                labels[str(row.id)] = " — ".join(parts)
+
+        for report in reports:
+            if not report.shift_id:
+                continue
+            apparatus_id = apparatus_by_shift.get(str(report.shift_id))
+            if apparatus_id:
+                report.shift_label = labels.get(str(apparatus_id))
+        return reports
+
     async def get_reports_for_trainee(
         self,
         organization_id: UUID,
@@ -1169,7 +1237,9 @@ class ShiftCompletionService:
             query = query.where(ShiftCompletionReport.shift_date <= end_date)
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return await self._attach_shift_labels(
+            list(result.scalars().all()), organization_id
+        )
 
     async def get_reports_by_officer(
         self,
@@ -1187,7 +1257,9 @@ class ShiftCompletionService:
             .order_by(ShiftCompletionReport.shift_date.desc())
             .limit(limit)
         )
-        return list(result.scalars().all())
+        return await self._attach_shift_labels(
+            list(result.scalars().all()), organization_id
+        )
 
     async def get_all_reports(
         self,
@@ -1217,7 +1289,9 @@ class ShiftCompletionService:
             query = query.where(ShiftCompletionReport.shift_date <= end_date)
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return await self._attach_shift_labels(
+            list(result.scalars().all()), organization_id
+        )
 
     async def acknowledge_report(
         self,
@@ -1258,7 +1332,9 @@ class ShiftCompletionService:
             )
             .order_by(ShiftCompletionReport.shift_date.desc())
         )
-        return list(result.scalars().all())
+        return await self._attach_shift_labels(
+            list(result.scalars().all()), organization_id
+        )
 
     async def review_report(
         self,

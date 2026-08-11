@@ -194,6 +194,10 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     officer_id: str
     trainee_name: Optional[str] = None
     officer_name: Optional[str] = None
+    # Which shift the report covers, e.g. "B-5 — Brush 5". A report carried a
+    # person and a date only, so two filed on one day were told apart by
+    # author alone. Populated by ShiftCompletionService._attach_shift_labels.
+    shift_label: Optional[str] = None
 
     hours_on_shift: float
     calls_responded: int

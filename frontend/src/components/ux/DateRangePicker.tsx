@@ -45,6 +45,14 @@ const buildPresets = (tz: string) => [
     },
   },
   {
+    label: 'This month',
+    getDates: () => {
+      const now = new Date();
+      const s = new Date(now.getFullYear(), now.getMonth(), 1);
+      return [toLocalDateString(s, tz), getTodayLocalDate(tz)];
+    },
+  },
+  {
     label: 'Last 90 days',
     getDates: () => {
       const e = new Date();
