@@ -37,6 +37,8 @@ from contextlib import closing
 import httpx
 import pytest
 import schemathesis
+from hypothesis import HealthCheck
+from hypothesis import settings as hypothesis_settings
 
 # Mark all tests in this module as slow + integration
 pytestmark = [pytest.mark.slow, pytest.mark.integration]
@@ -170,7 +172,16 @@ class TestAPIContract:
     # Authenticated endpoints need token injection (add later).
     if SCHEMA_AVAILABLE and schema is not None:
 
+        # filter_too_much: constrained path params (the 12-hex form slug)
+        # make hypothesis discard most generated inputs, which its health
+        # check reports as an error even though every kept input still runs.
+        # Suppressing the check keeps the assertions; it only stops hypothesis
+        # from failing the test over generation efficiency, which varies
+        # nondeterministically from run to run.
         @schema.include(path_regex=r"^/api/public/").parametrize()
+        @hypothesis_settings(
+            suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow]
+        )
         def test_public_endpoints(self, case):
             """Public endpoints should return valid responses."""
             response = case.call_and_validate()
