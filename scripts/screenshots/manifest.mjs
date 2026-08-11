@@ -3990,6 +3990,28 @@ export const SHOTS = [
   },
 
   {
+    id: "08-68-compliance-dashboard",
+    doc: "08-admin-reports.md",
+    line: 1001,
+    anchor: "Screenshot of the ComplianceDashboard showing compliance rate cards",
+    alt: "The medical-screening Compliance tab: a rate card per screening type, with expiring and overdue called out",
+    // `?tab=compliance` only started working on 2026-08-11. The page held its
+    // tab in plain state before that, so this shot would have silently
+    // captured the Requirements tab — the way `02-21`/`02-41` came to be
+    // byte-identical images under different captions.
+    route: "/medical-screening?tab=compliance",
+    fullPage: true,
+  },
+  {
+    id: "08-69-compliance-requirements-config",
+    doc: "08-admin-reports.md",
+    line: 1044,
+    anchor: "Screenshot of the ComplianceRequirementsConfigPage showing the threshold configuration",
+    alt: "Compliance requirements configuration: the thresholds at the top and the profiles beneath them",
+    route: "/training/compliance-config",
+    fullPage: true,
+  },
+  {
     id: "08-65-template-footer-selector",
     doc: "08-admin-reports.md",
     line: 1521,

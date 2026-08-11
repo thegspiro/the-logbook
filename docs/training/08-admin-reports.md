@@ -991,15 +991,26 @@ The Medical Screening module tracks health screenings, physicals, drug tests, an
 
 ### Compliance Dashboard
 
-The compliance dashboard shows:
+The **Compliance** tab lists screenings **expiring within 60 days**, soonest
+first — each row naming the member, the requirement, the days remaining and the
+date. Rows inside 30 days are marked in red; the rest are amber. There is no
+separate overdue section: an expired screening sorts to the top of the same
+list, which is where it needs to be read.
 
-- Overall compliance rate by screening type
-- Members with expiring screenings (configurable: 30/60/90 days)
-- Overdue screenings requiring immediate attention
-- Drill-down to individual member compliance details
+Above the tabs, on every tab, sits a count of screenings **expiring within 30
+days** — the shorter horizon, because that is the one worth interrupting
+someone about.
 
-> **Screenshot needed:**
-> _[Screenshot of the ComplianceDashboard showing compliance rate cards for each screening type, a list of expiring screenings with member names and dates, and an overdue screenings alert section]_
+![The medical-screening Compliance tab: the 60-day list, soonest first, under the 30-day count](./images/08-68-compliance-dashboard.png)
+
+> **The tab is addressable.** `/medical-screening?tab=compliance` opens straight
+> onto it, so a link to the compliance list can be sent to a colleague, and the
+> Back button works after a tab change.
+
+Per-screening-type compliance **rates**, and drill-down to an individual
+member's record, are not on this tab. Rates and thresholds are configured under
+**Training → Compliance Configuration** (below); an individual's screenings are
+on the **Records** tab, filtered by member.
 
 ### Edge Cases
 
@@ -1041,8 +1052,14 @@ Profiles allow different compliance standards for different groups:
    - **Threshold overrides** — optionally set different thresholds for this group
 3. Set **priority** — when a member matches multiple profiles, the highest-priority profile applies
 
-> **Screenshot needed:**
-> _[Screenshot of the ComplianceRequirementsConfigPage showing the threshold configuration section at the top, a list of compliance profiles with name, targeted groups, and threshold values, and an "Add Profile" button]_
+![Compliance requirements configuration: the Thresholds tab, with its status preview and reminder schedule](./images/08-69-compliance-requirements-config.png)
+
+The page carries **four tabs** — Thresholds, Profiles, Auto Reports and Report
+History — so the thresholds and the profile list are separate screens rather
+than one page scrolled. The **Status Preview** strip under the threshold fields
+restates the three bands in the numbers just entered ("Compliant: ≥ 100% · At
+Risk: 75% – 99% · Non-Compliant: < 75%"), which is the quickest way to check a
+change means what was intended before saving it.
 
 ### Automated Reporting
 
