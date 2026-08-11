@@ -19,14 +19,15 @@ from types import SimpleNamespace
 
 import pytest
 
-# The seeders live outside the backend package, beside the other operational
-# scripts, because the screenshot harness and the general seeder share them.
+# The seeder that scores these lives outside the backend package, beside the
+# other operational scripts; the blueprints themselves ship inside the app,
+# because the API serves them as a starter library.
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 pytest.importorskip(
-    "skill_sheet_library",
+    "seed_skills_testing",
     reason="scripts/ not present in this checkout",
 )
 
@@ -34,13 +35,13 @@ from seed_skills_testing import (  # noqa: E402  (path set up above)
     build_section_results,
     first_critical,
 )
-from skill_sheet_library import (  # noqa: E402
+
+from app.data.skill_sheet_library import (  # noqa: E402
     SKILL_SHEETS,
     build_template_payload,
     criterion_result,
     iter_criteria,
 )
-
 from app.schemas.skills_testing import (  # noqa: E402
     CRITERION_TYPES,
     SkillTemplateCreate,

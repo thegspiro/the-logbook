@@ -9,9 +9,15 @@ blueprints give a seeded environment a library that looks like one a training
 officer would actually have built, and give the test suite and the screenshot
 harness a single definition to share.
 
-Pure data — no I/O, no third-party imports — so it can be imported by the API
-seeders (``seed_skills_testing.py``, ``screenshots/seed_demo_data.py``) and by
-tests alike.
+Pure data — no I/O, no third-party imports — so the API can serve it, the
+seeders (``scripts/seed_skills_testing.py``, ``scripts/screenshots/
+seed_demo_data.py``) can post it, and the tests can validate it, all from one
+definition.
+
+It lives inside the application rather than in ``scripts/`` because a new
+department is offered these sheets at runtime: Skills Testing otherwise opens
+on an empty table and a New Template button, and building an NREMT sheet from
+scratch is twenty minutes of typing before the first candidate can be tested.
 
 **Criterion types are a closed set.** ``pass_fail``, ``score``, ``time_limit``,
 ``checklist`` and ``statement`` are the only values the examiner screen knows
@@ -694,6 +700,37 @@ SKILL_SHEETS: list[dict[str, Any]] = [
         ],
     },
 ]
+
+
+# Stable identifiers for the import endpoint. Explicit rather than derived from
+# the name: these names carry em dashes, fractions and slashes, and a slug
+# generated from them would change the moment anyone tidied a title — breaking
+# the link between a department's copy and the sheet it came from.
+SHEET_SLUGS: dict[str, str] = {
+    "Patient Assessment / Management — Medical": "patient-assessment-medical",
+    "SCBA Donning — Timed Evolution": "scba-donning-timed",
+    "Bleeding Control and Shock Management": "bleeding-control-shock",
+    "24' Extension Ladder — Two-Firefighter Raise": "ladder-24-two-firefighter-raise",
+    '1¾" Handline — Advance and Flow': "handline-advance-and-flow",
+    "Pump Operations — Draft and Relay Supply": "pump-ops-draft-relay",
+    "Emergency Vehicle Operations — Driving Course": "evoc-driving-course",
+    "Primary Search — Limited Visibility": "primary-search-limited-visibility",
+    "Hazmat — Level A Suit Donning and Doffing": "hazmat-level-a-suit",
+    "Company Officer — Incident Size-Up and Initial IAP": "officer-size-up-iap",
+}
+
+
+def slug_for(sheet: dict[str, Any]) -> str:
+    """The stable id a department's imported copy is traced back to."""
+    return SHEET_SLUGS[sheet["name"]]
+
+
+def sheet_by_slug(slug: str) -> dict[str, Any] | None:
+    """Look a blueprint up by its import id, or None if the slug is unknown."""
+    for sheet in SKILL_SHEETS:
+        if SHEET_SLUGS.get(sheet["name"]) == slug:
+            return sheet
+    return None
 
 
 def build_template_payload(sheet: dict[str, Any]) -> dict[str, Any]:

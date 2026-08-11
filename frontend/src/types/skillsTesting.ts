@@ -424,3 +424,24 @@ export interface SkillTestingSummary {
    *  cannot validate — it is an org-wide count of other people's evaluations. */
   pending_validation?: number | undefined;
 }
+
+/** One sheet in the starter library the API offers a new department.
+ *
+ *  Summary only: an officer choosing between ten sheets needs the discipline
+ *  and the shape, not 100 criteria on screen. The full structure arrives when
+ *  they import it, and from then on it is their template to edit. */
+export interface SkillSheetLibraryItem {
+  slug: string;
+  name: string;
+  description?: string | undefined;
+  category?: string | undefined;
+  tags: string[];
+  section_count: number;
+  criteria_count: number;
+  /** Statements excluded — they are read aloud, not judged. */
+  critical_count: number;
+  passing_percentage?: number | null | undefined;
+  time_limit_seconds?: number | null | undefined;
+  /** The department already holds a template with this name. */
+  already_imported: boolean;
+}

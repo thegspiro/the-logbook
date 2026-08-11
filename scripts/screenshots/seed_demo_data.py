@@ -33,11 +33,12 @@ from zoneinfo import ZoneInfo
 
 from bootstrap_demo import DEMO_ADMIN_PASSWORD, DEMO_ADMIN_USERNAME
 
-# The skill sheet blueprints live one directory up, beside the other seeders,
-# because the screenshot harness is not their only consumer.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# The skill sheet blueprints live in the backend package: the API serves them
+# as a starter library, so the application is their home and the screenshot
+# harness is one consumer among several.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "backend"))
 
-from skill_sheet_library import (  # noqa: E402  (path set up above)
+from app.data.skill_sheet_library import (  # noqa: E402  (path set up above)
     SKILL_SHEETS,
     build_template_payload,
     criterion_result,

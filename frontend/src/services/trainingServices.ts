@@ -9,6 +9,7 @@ import type {
   SkillTemplate,
   SkillTemplateCreate,
   SkillTemplateListItem,
+  SkillSheetLibraryItem,
   SkillTemplateUpdate,
   SkillTest,
   SkillTestCreate,
@@ -1224,6 +1225,21 @@ export const skillsTestingService = {
 
   async getTemplate(templateId: string): Promise<SkillTemplate> {
     const response = await api.get<SkillTemplate>(`/training/skills-testing/templates/${templateId}`);
+    return response.data;
+  },
+
+  /** The starter sheets a department can copy into its own library. */
+  async getLibrarySheets(): Promise<SkillSheetLibraryItem[]> {
+    const response = await api.get<SkillSheetLibraryItem[]>('/training/skills-testing/library');
+    return asArray(response.data);
+  },
+
+  /** Copy one in. It lands as a draft — a sheet nobody in the department has
+   *  read yet should not be selectable for a live evaluation. */
+  async importLibrarySheet(slug: string): Promise<SkillTemplate> {
+    const response = await api.post<SkillTemplate>(
+      `/training/skills-testing/library/${encodeURIComponent(slug)}/import`
+    );
     return response.data;
   },
 

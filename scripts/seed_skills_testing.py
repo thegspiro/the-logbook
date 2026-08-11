@@ -49,9 +49,11 @@ from pathlib import Path
 from time import sleep
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# The blueprints live in the backend package, not here: the API serves them as
+# a starter library, so the application is their home and this is one consumer.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from skill_sheet_library import (  # noqa: E402  (path set up above)
+from app.data.skill_sheet_library import (  # noqa: E402  (path set up above)
     C_STATEMENT,
     SKILL_SHEETS,
     build_template_payload,

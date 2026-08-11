@@ -115,6 +115,29 @@ class SkillTemplateCreate(BaseModel):
     result_viewer_positions: Optional[List[str]] = None
 
 
+class SkillSheetLibraryItem(BaseModel):
+    """One sheet in the starter library, as the picker lists it.
+
+    Summary only — an officer choosing between ten sheets needs the discipline
+    and the shape, not 100 criteria on screen. The full structure arrives when
+    they import it, and from then on it is their template to edit.
+    """
+
+    slug: str
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    section_count: int = 0
+    criteria_count: int = 0
+    critical_count: int = 0
+    passing_percentage: Optional[float] = None
+    time_limit_seconds: Optional[int] = None
+    # Set when the department already holds a template with this name, so the
+    # picker can say "already added" instead of quietly making a second copy.
+    already_imported: bool = False
+
+
 class SkillTemplateUpdate(BaseModel):
     """Schema for updating a skill template"""
 

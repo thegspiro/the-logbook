@@ -22,11 +22,13 @@ import {
   Eye,
   Send,
   CheckCircle2,
+  BookOpen,
 } from 'lucide-react';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type { SkillTemplateListItem } from '../types/skillsTesting';
 import { FormStatus } from '../constants/enums';
 import { ConfirmDialog } from '../components/ux';
+import { SkillSheetLibraryModal } from '../components/training/SkillSheetLibraryModal';
 
 // ── Shared sub-components ──────────────────────────────────────
 
@@ -191,6 +193,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
   const [publishTarget, setPublishTarget] = useState<SkillTemplateListItem | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<SkillTemplateListItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   useEffect(() => {
     void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
@@ -311,6 +314,13 @@ const SkillsTestingTemplatesTab: React.FC = () => {
             <option value="archived">Archived</option>
           </select>
           <button
+            onClick={() => setLibraryOpen(true)}
+            className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+          >
+            <BookOpen className="h-4 w-4" />
+            <span className="hidden sm:inline">Add from library</span>
+          </button>
+          <button
             onClick={() => void navigate('/training/skills-testing/templates/new')}
             className="btn-primary flex items-center gap-2 font-medium"
           >
@@ -329,12 +339,20 @@ const SkillsTestingTemplatesTab: React.FC = () => {
         <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
           <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted">No templates found</p>
-          <button
-            onClick={() => void navigate('/training/skills-testing/templates/new')}
-            className="btn-primary mt-4 text-sm"
-          >
-            Create Your First Template
-          </button>
+          {/* Where a new department actually lands, so the library is offered
+              first: copying a ready-made NREMT sheet is a shorter path to a
+              first evaluation than authoring one from a blank form. */}
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <button onClick={() => setLibraryOpen(true)} className="btn-primary text-sm">
+              Browse the sheet library
+            </button>
+            <button
+              onClick={() => void navigate('/training/skills-testing/templates/new')}
+              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+            >
+              Start from scratch
+            </button>
+          </div>
         </div>
       ) : (
         <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
@@ -407,6 +425,17 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      <SkillSheetLibraryModal
+        isOpen={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onImported={() => {
+          // Imported sheets land as drafts, so a list filtered to Published
+          // would show nothing new and read as a failed import.
+          void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
+          void loadSummary();
+        }}
+      />
 
       <ConfirmDialog
         isOpen={publishTarget !== null}

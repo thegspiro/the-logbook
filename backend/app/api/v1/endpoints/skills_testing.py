@@ -21,9 +21,17 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.data.skill_sheet_library import (
+    SKILL_SHEETS,
+    build_template_payload,
+    iter_criteria,
+    sheet_by_slug,
+    slug_for,
+)
 from app.models.skills_testing import (
     ResultDisclosure,
     SkillTemplate,
+    SkillTemplateStatus,
     SkillTest,
     SkillTestResult,
     SkillTestStatus,
@@ -31,6 +39,7 @@ from app.models.skills_testing import (
 )
 from app.models.user import User, UserStatus
 from app.schemas.skills_testing import (
+    SkillSheetLibraryItem,
     SkillTemplateCreate,
     SkillTemplateListResponse,
     SkillTemplateResponse,
@@ -387,6 +396,140 @@ async def create_template(
         event_data={
             "template_id": str(new_template.id),
             "template_name": new_template.name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return new_template
+
+
+@router.get("/library", response_model=list[SkillSheetLibraryItem])
+async def list_library_sheets(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    The starter sheets a department can copy into its own library.
+
+    Skills Testing otherwise opens on an empty table and a New Template button,
+    and building an NREMT-style sheet from scratch is twenty minutes of typing
+    before the first candidate can be tested.
+
+    These are read from a static definition rather than seeded as system-level
+    rows: ``skill_templates.organization_id`` is NOT NULL, and making a tenancy
+    column nullable to hold shared records is a bigger change than the feature
+    needs. Copying on demand also gets the ownership right — an imported sheet
+    is the department's, editable and publishable like any other, not a shared
+    row that shifts under them when the application updates.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    existing = (
+        (
+            await db.execute(
+                select(SkillTemplate.name).where(
+                    SkillTemplate.organization_id == current_user.organization_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    held = {name for name in existing if name}
+
+    items: list[SkillSheetLibraryItem] = []
+    for sheet in SKILL_SHEETS:
+        criteria = [c for *_, c in iter_criteria(sheet)]
+        items.append(
+            SkillSheetLibraryItem(
+                slug=slug_for(sheet),
+                name=sheet["name"],
+                description=sheet.get("description"),
+                category=sheet.get("category"),
+                tags=sheet.get("tags") or [],
+                section_count=len(sheet["sections"]),
+                criteria_count=len(criteria),
+                critical_count=sum(
+                    1
+                    for c in criteria
+                    if c.get("required") and c.get("type") != "statement"
+                ),
+                passing_percentage=sheet.get("passing_percentage"),
+                time_limit_seconds=sheet.get("time_limit_seconds"),
+                already_imported=sheet["name"] in held,
+            )
+        )
+    return items
+
+
+@router.post(
+    "/library/{slug}/import",
+    response_model=SkillTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def import_library_sheet(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Copy a starter sheet into the department's own library.
+
+    Lands as a **draft**, deliberately. A published template can be selected for
+    a live evaluation, and a sheet nobody in the department has read yet should
+    not be. The officer reviews it — the printed blank sheet is the easiest way
+    — adjusts anything their SOPs word differently, and publishes it themselves.
+
+    Goes through ``SkillTemplateCreate`` rather than straight into the model, so
+    the criterion-type whitelist and every other schema rule apply to imported
+    content exactly as they do to hand-authored content. An import path that
+    bypassed that validation is how unscorable templates got into a database
+    once already.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    sheet = sheet_by_slug(slug)
+    if sheet is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No starter sheet with that id",
+        )
+
+    # Validated, not trusted. Same gate as an authored template.
+    payload = SkillTemplateCreate(**build_template_payload(sheet))
+
+    new_template = SkillTemplate(
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        name=payload.name,
+        description=payload.description,
+        category=payload.category,
+        sections=[s.model_dump() for s in payload.sections],
+        time_limit_seconds=payload.time_limit_seconds,
+        passing_percentage=payload.passing_percentage,
+        require_all_critical=payload.require_all_critical,
+        score_pass_fail_criteria=payload.score_pass_fail_criteria,
+        tags=payload.tags,
+        visibility=payload.visibility,
+        status=SkillTemplateStatus.DRAFT.value,
+    )
+
+    db.add(new_template)
+    await db.commit()
+    await db.refresh(new_template)
+
+    await log_audit_event(
+        db=db,
+        event_type="skill_template_imported",
+        event_category="training",
+        severity="info",
+        event_data={
+            "template_id": str(new_template.id),
+            "template_name": new_template.name,
+            "library_slug": slug,
         },
         user_id=str(current_user.id),
         username=current_user.username,
