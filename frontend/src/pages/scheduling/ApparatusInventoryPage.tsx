@@ -43,7 +43,7 @@ import type { ApparatusListItem } from '../../modules/apparatus/types';
 import { PromptDialog } from '../../components/ux';
 import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { formatDate, formatDateTime } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 
 /** The list endpoint's ceiling; asking for more is rejected outright. */
@@ -257,7 +257,11 @@ const ApparatusInventoryPage: React.FC = () => {
                   Lot <span className="font-mono">{item.lotNumber}</span>
                 </span>
               )}
-              {item.expirationDate && <span>Exp {formatDate(item.expirationDate, tz)}</span>}
+              {item.expirationDate && (
+                <span>
+                  Exp {formatCalendarDate(item.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                </span>
+              )}
               {item.targetQuantity != null && (
                 <span className={item.isShort ? 'font-medium text-orange-600 dark:text-orange-400' : ''}>
                   {item.quantityOnTruck ?? item.targetQuantity} of {item.targetQuantity}
@@ -550,8 +554,10 @@ const ApparatusInventoryPage: React.FC = () => {
                         {lot.lotNumber || 'No lot #'}
                       </p>
                       <p className="text-theme-text-muted text-xs">
-                        {lot.expirationDate ? `Exp ${formatDate(lot.expirationDate, tz)}` : 'No expiration'} ·{' '}
-                        {lot.quantity} ready
+                        {lot.expirationDate
+                          ? `Exp ${formatCalendarDate(lot.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                          : 'No expiration'}{' '}
+                        · {lot.quantity} ready
                       </p>
                     </div>
                     <button

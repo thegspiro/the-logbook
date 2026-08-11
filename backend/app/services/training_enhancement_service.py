@@ -73,6 +73,11 @@ class RecertificationService:
         )
         self.db.add(pathway)
         await self.db.flush()
+        # `created_at` / `updated_at` are server-side defaults, so a flush leaves
+        # them expired rather than fetching the values back. See update_pathway:
+        # the endpoint serialises this object after committing, where the lazy
+        # reload raises MissingGreenlet and the POST 500s on a row it did create.
+        await self.db.refresh(pathway)
         return pathway
 
     async def update_pathway(
@@ -226,6 +231,9 @@ class CompetencyService:
         )
         self.db.add(matrix)
         await self.db.flush()
+        # See create_pathway: server-side timestamps stay expired after a flush
+        # and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(matrix)
         return matrix
 
     async def update_matrix(
@@ -309,6 +317,9 @@ class InstructorQualificationService:
         )
         self.db.add(qual)
         await self.db.flush()
+        # See create_pathway: server-side timestamps stay expired after a flush
+        # and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(qual)
         return qual
 
     async def update_qualification(
@@ -391,6 +402,9 @@ class TrainingEffectivenessService:
         )
         self.db.add(evaluation)
         await self.db.flush()
+        # See create_pathway: server-side timestamps stay expired after a flush
+        # and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(evaluation)
         return evaluation
 
     async def get_evaluations(
@@ -514,6 +528,9 @@ class MultiAgencyService:
         )
         self.db.add(exercise)
         await self.db.flush()
+        # See create_pathway: server-side timestamps stay expired after a flush
+        # and cannot be lazy-loaded during response serialisation.
+        await self.db.refresh(exercise)
         return exercise
 
     async def update_exercise(
@@ -629,6 +646,10 @@ class XAPIService:
         )
         self.db.add(statement)
         await self.db.flush()
+        # See create_pathway: `created_at` is a server-side default and stays
+        # expired after a flush, so it cannot be lazy-loaded during response
+        # serialisation.
+        await self.db.refresh(statement)
         return statement
 
     async def ingest_batch(

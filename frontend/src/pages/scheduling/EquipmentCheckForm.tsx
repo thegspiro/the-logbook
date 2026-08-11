@@ -42,7 +42,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLot } from '../../services/eventServices';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { formatDate, getTodayLocalDate } from '../../utils/dateFormatting';
+import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import {
@@ -1597,7 +1597,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 Swapped in
                 {swapOverrides[item.id]?.lotNumber ? ` Lot ${swapOverrides[item.id]?.lotNumber}` : ' fresh stock'}
                 {swapOverrides[item.id]?.expirationDate
-                  ? ` · exp ${formatDate(swapOverrides[item.id]?.expirationDate, tz)}`
+                  ? ` · exp ${formatCalendarDate(swapOverrides[item.id]?.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
                   : ''}
               </p>
             )}
@@ -2107,8 +2107,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                         {lot.lot_number || 'No lot #'}
                       </p>
                       <p className="text-theme-text-muted text-xs">
-                        {lot.expiration_date ? `Exp ${formatDate(lot.expiration_date, tz)}` : 'No expiration'} ·{' '}
-                        {lot.quantity} ready
+                        {lot.expiration_date
+                          ? `Exp ${formatCalendarDate(lot.expiration_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                          : 'No expiration'}{' '}
+                        · {lot.quantity} ready
                       </p>
                     </div>
                     <button

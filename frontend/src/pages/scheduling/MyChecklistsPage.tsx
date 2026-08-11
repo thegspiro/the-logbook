@@ -20,7 +20,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftEquipmentCheckRecord, EquipmentCheckTemplate } from '../../modules/scheduling/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../../modules/scheduling/services/api';
-import { formatDate, formatTime } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatDate, formatTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useAuthStore } from '../../stores/authStore';
@@ -520,7 +520,16 @@ export const MyChecklistsPage: React.FC = () => {
 
                     <div className="text-theme-text-muted mb-1 flex items-center gap-1.5 text-xs">
                       <Calendar className="h-3 w-3" />
-                      <span>{formatDate(checklist.shiftDate, timezone)}</span>
+                      {/* A shift date is a calendar date, not an instant. Run
+                          through the timezone it named the day before the
+                          shift, so every checklist card was dated a day early. */}
+                      <span>
+                        {formatCalendarDate(checklist.shiftDate, {
+                          year: 'numeric',
+                          month: 'numeric',
+                          day: 'numeric',
+                        })}
+                      </span>
                     </div>
 
                     <p className="text-theme-text-primary text-sm font-medium">{checklist.templateName}</p>

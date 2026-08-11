@@ -3705,6 +3705,12 @@ class MembershipPipelineService:
         )
 
         await self.db.commit()
+        # `created_at` / `updated_at` are server-side defaults, so the INSERT
+        # leaves them expired. The endpoint serialises this object through a
+        # response_model that requires both, and Pydantic's attribute read is
+        # synchronous — the lazy reload it triggers raises MissingGreenlet and
+        # the POST 500s on a package it did create. Load them here instead.
+        await self.db.refresh(pkg)
         return pkg
 
     _ELECTION_PKG_PROTECTED_FIELDS = frozenset(
@@ -4594,6 +4600,12 @@ class MembershipPipelineService:
         )
 
         await self.db.commit()
+
+        # The commit expired every attribute on `link`, and the response below
+        # reads several of them — including the server-side `created_at`. Those
+        # reads are synchronous, so the lazy reload they trigger raises
+        # MissingGreenlet and the POST 500s on a link it did create.
+        await self.db.refresh(link)
 
         # Return enriched response
         linker_result = await self.db.execute(select(User).where(User.id == linked_by))
