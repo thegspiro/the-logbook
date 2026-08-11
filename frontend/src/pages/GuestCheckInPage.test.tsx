@@ -159,7 +159,6 @@ describe('GuestCheckInPage', () => {
             attendee_id: 'att-1',
             event_name: 'Volunteer Interest Night',
             checked_in_at: '2026-08-09T23:05:00Z',
-            prospect_created: true,
             message: "You're signed in to Volunteer Interest Night.",
           },
         }
@@ -197,7 +196,6 @@ describe('GuestCheckInPage', () => {
             attendee_id: 'a',
             event_name: 'x',
             checked_in_at: '',
-            prospect_created: false,
             message: 'ok',
           },
         }
@@ -215,7 +213,7 @@ describe('GuestCheckInPage', () => {
       expect(body).not.toHaveProperty('phone');
     });
 
-    it('tells the guest a follow-up is coming when a prospect was created', async () => {
+    it('tells the guest a follow-up is coming when the event collects prospect details', async () => {
       const user = userEvent.setup();
       mockFetchSequence(
         { ok: true, body: eventInfo },
@@ -227,7 +225,6 @@ describe('GuestCheckInPage', () => {
             attendee_id: 'att-1',
             event_name: 'Volunteer Interest Night',
             checked_in_at: '2026-08-09T23:05:00Z',
-            prospect_created: true,
             message: 'Signed in.',
           },
         }
@@ -244,10 +241,10 @@ describe('GuestCheckInPage', () => {
       });
     });
 
-    it('does not promise a follow-up when no prospect was created', async () => {
+    it('does not promise a follow-up when the event does not collect prospect details', async () => {
       const user = userEvent.setup();
       mockFetchSequence(
-        { ok: true, body: eventInfo },
+        { ok: true, body: { ...eventInfo, collects_prospect_details: false } },
         {
           ok: true,
           status: 201,
@@ -256,7 +253,6 @@ describe('GuestCheckInPage', () => {
             attendee_id: 'att-1',
             event_name: 'Volunteer Interest Night',
             checked_in_at: '2026-08-09T23:05:00Z',
-            prospect_created: false,
             message: 'Signed in.',
           },
         }
