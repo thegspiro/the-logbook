@@ -13,12 +13,15 @@ from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
+from app.api.v1.endpoints.equipment_check import update_deployed_lot
 from app.models.apparatus import (
     CheckItemDeployedLot,
     CheckTemplateItem,
     TemplateChangeLog,
 )
+from app.schemas.equipment_check import DeployedLotUpdateRequest
 from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_service import InventoryService
 
@@ -747,6 +750,81 @@ class TestUpdateDeployedLot:
         )
 
         assert result is None
+
+
+class TestUpdateDeployedLotAuthorization:
+    """Counts are crew corrections; compliance metadata is privileged."""
+
+    @staticmethod
+    def _user():
+        return MagicMock(organization_id="org-1")
+
+    async def test_submitter_cannot_rewrite_expiration(self, mock_db):
+        with patch(
+            "app.api.v1.endpoints.equipment_check._collect_user_permissions",
+            return_value={"equipment_check.submit"},
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await update_deployed_lot(
+                    "ti-1",
+                    "dl-1",
+                    DeployedLotUpdateRequest(
+                        quantity=1, expiration_date=date(2099, 1, 1)
+                    ),
+                    mock_db,
+                    self._user(),
+                )
+
+        assert exc.value.status_code == 403
+
+    async def test_submitter_can_still_correct_quantity(self, mock_db):
+        with (
+            patch(
+                "app.api.v1.endpoints.equipment_check._collect_user_permissions",
+                return_value={"equipment_check.submit"},
+            ),
+            patch(
+                "app.api.v1.endpoints.equipment_check.EquipmentCheckService"
+            ) as service_class,
+        ):
+            service_class.return_value.update_deployed_lot = AsyncMock(
+                return_value={"lots": []}
+            )
+            await update_deployed_lot(
+                "ti-1",
+                "dl-1",
+                DeployedLotUpdateRequest(quantity=1),
+                mock_db,
+                self._user(),
+            )
+
+        service_class.return_value.update_deployed_lot.assert_awaited_once()
+
+    async def test_inventory_manager_can_rewrite_expiration(self, mock_db):
+        with (
+            patch(
+                "app.api.v1.endpoints.equipment_check._collect_user_permissions",
+                return_value={"inventory.manage"},
+            ),
+            patch(
+                "app.api.v1.endpoints.equipment_check.EquipmentCheckService"
+            ) as service_class,
+        ):
+            service_class.return_value.update_deployed_lot = AsyncMock(
+                return_value={"lots": []}
+            )
+            await update_deployed_lot(
+                "ti-1",
+                "dl-1",
+                DeployedLotUpdateRequest(quantity=1, expiration_date=None),
+                mock_db,
+                self._user(),
+            )
+
+        updates = service_class.return_value.update_deployed_lot.await_args.kwargs[
+            "updates"
+        ]
+        assert updates == {"quantity": 1, "expiration_date": None}
 
 
 class TestUnitLabels:
