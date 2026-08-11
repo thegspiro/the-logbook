@@ -83,13 +83,16 @@ Click on any member in the directory to view their profile. The profile page inc
 
 Members and officers can upload a profile photo:
 
-1. Click the **photo area** on the member's profile (or the camera icon).
-2. Select an image file (JPEG, PNG, or WebP).
-3. Preview and crop the image.
-4. Click **Upload** to save.
+1. Hover the **photo area** on the member's profile — **Upload** appears over
+   it, or **Change** where there is already a photo. On a phone the control is
+   always visible rather than waiting for a hover that cannot happen.
+2. Choose an image file — **JPEG, PNG or WebP, under 5 MB**. Anything else is
+   refused with the reason, before it is sent.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the photo upload modal showing the image preview with crop controls and Upload/Cancel buttons]_
+**The file uploads the moment you choose it.** There is no preview step, no
+crop tool and no Save button: the picture is taken as it comes, so crop it
+before you choose it if it needs cropping. **Remove photo** beside the avatar
+takes it away again.
 
 ### Member Self-Edit
 
@@ -209,8 +212,17 @@ What is checked before anything is created:
 | Duplicates **against the existing roster** | `membershipNumber: 214 belongs to J. Alvarez`                                                 |
 | Row width vs. header width                 | `row has 19 values, header has 21`                                                            |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Import Members review step showing a summary bar reading "58 rows will import, 4 will be skipped", a "Send welcome emails" checkbox left unchecked, and a rejected-rows table listing line numbers with multiple reasons per row]_
+The review reads the count back before anything happens — **"2 of 6 rows are
+ready; 4 will be skipped"** — previews the rows that will import, and lists the
+ones that will not **by their line number in your file**, each with the reason
+in the words above. **Send welcome emails now** is off unless you turn it on,
+and the button says how many members it is about to create.
+
+![The import review — the rows that will import, the rows that will not with their reasons, and the welcome-email choice](./images/01-33-import-review-rejected-rows.png)
+
+A second notice names the optional columns your file left out — "Importing
+without 15 optional column(s)" — which is information, not a fault: those
+members import, with those fields empty.
 
 ### The Rejected-Rows Report
 
@@ -460,8 +472,11 @@ Prospective members can indicate their preferred membership type when applying:
 - During conversion to full member, the system pre-fills "Regular" or "Administrative" based on the prospect's selection
 - Regular members start with probationary status; administrative members start with active status
 
-> **Screenshot needed:**
-> _[Screenshot of the Desired Membership Type cards in a prospect's detail drawer, with Regular Member selected and Administrative alongside it]_
+![Desired Membership Type — Regular Member selected, Administrative beside it as the alternative](./images/01-34-desired-membership-type.png)
+
+The selected card is outlined and **not clickable** — there is nothing to
+confirm and nothing to undo, because clicking the other card is both the change
+and its reversal.
 
 > **Edge case:** If a prospect's desired membership type is changed from "Regular" to "Administrative" after they have already passed an election/vote stage, the system does not retroactively invalidate the vote. The coordinator should verify that the voting requirements for administrative members were met.
 

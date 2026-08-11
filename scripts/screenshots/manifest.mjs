@@ -3027,6 +3027,80 @@ export const SHOTS = [
     selector: "div.fixed.inset-0",
   },
   {
+    id: "01-34-desired-membership-type",
+    doc: "01-membership.md",
+    line: 480,
+    anchor: "The Desired Membership Type cards in a prospect's detail drawer",
+    alt: "Desired Membership Type — Regular Member selected, Administrative beside it as the alternative",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      await page.waitForTimeout(2500);
+      await page
+        .locator("[role='button'][aria-label]")
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2000);
+      const section = page
+        .locator("div:has(> h3:text-is('Desired Membership Type'))")
+        .last();
+      await section.waitFor({ timeout: 20_000 });
+      await section.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    // The pair, not one card: the point is that the other is one click away.
+    selector: "div:has(> h3:text-is('Desired Membership Type'))",
+  },
+  {
+    id: "01-33-import-review-rejected-rows",
+    doc: "01-membership.md",
+    line: 212,
+    anchor: "The Import Members review step",
+    alt: "The import review — the rows that will import, the rows that will not with their reasons, and the welcome-email choice",
+    route: "/members/admin?tab=import",
+    prepare: async (page) => {
+      await page.waitForTimeout(2500);
+      // A roster with real faults in it: a missing surname, a rank the
+      // department does not have, a malformed address and a duplicate email.
+      // The file never leaves the browser — the review step is reached without
+      // importing anything, and this stops short of the Import button.
+      const header = [
+        "firstName",
+        "lastName",
+        "membershipNumber",
+        "username",
+        "dateOfBirth",
+        "email",
+        "joinDate",
+        "rank",
+        "emergencyName1",
+        "emergencyRelationship1",
+        "emergencyPhone1",
+      ];
+      const rows = [
+        ["Wren", "Adisa", "241", "wadisa", "1994-02-11", "wren.adisa@example.org", "2026-02-01", "firefighter", "Ada Adisa", "Sister", "555-0142"],
+        ["Tomas", "Vlk", "242", "tvlk", "1990-07-03", "tomas.vlk@example.org", "2026-02-01", "emt", "Petra Vlk", "Spouse", "555-0143"],
+        ["Ines", "", "243", "ifer", "1988-11-30", "ines.ferreira@example.org", "2026-02-01", "firefighter", "Luis Ferreira", "Father", "555-0144"],
+        ["Bo", "Nakashima", "244", "bn", "1996-05-19", "bo.nakashima@example.org", "2026-02-01", "Engine Operator", "Rei Nakashima", "Mother", "555-0145"],
+        ["Hala", "Zayed", "245", "hzayed", "not-a-date", "hala.zayed@example.org", "2026-02-01", "emt", "Omar Zayed", "Brother", "555-0146"],
+        ["Petr", "Vlk", "246", "pvlk", "1992-09-08", "tomas.vlk@example.org", "2026-02-01", "firefighter", "Jana Vlk", "Spouse", "555-0147"],
+      ];
+      const csv = [header, ...rows].map((line) => line.join(",")).join("\n");
+      await page
+        .locator('input[data-testid="csv-file-input"]')
+        .setInputFiles({
+          name: "roster.csv",
+          mimeType: "text/csv",
+          buffer: Buffer.from(csv, "utf8"),
+        });
+      await page.waitForTimeout(2500);
+      const rejected = page.getByText(/row\(s\) will not be imported/);
+      await rejected.waitFor({ timeout: 20_000 });
+      await rejected.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    viewport: { width: 1400, height: 1100 },
+  },
+  {
     id: "01-32-duplicate-applicant-warning",
     doc: "01-membership.md",
     line: 1055,
