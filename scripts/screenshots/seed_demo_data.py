@@ -116,6 +116,10 @@ OFFICER_RANKS = frozenset(
 # per-section point totals and a percentage.
 SCORED_TEMPLATE_NAME = "Handline Advance — Weighted Evaluation"
 
+# The candidate on the one failed test. Not the demo member, whose passed test
+# the scorecard screenshots are built around.
+FAILED_TEST_CANDIDATE_USERNAME = "cfrazier"
+
 # How many active applicants `--bulk-prospects` tops the pipeline up to.
 # Comfortably past the board's 200-card ceiling, so the truncation notice reads
 # as a real overflow rather than an off-by-one, while staying small enough to
@@ -5798,6 +5802,122 @@ class Seeder:
         )
         return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
 
+    def seed_failed_test(
+        self, templates: list[dict], members: list[dict]
+    ) -> dict | None:
+        """One completed test that did not pass, on the weighted sheet.
+
+        Every seeded test passed, so the result screen could only ever be
+        photographed green — and the guide's whole Result Determination section
+        is about the other outcome. This one fails both ways at once, which is
+        the case worth showing: the percentage lands under the passing mark
+        *and* a critical step was marked failed, so an examiner can see which of
+        the two sank it.
+        """
+        scored_template = next(
+            (t for t in templates if pick(t, "name") == SCORED_TEMPLATE_NAME), None
+        )
+        if not scored_template or not members:
+            return None
+        template_id = pick(scored_template, "id")
+
+        existing = items(
+            self.api.get("/training/skills-testing/tests?limit=100"), "tests"
+        )
+        for test in existing:
+            if pick(test, "result") == "fail":
+                return test
+
+        examiner_id = next(
+            (
+                pick(m, "id")
+                for m in members
+                if pick(m, "username") == DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        candidate = next(
+            (
+                m
+                for m in members
+                if pick(m, "username") == FAILED_TEST_CANDIDATE_USERNAME
+                and pick(m, "id") != examiner_id
+            ),
+            None,
+        )
+        if not candidate or not template_id:
+            return None
+
+        test = self.api.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": pick(candidate, "id"),
+                "notes": "First attempt. Re-test scheduled.",
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        # Under the passing mark on points, and the critical step failed — the
+        # two independent ways to fail, so the screen names both.
+        awarded = {
+            "Selects and stretches the correct line": 5,
+            "Advances without kinks or snags": 4,
+            "Bleeds the line and sets the pattern": 6,
+            "Maintains control under flow": 9,
+        }
+        failed_labels = {"Full PPE worn, including hood and gloves"}
+        notes = {
+            "Advances without kinks or snags": (
+                "Line kinked twice on the stairwell; lost time clearing it."
+            ),
+            "Full PPE worn, including hood and gloves": (
+                "Hood not deployed before entry."
+            ),
+        }
+
+        detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
+        section_results = []
+        for si, section in enumerate(detail.get("template_sections") or []):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if (
+                    not isinstance(criterion, dict)
+                    or criterion.get("type") == "statement"
+                ):
+                    continue
+                label = criterion.get("label", "")
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": label,
+                        "passed": label not in failed_labels,
+                        "score": awarded.get(label),
+                        "notes": notes.get(label),
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+
+        self.api.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 337,
+            },
+        )
+        return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
+
     def seed_in_progress_test(
         self, templates: list[dict], members: list[dict]
     ) -> dict | None:
@@ -7658,6 +7778,10 @@ class Seeder:
         self.step(
             "skills test with points",
             lambda: self.seed_scored_test(templates, members),
+        )
+        self.step(
+            "skills test that failed",
+            lambda: self.seed_failed_test(templates, members),
         )
         self.step(
             "skills test in progress",

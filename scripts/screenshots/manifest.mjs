@@ -6528,6 +6528,64 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "09-19-failed-test-result",
+    doc: "09-skills-testing.md",
+    line: 537,
+    anchor: "The test completion/results screen",
+    alt: "A failed scorecard — the result, the percentage against the passing mark, and the critical step that failed on its own",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=100",
+      (id) => `/training/skills-testing/test/${id}`,
+      "tests",
+      (test) => test.result === "fail",
+    ),
+    fullPage: false,
+    viewport: { width: 1440, height: 1100 },
+  },
+  {
+    id: "09-18-finish-with-unscored-steps",
+    doc: "09-skills-testing.md",
+    line: 510,
+    anchor: "The \"finish with unscored steps\" dialog",
+    alt: "The warning raised on finishing — how many steps have no score, what an unscored critical step costs, and the choice between going back and reviewing anyway",
+    route: "/training/skills-testing",
+    prepare: async (page) => {
+      const testId = await page.evaluate(async () => {
+        const response = await fetch(
+          "/api/v1/training/skills-testing/tests?limit=50",
+          { credentials: "include" },
+        );
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body) ? body : (body.tests ?? []);
+        const wanted = rows.find((row) => row.status === "in_progress");
+        return wanted ? wanted.id : null;
+      });
+      if (!testId) throw new Error("09-18: no test is part-scored");
+      await page.goto(
+        new URL(
+          `/training/skills-testing/test/${testId}/active`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(3000);
+      // Raised *before* review is entered and before anything is written, so
+      // this stops at the question rather than answering it.
+      await page
+        .getByRole("button", { name: /^Finish( & Review)?$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(1200);
+      await page
+        .getByText(/Some steps have no score/)
+        .first()
+        .waitFor({ timeout: 20_000 });
+    },
+    selector: "div[role='dialog'], div.fixed.inset-0 > div",
+  },
+  {
     id: "09-17-scoring-criteria-mix",
     doc: "09-skills-testing.md",
     line: 480,
