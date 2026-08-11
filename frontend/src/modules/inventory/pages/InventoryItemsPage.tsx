@@ -28,6 +28,8 @@ import {
   UserPlus,
   CheckCircle2,
   XCircle,
+  ListPlus,
+  Upload,
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -44,6 +46,7 @@ import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import { ItemFormModal } from '../components/ItemFormModal';
 import ReceiveStockModal from '../components/ReceiveStockModal';
+import BulkAddItemsModal from '../components/BulkAddItemsModal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import type {
@@ -340,6 +343,7 @@ const InventoryItemsPage: React.FC = () => {
   const [selIds, setSelIds] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState('');
@@ -670,6 +674,24 @@ const InventoryItemsPage: React.FC = () => {
             >
               <PackagePlus className="h-4 w-4" /> Receive Stock
             </button>
+          )}
+          {canManage && (
+            <button
+              onClick={() => setBulkAddOpen(true)}
+              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+              title="Paste a list of item names"
+            >
+              <ListPlus className="h-4 w-4" /> Add Several
+            </button>
+          )}
+          {canManage && (
+            <Link
+              to="/inventory/import"
+              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+              title="Import items from a CSV file"
+            >
+              <Upload className="h-4 w-4" /> Import CSV
+            </Link>
           )}
           {canManage && (
             <button onClick={openAdd} className="btn-info btn-md hidden items-center gap-2 sm:inline-flex">
@@ -1017,6 +1039,12 @@ const InventoryItemsPage: React.FC = () => {
       />
 
       <ReceiveStockModal isOpen={receiveOpen} onClose={() => setReceiveOpen(false)} onReceived={refresh} />
+      <BulkAddItemsModal
+        isOpen={bulkAddOpen}
+        onClose={() => setBulkAddOpen(false)}
+        categories={categories}
+        onCreated={refresh}
+      />
 
       {/* Quick-assign: pick a member, then assign items to them */}
       <MemberPickerModal

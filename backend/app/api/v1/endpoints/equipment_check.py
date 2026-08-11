@@ -39,6 +39,9 @@ from app.schemas.equipment_check import (
     EquipmentCheckTemplateResponse,
     EquipmentCheckTemplateUpdate,
     FailureLogResponse,
+    InventoryLinkRequest,
+    InventoryLinkResponse,
+    InventoryMatchesResponse,
     ItemDeployedLots,
     ItemDeployment,
     ItemQuantityRequest,
@@ -235,6 +238,66 @@ async def clone_template(
         return template
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+# =====================================================================
+# Catalog Linking (template setup)
+# =====================================================================
+
+
+@router.get(
+    "/templates/{template_id}/inventory-matches",
+    response_model=InventoryMatchesResponse,
+)
+async def suggest_inventory_matches(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Propose a catalog item for each unlinked position on this template.
+
+    Read-only — nothing is linked until the reviewed set comes back through
+    ``POST /templates/{id}/inventory-links``.
+
+    **Requires permission: equipment_check.manage**
+    """
+    service = EquipmentCheckService(db)
+    result = await service.suggest_inventory_matches(
+        template_id, current_user.organization_id
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return result
+
+
+@router.post(
+    "/templates/{template_id}/inventory-links",
+    response_model=InventoryLinkResponse,
+)
+async def link_inventory_items(
+    template_id: str,
+    data: InventoryLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Apply a reviewed set of catalog links to this template's items.
+
+    **Requires permission: equipment_check.manage**
+    """
+    service = EquipmentCheckService(db)
+    try:
+        changed = await service.link_inventory_items(
+            template_id, current_user.organization_id, data.links
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if changed is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    coverage = await service.get_link_coverage(
+        template_id, current_user.organization_id
+    )
+    return {"linked": changed, "coverage": coverage or {}}
 
 
 # =====================================================================

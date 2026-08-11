@@ -1141,6 +1141,30 @@ export interface InventoryItemsListResponse {
   limit: number;
 }
 
+/**
+ * One line of a pasted list of catalog items.
+ *
+ * Deliberately a small subset of InventoryItemCreate. This path exists to get
+ * names on file fast; the detail that matters per item is edited afterwards,
+ * on the item, where there is room for it.
+ */
+export interface InventoryItemBulkEntry {
+  name: string;
+  description?: string | undefined;
+  category_id?: string | undefined;
+  unit_of_measure?: string | undefined;
+  quantity?: number | undefined;
+  reorder_point?: number | undefined;
+  tracking_type?: 'individual' | 'pool' | undefined;
+}
+
+export interface InventoryItemBulkResult {
+  created: number;
+  /** Names already in the catalog — reported rather than treated as failures. */
+  skipped: string[];
+  item_ids: string[];
+}
+
 export interface InventoryImportResult {
   imported: number;
   failed: number;

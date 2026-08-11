@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 
@@ -73,6 +73,32 @@ const template = (itemOverrides = {}) => ({
           ...itemOverrides,
         },
       ],
+    },
+  ],
+});
+
+/** A compartment where every item is one short of a par of ten. */
+const multiItemTemplate = (count: number) => ({
+  ...template(),
+  compartments: [
+    {
+      id: 'c-1',
+      templateId: 'tmpl-1',
+      name: 'Front Bumper',
+      sortOrder: 0,
+      items: Array.from({ length: count }, (_, i) => ({
+        id: `ti-${i + 1}`,
+        compartmentId: 'c-1',
+        name: `Item ${i + 1}`,
+        sortOrder: i,
+        checkType: 'quantity',
+        isRequired: true,
+        requiredQuantity: 10,
+        expectedQuantity: 10,
+        quantityOnTruck: 1,
+        hasExpiration: false,
+        expirationWarningDays: 30,
+      })),
     },
   ],
 });
@@ -172,8 +198,10 @@ describe('EquipmentCheckForm quantity seeding', () => {
     await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
 
     // Par writes over what is shown, so putting six gauze on the record that
-    // are not in the bag has to be a decision, not a fast path.
-    expect(await screen.findByText(/showing below the required quantity/)).toBeInTheDocument();
+    // are not in the bag has to be a decision, not a fast path — and the
+    // decision needs the size of the claim, not just the fact of one.
+    expect(await screen.findByText(/This item is.* below the required quantity/)).toBeInTheDocument();
+    expect(screen.getByText('18 → 24')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Keep the counts/ }));
 
     await waitFor(() => {
@@ -187,7 +215,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     await screen.findByDisplayValue('18');
 
     await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
-    await user.click(await screen.findByRole('button', { name: /Yes, they are full/ }));
+    await user.click(await screen.findByRole('button', { name: /Yes, it is full/ }));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('24')).toBeInTheDocument();
@@ -264,6 +292,48 @@ describe('EquipmentCheckForm quantity seeding', () => {
     });
 
     expect(await screen.findByText('EXPIRED')).toBeInTheDocument();
+  });
+
+  it('itemizes every shortfall rather than running them into a sentence', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={multiItemTemplate(3) as never} />);
+    await screen.findAllByDisplayValue('1');
+
+    await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
+
+    // Three names joined by commas inside a paragraph is not something a crew
+    // can read at 6am, and prose cannot say how short each one is.
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.getByText(/These 3 items are below the required quantity/)).toBeInTheDocument();
+    expect(dialog.getByText('Item 1')).toBeInTheDocument();
+    expect(dialog.getByText('Item 3')).toBeInTheDocument();
+    expect(dialog.getAllByText('1 → 10')).toHaveLength(3);
+  });
+
+  it('summarizes the tail so a long list cannot fill the screen', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={multiItemTemplate(9) as never} />);
+    await screen.findAllByDisplayValue('1');
+
+    await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
+
+    // Six named, the rest counted: the dialog stays glanceable whether the
+    // compartment is two items short or twenty.
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.getByText('Item 6')).toBeInTheDocument();
+    expect(dialog.queryByText('Item 7')).not.toBeInTheDocument();
+    expect(dialog.getByText(/and 3 more items below par/)).toBeInTheDocument();
+  });
+
+  it('counts the items in the title so the ask is clear before reading', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={multiItemTemplate(4) as never} />);
+    await screen.findAllByDisplayValue('1');
+
+    await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
+
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.getByText('Record 4 items at full?')).toBeInTheDocument();
   });
 
   it('records a corrected date without leaving the check', async () => {

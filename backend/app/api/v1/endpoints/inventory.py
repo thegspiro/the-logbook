@@ -92,6 +92,8 @@ from app.schemas.inventory import (
     InventoryCategoryCreate,
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
+    InventoryItemBulkCreate,
+    InventoryItemBulkResult,
     InventoryItemCreate,
     InventoryItemResponse,
     InventoryItemUpdate,
@@ -518,6 +520,62 @@ async def create_item(
     )
 
     return new_item
+
+
+@router.post(
+    "/items/bulk",
+    response_model=InventoryItemBulkResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_items_bulk(
+    data: InventoryItemBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create many inventory items in one pass.
+
+    Names already in the catalog are skipped and reported, not rejected, so a
+    list can be re-pasted after it grows. Any validation failure writes
+    nothing.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    try:
+        items, skipped = await service.create_items_bulk(
+            organization_id=current_user.organization_id,
+            entries=[e.model_dump(exclude_unset=True) for e in data.entries],
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(str(e)),
+        )
+
+    if items:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_items_bulk_created",
+            event_category="inventory",
+            severity="info",
+            event_data={"count": len(items), "skipped": len(skipped)},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "items_bulk_created",
+            {"count": len(items)},
+        )
+
+    return InventoryItemBulkResult(
+        created=len(items),
+        skipped=skipped,
+        item_ids=[item.id for item in items],
+    )
 
 
 @router.get("/items/export")

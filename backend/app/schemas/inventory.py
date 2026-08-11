@@ -283,6 +283,39 @@ class InventoryItemCreate(InventoryItemBase):
     """Schema for creating a new inventory item"""
 
 
+class InventoryItemBulkEntry(BaseModel):
+    """One line of a pasted or imported list of catalog items.
+
+    Deliberately a small subset of the full create schema. This path exists to
+    get names into the catalog fast — the detail that matters per item is
+    edited afterwards, on the item, where there is room for it.
+    """
+
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[FreeText] = None
+    category_id: Optional[UUID] = None
+    unit_of_measure: Optional[str] = Field(None, max_length=50)
+    quantity: Optional[int] = Field(None, ge=0)
+    reorder_point: Optional[int] = Field(None, ge=0)
+    tracking_type: Optional[TrackingTypeLiteral] = None
+
+
+class InventoryItemBulkCreate(BaseModel):
+    """A list of catalog items entered in one pass."""
+
+    entries: List[InventoryItemBulkEntry] = Field(..., min_length=1, max_length=500)
+
+
+class InventoryItemBulkResult(BaseModel):
+    """What a bulk create wrote, and what it left alone."""
+
+    created: int = 0
+    # Names already in the catalog. Reported rather than rejected so re-pasting
+    # a list that grew by two lines does the obvious thing.
+    skipped: List[str] = []
+    item_ids: List[UUID] = []
+
+
 class InventoryItemUpdate(BaseModel):
     """Schema for updating an inventory item"""
 
