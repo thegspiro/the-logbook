@@ -413,18 +413,15 @@ class TestShiftCRUD:
             org_id, restrict_checkin_to_assigned=True
         )
 
-        # A shift whose window is open *now*, not a fixed 07:00: check-in is
-        # also bounded by the shift it is for, and a shift that started at
-        # seven this morning is refused with "ended too long ago" by the time
-        # the suite runs in the afternoon — so this test passed before lunch
-        # and failed after it, on the wrong guard entirely.
-        now = datetime.now()
+        # Anchor the shift to the current time: a fixed 07:00 start with no end
+        # collapses the check-in window to 07:00 UTC + 12h, so the window guard
+        # (checked before the assignment guard) rejects any run after 19:00 UTC.
+        now = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
         shift, _ = await svc.create_shift(
             uuid.UUID(org_id),
             {
                 "shift_date": now.date(),
-                "start_time": now - timedelta(hours=1),
-                "end_time": now + timedelta(hours=1),
+                "start_time": now,
             },
             uuid.UUID(user_id),
         )
@@ -432,10 +429,12 @@ class TestShiftCRUD:
         # An unrostered member is blocked from checking in.
         result, err = await svc.member_check_in(shift.id, user2_id, uuid.UUID(org_id))
         assert result is None
-        assert "not assigned" in err.lower(), (
-            "the roster guard must be what refuses this, not the check-in "
-            f"window: {err}"
-        )
+        # Naming the guard, not just the refusal: the window guard runs first
+        # and also returns a message, so a bare "is there an error" assertion
+        # passes while testing nothing about the roster.
+        assert (
+            "not assigned" in err.lower()
+        ), f"the roster guard must be what refuses this, not the window: {err}"
 
         # After being assigned, the member can check in.
         await svc.create_assignment(
