@@ -284,19 +284,30 @@ Navigate to **Training > Programs** and click **Create Program** to open the pip
 
 **Required Permission:** `training.manage`
 
-1. Open the program and select the **Enrollments** tab.
-2. Click **Enroll Members** to open the searchable **member picker**.
-3. Search by name and either select a **single** member, or select **multiple** members for a **bulk** enrollment.
-4. Confirm to enroll.
+1. Open the program and click **Enroll**, in the header beside Edit and Duplicate.
+2. Search by name or membership number, and click a member to select them. Each
+   selection appears as a removable chip above the search box, and the button at
+   the foot counts them — **Enroll 3 Members**.
+3. Optionally set a **Target Completion Date**, which applies to everyone in the
+   batch.
+4. Click the button to enrol them.
 
-**Bulk enrollment checks each member first.** The system **skips** any member who:
+**The eligibility check happens before you enrol, not after.** The picker counts
+what it found — "18 of 22 eligible" — and **Show eligible only**, on by default,
+hides the rest. Turn it off and the members who cannot be enrolled are listed
+with the reason on the row and an **Enrolled** badge, and they cannot be
+selected. A member is ineligible when they:
 
-- has **not met the program's prerequisites**, or
-- is already enrolled in a program that **does not allow concurrent enrollment**.
+- have **not met the program's prerequisites**,
+- are already enrolled in a program that **does not allow concurrent
+  enrollment**, or
+- are already on this program.
 
-After a bulk enroll, a summary reports who was enrolled and, for each member who was skipped, **the reason**. Correct the underlying issue (complete the prerequisite, or finish/cancel the conflicting enrollment) and re-run the enrollment for those members.
+So there is no after-the-fact summary of who was skipped and why: you can see it
+before you commit. Correct the underlying issue — complete the prerequisite, or
+finish or cancel the conflicting enrollment — and the member becomes selectable.
 
-> **[SCREENSHOT NEEDED]:** _The Enrollments tab with the member picker open, several members selected for bulk enrollment, and a results summary listing enrolled members alongside skipped members with reasons (e.g., "Prerequisite not met", "Already enrolled in a program that disallows concurrent enrollment")._
+![The Enroll Members picker — members selected, the ineligible listed with their reason, and the button counting the selection](./images/02-96-bulk-enroll-picker.png)
 
 ### Tracking a Member's Progress
 

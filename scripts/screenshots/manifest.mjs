@@ -1894,6 +1894,65 @@ export const SHOTS = [
     viewport: { width: 1800, height: 1300 },
   },
   {
+    id: "02-96-bulk-enroll-picker",
+    doc: "02-training.md",
+    line: 310,
+    anchor: "The Enroll Members picker with several members selected",
+    alt: "The Enroll Members picker — members selected, the ineligible listed with their reason, and the button counting the selection",
+    route: "/training/programs",
+    prepare: async (page) => {
+      const programId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/training/programs/programs", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const list = Array.isArray(rows) ? rows : [];
+        const wanted =
+          list.find((row) => /Probationary/.test(row.name || "")) || list[0];
+        return wanted ? wanted.id : null;
+      });
+      if (!programId) throw new Error("02-96: no training programme to open");
+      await page.goto(
+        new URL(`/training/programs/${programId}`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(2500);
+      await page
+        .getByRole("button", { name: /^Enroll$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2000);
+      // Off, so the members who cannot be enrolled are listed with the reason
+      // rather than filtered away — which is the half of this the guide
+      // described as an after-the-fact summary.
+      await page.getByText(/Show eligible only/).first().click();
+      await page.waitForTimeout(1200);
+      const dialog = page.locator("div.fixed.inset-0").first();
+      // The eligible members sort first, so the first three rows are a
+      // selection the Enroll button will count. Selecting mutates nothing —
+      // only the button does, and it is deliberately not pressed.
+      for (const index of [0, 1, 2]) {
+        await dialog
+          .getByText(/#0\d\d/)
+          .nth(index)
+          .click()
+          .catch(() => {});
+        await page.waitForTimeout(300);
+      }
+      // The list scrolls inside the dialog; its foot is where the ineligible
+      // rows and their reasons are, next to the button carrying the count.
+      await dialog.evaluate((el) => {
+        const scroller = [...el.querySelectorAll("*")].find(
+          (node) => node.scrollHeight > node.clientHeight + 40,
+        );
+        if (scroller) scroller.scrollTop = scroller.scrollHeight;
+      });
+      await page.waitForTimeout(600);
+    },
+    selector: "div.fixed.inset-0 > div",
+  },
+  {
     id: "02-95-knowledge-test-entry",
     doc: "02-training.md",
     line: 379,
