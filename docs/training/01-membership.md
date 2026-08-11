@@ -419,7 +419,21 @@ The pipeline offers two views:
 4. **Back** - If a prospect needs to return to a previous stage (e.g., missing documents discovered after advancing), click **Back** in the prospect's detail drawer. The previous stage's progress is reset to allow re-completion. The button is absent while the prospect is still on the first stage, since there is nowhere to go back to.
 5. **Upload Documents** - Attach application documents, ID copies, or other requirements to the prospect's record. Uploaded files are now stored on the prospect's record and can be downloaded later. Each file may be up to **50 MB**; allowed types are PDF, Word (DOC/DOCX), JPEG, PNG, and GIF.
 
-> **[SCREENSHOT NEEDED]:** _The prospect detail drawer's documents area showing an uploaded file in the list with its download link._
+The **Documents** area sits in the applicant's drawer, below Linked Events.
+**Upload** opens the file picker; each file that lands is listed with its type,
+its size and the date it arrived, and its name is the link that downloads it.
+The bin removes one filed by mistake, after asking.
+
+![An applicant's documents — each with its type, size and upload date, and a link that downloads it](./images/01-31-applicant-documents.png)
+
+> **The area is new** _(2026-08-11)_. The upload endpoint, the download endpoint
+> and the client methods for both had been in place since documents were added,
+> but nothing rendered them — so a file could be attached only by calling the
+> API directly, and no officer could read one back.
+
+Uploading and removing are offered on **active** applicants only. A withdrawn or
+rejected applicant's paperwork stays readable — it is part of the record of the
+decision — but is no longer editable.
 
 6. **Transfer to Member** - When the prospect is approved, click **Transfer to Membership** to convert them to a full member account. The membership type is pre-filled from the prospect's desired type.
 

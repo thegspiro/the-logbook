@@ -3027,6 +3027,32 @@ export const SHOTS = [
     selector: "div.fixed.inset-0",
   },
   {
+    id: "01-31-applicant-documents",
+    doc: "01-membership.md",
+    line: 422,
+    anchor: "The prospect detail drawer's documents area",
+    alt: "An applicant's documents — each with its type, size and upload date, and a link that downloads it",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      await page.waitForTimeout(2500);
+      // The applicant whose paperwork the seeder files — the one furthest
+      // along the pipeline, since an applicant at the first stage with their
+      // ID already on file would say the wrong thing about the process.
+      await page
+        .locator("[role='button'][aria-label*='Bishop']")
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2000);
+      const section = page
+        .locator("div:has(> div > h3:text-is('Documents'))")
+        .last();
+      await section.waitFor({ timeout: 20_000 });
+      await section.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    selector: "div:has(> div > h3:text-is('Documents'))",
+  },
+  {
     id: "01-25-applicant-action-bar",
     doc: "01-membership.md",
     line: 432,

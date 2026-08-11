@@ -346,14 +346,64 @@ def criterion_payload(entry: Any, sort_order: int) -> dict:
     return criterion
 
 
+def _minimal_pdf(title: str, subtitle: str) -> bytes:
+    """A valid single-page PDF, assembled by hand.
+
+    Enough of the format for a magic-byte sniffer to accept it and for a reader
+    to render the two lines: catalog, pages, one page, a Helvetica font and a
+    content stream, with a cross-reference table whose offsets are measured off
+    the bytes actually written.
+    """
+
+    def _escape(text: str) -> str:
+        return text.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+
+    stream = (
+        "BT /F1 18 Tf 72 696 Td (" + _escape(title) + ") Tj ET\n"
+        "BT /F1 11 Tf 72 672 Td (" + _escape(subtitle) + ") Tj ET\n"
+        "BT /F1 11 Tf 72 640 Td (Oakville Fire Department) Tj ET\n"
+    ).encode("latin-1", "replace")
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length "
+        + str(len(stream)).encode()
+        + b" >>\nstream\n"
+        + stream
+        + b"endstream",
+    ]
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets: list[int] = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n".encode() + body + b"\nendobj\n"
+
+    xref_at = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n".encode()
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode()
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_at}\n%%EOF\n"
+    ).encode()
+    return bytes(out)
+
+
 def _demo_pdf(title: str, subtitle: str) -> bytes:
     """A one-page PDF standing in for a real department document.
 
-    The upload route sniffs the MIME type from the file's magic bytes rather
+    The upload routes sniff the MIME type from the file's magic bytes rather
     than trusting the declared Content-Type, so this has to be a genuine PDF,
-    not text with a .pdf name. reportlab is already a backend dependency; where
-    it is missing the caller still gets a valid file, just a plain-text one —
-    text/plain is on the allow-list too.
+    not text with a .pdf name. reportlab is a backend dependency and the seeder
+    is usually run on the system interpreter without it, so the fallback is a
+    hand-built one-page PDF rather than plain text — the prospect-document route
+    allows PDF, Word and images only, and rejected the text file outright.
     """
     try:
         from io import BytesIO
@@ -361,7 +411,7 @@ def _demo_pdf(title: str, subtitle: str) -> bytes:
         from reportlab.lib.pagesizes import LETTER
         from reportlab.pdfgen import canvas
     except ImportError:
-        return f"{title}\n\n{subtitle}\n".encode()
+        return _minimal_pdf(title, subtitle)
 
     buffer = BytesIO()
     page = canvas.Canvas(buffer, pagesize=LETTER)
@@ -6592,7 +6642,62 @@ class Seeder:
         self._enable_public_status(pipelines)
         self._seed_election_packages(prospects)
         self._link_prospect_events(prospects)
+        self._upload_prospect_documents(prospects)
         return {"pipelines": pipelines, "prospects": prospects}
+
+    # The paperwork an applicant hands in, by document type. Two of them, so
+    # the drawer shows a list rather than one row that could be mistaken for
+    # the whole feature.
+    PROSPECT_DOCUMENTS = [
+        ("application", "Membership Application", "Signed application form"),
+        ("id", "Driver's License", "Photo identification on file"),
+    ]
+
+    def _upload_prospect_documents(self, prospects: list[dict]) -> None:
+        """Put real files on an applicant's record.
+
+        Nothing seeded any, so the drawer's documents area could only ever be
+        photographed empty — and the guide describes downloading a file that
+        has been uploaded. Only the furthest-along applicant carries them: an
+        applicant at the first stage with their ID already on file would say
+        the wrong thing about the pipeline.
+        """
+        # The list rows carry the stage's *name*, not its index, so order by
+        # where that name sits in the pipeline this seeder built.
+        stage_order = {
+            stage[0]: index for index, stage in enumerate(self.PIPELINE_STAGES)
+        }
+        target = max(
+            prospects,
+            key=lambda p: stage_order.get(str(pick(p, "current_step_name") or ""), -1),
+            default=None,
+        )
+        if not target:
+            return
+        prospect_id = pick(target, "id")
+        if not prospect_id:
+            return
+        existing = {
+            str(pick(doc, "document_type") or "")
+            for doc in items(
+                self.api.get(f"/prospective-members/prospects/{prospect_id}/documents"),
+                "documents",
+            )
+        }
+        for document_type, title, description in self.PROSPECT_DOCUMENTS:
+            if document_type in existing:
+                continue
+            try:
+                self.api.post_file(
+                    f"/prospective-members/prospects/{prospect_id}/documents",
+                    {"document_type": document_type},
+                    f"{title}.pdf",
+                    _demo_pdf(title, description),
+                    "application/pdf",
+                )
+            except ApiError as exc:
+                self.blocked.append(f"prospect document: {exc}")
+                return
 
     def _link_prospect_events(self, prospects: list[dict]) -> None:
         """Attach an upcoming event to the prospects past the first stage.
