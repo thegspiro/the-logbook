@@ -22,6 +22,7 @@ from app.models.notification import (
 )
 from app.models.training import (
     AssignmentStatus,
+    BasicApparatus,
     CompetencyLevel,
     EnrollmentStatus,
     MemberCompetency,
@@ -1266,6 +1267,28 @@ class ShiftCompletionService:
                 )
             )
             for row in apparatus_rows:
+                parts = [p for p in (row.unit_number, row.name) if p]
+                labels[str(row.id)] = " — ".join(parts)
+
+        # `shift.apparatus_id` predates its foreign key and may reference the
+        # onboarding-era basic_apparatus table instead of a full Apparatus
+        # record. Ids the Apparatus query did not claim are retried there, so
+        # a department still on basic apparatus gets its labels too. Apparatus
+        # wins when both tables somehow hold an id — the same priority
+        # app/utils/apparatus_ref.py resolves by.
+        missing_ids = {a for a in apparatus_ids if str(a) not in labels}
+        if missing_ids:
+            basic_rows = await self.db.execute(
+                select(
+                    BasicApparatus.id,
+                    BasicApparatus.unit_number,
+                    BasicApparatus.name,
+                ).where(
+                    BasicApparatus.id.in_(missing_ids),
+                    BasicApparatus.organization_id == str(organization_id),
+                )
+            )
+            for row in basic_rows:
                 parts = [p for p in (row.unit_number, row.name) if p]
                 labels[str(row.id)] = " — ".join(parts)
 
