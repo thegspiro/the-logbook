@@ -2004,7 +2004,8 @@ the old one and get a new one.
 > **Note:** The feed is read-only and shows roughly the last two months through
 > the next year of your assigned (non-cancelled) shifts.
 
-![Subscribe to my shifts card showing the calendar feed URL and its controls](./images/03-34-calendar-subscribe.png)
+> **Screenshot omitted for security:** Expanding this card reveals a private
+> calendar-feed credential. Do not capture or publish the expanded card.
 
 ### The On-Duty Officer Can Run Their Own Shift
 
