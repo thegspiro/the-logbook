@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, CheckCircle2, CircleSlash, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { Ban, CheckCircle2, CircleSlash, Download, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
@@ -337,6 +337,19 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             <option value="cancelled">Cancelled</option>
             <option value="voided">Voided</option>
           </select>
+          {/* A direct link rather than a fetch: the response is a file
+              download, and routing it through axios would buffer the whole
+              CSV in memory only to hand it back to the browser to save. */}
+          <a
+            href={`/api/v1/training/skills-testing/tests/export/csv?detail=criteria${
+              statusFilter && !pendingOnly ? `&status=${encodeURIComponent(statusFilter)}` : ''
+            }`}
+            className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 text-sm font-medium"
+            title="Export test records as CSV — one row per evaluated step"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Export</span>
+          </a>
           <button
             onClick={() => void navigate('/training/skills-testing/test/new')}
             className="btn-primary flex items-center gap-2 font-medium"

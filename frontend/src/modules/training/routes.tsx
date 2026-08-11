@@ -55,6 +55,7 @@ const MemberTrainingPrintPage = lazyWithRetry(() => import('../../pages/training
 const ProgramPrintPage = lazyWithRetry(() => import('../../pages/training/ProgramPrintPage'));
 const CompliancePrintPage = lazyWithRetry(() => import('../../pages/training/CompliancePrintPage'));
 const SkillSheetPrintPage = lazyWithRetry(() => import('../../pages/training/SkillSheetPrintPage'));
+const SkillTestScorecardPrintPage = lazyWithRetry(() => import('../../pages/training/SkillTestScorecardPrintPage'));
 
 export const getTrainingRoutes = () => {
   return (
@@ -260,6 +261,21 @@ export const getTrainingRoutes = () => {
           <ProtectedRoute>
             <React.Suspense fallback={null}>
               <SkillSheetPrintPage />
+            </React.Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* Auth-only, like the member print: a candidate prints their own result
+          for their file. What the page can show is decided by the backend,
+          which redacts the test to the reader's disclosure level before it
+          leaves the server — gating the route on training.manage would instead
+          stop members printing results they are already allowed to read. */}
+      <Route
+        path="/training/skills-testing/print/scorecard"
+        element={
+          <ProtectedRoute>
+            <React.Suspense fallback={null}>
+              <SkillTestScorecardPrintPage />
             </React.Suspense>
           </ProtectedRoute>
         }

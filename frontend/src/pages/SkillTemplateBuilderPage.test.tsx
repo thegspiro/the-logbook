@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SkillTemplateBuilderPage from './SkillTemplateBuilderPage';
@@ -278,6 +278,30 @@ describe('SkillTemplateBuilderPage', () => {
           result_release: 'on_release',
         })
       );
+    });
+
+    // The API returns roles ordered by `priority DESC`, which is an
+    // authorization ranking rather than an org chart — IT Manager is seeded at
+    // 100, above Fire Chief at 95 — so rank order opens the list with the most
+    // privileged account rather than the most senior officer. In a checkbox
+    // list someone is scanning for a title, alphabetical is what they can
+    // predict before they look.
+    it('lists positions alphabetically, not in the order the API returns', async () => {
+      mockGetRoles.mockResolvedValue([
+        { id: 'r1', name: 'IT Manager', slug: 'it-manager', priority: 100 },
+        { id: 'r2', name: 'Fire Chief', slug: 'fire-chief', priority: 95 },
+        { id: 'r3', name: 'Deputy Chief', slug: 'deputy-chief', priority: 90 },
+        { id: 'r4', name: 'Assistant Chief', slug: 'assistant-chief', priority: 85 },
+      ]);
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await screen.findByRole('checkbox', { name: 'Fire Chief' });
+      const picker = screen.getByRole('group', { name: /also visible to these positions/i });
+      const names = within(picker)
+        .getAllByRole('checkbox')
+        .map((box) => box.getAttribute('aria-label') || (box as HTMLInputElement).labels?.[0]?.textContent?.trim());
+
+      expect(names).toEqual(['Assistant Chief', 'Deputy Chief', 'Fire Chief', 'IT Manager']);
     });
 
     it('sends selected position slugs, not names or ids', async () => {

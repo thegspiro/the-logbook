@@ -7,7 +7,7 @@ and tracking pass/fail results for fire department skills assessments.
 """
 
 import html
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -2662,6 +2662,286 @@ async def email_test_results(
         )
 
     return {"message": f"Results emailed to {candidate.email}"}
+
+
+# ============================================
+# Export
+# ============================================
+
+
+def _csv_bool(value: object) -> str:
+    return "Yes" if value else "No"
+
+
+def _csv_dt(value: object) -> str:
+    """An ISO-8601 UTC stamp, or blank.
+
+    Deliberately not localized. Everything is stored as UTC, and an export is
+    read months later by an auditor in an unknown timezone — a bare local
+    string with no offset is the one format that cannot be checked.
+    """
+    if not value:
+        return ""
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+@router.get("/tests/export/csv")
+async def export_tests_csv(
+    detail: str = Query(
+        "summary",
+        description="'summary' for one row per test, 'criteria' for one row per step",
+    ),
+    status_filter: str | None = Query(None, alias="status"),
+    candidate_id: UUID | None = Query(None),
+    template_id: UUID | None = Query(None),
+    include_practice: bool = Query(False),
+    date_from: date | None = Query(
+        None, description="Only tests completed on or after this date (UTC)"
+    ),
+    date_to: date | None = Query(
+        None, description="Only tests completed on or before this date (UTC)"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Export skill test records as CSV, for an audit packet or a training file.
+
+    Officer-only, deliberately. The list endpoint runs a two-pass disclosure
+    filter so a member sees only what the policy allows; an export that tried
+    to honour the same rules would silently produce a different file for every
+    reader, which is the opposite of what an audit hand-off needs. Officers
+    already see every result in full, so restricting the route to
+    ``training.manage`` makes the file's contents a single, explainable thing.
+
+    ``detail=criteria`` emits one row per evaluated step — what a state or ISO
+    reviewer actually asks for — flattened through
+    :func:`iter_criterion_rows` so the outcomes match the scorecard exactly.
+
+    Practice attempts are excluded unless asked for: they are never validated,
+    credit nothing, and are purged on a retention sweep, so including them by
+    default would pad an audit file with runs the department does not consider
+    records.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    import io
+
+    from starlette.responses import StreamingResponse
+
+    from app.services.skills_testing_service import iter_criterion_rows
+    from app.utils.csv_export import SafeCsvWriter
+
+    if detail not in ("summary", "criteria"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="detail must be 'summary' or 'criteria'",
+        )
+
+    query = select(SkillTest).where(
+        SkillTest.organization_id == current_user.organization_id
+    )
+    if not include_practice:
+        query = query.where(SkillTest.is_practice == False)  # noqa: E712
+    if status_filter:
+        query = query.where(SkillTest.status == status_filter)
+    if candidate_id:
+        query = query.where(SkillTest.candidate_id == str(candidate_id))
+    if template_id:
+        query = query.where(SkillTest.template_id == str(template_id))
+    # Filtered on completion rather than creation: a test is a record from the
+    # moment it is completed, and a draft opened in December for an evaluation
+    # run in January belongs in January's packet.
+    if date_from:
+        query = query.where(
+            SkillTest.completed_at >= datetime.combine(date_from, time.min)
+        )
+    if date_to:
+        query = query.where(
+            SkillTest.completed_at <= datetime.combine(date_to, time.max)
+        )
+    query = query.order_by(SkillTest.completed_at.desc(), SkillTest.created_at.desc())
+
+    tests = (await db.execute(query)).scalars().all()
+
+    user_ids: set[str] = set()
+    template_ids: set[str] = set()
+    for t in tests:
+        user_ids.update(
+            i for i in (t.candidate_id, t.examiner_id, t.validated_by, t.voided_by) if i
+        )
+        template_ids.add(t.template_id)
+
+    users_map: dict[str, User] = {}
+    if user_ids:
+        users_map = {
+            u.id: u
+            for u in (await db.execute(select(User).where(User.id.in_(list(user_ids)))))
+            .scalars()
+            .all()
+        }
+    templates_map: dict[str, SkillTemplate] = {}
+    if template_ids:
+        templates_map = {
+            tmpl.id: tmpl
+            for tmpl in (
+                await db.execute(
+                    select(SkillTemplate).where(
+                        SkillTemplate.id.in_(list(template_ids))
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+
+    def name_of(user_id: str | None) -> str:
+        user = users_map.get(user_id) if user_id else None
+        return _format_user_name(user) if user else ""
+
+    output = io.StringIO()
+    # SafeCsvWriter neutralizes spreadsheet formula injection. Mandatory here
+    # rather than defensive: examiner notes, criterion labels and void reasons
+    # are all free text a member can influence, and this file is opened in
+    # Excel by whoever assembles the audit packet.
+    writer = SafeCsvWriter(output)
+
+    if detail == "summary":
+        writer.writerow(
+            [
+                "Test ID",
+                "Template",
+                "Category",
+                "Candidate",
+                "Examiner",
+                "Status",
+                "Result",
+                "Score %",
+                "Practice",
+                "Started (UTC)",
+                "Completed (UTC)",
+                "Elapsed (s)",
+                "Validated (UTC)",
+                "Validated By",
+                "Voided (UTC)",
+                "Voided By",
+                "Void Reason",
+                "Notes",
+            ]
+        )
+        for t in tests:
+            tmpl = templates_map.get(t.template_id)
+            writer.writerow(
+                [
+                    t.id,
+                    tmpl.name if tmpl else "",
+                    (tmpl.category or "") if tmpl else "",
+                    name_of(t.candidate_id),
+                    name_of(t.examiner_id),
+                    t.status or "",
+                    t.result or "",
+                    "" if t.overall_score is None else t.overall_score,
+                    _csv_bool(t.is_practice),
+                    _csv_dt(t.started_at),
+                    _csv_dt(t.completed_at),
+                    "" if t.elapsed_seconds is None else t.elapsed_seconds,
+                    _csv_dt(t.validated_at),
+                    name_of(t.validated_by),
+                    _csv_dt(t.voided_at),
+                    name_of(t.voided_by),
+                    t.void_reason or "",
+                    t.notes or "",
+                ]
+            )
+    else:
+        writer.writerow(
+            [
+                "Test ID",
+                "Template",
+                "Candidate",
+                "Examiner",
+                "Completed (UTC)",
+                "Test Result",
+                "Section #",
+                "Section",
+                "Step #",
+                "Step",
+                "Type",
+                "Critical",
+                "Outcome",
+                "Score",
+                "Max Score",
+                "Time (s)",
+                "Checklist",
+                "Step Notes",
+            ]
+        )
+        for t in tests:
+            tmpl = templates_map.get(t.template_id)
+            # The frozen snapshot, not the live template: a test is judged
+            # against the structure it was created with.
+            effective = resolve_test_template(t, tmpl)
+            if effective is None:
+                continue
+            candidate_name = name_of(t.candidate_id)
+            examiner_name = name_of(t.examiner_id)
+            completed = _csv_dt(t.completed_at)
+            for row in iter_criterion_rows(t, effective):
+                ticked = row["checklist"]
+                writer.writerow(
+                    [
+                        t.id,
+                        tmpl.name if tmpl else "",
+                        candidate_name,
+                        examiner_name,
+                        completed,
+                        t.result or "",
+                        row["section_index"] + 1,
+                        row["section_name"],
+                        row["criterion_index"] + 1,
+                        row["label"],
+                        row["type"],
+                        _csv_bool(row["critical"]),
+                        row["outcome"],
+                        "" if row["score"] is None else row["score"],
+                        "" if row["max_score"] is None else row["max_score"],
+                        "" if row["time_seconds"] is None else row["time_seconds"],
+                        (
+                            f"{sum(1 for c in ticked if c)}/{len(ticked)} ticked"
+                            if ticked
+                            else ""
+                        ),
+                        row["notes"] or "",
+                    ]
+                )
+
+    # A bulk read of every member's evaluation results leaving the system is
+    # exactly the access an audit trail exists to record.
+    await log_audit_event(
+        db=db,
+        event_type="skill_tests_exported",
+        event_category="training",
+        severity="info",
+        event_data={
+            "detail": detail,
+            "test_count": len(tests),
+            "include_practice": include_practice,
+            "candidate_id": str(candidate_id) if candidate_id else None,
+            "template_id": str(template_id) if template_id else None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=skill_tests_{detail}.csv"
+        },
+    )
 
 
 # ============================================

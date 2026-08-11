@@ -453,7 +453,20 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   useEffect(() => {
     void (async () => {
       try {
-        setPositions(await roleService.getRoles());
+        // Sorted by name, not by the order the API returns.
+        //
+        // `list_roles` orders by `priority DESC`, which is an *authorization*
+        // ranking — "higher priority = more powerful" — not an org chart. IT
+        // Manager is seeded at 100, above Fire Chief at 95, so the rank order
+        // opens this list with the most privileged account rather than the
+        // most senior officer. That reads as a recommendation here, and it
+        // isn't one.
+        //
+        // Rank order earns nothing anyway in a checkbox list someone is
+        // scanning for a specific title, which is what this is: alphabetical
+        // is the order you can predict before you look.
+        const roles = await roleService.getRoles();
+        setPositions([...roles].sort((a, b) => a.name.localeCompare(b.name)));
       } catch {
         // Non-fatal — position grants are optional.
       }

@@ -329,6 +329,61 @@ def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str,
     }
 
 
+def iter_criterion_rows(test: SkillTest, template: Any):
+    """Yield one flat row per criterion on ``test``, in sheet order.
+
+    Exists so an export or a printed scorecard can list what was recorded
+    against each step without re-deriving the matching and outcome rules that
+    :func:`build_score_breakdown` already owns. Those rules are not obvious —
+    results are matched positionally with a label fallback, statements are not
+    judged, and a non-critical scored step is never reported as passed or
+    failed — and a second implementation of them would drift the moment one
+    side was fixed.
+
+    Callers must pass the template :func:`resolve_test_template` returned, not
+    the live row: a test is judged against the structure frozen when it was
+    created.
+
+    Each row is a dict with ``section_index``, ``section_name``,
+    ``criterion_index``, ``label``, ``type``, ``critical``, ``outcome`` (the
+    same vocabulary ``_criterion_outcome`` uses), and whichever of ``score`` /
+    ``max_score`` / ``time_seconds`` / ``checklist`` carries the evidence for
+    that type, plus the examiner's ``notes``.
+    """
+    section_results = getattr(test, "section_results", None) or []
+    template_sections = getattr(template, "sections", None) or []
+
+    for section_idx, section in enumerate(template_sections):
+        if not isinstance(section, dict):
+            continue
+        sr_match = _find_section_result(section_results, section_idx, section)
+
+        for ci, criterion in enumerate(section.get("criteria", []) or []):
+            if not isinstance(criterion, dict):
+                continue
+            cr_result = _find_criterion_result(sr_match, section_idx, ci, criterion)
+            recorded = cr_result or {}
+            checklist = recorded.get("checklist_completed")
+
+            yield {
+                "section_index": section_idx,
+                "section_name": section.get("name") or f"Section {section_idx + 1}",
+                "criterion_index": ci,
+                "label": criterion.get("label") or f"Criterion {ci + 1}",
+                "type": criterion.get("type") or "pass_fail",
+                "critical": bool(criterion.get("required", False)),
+                "outcome": _criterion_outcome(criterion, cr_result),
+                "score": recorded.get("score"),
+                "max_score": criterion.get("max_score"),
+                "time_seconds": recorded.get("time_seconds"),
+                # Rendered as "3/5 ticked" by callers; the raw list is kept so a
+                # caller that wants the individual boxes still has them.
+                "checklist": checklist if isinstance(checklist, list) else None,
+                "checklist_items": criterion.get("checklist_items") or None,
+                "notes": recorded.get("notes"),
+            }
+
+
 def calculate_test_result(
     test: SkillTest, template: SkillTemplate
 ) -> tuple[float | None, str]:

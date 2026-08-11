@@ -255,22 +255,64 @@ The sheet says of itself, in a boxed notice, that it is **not** the record and
 must be entered in the app — because until it is entered and validated it
 credits no requirement, consumes no attempt, and the candidate sees nothing.
 
-**Still open — a printable completed scorecard.** There is `/email-results`,
-but nothing for a candidate's paper training file or a state/ISO audit
-hand-off. Every other record-bearing module has one. **Small**, and it reuses
-this page's layout.
+**Completed scorecard — built in this change.**
+`SkillTestScorecardPrintPage` (`/training/skills-testing/print/scorecard?id=…`)
+prints a finished evaluation: who was tested and by whom, the verdict, the
+server's own score breakdown section by section, what was recorded against
+each step, and the officer sign-off the result rests on. Reachable from a Print
+button on the member's own result page.
 
-**Still open — no CSV export of test results.** A training officer assembling an
-audit packet has no bulk export. Worth flagging *before* anyone builds it:
-examiner notes are free text, so it must use `SafeCsvWriter` (Pitfall #15) — a
-member named `=cmd|…` in a scorecard export is exactly that attack.
+Two things it deliberately does *not* do. It derives nothing the API withheld —
+`GET /tests/{id}` already runs the test → template → organization disclosure
+chain and redacts before the payload leaves the server, so a candidate under
+`scores` disclosure gets marks with the examiner's notes stripped and the print
+page simply renders what arrived. And it refuses to print a result still
+awaiting validation: the API withholds the outcome on those, so printing one
+would hand the candidate a document reading as a failure nobody recorded.
 
-**Minor — position ordering in the disclosure picker.** `09-08` and `09-02`
-list **IT Manager** first, then Fire Chief, President, Deputy Chief. It is
-`roleService.getRoles()` rendered in whatever order it returns. Presenting IT
-Manager as the first candidate for "who else may see evaluation results" is
-wrong by relevance in a fire department, and it is visible in the shipped
-documentation screenshots. **Small.**
+The critical-failure box is what makes the page worth printing. A test can
+score 80% and read FAIL, and on paper — with no tooltip to hover — the reason
+has to be on the page or the record looks like an arithmetic error.
+
+**CSV export — built in this change.** `GET
+/training/skills-testing/tests/export/csv` with `detail=summary` (one row per
+test) or `detail=criteria` (one row per evaluated step, which is what a state
+or ISO reviewer asks for), filterable by status, candidate, template and
+completion date. Export button on the Test Records tab.
+
+Written with `SafeCsvWriter`, non-negotiably: criterion labels, examiner notes
+and void reasons are all free text a member can influence, and the file is
+opened in Excel by whoever assembles the packet (Pitfall #15). A test pins the
+neutralization against those exact values rather than trusting the call site.
+
+Officer-only (`training.manage`), deliberately. The list endpoint runs a
+two-pass disclosure filter so a member sees only what policy allows; an export
+honouring the same rules would silently produce a different file per reader,
+which is the opposite of what an audit hand-off needs. Officers already see
+every result in full, so the restriction makes the file's contents one
+explainable thing. The export is audit-logged — a bulk read of every member's
+evaluation results leaving the system is exactly the access an audit trail is
+for.
+
+Flattening is shared with the scorecard through `iter_criterion_rows` in the
+service, so the outcomes in the CSV cannot drift from the ones on screen. The
+matching rules are not obvious — positional with a label fallback, statements
+not judged, non-critical scored steps reported as points rather than a verdict
+— and a second implementation of them would diverge the first time one side was
+fixed.
+
+**Position ordering in the disclosure picker — fixed, but not for the reason
+first recorded here.** The earlier note said the list was "rendered in whatever
+order it returns". That was wrong: `list_roles` orders by `priority DESC, name`,
+and it was working. The cause is that `priority` is an **authorization**
+ranking — "higher priority = more powerful" — not an org chart, and **IT Manager
+is seeded at 100, above Fire Chief at 95**. Rank order therefore opens the list
+with the most privileged account rather than the most senior officer, which
+reads as a recommendation and isn't one.
+
+Now sorted by name. Rank order earns nothing in a checkbox list someone is
+scanning for a specific title; alphabetical is the order you can predict before
+you look.
 
 ---
 
@@ -319,12 +361,13 @@ seed data; the import path (§3c) is the next one to cover.
 | - | ---- | ------ | ------- |
 | 1 | ~~Unknown criterion type is unscorable~~ | — | **Fixed** |
 | 2 | ~~No printable blank skill sheet~~ (§5b) | — | **Built** — the paper fallback while offline waits |
-| 3 | `score` with no `max_score` (§3a) | S | Same silent-zero failure, still live |
-| 4 | Review queue as an inbox + bulk validate (§5a, §5b) | S–M | Officer-facing friction every drill night |
-| 5 | Printable completed scorecard (§5b) | S | Audit hand-off; reuses the sheet layout |
-| 6 | Batch testing (§4b) | M | The actual shape of drill night |
-| 7 | Starter template library (§3b) | M | First-run experience; the data now exists |
-| 8 | CSV export of results (§5b) | M | Must use `SafeCsvWriter` — notes are free text |
-| 9 | Offline (§4a) | L | Blocked on two owner decisions, not engineering |
-| 10 | Return for correction (§5c) | M | Needs a product decision first |
-| 11 | Picker/viewer consistency, position ordering (§4c, §4d, §5b) | S | Cheap; the panel degrades with roster size |
+| 3 | ~~No printable completed scorecard~~ (§5b) | — | **Built** — audit hand-off and paper training file |
+| 4 | ~~No CSV export of results~~ (§5b) | — | **Built** — `SafeCsvWriter`, officer-only, audit-logged |
+| 5 | ~~Position ordering in the disclosure picker~~ (§5b) | — | **Fixed** — sorted by name, not by authorization rank |
+| 6 | `score` with no `max_score` (§3a) | S | Same silent-zero failure, still live |
+| 7 | Review queue as an inbox + bulk validate (§5a) | S–M | Officer-facing friction every drill night |
+| 8 | Batch testing (§4b) | M | The actual shape of drill night |
+| 9 | Starter template library (§3b) | M | First-run experience; the data now exists |
+| 10 | Offline (§4a) | L | Blocked on two owner decisions, not engineering |
+| 11 | Return for correction (§5c) | M | Needs a product decision first |
+| 12 | Picker/viewer control consistency (§4c, §4d) | S | Cheap; the panel degrades with roster size |
