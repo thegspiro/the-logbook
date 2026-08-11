@@ -1512,14 +1512,27 @@ has switches for the contact block and the address block.
 4. Mark one as the department default.
 5. Save.
 
-> **Screenshot needed:**
-> _[Screenshot of the Footers tab showing the three seeded footers in a list with the Internal one marked as default, one expanded to show its lines, the contact/address toggles, and the "N templates use this" count beside each]_
+![The Footers tab: the seeded library, the default marked, and a per-footer usage count](./images/08-64-email-footers-tab.png)
 
 To point a specific template at a specific footer, open that template and choose
-its footer in the editor.
+its footer in the **Closes with** selector. The hint under the control is the
+chosen footer's own description, so the three can be told apart without opening
+the Footers tab.
 
-> **Screenshot needed:**
-> _[Screenshot of the email template editor with the footer selector visible, set to "Public", and the preview pane below showing that footer rendered at the bottom of the message]_
+![The template editor's Closes with selector, set to the Public footer, with that footer's own description under it](./images/08-65-template-footer-selector.png)
+
+> **A template only shows a footer if its body asks for one.** The closing block
+> is delivered as the `{{footer_html}}` variable, so a body that does not contain
+> it renders without a footer no matter what **Closes with** is set to — and the
+> screen gives no sign of that. Most shipped bodies include the variable, but a
+> department that has customised a template, or whose database predates this
+> release, will have bodies that do not: re-seeding never touches a template that
+> already exists by name. If a chosen footer is not appearing, open the body and
+> check for `{{footer_html}}` before looking anywhere else. See
+> `docs/KNOWN_LIMITATIONS.md`.
+
+**Edit and Preview are alternate views of the same panel**, not two halves of one
+screen — choosing a footer and seeing it rendered are two steps, not one.
 
 ### Things worth knowing before you delete one
 
@@ -1555,8 +1568,12 @@ line**:
 | `{{organization_fax}}`                                            | Still expected on official correspondence by some agencies                                                                                                                                  |
 | `{{organization_description}}` `{{organization_type}}`            | Completeness                                                                                                                                                                                |
 
-> **Screenshot needed:**
-> _[Screenshot of the template editor's variable palette expanded on the Organization group, showing the new identifier, tax ID, county and founded-year variables alongside the existing name/phone/address ones]_
+![The Available Variables palette expanded, the organization variables among the rest](./images/08-66-template-variable-palette.png)
+
+The palette is **one flat list per template**, not a set of collapsible groups —
+the organization variables sit among the rest, in the order above. Officer
+signature variables are the exception, and have a panel of their own beneath it
+because they apply to every template rather than to this one.
 
 > **Addresses outside the US keep their last line.** The address composer read
 > every column except country, so a Canadian department's address lost its
@@ -1597,8 +1614,13 @@ They now have real template rows with documented variables and sample data.
 > stylesheet**, so future improvements reach you automatically. Templates whose
 > CSS you _did_ edit are left exactly as they are.
 
-> **Screenshot needed:**
-> _[Screenshot of the email preview pane showing the new white-card-on-grey design — rounded header band, a details table, and the footer — so departments can see what their outgoing mail now looks like]_
+![The rendered preview: the white card on grey, its header band and details table](./images/08-67-email-preview-design.png)
+
+Pictured with **Shift Assignment**, whose body carries `{{footer_html}}` — the
+closing block sits below the details table, off the bottom of this frame. The
+**Sample data** selector above the message swaps in a real member's details, and
+the two small icons beside **Refresh** switch the preview between desktop and
+phone width.
 
 ---
 

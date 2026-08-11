@@ -3980,6 +3980,77 @@ export const SHOTS = [
     // in plain state before that, so this shot would have silently captured the
     // Templates tab — the same way `02-21` and `02-41` came to be byte-identical.
     route: "/communications/email-templates?tab=footers",
+    // The whole page: the guide's claim is about the *library* — three footers,
+    // one of them the default — and a single viewport holds one and a half.
+    fullPage: true,
+    // The empty-state detector fires on "No templates close with this footer",
+    // which is the honest count beside a footer nobody has assigned yet, not a
+    // page that failed to load.
+    allowEmptyState: true,
+  },
+
+  {
+    id: "08-65-template-footer-selector",
+    doc: "08-admin-reports.md",
+    line: 1521,
+    anchor: "Screenshot of the email template editor with the footer selector visible",
+    alt: "The template editor's Closes with selector, set to the Public footer, with that footer's own description under it",
+    route: "/communications/email-templates",
+    prepare: async (page) => {
+      const select = page.locator("#template-footer");
+      await select.waitFor({ timeout: 20_000 });
+      // Changing the select only moves component state — nothing is written
+      // until Save, which is deliberately not clicked. Picking Public rather
+      // than leaving the default is the point: the hint under the control
+      // swaps to the chosen footer's own description, which is how an
+      // administrator tells the three apart without opening the Footers tab.
+      await select.selectOption("public");
+      await page.waitForTimeout(800);
+      await select.scrollIntoViewIfNeeded().catch(() => {});
+    },
+  },
+  {
+    id: "08-66-template-variable-palette",
+    doc: "08-admin-reports.md",
+    line: 1558,
+    anchor: "Screenshot of the template editor's variable palette expanded",
+    alt: "The Available Variables palette expanded, the organization variables among the rest",
+    route: "/communications/email-templates",
+    prepare: async (page) => {
+      await clickByName(/^Available Variables \(\d+\)$/)(page);
+      await page.waitForTimeout(800);
+    },
+    // Not `fullPage`: this page's template list runs to sixty entries, so a
+    // full-page shot is 2,700px tall to picture a panel that occupies 250 of
+    // them.
+    fullPage: false,
+  },
+  {
+    id: "08-67-email-preview-design",
+    doc: "08-admin-reports.md",
+    line: 1600,
+    anchor: "Screenshot of the email preview pane showing the new white-card-on-grey design",
+    alt: "The rendered preview: a white card on grey, its header band, details table and footer",
+    route: "/communications/email-templates",
+    // The Preview tab, not the editor: the two are alternate views of the same
+    // panel and cannot both be on screen.
+    prepare: async (page) => {
+      // "Shift Assignment" rather than whichever template the list opens on.
+      // The footer only renders where the body contains `{{footer_html}}`, and
+      // most of the shipped bodies predate footers — a preview of one of those
+      // would picture the design without the closing block the guide points at.
+      await page.getByText("Shift Assignment", { exact: true }).first().click();
+      await page.waitForTimeout(1_000);
+      await clickByName(/^Preview$/)(page);
+      await page.waitForTimeout(2_000);
+      await page
+        .getByText(/automated message from|Sent by/i)
+        .first()
+        .scrollIntoViewIfNeeded({ timeout: 10_000 })
+        .catch(() => {});
+    },
+    // Not `fullPage`: the sixty-entry template list makes the page 2,700px
+    // tall, and the rendered message sits entirely in the first viewport.
     fullPage: false,
   },
 
