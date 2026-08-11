@@ -6528,6 +6528,23 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "09-17-scoring-criteria-mix",
+    doc: "09-skills-testing.md",
+    line: 480,
+    anchor: "The active scoring screen's criteria area",
+    alt: "A section of the scoring screen — a critical step marked Critical, the count of steps scored, and the mix of scored and blank steps beneath",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/tests?limit=50",
+      (id) => `/training/skills-testing/test/${id}/active`,
+      "tests",
+      (test) => test.status === "in_progress",
+    ),
+    // The section body rather than the whole page: the header and the timer are
+    // in 09-16, and this placeholder is about the steps themselves.
+    selector: "div.space-y-6:has(h2)",
+  },
+  {
     id: "09-16-active-scoring-screen",
     doc: "09-skills-testing.md",
     line: 344,

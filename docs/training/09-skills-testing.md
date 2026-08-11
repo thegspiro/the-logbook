@@ -477,11 +477,22 @@ If "Require All Critical" is enabled on the template:
 - Any **required** criterion that is left unchecked (not passed) will result in an **automatic FAIL**
 - This is true even if the candidate's percentage score exceeds the passing threshold
 
-> **[SCREENSHOT NEEDED]:** _The active scoring screen's criteria area, showing a
-> critical criterion with its red asterisk scored Pass, an unscored score-type
-> criterion reading "—/5" in neutral type, a checklist criterion with two of four
-> boxes ticked and the "Candidate did none of these" option beneath, and the
-> timer running in the header._
+A critical step is labelled **(Critical)** in its own text, and where the
+template requires all of them the section header says what that means outright —
+"Steps marked (Critical) must pass. Leaving one unscored counts the same as a
+fail." There is no asterisk to decode.
+
+![A section of the scoring screen — the count of steps scored, a step scored 10/10, and the next one still blank at —/20](./images/09-17-scoring-criteria-mix.png)
+
+An **unscored** step reads **"—/20"** rather than "0/20", which are different
+things: the dash is a step nobody has judged, and a zero is a judgement. The
+section counts only the steps that can be scored — "1 of 2 steps scored" — so
+statements and headings never pad it.
+
+How a score is entered depends on how many points the step is worth: **10 or
+fewer** gives a row of numbered buttons, where tapping the same number again
+clears it; **more than 10** gives a slider. Both leave the step blank until you
+touch them.
 
 ---
 
