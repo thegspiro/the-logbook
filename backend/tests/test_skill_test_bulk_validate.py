@@ -18,6 +18,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.api.v1.endpoints import skills_testing as endpoint
 from app.schemas.skills_testing import SkillTestBulkValidateRequest
@@ -169,13 +170,13 @@ class TestAudit:
 
 class TestRequestShape:
     def test_an_empty_selection_is_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError, match="at least 1 item"):
             SkillTestBulkValidateRequest(test_ids=[])
 
     def test_the_batch_is_capped(self):
         """Each id is a burst of side effects, so one click's worth of
         consequences stays reviewable."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError, match="at most 50 items"):
             SkillTestBulkValidateRequest(test_ids=[uuid4() for _ in range(51)])
 
     def test_a_full_batch_is_accepted(self):

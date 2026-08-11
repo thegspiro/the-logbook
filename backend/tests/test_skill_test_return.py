@@ -20,6 +20,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.api.v1.endpoints import skills_testing as endpoint
 from app.models.skills_testing import SkillTestResult, SkillTestStatus
@@ -296,7 +297,7 @@ class TestReasonRequirement:
 
     @pytest.mark.parametrize("bad", ["", "   ", "too short", "fix it"])
     def test_a_trivial_reason_is_rejected(self, bad):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError, match="at least 10 characters"):
             SkillTestReturnRequest(reason=bad)
 
     def test_a_real_reason_is_accepted(self):
