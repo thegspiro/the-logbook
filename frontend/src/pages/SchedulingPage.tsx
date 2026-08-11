@@ -16,7 +16,6 @@ import {
   Settings,
   Repeat,
   FileText,
-  ExternalLink,
   Truck,
   ChevronDown,
   CheckCircle2,
@@ -584,6 +583,41 @@ const SchedulingPage: React.FC = () => {
           />
         </div>
 
+        {/* Officer tools.
+            These sat under the month grid as seven cards headed
+            "ADMINISTRATION", so an officer reached them only by scrolling a
+            whole calendar past — and on a phone each carried an
+            external-link arrow, though every one is an ordinary page in this
+            app. A strip above the content instead: same links, no scrolling,
+            and the Supply count says what it is counting. */}
+        {canManage && (
+          <div className="mb-6">
+            <h2 className="text-theme-text-muted mb-2 text-xs font-semibold">Officer tools</h2>
+            <div className="hscroll flex gap-2">
+              {adminLinks.map((link) => {
+                const Icon = link.icon;
+                const isSupply = link.path === '/scheduling/supply/expiring';
+                return (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    title={link.description}
+                    className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-primary mobile-touch-target inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+                  >
+                    <Icon className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
+                    {link.label}
+                    {isSupply && supplyCount != null && supplyCount > 0 && (
+                      <span className="inline-flex shrink-0 items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                        {supplyCount} expiring
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Tab Content */}
         {activeTab === 'schedule' && (
           <>
@@ -1034,39 +1068,6 @@ const SchedulingPage: React.FC = () => {
             {activeTab === 'equipment-checks' && <MyChecklistsPage />}
             {activeTab === 'shift-reports' && <ShiftReportsTab />}
           </Suspense>
-        )}
-
-        {/* Admin Quick Links */}
-        {canManage && (
-          <div className="border-theme-surface-border mt-8 border-t pt-6">
-            <h2 className="text-theme-text-muted mb-3 text-sm font-semibold tracking-wider uppercase">
-              Administration
-            </h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {adminLinks.map((link) => {
-                const Icon = link.icon;
-                return (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover group flex items-center gap-3 rounded-xl border p-3 transition-colors"
-                  >
-                    <Icon className="h-5 w-5 shrink-0 text-violet-500" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-theme-text-primary truncate text-sm font-medium">{link.label}</p>
-                      <p className="text-theme-text-muted hidden truncate text-xs sm:block">{link.description}</p>
-                    </div>
-                    {link.path === '/scheduling/supply/expiring' && supplyCount != null && supplyCount > 0 && (
-                      <span className="inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white">
-                        {supplyCount}
-                      </span>
-                    )}
-                    <ExternalLink className="text-theme-text-muted h-3.5 w-3.5 shrink-0 transition-opacity sm:opacity-0 sm:group-hover:opacity-100" />
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
         )}
 
         {/* Shift Detail Panel */}

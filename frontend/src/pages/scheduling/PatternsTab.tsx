@@ -374,12 +374,10 @@ export const PatternsTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">Shift Patterns</h3>
-          <p className="text-theme-text-muted text-sm">Create recurring patterns and generate shifts in bulk.</p>
-        </div>
+      {/* Header. The heading lived here as well as on the page around it, so
+          "Shift Patterns" was printed twice, one line apart. The page owns the
+          title and the sentence under it; this row keeps only its controls. */}
+      <div className="flex justify-end gap-3">
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
@@ -794,91 +792,115 @@ export const PatternsTab: React.FC = () => {
                 key={pattern.id}
                 className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border"
               >
-                <button
-                  onClick={() => setExpandedId(isExpanded ? null : pattern.id)}
-                  className="flex w-full items-start justify-between gap-3 p-4 text-left sm:items-center sm:p-5"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                        pattern.is_active ? 'bg-violet-500/10' : 'bg-theme-surface-secondary'
-                      }`}
-                    >
-                      <RefreshCw
-                        className={`h-5 w-5 ${pattern.is_active ? 'text-violet-500' : 'text-theme-text-muted'}`}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-theme-text-primary text-sm font-semibold">{pattern.name}</p>
-                        <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 capitalize dark:text-violet-400">
-                          {PATTERN_TYPE_LABELS[pattern.pattern_type] ?? pattern.pattern_type}
-                        </span>
-                        {!pattern.is_active && (
-                          <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-[10px] font-medium">
-                            Inactive
-                          </span>
-                        )}
+                {/* A pattern row used to be one big button with a bare chevron:
+                    everything a pattern is for — generating the shifts — was
+                    behind a glyph that said nothing about what it hid. The
+                    toggle names itself, and the one action worth taking sits on
+                    the row. */}
+                <div className="flex items-start gap-2 sm:items-center">
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : pattern.id)}
+                    className="flex min-w-0 flex-1 items-start justify-between gap-3 p-4 text-left sm:items-center sm:p-5"
+                    aria-expanded={isExpanded}
+                    aria-controls={`pattern-details-${pattern.id}`}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                          pattern.is_active ? 'bg-violet-500/10' : 'bg-theme-surface-secondary'
+                        }`}
+                      >
+                        <RefreshCw
+                          className={`h-5 w-5 ${pattern.is_active ? 'text-violet-500' : 'text-theme-text-muted'}`}
+                        />
                       </div>
-                      <p className="text-theme-text-muted mt-0.5 text-xs">
-                        {templateName && <span>Template: {templateName} · </span>}
-                        Starts:{' '}
-                        {formatDateCustom(
-                          pattern.start_date + 'T12:00:00',
-                          {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          },
-                          tz
-                        )}
-                        {pattern.end_date && (
-                          <span>
-                            {' '}
-                            · Ends:{' '}
-                            {formatDateCustom(
-                              pattern.end_date + 'T12:00:00',
-                              {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              },
-                              tz
-                            )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-theme-text-primary text-sm font-semibold">{pattern.name}</p>
+                          <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 capitalize dark:text-violet-400">
+                            {PATTERN_TYPE_LABELS[pattern.pattern_type] ?? pattern.pattern_type}
                           </span>
-                        )}
-                      </p>
-                      {weekdays && weekdays.length > 0 && (
-                        <div className="mt-1 flex gap-1">
-                          {WEEKDAY_LABELS.map((label, i) => (
-                            <span
-                              key={i}
-                              className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
-                                weekdays.includes(i)
-                                  ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
-                                  : 'text-theme-text-muted opacity-40'
-                              }`}
-                            >
-                              {label.charAt(0)}
+                          {!pattern.is_active && (
+                            <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-[10px] font-medium">
+                              Inactive
                             </span>
-                          ))}
+                          )}
                         </div>
-                      )}
-                      {cyclePattern && <CycleStrip config={config} />}
+                        <p className="text-theme-text-muted mt-0.5 text-xs">
+                          {templateName && <span>Template: {templateName} · </span>}
+                          Starts:{' '}
+                          {formatDateCustom(
+                            pattern.start_date + 'T12:00:00',
+                            {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            },
+                            tz
+                          )}
+                          {pattern.end_date && (
+                            <span>
+                              {' '}
+                              · Ends:{' '}
+                              {formatDateCustom(
+                                pattern.end_date + 'T12:00:00',
+                                {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                },
+                                tz
+                              )}
+                            </span>
+                          )}
+                        </p>
+                        {weekdays && weekdays.length > 0 && (
+                          <div className="mt-1 flex gap-1">
+                            {WEEKDAY_LABELS.map((label, i) => (
+                              <span
+                                key={i}
+                                className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                                  weekdays.includes(i)
+                                    ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                                    : 'text-theme-text-muted opacity-40'
+                                }`}
+                              >
+                                {label.charAt(0)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {cyclePattern && <CycleStrip config={config} />}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {isExpanded ? (
-                      <ChevronUp className="text-theme-text-muted h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="text-theme-text-muted h-4 w-4" />
-                    )}
-                  </div>
-                </button>
+                    <span className="text-theme-text-muted flex shrink-0 items-center gap-1 text-xs font-medium">
+                      {isExpanded ? 'Hide' : 'Details'}
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setExpandedId(pattern.id);
+                      setGeneratingFor(pattern.id);
+                      setGenerateForm({ start_date: '', end_date: '' });
+                    }}
+                    className="mr-4 flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 max-sm:mt-4 sm:mr-5"
+                  >
+                    <Play className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span className="max-sm:sr-only">Generate shifts</span>
+                  </button>
+                </div>
 
                 {/* Expanded details */}
                 {isExpanded && (
-                  <div className="border-theme-surface-border space-y-4 border-t p-4 sm:p-5">
+                  <div
+                    id={`pattern-details-${pattern.id}`}
+                    className="border-theme-surface-border space-y-4 border-t p-4 sm:p-5"
+                  >
                     {pattern.description && <p className="text-theme-text-secondary text-sm">{pattern.description}</p>}
 
                     {pattern.pattern_type === 'platoon' && !cyclePattern && (
