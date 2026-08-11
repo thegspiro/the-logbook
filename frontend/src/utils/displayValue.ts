@@ -16,16 +16,29 @@ const ACRONYMS = new Set(['ada', 'hvac', 'id', 'ppe', 'nfpa', 'osha', 'ems', 'sc
  *
  * `"building_code"` → `"Building Code"`, `"deputy_chief"` → `"Deputy Chief"`.
  *
+ * Whitespace splits too: an apparatus type reaches the client lowercased so it
+ * can be matched against the skill mappings, and `"ladder truck"` has to come
+ * back as "Ladder Truck" rather than "Ladder truck".
+ *
  * CSS `text-transform: capitalize` is not a substitute: it capitalises the
  * first letter of each *word*, and a snake_case value is one word, so
  * `deputy_chief` renders as "Deputy_chief" — underscore and all.
  */
 export function enumLabel(value: string | undefined | null): string {
   if (!value) return '';
+  // A slash separates words but is not itself a gap — "brush/wildland" is one
+  // apparatus type, and rendering it "Brush Wildland" would name a unit the
+  // department does not have.
   return value
-    .split('_')
-    .map((w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
-    .join(' ');
+    .trim()
+    .split('/')
+    .map((part) =>
+      part
+        .split(/[\s_]+/)
+        .map((w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+        .join(' ')
+    )
+    .join('/');
 }
 
 export function toDisplayString(value: unknown): string {

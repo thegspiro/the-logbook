@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { formatDateTime } from '../utils/dateFormatting';
 import {
   Link2,
@@ -25,13 +26,14 @@ import {
   Edit2,
   PlayCircle,
 } from 'lucide-react';
-import { externalTrainingService } from '../services/api';
+import { externalTrainingService, trainingService } from '../services/api';
 import type {
   ExternalTrainingProvider,
   ExternalTrainingProviderCreate,
   ExternalProviderType,
   ExternalCategoryMapping,
   ExternalUserMapping,
+  TrainingCategory,
 } from '../types/training';
 
 type TabView = 'providers' | 'imports' | 'mappings';
@@ -831,17 +833,23 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
   const [activeTab, setActiveTab] = useState<'categories' | 'users'>('categories');
   const [categoryMappings, setCategoryMappings] = useState<ExternalCategoryMapping[]>([]);
   const [userMappings, setUserMappings] = useState<ExternalUserMapping[]>([]);
+  // The internal categories an external one can be pointed at. Without them the
+  // Map Category button had nothing to offer and did nothing at all.
+  const [internalCategories, setInternalCategories] = useState<TrainingCategory[]>([]);
+  const [savingMappingId, setSavingMappingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadMappings = useCallback(async () => {
     setLoading(true);
     try {
-      const [categories, users] = await Promise.all([
+      const [categories, users, internal] = await Promise.all([
         externalTrainingService.getCategoryMappings(providerId),
         externalTrainingService.getUserMappings(providerId),
+        trainingService.getCategories(),
       ]);
       setCategoryMappings(categories);
       setUserMappings(users);
+      setInternalCategories(internal);
     } catch (_err) {
       // Error silently handled - mappings modal will show empty state
     } finally {
@@ -854,6 +862,28 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
       void loadMappings();
     }
   }, [isOpen, providerId, loadMappings]);
+
+  const mapCategory = async (mapping: ExternalCategoryMapping, internalCategoryId: string) => {
+    setSavingMappingId(mapping.id);
+    try {
+      const updated = await externalTrainingService.updateCategoryMapping(providerId, mapping.id, {
+        internal_category_id: internalCategoryId,
+        is_mapped: Boolean(internalCategoryId),
+      });
+      setCategoryMappings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      toast.success(
+        internalCategoryId
+          ? `"${mapping.external_category_name}" now imports as ${
+              internalCategories.find((c) => c.id === internalCategoryId)?.name ?? 'the chosen category'
+            }`
+          : `"${mapping.external_category_name}" is unmapped again`
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save the category mapping'));
+    } finally {
+      setSavingMappingId(null);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -936,17 +966,29 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        {mapping.is_mapped ? (
+                        {mapping.is_mapped && (
                           <span className="flex items-center gap-1 text-sm text-green-700 dark:text-green-400">
                             <CheckCircle className="h-4 w-4" aria-hidden="true" />
                             Mapped
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
-                        ) : (
-                          <button className="rounded-sm bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700">
-                            Map Category
-                          </button>
                         )}
+                        <select
+                          value={mapping.internal_category_id ?? ''}
+                          disabled={savingMappingId === mapping.id}
+                          onChange={(e) => {
+                            void mapCategory(mapping, e.target.value);
+                          }}
+                          aria-label={`Internal category for ${mapping.external_category_name}`}
+                          className="form-input-sm w-56"
+                        >
+                          <option value="">Not mapped</option>
+                          {internalCategories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -1011,6 +1053,9 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
 };
 
 const ExternalTrainingPage: React.FC = () => {
+  // Never window.confirm: a browser that suppresses it returns false, which is
+  // indistinguishable from the officer pressing Cancel.
+  const { confirm } = useConfirm();
   const [activeTab, setActiveTab] = useState<TabView>('providers');
   const [providers, setProviders] = useState<ExternalTrainingProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1096,9 +1141,15 @@ const ExternalTrainingPage: React.FC = () => {
   };
 
   const handleDelete = async (providerId: string) => {
-    if (!confirm('Are you sure you want to delete this provider? This will also remove all imported records.')) {
-      return;
-    }
+    const agreed = await confirm({
+      title: 'Delete this integration?',
+      message:
+        'Every training record imported through it is removed with it. Records logged in The Logbook directly are untouched.',
+      confirmLabel: 'Delete integration',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!agreed) return;
     try {
       await externalTrainingService.deleteProvider(providerId);
       await loadProviders();

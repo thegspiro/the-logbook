@@ -183,9 +183,35 @@ Three ways forward, in rough order of cost:
 | Encrypt the skills queue at rest          | Reduces shared-profile exposure; key management on a browser is genuinely hard and partly theatre without a server-held key | High                                                                        |
 | Accept the risk, documented               | Matches how equipment-check photos are already handled                                                                      | None, but should be a recorded decision in [COMPLIANCE.md](./COMPLIANCE.md) |
 
-**This is an owner decision.** The implementation cannot sensibly pick for you,
-and the first option is cheap enough that it should probably ship regardless of
-which of the other two is chosen.
+**This is an owner decision.** The implementation cannot sensibly pick for you.
+
+### 5.3 The first option was built and reverted
+
+A logout guard was implemented on the reasoning above — cheap, correct
+whichever way the retention question goes. It was reverted on the owner's call,
+and the reasoning is worth keeping:
+
+> An examiner offline enough to be signing out mid-drill has larger problems
+> than a dialog, and those problems get handled in person.
+
+The loss it prevented is also smaller than it looked. Everything up to the last
+successful save is on the server, and the records list offers the test straight
+back — `loadTest` restores the clock from `elapsed_seconds` and the section
+index returns the examiner to the step they had reached. Re-entry, not
+prevention, is the supported path, and it already works.
+
+The same call was made about **annotating a resumed test's timing**: a
+`resume_count` column and "timing not verified" markings across the examiner
+screen, scorecard, printed record and export were built and reverted. A skills
+evaluation is two people in an apparatus bay; when an evolution is interrupted,
+the examiner and the training officer settle it face to face. They already have
+free-text notes on the test and on every criterion, and the officer reviews
+before validating. A system that annotates its own uncertainty invites an
+officer to trust a badge instead of asking.
+
+This does not change the case for Phases 1–3 — losing a *whole evaluation* to
+no signal is a different problem from a clock that drifted — but it does set
+the bar: sync the work, do not editorialize about it.
 
 ---
 

@@ -334,6 +334,33 @@ export const formatCalendarDate = (
 };
 
 /**
+ * Shift a calendar date by whole days, staying in calendar space.
+ *
+ * A shift date, a target completion date and a deadline are calendar dates, not
+ * instants: "the day after 2026-03-08" is 2026-03-09 for every viewer. Adding a
+ * day to a `new Date()` and reading it back with `toISOString()` answers a
+ * different question — what the UTC date is once the local clock has moved —
+ * and lands a day out either side of midnight.
+ *
+ * @param dateOnly - Calendar date "YYYY-MM-DD" (anything else is returned unchanged)
+ * @param days - Whole days to add; negative moves back
+ * @returns Calendar date "YYYY-MM-DD"
+ */
+export const addCalendarDays = (dateOnly: string | null | undefined, days: number): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly ?? '');
+  if (!match) return dateOnly ?? '';
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+  if (isNaN(date.getTime())) return dateOnly ?? '';
+  date.setUTCDate(date.getUTCDate() + days);
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'UTC',
+  }).format(date);
+};
+
+/**
  * Format a number for display (currency, counts, measurements).
  * Use this instead of `value.toLocaleString()` to avoid ESLint
  * conflicts with the date-method restrictions.

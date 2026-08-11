@@ -477,11 +477,22 @@ If "Require All Critical" is enabled on the template:
 - Any **required** criterion that is left unchecked (not passed) will result in an **automatic FAIL**
 - This is true even if the candidate's percentage score exceeds the passing threshold
 
-> **[SCREENSHOT NEEDED]:** _The active scoring screen's criteria area, showing a
-> critical criterion with its red asterisk scored Pass, an unscored score-type
-> criterion reading "—/5" in neutral type, a checklist criterion with two of four
-> boxes ticked and the "Candidate did none of these" option beneath, and the
-> timer running in the header._
+A critical step is labelled **(Critical)** in its own text, and where the
+template requires all of them the section header says what that means outright —
+"Steps marked (Critical) must pass. Leaving one unscored counts the same as a
+fail." There is no asterisk to decode.
+
+![A section of the scoring screen — the count of steps scored, a step scored 10/10, and the next one still blank at —/20](./images/09-17-scoring-criteria-mix.png)
+
+An **unscored** step reads **"—/20"** rather than "0/20", which are different
+things: the dash is a step nobody has judged, and a zero is a judgement. The
+section counts only the steps that can be scored — "1 of 2 steps scored" — so
+statements and headings never pad it.
+
+How a score is entered depends on how many points the step is worth: **10 or
+fewer** gives a row of numbered buttons, where tapping the same number again
+clears it; **more than 10** gives a slider. Both leave the step blank until you
+touch them.
 
 ---
 
@@ -496,9 +507,19 @@ When the candidate finishes the procedure:
    > actually happens. The review screen repeats it, with a button that takes you
    > straight back to the first unfinished section.
 
-   > **[SCREENSHOT NEEDED]:** _The "finish with unscored steps" dialog naming the
-   > number of blank steps and stating that an unscored critical step counts as a
-   > fail, with its keep-scoring and finish-anyway buttons._
+   > The dialog counts the blank steps and offers **Keep scoring** or **Review
+   > anyway**. What it says after the count depends on what is blank: where the
+   > template requires all critical steps **and one of the blank ones is
+   > critical**, it says so and what that costs — otherwise it points at the
+   > green checks on the section chips, which are the sections you have
+   > finished.
+
+   ![The warning raised on finishing — how many steps have no score, and the choice between going back and reviewing anyway](./images/09-18-finish-with-unscored-steps.png)
+
+   > **The clock keeps running while the dialog is open.** An examiner who taps
+   > Finish, reads the warning and goes back to score the last step is still
+   > mid-evaluation, and stopping the clock on them would under-record a test
+   > whose time limit may itself be the criterion.
 
 2. The system shows a **post-completion review screen** where the examiner can:
    - Review each section's criteria and scores
@@ -523,8 +544,22 @@ A candidate **fails** if ANY of the following are true:
 1. Their percentage score is below the passing percentage
 2. Any required criterion was not passed (when "Require All Critical" is enabled)
 
-> **Screenshot placeholder:**
-> _[Screenshot of the test completion/results screen showing: a large PASS indicator in green (or FAIL in red), the final score "16/18 (89%)", time elapsed "07:23", a section-by-section breakdown showing scores per section, and a list of any missed criteria highlighted in yellow. For a failing test, also show which critical criteria were triggered in red]_
+The result screen leads with the outcome and the percentage, then shows the
+candidate, the examiner, the elapsed time and the arithmetic behind the score —
+**"24 of 50 points earned = 48%. Passing mark is 70% — not met."** A passing
+scorecard is pictured in [What the percentage is actually made of](#what-the-percentage-is-actually-made-of-2026-08-09); this is the
+other outcome:
+
+![A failed scorecard — the result, the percentage against the passing mark, and the critical step that failed on its own](./images/09-19-failed-test-result.png)
+
+**When a critical step is what sank it, the screen says so separately** — "A
+critical step failed this test regardless of the percentage", naming the step and
+the section it is in. That banner appears whether or not the percentage also
+fell short, so an examiner explaining the result to a candidate never has to work
+out which of the two rules applied.
+
+Below it, every section is listed with its points, and each step with what it
+scored and any note the examiner left — "Hood not deployed before entry."
 
 ### Effect on Training Pipeline Progress
 
@@ -1008,13 +1043,22 @@ _other_ candidate's results too.
 
 ### Setting the department default
 
-Navigate to **Training Admin > Configuration** and find the **Skills-Test
-Results** group, beside the existing member-visibility switches. The "when"
-question is hidden if you set disclosure to **Nothing**, since there is then
-nothing to time.
+Open **Training → My Training** and, as an officer, the **Member Visibility
+Settings** tab — the same editor that governs what members see of the rest of
+their training. The **Skills-Test Results** group sits at its foot, two
+dropdowns rather than switches:
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Training Configuration editor showing the "Skills-Test Results" group with two controls: a "What the member sees" segmented control set to "Full results", and a "When" radio pair set to "On completion"]_
+![The Skills-Test Results settings — what a member sees of a result, and when they see it](./images/09-20-result-disclosure-settings.png)
+
+**What the member sees** carries the reasoning next to the control: examiner
+notes are often candid working notes for the training file rather than feedback
+written to be read by the member. **When they see it** explains what a release
+buys you — a chance to review the scorecard, or to deliver a failure in person,
+before the member reads it — and notes that practice attempts are never held
+back.
+
+The "when" question disappears entirely if you set disclosure to **Nothing**,
+since there is then nothing to time.
 
 ### Overriding it on a single template _(2026-08-08)_
 

@@ -182,6 +182,23 @@ async def get_current_user(
     return user
 
 
+async def get_optional_current_user(
+    request: Request,
+    authorization: str | None = Header(None),
+    access_token: str | None = Cookie(None),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Resolve an authenticated user when credentials are present.
+
+    Public routes use this dependency when a record's policy determines whether
+    authentication is mandatory. Invalid supplied credentials still fail rather
+    than being silently downgraded to an anonymous request.
+    """
+    if not access_token and not authorization:
+        return None
+    return await get_current_user(request, authorization, access_token, db)
+
+
 def _has_permission(required: str, user_permissions: set) -> bool:
     """
     Check if a single required permission is satisfied by the user's permissions.

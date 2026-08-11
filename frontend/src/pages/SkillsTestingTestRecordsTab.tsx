@@ -6,8 +6,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Ban, CheckCircle2, CircleSlash, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Ban, CheckCircle2, CircleSlash, Download, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
@@ -62,7 +62,13 @@ const TestCard: React.FC<{
   onCancel: () => void;
   onRelease: () => void;
   onValidate: () => void;
-}> = ({ test, onClick, onDelete, onVoid, onCancel, onRelease, onValidate }) => {
+  /** Selection is offered only in the review queue. Everywhere else the list
+   *  mixes drafts, practice runs and closed records, and there is no one action
+   *  a selection across those could mean. */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelected?: () => void;
+}> = ({ test, onClick, onDelete, onVoid, onCancel, onRelease, onValidate, selectable, selected, onToggleSelected }) => {
   const tz = useTimezone();
   return (
     <div
@@ -75,6 +81,18 @@ const TestCard: React.FC<{
       className="bg-theme-surface border-theme-surface-border w-full cursor-pointer rounded-lg border p-4 text-left transition-colors hover:border-red-500/50"
     >
       <div className="flex items-center justify-between">
+        {selectable && (
+          // Stops the row's own click handler: ticking a box must not also open
+          // the scorecard underneath it.
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onClick={(e) => e.stopPropagation()}
+            onChange={() => onToggleSelected?.()}
+            aria-label={`Select ${test.candidate_name}'s ${test.template_name} result`}
+            className="form-checkbox mr-3 shrink-0"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
             <p className="text-theme-text-primary truncate font-medium">{test.template_name}</p>
@@ -213,11 +231,15 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
     cancelTest,
     releaseTest,
     validateTest,
+    bulkValidateTests,
     templates,
     loadTemplates,
   } = useSkillsTestingStore();
+  // The Needs Validation tile links straight here with ?status=pending_validation,
+  // so the queue opens on the rows it counted rather than on everything.
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? '');
   const [voidTarget, setVoidTarget] = useState<SkillTestListItem | null>(null);
   const [voidReason, setVoidReason] = useState('');
   const [voiding, setVoiding] = useState(false);
@@ -229,6 +251,11 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
   const [validateTarget, setValidateTarget] = useState<SkillTestListItem | null>(null);
   const [cancelTarget, setCancelTarget] = useState<SkillTestListItem | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  // Selection lives only while the queue is on screen. Keyed by id rather than
+  // index so a refetch that reorders rows cannot silently move a tick from one
+  // candidate's result to another's.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkValidating, setBulkValidating] = useState(false);
 
   // "Needs validation" is a filter over completed tests rather than another
   // status value, so it lives in the same dropdown but maps to its own param.
@@ -241,6 +268,10 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
       void loadTests(statusFilter ? { status: statusFilter } : undefined);
     }
     void loadTemplates({ status: 'published' });
+    // Dropped on every filter change: a tick made against one view means
+    // nothing in another, and carrying it would let an officer validate rows
+    // they can no longer see.
+    setSelectedIds(new Set());
   }, [loadTests, loadTemplates, statusFilter, pendingOnly]);
 
   const filteredTests = tests.filter(
@@ -249,6 +280,46 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
       t.candidate_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.examiner_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Only rows that could actually be validated. Search narrows the queue, so
+  // "select all" must mean what is on screen — selecting rows the officer has
+  // filtered away is how a bulk action surprises someone.
+  const selectableTests = pendingOnly ? filteredTests.filter((t) => t.pending_validation) : [];
+  const allSelected = selectableTests.length > 0 && selectableTests.every((t) => selectedIds.has(t.id));
+
+  const toggleSelected = (id: string) =>
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleSelectAll = () => setSelectedIds(allSelected ? new Set() : new Set(selectableTests.map((t) => t.id)));
+
+  const handleBulkValidate = async () => {
+    const ids = selectableTests.filter((t) => selectedIds.has(t.id)).map((t) => t.id);
+    if (ids.length === 0) return;
+    setBulkValidating(true);
+    try {
+      const result = await bulkValidateTests(ids);
+      // Partial success is the normal outcome — a colleague may have acted on
+      // one of these since the queue loaded. Reported rather than swallowed, or
+      // the officer walks away believing the queue is clear.
+      if (result.skipped.length > 0) {
+        toast.success(`Accepted ${result.validated.length}`);
+        toast.error(`${result.skipped.length} could not be accepted: ${result.skipped[0]?.reason ?? 'unknown reason'}`);
+      } else {
+        toast.success(`Accepted ${result.validated.length} result${result.validated.length === 1 ? '' : 's'}`);
+      }
+      setSelectedIds(new Set());
+      await loadTests({ pending_validation: true });
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to accept results'));
+    } finally {
+      setBulkValidating(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -353,6 +424,23 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             <option value="cancelled">Cancelled</option>
             <option value="voided">Voided</option>
           </select>
+          {/* A direct link rather than a fetch: the response is a file
+              download, and routing it through axios would buffer the whole
+              CSV in memory only to hand it back to the browser to save. */}
+          <a
+            href={`/api/v1/training/skills-testing/tests/export/csv?detail=criteria${
+              pendingOnly
+                ? '&pending_validation=true'
+                : statusFilter
+                  ? `&status=${encodeURIComponent(statusFilter)}`
+                  : ''
+            }`}
+            className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 text-sm font-medium"
+            title="Export test records as CSV — one row per evaluated step"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Export</span>
+          </a>
           <button
             onClick={() => void navigate('/training/skills-testing/test/new')}
             className="btn-primary flex items-center gap-2 font-medium"
@@ -362,6 +450,36 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Review-queue controls. Only in the pending view: elsewhere the list
+          mixes drafts, practice runs and closed records, and there is no single
+          action a selection across those could mean. */}
+      {pendingOnly && selectableTests.length > 0 && (
+        <div className="bg-theme-surface border-theme-surface-border mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+          <label className="mobile-touch-target flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              className="form-checkbox"
+              aria-label="Select every result in the queue"
+            />
+            <span className="text-theme-text-secondary">
+              {selectedIds.size > 0
+                ? `${selectedIds.size} of ${selectableTests.length} selected`
+                : `Select all ${selectableTests.length}`}
+            </span>
+          </label>
+          <button
+            onClick={() => void handleBulkValidate()}
+            disabled={selectedIds.size === 0 || bulkValidating}
+            className="mobile-touch-target flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            {bulkValidating ? 'Accepting…' : `Accept ${selectedIds.size || ''}`.trim()}
+          </button>
+        </div>
+      )}
 
       {/* Tests List */}
       {testsLoading ? (
@@ -409,6 +527,9 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               onCancel={() => setCancelTarget(test)}
               onRelease={() => void handleRelease(test)}
               onValidate={() => setValidateTarget(test)}
+              selectable={!!(pendingOnly && test.pending_validation)}
+              selected={selectedIds.has(test.id)}
+              onToggleSelected={() => toggleSelected(test.id)}
             />
           ))}
         </div>
