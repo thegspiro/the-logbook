@@ -878,11 +878,15 @@ class Seeder:
                 {"platoons_enabled": True},
             )
 
+        # PlatoonOverviewResponse keys the roster as `groups`, each carrying
+        # `platoon` and `member_count`. Reading a `platoons` key instead makes
+        # this guard silently vacuous — it always sees zero and re-deals the
+        # whole roster on every run, which is the opposite of idempotent.
         overview = self.api.get("/scheduling/platoons/overview") or {}
         already = sum(
-            len(p.get("members") or [])
-            for p in (overview.get("platoons") or [])
-            if (p.get("platoon") or "").strip()
+            group.get("member_count") or 0
+            for group in (overview.get("groups") or [])
+            if (group.get("platoon") or "").strip()
         )
         if already:
             return
@@ -2874,16 +2878,29 @@ class Seeder:
 
         # The examiner must not hold training.manage, or their submission
         # validates itself and this step quietly produces the opposite of what
-        # it exists for. Ranks carry default permissions, so a rank change to
-        # this account — or reusing the constant for someone promoted — breaks
-        # it silently: the step still reports success, and three screenshots
-        # fail much later waiting on an empty queue. Fail loudly here instead.
-        if (pick(examiner, "rank") or "") in OFFICER_RANKS:
-            raise RuntimeError(
-                f"Peer examiner {DEMO_PEER_EXAMINER_USERNAME!r} holds rank "
-                f"{pick(examiner, 'rank')!r}, which grants training.manage. "
-                "Their own completion would self-validate, leaving the "
-                "validation queue empty. Pick a non-officer."
+        # it exists for: the step reports success and three screenshots fail
+        # much later waiting on a queue that was never non-empty.
+        #
+        # Read the rank back from the API rather than from `members`. That list
+        # is snapshotted before `seed_member_changes` applies promotions, so it
+        # still holds pre-promotion ranks — and promoting this account is
+        # precisely the case this guard is here to catch.
+        examiner_id = pick(examiner, "id")
+        live = self.api.get(f"/users/{examiner_id}") if examiner_id else {}
+        live_rank = pick(live or {}, "rank") or pick(examiner, "rank") or ""
+        if live_rank in OFFICER_RANKS:
+            # ApiError rather than a bare RuntimeError: `step()` catches only
+            # ApiError, so anything else aborts the whole run and every later
+            # step — inventory, documents, elections, finance — never executes.
+            # This must be loud, not fatal.
+            raise ApiError(
+                "GUARD",
+                "seed_pending_validation_test",
+                0,
+                f"peer examiner {DEMO_PEER_EXAMINER_USERNAME!r} holds rank "
+                f"{live_rank!r}, which grants training.manage — their own "
+                "completion would self-validate, leaving the validation queue "
+                "empty. Pick a non-officer.",
             )
 
         peer = self.member_session(

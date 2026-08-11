@@ -1429,7 +1429,11 @@ export const SHOTS = [
     anchor:
       "Screenshot of Settings → Security showing the Privacy Choices section with three",
     alt: "Account security settings showing the privacy choices section",
-    route: "/settings/account",
+    // Privacy Choices lives on the Security tab; this shot was landing on
+    // Account, byte-identical to 00-09-account-settings. Note the canonical
+    // path: /settings/account is a <Navigate to="/account"> with no query, so
+    // React Router drops ?tab= on the redirect and the param never arrives.
+    route: "/account?tab=security",
     fullPage: true,
   },
 
@@ -1528,12 +1532,15 @@ export const SHOTS = [
       await page
         .getByRole("button", { name: /check compliance/i })
         .click({ timeout: 10_000 });
-      // The compliance tab's own empty state, not Member Hours'. Waiting for
-      // it to go is what "the report rendered" actually means; a fixed sleep
-      // would happily re-shoot the placeholder.
+      // Wait for the results themselves, not for the placeholder to vanish:
+      // loadCompliance sets hasSearched *before* awaiting the fetch, so the
+      // empty state disappears on click and a "hidden" wait resolves instantly
+      // — asserting nothing, and happily shooting an errored or empty response
+      // under the compliance caption. The filter toggle renders only in the
+      // results branch, so it is the real signal.
       await page
-        .getByText(/check member compliance against shift and hours/i)
-        .waitFor({ state: "hidden", timeout: 20_000 });
+        .getByRole("button", { name: /non-compliant only/i })
+        .waitFor({ state: "visible", timeout: 20_000 });
     },
     fullPage: true,
   },
@@ -1939,7 +1946,10 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Event Requests tab showing a list of requests with",
     alt: "Event requests tab listing incoming requests with status badges",
-    route: "/events/admin",
+    // /events/admin defaults to the Create Event tab, so this was
+    // byte-identical to 04-05-create-event under a different caption — the
+    // same defect as 02-21/02-41.
+    route: "/events/admin?tab=requests",
     fullPage: true,
   },
   {

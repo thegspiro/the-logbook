@@ -119,8 +119,20 @@ either screen flagged.
 ## Superseded — the 2026-08-09 staleness audit
 
 The table below is the pre-re-capture analysis, kept for the reasoning rather
-than the verdicts. The **Structural** rows have all been re-captured and are
-current.
+than the verdicts.
+
+Every **Structural** row was re-captured successfully. Four —
+`09-07`, `09-08`, `09-09` and `09-12` — produced **byte-identical** output, so
+they do not appear in the commit diff. That is not the same as "not
+re-captured": those screens already matched the current build, and the shots had
+been failing for a data reason rather than a rendering one. `09-12` is the clear
+case — it timed out before the examiner fix and captures cleanly after it, while
+rendering exactly the same pixels, because the stale file on disk had been shot
+when a pending validation happened to exist.
+
+Worth stating because a diff-based reading gets it backwards: an unchanged image
+file after a successful re-capture is the _good_ outcome. It means the screen was
+already current.
 
 ## Structural — re-capture first
 
