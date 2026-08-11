@@ -6528,6 +6528,40 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "03-95-apparatus-inventory",
+    doc: "03-scheduling.md",
+    line: 837,
+    anchor: "the Apparatus Inventory page on a phone",
+    alt: "Apparatus Inventory on a phone — counted positions with what is aboard against par, the short ones called out",
+    route: "/scheduling/apparatus-inventory",
+    viewport: "mobile",
+    prepare: async (page) => {
+      await page.waitForTimeout(2500);
+      // The page reads the truck from ?apparatus=; the seeder stocks exactly
+      // one, so ask the API which rather than clicking through the fleet.
+      const apparatusId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/apparatus?page_size=50", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body) ? body : (body.apparatus ?? body.items ?? []);
+        const wanted = rows.find((row) => row.name === "Engine 1");
+        return wanted ? wanted.id : null;
+      });
+      if (!apparatusId) throw new Error("03-95: Engine 1 not found");
+      await page.goto(
+        new URL(
+          `/scheduling/apparatus-inventory?apparatus=${apparatusId}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(3000);
+    },
+    fullPage: true,
+  },
+  {
     id: "09-20-result-disclosure-settings",
     doc: "09-skills-testing.md",
     line: 1051,

@@ -116,6 +116,11 @@ OFFICER_RANKS = frozenset(
 # per-section point totals and a percentage.
 SCORED_TEMPLATE_NAME = "Handline Advance — Weighted Evaluation"
 
+# The one apparatus stocked by id rather than by type, so Apparatus Inventory
+# has counted positions to show. See seed_apparatus_stock.
+APPARATUS_STOCK_UNIT = "Engine 1"
+APPARATUS_STOCK_TEMPLATE_NAME = "Engine 1 — Stock Levels"
+
 # The candidate on the one failed test. Not the demo member, whose passed test
 # the scorecard screenshots are built around.
 FAILED_TEST_CANDIDATE_USERNAME = "cfrazier"
@@ -3303,6 +3308,127 @@ class Seeder:
         return requests
 
     # -- scheduling: equipment check templates and completed checks --
+
+    # The truck one apparatus is stocked on, by id rather than by type. The
+    # counted positions are what the Apparatus Inventory page is: a par figure,
+    # what is aboard now, and the gap between them.
+    #
+    # (name, expected on the truck, actually aboard)
+    APPARATUS_STOCK_POSITIONS = [
+        (
+            "EMS Compartment",
+            [
+                ("Nitrile gloves (box)", 6, 6),
+                ("Trauma dressing 5x9", 12, 7),
+                ("Burn sheet", 4, 4),
+            ],
+        ),
+        (
+            "Compartment 2 — Officer Side",
+            [
+                ("Road flares", 24, 15),
+                ("Absorbent pads", 10, 10),
+            ],
+        ),
+    ]
+
+    def seed_apparatus_stock(self) -> dict | None:
+        """Stock one truck, so Apparatus Inventory has something to show.
+
+        The inventory endpoint joins template compartments to an apparatus by
+        ``EquipmentCheckTemplate.apparatus_id``. Both other seeded templates
+        bind by ``apparatus_type`` — a checklist that applies to every engine,
+        which is a real thing a department has, but not one that stocks a
+        particular truck — so the page rendered nothing for all seven apparatus.
+
+        Deliberately one apparatus and one template: ``_resolve_templates``
+        matches a shift's checklists by id **or** type, so every id-bound
+        template also attaches to that apparatus's shifts. One is enough to
+        photograph the page and small enough to reason about when a checklist
+        count moves.
+        """
+        apparatus = items(self.api.get("/apparatus?page_size=50"), "apparatus", "items")
+        target = next(
+            (
+                a
+                for a in apparatus
+                if str(pick(a, "name") or "") == APPARATUS_STOCK_UNIT
+            ),
+            None,
+        )
+        if not target:
+            return None
+        apparatus_id = pick(target, "id")
+
+        templates = items(self.api.get("/equipment-checks/templates"), "templates")
+        existing = next(
+            (
+                t
+                for t in templates
+                if str(pick(t, "name") or "") == APPARATUS_STOCK_TEMPLATE_NAME
+            ),
+            None,
+        )
+        if existing is None:
+            existing = self.api.post(
+                "/equipment-checks/templates",
+                {
+                    "name": APPARATUS_STOCK_TEMPLATE_NAME,
+                    "description": (
+                        f"What {APPARATUS_STOCK_UNIT} carries, and how many of each."
+                    ),
+                    "check_timing": "start_of_shift",
+                    "apparatus_id": apparatus_id,
+                    "is_active": True,
+                    "compartments": [
+                        {
+                            "name": name,
+                            "sort_order": order,
+                            "items": [
+                                {
+                                    "name": item_name,
+                                    "sort_order": item_order,
+                                    "check_type": "quantity",
+                                    "is_required": True,
+                                    "expected_quantity": par,
+                                }
+                                for item_order, (item_name, par, _aboard) in enumerate(
+                                    contents
+                                )
+                            ],
+                        }
+                        for order, (name, contents) in enumerate(
+                            self.APPARATUS_STOCK_POSITIONS
+                        )
+                    ],
+                },
+            )
+
+        template_id = pick(existing, "id")
+        if not template_id:
+            return None
+
+        # What is aboard now is set per item after the fact: the create payload
+        # carries the par figure only, and a position at par looks the same as
+        # one nobody has counted until this runs.
+        aboard = {
+            item_name: on_truck
+            for _compartment, contents in self.APPARATUS_STOCK_POSITIONS
+            for item_name, _par, on_truck in contents
+        }
+        detail = self.api.get(f"/equipment-checks/templates/{template_id}")
+        for compartment in detail.get("compartments") or []:
+            for item in compartment.get("items") or []:
+                name = str(pick(item, "name") or "")
+                if name not in aboard:
+                    continue
+                if pick(item, "quantity_on_truck") == aboard[name]:
+                    continue
+                self.api.put(
+                    f"/equipment-checks/items/{pick(item, 'id')}/quantity",
+                    {"quantity": aboard[name]},
+                )
+        return existing
 
     def seed_equipment_checks(self) -> dict[str, Any]:
         """A template plus completed checks, which the reports page aggregates."""
@@ -7845,6 +7971,7 @@ class Seeder:
         self.step("expense reports", lambda: self.seed_expense_reports(finance))
         self.step("check requests", lambda: self.seed_check_requests(finance))
         self.step("equipment checks", self.seed_equipment_checks)
+        self.step("apparatus stock", self.seed_apparatus_stock)
         self.step("shift reports", lambda: self.seed_shift_reports(members))
         # After the reports: finalizing auto-creates drafts for attendees, and
         # doing it first would put a second batch of drafts in the way of the

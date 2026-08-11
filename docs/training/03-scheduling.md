@@ -834,8 +834,18 @@ any member with `equipment_check.submit` — the default member position — bec
 recording what you just used is crew work, and putting it behind an officer
 permission is the thing that leaves the bracket empty until morning.
 
-> **Screenshot needed:**
-> _[Screenshot of the Apparatus Inventory page on a phone with an engine selected, showing two compartments expanded — one position at full count in green, one short with an amber count, and one showing a lots-aboard chip with two dates]_
+![Apparatus Inventory on a phone — counted positions with what is aboard against par, the short ones called out](./images/03-95-apparatus-inventory.png)
+
+The header counts the truck twice: **how many positions are tracked**, and **how
+many need restock**. A position at par states its count plainly — "6 of 6
+aboard" — and a position under it carries an amber **Short** badge with the gap
+spelled out, so the two are told apart at a glance rather than by shade.
+
+> **A tracked position comes from a checklist bound to _that_ apparatus.** A
+> template that applies to every engine — bound by apparatus **type** — supplies
+> checklists for shifts but stocks no particular truck, and a rig with only
+> type-bound templates shows an empty inventory. If a truck you expect to see
+> here is bare, that is why.
 
 Each position offers up to five actions, and they mean different things:
 
