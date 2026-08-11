@@ -251,6 +251,77 @@ class TestBuildProgram:
         assert milestones[0].phase_id is None
         assert db.commit.await_count == 1
 
+    async def test_build_carries_the_prerequisite_flag(self):
+        """
+        A gating requirement built in one call must come out gating.
+
+        Create, clone and import all carried ``is_prerequisite``; build silently
+        dropped it, so a programme assembled by the wizard had every requirement
+        open and the gate had to be re-set by hand afterwards.
+        """
+        db = RecordingSession()
+        svc = TrainingProgramService(db)
+
+        payload = ProgramBuildRequest(
+            program=TrainingProgramCreate(
+                name="Recruit", code="RECRUIT", structure_type="phases"
+            ),
+            phases=[
+                ProgramBuildPhaseInput(
+                    phase_number=1,
+                    name="Basic Skills",
+                    requirements=[
+                        ProgramBuildRequirementInput(
+                            name="Hose Deployment",
+                            requirement_type="hours",
+                            required_hours=12,
+                            is_prerequisite=True,
+                        ),
+                        ProgramBuildRequirementInput(
+                            name="Ladder Evolutions",
+                            requirement_type="hours",
+                            required_hours=12,
+                        ),
+                    ],
+                )
+            ],
+        )
+
+        program, error = await svc.build_program(payload, uuid4(), uuid4())
+
+        assert error is None
+        assert program is not None
+        requirements = [o for o in db.added if isinstance(o, TrainingRequirement)]
+        gate_id = next(r.id for r in requirements if r.name == "Hose Deployment")
+        links = [o for o in db.added if isinstance(o, ProgramRequirement)]
+        assert len(links) == 2
+        gated = [link for link in links if link.is_prerequisite]
+        assert len(gated) == 1
+        assert gated[0].requirement_id == gate_id
+
+    async def test_build_links_an_existing_requirement_as_a_prerequisite(self):
+        """The link form takes the flag too, not only the define form."""
+        req_id = uuid4()
+        db = RecordingSession([_rows([(str(req_id),)])])  # in-org check
+        svc = TrainingProgramService(db)
+
+        payload = ProgramBuildRequest(
+            program=TrainingProgramCreate(name="Annual CE", structure_type="flexible"),
+            requirements=[
+                ProgramBuildRequirementInput(
+                    requirement_id=req_id, is_prerequisite=True
+                )
+            ],
+        )
+
+        program, error = await svc.build_program(payload, uuid4(), uuid4())
+
+        assert error is None
+        assert program is not None
+        links = [o for o in db.added if isinstance(o, ProgramRequirement)]
+        assert len(links) == 1
+        assert links[0].is_prerequisite is True
+
     async def test_rejects_the_same_program_level_requirement_twice(self):
         req_id = uuid4()
         db = RecordingSession()

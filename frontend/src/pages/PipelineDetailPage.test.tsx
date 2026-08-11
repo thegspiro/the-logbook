@@ -152,6 +152,44 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     expect(await screen.findByText('Jane Recruit')).toBeInTheDocument();
   });
 
+  it('names the enrollment status rather than printing the stored value', async () => {
+    mockGetProgramEnrollments.mockResolvedValue([{ ...enrollment, status: 'on_hold' }]);
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+
+    expect(await screen.findByText(/Status: On Hold/)).toBeInTheDocument();
+  });
+
+  it('asks the API for one status when the filter is set', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await screen.findByText('Jane Recruit');
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'expired');
+
+    await waitFor(() => expect(mockGetProgramEnrollments).toHaveBeenCalledWith('prog-1', 'expired'));
+  });
+
+  it('says the filter emptied the list, and offers the way back', async () => {
+    // Distinct from "nobody is enrolled": an officer who filtered to Expired
+    // and found none should not be told to enroll somebody.
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await screen.findByText('Jane Recruit');
+    mockGetProgramEnrollments.mockResolvedValue([]);
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'expired');
+
+    expect(await screen.findByText(/No expired enrollments in this pipeline/)).toBeInTheDocument();
+    expect(screen.queryByText(/No members enrolled yet/)).not.toBeInTheDocument();
+
+    mockGetProgramEnrollments.mockResolvedValue([enrollment]);
+    await userEvent.click(screen.getByRole('button', { name: /Show all statuses/i }));
+
+    expect(await screen.findByText('Jane Recruit')).toBeInTheDocument();
+  });
+
   it('marks a non-numeric requirement complete via the progress modal', async () => {
     renderWithRouter(<PipelineDetailPage />);
 

@@ -1222,7 +1222,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     type="text"
                     value={newApplicant.first_name}
                     onChange={(e) => setNewApplicant({ ...newApplicant, first_name: e.target.value })}
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input text-sm"
                   />
                 </div>
                 <div>
@@ -1231,7 +1231,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     type="text"
                     value={newApplicant.last_name}
                     onChange={(e) => setNewApplicant({ ...newApplicant, last_name: e.target.value })}
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                    className="form-input text-sm"
                   />
                 </div>
               </div>
@@ -1241,7 +1241,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   type="email"
                   value={newApplicant.email}
                   onChange={(e) => setNewApplicant({ ...newApplicant, email: e.target.value })}
-                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input text-sm"
                 />
               </div>
               <div>
@@ -1250,7 +1250,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   type="tel"
                   value={newApplicant.phone}
                   onChange={(e) => setNewApplicant({ ...newApplicant, phone: e.target.value })}
-                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input text-sm"
                 />
               </div>
               <div>
@@ -1263,7 +1263,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       target_membership_type: e.target.value as 'regular' | 'administrative',
                     })
                   }
-                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  className="form-input text-sm"
                 >
                   <option value="regular">Regular Member</option>
                   <option value="administrative">Administrative</option>
