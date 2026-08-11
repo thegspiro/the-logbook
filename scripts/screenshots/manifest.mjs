@@ -286,6 +286,53 @@ export function openTemplateNamed(name) {
   };
 }
 
+/**
+ * Select an email template so the editor and its preview render.
+ *
+ * The Email Templates screen shows nothing but the list until a template is
+ * chosen — every shot of the editor, the variable palette or the preview has to
+ * pick one first. It is reached through the screen's own filter box rather than
+ * by clicking a position in the list: the catalogue is forty-odd templates in
+ * collapsible categories, so the nth row is a different template every time one
+ * is added.
+ *
+ * The welcome email is the one to picture. It is the notice every department
+ * sends, it carries organization variables and a footer, and its sample data is
+ * seeded — a template composed in code renders a preview with nothing in it.
+ *
+ * Pass `footer` to also set the "Closes with" picker to a named footer, for the
+ * shots that are about the footer rather than the body.
+ */
+export function openTemplateEditor({ footer } = {}) {
+  return async (page) => {
+    const filter = page.getByPlaceholder(/Filter templates/i);
+    await filter.waitFor({ timeout: 20_000 });
+    await filter.fill("Welcome");
+    const row = page.getByRole("button", { name: /Welcome Email/i }).first();
+    await row.waitFor({ timeout: 20_000 });
+    await row.click();
+    // The editor mounts on selection; the subject field is the first thing in
+    // it, so waiting on that is waiting on the editor rather than on a timeout.
+    await page.locator("#template-subject").waitFor({ timeout: 20_000 });
+
+    if (footer) {
+      const picker = page.locator("#template-footer");
+      await picker.waitFor({ timeout: 20_000 });
+      const value = await picker.evaluate(
+        (el, pattern) =>
+          Array.from(el.options).find((option) =>
+            new RegExp(pattern, "i").test(option.text),
+          )?.value ?? "",
+        footer.source,
+      );
+      if (!value) throw new Error(`no footer matching ${footer} in the picker`);
+      await picker.selectOption(value);
+      await picker.scrollIntoViewIfNeeded();
+    }
+    await page.waitForTimeout(1_000);
+  };
+}
+
 /** True for an event that has started but not finished. */
 export const isInProgress = (event) => {
   const now = new Date().toISOString();
@@ -736,6 +783,10 @@ export const SHOTS = [
     anchor: "Screenshot of a shift's Crew Board with one position filled",
     alt: "A shift's crew board — one filled position and three open, each with Assign and Sign Up",
     route: "/scheduling",
+    // "No calls logged for this shift" is the Calls/Runs panel further down the
+    // same drawer. This shift is deliberately in the future — that is what
+    // leaves its seats open — and a shift that has not run yet has no calls.
+    allowEmptyState: true,
     prepare: async (page) => {
       // A shift with several slots still open: that is what puts open-position
       // rows on the board and brings up the bulk "Fill All Open" action, which
@@ -782,6 +833,10 @@ export const SHOTS = [
       "Screenshot of the Required EVOC Level control on an apparatus edit form",
     alt: "The Required EVOC Level control on an apparatus, set to the level needed to drive it",
     route: "/apparatus",
+    // "No EVOC requirement" is this select's placeholder option. It is in the
+    // DOM — and so in the text the empty-state scan reads — on every apparatus,
+    // including the one picked here precisely because it *has* a level set.
+    allowEmptyState: true,
     prepare: async (page) => {
       // The control is on the apparatus *edit form*, not the detail page, and
       // it renders only once the organization has EVOC levels configured.
@@ -2594,7 +2649,8 @@ export const SHOTS = [
     id: "03-57-apparatus-inventory",
     doc: "03-scheduling.md",
     line: 827,
-    anchor: "Screenshot of the Apparatus Inventory page on a phone with an engine",
+    anchor:
+      "Screenshot of the Apparatus Inventory page on a phone with an engine",
     alt: "Apparatus Inventory on a phone: compartments with per-position counts and the lots aboard",
     // Shot from a crew member's session, not the chief's. The page opens on
     // `equipment_check.submit` — the default member position — and that is the
@@ -2626,7 +2682,8 @@ export const SHOTS = [
     id: "03-59-supply-worklist",
     doc: "03-scheduling.md",
     line: 866,
-    anchor: "Screenshot of the Expiring on Apparatus page with the three summary pills",
+    anchor:
+      "Screenshot of the Expiring on Apparatus page with the three summary pills",
     alt: "Expiring on Apparatus: summary pills, the window selector, and rows in four different states",
     route: "/scheduling/supply/expiring",
     // "No stock" here is a **badge on a populated row** — the Nozzle position,
@@ -2642,7 +2699,8 @@ export const SHOTS = [
     id: "03-58-lots-aboard-sheet",
     doc: "03-scheduling.md",
     line: 840,
-    anchor: "Screenshot of the lots sheet open over the Apparatus Inventory page",
+    anchor:
+      "Screenshot of the lots sheet open over the Apparatus Inventory page",
     alt: "The lots sheet: two lots on one position, each with its own count, date and Remove",
     auth: "member",
     route: "/scheduling/apparatus-inventory",
@@ -2664,7 +2722,8 @@ export const SHOTS = [
     id: "03-60-report-used-sheet",
     doc: "03-scheduling.md",
     line: 880,
-    anchor: 'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
+    anchor:
+      'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
     alt: "The report-used sheet: quantity stepper, optional note, and the position's current count",
     auth: "member",
     route: "/scheduling/apparatus-inventory",
@@ -2674,7 +2733,9 @@ export const SHOTS = [
       // "Flag" on a counted position, "Used" on one with no target — the same
       // report by either name, so match both rather than assuming which the
       // seeder produced for the first row.
-      const trigger = page.getByRole("button", { name: /^(Flag|Used)$/ }).first();
+      const trigger = page
+        .getByRole("button", { name: /^(Flag|Used)$/ })
+        .first();
       await trigger.waitFor({ timeout: 20_000 });
       await trigger.click();
       await page.waitForTimeout(900);
@@ -2685,7 +2746,8 @@ export const SHOTS = [
     id: "03-61-quick-add-catalog-search",
     doc: "03-scheduling.md",
     line: 937,
-    anchor: "Screenshot of the template builder's quick-add bar with \"gau\" typed",
+    anchor:
+      'Screenshot of the template builder\'s quick-add bar with "gau" typed',
     alt: "The quick-add bar searching the inventory catalog, with matches and the create-and-link option",
     route: "/scheduling",
     prepare: async (page) => {
@@ -2711,7 +2773,8 @@ export const SHOTS = [
     id: "03-62-bulk-inventory-match",
     doc: "03-scheduling.md",
     line: 940,
-    anchor: "Screenshot of the bulk inventory-match dialog on an unlinked engine checklist",
+    anchor:
+      "Screenshot of the bulk inventory-match dialog on an unlinked engine checklist",
     alt: "The bulk match dialog: exact matches pre-selected, a close match left for a person to arbitrate",
     route: "/scheduling",
     prepare: async (page) => {
@@ -2818,12 +2881,103 @@ export const SHOTS = [
     id: "05-53-items-grid-lot-stock",
     doc: "05-inventory.md",
     line: 662,
-    anchor: "Screenshot of the inventory items grid with two consumable rows visible",
+    anchor:
+      "Screenshot of the inventory items grid with two consumable rows visible",
     alt: 'Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure',
     // Needs `seed_supply_tracking` to have run: without dated lots on at least
     // one item every row reports the pool figure and the two ledgers cannot be
     // told apart, which is the entire subject of the caption.
     route: "/inventory/items",
+    fullPage: false,
+  },
+
+  {
+    id: "05-65-receive-stock-modal",
+    doc: "05-inventory.md",
+    line: 687,
+    anchor:
+      "Screenshot of the Receive Stock modal with four delivery lines filled in",
+    alt: "Receive Stock: one dated lot per delivery line, with a single received date above them",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // Desktop only by construction: the toolbar buttons are
+      // `hidden sm:inline-flex`, so at phone width the trigger is not in the
+      // DOM to click at all.
+      const open = page.getByRole("button", { name: /Receive Stock/i }).first();
+      await open.waitFor({ timeout: 20_000 });
+      await open.click();
+      await page.waitForTimeout(1_200);
+    },
+    fullPage: false,
+  },
+  {
+    id: "05-66-add-several-modal",
+    doc: "05-inventory.md",
+    line: 707,
+    anchor:
+      "Screenshot of the Add Several modal with eight pasted lines in the input",
+    alt: "Add Several: a pasted list of catalog items with its parsed preview, and the category and tracking that apply to all of them",
+    route: "/inventory/items",
+    // "No category" is this select's placeholder option — leaving the whole
+    // list uncategorised is the modal's default and a legitimate way to use it,
+    // so the phrase is not evidence of an unpopulated page.
+    allowEmptyState: true,
+    prepare: async (page) => {
+      const open = page.getByRole("button", { name: /Add Several/i }).first();
+      await open.waitFor({ timeout: 20_000 });
+      await open.click();
+      await page.waitForTimeout(1_000);
+      const box = page.locator("textarea").first();
+      await box.waitFor({ timeout: 10_000 });
+      // The first two are already in the catalog. The preview does not mark
+      // them — the skip is reported after the submit — so this list is chosen
+      // to match the worked example in the guide, not to picture the skip.
+      await box.fill(
+        [
+          "Naloxone 4mg Nasal",
+          "Gauze 4x4 Sterile",
+          "Burn Sheet",
+          "Cervical Collar — Adult",
+          "Nasopharyngeal Airway 28Fr",
+          "Chest Seal, Vented",
+          "Tourniquet (CAT Gen 7)",
+          "Emesis Bag",
+        ].join("\n"),
+      );
+      await page.waitForTimeout(1_500);
+    },
+    fullPage: false,
+  },
+  {
+    id: "05-67-item-deployed-on-apparatus",
+    doc: "05-inventory.md",
+    line: 731,
+    anchor:
+      "Screenshot of an inventory item's Stock tab showing the ready-lots table",
+    alt: "An item's Stock tab: ready lots above the checklist positions carrying it, per apparatus",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // Naloxone by name, not the first item in the list: it is the one the
+      // seeder puts on a truck, and the caption is about the *deployed* half of
+      // the panel. Any other item renders the lots table with nothing under it.
+      await openFirstFromApi(
+        "/inventory/items?limit=200",
+        (id) => `/inventory/items/${id}`,
+        "items",
+        (i) => (i.name ?? "") === "Naloxone 4mg Nasal",
+      )(page);
+      const tab = page.getByRole("button", { name: /^Stock Lots$/ }).first();
+      await tab.waitFor({ timeout: 20_000 });
+      await tab.click();
+      const deployed = page.getByText(/On apparatus/i).first();
+      await deployed.waitFor({ timeout: 20_000 });
+      // The deployed list is the subject of the caption and sits below the
+      // ready-lots table, off the bottom of a viewport-height shot. Scrolled
+      // into the middle rather than shot fullPage, which would stretch the
+      // image to the whole record and shrink the part that matters.
+      await deployed.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
     fullPage: false,
   },
 
@@ -2903,6 +3057,96 @@ export const SHOTS = [
       "Screenshot of the Integrations page showing available integrations as cards with logos,",
     alt: "Integrations page showing available integrations and connection status",
     route: "/integrations",
+  },
+
+  {
+    id: "06-22-apparatus-operators-tab",
+    doc: "06-apparatus-facilities.md",
+    line: 672,
+    anchor:
+      "Screenshot of an engine's Operators tab listing three operators by name",
+    alt: "The Operators tab: certified operators by name, with EVOC level and certification dates",
+    route: "/apparatus",
+    prepare: async (page) => {
+      // `?tab=operators` is read on mount, so no click is needed — but the
+      // apparatus id has to be resolved first, and E-1 is the rig the seeder
+      // gives three operators with spread EVOC levels.
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}?tab=operators`,
+        "apparatus",
+        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
+      )(page);
+      await page
+        .getByRole("button", { name: /Add Operator/i })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
+  },
+  {
+    id: "06-23-add-operator-member-picker",
+    doc: "06-apparatus-facilities.md",
+    line: 687,
+    anchor:
+      "Screenshot of the Add Operator form with a member chosen from the picker",
+    alt: "The Add Operator form: a member picker, not the free-text UUID box it replaced",
+    route: "/apparatus",
+    // Both selects are native, and an open native popup is drawn by the OS
+    // rather than the page — Playwright cannot photograph it. Showing the two
+    // fields *set* makes the same point the caption does, and better: a real
+    // member name proves the box is a picker over the roster, and an EVOC level
+    // is the combination that used to return a server error.
+    allowEmptyState: true, // "No EVOC level" is the placeholder option, not an empty page
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}?tab=operators`,
+        "apparatus",
+        (a) => (a.unit_number ?? a.unitNumber) === "E-1",
+      )(page);
+      const add = page.getByRole("button", { name: /Add Operator/i }).first();
+      await add.waitFor({ timeout: 20_000 });
+      await add.click();
+
+      // Pick by position rather than by name: the roster is seeded and the
+      // first real option is a member either way, whereas naming one couples
+      // this shot to the seeder's name list.
+      const member = page.locator("#operator-member");
+      await member.waitFor({ timeout: 10_000 });
+      // The roster is fetched after the modal mounts, so the select exists for
+      // a moment holding nothing but its placeholder. Waiting on the element
+      // is not waiting on the list.
+      await member
+        .locator("option")
+        .nth(1)
+        .waitFor({ state: "attached", timeout: 20_000 });
+      const memberValue = await member.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) => option.value !== "")?.value ??
+          "",
+      );
+      if (!memberValue) throw new Error("member picker has no members in it");
+      await member.selectOption(memberValue);
+
+      const evoc = page.locator("select").nth(1);
+      const evocValue = await evoc.evaluate(
+        (el) =>
+          Array.from(el.options).find((option) =>
+            /intermediate/i.test(option.text),
+          )?.value ?? "",
+      );
+      if (!evocValue) throw new Error("no Intermediate EVOC level defined");
+      await evoc.selectOption(evocValue);
+
+      await page
+        .getByLabel(/Certified to operate/i)
+        .first()
+        .check();
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
   },
 
   // ── 08 Administration & Reports ─────────────────────────────────────
@@ -3104,6 +3348,74 @@ export const SHOTS = [
     // Templates tab — the same way `02-21` and `02-41` came to be byte-identical.
     route: "/communications/email-templates?tab=footers",
     fullPage: false,
+  },
+  {
+    id: "08-65-template-footer-selector",
+    doc: "08-admin-reports.md",
+    line: 1521,
+    anchor:
+      'Screenshot of the email template editor with the "Closes with" selector set to "Public"',
+    alt: 'The template editor\'s "Closes with" picker set to Public, with the line describing who that footer is for beneath it',
+    route: "/communications/email-templates",
+    prepare: openTemplateEditor({ footer: /public/i }),
+    fullPage: false,
+  },
+  {
+    id: "08-66-template-variable-palette",
+    doc: "08-admin-reports.md",
+    line: 1558,
+    anchor: "Screenshot of the template editor's variable palette expanded",
+    alt: "The variable palette expanded, listing the organization fields a template can substitute",
+    route: "/communications/email-templates",
+    prepare: async (page) => {
+      await openTemplateEditor()(page);
+      const palette = page
+        .getByRole("button", { name: /Available Variables \(\d+\)/ })
+        .first();
+      await palette.waitFor({ timeout: 20_000 });
+      await palette.click();
+      // The palette is below the fold on a template with a long body, and the
+      // point of the shot is the variables rather than the subject line.
+      await palette.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(900);
+    },
+    fullPage: false,
+  },
+  {
+    id: "08-67-email-preview-design",
+    doc: "08-admin-reports.md",
+    line: 1600,
+    anchor: "Screenshot of the email preview pane showing the new",
+    alt: "The email preview: a white card on grey, with a rounded header band, styled paragraphs and a details table",
+    route: "/communications/email-templates",
+    prepare: async (page) => {
+      await openTemplateEditor()(page);
+      // Preview is a tab beside Edit, not a second pane — the editor fills the
+      // column on its own, so without this click the shot is the HTML source.
+      const tab = page.getByRole("button", { name: /^Preview$/ }).first();
+      await tab.waitFor({ timeout: 20_000 });
+      await tab.click();
+      // The preview renders into an iframe so the email's own stylesheet cannot
+      // reach the application around it — which is the design this shot is
+      // about, so wait for content inside the frame rather than on the page.
+      await page
+        .frameLocator("iframe")
+        .first()
+        .locator(".container, body > *")
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1_200);
+    },
+    // Full page, unlike the other two, so the sample-data picker and the
+    // test-send button frame the message rather than being cropped off it.
+    //
+    // The footer is *not* in this shot and cannot be: the preview is a fixed
+    // 600px iframe with its own scrollbar, and the welcome email is taller than
+    // that. Scrolling the frame to reach the footer would push the header band
+    // — the thing the caption is actually about — out of view. The guide says
+    // so in prose beside this image rather than leaving a reader hunting for a
+    // footer that is one scroll further down.
+    fullPage: true,
   },
 
   // ── 09 Skills Testing ───────────────────────────────────────────────
@@ -4184,16 +4496,24 @@ export const SHOTS = [
   },
   {
     id: "03-22-equipment-check-builder",
-    // a builder opened on a new template correctly starts with no compartments;
-    // the shot is of the builder layout
-    allowEmptyState: true,
     doc: "03-scheduling.md",
     line: 668,
     anchor:
       "Screenshot of the Equipment Check Template Builder showing the template header (name,",
-    alt: "Equipment check template builder with the template header and sections",
-    route: "/scheduling/equipment-check-templates/new",
-    fullPage: true,
+    alt: "Equipment check template builder: the template header, its compartments and items, and the catalog-linked count",
+    route: "/scheduling",
+    // An existing template, not `/new`. The shot used to be of the blank
+    // create page — carrying `allowEmptyState` to say so — and the guide text
+    // above it is about compartments, item check types and drag-to-reorder,
+    // none of which a page with "No compartments yet" can show. The toolbar's
+    // linked/unlinked catalog count and the quick-add bar's catalog search,
+    // both added by the supply work, need items on the page to render at all.
+    prepare: openTemplateNamed("Medic 3 Supply Check"),
+    // Viewport, not full page: the builder's toolbar and its summary bar are
+    // both sticky, so a full-page capture paints each of them twice — once
+    // pinned and once where they sit in the document — leaving a duplicated
+    // toolbar across the middle of the image.
+    fullPage: false,
   },
   {
     id: "04-04-event-qr-code",

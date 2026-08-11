@@ -20,7 +20,7 @@ import { schedulingService } from '@/modules/scheduling/services/api';
 import type { ItemDeployment } from '@/modules/scheduling/types/equipmentCheck';
 import type { InventoryLot, InventoryLotCreate } from '@/services/eventServices';
 import { getErrorMessage } from '@/utils/errorHandling';
-import { formatDate, getTodayLocalDate } from '@/utils/dateFormatting';
+import { formatCalendarDate, getTodayLocalDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
@@ -306,7 +306,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                         {state === 'expired' && <AlertTriangle className="h-3 w-3" />}
                         {state === 'soon' && <Clock className="h-3 w-3" />}
                         {state === 'expired' ? 'Expired ' : 'Exp '}
-                        {formatDate(lot.expiration_date, tz)}
+                        {formatCalendarDate(lot.expiration_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}
                         {(() => {
                           const d = daysLeft(lot);
                           return d === null ? null : <span className="opacity-70">· {daysLeftLabel(d)}</span>;
@@ -393,7 +393,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                     >
                       {d.isExpired ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
                       {d.isExpired ? 'Expired ' : 'Exp '}
-                      {formatDate(d.expirationDate, tz)}
+                      {formatCalendarDate(d.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}
                     </span>
                   )}
                 </div>

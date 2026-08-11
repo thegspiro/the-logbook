@@ -683,8 +683,7 @@ for often did not exist.
 4. Set the **received date** once, for the whole delivery.
 5. Review and submit.
 
-> **Screenshot needed:**
-> _[Screenshot of the Receive Stock modal with four delivery lines filled in — different items, lot numbers, expirations and quantities — and the single received-date field above them]_
+![Receive Stock: one dated lot per delivery line, with a single received date above them](./images/05-65-receive-stock-modal.png)
 
 **The whole delivery lands, or none of it does.** A partly applied delivery is
 worse than a rejected one: you cannot tell which lines landed, and re-entering it
@@ -703,12 +702,13 @@ one-item-at-a-time modal.
 3. Paste or type one item per line.
 4. Review the parsed preview and submit.
 
-> **Screenshot needed:**
-> _[Screenshot of the Add Several modal with eight pasted lines in the input and the parsed preview beside it, showing two lines marked as already existing in the catalog]_
+![Add Several: a pasted list of catalog items with its parsed preview, and the category and tracking that apply to all of them](./images/05-66-add-several-modal.png)
 
 **Names already in the catalog are skipped and reported, not rejected**, so you
-can re-paste a list after it grows and only the new lines are created. As with
-receiving, any validation failure writes nothing at all.
+can re-paste a list after it grows and only the new lines are created. The
+preview does not mark them in advance — it shows every line you pasted, and the
+skipped ones are named in the confirmation after you submit. As with receiving,
+any validation failure writes nothing at all.
 
 The **Import CSV** button beside them is the third path. It goes to
 `/inventory/import`, which was built and routed but previously reachable only by
@@ -727,8 +727,7 @@ apparatus**: the checklist positions this item fills, which apparatus and
 compartment each one is, what that truck is carrying right now, and the soonest
 expiration aboard.
 
-> **Screenshot needed:**
-> _[Screenshot of an inventory item's Stock tab showing the ready-lots table above a "Deployed on apparatus" list of three checklist positions, each naming its apparatus, compartment, on-truck count and soonest expiration]_
+![An item's Stock tab: ready lots above the checklist positions carrying it, per apparatus](./images/05-67-item-deployed-on-apparatus.png)
 
 This is the direction a **recall** is worked from — you are holding the item and
 need to know which rigs to go to. The opposite direction ("what is expiring on my

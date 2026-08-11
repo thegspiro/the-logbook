@@ -2338,7 +2338,7 @@ class EquipmentCheckService:
                     # vehicle has no apparatus_id to name; say which type so the
                     # row is still actionable.
                     "apparatus_type": tmpl.apparatus_type,
-                    "lot_number": item.lot_number,
+                    "lot_number": self._soonest_lot_number(item),
                     "serial_number": item.serial_number,
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,

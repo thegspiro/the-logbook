@@ -83,9 +83,7 @@ class Throttle:
 ADMIN_RESET_WINDOW_SECONDS = float(
     os.environ.get("SEED_ADMIN_RESET_WINDOW_SECONDS", "300")
 )
-ADMIN_RESET_THROTTLE = Throttle(
-    max_calls=5, window_seconds=ADMIN_RESET_WINDOW_SECONDS
-)
+ADMIN_RESET_THROTTLE = Throttle(max_calls=5, window_seconds=ADMIN_RESET_WINDOW_SECONDS)
 
 # Shared password given to the seeded member accounts so the seeder can act as
 # them where the API has no admin-on-behalf-of route (event RSVPs). Demo-only.
@@ -436,6 +434,20 @@ RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 # staffing, so a four-person engine asks for an officer, a driver and two
 # firefighters while a two-person brush truck asks for an officer and a driver.
 SHIFT_POSITIONS = ["officer", "driver", "firefighter", "firefighter", "ems"]
+
+# One future shift is left crewed by its officer alone.
+#
+# Every other shift is staffed to its minimum or one short, which is what a real
+# schedule looks like — but it means the crew board never shows more than a
+# single open row, and the bulk "Fill All Open" action only appears once two or
+# more slots are unfilled. Both were unreachable in the demo, so the guide's
+# crew-board screenshot had nothing to photograph.
+#
+# ``(day offset from today, index into the fleet)``. Day 4 puts it far enough
+# ahead to be unambiguously future on any run; fleet index 2 is the Weekend Duty
+# Crew template, whose minimum staffing of four leaves three rows open beside
+# the officer's filled one.
+PART_STAFFED_SHIFT = (4, 2)
 
 # Steps behind a checklist requirement, keyed on the requirement name.
 CHECKLIST_ITEMS = {
@@ -1679,7 +1691,13 @@ class Seeder:
                 seats = SHIFT_POSITIONS[:staffing]
                 if officer_seated and "officer" in seats:
                     seats = [seat for seat in seats if seat != "officer"]
-                if not full:
+                if (offset, index) == PART_STAFFED_SHIFT and officer_seated:
+                    # The one board with several rows open — see
+                    # PART_STAFFED_SHIFT. Only meaningful with an officer
+                    # already seated: with nobody aboard at all the board is an
+                    # empty state, not a part-staffed shift.
+                    seats = []
+                elif not full:
                     seats = seats[:-1]
                 crew = day_pool[pool_cursor : pool_cursor + len(seats)]
                 pool_cursor += len(crew)
@@ -1719,6 +1737,7 @@ class Seeder:
                             raise
         self._seat_shift_officers(shifts)
         self._align_crew_to_seats(shifts)
+        self._thin_part_staffed_shift(fleet[:3])
         self._seed_shift_attendance(shifts)
         return {
             "templates": templates,
@@ -1726,6 +1745,49 @@ class Seeder:
             "apparatus": fleet,
             "shifts": shifts,
         }
+
+    def _thin_part_staffed_shift(self, fleet: list[dict]) -> None:
+        """Empty every seat but the officer's on the one part-staffed shift.
+
+        The create path above declines to crew this shift in the first place,
+        but a shift that already exists is skipped entirely on a re-run — so on
+        every database except a brand new one the board would stay one row short
+        and the guide's crew-board screenshot would have nothing to picture. The
+        repair is here, against the API, for the same reason
+        ``_align_crew_to_seats`` is: an existing demo database should be brought
+        into line rather than needing a wipe.
+
+        The shift officer keeps their seat. A board with nobody on it is an
+        empty state, not the part-staffed one this is for.
+        """
+        offset, index = PART_STAFFED_SHIFT
+        if index >= len(fleet):
+            return
+        apparatus_id = pick(fleet[index], "id")
+        day = str(TODAY + timedelta(days=offset))
+        target = next(
+            (
+                shift
+                for shift in items(
+                    self.api.get("/scheduling/shifts?limit=200"), "shifts"
+                )
+                if str(pick(shift, "shift_date", "shiftDate") or "") == day
+                and pick(shift, "apparatus_id", "apparatusId") == apparatus_id
+            ),
+            None,
+        )
+        if not target:
+            return
+        shift_id = pick(target, "id")
+        officer_id = pick(target, "shift_officer_id", "shiftOfficerId")
+        if not officer_id:
+            return
+        for row in items(
+            self.api.get(f"/scheduling/shifts/{shift_id}/assignments"), "assignments"
+        ):
+            if pick(row, "user_id", "userId") == officer_id:
+                continue
+            self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
 
     def _seat_shift_officers(self, shifts: list[dict]) -> None:
         """Put each shift's designated officer onto its crew board.
@@ -3207,9 +3269,7 @@ class Seeder:
             # on this rig, so the phantom row inflates every count past its
             # target and leaves an undated lot in a sheet whose whole subject is
             # dates. Starting from an explicit zero makes the lots the count.
-            self.api.put(
-                f"/equipment-checks/items/{item_id}/quantity", {"quantity": 0}
-            )
+            self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 0})
             for lot, quantity in zip(usable, plan):
                 try:
                     self.api.post(
@@ -3301,9 +3361,7 @@ class Seeder:
         holds the old ones, and re-seeding does not touch a template that
         already exists by name.
         """
-        for template in items(
-            self.api.get("/equipment-checks/templates"), "templates"
-        ):
+        for template in items(self.api.get("/equipment-checks/templates"), "templates"):
             template_id = pick(template, "id")
             if not template_id:
                 continue

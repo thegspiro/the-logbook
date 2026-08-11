@@ -668,8 +668,7 @@ When scheduling assigns a member to a Driver/Operator position on this apparatus
 Each apparatus has an **Operators** tab listing the members certified to drive
 it, with their EVOC level and certification dates.
 
-> **Screenshot needed:**
-> _[Screenshot of an engine's Operators tab listing three operators by name with their EVOC levels, certification dates, and the Add Operator button]_
+![The Operators tab: certified operators by name, with EVOC level and certification dates](./images/06-22-apparatus-operators-tab.png)
 
 Two long-standing problems here were fixed on 2026-08-10:
 
@@ -683,8 +682,7 @@ Two long-standing problems here were fixed on 2026-08-10:
   failure over an operator that had in fact been created. If you have duplicate
   operator rows from before this fix, delete the extras.
 
-> **Screenshot needed:**
-> _[Screenshot of the Add Operator form showing the member picker dropdown open with three member names, the EVOC level selector, and the certification date fields]_
+![The Add Operator form: a member picker, not the free-text UUID box it replaced](./images/06-23-add-operator-member-picker.png)
 
 ### Standalone Equipment Checks
 

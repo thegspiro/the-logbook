@@ -17,6 +17,7 @@ correct, and only the pair was wrong.
 """
 
 from datetime import date, timedelta
+from pathlib import Path
 
 from app.models.apparatus import CheckItemDeployedLot, CheckTemplateItem
 from app.services.equipment_check_service import EquipmentCheckService
@@ -91,3 +92,52 @@ class TestSoonestLotNumber:
 
         assert EquipmentCheckService._soonest_expiration(item) == SOON
         assert EquipmentCheckService._soonest_lot_number(item) == "LEGACY-1"
+
+
+class TestEveryProjectionUsesThePair:
+    """The helper is only half the fix — every reader has to call it.
+
+    There are three projections that report a derived `expiration_date`
+    alongside a lot number: the supply worklist, the apparatus inventory view,
+    and the item-to-apparatus reverse lookup. The first two were fixed and the
+    third was missed, so the reverse lookup went on pairing NLX-2411 with
+    NLX-2405's date — found by photographing an item's Stock tab after the
+    other two already looked right.
+
+    Reading the source is the only way to assert "no *other* site does this":
+    a behavioural test can only cover the projections somebody remembered.
+    """
+
+    SERVICE = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "services"
+        / "equipment_check_service.py"
+    )
+
+    def test_no_projection_pairs_the_scalar_with_a_derived_date(self):
+        source = self.SERVICE.read_text()
+        lines = source.splitlines()
+        offenders = []
+        for i, line in enumerate(lines):
+            if '"lot_number": item.lot_number' not in line:
+                continue
+            # A derived date within a few lines of the scalar lot number is the
+            # mismatch. `item.expiration_date` beside it is self-consistent and
+            # fine — both come from the same row.
+            window = "\n".join(lines[i : i + 4])
+            if '"expiration_date": exp' in window:
+                offenders.append(i + 1)
+        assert not offenders, (
+            "these lines pair the legacy lot_number scalar with a derived "
+            f"expiration, so they name different boxes: {offenders}. Use "
+            "_soonest_lot_number(item)."
+        )
+
+    def test_the_three_known_projections_use_the_helper(self):
+        source = self.SERVICE.read_text()
+        assert source.count("_soonest_lot_number(item)") >= 3, (
+            "the supply worklist, the apparatus inventory view and the "
+            "item-to-apparatus lookup all report a soonest date and must all "
+            "name the lot it belongs to"
+        )

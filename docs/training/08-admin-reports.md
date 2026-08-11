@@ -1512,14 +1512,16 @@ has switches for the contact block and the address block.
 4. Mark one as the department default.
 5. Save.
 
-> **Screenshot needed:**
-> _[Screenshot of the Footers tab showing the three seeded footers in a list with the Internal one marked as default, one expanded to show its lines, the contact/address toggles, and the "N templates use this" count beside each]_
+![The Footers tab: the seeded library, the default marked, and a per-footer usage count](./images/08-64-email-footers-tab.png)
 
 To point a specific template at a specific footer, open that template and choose
 its footer in the editor.
 
-> **Screenshot needed:**
-> _[Screenshot of the email template editor with the footer selector visible, set to "Public", and the preview pane below showing that footer rendered at the bottom of the message]_
+![The template editor's "Closes with" picker set to Public, with the line describing who that footer is for beneath it](./images/08-65-template-footer-selector.png)
+
+The preview is the tab beside **Edit**, and it renders the footer you chose at
+the bottom of the message — worth a look before you save, because a template
+pointed at the wrong footer is only visible there.
 
 ### Things worth knowing before you delete one
 
@@ -1555,8 +1557,11 @@ line**:
 | `{{organization_fax}}`                                            | Still expected on official correspondence by some agencies                                                                                                                                  |
 | `{{organization_description}}` `{{organization_type}}`            | Completeness                                                                                                                                                                                |
 
-> **Screenshot needed:**
-> _[Screenshot of the template editor's variable palette expanded on the Organization group, showing the new identifier, tax ID, county and founded-year variables alongside the existing name/phone/address ones]_
+![The variable palette expanded, listing the organization fields a template can substitute](./images/08-66-template-variable-palette.png)
+
+The palette is one flat list under **Available Variables**, not a set of groups —
+the organization fields lead it, and clicking any of them inserts the tag at the
+cursor in the HTML body.
 
 > **Addresses outside the US keep their last line.** The address composer read
 > every column except country, so a Canadian department's address lost its
@@ -1597,8 +1602,12 @@ They now have real template rows with documented variables and sample data.
 > stylesheet**, so future improvements reach you automatically. Templates whose
 > CSS you _did_ edit are left exactly as they are.
 
-> **Screenshot needed:**
-> _[Screenshot of the email preview pane showing the new white-card-on-grey design — rounded header band, a details table, and the footer — so departments can see what their outgoing mail now looks like]_
+![The email preview: a white card on grey, with a rounded header band, styled paragraphs and a details table](./images/08-67-email-preview-design.png)
+
+The preview pane is a fixed-height window onto the message, with its own
+scrollbar. Most notices are taller than it, so the footer is below the fold —
+**scroll inside the preview** to see how the message closes, or use **Send Test
+Email to Me** and read it in your own inbox.
 
 ---
 
