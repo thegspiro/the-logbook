@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.models.membership_pipeline import PipelineStepType
 from app.services.membership_pipeline_service import MembershipPipelineService
 
 
@@ -183,3 +184,68 @@ class TestProspectDocumentStepValidation:
                     file_path="/app/uploads/w.pdf",
                     step_id="foreign-step",
                 )
+
+
+class TestChecklistStepGate:
+    """A checklist stage's gate, and the dead end it currently is.
+
+    ``_validate_step_completion`` counts ``action_result["completed_items"]``
+    on the stored progress row. Nothing in the application writes that key —
+    ``complete-step`` carries only notes, there is no partial-progress
+    endpoint, and no component renders the items as tickable — so a stage with
+    items configured can be neither completed nor skipped through the product.
+    Recorded in docs/KNOWN_LIMITATIONS.md; these tests pin the behaviour so a
+    fix has something to change deliberately.
+    """
+
+    @staticmethod
+    def _step(items, require_all=True):
+        return SimpleNamespace(
+            id="step-1",
+            step_type=PipelineStepType.CHECKLIST,
+            config={"items": items, "require_all": require_all},
+        )
+
+    @staticmethod
+    def _prospect(completed):
+        return SimpleNamespace(
+            step_progress=[
+                SimpleNamespace(
+                    step_id="step-1",
+                    action_result=(
+                        {"completed_items": completed}
+                        if completed is not None
+                        else None
+                    ),
+                )
+            ]
+        )
+
+    async def test_refuses_while_items_are_outstanding(self):
+        service = MembershipPipelineService(AsyncMock())
+        with pytest.raises(ValueError, match="checklist items must be"):
+            await service._validate_step_completion(
+                self._prospect(["Gear issued"]),
+                self._step(["Gear issued", "Station tour", "Radio assigned"]),
+            )
+
+    async def test_refuses_when_nothing_has_recorded_progress(self):
+        """The state every applicant is actually in."""
+        service = MembershipPipelineService(AsyncMock())
+        with pytest.raises(ValueError, match="only 0 done"):
+            await service._validate_step_completion(
+                self._prospect(None),
+                self._step(["Gear issued", "Station tour"]),
+            )
+
+    async def test_allows_a_stage_with_no_items_configured(self):
+        """Which is why the demo pipeline's Onboarding stage still advances."""
+        service = MembershipPipelineService(AsyncMock())
+        await service._validate_step_completion(self._prospect(None), self._step([]))
+
+    async def test_allows_it_when_require_all_is_off(self):
+        service = MembershipPipelineService(AsyncMock())
+        await service._validate_step_completion(
+            self._prospect(None),
+            self._step(["Gear issued"], require_all=False),
+        )

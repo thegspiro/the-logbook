@@ -2,6 +2,49 @@
 
 Welcome to The Logbook, a comprehensive department management platform built for fire departments and emergency services organizations. This guide will walk you through your first login, navigating the interface, and understanding how the system is organized.
 
+## Lesson at a Glance
+
+|                    |                                                                 |
+| ------------------ | --------------------------------------------------------------- |
+| **Audience**       | Every new member                                                |
+| **Permissions**    | An active member account; no officer permissions required       |
+| **Prerequisites**  | Your department URL and welcome email or single sign-on account |
+| **Essential path** | About 15 minutes                                                |
+| **Full guide**     | About 30–45 minutes                                             |
+| **Last verified**  | 2026-08-11                                                      |
+| **Owner**          | Department IT manager or onboarding coordinator                 |
+
+By the end of the essential path, you can:
+
+- sign in securely and recover from the most common access problems;
+- identify the navigation, dashboard, notifications, and account areas;
+- update the contact and security information you control; and
+- find help when a module or action is unavailable.
+
+> **Practice safely:** You can complete this lesson in your normal account. Do
+> not change department-owned fields, acknowledge a real alert merely for
+> practice, or share passwords, MFA codes, recovery codes, or calendar links.
+
+### 15-Minute Essential Path
+
+1. [Sign in](#first-login) and, if prompted, [change your temporary password](#changing-your-password).
+2. [Orient yourself to the interface](#understanding-the-interface) and [sidebar](#navigation-sidebar).
+3. Review [your dashboard](#your-dashboard), including one notification, upcoming shift, or event.
+4. Open [Account Settings](#account-settings) and verify your contact and security information.
+5. Bookmark [Getting Help](#getting-help) so you know what to do if access is missing.
+
+### Try It: First-Day Readiness Check
+
+- **Starting state:** Sign in with your own member account.
+- **Task:** Without following the numbered instructions above, locate your next
+  scheduled item, find the page where you would change your password, and
+  identify who can help if a module is missing.
+- **Success:** You can name the scheduled item (or confirm that none is shown),
+  reach the Password tab without changing anything, and explain that an
+  administrator controls module availability.
+- **Variation:** If you see **Not Authorized**, what should you do instead of
+  repeatedly retrying the action?
+
 ---
 
 ## Table of Contents

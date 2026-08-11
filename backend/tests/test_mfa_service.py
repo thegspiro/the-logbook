@@ -30,7 +30,8 @@ def test_recovery_codes_are_unique_and_formatted():
     assert len(codes) == mfa_service.RECOVERY_CODE_COUNT
     assert len(set(codes)) == len(codes)
     for code in codes:
-        assert "-" in code
+        assert len(code.replace("-", "")) == 20
+        assert code.count("-") == 3
 
 
 def test_normalize_recovery_code():

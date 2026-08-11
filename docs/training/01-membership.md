@@ -83,13 +83,16 @@ Click on any member in the directory to view their profile. The profile page inc
 
 Members and officers can upload a profile photo:
 
-1. Click the **photo area** on the member's profile (or the camera icon).
-2. Select an image file (JPEG, PNG, or WebP).
-3. Preview and crop the image.
-4. Click **Upload** to save.
+1. Hover the **photo area** on the member's profile — **Upload** appears over
+   it, or **Change** where there is already a photo. On a phone the control is
+   always visible rather than waiting for a hover that cannot happen.
+2. Choose an image file — **JPEG, PNG or WebP, under 5 MB**. Anything else is
+   refused with the reason, before it is sent.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the photo upload modal showing the image preview with crop controls and Upload/Cancel buttons]_
+**The file uploads the moment you choose it.** There is no preview step, no
+crop tool and no Save button: the picture is taken as it comes, so crop it
+before you choose it if it needs cropping. **Remove photo** beside the avatar
+takes it away again.
 
 ### Member Self-Edit
 
@@ -209,8 +212,17 @@ What is checked before anything is created:
 | Duplicates **against the existing roster** | `membershipNumber: 214 belongs to J. Alvarez`                                                 |
 | Row width vs. header width                 | `row has 19 values, header has 21`                                                            |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Import Members review step showing a summary bar reading "58 rows will import, 4 will be skipped", a "Send welcome emails" checkbox left unchecked, and a rejected-rows table listing line numbers with multiple reasons per row]_
+The review reads the count back before anything happens — **"2 of 6 rows are
+ready; 4 will be skipped"** — previews the rows that will import, and lists the
+ones that will not **by their line number in your file**, each with the reason
+in the words above. **Send welcome emails now** is off unless you turn it on,
+and the button says how many members it is about to create.
+
+![The import review — the rows that will import, the rows that will not with their reasons, and the welcome-email choice](./images/01-33-import-review-rejected-rows.png)
+
+A second notice names the optional columns your file left out — "Importing
+without 15 optional column(s)" — which is information, not a fault: those
+members import, with those fields empty.
 
 ### The Rejected-Rows Report
 
@@ -419,7 +431,21 @@ The pipeline offers two views:
 4. **Back** - If a prospect needs to return to a previous stage (e.g., missing documents discovered after advancing), click **Back** in the prospect's detail drawer. The previous stage's progress is reset to allow re-completion. The button is absent while the prospect is still on the first stage, since there is nowhere to go back to.
 5. **Upload Documents** - Attach application documents, ID copies, or other requirements to the prospect's record. Uploaded files are now stored on the prospect's record and can be downloaded later. Each file may be up to **50 MB**; allowed types are PDF, Word (DOC/DOCX), JPEG, PNG, and GIF.
 
-> **[SCREENSHOT NEEDED]:** _The prospect detail drawer's documents area showing an uploaded file in the list with its download link._
+The **Documents** area sits in the applicant's drawer, below Linked Events.
+**Upload** opens the file picker; each file that lands is listed with its type,
+its size and the date it arrived, and its name is the link that downloads it.
+The bin removes one filed by mistake, after asking.
+
+![An applicant's documents — each with its type, size and upload date, and a link that downloads it](./images/01-31-applicant-documents.png)
+
+> **The area is new** _(2026-08-11)_. The upload endpoint, the download endpoint
+> and the client methods for both had been in place since documents were added,
+> but nothing rendered them — so a file could be attached only by calling the
+> API directly, and no officer could read one back.
+
+Uploading and removing are offered on **active** applicants only. A withdrawn or
+rejected applicant's paperwork stays readable — it is part of the record of the
+decision — but is no longer editable.
 
 6. **Transfer to Member** - When the prospect is approved, click **Transfer to Membership** to convert them to a full member account. The membership type is pre-filled from the prospect's desired type.
 
@@ -446,13 +472,28 @@ Prospective members can indicate their preferred membership type when applying:
 - During conversion to full member, the system pre-fills "Regular" or "Administrative" based on the prospect's selection
 - Regular members start with probationary status; administrative members start with active status
 
-> **Screenshot needed:**
-> _[Screenshot of the Desired Membership Type cards in a prospect's detail drawer, with Regular Member selected and Administrative alongside it]_
+![Desired Membership Type — Regular Member selected, Administrative beside it as the alternative](./images/01-34-desired-membership-type.png)
+
+The selected card is outlined and **not clickable** — there is nothing to
+confirm and nothing to undo, because clicking the other card is both the change
+and its reversal.
 
 > **Edge case:** If a prospect's desired membership type is changed from "Regular" to "Administrative" after they have already passed an election/vote stage, the system does not retroactively invalidate the vote. The coordinator should verify that the voting requirements for administrative members were met.
 
-> **Screenshot placeholder:**
-> _[Screenshot of a prospect detail drawer showing the prospect's info at the top, the current pipeline stage, step checklist with some items completed, and the "Transfer to Membership" button]_
+### The applicant's drawer, end to end
+
+Everything about one applicant is in the drawer, in this order: who they are and
+how to reach them, the membership type they asked for, the stage they are on and
+when they reached it, the events they are booked into, their documents, and the
+action bar. On the **last** stage the action bar's final button reads **Convert**
+rather than Advance — the same button, naming what it does there.
+
+![An applicant's drawer on the last stage of the pipeline — their details, the stage they are on, and Convert where Advance sits elsewhere](./images/01-35-applicant-drawer-final-stage.png)
+
+> **Checklist Progress reads "No checklist data recorded yet" for everyone.**
+> Nothing in the application records which checklist items are done — see
+> `docs/KNOWN_LIMITATIONS.md`. Track a checklist stage's items in the stage
+> notes until that is built, and leave the stage's item list unconfigured.
 
 ### Printing Applicant Badges
 
@@ -1035,9 +1076,19 @@ Alex discovers OFD's recruitment page and submits an interest form through the *
 4. Alex clicks the link, fills out the interest form online, and submits it.
 5. The stage has **auto-advance** enabled, so Alex's card automatically moves to **Stage 2: Application Review**.
 
-**Edge case — duplicate detection:** When Lt. Morrison creates the prospect, the system detects an archived member with the last name "Rivera" but a different email address. A duplicate warning banner appears on the prospect drawer. Lt. Morrison reviews the archived record, confirms this is a different person, and dismisses the warning. The prospect proceeds normally.
+**Edge case — duplicate detection:** The check runs **before the applicant
+exists**, not after. When Lt. Morrison clicks **Add to Pipeline**, the email and
+name are matched against the membership; a match stops the save and asks, naming
+how many members it found. **Go back** returns her to the form with everything
+she typed still in it; **Create anyway** proceeds, which is the right answer when
+the match is a different person of the same name.
 
-> **[SCREENSHOT NEEDED]:** _The Prospective Members Kanban board showing Alex Rivera's card in Stage 2: Application Review, with the duplicate warning banner visible at the top of the prospect detail drawer._
+![The duplicate warning — the name and email match an existing member, with Create anyway and Go back](./images/01-32-duplicate-applicant-warning.png)
+
+There is no banner on the drawer afterwards and nothing to dismiss later: the
+question is asked once, at the moment it can still be answered cheaply. The
+board itself is pictured in
+[Prospective Members Pipeline](./15-prospective-members.md#the-kanban-board).
 
 ---
 
@@ -1111,18 +1162,36 @@ When Alex reaches the **Election/Vote** stage, the system automatically creates 
    - Helmet
    - Gloves
    - Boots
-7. Alex's sizes are not on file. Lt. Walsh clicks **"Request Sizes"** next to Alex's name. The system sends Alex a notification asking them to enter size preferences.
+7. Alex's sizes are not on file. The results say so — **"_N_ members need the
+   item but have no size on file"** — and the **Request sizes** button beside
+   that line notifies **all of them at once**, not one member at a time. There
+   is no per-member request: the planner works on the whole analysis, and the
+   button reports back how many were notified.
 8. Alex logs in for the first time, changes their password, and navigates to **My Equipment > Size Preferences**. Alex enters:
    - Coat: L Regular
    - Pants: 34x32
    - Helmet: 7 1/4
    - Gloves: XL
    - Boots: 11 Wide
-9. Lt. Walsh returns to the Impact Planner, sees Alex's sizes are now on file, and clicks **Issue PPE Kit**. The system matches available inventory to Alex's size preferences and creates assignment records.
+9. Lt. Walsh re-runs the analysis, sees the sizes are now on file, and clicks
+   **Issue on-hand stock**. It confirms first — "one matching-size item to each
+   member who needs it and has stock available" — and reports back what it did:
+   **"Issued to 6 members, 2 skipped"**, naming each member skipped and why.
 
-**Edge case — stock shortage:** XL gloves are out of stock. The system issues a partial kit (coat, pants, helmet, boots) and flags gloves as **"Pending — Out of Stock"**. An automatic reorder request is created in the Inventory module, and Lt. Walsh receives a notification. Alex's equipment profile shows 4 of 5 items assigned with the gloves line item showing a yellow "Backordered" badge.
+**Edge case — stock shortage:** the planner issues what it can and skips the
+rest, **per member and per item**, with the reason beside each name ("no
+matching stock", "no size on file"). There is no partial-kit record and no
+"Backordered" badge: a member who could not be issued gloves simply has no
+gloves assignment, and still appears in the next analysis as needing one.
 
-> **[SCREENSHOT NEEDED]:** _The Impact Planner results showing Alex Rivera with "Needs item" status for five PPE categories, with the "Request Sizes" button visible and size preference fields partially filled._
+The shortfall itself is handled separately, from the same results — **the
+purchase list and the draft purchase orders raised from it**, described in
+[Inventory](./05-inventory.md).
+
+The planner's results — the per-member "Needs item" rows, the sizes to purchase
+and the shortfall — are pictured in
+[Inventory](./05-inventory.md#impact-planner--demand-forecasting--bulk-operations-2026-06-22). This section covers what a new
+member's first kit looks like through them; it does not repeat the screens.
 
 ---
 
