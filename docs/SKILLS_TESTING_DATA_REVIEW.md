@@ -224,6 +224,56 @@ since it deliberately reverses a documented choice.**
 
 ---
 
+## 5b. Paper — the fallback that had no support at all
+
+Training ships three print pages (`MemberTrainingPrintPage`,
+`ProgramPrintPage`, `CompliancePrintPage`) and scheduling ships two. Skills
+testing shipped none, which is odd for the one module whose work happens
+furthest from a desk.
+
+**Blank skill sheet — built in this change.** `SkillSheetPrintPage`
+(`/training/skills-testing/print/template?id=…`, printer icon on each row of
+the Templates tab) renders a published *or* draft template as the paper form an
+examiner carries on a clipboard: a candidate/examiner/date block, the scoring
+rules stated before the first mark, one marking affordance per criterion type
+(P/F boxes, `___ / max` with the passing floor, a stopwatch blank with the
+ceiling, a box per checklist item, and no box at all on a statement — it is
+read aloud and marks itself), critical steps flagged `★ CRITICAL`, and
+signature lines.
+
+It exists because full offline support (§4a) is blocked on two owner decisions
+and could sit for a while, while paper is what departments already fall back
+to. Printing the department's *own* sheet rather than a generic one means what
+gets marked in the field matches what gets transcribed afterwards — sections and
+criteria are numbered exactly as the examiner screen numbers them, so a paper
+mark maps onto one field with no interpretation in between. It goes through the
+same `hydrateTemplateSections` the examiner screen uses, so a legacy
+unrenderable type falls back to a P/F box here too rather than printing a step
+with nothing to mark.
+
+The sheet says of itself, in a boxed notice, that it is **not** the record and
+must be entered in the app — because until it is entered and validated it
+credits no requirement, consumes no attempt, and the candidate sees nothing.
+
+**Still open — a printable completed scorecard.** There is `/email-results`,
+but nothing for a candidate's paper training file or a state/ISO audit
+hand-off. Every other record-bearing module has one. **Small**, and it reuses
+this page's layout.
+
+**Still open — no CSV export of test results.** A training officer assembling an
+audit packet has no bulk export. Worth flagging *before* anyone builds it:
+examiner notes are free text, so it must use `SafeCsvWriter` (Pitfall #15) — a
+member named `=cmd|…` in a scorecard export is exactly that attack.
+
+**Minor — position ordering in the disclosure picker.** `09-08` and `09-02`
+list **IT Manager** first, then Fire Chief, President, Deputy Chief. It is
+`roleService.getRoles()` rendered in whatever order it returns. Presenting IT
+Manager as the first candidate for "who else may see evaluation results" is
+wrong by relevance in a fire department, and it is visible in the shipped
+documentation screenshots. **Small.**
+
+---
+
 ## 6. Storage — how the records hold up
 
 This is the strongest part of the module, and mostly needs confirming rather
@@ -267,11 +317,14 @@ seed data; the import path (§3c) is the next one to cover.
 
 | # | Item | Effort | Why now |
 | - | ---- | ------ | ------- |
-| 1 | ~~Unknown criterion type is unscorable~~ | — | **Fixed in this change** |
-| 2 | `score` with no `max_score` (§3a) | S | Same silent-zero failure, still live |
-| 3 | Review queue as an inbox + bulk validate (§5a, §5b) | S–M | Officer-facing friction every drill night |
-| 4 | Batch testing (§4b) | M | The actual shape of drill night |
-| 5 | Starter template library (§3b) | M | First-run experience; the data now exists |
-| 6 | Offline (§4a) | L | Blocked on two owner decisions, not engineering |
-| 7 | Return for correction (§5c) | M | Needs a product decision first |
-| 8 | Picker/viewer control consistency (§4c, §4d) | S | Cheap, and the panel degrades with roster size |
+| 1 | ~~Unknown criterion type is unscorable~~ | — | **Fixed** |
+| 2 | ~~No printable blank skill sheet~~ (§5b) | — | **Built** — the paper fallback while offline waits |
+| 3 | `score` with no `max_score` (§3a) | S | Same silent-zero failure, still live |
+| 4 | Review queue as an inbox + bulk validate (§5a, §5b) | S–M | Officer-facing friction every drill night |
+| 5 | Printable completed scorecard (§5b) | S | Audit hand-off; reuses the sheet layout |
+| 6 | Batch testing (§4b) | M | The actual shape of drill night |
+| 7 | Starter template library (§3b) | M | First-run experience; the data now exists |
+| 8 | CSV export of results (§5b) | M | Must use `SafeCsvWriter` — notes are free text |
+| 9 | Offline (§4a) | L | Blocked on two owner decisions, not engineering |
+| 10 | Return for correction (§5c) | M | Needs a product decision first |
+| 11 | Picker/viewer consistency, position ordering (§4c, §4d, §5b) | S | Cheap; the panel degrades with roster size |

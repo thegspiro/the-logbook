@@ -54,6 +54,7 @@ const ManualShiftReportPage = lazyWithRetry(() => import('../../pages/training/M
 const MemberTrainingPrintPage = lazyWithRetry(() => import('../../pages/training/MemberTrainingPrintPage'));
 const ProgramPrintPage = lazyWithRetry(() => import('../../pages/training/ProgramPrintPage'));
 const CompliancePrintPage = lazyWithRetry(() => import('../../pages/training/CompliancePrintPage'));
+const SkillSheetPrintPage = lazyWithRetry(() => import('../../pages/training/SkillSheetPrintPage'));
 
 export const getTrainingRoutes = () => {
   return (
@@ -244,6 +245,21 @@ export const getTrainingRoutes = () => {
           <ProtectedRoute requiredPermission="training.manage">
             <React.Suspense fallback={null}>
               <CompliancePrintPage />
+            </React.Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* A blank skill sheet carries no member data — it is the empty form, and
+          the templates list that links to it is already visible to members
+          under the template's own visibility rules. Auth-only, like the member
+          and program prints; the backend's template fetch enforces visibility
+          and org scoping. */}
+      <Route
+        path="/training/skills-testing/print/template"
+        element={
+          <ProtectedRoute>
+            <React.Suspense fallback={null}>
+              <SkillSheetPrintPage />
             </React.Suspense>
           </ProtectedRoute>
         }

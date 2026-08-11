@@ -17,6 +17,7 @@ import {
   BarChart3,
   Copy,
   Pencil,
+  Printer,
   Trash2,
   Eye,
   Send,
@@ -68,8 +69,9 @@ const TemplateRow: React.FC<{
   onView: () => void;
   onPublish: () => void;
   onDuplicate: () => void;
+  onPrint: () => void;
   onDelete: () => void;
-}> = ({ template, onEdit, onView, onPublish, onDuplicate, onDelete }) => (
+}> = ({ template, onEdit, onView, onPublish, onDuplicate, onPrint, onDelete }) => (
   <tr className="hover:bg-theme-surface-hover transition-colors">
     <td className="px-4 py-3">
       <div>
@@ -127,6 +129,16 @@ const TemplateRow: React.FC<{
           title="Duplicate"
         >
           <Copy className="text-theme-text-muted h-4 w-4" />
+        </button>
+        {/* The paper fallback for a burn tower or apparatus bay with no signal.
+            Offered on drafts too — an author proofreads a sheet far more
+            easily on the printed form than in the builder. */}
+        <button
+          onClick={onPrint}
+          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          title="Print blank sheet"
+        >
+          <Printer className="text-theme-text-muted h-4 w-4" />
         </button>
         <button
           onClick={onDelete}
@@ -357,6 +369,16 @@ const SkillsTestingTemplatesTab: React.FC = () => {
                     onView={() => void navigate(`/training/skills-testing/templates/${template.id}`)}
                     onPublish={() => setPublishTarget(template)}
                     onDuplicate={() => void handleDuplicate(template.id)}
+                    // A new tab: the print view calls window.print() on load,
+                    // and navigating the current tab would drop an officer out
+                    // of the templates list to get back to a print dialog.
+                    onPrint={() =>
+                      window.open(
+                        `/training/skills-testing/print/template?id=${encodeURIComponent(template.id)}`,
+                        '_blank',
+                        'noopener'
+                      )
+                    }
                     onDelete={() => setArchiveTarget(template)}
                   />
                 ))}
