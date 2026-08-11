@@ -28,6 +28,7 @@ interface LineItemFormData {
   item_name: string;
   quantity: string;
   size_selectable: boolean;
+  optional: boolean;
 }
 
 const EMPTY_LINE_ITEM: LineItemFormData = {
@@ -36,6 +37,7 @@ const EMPTY_LINE_ITEM: LineItemFormData = {
   item_name: '',
   quantity: '1',
   size_selectable: false,
+  optional: false,
 };
 
 interface KitFormData {
@@ -122,6 +124,7 @@ const EquipmentKitsPage: React.FC = () => {
                 item_name: li.item_name,
                 quantity: String(li.quantity),
                 size_selectable: li.size_selectable,
+                optional: li.optional ?? false,
               }))
             : [{ ...EMPTY_LINE_ITEM }],
       });
@@ -202,6 +205,7 @@ const EquipmentKitsPage: React.FC = () => {
           item_name: li.item_name.trim(),
           quantity: parseInt(li.quantity, 10) || 1,
           size_selectable: li.size_selectable,
+          optional: li.optional,
         })),
       };
       if (editingKit) {
@@ -492,16 +496,27 @@ const EquipmentKitsPage: React.FC = () => {
                     />
                   </div>
                   <div className="flex items-end pb-1 sm:col-span-2">
-                    <label className="text-theme-text-secondary flex cursor-pointer items-center gap-1.5 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={li.size_selectable}
-                        onChange={(e) => updateLineItem(idx, 'size_selectable', e.target.checked)}
-                        className="border-theme-surface-border rounded"
-                      />
-                      <Ruler className="h-3.5 w-3.5" />
-                      Size
-                    </label>
+                    <div className="space-y-1">
+                      <label className="text-theme-text-secondary flex cursor-pointer items-center gap-1.5 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={li.size_selectable}
+                          onChange={(e) => updateLineItem(idx, 'size_selectable', e.target.checked)}
+                          className="border-theme-surface-border rounded"
+                        />
+                        <Ruler className="h-3.5 w-3.5" />
+                        Size
+                      </label>
+                      <label className="text-theme-text-secondary flex cursor-pointer items-center gap-1.5 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={li.optional}
+                          onChange={(e) => updateLineItem(idx, 'optional', e.target.checked)}
+                          className="border-theme-surface-border rounded"
+                        />
+                        Optional
+                      </label>
+                    </div>
                   </div>
                 </div>
                 {formData.line_items.length > 1 && (
@@ -567,6 +582,7 @@ const EquipmentKitsPage: React.FC = () => {
                             <Ruler className="h-3 w-3" /> Size select
                           </span>
                         )}
+                        {li.optional && <span className="text-amber-600 dark:text-amber-400">Optional</span>}
                       </div>
                     </div>
                   ))}
