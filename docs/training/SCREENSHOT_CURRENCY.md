@@ -9,28 +9,148 @@ Kept separately because `SCREENSHOT_STATUS.md` is regenerated wholesale by
 `scripts/screenshots/status_report.py` and anything hand-written there is lost on
 the next run.
 
-**Audited 2026-08-10.** 194 images, all captured on or before
-**2026-08-09 09:43 UTC**. 174 frontend source files changed after that. The table
-below is derived from which source files back which screens — it is a staleness
-_audit_, not a re-capture. **No images were re-captured in this pass**; MariaDB
-and a Docker daemon were both unavailable in the environment the audit ran in, and
-the pipeline drives the real application.
+**Re-captured 2026-08-10.** The 02, 03 and 09 guides — 57 images — were shot
+against a live stack rebuilt from current `main`. The three other guides listed
+under _Not re-captured_ below still carry images from **2026-08-09 09:43 UTC or
+earlier** and remain stale.
+
+> **An earlier revision of this file said re-capture was impossible here**,
+> because MariaDB and a Docker daemon were both absent. That was true of the
+> container, not of the project: `apt-get install mariadb-server` supplies the
+> database, and the pipeline runs fine without Docker. The claim is corrected
+> rather than deleted because it is the sort of environment assumption that
+> quietly becomes policy.
 
 ---
 
-## How to read this
+## What re-capturing exposed
 
-| Tier           | Meaning                                                                                                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Structural** | The screen is laid out differently, or its controls are different. The screenshot shows something that is no longer there. **Re-capture before the guide is published or filmed.**                                 |
-| **Cosmetic**   | The content and layout are unchanged; form controls were normalised (padding, corner radius, checkbox size, focus ring, 44px minimum height on phones). A reader will not be misled. Re-capture opportunistically. |
+Eight defects, plus two in the harness itself. None were reported by the
+capture run: it listed **26/26 captured, 0 flagged** for a batch containing two
+images showing the opposite of their captions. Its empty-state check can tell
+that a page rendered, not that it rendered the thing the caption promises.
 
-Everything captured is at least **cosmetic**-stale: the 2026-08-10 form-control
-sweep touched 103 files across every module, so any screenshot containing a text
-input, select or checkbox differs from the current build in control padding and
-corner radius.
+| Defect                                                                                                                                           | Found by                                                          | Fix                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Platoon Management captioned "platoon columns and their members", showing a "platoon scheduling is turned off" banner over one Unassigned column | Opening the image                                                 | Seeder enables platoons and deals the roster A/B/C                                                                                                                                                                                                             |
+| Scheduling Settings showed six sections against documentation describing seven                                                                   | Same — Platoons is hidden while the feature is off                | Same fix                                                                                                                                                                                                                                                       |
+| `03-14` captioned "compliance report", showing an empty date picker                                                                              | Opening the image                                                 | `prepare` step drives the Shift Compliance tab                                                                                                                                                                                                                 |
+| `09-10`, `09-11`, `09-12` timed out on an empty validation queue                                                                                 | Capture failure, then tracing it to the data                      | Peer examiner was a **lieutenant**, whose rank grants `training.manage`, so their submission self-validated. Switched to a firefighter; the seeder now asserts it                                                                                              |
+| `02-21` and `02-41` were **byte-identical**, both shooting the default tab under two different captions                                          | Hashing the whole image set                                       | Both routes now carry `?tab=`                                                                                                                                                                                                                                  |
+| `04-20` and `17-01` byte-identical to _other_ shots — hub routes defaulting to another tab                                                       | The same MD5 sweep, set aside at first as another guide's problem | Both carry `?tab=`. `17-01` needed a second fix: `/settings/account` is a `<Navigate>` with no query, so React Router dropped `?tab=` on the redirect and the shot stayed on the Account tab while the harness reported success. Uses the canonical `/account` |
+| Expiring Certifications permanently empty                                                                                                        | Fixing the route above                                            | The seeder's own comment promised near-future expiries; its arithmetic put the earliest at **TODAY + 233 days**, so none of the 66 records could enter the 90-day window                                                                                       |
+
+### Two defects in the harness
+
+Both surfaced by images, and both had been costing accuracy silently:
+
+- **A false positive held back a correct screenshot.** The empty-state check
+  scanned the whole page as one blob, so `17-01` was flagged on its own help
+  text — "These are optional — _nothing here_ is required for membership."
+  Prose, not an empty state. It now matches per line and only on lines short
+  enough to _be_ the message, which is what distinguishes a standalone
+  "No Integrations Yet" from the same words mid-sentence.
+- **A false negative let an empty page through.** The pattern required the
+  phrase to end in found/yet/scheduled/available/to show, so
+  "No certifications expiring within 90 days" scanned as populated — which is
+  exactly why the empty expiring-certs page reported `empty=False` and was
+  publish-eligible while showing nothing. Line scoping makes a whole-line
+  "No …" safe to match, so that gap is closed.
+
+### Two duplicate pairs are legitimate
+
+`03-15` / `03-32` (settings defaults to `?tab=general`) and `03-02` / `03-08`
+(the Calls / Runs section lives inside the shift detail panel) are genuinely one
+screen satisfying two captions. Recorded so a future hash sweep does not
+re-investigate them.
+
+### A product bug these images display
+
+`03-14` shows **"Total Members 66"** for a 22-member department.
+`SchedulingReportsPage.tsx` computes that card as
+`complianceData.reduce((sum, r) => sum + r.total_members, 0)` — a sum of
+per-requirement cohorts, so a member counted under three requirements counts
+three times. The Compliant and Non-Compliant cards sum the same way: the values
+are member-requirement pairs, the labels claim members.
+
+**Not fixed here.** The payload carries no distinct-member count, so correcting
+it means either relabelling the cards or adding a field to the API — a product
+decision, not a screenshot one. The image accurately shows current behaviour;
+this note exists so the guide does not silently endorse the number.
+
+### Held back deliberately
+
+`02-42-external-integrations` and `02-68-vector-category-mapping` capture an
+empty "No Integrations Yet" state. The harness flags them and does not apply
+them, and they are **not committed**, so the guide keeps its unfilled
+placeholders rather than gaining a picture of nothing.
 
 ---
+
+## Not re-captured
+
+These guides still carry pre-2026-08-09 images. Everything in them is at least
+**cosmetically** stale: the 2026-08-10 form-control sweep touched 103 files
+across every module, so any screenshot containing a text input, select or
+checkbox differs from the current build in control padding, corner radius,
+checkbox size and focus ring.
+
+| Guide                        | Captured |
+| ---------------------------- | -------: |
+| `00-getting-started.md`      |        4 |
+| `01-membership.md`           |        9 |
+| `04-events-meetings.md`      |       10 |
+| `05-inventory.md`            |       18 |
+| `06-apparatus-facilities.md` |       13 |
+| `07-documents-forms.md`      |       13 |
+| `08-admin-reports.md`        |       11 |
+| `10-mobile-pwa.md`           |        5 |
+| `11-finance.md`              |       12 |
+| `12-grants-fundraising.md`   |       10 |
+| `13-medical-screening.md`    |        5 |
+| `14-elections.md`            |        7 |
+| `15-prospective-members.md`  |       11 |
+| `16-integrations.md`         |        1 |
+| `17-privacy-data-rights.md`  |        2 |
+| `18-storefront.md`           |        4 |
+
+`10-mobile-pwa.md` is the most affected of these: it shoots at phone width,
+where the sweep's 44px minimum control height changes layout rather than just
+appearance.
+
+---
+
+## Verification method
+
+Captured images were checked **by opening them and reading them against the
+caption they fill**, not by trusting the harness's exit code — every defect
+above survived a green capture run. Two whole-set screens ran alongside that:
+an MD5 pass for duplicate files, which is what caught `02-21`/`02-41`, and a
+colour-uniformity pass for blank or near-blank pages.
+
+Not every one of the 57 was opened individually. Priority went to the
+structurally-changed screens, every shot carrying a `prepare` step, and anything
+either screen flagged.
+
+---
+
+## Superseded — the 2026-08-09 staleness audit
+
+The table below is the pre-re-capture analysis, kept for the reasoning rather
+than the verdicts.
+
+Every **Structural** row was re-captured successfully. Four —
+`09-07`, `09-08`, `09-09` and `09-12` — produced **byte-identical** output, so
+they do not appear in the commit diff. That is not the same as "not
+re-captured": those screens already matched the current build, and the shots had
+been failing for a data reason rather than a rendering one. `09-12` is the clear
+case — it timed out before the examiner fix and captures cleanly after it, while
+rendering exactly the same pixels, because the stale file on disk had been shot
+when a pending validation happened to exist.
+
+Worth stating because a diff-based reading gets it backwards: an unchanged image
+file after a successful re-capture is the _good_ outcome. It means the screen was
+already current.
 
 ## Structural — re-capture first
 

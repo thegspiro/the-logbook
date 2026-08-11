@@ -120,7 +120,7 @@ async function settle(page) {
  * so shots are flagged here and the applier leaves the placeholder alone.
  */
 const EMPTY_STATE =
-  /\bno [a-z .'-]{2,40}\b(found|yet|scheduled|available|to show)|get started by (creating|adding)|nothing (here|to show)/i;
+  /\bno [a-z .'-]{2,40}\b(found|yet|scheduled|available|to show)|get started by (creating|adding)|nothing (here|to show)|^no\s+[a-z0-9 .'-]{2,60}$/i;
 
 /**
  * The app's ErrorBoundary renders this when a page throws during render. It is
@@ -161,11 +161,27 @@ async function detectCrash(page) {
   return CRASHED.test(text);
 }
 
+/**
+ * Longest line that can plausibly *be* an empty-state message rather than
+ * merely contain the words. Empty states are standalone headings or one-liners
+ * ("No certifications expiring within 90 days", "No Integrations Yet"); the
+ * false positives are the same words buried mid-sentence in body copy.
+ */
+const EMPTY_STATE_MAX_LINE = 80;
+
+/**
+ * The last alternative in EMPTY_STATE — a whole short line beginning "No …" —
+ * is only safe because of the line scoping below, and it closes a real gap:
+ * the earlier pattern required the phrase to end in found/yet/scheduled/
+ * available/to show, so "No certifications expiring within 90 days" scanned as
+ * populated. That page was published-eligible while showing nothing, which is
+ * the failure this whole check exists to prevent.
+ */
+
 async function detectEmptyState(page, selector) {
   // Scan what the image will actually contain. A clipped shot pictures one
   // section, and scanning the whole page around it flags copy that is nowhere
-  // in the screenshot — the account security tab says "nothing here is
-  // required for membership", which is prose, not an empty state.
+  // in the screenshot.
   const text = selector
     ? await page
         .locator(selector)
@@ -173,8 +189,21 @@ async function detectEmptyState(page, selector) {
         .innerText()
         .catch(() => "")
     : await pageText(page);
-  const match = text.match(EMPTY_STATE);
-  return match ? match[0].trim() : null;
+
+  // Match per line, and only on lines short enough to be the message itself.
+  // Scanning the whole blob matches prose that happens to contain the phrase:
+  // the account security tab reads "These are optional — nothing here is
+  // required for membership", which held back a perfectly good screenshot of
+  // the Privacy Choices section. Scoping to `selector` was the previous
+  // mitigation, but a fullPage shot has no selector to scope to, so the guard
+  // has to hold on the text itself.
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.length > EMPTY_STATE_MAX_LINE) continue;
+    const match = trimmed.match(EMPTY_STATE);
+    if (match) return match[0].trim();
+  }
+  return null;
 }
 
 async function signIn(page, credentials) {

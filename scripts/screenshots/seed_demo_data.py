@@ -89,10 +89,28 @@ DEMO_MEMBER_USERNAME = "nbelhaj"
 # The visitor the guest sign-in seeds. Matched on email rather than name so a
 # re-run recognises its own guest instead of adding another every time.
 GUEST_EMAIL = "rosa.delgado@example.com"
-# A second member, used as the *examiner* on the peer-run skills test. It has to
-# be someone other than the candidate: skills testing refuses a test whose
-# examiner is also its candidate.
-DEMO_PEER_EXAMINER_USERNAME = "cfrazier"
+# A second member, used as the *examiner* on the peer-run skills test. Two
+# constraints, and the second one is easy to miss:
+#
+#   * Not the candidate — skills testing refuses a test whose examiner is also
+#     its candidate.
+#   * Not an officer. An examiner holding `training.manage` validates their own
+#     result in the same step, so the test lands signed off and the validation
+#     queue stays empty — which is the one thing this member exists to prevent.
+#
+# `cfrazier` was a lieutenant, and lieutenant carries training.manage by rank
+# default, so every "pending validation" seed silently produced a validated
+# test and three screenshots timed out waiting for a queue that was never
+# non-empty. `rduarte` is a firefighter, which does not.
+DEMO_PEER_EXAMINER_USERNAME = "rduarte"
+
+# Ranks whose default permissions include training.manage. Mirrors
+# app/core/permissions.py's rank defaults; kept here as a literal because the
+# seeder talks to the API over HTTP and does not import the backend.
+OFFICER_RANKS = frozenset(
+    {"lieutenant", "captain", "deputy_chief", "assistant_chief", "fire_chief"}
+)
+
 # The one skill sheet built from weighted `score` steps. Named so the test
 # seeder can find it: it is the only template that can produce a scorecard with
 # per-section point totals and a percentage.
@@ -1389,6 +1407,50 @@ class Seeder:
         ("Weekend Duty Crew", "08:00", "20:00", 12, "#059669", 4),
         ("Medic Duty", "06:00", "18:00", 12, "#2563EB", 2),
     ]
+
+    def seed_platoons(self, members: list[dict]) -> None:
+        """Turn platoon scheduling on and deal the roster into A/B/C.
+
+        Left off, two guides picture something that isn't there: Platoon
+        Management renders a "platoon scheduling is turned off" banner over a
+        single Unassigned column, and Scheduling Settings shows six sections
+        instead of seven, because the Platoons section is hidden while the
+        feature is off. Both are captioned as showing the opposite.
+
+        The department the demo data describes runs an A/B/C rotation — it
+        seeds the "A/B/C Platoon Rotation" shift pattern already — so the
+        toggle being off was an omission rather than a choice.
+        """
+        settings = self.api.get("/scheduling/settings") or {}
+        if not settings.get("platoons_enabled"):
+            self.api.put(
+                "/scheduling/settings",
+                {"platoons_enabled": True},
+            )
+
+        # PlatoonOverviewResponse keys the roster as `groups`, each carrying
+        # `platoon` and `member_count`. Reading a `platoons` key instead makes
+        # this guard silently vacuous — it always sees zero and re-deals the
+        # whole roster on every run, which is the opposite of idempotent.
+        overview = self.api.get("/scheduling/platoons/overview") or {}
+        already = sum(
+            group.get("member_count") or 0
+            for group in (overview.get("groups") or [])
+            if (group.get("platoon") or "").strip()
+        )
+        if already:
+            return
+
+        # Deal round-robin so every platoon has a mix of ranks rather than one
+        # column of officers and two of firefighters.
+        assignable = [pick(m, "id") for m in members if pick(m, "id")]
+        for index, platoon in enumerate(("A", "B", "C")):
+            batch = assignable[index::3]
+            if batch:
+                self.api.post(
+                    "/scheduling/platoons/bulk-assign",
+                    {"user_ids": batch, "platoon": platoon},
+                )
 
     def seed_scheduling(
         self, stations: list[dict], apparatus: list[dict], members: list[dict]
@@ -4906,9 +4968,19 @@ class Seeder:
             self._attach_a_certificate(records)
             return records
         # Every member gets a spread of completed courses so My Training, the
-        # compliance matrix and the hours reports all have something to show;
-        # a few expirations land in the near future to populate the
-        # expiring-certifications view.
+        # compliance matrix and the hours reports all have something to show.
+        #
+        # A handful also expire soon, which is what fills the Expiring
+        # Certifications view. The general spread cannot do that on its own:
+        # its expiry works out to TODAY + 365 - 45*offset - 2*member_index,
+        # whose minimum across the whole loop is TODAY + 233 — so for a
+        # 22-member department nothing ever landed inside the 90-day window and
+        # that view was permanently empty, against a comment claiming otherwise.
+        #
+        # NEAR_EXPIRY_DAYS is therefore explicit rather than derived, and spans
+        # both bands the view counts separately: Critical (<= 30 days) and
+        # Warning (31-90).
+        NEAR_EXPIRY_DAYS = [12, 26, 45, 78]
         for member_index, member in enumerate(members):
             user_id = pick(member, "id")
             if not user_id:
@@ -4929,7 +5001,11 @@ class Seeder:
                     "credit_hours": hours,
                     "completion_date": str(completed),
                     "expiration_date": str(
-                        completed + timedelta(days=365 + member_index * 3)
+                        # One record per member, for the first few members,
+                        # expires inside the 90-day window the view filters on.
+                        TODAY + timedelta(days=NEAR_EXPIRY_DAYS[member_index])
+                        if offset == 0 and member_index < len(NEAR_EXPIRY_DAYS)
+                        else completed + timedelta(days=365 + member_index * 3)
                     ),
                     "status": "completed",
                     "passed": True,
@@ -5373,6 +5449,36 @@ class Seeder:
         published = [t for t in templates if pick(t, "status") == "published"]
         if not candidate or not examiner or not published:
             return None
+
+        # The examiner must not hold training.manage, or their submission
+        # validates itself and this step quietly produces the opposite of what
+        # it exists for: the step reports success and three screenshots fail
+        # much later waiting on a queue that was never non-empty.
+        #
+        # Read the rank back from the API rather than from `members`. That list
+        # is snapshotted before `seed_member_changes` applies promotions, so it
+        # still holds pre-promotion ranks — and promoting this account is
+        # precisely the case this guard is here to catch.
+        examiner_id = pick(examiner, "id")
+        # /with-roles, because there is no bare GET /users/{id} route — that
+        # path 404s, the ApiError fails this step on every run, and the queue
+        # goes back to being empty.
+        live = self.api.get(f"/users/{examiner_id}/with-roles") if examiner_id else {}
+        live_rank = pick(live or {}, "rank") or pick(examiner, "rank") or ""
+        if live_rank in OFFICER_RANKS:
+            # ApiError rather than a bare RuntimeError: `step()` catches only
+            # ApiError, so anything else aborts the whole run and every later
+            # step — inventory, documents, elections, finance — never executes.
+            # This must be loud, not fatal.
+            raise ApiError(
+                "GUARD",
+                "seed_pending_validation_test",
+                0,
+                f"peer examiner {DEMO_PEER_EXAMINER_USERNAME!r} holds rank "
+                f"{live_rank!r}, which grants training.manage — their own "
+                "completion would self-validate, leaving the validation queue "
+                "empty. Pick a non-officer.",
+            )
 
         peer = self.member_session(
             base_url,
@@ -6992,6 +7098,7 @@ class Seeder:
             "event rsvps",
             lambda: self.seed_event_rsvps(self.base_url, events, members),
         )
+        self.step("platoons", lambda: self.seed_platoons(members))
         self.step(
             "scheduling",
             lambda: self.seed_scheduling(stations, apparatus, members),
