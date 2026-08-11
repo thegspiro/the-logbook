@@ -1043,13 +1043,22 @@ _other_ candidate's results too.
 
 ### Setting the department default
 
-Navigate to **Training Admin > Configuration** and find the **Skills-Test
-Results** group, beside the existing member-visibility switches. The "when"
-question is hidden if you set disclosure to **Nothing**, since there is then
-nothing to time.
+Open **Training → My Training** and, as an officer, the **Member Visibility
+Settings** tab — the same editor that governs what members see of the rest of
+their training. The **Skills-Test Results** group sits at its foot, two
+dropdowns rather than switches:
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Training Configuration editor showing the "Skills-Test Results" group with two controls: a "What the member sees" segmented control set to "Full results", and a "When" radio pair set to "On completion"]_
+![The Skills-Test Results settings — what a member sees of a result, and when they see it](./images/09-20-result-disclosure-settings.png)
+
+**What the member sees** carries the reasoning next to the control: examiner
+notes are often candid working notes for the training file rather than feedback
+written to be read by the member. **When they see it** explains what a release
+buys you — a chance to review the scorecard, or to deliver a failure in person,
+before the member reads it — and notes that practice attempts are never held
+back.
+
+The "when" question disappears entirely if you set disclosure to **Nothing**,
+since there is then nothing to time.
 
 ### Overriding it on a single template _(2026-08-08)_
 

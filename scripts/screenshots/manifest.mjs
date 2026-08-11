@@ -6528,6 +6528,29 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "09-20-result-disclosure-settings",
+    doc: "09-skills-testing.md",
+    line: 1051,
+    anchor: "The Training Configuration editor showing the",
+    alt: "The Skills-Test Results settings — what a member sees of a result, and when they see it",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      await page.waitForTimeout(2500);
+      await page
+        .getByRole("button", { name: /Member Visibility Settings/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(1500);
+      const group = page
+        .locator("div:has(> h3:text-is('Skills-Test Results'))")
+        .last();
+      await group.waitFor({ timeout: 20_000 });
+      await group.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    selector: "div:has(> h3:text-is('Skills-Test Results'))",
+  },
+  {
     id: "09-19-failed-test-result",
     doc: "09-skills-testing.md",
     line: 537,
@@ -6635,9 +6658,18 @@ export const SHOTS = [
       "/training/skills-testing/tests?limit=50",
       (id) => `/training/skills-testing/test/${id}`,
       "tests",
-      (test) =>
-        test.status === "completed" &&
-        (test.overallScore ?? test.overall_score ?? null) !== null,
+      // A passing one that is *not* full marks: the failed scorecard is 09-19,
+      // and a flat 100% demonstrates nothing about how the percentage is made
+      // up — no section differs from another and no step carries a note.
+      (test) => {
+        const score = test.overallScore ?? test.overall_score ?? null;
+        return (
+          test.status === "completed" &&
+          test.result === "pass" &&
+          score !== null &&
+          score < 100
+        );
+      },
     ),
     // Viewport rather than full page: the scorecard's "Back to Tests" bar is
     // sticky, and a full-page shot paints it across the middle of the sheet,
