@@ -51,8 +51,10 @@ someone writing a migration on a branch, not an operator running `git pull`. The
 operator-facing half (recognising a crash on start) is already covered by
 `WHEN THE APP REFUSES TO START`, and adding to that section ripples timings
 through three chapters of a 40-minute script for about fifteen seconds of
-content. `docs/TROUBLESHOOTING.md` and `docs/ALEMBIC_MIGRATIONS.md` are the
-right homes and both now carry it.
+content. `docs/TROUBLESHOOTING.md` (_Alembic Duplicate Revision IDs_) and
+`docs/ALEMBIC_MIGRATIONS.md` (_Current Head_) are the right homes, and both
+carry it — the troubleshooting entry now records the 2026-08-10 recurrence as
+the third instance, with the habit that avoids it.
 
 **A pre-existing timing overlap in script 04**, unrelated to this work:
 `CLOSING & PUBLISHING RESULTS (17:30 – 18:00)` and
