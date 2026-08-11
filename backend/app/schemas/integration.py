@@ -145,6 +145,9 @@ class SalesforceConfig(BaseModel):
     client_id: str = ""
     client_secret: str = ""
     refresh_token: str = ""
+    # If refresh_token is omitted, the backend uses Salesforce's OAuth 2.0
+    # client-credentials flow for a Connected App configured with a Run As
+    # integration user. No service-account password is stored or transmitted.
     api_version: str = "v62.0"
     environment: str = Field(default="production", pattern=r"^(production|sandbox)$")
     sync_direction: str = Field(default="push", pattern=r"^(push|pull|both)$")

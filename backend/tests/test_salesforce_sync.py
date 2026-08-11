@@ -25,10 +25,11 @@ from app.services.integration_services.salesforce_sync_service import (
 class FakeResponse:
     """Minimal stand-in for an httpx.Response used by SalesforceService."""
 
-    def __init__(self, status_code, json_data=None, text=""):
+    def __init__(self, status_code, json_data=None, text="", headers=None):
         self.status_code = status_code
         self._json = json_data if json_data is not None else {}
         self.text = text
+        self.headers = headers or {}
 
     def json(self):
         return self._json
@@ -238,6 +239,117 @@ async def test_create_record_drops_unknown_custom_field(monkeypatch):
     # The retry payload no longer includes the unknown field.
     assert "Logbook_Member_ID__c" not in payloads[1]
     assert payloads[1]["LastName"] == "Doe"
+
+
+async def test_service_account_uses_client_credentials_grant(monkeypatch):
+    sf = SalesforceService(
+        {
+            "instance_url": "https://acme.my.salesforce.com",
+            "client_id": "consumer-key",
+            "client_secret": "consumer-secret",
+        }
+    )
+    post = AsyncMock(
+        return_value=FakeResponse(
+            200,
+            {
+                "access_token": "short-lived-token",
+                "instance_url": "https://acme.my.salesforce.com/",
+            },
+        )
+    )
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.__aexit__.return_value = None
+    client.post = post
+    monkeypatch.setattr(
+        "app.services.integration_services.salesforce_service.create_integration_client",
+        lambda: client,
+    )
+
+    assert await sf._refresh_access_token() == "short-lived-token"
+    assert post.await_args.kwargs["data"] == {
+        "grant_type": "client_credentials",
+        "client_id": "consumer-key",
+        "client_secret": "consumer-secret",
+    }
+    assert post.await_args.args[0] == (
+        "https://acme.my.salesforce.com/services/oauth2/token"
+    )
+    assert sf.instance_url == "https://acme.my.salesforce.com"
+
+
+async def test_token_response_rejects_untrusted_instance_url(monkeypatch):
+    sf = SalesforceService(
+        {
+            "instance_url": "https://acme.my.salesforce.com",
+            "client_id": "consumer-key",
+            "client_secret": "consumer-secret",
+        }
+    )
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.__aexit__.return_value = None
+    client.post.return_value = FakeResponse(
+        200,
+        {"access_token": "token", "instance_url": "https://attacker.example"},
+    )
+    monkeypatch.setattr(
+        "app.services.integration_services.salesforce_service.create_integration_client",
+        lambda: client,
+    )
+
+    with pytest.raises(Exception, match="invalid instance URL"):
+        await sf._refresh_access_token()
+
+
+async def test_query_fails_instead_of_returning_partial_pages(monkeypatch):
+    sf = SalesforceService(
+        {"instance_url": "https://acme.my.salesforce.com", "access_token": "token"}
+    )
+    responses = iter(
+        [
+            FakeResponse(
+                200,
+                {
+                    "records": [{"Id": "first"}],
+                    "done": False,
+                    "nextRecordsUrl": "/services/data/v62.0/query/next",
+                },
+            ),
+            FakeResponse(503),
+        ]
+    )
+
+    async def fake_request(method, url, *, json=None, params=None):
+        return next(responses)
+
+    monkeypatch.setattr(sf, "_request", fake_request)
+
+    with pytest.raises(Exception, match="refusing partial results"):
+        await sf.query("SELECT Id FROM Contact")
+
+
+async def test_request_retries_rate_limit_using_retry_after(monkeypatch):
+    sf = SalesforceService(
+        {"instance_url": "https://acme.my.salesforce.com", "access_token": "token"}
+    )
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.__aexit__.return_value = None
+    client.request.side_effect = [
+        FakeResponse(429, headers={"Retry-After": "0"}),
+        FakeResponse(200, {"records": [], "done": True}),
+    ]
+    monkeypatch.setattr(
+        "app.services.integration_services.salesforce_service.create_integration_client",
+        lambda: client,
+    )
+
+    response = await sf._request("GET", sf._api_url("/query"))
+
+    assert response.status_code == 200
+    assert client.request.await_count == 2
 
 
 async def test_create_record_respects_disabled_graceful(monkeypatch):

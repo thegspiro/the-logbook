@@ -44,6 +44,22 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 > (which forces `ENVIRONMENT: production`). The base `docker-compose.yml` is a
 > development configuration, so `.env.example` defaults `ENVIRONMENT=development`.
 
+### Optional Salesforce Connected App
+
+| Variable                        | Description                                                                                     | Default                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------- |
+| `SALESFORCE_CLIENT_ID`          | Deployment-wide Connected App consumer key; an encrypted per-organization value overrides it    | unset                        |
+| `SALESFORCE_CLIENT_SECRET`      | Deployment-wide Connected App consumer secret; an encrypted per-organization value overrides it | unset                        |
+| `SALESFORCE_OAUTH_REDIRECT_URI` | Exact callback URL registered for interactive **Connect with Salesforce** authorization         | derived from the request URL |
+
+These deployment variables support the interactive authorization-code flow.
+For an unattended service account, configure the organization integration with
+its Salesforce My Domain instance URL, client ID, and client secret, and leave
+the refresh token empty. Salesforce must have **OAuth 2.0 Client Credentials
+Flow** enabled with a dedicated least-privilege **Run As** user. The Logbook
+stores no Salesforce user password. See [Salesforce CRM
+Integration](Integration-Salesforce#service-account-client-credentials).
+
 ---
 
 ## Port Configuration
