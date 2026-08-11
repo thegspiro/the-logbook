@@ -18,6 +18,18 @@ interface DateRangePickerProps {
   label?: string;
 }
 
+/**
+ * First day of the month (or year) that `today` falls in.
+ *
+ * `today` is already the department's calendar date, so this is string
+ * arithmetic. Building `new Date(y, m, 1)` instead makes local midnight on the
+ * first and then reformats that *instant* in the department zone — for a
+ * browser east of it, Aug 1 00:00 in New York is Jul 31 in Los Angeles, so
+ * "This month" quietly began in the previous month.
+ */
+const startOfMonth = (today: string): string => `${today.slice(0, 7)}-01`;
+const startOfYear = (today: string): string => `${today.slice(0, 4)}-01-01`;
+
 const buildPresets = (tz: string) => [
   {
     label: 'Today',
@@ -45,6 +57,13 @@ const buildPresets = (tz: string) => [
     },
   },
   {
+    label: 'This month',
+    getDates: () => {
+      const today = getTodayLocalDate(tz);
+      return [startOfMonth(today), today];
+    },
+  },
+  {
     label: 'Last 90 days',
     getDates: () => {
       const e = new Date();
@@ -56,9 +75,8 @@ const buildPresets = (tz: string) => [
   {
     label: 'This year',
     getDates: () => {
-      const e = new Date();
-      const s = new Date(e.getFullYear(), 0, 1);
-      return [toLocalDateString(s, tz), getTodayLocalDate(tz)];
+      const today = getTodayLocalDate(tz);
+      return [startOfYear(today), today];
     },
   },
 ];
@@ -105,6 +123,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           />
           {hasValue && (
             <button
+              type="button"
               onClick={handleClear}
               className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center p-1.5 max-sm:min-h-[44px] max-sm:min-w-[44px]"
               aria-label="Clear date range"
@@ -116,6 +135,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
         <div className="relative">
           <button
+            type="button"
             onClick={() => setShowPresets(!showPresets)}
             className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover rounded-lg border px-2.5 py-1.5 text-sm transition-colors"
             aria-expanded={showPresets}
@@ -133,6 +153,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                 {presets.map((preset) => (
                   <button
                     key={preset.label}
+                    type="button"
                     role="menuitem"
                     onClick={() => {
                       const [s, e] = preset.getDates();

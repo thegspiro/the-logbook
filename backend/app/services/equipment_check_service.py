@@ -691,6 +691,12 @@ class EquipmentCheckService:
             item["is_expired"] = bool(expiration and expiration < today)
             if item.get("is_expired"):
                 item["status"] = "fail"
+            # "not_applicable" is the crew answering that the item is not on
+            # this apparatus, so there is no count to be short of. Expiry above
+            # still wins — that verdict comes from the department's own record —
+            # but a shortfall cannot be read off an item nobody is carrying.
+            if item.get("status") == "not_applicable":
+                continue
             req_qty = item.get("required_quantity")
             found_qty = item.get("quantity_found")
             if req_qty is not None and found_qty is not None and found_qty < req_qty:
@@ -1261,6 +1267,10 @@ class EquipmentCheckService:
         for item in all_items:
             if item.is_expired:
                 item.status = "fail"
+            # An item answered "not on truck" has no count to be short of; see
+            # _compute_check_status, which this mirrors.
+            if item.status == "not_applicable":
+                continue
             req_qty = item.required_quantity
             found_qty = item.quantity_found
             if req_qty is not None and found_qty is not None and found_qty < req_qty:

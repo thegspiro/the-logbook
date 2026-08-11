@@ -64,18 +64,17 @@ const learningPaths: LearningPath[] = [
 
 function readProgress(): Record<string, boolean> {
   try {
-    // `JSON.parse` is typed `any`, so the old shape check narrowed nothing and
-    // the return was an unchecked cast: an array, or a value holding strings,
-    // was handed back as `Record<string, boolean>`. Anything can be in
-    // localStorage — an older payload, or a hand-edited one — and a
-    // non-boolean here renders as a completed step.
-    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    return Object.fromEntries(
-      Object.entries(parsed as Record<string, unknown>).filter(
-        (entry): entry is [string, boolean] => typeof entry[1] === 'boolean'
-      )
-    );
+    // JSON.parse returns `any`, so narrow before returning: the stored value is
+    // whatever a previous version of this page wrote, or whatever a user typed
+    // into localStorage. Only own boolean entries are kept, which is what the
+    // return type already promised.
+    const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const progress: Record<string, boolean> = {};
+    for (const [key, flag] of Object.entries(value)) {
+      if (typeof flag === 'boolean') progress[key] = flag;
+    }
+    return progress;
   } catch {
     return {};
   }

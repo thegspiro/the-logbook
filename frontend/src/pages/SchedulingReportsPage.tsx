@@ -6,7 +6,7 @@
  * Each tab has date range filters and displays tabular data.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useRanks } from '../hooks/useRanks';
@@ -33,7 +33,8 @@ import type {
   AvailabilityRecord,
 } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { DateRangePicker } from '../components/ux/DateRangePicker';
 
 type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability' | 'compliance';
 
@@ -51,13 +52,6 @@ interface DateRangeFilterProps {
   extraControls?: React.ReactNode;
 }
 
-const localDateValue = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   startDate,
   endDate,
@@ -72,58 +66,20 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
     onSearch();
   };
 
-  const setPreset = (preset: 'month' | '30-days' | 'year') => {
-    const today = new Date();
-    const start = new Date(today);
-    if (preset === 'month') start.setDate(1);
-    if (preset === '30-days') start.setDate(today.getDate() - 29);
-    if (preset === 'year') {
-      start.setMonth(0);
-      start.setDate(1);
-    }
-    onStartChange(localDateValue(start));
-    onEndChange(localDateValue(today));
-  };
-
   return (
     <form onSubmit={handleSubmit} className="card-secondary mb-6 flex flex-wrap items-end gap-3 p-4">
-      <div className="flex w-full flex-wrap gap-2" aria-label="Date range presets">
-        <button type="button" className="btn-secondary text-xs" onClick={() => setPreset('month')}>
-          This month
-        </button>
-        <button type="button" className="btn-secondary text-xs" onClick={() => setPreset('30-days')}>
-          Last 30 days
-        </button>
-        <button type="button" className="btn-secondary text-xs" onClick={() => setPreset('year')}>
-          This year
-        </button>
-      </div>
-      <div>
-        <label htmlFor="report-start" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-          Start Date
-        </label>
-        <input
-          id="report-start"
-          type="date"
-          value={startDate}
-          onChange={(e) => onStartChange(e.target.value)}
-          className="form-input"
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="report-end" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-          End Date
-        </label>
-        <input
-          id="report-end"
-          type="date"
-          value={endDate}
-          onChange={(e) => onEndChange(e.target.value)}
-          className="form-input"
-          required
-        />
-      </div>
+      {/* Two bare mm/dd/yyyy boxes with no default meant every visit to every
+          one of these five reports began with typing. The app's own picker
+          carries the presets, and the range arrives filled in. */}
+      <DateRangePicker
+        label="Dates covered"
+        startDate={startDate}
+        endDate={endDate}
+        onChange={(s, e) => {
+          onStartChange(s);
+          onEndChange(e);
+        }}
+      />
       {extraControls}
       <button
         type="submit"
@@ -172,10 +128,15 @@ export const SchedulingReportsPage: React.FC = () => {
   const { formatRank } = useRanks();
   const [activeTab, setActiveTab] = useState<TabView>('member-hours');
 
-  // Date ranges
-  const now = new Date();
-  const [startDate, setStartDate] = useState(() => localDateValue(new Date(now.getFullYear(), now.getMonth(), 1)));
-  const [endDate, setEndDate] = useState(() => localDateValue(now));
+  // Date ranges. Defaulted to this month: a report that opens on two empty
+  // boxes makes the reader do setup work before it will say anything at all.
+  //
+  // The first of the month is sliced off the department's own calendar date.
+  // Building `new Date(y, m, 1)` and reformatting it in the department zone
+  // answers a different question — for a browser east of that zone it lands on
+  // the last day of the previous month, so the default range began a day early.
+  const [startDate, setStartDate] = useState(() => `${getTodayLocalDate(tz).slice(0, 7)}-01`);
+  const [endDate, setEndDate] = useState(() => getTodayLocalDate(tz));
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -298,7 +259,7 @@ export const SchedulingReportsPage: React.FC = () => {
     });
   };
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     switch (activeTab) {
       case 'member-hours':
         void loadMemberHours();
@@ -316,7 +277,18 @@ export const SchedulingReportsPage: React.FC = () => {
         void loadCompliance();
         break;
     }
-  };
+  }, [activeTab, loadMemberHours, loadCoverage, loadCallVolume, loadAvailability, loadCompliance]);
+
+  /**
+   * Run the active report as soon as there is a range to run it over — on
+   * arrival, and again when a tab switch clears the previous tab's data. Each
+   * loader sets `hasSearched` before it awaits, so a failed load does not
+   * re-trigger this.
+   */
+  useEffect(() => {
+    if (!startDate || !endDate || hasSearched || loading) return;
+    handleSearch();
+  }, [startDate, endDate, hasSearched, loading, handleSearch]);
 
   const formatResponseTime = (seconds?: number) => {
     if (!seconds) return '-';
@@ -423,7 +395,7 @@ export const SchedulingReportsPage: React.FC = () => {
           {!hasSearched ? (
             <div className="card-secondary py-12 text-center">
               <Clock className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Select a Date Range</h3>
+              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Pick the dates to cover</h3>
               <p className="text-theme-text-muted">Choose start and end dates to generate the member hours report</p>
             </div>
           ) : loading ? (
@@ -556,7 +528,7 @@ export const SchedulingReportsPage: React.FC = () => {
           {!hasSearched ? (
             <div className="card-secondary py-12 text-center">
               <Shield className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Select a Date Range</h3>
+              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Pick the dates to cover</h3>
               <p className="text-theme-text-muted">Choose start and end dates to view shift coverage data</p>
             </div>
           ) : loading ? (
@@ -681,7 +653,7 @@ export const SchedulingReportsPage: React.FC = () => {
           {!hasSearched ? (
             <div className="card-secondary py-12 text-center">
               <Phone className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Select a Date Range</h3>
+              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Pick the dates to cover</h3>
               <p className="text-theme-text-muted">Choose start and end dates to view call volume data</p>
             </div>
           ) : loading ? (
@@ -786,7 +758,7 @@ export const SchedulingReportsPage: React.FC = () => {
           {!hasSearched ? (
             <div className="card-secondary py-12 text-center">
               <Users className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Select a Date Range</h3>
+              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Pick the dates to cover</h3>
               <p className="text-theme-text-muted">Choose start and end dates to check member availability</p>
             </div>
           ) : loading ? (
