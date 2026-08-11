@@ -80,10 +80,17 @@ interface EquipmentCheckFormProps {
   onBack?: () => void;
   previewMode?: boolean;
   existingCheckId?: string | undefined;
+  shiftContext?:
+    | {
+        apparatusName: string;
+        shiftDate: string;
+        checkTiming: string;
+      }
+    | undefined;
 }
 
 interface ItemResult {
-  status: 'pass' | 'fail' | 'not_checked';
+  status: 'pass' | 'fail' | 'not_applicable' | 'out_of_service' | 'not_checked';
   quantityFound?: number | undefined;
   levelReading?: number | undefined;
   serialNumber?: string | undefined;
@@ -255,6 +262,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   onBack,
   previewMode,
   existingCheckId,
+  shiftContext,
 }) => {
   const { confirm } = useConfirm();
   const tz = useTimezone();
@@ -1138,7 +1146,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const effectiveStatus = isExpired ? 'fail' : currentStatus;
 
     const passFailButtons = (
-      <div className="flex items-center gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           data-action="pass"
@@ -1165,6 +1173,21 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         >
           <XCircle className="h-4 w-4" />
           Fail
+        </button>
+        <button
+          type="button"
+          onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable' })}
+          disabled={isExpired}
+          className={`min-h-[44px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${effectiveStatus === 'not_applicable' ? 'border-slate-500 bg-slate-500 text-white' : 'border-theme-surface-border text-theme-text-muted hover:border-slate-500'}`}
+        >
+          Not applicable
+        </button>
+        <button
+          type="button"
+          onClick={() => updateResultAndAdvance(item.id, { status: 'out_of_service' })}
+          className={`min-h-[44px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${effectiveStatus === 'out_of_service' ? 'border-amber-600 bg-amber-600 text-white' : 'border-theme-surface-border text-theme-text-muted hover:border-amber-600'}`}
+        >
+          Out of service
         </button>
       </div>
     );
@@ -1588,7 +1611,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               {!isQuantity && <TypeIcon className="text-theme-text-muted h-4 w-4 flex-shrink-0" />}
               <span className="text-theme-text-primary text-sm font-medium">{item.name}</span>
-              {item.isRequired && <span className="text-[10px] font-medium text-red-500 uppercase">Required</span>}
+              {!item.isRequired && (
+                <span className="text-theme-text-muted text-[10px] font-medium uppercase">Optional</span>
+              )}
               {renderExpirationBadge(item)}
             </div>
             {swapOverrides[item.id] && (
@@ -1936,7 +1961,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
         {/* Overall notes + submit */}
         {!previewMode && (
-          <div className="space-y-3 pt-2">
+          <div className="bg-theme-background border-theme-surface-border sticky bottom-0 z-20 space-y-3 border-t pt-3 pb-2">
             <div>
               <label htmlFor="overall-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Overall Notes
@@ -2020,7 +2045,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       )}
 
       {/* Header */}
-      <div className="space-y-2">
+      <div className="bg-theme-background border-theme-surface-border sticky top-0 z-20 space-y-2 border-b py-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {onBack && (
@@ -2039,6 +2064,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {checkedItems}/{totalItems}
           </span>
         </div>
+
+        {shiftContext && (
+          <p className="text-theme-text-muted pl-11 text-xs">
+            {shiftContext.apparatusName} ·{' '}
+            {formatCalendarDate(shiftContext.shiftDate, {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })}{' '}
+            · {shiftContext.checkTiming === 'start_of_shift' ? 'Start of shift' : 'End of shift'}
+          </p>
+        )}
 
         {/* Progress bar */}
         <div

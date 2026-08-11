@@ -307,7 +307,7 @@ export interface CheckItemResultSubmit {
   compartment_name: string;
   item_name: string;
   check_type?: string | undefined;
-  status: 'pass' | 'fail' | 'not_checked';
+  status: 'pass' | 'fail' | 'not_applicable' | 'out_of_service' | 'not_checked';
   quantity_found?: number | undefined;
   required_quantity?: number | undefined;
   critical_minimum_quantity?: number | undefined;
@@ -353,7 +353,7 @@ export interface ShiftEquipmentCheckItemRecord {
   compartmentName: string;
   itemName: string;
   checkType?: string;
-  status: 'pass' | 'fail' | 'not_checked';
+  status: 'pass' | 'fail' | 'not_applicable' | 'out_of_service' | 'not_checked';
   quantityFound?: number;
   requiredQuantity?: number;
   criticalMinimumQuantity?: number;

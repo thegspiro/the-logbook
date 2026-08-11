@@ -140,11 +140,17 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               Array.from({ length: r.quantity }, () => r.positions.map((p) => ({ position: p, required: true }))).flat()
             )
           : formData.positions;
+      const [startHour = 0, startMinute = 0] = formData.start_time_of_day.split(':').map(Number);
+      const [endHour = 0, endMinute = 0] = formData.end_time_of_day.split(':').map(Number);
+      const startMinutes = startHour * 60 + startMinute;
+      let endMinutes = endHour * 60 + endMinute;
+      if (endMinutes <= startMinutes) endMinutes += 24 * 60;
+      const durationHours = (endMinutes - startMinutes) / 60;
       const payload: Record<string, unknown> = {
         name: formData.name,
         start_time_of_day: formData.start_time_of_day,
         end_time_of_day: formData.end_time_of_day,
-        duration_hours: parseFloat(formData.duration_hours),
+        duration_hours: durationHours,
         min_staffing:
           formData.category === 'event' && totalResourceStaffing > 0
             ? totalResourceStaffing
@@ -571,20 +577,10 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                   required
                 />
               </div>
-              <div>
-                <label htmlFor="template-duration" className="form-label">
-                  Duration (hrs) <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="template-duration"
-                  type="number"
-                  value={formData.duration_hours}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, duration_hours: e.target.value }))}
-                  className="form-input"
-                  min="0.5"
-                  step="0.5"
-                  required
-                />
+              <div className="flex items-end pb-2">
+                <p className="text-theme-text-muted text-sm">
+                  Duration is calculated automatically from the start and end times.
+                </p>
               </div>
             </div>
 
@@ -593,15 +589,29 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                 <label htmlFor="template-color" className="form-label">
                   Color
                 </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="template-color"
-                    type="color"
-                    value={formData.color}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))}
-                    className="border-theme-input-border h-10 w-10 cursor-pointer rounded-sm border"
-                  />
-                  <span className="text-theme-text-muted text-sm">{formData.color}</span>
+                <div id="template-color" className="flex flex-wrap gap-2" role="radiogroup" aria-label="Template color">
+                  {(
+                    [
+                      ['#2563eb', 'Blue'],
+                      ['#0d9488', 'Teal'],
+                      ['#16a34a', 'Green'],
+                      ['#d97706', 'Amber'],
+                      ['#7c3aed', 'Violet'],
+                      ['#475569', 'Slate'],
+                    ] as const
+                  ).map(([color, label]) => (
+                    <button
+                      key={color}
+                      type="button"
+                      role="radio"
+                      aria-checked={formData.color === color}
+                      aria-label={label}
+                      title={label}
+                      onClick={() => setFormData((prev) => ({ ...prev, color }))}
+                      className={`h-9 w-9 rounded-full border-2 ${formData.color === color ? 'border-theme-text-primary ring-2 ring-offset-2' : 'border-transparent'}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
                 </div>
               </div>
               <div>

@@ -43,6 +43,7 @@ class TaskPerformed(BaseModel):
     task: str
     description: Optional[str] = None
     comment: Optional[str] = None  # Officer comment on this specific task
+    equipment_check_id: Optional[str] = None
 
 
 class RequirementProgressEntry(BaseModel):
@@ -194,6 +195,8 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     officer_id: str
     trainee_name: Optional[str] = None
     officer_name: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    shift_start_time: Optional[datetime] = None
 
     hours_on_shift: float
     calls_responded: int

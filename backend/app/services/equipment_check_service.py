@@ -644,7 +644,7 @@ class EquipmentCheckService:
 
         total = len(items_data)
         completed = sum(1 for i in items_data if i.get("status") != "not_checked")
-        failed = sum(1 for i in items_data if i.get("status") == "fail")
+        failed = sum(1 for i in items_data if i.get("status") in ("fail", "out_of_service"))
 
         if completed < total:
             overall_status = "incomplete"
@@ -1180,7 +1180,7 @@ class EquipmentCheckService:
 
         total = len(all_items)
         completed = sum(1 for i in all_items if i.status != "not_checked")
-        failed = sum(1 for i in all_items if i.status == "fail")
+        failed = sum(1 for i in all_items if i.status in ("fail", "out_of_service"))
 
         if completed < total:
             check.overall_status = "incomplete"
@@ -3285,7 +3285,7 @@ class EquipmentCheckService:
             )
             .where(
                 ShiftEquipmentCheck.organization_id == organization_id,
-                ShiftEquipmentCheckItem.status == "fail",
+                ShiftEquipmentCheckItem.status.in_(["fail", "out_of_service"]),
                 ShiftEquipmentCheck.checked_at >= date_from_start,
                 ShiftEquipmentCheck.checked_at <= date_to_end,
             )
@@ -3466,7 +3466,7 @@ class EquipmentCheckService:
             period_key = check.checked_at.strftime(fmt)
             if item.status == "pass":
                 buckets[period_key]["pass_count"] += 1
-            elif item.status == "fail":
+            elif item.status in ("fail", "out_of_service"):
                 buckets[period_key]["fail_count"] += 1
             else:
                 buckets[period_key]["not_checked_count"] += 1

@@ -17,8 +17,11 @@ Covers:
 import json
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -970,6 +973,129 @@ class TestShiftDataPreview:
         assert await svc.validate_shift_ownership(d["shift_id"], uuid.UUID(d["org_id"]))
         assert not await svc.validate_shift_ownership(d["shift_id"], uuid.uuid4())
         assert not await svc.validate_shift_ownership(_uid(), uuid.UUID(d["org_id"]))
+
+
+class TestEquipmentCheckTrainingLink:
+    async def test_trainee_checks_become_auditable_report_tasks(self):
+        check = SimpleNamespace(
+            id="check-1",
+            check_timing="start_of_shift",
+            overall_status="pass",
+        )
+        result = MagicMock()
+        result.all.return_value = [(check, "Engine readiness")]
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        tasks = await ShiftCompletionService(
+            db
+        )._get_trainee_equipment_checks_from_shift("shift-1", "trainee-1")
+
+        assert tasks == [
+            {
+                "task": "Engine readiness",
+                "description": "Start of shift equipment check — Pass",
+                "equipment_check_id": "check-1",
+            }
+        ]
+
+
+class TestTraineeReportReleaseBoundary:
+    async def test_trainee_report_query_can_require_officer_release(self):
+        scalar_result = MagicMock()
+        scalar_result.all.return_value = []
+        result = MagicMock()
+        result.scalars.return_value = scalar_result
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        await ShiftCompletionService(db).get_reports_for_trainee(
+            organization_id=uuid.uuid4(),
+            trainee_id="trainee-1",
+            released_only=True,
+        )
+
+        query = db.execute.await_args.args[0]
+        assert "approved" in query.compile().params.values()
+
+    async def test_trainee_cannot_fetch_unreleased_report_by_id(self, monkeypatch):
+        from app.api.v1.endpoints import shift_completion as endpoint
+
+        report = SimpleNamespace(
+            id="report-1",
+            trainee_id="trainee-1",
+            officer_id="officer-1",
+            review_status="draft",
+        )
+
+        class FakeService:
+            def __init__(self, _db):
+                pass
+
+            async def get_report(self, _report_id, _organization_id):
+                return report
+
+        monkeypatch.setattr(endpoint, "ShiftCompletionService", FakeService)
+        user = SimpleNamespace(
+            id="trainee-1",
+            organization_id=uuid.uuid4(),
+            positions=[],
+            rank=None,
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await endpoint.get_shift_report("report-1", MagicMock(), user)
+
+        assert exc.value.status_code == 404
+
+    async def test_unreleased_report_cannot_be_acknowledged(self):
+        report = SimpleNamespace(
+            trainee_id="trainee-1",
+            organization_id=str(uuid.uuid4()),
+            review_status="pending_review",
+        )
+        db = MagicMock()
+        service = ShiftCompletionService(db)
+        service.get_report = AsyncMock(return_value=report)
+
+        acknowledged = await service.acknowledge_report(
+            "report-1", "trainee-1", uuid.UUID(report.organization_id)
+        )
+
+        assert acknowledged is None
+        db.commit.assert_not_called()
+
+
+class TestTrainingCreditReleaseBoundary:
+    async def test_pending_review_does_not_credit_until_approved(self):
+        org_id = uuid.uuid4()
+        report = SimpleNamespace(
+            organization_id=str(org_id),
+            officer_id="officer-1",
+            review_status="draft",
+        )
+        db = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        service = ShiftCompletionService(db)
+        service.get_report = AsyncMock(return_value=report)
+        service._trigger_deferred_progress = AsyncMock()
+
+        await service.update_report(
+            "report-1",
+            org_id,
+            "officer-1",
+            {"review_status": "pending_review"},
+        )
+        service._trigger_deferred_progress.assert_not_awaited()
+
+        await service.update_report(
+            "report-1",
+            org_id,
+            "officer-1",
+            {"review_status": "approved"},
+        )
+        service._trigger_deferred_progress.assert_awaited_once_with(report, "officer-1")
 
 
 # ── Auto-population vs. the officer's own entry ──────────────────────

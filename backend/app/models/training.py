@@ -1981,6 +1981,20 @@ class ShiftCompletionReport(Base):
     trainee = relationship("User", foreign_keys=[trainee_id], lazy="joined")
     officer = relationship("User", foreign_keys=[officer_id], lazy="joined")
     reviewer = relationship("User", foreign_keys=[reviewed_by], lazy="joined")
+    shift = relationship("Shift", foreign_keys=[shift_id], lazy="joined")
+
+    @property
+    def apparatus_name(self):
+        if not self.shift:
+            return None
+        apparatus = self.shift.apparatus
+        if not apparatus:
+            return None
+        return apparatus.name or apparatus.unit_number
+
+    @property
+    def shift_start_time(self):
+        return self.shift.start_time if self.shift else None
 
     __table_args__ = (
         Index("idx_shift_report_trainee", "trainee_id", "shift_date"),
@@ -2948,6 +2962,16 @@ class Shift(Base):
     )
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # `apparatus_id` predates its database foreign key, but reports need the
+    # human-readable unit identity without issuing one request per row.
+    apparatus = relationship(
+        "Apparatus",
+        primaryjoin="foreign(Shift.apparatus_id) == Apparatus.id",
+        viewonly=True,
+        lazy="joined",
+        uselist=False,
     )
 
     __table_args__ = (Index("idx_shift_date", "organization_id", "shift_date"),)

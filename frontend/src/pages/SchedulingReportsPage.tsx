@@ -51,6 +51,13 @@ interface DateRangeFilterProps {
   extraControls?: React.ReactNode;
 }
 
+const localDateValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   startDate,
   endDate,
@@ -65,8 +72,32 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
     onSearch();
   };
 
+  const setPreset = (preset: 'month' | '30-days' | 'year') => {
+    const today = new Date();
+    const start = new Date(today);
+    if (preset === 'month') start.setDate(1);
+    if (preset === '30-days') start.setDate(today.getDate() - 29);
+    if (preset === 'year') {
+      start.setMonth(0);
+      start.setDate(1);
+    }
+    onStartChange(localDateValue(start));
+    onEndChange(localDateValue(today));
+  };
+
   return (
     <form onSubmit={handleSubmit} className="card-secondary mb-6 flex flex-wrap items-end gap-3 p-4">
+      <div className="flex w-full flex-wrap gap-2" aria-label="Date range presets">
+        <button type="button" className="btn-secondary text-xs" onClick={() => setPreset('month')}>
+          This month
+        </button>
+        <button type="button" className="btn-secondary text-xs" onClick={() => setPreset('30-days')}>
+          Last 30 days
+        </button>
+        <button type="button" className="btn-secondary text-xs" onClick={() => setPreset('year')}>
+          This year
+        </button>
+      </div>
       <div>
         <label htmlFor="report-start" className="text-theme-text-secondary mb-1 block text-sm font-medium">
           Start Date
@@ -142,8 +173,9 @@ export const SchedulingReportsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabView>('member-hours');
 
   // Date ranges
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const now = new Date();
+  const [startDate, setStartDate] = useState(() => localDateValue(new Date(now.getFullYear(), now.getMonth(), 1)));
+  const [endDate, setEndDate] = useState(() => localDateValue(now));
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 

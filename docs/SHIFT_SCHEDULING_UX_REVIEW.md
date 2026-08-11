@@ -19,8 +19,10 @@ Severity is about consequence, not polish:
 | **Invites mistakes**  | The screen is readable, but the obvious reading is the wrong one. |
 | **Slows people down** | Clear enough once learned, more work than it needs to be.         |
 
-Counts: **19** invites mistakes, **19** slows people down, plus **9** code
-faults found and fixed (below).
+Original review counts: **19** invites mistakes and **19** slows people down,
+plus **9** code faults found and fixed (below). After the fixes marked in this
+document, **All 24 remaining workflow findings are now implemented.** The review remains
+as a regression checklist and records the reasoning behind each change.
 
 ## Corrections to the first pass
 
@@ -128,22 +130,22 @@ scroll container, so the last option ended mid-sentence and Save sat below the
 fold with no scrollbar or shadow to say the form continued. Reachable, but only
 if you guessed. The header and footer are pinned now and only the fields scroll.
 
-**Slows people down — three fields for two facts.** Start time, end time _and_
+**Slows people down — three fields for two facts.** ✅ **Fixed.** Start time, end time _and_
 duration, with duration pre-filled `12` regardless, so the two can disagree.
 Start and end are six blank dropdowns. Cards behind the dialog show 24-hour
 times while the form uses AM/PM.
 
-**Slows people down — colour is picked by typing a hex code** (`#dc2626`). A raw
+**Slows people down — colour is picked by typing a hex code** ✅ **Fixed.** (`#dc2626`). A raw
 hex field is developer-facing; offer six or eight named swatches. The default is
 also red, which the calendar itself uses for a shift in trouble.
 
-**Slows people down — officer tools sit below the whole calendar.** Seven cards
+**Slows people down — officer tools sit below the whole calendar.** ✅ **Fixed.** Seven cards
 under an "ADMINISTRATION" heading, reached only after scrolling a full month
 grid; on a phone each carries an external-link arrow though they are ordinary
 pages, and the Supply badge shows an orange `1` with nothing to say what it
 counts.
 
-**Slows people down — patterns open collapsed** with nothing to read or do, and
+**Slows people down — patterns open collapsed** ✅ **Fixed.** with nothing to read or do, and
 the page prints its title twice.
 
 ## 02 · Assignment
@@ -162,35 +164,35 @@ at the project's 44px touch minimum (they were 40px).
 **Invites mistakes — the bulk header contradicts its rows.** ✅ **Fixed.** "Select all 4
 pending" above four rows badged **Assigned**.
 
-**Invites mistakes — "0/2 present" on a shift eight days out.** Nobody can be
+**Invites mistakes — "0/2 present" on a shift eight days out.** ✅ **Fixed.** Nobody can be
 present for a future shift, so the zero reads as an alarm; and the two
 denominators differ (`0/2` present, `2/3` staffed), which makes the pair look
 self-contradictory. Show attendance only once the shift has started.
 
-**Invites mistakes — an unlabelled delete in the drawer header**, one of four
+**Invites mistakes — an unlabelled delete in the drawer header** ✅ **Fixed.**, one of four
 bare icons, two of them destructive.
 
-**Invites mistakes — an uncaptioned hours chip** beside each crew member
+**Invites mistakes — an uncaptioned hours chip** ✅ **Fixed.** beside each crew member
 (`12h`, `11.9h`). Scheduled, credited or worked — the three differ in practice.
 
 **Slows people down — My Shifts never says which truck.** ✅ **Fixed.** Date, time and
 "Position: Officer", but no apparatus or station: the one fact that tells you
 where to go. Every other view shows it.
 
-**Slows people down — Assign opens a form you cannot see.** The form renders at
+**Slows people down — Assign opens a form you cannot see.** ✅ **Fixed.** The form renders at
 the bottom of the drawer without scrolling to it, so on a 900px window the
 button appears to do almost nothing.
 
-**Slows people down — "Assign" and "Sign Up" side by side**, with the
+**Slows people down — "Assign" and "Sign Up" side by side** ✅ **Fixed.**, with the
 difference (someone else vs. me) never stated.
 
-**Slows people down — internal phrasing on screen:** "Positions from B-5 +
+**Slows people down — internal phrasing on screen:** ✅ **Fixed.** "Positions from B-5 +
 shift customizations" describes how the list is computed.
 
 ## 03 · Start of shift
 
 **Invites mistakes — a card reading "End" above a button reading "Start
-Check".** The badge is _when_, the button is _what you do now_, and together
+Check".** ✅ **Fixed.** The badge is _when_, the button is _what you do now_, and together
 they contradict. The filter chips "All / Start / End" repeat it. Spell the
 timing out and rename the button "Open checklist".
 
@@ -202,11 +204,11 @@ against the set the template builder offers, an unrecognised one renders no
 caption at all rather than an internal token, and the seeder was corrected. A
 department using the builder always saw the proper label ("Present").
 
-**Invites mistakes — the checklist forgets its shift.** Once open, the only
+**Invites mistakes — the checklist forgets its shift.** ✅ **Fixed.** Once open, the only
 heading is the template name; apparatus, date and shift are gone, so two trucks
 running the same template produce identical screens.
 
-**Invites mistakes — Pass or Fail, nothing between.** No "not applicable", no
+**Invites mistakes — Pass or Fail, nothing between.** ✅ **Fixed.** No "not applicable", no
 "out of service". A tool legitimately off the truck must be recorded as a
 failure or buried in a note, and the compliance reports then count it as a
 fault.
@@ -220,28 +222,28 @@ The product already has the concept — Scheduling Settings carries "Checklist
 Timing — start/end of shift windows" — so bound check-in the same way and say on
 screen why the button is off.
 
-**Slows people down — checking in leads nowhere.** After a successful check-in
+**Slows people down — checking in leads nowhere.** ✅ **Fixed.** After a successful check-in
 nothing points at the start-of-shift checklist, which lives on another tab of
 another page.
 
-**Slows people down — REQUIRED on all nine items**, in red, the same red used
+**Slows people down — REQUIRED on all nine items** ✅ **Fixed.**, in red, the same red used
 for a failed item. Mark the optional ones instead.
 
-**Slows people down — checklists days away look as due as today's.** Six
+**Slows people down — checklists days away look as due as today's.** ✅ **Fixed.** Six
 checklists five to nine days out, active buttons, no ordering by urgency,
 nothing marking what is due on this shift.
 
-**Slows people down — no progress or submit within reach.** Progress (`0/9`) is
+**Slows people down — no progress or submit within reach.** ✅ **Fixed.** Progress (`0/9`) is
 at the top, Submit at the very bottom, compartment headings scroll away. The
 demo checklist has nine items; a real engine inventory runs to dozens, so a
 member scrolls to the end to find out they missed one in the cab. Pin progress
 and Submit; make compartment headings sticky.
 
-**Slows people down — two buttons a letter apart:** "Start a Check" (page
+**Slows people down — two buttons a letter apart:** ✅ **Fixed.** "Start a Check" (page
 header, unscheduled) and "Start Check" (card, assigned).
 
 **Slows people down — the not-found message blames a QR code that was never
-used.** Opening the page without a shift shows "This QR code may be invalid or
+used.** ✅ **Fixed.** Opening the page without a shift shows "This QR code may be invalid or
 you may not have access to this shift" — two guesses, neither actionable.
 
 ## 04 · End of shift
@@ -253,19 +255,19 @@ understaffed — 3 of 4 positions filled." It tells an officer what they are
 signing off with no jargon at all. Everything below is wording on top of a
 screen that already works.
 
-**Invites mistakes — nothing says which rows block the close-out.** The amber
+**Invites mistakes — nothing says which rows block the close-out.** ✅ **Fixed.** The amber
 "Ran understaffed" row looks like a barrier but is not; the shift finalises
 anyway. Green and amber are equally passable, which trains officers to ignore
 both. Separate "must fix first" from "noted on the record".
 
 **Invites mistakes — the close-out checklist is indistinguishable from the
-start-of-shift one.** Same layout, same buttons, same "Submit Report"; only the
+start-of-shift one.** ✅ **Fixed.** Same layout, same buttons, same "Submit Report"; only the
 template name differs.
 
 **Slows people down — "Finalize" appears twice at once** ✅ **Fixed.** (drawer header and
 panel) and is the least plain word on the screen. One button, "Close out shift".
 
-**Slows people down — machine plurals and a raw date.** ✅ **Partly fixed** (plurals; the stale-handoff date remains). "1 equipment check(s)
+**Slows people down — machine plurals and a raw date.** ✅ **Fixed** (plurals; the stale-handoff date remains). "1 equipment check(s)
 completed", "1 call(s) recorded", and a handoff banner headed "Handoff from
 previous shift (2026-08-01)" — an ISO date two lines under "Wednesday,
 August 12, 2026", eleven days stale with nothing marking it as old.
@@ -294,7 +296,7 @@ is inferred from a gap.
 themselves.** ✅ **Fixed.** One screen shows `6h`, `12h`, `11.87h`, `11.73h`, and the same
 record reads `11.9` in the summary table and `11.87h` in the row below it.
 
-**Slows people down — Scheduling Reports opens blank.** Five report types, all
+**Slows people down — Scheduling Reports opens blank.** ✅ **Fixed.** Five report types, all
 starting on "Select a Date Range" with two empty `mm/dd/yyyy` boxes: no default
 range and no presets, so every visit begins with typing. Default to this month,
 add "Last 30 days / This month / This year", and use the app's own
@@ -302,7 +304,7 @@ add "Last 30 days / This month / This year", and use the app's own
 review called the red Generate button a danger signal — see Corrections: red is
 the app's primary colour.)
 
-**Slows people down — reports do not say which shift they cover** — person and
+**Slows people down — reports do not say which shift they cover** ✅ **Fixed.** — person and
 date only, so two reports from one day are told apart by author alone.
 
 ---
@@ -353,12 +355,128 @@ Also: the nav says **Shift Scheduling** while the page says **Scheduling &
 Shifts**; and check / checklist / report are used interchangeably for three
 different things.
 
-## Where to start
+## Implemented delivery order
 
-1. **Label the four icons in My Shifts** — highest stakes, smallest change.
-2. **Bound check-in to the shift** — the only data-integrity finding.
-3. **Make the calendar say what it means**, using the wording the phone layout
-   already uses, plus a two-line key.
-4. **Fix the clipped template dialog** — a form whose Save button cannot be seen.
-5. **Retire "presence", "Trainee" and "Finalize"**, and publish the star-rating
-   scale next to the stars.
+The original highest-risk items (ambiguous My Shifts actions, unrestricted late
+check-in, calendar codes, the template dialog, and unclear report terminology)
+are fixed. The table below records the implementation order used for the remaining work.
+
+| Priority | Outcome                                                      | Changes that produce it                                                                                                                                                                                | Why now                                                                                                                                                |
+| -------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **P0**   | A member records the right checklist against the right shift | Carry apparatus, shift date and start/end timing into the checklist; rename the action to **Open checklist**; add **Not applicable** and **Out of service** outcomes                                   | The current flow can attach an apparently valid Pass/Fail record to an indistinguishable checklist and forces legitimate exceptions to become failures |
+| **P0**   | Assignment actions cannot silently surprise a crew           | Hide future attendance; label destructive drawer actions; caption hours as scheduled or worked; scroll the newly opened assignment form into view; explain **Assign member** versus **Sign myself up** | These actions directly change staffing, but the current screen mixes future attendance, ambiguous numbers and controls that appear to do nothing       |
+| **P1**   | Start-of-shift work becomes one continuous task              | After check-in, link directly to today's start checklist; sort today's checklists first; distinguish future items; pin checklist progress and submit; keep compartment headings visible                | Members currently cross tabs/pages and repeatedly scroll long apparatus checks to discover omissions                                                   |
+| **P1**   | Officers know what must be resolved before close-out         | Split finalisation conditions into **Must fix** and **Recorded warning**; visibly distinguish start and end checklists; mark stale pass-down notes with a friendly date and age                        | The strongest screen in the flow still makes passable warnings look like blockers and makes stale handoffs look current                                |
+| **P1**   | Reports answer common questions on arrival                   | Default the range to this month; add date presets; use the shared date-range control; identify the covered shift with time and apparatus                                                               | Every report visit currently starts with manual date entry, and same-day reports cannot be identified confidently                                      |
+| **P2**   | Shift creation has one source of truth                       | Derive duration from start/end time; replace six blank time dropdowns with the standard time input; use one time format; replace raw hex entry with named colour swatches                              | Removing redundant and developer-facing inputs prevents contradictory templates and speeds routine setup                                               |
+| **P2**   | Administration is discoverable without calendar scrolling    | Move officer tools into a persistent sub-navigation; remove external-link glyphs from internal routes; label badge counts; open Patterns with useful content and one page title                        | This is recurring navigation friction rather than a correctness risk, so it follows the shift lifecycle work                                           |
+
+### Delivered slices
+
+1. **Checklist identity and outcomes:** context header, start/end wording, new
+   outcomes, and report handling for those outcomes.
+2. **Assignment safety:** future-attendance suppression, explicit action labels,
+   hours captions, and focus/scroll management for the assignment form.
+3. **Guided shift lifecycle:** check-in → today's checklist → close-out, with
+   progress and blocking-state treatment carried between screens.
+4. **Reporting defaults:** date presets and shift identity in list, detail and
+   print views.
+5. **Creation and navigation polish:** derived duration, time controls, colour
+   swatches, administration navigation and Patterns empty state.
+
+Measure the first three slices with task completion rather than clicks alone:
+the percentage of members who complete check-in and the correct start checklist
+without leaving the flow, checklist exception rates by outcome, assignment-form
+abandonment, and close-out attempts blocked by an unresolved requirement.
+
+## Follow-up implementation review
+
+Implementing the workflow changes exposed six contracts that were easy to miss
+in a screen-only review:
+
+1. **Checklist outcomes are a data contract, not button copy.** Adding **Not
+   applicable** and **Out of service** required the request schema, client types,
+   aggregate status calculation, stored item value and history display to agree.
+   Not applicable completes an item without failing the check; out of service
+   completes the item and fails the overall check so it remains visible in
+   readiness and deficiency reporting.
+2. **Shift identity belongs on the report response.** The report list cannot
+   reliably distinguish two same-day shifts using the report row alone. The API
+   now exposes the linked apparatus and shift start time from its existing shift
+   relationship, rather than issuing one client request per report or encoding
+   presentation text into the report record.
+3. **Derived duration needs an overnight rule.** Template duration is now
+   calculated from start and end. An end at or before the start is treated as
+   the following day, preserving 19:00–07:00 and 07:00–07:00 templates without
+   asking the creator to reconcile a third value.
+4. **Persistent does not have to mean fixed-position.** Administration is now a
+   compact, horizontally scrollable sub-navigation immediately after the main
+   scheduling tabs. It remains discoverable before the calendar without taking
+   permanent viewport space on a phone; badge text says what is being counted.
+5. **A trainee performing the check needs training provenance.** Shift
+   finalisation already creates a draft training report for active enrollees and
+   explicit training-slot assignments, but the report previously contained no
+   evidence that the trainee performed an equipment check. Linked, completed
+   checks are now copied into the draft's tasks with the check id as provenance.
+   The operational checklist remains the source of truth; the training report
+   records what the evaluator should review and approve.
+6. **Training provenance is not trainee-visible until release.** Draft,
+   pending-review and flagged reports remain officer-only through list, detail
+   and aggregate-stat endpoints. This boundary applies even when the optional
+   second-review workflow is disabled: that setting allows the filing officer
+   to approve directly; it does not publish drafts. Trainees receive only an
+   approved report, after configured field-level visibility is applied.
+7. **Provisional review must not award training credit.** Submitting a draft for
+   second review no longer advances shift, hour, call or skill requirements.
+   Credit is applied only when the report becomes approved, using the existing
+   source-id deduplication so a retry cannot award it twice. Likewise, a trainee
+   cannot acknowledge a draft, pending-review or flagged report by calling the
+   acknowledgement endpoint directly.
+
+### Next controls for review quality
+
+The confidentiality and credit boundaries are now explicit. The next gains are
+process controls rather than more report fields:
+
+1. **Give every draft one accountable reviewer.** Notify the assignment's
+   configured evaluator—not only the officer who finalized the shift—and show an
+   **Assigned to me** queue. Fall back to the shift officer only when no evaluator
+   was selected.
+2. **Add review service levels.** Set department-configurable targets for draft
+   completion and second review (for example, 48 hours each), remind the assigned
+   reviewer before the deadline, and escalate overdue reports to training
+   managers. The existing scheduled job escalates trainee acknowledgement only;
+   it does not stop reports from waiting indefinitely on an officer.
+3. **Require evidence before release.** For training assignments, block approval
+   until hours are reconciled, required rubric sections are complete, linked
+   equipment checks still exist, and each failed/out-of-service result has a
+   disposition. Show these as a plain-language release checklist.
+4. **Separate observation from approval.** Preserve the filing evaluator's
+   evidence, reviewer changes and redactions as distinct history entries. For
+   departments using second review, prevent the filing evaluator from acting as
+   the second reviewer unless an explicit override is audited.
+5. **Measure the review funnel.** Report median time from shift close to draft,
+   draft to submission, submission to approval and approval to trainee
+   acknowledgement; also show overdue counts, flag/rework rates and reports
+   released without equipment-check evidence.
+
+### Regression checks for future review
+
+- Create same-day, overnight and 24-hour templates and verify their derived
+  durations at the API boundary.
+- Submit each of Pass, Fail, Not applicable and Out of service, then verify the
+  item history, overall result, readiness state and aggregate reports agree.
+- Check in from the QR landing page and reach the highlighted checklist without
+  navigating through another scheduling tab.
+- Have a training-slot member complete a shift check, close the shift, and
+  verify the evaluator's draft report names the check and retains its source id.
+- As that trainee, verify the draft is absent from report lists and stats and
+  returns not found by id; approve it as an officer, then verify it appears with
+  the configured field-level visibility.
+- Submit a draft into second review and verify no training progress changes;
+  approve it and verify credit is applied once, then retry approval and verify
+  it remains unchanged.
+- Open two reports for the same member and date on different apparatus and
+  verify they can be distinguished while collapsed and in print.
+- Repeat assignment and checklist tasks at phone width with keyboard focus and
+  screen-reader names as well as visible labels.

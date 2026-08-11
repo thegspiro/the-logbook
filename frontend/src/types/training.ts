@@ -1615,6 +1615,7 @@ export interface TaskPerformed {
   task: string;
   description?: string | undefined;
   comment?: string;
+  equipment_check_id?: string;
 }
 
 export interface ShiftCompletionReportCreate {
@@ -1643,6 +1644,8 @@ export interface ShiftCompletionReport {
   officer_id: string;
   trainee_name?: string;
   officer_name?: string;
+  apparatus_name?: string;
+  shift_start_time?: string;
   hours_on_shift: number;
   calls_responded: number;
   call_types?: string[];

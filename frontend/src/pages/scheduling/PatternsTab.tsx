@@ -155,6 +155,7 @@ export const PatternsTab: React.FC = () => {
       ]);
       setPatterns(patternsData);
       setTemplates(templatesData);
+      setExpandedId((current) => current ?? patternsData[0]?.id ?? null);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load patterns'));
     } finally {
@@ -377,7 +378,6 @@ export const PatternsTab: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">Shift Patterns</h3>
           <p className="text-theme-text-muted text-sm">Create recurring patterns and generate shifts in bulk.</p>
         </div>
         <div className="flex items-center gap-2">

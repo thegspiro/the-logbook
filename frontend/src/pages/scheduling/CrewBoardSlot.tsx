@@ -184,7 +184,7 @@ const AttendanceBadge: React.FC<{ record: ShiftAttendanceRecord | undefined; tz:
         className="rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-400"
         title={`In: ${formatTime(record.checked_in_at, tz)} Out: ${formatTime(record.checked_out_at, tz)}`}
       >
-        {hrs}h
+        {hrs}h worked
       </span>
     );
   }

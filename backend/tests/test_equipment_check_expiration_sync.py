@@ -149,6 +149,16 @@ class TestComputeCheckStatus:
         )
         assert (failed, overall) == (1, "fail")
 
+    def test_not_applicable_is_complete_without_failing(self, service):
+        items = [{"template_item_id": "ti-1", "status": "not_applicable"}]
+        total, completed, failed, overall = service._compute_check_status(items)
+        assert (total, completed, failed, overall) == (1, 1, 0, "pass")
+
+    def test_out_of_service_is_complete_and_fails_check(self, service):
+        items = [{"template_item_id": "ti-1", "status": "out_of_service"}]
+        total, completed, failed, overall = service._compute_check_status(items)
+        assert (total, completed, failed, overall) == (1, 1, 1, "fail")
+
 
 class TestApplyFoundValuesToTemplate:
     def test_expiration_written_back_to_template(self, service):
