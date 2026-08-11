@@ -25,19 +25,37 @@ earlier** and remain stale.
 
 ## What re-capturing exposed
 
-Six defects, none of which the harness reported — it listed **26/26 captured,
-0 flagged** for a batch containing two images showing the opposite of their
-captions. Its empty-state check can tell that a page rendered, not that it
-rendered the thing the caption promises.
+Eight defects, plus two in the harness itself. None were reported by the
+capture run: it listed **26/26 captured, 0 flagged** for a batch containing two
+images showing the opposite of their captions. Its empty-state check can tell
+that a page rendered, not that it rendered the thing the caption promises.
 
-| Defect                                                                                                                                           | Found by                                           | Fix                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Platoon Management captioned "platoon columns and their members", showing a "platoon scheduling is turned off" banner over one Unassigned column | Opening the image                                  | Seeder enables platoons and deals the roster A/B/C                                                                                                                       |
-| Scheduling Settings showed six sections against documentation describing seven                                                                   | Same — Platoons is hidden while the feature is off | Same fix                                                                                                                                                                 |
-| `03-14` captioned "compliance report", showing an empty date picker                                                                              | Opening the image                                  | `prepare` step drives the Shift Compliance tab                                                                                                                           |
-| `09-10`, `09-11`, `09-12` timed out on an empty validation queue                                                                                 | Capture failure, then tracing it to the data       | Peer examiner was a **lieutenant**, whose rank grants `training.manage`, so their submission self-validated. Switched to a firefighter; the seeder now asserts it        |
-| `02-21` and `02-41` were **byte-identical**, both shooting the default tab under two different captions                                          | Hashing the whole image set                        | Both routes now carry `?tab=`                                                                                                                                            |
-| Expiring Certifications permanently empty                                                                                                        | Fixing the route above                             | The seeder's own comment promised near-future expiries; its arithmetic put the earliest at **TODAY + 233 days**, so none of the 66 records could enter the 90-day window |
+| Defect                                                                                                                                           | Found by                                                          | Fix                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Platoon Management captioned "platoon columns and their members", showing a "platoon scheduling is turned off" banner over one Unassigned column | Opening the image                                                 | Seeder enables platoons and deals the roster A/B/C                                                                                                                                                                                                             |
+| Scheduling Settings showed six sections against documentation describing seven                                                                   | Same — Platoons is hidden while the feature is off                | Same fix                                                                                                                                                                                                                                                       |
+| `03-14` captioned "compliance report", showing an empty date picker                                                                              | Opening the image                                                 | `prepare` step drives the Shift Compliance tab                                                                                                                                                                                                                 |
+| `09-10`, `09-11`, `09-12` timed out on an empty validation queue                                                                                 | Capture failure, then tracing it to the data                      | Peer examiner was a **lieutenant**, whose rank grants `training.manage`, so their submission self-validated. Switched to a firefighter; the seeder now asserts it                                                                                              |
+| `02-21` and `02-41` were **byte-identical**, both shooting the default tab under two different captions                                          | Hashing the whole image set                                       | Both routes now carry `?tab=`                                                                                                                                                                                                                                  |
+| `04-20` and `17-01` byte-identical to _other_ shots — hub routes defaulting to another tab                                                       | The same MD5 sweep, set aside at first as another guide's problem | Both carry `?tab=`. `17-01` needed a second fix: `/settings/account` is a `<Navigate>` with no query, so React Router dropped `?tab=` on the redirect and the shot stayed on the Account tab while the harness reported success. Uses the canonical `/account` |
+| Expiring Certifications permanently empty                                                                                                        | Fixing the route above                                            | The seeder's own comment promised near-future expiries; its arithmetic put the earliest at **TODAY + 233 days**, so none of the 66 records could enter the 90-day window                                                                                       |
+
+### Two defects in the harness
+
+Both surfaced by images, and both had been costing accuracy silently:
+
+- **A false positive held back a correct screenshot.** The empty-state check
+  scanned the whole page as one blob, so `17-01` was flagged on its own help
+  text — "These are optional — _nothing here_ is required for membership."
+  Prose, not an empty state. It now matches per line and only on lines short
+  enough to _be_ the message, which is what distinguishes a standalone
+  "No Integrations Yet" from the same words mid-sentence.
+- **A false negative let an empty page through.** The pattern required the
+  phrase to end in found/yet/scheduled/available/to show, so
+  "No certifications expiring within 90 days" scanned as populated — which is
+  exactly why the empty expiring-certs page reported `empty=False` and was
+  publish-eligible while showing nothing. Line scoping makes a whole-line
+  "No …" safe to match, so that gap is closed.
 
 ### Two duplicate pairs are legitimate
 
