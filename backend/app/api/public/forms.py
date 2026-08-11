@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_optional_current_user
+from app.api.public import responses as public_responses
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import (
@@ -141,6 +142,9 @@ async def get_public_form(
     response_model=PublicFormSubmissionResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(_rate_limit_submit)],
+    # 401 is route-level rather than router-level: the view routes cannot
+    # emit it, and over-declaring is its own form of wrong documentation.
+    responses=public_responses.FORM_AUTH,
 )
 async def submit_public_form(
     slug: str,
