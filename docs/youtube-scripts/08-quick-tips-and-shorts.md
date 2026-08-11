@@ -831,25 +831,218 @@ non-compliant]**
 
 ---
 
-## Proposed Shorts — not yet written (2026-08-11)
+## SHORT 8AA: Change Your Email Footer Once, Not Thirty-Five Times
 
-Five single-action pieces from the 2026-08-10 supply and email work. Each is one
-action, which is what this format is for. Full rationale in
-[SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md#08--quick-tips--shorts).
+**Length:** 45 seconds
+**Extracted From:** Script 7
+**Audience:** Secretaries, administrative officers
 
-| ID      | Title                                                | The one action                                                                                          |
-| ------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **8AA** | Change Your Email Footer Once, Not Thirty-Five Times | Communications → Email Templates → **Footers** → edit → save                                            |
-| **8AB** | You Used the Last One — Tell the Truck               | Scheduling → Equipment Checks → **Apparatus Inventory** → find the item → tap **−**                     |
-| **8AC** | Log a Whole Delivery in One Screen                   | Inventory → Manage Items → **Receive Stock** — four lines, one received date                            |
-| **8AD** | Why Your Reorder Alert Never Fired                   | On-hand comes from **in-date lots** for anything stocked that way, and expired stock counts as **zero** |
-| **8AE** | Three Boxes, Three Expiry Dates, One Bracket         | The lots sheet on a position — and why the date shown is the **soonest** aboard                         |
+---
 
-**8AD is the highest-value one here.** A consumable stocked purely through dated
-lots used to sit at zero ready units and never trip its reorder alert, because
-the alert read a `Quantity` field that nobody maintains for lot-tracked stock.
-Departments that have been quietly running out of things will recognise the
-symptom before the title card finishes.
+**[SCREEN: The bottom of a sent email — "This is an automated message from…",
+the contact line, the address]**
+
+> "Every notice your department sends ends with this block. And until recently,
+> it was copy-pasted into all **thirty-five** templates."
+
+**[SCREEN: Flick through three or four different templates, each showing the
+same footer text]**
+
+> "So changing one word in it was thirty-five edits. And if you'd already
+> customised a template by hand, your only way to pick up the new wording was
+> **Reset** — which throws away everything else you changed in it."
+
+**[SCREEN: Communications → Email Templates → the Footers tab]**
+
+> "It's a library now. Edit it once, here."
+
+**[SCREEN: The three seeded footers listed, Internal marked as default]**
+
+> "Three come set up, and they're different on purpose. **Internal** for
+> members — the 'do not reply' close. **Public** for everyone else, which
+> invites a reply and carries your mailing address. **Official notice** for
+> things going on the record."
+
+**[CALLOUT: "Don't tell a member of the public not to reply"]**
+
+> "That middle one matters. Somebody emails asking if you'll bring an engine to
+> their school's fair — they should not get a notice back saying do not reply.
+> Event requesters and applicants get the public footer automatically."
+
+**[SCREEN: Point to the "3 templates use this" count beside a footer]**
+
+> "And before you delete one, it tells you how many templates use it. If you
+> delete it anyway, those templates fall back to your default — nothing ever
+> ends up with no footer at all."
+
+---
+
+## SHORT 8AB: You Used the Last One — Tell the Truck
+
+**Length:** 40 seconds
+**Extracted From:** Script 6
+**Audience:** All members
+
+---
+
+**[SCREEN: A phone, 3am-ish lighting if you can stage it. A hand pulling the
+last item out of a compartment.]**
+
+> "Three in the morning. You use the last of something off the rig. What happens
+> to that fact?"
+
+**[BEAT]**
+
+> "Usually nothing. Maybe you tell someone. Mostly it waits for whoever does the
+> morning check — which is exactly the window where the truck goes out short."
+
+**[SCREEN: Scheduling → Equipment Checks → tap **Apparatus Inventory** in the
+header]**
+
+> "You don't need to start a whole equipment check. Apparatus Inventory is a
+> standing view of the truck. Open any time."
+
+**[SCREEN: Pick the rig. Compartments load. Tap minus twice on a position.]**
+
+> "Find it. Tap minus. Done."
+
+**[SCREEN: The count drops; the position flips to needing restock]**
+
+> "The count came down, and a restock report went to whoever handles supply —
+> with your name and the time on it."
+
+**[CALLOUT: "Any member can do this"]**
+
+> "No officer needed. That's deliberate. The person who used the last one is the
+> person who knows."
+
+---
+
+## SHORT 8AC: Log a Whole Delivery in One Screen
+
+**Length:** 40 seconds
+**Extracted From:** Script 7
+**Audience:** Quartermasters, supply officers
+
+---
+
+**[SCREEN: A box of supplies on a table beside a laptop]**
+
+> "The delivery's here. Six different items. How long does logging it take?"
+
+**[SCREEN: The old way — an item detail page, Add Lot, save, back, next item]**
+
+> "It used to be one page per item. Open the item, add the lot, save, go back,
+> next. Six items, six round trips — which is a large part of why the stock a
+> crew goes looking for often isn't there."
+
+**[SCREEN: Inventory → **Receive Stock**]**
+
+> "Receive Stock takes the whole delivery at once."
+
+**[SCREEN: Fill four lines — item, lot number, expiration, quantity]**
+
+> "One line per item: what it is, the lot number, the expiry date, how many.
+> Then **one** received date for the whole delivery, at the top."
+
+**[SCREEN: Submit; the lines land together]**
+
+**[CALLOUT: "All of it, or none of it"]**
+
+> "And if one line's wrong, nothing saves. That's on purpose — a half-logged
+> delivery is worse than a rejected one, because you can't tell which lines
+> landed, and re-entering it would double-count whatever did."
+
+---
+
+## SHORT 8AD: Why Your Reorder Alert Never Fired
+
+**Length:** 50 seconds
+**Extracted From:** Script 7
+**Audience:** Quartermasters, supply officers, chiefs
+
+---
+
+**[SCREEN: An empty supply shelf where a box should be]**
+
+> "If you've ever run out of something the system swore you had — this one's for
+> you."
+
+**[SCREEN: An inventory item's detail page. Point to the Quantity field reading
+12, then to the lots list showing 0 in date.]**
+
+> "Consumables are kept as dated **lots**. Boxes with expiry dates on them. But
+> the item also has a plain **Quantity** field, left over from how it was first
+> created."
+
+**[SCREEN: Point back and forth between the two numbers]**
+
+> "For anything stocked as lots, **that Quantity field is not maintained.**
+> Receiving a lot doesn't touch it. Putting stock on a truck doesn't touch it.
+> It's whatever number happened to be typed the day the item was created."
+
+**[SCREEN: The reorder alert configuration]**
+
+> "And the low-stock alert used to read that field. So a consumable stocked
+> entirely through lots could sit at **zero ready units and never trip its
+> alert** — while an item whose Quantity was never maintained tripped it every
+> single day."
+
+**[CALLOUT: "On hand = in-date lots"]**
+
+> "On hand now comes from your in-date lots, and the items grid labels it so you
+> can tell the two apart at a glance."
+
+**[SCREEN: An item whose lots have all expired, reading zero]**
+
+> "And expired stock counts as **zero**, not as stock. It's refused for going on
+> a truck anyway — counting it would hide exactly the shortage you most need to
+> order for."
+
+---
+
+## SHORT 8AE: Three Boxes, Three Expiry Dates, One Bracket
+
+**Length:** 45 seconds
+**Extracted From:** Script 6
+**Audience:** All members, EMS officers, supply officers
+
+---
+
+**[SCREEN: A drug bag open, three boxes of the same medication visible, dates
+clearly different]**
+
+> "One bracket. Three boxes. Three different expiry dates. Which one does your
+> record show?"
+
+**[BEAT]**
+
+> "It used to show whichever was restocked **last**. Which is the worst possible
+> answer — restock two of four and the new date got stamped over the two already
+> in there, hiding the older units behind it."
+
+**[SCREEN: Apparatus Inventory; tap a position showing a lots chip with two
+dates. The lots sheet opens.]**
+
+> "Now each one is recorded separately. Tap the position and you see them: lot
+> number, date, how many of each."
+
+**[SCREEN: Point to the position's headline date on the row behind the sheet]**
+
+> "And the date the position reports is the **soonest one aboard**. Which is the
+> only number that's any use — it's the one that tells you when the truck has a
+> problem."
+
+**[SCREEN: Correct one lot — change its count, lot number and date together]**
+
+> "Swapped a box out? Change the count, the lot number and the date in one go.
+> That's what stops the system confidently telling everyone a drug expires next
+> year when the box in the bag says next week."
+
+**[CALLOUT: "Oldest goes out first"]**
+
+> "And when you record using one, it comes off the soonest-expiring lot first —
+> which is the order you should be pulling from anyway."
 
 ---
 

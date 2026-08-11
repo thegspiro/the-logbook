@@ -3577,6 +3577,48 @@ export const SHOTS = [
     route: "/scheduling/equipment-check-reports",
   },
 
+  {
+    id: "03-57-apparatus-inventory",
+    doc: "03-scheduling.md",
+    line: 827,
+    anchor: "Screenshot of the Apparatus Inventory page on a phone with an engine",
+    alt: "Apparatus Inventory on a phone: compartments with per-position counts and the lots aboard",
+    // Shot from a crew member's session, not the chief's. The page opens on
+    // `equipment_check.submit` — the default member position — and that is the
+    // whole claim the feature makes about who records what they used.
+    auth: "member",
+    route: "/scheduling/apparatus-inventory",
+    viewport: "mobile",
+    prepare: async (page) => {
+      // The page opens on "Select an apparatus…", which is an empty state
+      // rather than the screen. M-3 is the rig `seed_supply_tracking` stocks.
+      const select = page.locator("#apparatus-select");
+      await select.waitFor({ timeout: 20_000 });
+      // By the option's own value rather than its label: the label is
+      // "M-3 — Medic 3", built from two fields, and matching it as a string
+      // breaks the moment either changes.
+      const value = await page
+        .locator("#apparatus-select option")
+        .filter({ hasText: "M-3" })
+        .first()
+        .getAttribute("value");
+      if (value) {
+        await select.selectOption(value);
+        await page.waitForTimeout(1_200);
+      }
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-59-supply-worklist",
+    doc: "03-scheduling.md",
+    line: 866,
+    anchor: "Screenshot of the Expiring on Apparatus page with the three summary pills",
+    alt: "Expiring on Apparatus: summary pills, the window selector, and rows in four different states",
+    route: "/scheduling/supply/expiring",
+    fullPage: true,
+  },
+
   // ── 04 Events & Meetings ────────────────────────────────────────────
   {
     id: "04-01-events-list",
@@ -3653,6 +3695,19 @@ export const SHOTS = [
       "Screenshot of the Categories tab showing a list of categories with item",
     alt: "Inventory categories page listing categories with item counts",
     route: "/inventory/admin/categories",
+  },
+
+  {
+    id: "05-53-items-grid-lot-stock",
+    doc: "05-inventory.md",
+    line: 662,
+    anchor: "Screenshot of the inventory items grid with two consumable rows visible",
+    alt: 'Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure',
+    // Needs `seed_supply_tracking` to have run: without dated lots on at least
+    // one item every row reports the pool figure and the two ledgers cannot be
+    // told apart, which is the entire subject of the caption.
+    route: "/inventory/items",
+    fullPage: false,
   },
 
   // ── 06 Apparatus & Facilities ───────────────────────────────────────
@@ -3919,6 +3974,19 @@ export const SHOTS = [
       "Screenshot of the Medical Screening page showing the Requirements tab with a",
     alt: "Medical Screening page showing the configured requirements",
     route: "/medical-screening",
+  },
+
+  {
+    id: "08-64-email-footers-tab",
+    doc: "08-admin-reports.md",
+    line: 1516,
+    anchor: "Screenshot of the Footers tab showing the three seeded footers",
+    alt: "The Footers tab: the seeded library, the default marked, and a per-footer usage count",
+    // `?tab=footers` only started working on 2026-08-11. The page held its tab
+    // in plain state before that, so this shot would have silently captured the
+    // Templates tab — the same way `02-21` and `02-41` came to be byte-identical.
+    route: "/communications/email-templates?tab=footers",
+    fullPage: false,
   },
 
   // ── 09 Skills Testing ───────────────────────────────────────────────
