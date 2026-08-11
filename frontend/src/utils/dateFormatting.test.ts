@@ -6,6 +6,8 @@ import {
   formatTime,
   formatForDateTimeInput,
   formatCalendarDate,
+  formatTimeOfDay,
+  hoursBetweenTimesOfDay,
   localToUTC,
   getTodayLocalDate,
   toLocalDateString,
@@ -443,5 +445,58 @@ describe('formatCalendarDate', () => {
 
   it('defaults to a readable medium date', () => {
     expect(formatCalendarDate('2026-08-10')).toBe('Aug 10, 2026');
+  });
+});
+
+describe('formatTimeOfDay', () => {
+  // A template's start is a time of day, not an instant: it must read the same
+  // in every timezone, so this one never goes near a Date.
+  it('re-spells a 24-hour time as AM/PM', () => {
+    expect(formatTimeOfDay('07:00')).toBe('7:00 AM');
+    expect(formatTimeOfDay('19:30')).toBe('7:30 PM');
+    expect(formatTimeOfDay('08:15')).toBe('8:15 AM');
+  });
+
+  it('names midnight and noon rather than printing 12:00 twice', () => {
+    expect(formatTimeOfDay('00:00')).toBe('Midnight');
+    expect(formatTimeOfDay('12:00')).toBe('Noon');
+    expect(formatTimeOfDay('00:30')).toBe('12:30 AM');
+    expect(formatTimeOfDay('12:30')).toBe('12:30 PM');
+  });
+
+  it('tolerates seconds and single-digit hours', () => {
+    expect(formatTimeOfDay('9:05')).toBe('9:05 AM');
+    expect(formatTimeOfDay('17:45:00')).toBe('5:45 PM');
+  });
+
+  it('returns the input unchanged when it is not a time', () => {
+    expect(formatTimeOfDay('')).toBe('');
+    expect(formatTimeOfDay(null)).toBe('');
+    expect(formatTimeOfDay('later')).toBe('later');
+    expect(formatTimeOfDay('99:00')).toBe('99:00');
+  });
+});
+
+describe('hoursBetweenTimesOfDay', () => {
+  it('measures a same-day span', () => {
+    expect(hoursBetweenTimesOfDay('08:00', '20:00')).toBe(12);
+    expect(hoursBetweenTimesOfDay('09:00', '13:30')).toBe(4.5);
+  });
+
+  // A night shift is twelve hours long, not minus twelve.
+  it('wraps past midnight', () => {
+    expect(hoursBetweenTimesOfDay('19:00', '07:00')).toBe(12);
+    expect(hoursBetweenTimesOfDay('22:30', '06:00')).toBe(7.5);
+  });
+
+  // How a 24/48 rotation is written: on at 07:00, off at 07:00.
+  it('reads an identical start and end as a full day', () => {
+    expect(hoursBetweenTimesOfDay('07:00', '07:00')).toBe(24);
+  });
+
+  it('returns null when either end is unparseable', () => {
+    expect(hoursBetweenTimesOfDay('08:00', '')).toBeNull();
+    expect(hoursBetweenTimesOfDay(null, '20:00')).toBeNull();
+    expect(hoursBetweenTimesOfDay('08:00', '24:00')).toBeNull();
   });
 });

@@ -29,7 +29,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftTemplateRecord } from '../../modules/scheduling/services/api';
 import type { ShiftPattern } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom } from '../../utils/dateFormatting';
+import { formatDateCustom, formatTimeOfDay } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import type { PresetPatternDef, CycleEntry } from './shiftPatternPresets';
 import { PlatoonSelector } from './PlatoonSelector';
@@ -633,7 +633,7 @@ export const PatternsTab: React.FC = () => {
                             <option value="">Select template...</option>
                             {activeTemplates.map((t) => (
                               <option key={t.id} value={t.id}>
-                                {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                                {t.name} ({formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
                               </option>
                             ))}
                           </select>
@@ -656,7 +656,7 @@ export const PatternsTab: React.FC = () => {
                             <option value="">Select template...</option>
                             {activeTemplates.map((t) => (
                               <option key={t.id} value={t.id}>
-                                {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                                {t.name} ({formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
                               </option>
                             ))}
                           </select>
@@ -681,7 +681,7 @@ export const PatternsTab: React.FC = () => {
                         <option value="">Select template...</option>
                         {activeTemplates.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                            {t.name} ({formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
                           </option>
                         ))}
                       </select>

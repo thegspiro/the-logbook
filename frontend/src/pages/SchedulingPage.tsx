@@ -26,7 +26,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { useTheme } from '../contexts/ThemeContext';
-import { formatDateCustom, localToUTC } from '../utils/dateFormatting';
+import { formatDateCustom, formatTimeOfDay, localToUTC } from '../utils/dateFormatting';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
 import type { ShiftRecord, ShiftTemplateRecord } from '../modules/scheduling';
 import { resolveTemplatePositions } from '../modules/scheduling/services/api';
@@ -1158,8 +1158,8 @@ const SchedulingPage: React.FC = () => {
                                   {standard.map((t) => (
                                     <option key={t.id} value={t.id}>
                                       {t.name}
-                                      {t.apparatus_type ? ` — ${t.apparatus_type}` : ''} ({t.start_time_of_day} -{' '}
-                                      {t.end_time_of_day})
+                                      {t.apparatus_type ? ` — ${t.apparatus_type}` : ''} (
+                                      {formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
                                     </option>
                                   ))}
                                 </optgroup>
@@ -1168,7 +1168,8 @@ const SchedulingPage: React.FC = () => {
                                 <optgroup label="Specialty Vehicle">
                                   {specialty.map((t) => (
                                     <option key={t.id} value={t.id}>
-                                      {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                                      {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
+                                      {formatTimeOfDay(t.end_time_of_day)})
                                     </option>
                                   ))}
                                 </optgroup>
@@ -1177,7 +1178,8 @@ const SchedulingPage: React.FC = () => {
                                 <optgroup label="Event / Special">
                                   {event.map((t) => (
                                     <option key={t.id} value={t.id}>
-                                      {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                                      {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
+                                      {formatTimeOfDay(t.end_time_of_day)})
                                     </option>
                                   ))}
                                 </optgroup>
@@ -1188,7 +1190,8 @@ const SchedulingPage: React.FC = () => {
                                 filtered.length > 0 &&
                                 filtered.map((t) => (
                                   <option key={t.id} value={t.id}>
-                                    {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                                    {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
+                                    {formatTimeOfDay(t.end_time_of_day)})
                                   </option>
                                 ))}
                               {filtered.length === 0 && (
@@ -1321,8 +1324,8 @@ const SchedulingPage: React.FC = () => {
                             const sameDay = shiftForm.startDate === shiftForm.endDate;
                             return (
                               <p className="text-theme-text-muted mt-1 text-xs">
-                                {tmpl.start_time_of_day} &rarr; {tmpl.end_time_of_day} (
-                                {sameDay ? 'same day' : 'next day'})
+                                {formatTimeOfDay(tmpl.start_time_of_day)} &rarr; {formatTimeOfDay(tmpl.end_time_of_day)}{' '}
+                                ({sameDay ? 'same day' : 'next day'})
                               </p>
                             );
                           })()}

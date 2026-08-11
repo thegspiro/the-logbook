@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { X, Truck, Users, Plus, Minus, Copy, PartyPopper } from 'lucide-react';
+import { X, Truck, Users, Plus, Minus, Copy, PartyPopper, Check } from 'lucide-react';
 import type { ApparatusOption } from '../services/api';
 import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
+import { formatTimeOfDay, hoursBetweenTimesOfDay } from '../../../utils/dateFormatting';
 import type { TemplateFormData, PositionEntry, ResourceUnit, EventType } from './shiftTemplateTypes';
 import {
   TEMPLATE_CATEGORIES,
@@ -14,6 +15,22 @@ import {
   getPositionOptions,
   emptyTemplateForm,
 } from './shiftTemplateTypes';
+
+/**
+ * A hex field is developer-facing, and the old default was the same red the
+ * calendar uses for a shift in trouble. Named swatches instead, and a default
+ * that does not compete with the status colours.
+ */
+const TEMPLATE_COLORS: { value: string; label: string }[] = [
+  { value: '#2563eb', label: 'Blue' },
+  { value: '#0d9488', label: 'Teal' },
+  { value: '#16a34a', label: 'Green' },
+  { value: '#d97706', label: 'Amber' },
+  { value: '#ea580c', label: 'Orange' },
+  { value: '#dc2626', label: 'Red' },
+  { value: '#7c3aed', label: 'Violet' },
+  { value: '#475569', label: 'Slate' },
+];
 
 interface TemplateFormModalProps {
   isOpen: boolean;
@@ -38,9 +55,28 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const positionOptions = getPositionOptions();
 
+  /**
+   * The shift's length is the distance between its start and its end — asking
+   * for it a third time only let the two disagree, and the field arrived
+   * pre-filled with 12 whatever the times said. Derived here, and shown back as
+   * a sentence. Only a shift longer than a single day needs the number typed,
+   * so that field stays hidden until it does.
+   */
+  const spanHours = useMemo(
+    () => hoursBetweenTimesOfDay(formData.start_time_of_day, formData.end_time_of_day),
+    [formData.start_time_of_day, formData.end_time_of_day]
+  );
+  const [runsMultipleDays, setRunsMultipleDays] = useState(false);
+
   useEffect(() => {
-    setFormData(initialData || emptyTemplateForm);
+    const next = initialData || emptyTemplateForm;
+    setFormData(next);
+    const span = hoursBetweenTimesOfDay(next.start_time_of_day, next.end_time_of_day);
+    const stated = parseFloat(next.duration_hours);
+    setRunsMultipleDays(!isNaN(stated) && span !== null && stated - span > 0.01);
   }, [initialData, isOpen]);
+
+  const effectiveDuration = runsMultipleDays ? parseFloat(formData.duration_hours) : (spanHours ?? NaN);
 
   const loadApparatusTypeDefaults = (type: string) => {
     if (!type) return;
@@ -93,6 +129,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
       resources: starter.resources.map((r) => ({ ...r, positions: [...r.positions] })),
       min_staffing: String(starter.resources.reduce((s, r) => s + r.positions.length * r.quantity, 0)),
     }));
+    setRunsMultipleDays(false);
   };
 
   const addResource = (typeValue: string) => {
@@ -132,6 +169,10 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isNaN(effectiveDuration) || effectiveDuration <= 0) {
+      toast.error('Set a start and end time so the shift has a length.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       const effectivePositions: PositionEntry[] =
@@ -144,7 +185,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
         name: formData.name,
         start_time_of_day: formData.start_time_of_day,
         end_time_of_day: formData.end_time_of_day,
-        duration_hours: parseFloat(formData.duration_hours),
+        duration_hours: effectiveDuration,
         min_staffing:
           formData.category === 'event' && totalResourceStaffing > 0
             ? totalResourceStaffing
@@ -546,77 +587,137 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               </>
             )}
 
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label htmlFor="template-start" className="form-label">
-                  Start Time <span aria-hidden="true">*</span>
-                </label>
-                <TimeQuarterHour
-                  id="template-start"
-                  value={formData.start_time_of_day}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, start_time_of_day: e.target.value }))}
-                  className="form-input"
-                  required
-                />
+            <div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="template-start" className="form-label">
+                    Starts at <span aria-hidden="true">*</span>
+                  </label>
+                  <TimeQuarterHour
+                    id="template-start"
+                    value={formData.start_time_of_day}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, start_time_of_day: e.target.value }))}
+                    className="form-input"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="template-end" className="form-label">
+                    Ends at <span aria-hidden="true">*</span>
+                  </label>
+                  <TimeQuarterHour
+                    id="template-end"
+                    value={formData.end_time_of_day}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, end_time_of_day: e.target.value }))}
+                    className="form-input"
+                    required
+                  />
+                </div>
               </div>
-              <div>
-                <label htmlFor="template-end" className="form-label">
-                  End Time <span aria-hidden="true">*</span>
-                </label>
-                <TimeQuarterHour
-                  id="template-end"
-                  value={formData.end_time_of_day}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, end_time_of_day: e.target.value }))}
-                  className="form-input"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="template-duration" className="form-label">
-                  Duration (hrs) <span aria-hidden="true">*</span>
-                </label>
+              <p className="text-theme-text-secondary mt-1.5 text-xs">
+                {spanHours === null ? (
+                  'Pick a start and an end time.'
+                ) : (
+                  <>
+                    {formatTimeOfDay(formData.start_time_of_day)} to {formatTimeOfDay(formData.end_time_of_day)} —{' '}
+                    <span className="font-medium">
+                      {runsMultipleDays && !isNaN(effectiveDuration) ? effectiveDuration : spanHours} hours
+                    </span>
+                    {spanHours >= 24
+                      ? ', a full day'
+                      : formData.end_time_of_day <= formData.start_time_of_day
+                        ? ', ending the next day'
+                        : ', the same day'}
+                    .
+                  </>
+                )}
+              </p>
+              <label className="text-theme-text-secondary mt-2 flex cursor-pointer items-center gap-2 text-xs">
                 <input
-                  id="template-duration"
-                  type="number"
-                  value={formData.duration_hours}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, duration_hours: e.target.value }))}
-                  className="form-input"
-                  min="0.5"
-                  step="0.5"
-                  required
+                  type="checkbox"
+                  checked={runsMultipleDays}
+                  onChange={(e) => {
+                    setRunsMultipleDays(e.target.checked);
+                    if (e.target.checked && spanHours !== null) {
+                      setFormData((prev) => ({ ...prev, duration_hours: String(spanHours) }));
+                    }
+                  }}
+                  className="form-checkbox"
                 />
-              </div>
+                This shift runs longer than the times above (a 48-hour tour, say)
+              </label>
+              {runsMultipleDays && (
+                <div className="mt-2">
+                  <label htmlFor="template-duration" className="form-label">
+                    Total hours on duty <span aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="template-duration"
+                    type="number"
+                    value={formData.duration_hours}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, duration_hours: e.target.value }))}
+                    className="form-input w-32"
+                    min="0.5"
+                    step="0.5"
+                    required
+                  />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label htmlFor="template-color" className="form-label">
-                  Color
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="template-color"
-                    type="color"
-                    value={formData.color}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))}
-                    className="border-theme-input-border h-10 w-10 cursor-pointer rounded-sm border"
-                  />
-                  <span className="text-theme-text-muted text-sm">{formData.color}</span>
+                <span className="form-label" id="template-color-label">
+                  Calendar colour
+                </span>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby="template-color-label">
+                  {TEMPLATE_COLORS.some((c) => c.value === formData.color) ? null : (
+                    <button
+                      type="button"
+                      aria-pressed={true}
+                      className="border-theme-text-primary mobile-touch-target rounded-md border-2"
+                      style={{ backgroundColor: formData.color }}
+                      title={`Current colour (${formData.color})`}
+                    >
+                      <Check className="h-4 w-4 text-white drop-shadow" aria-hidden="true" />
+                      <span className="sr-only">Current colour {formData.color}</span>
+                    </button>
+                  )}
+                  {TEMPLATE_COLORS.map((c) => {
+                    const isSelected = formData.color === c.value;
+                    return (
+                      <button
+                        key={c.value}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => setFormData((prev) => ({ ...prev, color: c.value }))}
+                        className={`mobile-touch-target rounded-md border-2 transition-transform hover:scale-105 ${
+                          isSelected ? 'border-theme-text-primary' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: c.value }}
+                        title={c.label}
+                      >
+                        {isSelected && <Check className="h-4 w-4 text-white drop-shadow" aria-hidden="true" />}
+                        <span className="sr-only">{c.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               <div>
                 <label htmlFor="template-min-staffing" className="form-label">
-                  Min Staffing <span aria-hidden="true">*</span>
+                  Smallest crew that can run <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id="template-min-staffing"
                   type="number"
                   value={formData.min_staffing}
                   onChange={(e) => setFormData((prev) => ({ ...prev, min_staffing: e.target.value }))}
-                  className="form-input"
+                  className="form-input w-28"
                   min="1"
                   required
                 />
+                <p className="text-theme-text-muted mt-1 text-xs">Below this, the shift is flagged as running short.</p>
               </div>
             </div>
 

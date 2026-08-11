@@ -334,6 +334,57 @@ export const formatCalendarDate = (
 };
 
 /**
+ * Format a wall-clock time of day ("HH:MM", 24-hour) for display.
+ *
+ * A template's start and end are times of *day*, not instants: "07:00" means
+ * seven in the morning wherever the shift runs, so — like `formatCalendarDate`
+ * — this must not go near a timezone conversion. It is a pure re-spelling of
+ * the string, matching the AM/PM the time pickers present.
+ *
+ * @param hhmm - "HH:MM" or "HH:MM:SS" (anything else is returned unchanged)
+ * @returns e.g. "7:00 AM", "7:30 PM", "Midnight", "Noon"
+ */
+export const formatTimeOfDay = (hhmm: string | null | undefined): string => {
+  const match = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
+  if (!match) return hhmm ?? '';
+  const hour24 = parseInt(match[1] ?? '', 10);
+  const minute = match[2] ?? '00';
+  if (isNaN(hour24) || hour24 > 23) return hhmm ?? '';
+  if (minute === '00' && hour24 === 0) return 'Midnight';
+  if (minute === '00' && hour24 === 12) return 'Noon';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${minute} ${hour24 < 12 ? 'AM' : 'PM'}`;
+};
+
+/**
+ * Hours spanned between two times of day, wrapping past midnight.
+ *
+ * "19:00" → "07:00" is a twelve-hour night shift, not minus twelve. A span of
+ * zero (identical start and end) is a full 24 hours, which is how 24/48
+ * schedules are written.
+ *
+ * @returns Hours as a number, or null if either time is unparseable
+ */
+export const hoursBetweenTimesOfDay = (
+  start: string | null | undefined,
+  end: string | null | undefined
+): number | null => {
+  const toMinutes = (value: string | null | undefined): number | null => {
+    const match = /^(\d{1,2}):(\d{2})/.exec(value ?? '');
+    if (!match) return null;
+    const h = parseInt(match[1] ?? '', 10);
+    const m = parseInt(match[2] ?? '', 10);
+    if (isNaN(h) || isNaN(m) || h > 23 || m > 59) return null;
+    return h * 60 + m;
+  };
+  const startMinutes = toMinutes(start);
+  const endMinutes = toMinutes(end);
+  if (startMinutes === null || endMinutes === null) return null;
+  const span = endMinutes - startMinutes;
+  return (span > 0 ? span : span + 1440) / 60;
+};
+
+/**
  * Format a number for display (currency, counts, measurements).
  * Use this instead of `value.toLocaleString()` to avoid ESLint
  * conflicts with the date-method restrictions.

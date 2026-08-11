@@ -377,7 +377,9 @@ export const emptyTemplateForm: TemplateFormData = {
   start_time_of_day: '08:00',
   end_time_of_day: '20:00',
   duration_hours: '12',
-  color: '#dc2626',
+  // Not red: the calendar uses red for a shift in trouble, so a template
+  // defaulting to it made every ordinary shift look like a problem.
+  color: '#2563eb',
   min_staffing: '1',
   is_default: false,
   open_to_all_members: false,

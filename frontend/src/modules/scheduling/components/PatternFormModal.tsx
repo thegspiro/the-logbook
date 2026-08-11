@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { formatTimeOfDay } from '../../../utils/dateFormatting';
 import { X } from 'lucide-react';
 import type { PatternFormData, ShiftTemplate } from './shiftTemplateTypes';
 import { PATTERN_TYPES, emptyPatternForm } from './shiftTemplateTypes';
@@ -145,7 +146,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
               <option value="">No template</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                  {t.name} ({formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
                 </option>
               ))}
             </select>
