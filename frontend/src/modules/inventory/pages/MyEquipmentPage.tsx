@@ -481,7 +481,10 @@ const MyEquipmentPage: React.FC = () => {
                 <div className="text-theme-text-muted flex flex-wrap gap-2 text-xs">
                   {a.serial_number && <span>SN: {a.serial_number}</span>}
                   {a.asset_tag && <span>Tag: {a.asset_tag}</span>}
-                  <span className={getConditionColor(a.condition)}>{a.condition}</span>
+                  {/* `capitalize` as on the items list: condition is stored
+                      lowercase, and without it a member's own kit reads "good"
+                      where the same value on every other screen reads "Good". */}
+                  <span className={`capitalize ${getConditionColor(a.condition)}`}>{a.condition}</span>
                   <span>Assigned {formatDate(a.assigned_date, tz)}</span>
                 </div>
               </div>

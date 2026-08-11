@@ -413,12 +413,15 @@ class TestShiftCRUD:
             org_id, restrict_checkin_to_assigned=True
         )
 
-        today = date.today()
+        # Anchor the shift to the current time: a fixed 07:00 start with no end
+        # collapses the check-in window to 07:00 UTC + 12h, so the window guard
+        # (checked before the assignment guard) rejects any run after 19:00 UTC.
+        now = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
         shift, _ = await svc.create_shift(
             uuid.UUID(org_id),
             {
-                "shift_date": today,
-                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+                "shift_date": now.date(),
+                "start_time": now,
             },
             uuid.UUID(user_id),
         )

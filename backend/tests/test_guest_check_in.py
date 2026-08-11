@@ -23,7 +23,14 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import CheckInWindowType, Event, EventExternalAttendee, EventType
+from app.schemas.event import GuestCheckInResponse
 from app.services.guest_check_in_service import GuestCheckInService
+
+
+def test_public_response_does_not_disclose_prospect_creation():
+    """Callers must not be able to use sign-in to probe pipeline membership."""
+    assert "prospect_created" not in GuestCheckInResponse.model_fields
+
 
 # ---- Factory helpers ----
 

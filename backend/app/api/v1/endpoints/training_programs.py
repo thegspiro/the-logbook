@@ -66,6 +66,49 @@ from app.services.training_program_service import TrainingProgramService
 
 router = APIRouter()
 
+
+def _can_view_officer_training_data(user: User) -> bool:
+    permissions = _collect_user_permissions(user)
+    return permission_matches("training.view_all", permissions) or permission_matches(
+        "training.manage", permissions
+    )
+
+
+def _member_requirement(requirement) -> TrainingRequirementEnhancedResponse:
+    """Return a requirement without checklist steps reserved for officers."""
+    response = TrainingRequirementEnhancedResponse.model_validate(requirement)
+    return response.model_copy(
+        update={
+            "checklist_items": [
+                item for item in (response.checklist_items or []) if item.member_visible
+            ]
+        }
+    )
+
+
+def _member_progress(progress) -> RequirementProgressResponse:
+    """Return progress without officer-only checklist identifiers."""
+    response = RequirementProgressResponse.model_validate(progress)
+    requirement = response.requirement
+    if requirement is None:
+        return response
+
+    visible_requirement = _member_requirement(requirement)
+    visible_ids = {
+        item.id for item in (visible_requirement.checklist_items or []) if item.id
+    }
+    notes = dict(response.progress_notes or {})
+    if isinstance(notes.get("checklist_done"), list):
+        notes["checklist_done"] = [
+            item_id
+            for item_id in notes["checklist_done"]
+            if str(item_id) in visible_ids
+        ]
+    return response.model_copy(
+        update={"requirement": visible_requirement, "progress_notes": notes or None}
+    )
+
+
 # Registry JSON files, resolved relative to the app package (…/backend/app/data)
 # so they load no matter what the process working directory is.
 _REGISTRY_DIR = Path(__file__).resolve().parents[3] / "data" / "registries"
@@ -141,7 +184,9 @@ async def get_training_requirements(
         position=position,
     )
 
-    return requirements
+    if _can_view_officer_training_data(current_user):
+        return requirements
+    return [_member_requirement(requirement) for requirement in requirements]
 
 
 # ==================== Registry Import Endpoints ====================
@@ -316,7 +361,9 @@ async def get_training_requirement(
             detail="Training requirement not found",
         )
 
-    return requirement
+    if _can_view_officer_training_data(current_user):
+        return requirement
+    return _member_requirement(requirement)
 
 
 @router.patch(
@@ -594,6 +641,10 @@ async def get_training_program(
         program_id, current_user.organization_id
     )
     requirements = [pr.requirement for pr in program_requirements]
+    if not _can_view_officer_training_data(current_user):
+        requirements = [
+            _member_requirement(requirement) for requirement in requirements
+        ]
 
     # Get milestones
     from sqlalchemy import select
@@ -1275,11 +1326,18 @@ async def get_enrollment_progress(
         if str(getattr(rp.status, "value", rp.status)) in done_statuses
     )
 
+    can_view_officer_data = _can_view_officer_training_data(current_user)
+    requirement_progress = enrollment.requirement_progress
+    if not can_view_officer_data:
+        requirement_progress = [
+            _member_progress(progress) for progress in requirement_progress
+        ]
+
     return MemberProgramProgress(
         enrollment=enrollment,
         program=enrollment.program,
         current_phase=enrollment.current_phase,
-        requirement_progress=enrollment.requirement_progress,
+        requirement_progress=requirement_progress,
         completed_requirements=completed_requirements,
         total_requirements=len(tracked),
         next_milestones=next_milestones,
@@ -1419,7 +1477,9 @@ async def update_requirement_progress(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
-    return progress
+    if can_manage:
+        return progress
+    return _member_progress(progress)
 
 
 @router.post(

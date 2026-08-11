@@ -149,6 +149,21 @@ export const STANDARD_SIZES = [
   { value: 'custom', label: 'Custom' },
 ] as const;
 
+/**
+ * Display label for a stored size code.
+ *
+ * Sizes are stored as lowercase codes and shown through `STANDARD_SIZES`
+ * everywhere a dropdown renders them — but a screen that prints the stored
+ * value directly shows a quartermaster "l" and "xl" where the rest of the
+ * application says "L" and "XL". Anything not in the list (a numeric waist, a
+ * boot width) is returned unchanged rather than mangled.
+ */
+export function sizeLabel(value: string | null | undefined): string {
+  if (!value) return '';
+  const match = STANDARD_SIZES.find((size) => size.value === value.toLowerCase());
+  return match ? match.label : value;
+}
+
 /** Shoe/boot size options */
 export const SHOE_SIZES = [
   '6',

@@ -101,6 +101,7 @@ async def _submit(db, shift, monkeypatch):
         organization_id="org-1",
         checked_by="user-1",
         data={"items": _items(), "template_id": None},
+        allow_manage=True,
     )
 
 
@@ -346,6 +347,7 @@ class TestSubmitCheckGuards:
                 organization_id="org-1",
                 checked_by="user-1",
                 data={"items": _items()},
+                allow_manage=True,
             )
 
     async def test_empty_items_are_rejected(self):
@@ -359,4 +361,21 @@ class TestSubmitCheckGuards:
                 organization_id="org-1",
                 checked_by="user-1",
                 data={"items": []},
+                allow_manage=True,
+            )
+
+    async def test_unassigned_member_is_rejected(self):
+        db = MagicMock()
+        db.execute = _queued_execute(
+            _scalars_first(_shift()),
+            _scalars_first(None),
+        )
+        svc = EquipmentCheckService(db)
+
+        with pytest.raises(PermissionError, match="Not authorized"):
+            await svc.submit_check(
+                shift_id="shift-1",
+                organization_id="org-1",
+                checked_by="user-1",
+                data={"items": _items()},
             )
