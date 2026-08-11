@@ -118,7 +118,13 @@ async def list_templates(
     apparatus_type: str | None = Query(None),
     check_timing: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    # EC-7: view OR submit (see get_shift_checklists). The member-facing
+    # "Start a Check" picker lists templates to choose from, so gating this
+    # behind the officer's view permission leaves the picker empty for the
+    # people the feature is for.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """List equipment check templates with optional filters."""
     service = EquipmentCheckService(db)
@@ -137,7 +143,13 @@ async def list_templates(
 async def get_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    # EC-7: view OR submit (see get_shift_checklists). This is the endpoint the
+    # check form itself loads — the member taps "Start Check" on a checklist
+    # assigned to them, and without submit here the form never opens, so the
+    # whole start/end-of-shift flow 403s for the crew it is meant for.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
