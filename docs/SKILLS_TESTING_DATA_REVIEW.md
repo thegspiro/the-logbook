@@ -59,16 +59,16 @@ blueprint through to a score.
 | ----- | ------ |
 | API | `CRITERION_TYPES` whitelist + a `model_validator` on `SkillCriterionSchema`. An unknown type is now a 422 naming the offending step and the accepted values. |
 | Frontend | `hydrateTemplateSections` normalizes an unrecognized stored type to `pass_fail`, so templates already written into existing databases become scorable instead of silently failing. `??` could not do this — the stored value is a non-null string. |
-| Seed data | Blueprints moved to `scripts/skill_sheet_library.py` with `C_*` constants, so a typo is an `AttributeError` at import rather than an unscorable sheet in production. |
+| Seed data | Blueprints moved to `backend/app/data/skill_sheet_library.py` with `C_*` constants, so a typo is an `AttributeError` at import rather than an unscorable sheet in production. |
 | Tests | `test_skill_criterion_type_validation.py` holds the whitelist closed; `test_seed_skill_sheet_library.py` validates every blueprint against the real create-template schema and then **scores it with the real scorer** — a clean run must pass with a non-zero percentage, and failing one critical step must fail the test. |
 
 ---
 
 ## 2. Seed data delivered
 
-**`scripts/skill_sheet_library.py`** — ten skill sheets, pure data, no I/O, so
-the general seeder, the screenshot harness and the test suite share one
-definition:
+**`backend/app/data/skill_sheet_library.py`** — ten skill sheets, pure data, no
+I/O, so the API, the general seeder, the screenshot harness and the test suite
+all share one definition:
 
 | Sheet | Category | Exercises |
 | ----- | -------- | --------- |
@@ -107,38 +107,41 @@ library, so re-running the screenshot harness fixes the 0% in `09-01`.
 
 ## 3. Creation — what the test author hits
 
-**3a. `score` with no `max_score` is the same bug, still open.** The builder
-shows a Max Score field but does not require it
-(`SkillTemplateBuilderPage.tsx:530–561` validates checklist items and statement
-text, not this), and `_criterion_point_value` returns `None` when `max_score`
-is absent or zero. An author picks "Score", leaves the box empty, and the step
-contributes nothing to the percentage — silently, exactly like `checkbox`.
+**3a. `score` with no `max_score` — fixed.** The builder showed a Max Score
+field without requiring it, and `_criterion_point_value` returns `None` when
+`max_score` is absent or zero: an author picked "Score", left the box empty, and
+the step contributed nothing to the percentage — silently, exactly like
+`checkbox`.
 
-Deliberately *not* fixed here: enforcing it in the schema would 422 on every
-subsequent edit of a template saved before the rule existed, because the
-template PUT resends every section. The right fix is at the point of authoring
-— a builder-level validation error, plus a "this step carries no points" note
-on the criterion row. **Small; do this one.**
+Now blocked at save with the offending section and criterion named, and warned
+inline while the box is still empty. Deliberately *not* enforced in the API
+schema: the template PUT resends every section, so a 422 would block edits to
+templates saved before the rule existed, with no way to see which step was at
+fault. The seeded library is held to the same rule by a test.
 
-**3b. Every department types NREMT sheets from scratch.** There is no starter
-library — a new organization sees an empty table and a New Template button.
-`scripts/skill_sheet_library.py` is now the raw material for shipping one.
+**3b. Every department typed NREMT sheets from scratch — fixed.** A new
+organization saw an empty table and a New Template button.
 
-One concrete blocker: `SkillTemplate.organization_id` is `nullable=False`
-(`models/skills_testing.py:112`), so system-level rows in the style of the
-facility seed data cannot exist yet. Shipping a library means either the same
-`nullable=True` + `is_system` treatment the facility tables got (CLAUDE.md
-Pitfall #2 and #8 — make the column nullable *before* the seed migration, and
-register the file in `SEED_DATA_FILES`), or a "copy from library" action that
-clones into the caller's org on demand. **The second is cheaper and avoids
-touching the tenancy column.**
+`GET /training/skills-testing/library` now offers the ten sheets and
+`POST /library/{slug}/import` copies one in, reachable from an "Add from
+library" button and from the empty state itself.
+
+Copy-on-demand rather than system-level seed rows, for the reason the review
+identified: `SkillTemplate.organization_id` is `nullable=False`, and making a
+tenancy column nullable to hold shared records is a bigger change than the
+feature needs. Copying also gets the ownership right — an imported sheet is the
+department's own, not a shared row that shifts under them on upgrade. It lands
+as a **draft**: a published template can be selected for a live evaluation, and
+a sheet nobody has read yet should not be.
 
 **3c. Template sharing between departments.** Covered by
 [DEPARTMENT_TEMPLATE_EXPORT_IMPORT_PLAN.md](./DEPARTMENT_TEMPLATE_EXPORT_IMPORT_PLAN.md),
 which already lists `skill_templates` as JSON-structural with `created_by`
 nulled. No new work needed here — worth confirming the criterion-type whitelist
 is applied on **import**, since an import path that bypasses
-`SkillTemplateCreate` would reintroduce §1 wholesale.
+`SkillTemplateCreate` would reintroduce §1 wholesale. The starter-library
+import added in §3b goes through `SkillTemplateCreate` for exactly that
+reason, and a test pins it.
 
 **3d. No preview.** An author cannot see what the examiner will see without
 publishing and starting a live test. Given that section and criterion identity
@@ -172,12 +175,16 @@ blocked on **two owner decisions, not on engineering**:
 Until that lands, `saveState: 'failed'` is the only signal that an evaluation
 exists solely in browser memory — worth making louder than a status word.
 
-**4b. Drill night is a batch, and the app only knows about one test at a
-time.** Twelve people through one SCBA evolution means twelve trips back to
-Start Skill Test, re-picking the same template each time. A "test the next
-candidate against this sheet" action from the completed-test screen, or a
-multi-select on the candidate step that queues a run per person, removes the
-repetition where it actually hurts. **Medium, high value.**
+**4b. Drill night is a batch — fixed.** The app knew about one test at a time,
+so twelve people through one SCBA evolution meant twelve trips back to Start
+Skill Test, re-picking the same sheet each time.
+
+The candidate step now takes a list: picking someone adds them and leaves the
+search open, each can be removed, and the button says how many evaluations it
+is about to create. Tests are created one at a time and *sequentially* — the
+attempt cap is checked against tests already recorded, so firing a squad's
+worth together could let a candidate past a cap two racing requests both read
+as not yet reached. One refusal does not discard the rest of the squad.
 
 **4c. The candidate picker is typing-only.** `09-07` shows "Type at least 2
 characters of a name to search". On a phone with gloves at a burn tower, a
@@ -187,44 +194,60 @@ roster export — see the endpoint comment at `skills_testing.py:731`) and shoul
 stay; this is about adding a browse path beside it, not widening the search.
 **Small.**
 
-**4d. The viewers panel disagrees with the picker.** `09-13` grants access
-through a plain `<select>` of the whole roster
-(`TestViewersPanel.tsx:167–179`) while the candidate step uses a typeahead.
-Same task, two controls, and the `<select>` degrades badly past ~50 members.
-Reuse the typeahead. **Small.**
+**4d. The viewers panel disagreed with the picker — fixed.** `09-13` granted
+access through a plain `<select>` of the whole roster while the candidate step
+used a typeahead: same task, two controls, and the `<select>` degraded badly
+past a few dozen members.
+
+Both now go through a shared `useMemberSearch` over the search-only candidates
+endpoint. That matters beyond consistency — the endpoint requires a fragment
+and caps its results, so the panel no longer pulls the full member payload to
+name one person.
 
 ---
 
 ## 5. Validation — what the officer hits
 
-**5a. The queue is a filter, not an inbox.** `09-11` reaches pending results by
-setting a dropdown on the Test Records tab to "Needs Validation". The summary
-tile in `09-01` counts them, and the two are not obviously connected. A
-first-class review queue — reachable from the tile, defaulting to pending,
-showing the score and any critical failure inline — is the difference between a
-workflow and a filter someone has to remember.
+**5a. The queue was a filter, not an inbox — fixed.** Pending results were
+reached by setting a dropdown on the Test Records tab, and the tile in `09-01`
+counted them without linking anywhere. The tile is now the way into the work it
+counts.
 
-**5b. There is no bulk validate.** After a drill night an officer signs off
-each result individually. Every other approval surface in the product
-(purchase requests, submissions) has a bulk path. **Small once 5a exists.**
+**5b. No bulk validate — fixed.** An officer signed off a drill night's worth
+of peer-run results one at a time, while every other approval surface in the
+product has a bulk path.
 
-**5c. There is no way back to the examiner.** The only exits from pending are
-`/validate` and `/void`, and the endpoint docstring is explicit that "the
-rejection path is `/void`". That is a defensible design for a *wrong* result —
-the record survives with its reason, which is right for something a candidate
-sat for. But it is a heavy instrument for "Engine 2's captain mis-scored step
-4, have him redo it": the void is permanent and visible on the candidate's
-history, and the correction becomes a second test.
+`POST /tests/bulk-validate` delegates to `validate_test` per id rather than
+reimplementing it, so separation of duties, the attempt cap, the pipeline apply
+and the notification all behave identically — there is no second implementation
+to drift, and what it would drift on is who gets credited for what. Partial
+success is the normal outcome and each refusal is reported: an officer who
+selected ten and got eight would otherwise walk away believing the queue is
+clear. Selection is keyed by id, dropped on filter change, and select-all
+covers exactly what the search has left on screen.
 
-A `return_for_correction` transition — clears `validated_at`, reopens the test
-to its examiner, records who returned it and why, credits nothing — would cover
-the common case without spending a void. It should still be an auditable
-transition, not a silent reopen. **Medium; worth a product decision first,
-since it deliberately reverses a documented choice.**
+**5c. No way back to the examiner — fixed, owner-approved.** The only exits
+from pending were `/validate` and `/void`, and the endpoint docstring was
+explicit that "the rejection path is `/void`". Right for a result that was
+*wrong* — the record survives with its reason, which is what a candidate who
+sat the evaluation is owed — and a heavy instrument for "Engine 2's captain
+mis-scored step 4, have him redo it", where the void is permanent and
+candidate-visible and the correction becomes a second test.
+
+`POST /tests/{id}/return` reopens the submission to its examiner with every
+mark intact. It is refused on a validated result — that has credited a
+requirement, spent an attempt and been shown to the candidate, and undoing it
+is a void, which releases all three. The candidate is not notified: nothing has
+been claimed about them, and "your evaluation was returned" discloses both that
+they were tested and that something was wrong with it. `return_count` persists,
+because one return is a slip and a third is a training conversation.
+
+This reverses a documented design decision and was built on the owner's
+explicit approval.
 
 ---
 
-## 5b. Paper — the fallback that had no support at all
+## 5d. Paper — the fallback that had no support at all
 
 Training ships three print pages (`MemberTrainingPrintPage`,
 `ProgramPrintPage`, `CompliancePrintPage`) and scheduling ships two. Skills
@@ -360,14 +383,48 @@ seed data; the import path (§3c) is the next one to cover.
 | # | Item | Effort | Why now |
 | - | ---- | ------ | ------- |
 | 1 | ~~Unknown criterion type is unscorable~~ | — | **Fixed** |
-| 2 | ~~No printable blank skill sheet~~ (§5b) | — | **Built** — the paper fallback while offline waits |
-| 3 | ~~No printable completed scorecard~~ (§5b) | — | **Built** — audit hand-off and paper training file |
-| 4 | ~~No CSV export of results~~ (§5b) | — | **Built** — `SafeCsvWriter`, officer-only, audit-logged |
-| 5 | ~~Position ordering in the disclosure picker~~ (§5b) | — | **Fixed** — sorted by name, not by authorization rank |
-| 6 | `score` with no `max_score` (§3a) | S | Same silent-zero failure, still live |
-| 7 | Review queue as an inbox + bulk validate (§5a) | S–M | Officer-facing friction every drill night |
-| 8 | Batch testing (§4b) | M | The actual shape of drill night |
-| 9 | Starter template library (§3b) | M | First-run experience; the data now exists |
-| 10 | Offline (§4a) | L | Blocked on two owner decisions, not engineering |
-| 11 | Return for correction (§5c) | M | Needs a product decision first |
-| 12 | Picker/viewer control consistency (§4c, §4d) | S | Cheap; the panel degrades with roster size |
+| 2 | ~~No printable blank skill sheet~~ (§5d) | — | **Built** — the paper fallback while offline waits |
+| 3 | ~~No printable completed scorecard~~ (§5d) | — | **Built** — audit hand-off and paper training file |
+| 4 | ~~No CSV export of results~~ (§5d) | — | **Built** — `SafeCsvWriter`, officer-only, audit-logged |
+| 5 | ~~Position ordering in the disclosure picker~~ (§5d) | — | **Fixed** — sorted by name, not by authorization rank |
+| 6 | ~~`score` with no `max_score`~~ (§3a) | — | **Fixed** — blocked in the builder, warned inline |
+| 7 | ~~Review queue is a filter, not an inbox~~ (§5a, §5b) | — | **Built** — tile links in, selection, bulk accept |
+| 8 | ~~No batch testing~~ (§4b) | — | **Built** — one sheet against a squad |
+| 9 | ~~No starter template library~~ (§3b) | — | **Built** — copy-on-demand, lands as a draft |
+| 10 | ~~Return for correction~~ (§5c) | — | **Built** — approved by the owner; third exit from a pending result |
+| 11 | ~~Viewers panel used a roster `<select>`~~ (§4d) | — | **Fixed** — same typeahead as the candidate picker |
+| 12 | **Offline (§4a)** | L | **Not started.** Scope decided (plan options A+B); §5 still open — see below |
+
+### What offline still needs
+
+The owner has chosen **plan options A+B**: persist an in-progress evaluation
+locally and replay writes in order on reconnect, *and* allow starting a test
+from a device that has never had signal for it.
+
+One thing that decision does not settle, and implementation should not start
+without it: **§5, shared-station devices.** Logout currently purges unsynced
+work, and A+B means a named member's scorecard sits in IndexedDB on a browser
+profile the whole watch shares. That is a new exposure on a module that carries
+PHI-adjacent data, and it is a retention policy question rather than an
+engineering one. The plan's cheapest mitigation — block logout while skills
+work is pending — is worth shipping whichever way the larger question goes.
+
+Two things have already narrowed the gap this feature was closing:
+
+- **The printable blank sheet** (§5d) covers the no-coverage case today. An
+  examiner at a county training ground has a working fallback rather than a
+  screen that cannot save.
+- **Autosave plus optimistic concurrency** already covers the common
+  same-signal loss: a locked phone, a killed tab, a second examiner on the
+  same test.
+
+What remains uncovered is the signal *dropping mid-evolution*, which is what
+A+B is for.
+
+### Not fixed, noted while passing
+
+- **The criterion editor's labels are not associated with their controls.**
+  `<label>Type</label>` sits beside its `<select>` with no `htmlFor`, so the
+  type, max-points, time-limit and checklist inputs have no accessible name —
+  a screen-reader user tabbing the builder hears nothing. Small, and worth
+  doing across the whole editor rather than one field at a time.
