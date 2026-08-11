@@ -37,6 +37,16 @@ describe('NotificationsPage tab deep links', () => {
     expect(handler).not.toContain("searchParams.delete('tab')");
   });
 
+  it('derives the active tab from the URL rather than mirroring it into state', () => {
+    // The 2026-08-10 fix read the parameter once with `useState(initialTab)`,
+    // which makes a *link* work and leaves the **Back button** broken: click
+    // Send Log then Rules, press Back, and the URL says `?tab=log` while the
+    // page still renders Rules. Caught on a later PR by review, on the page
+    // that had copied this pattern.
+    expect(source).toMatch(/const activeTab: 'inbox' \| 'rules' \| 'templates' \| 'log' =/);
+    expect(source).not.toMatch(/useState<'inbox' \| 'rules' \| 'templates' \| 'log'>/);
+  });
+
   it('still falls back to the inbox for a viewer who cannot manage', () => {
     // The admin tabs must not be restorable by anyone who cannot see them.
     const initial = source.slice(source.indexOf('const requestedTab'), source.indexOf('const [activeTab'));

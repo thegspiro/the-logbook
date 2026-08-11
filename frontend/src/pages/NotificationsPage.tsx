@@ -134,8 +134,15 @@ const NotificationsPage: React.FC = () => {
   // All four tabs are addressable, not just the inbox. `?tab=log` used to
   // fall through to the rules tab, so a link to the Send Log — the one tab
   // anyone has cause to send somebody — opened the wrong screen.
+  //
+  // Derived from the URL rather than mirrored into state _(2026-08-11)_. The
+  // first fix read the parameter once, on mount, which left every later URL
+  // change ignored — the Back button being the one that matters: click Send Log
+  // then Rules, press Back, and the address bar says `?tab=log` while the page
+  // still renders Rules. Deriving removes the state that could fall out of step
+  // at all.
   const requestedTab = searchParams.get('tab');
-  const initialTab: 'inbox' | 'rules' | 'templates' | 'log' =
+  const activeTab: 'inbox' | 'rules' | 'templates' | 'log' =
     requestedTab === 'inbox'
       ? 'inbox'
       : canView && (requestedTab === 'rules' || requestedTab === 'templates' || requestedTab === 'log')
@@ -143,7 +150,6 @@ const NotificationsPage: React.FC = () => {
         : canView
           ? 'rules'
           : 'inbox';
-  const [activeTab, setActiveTab] = useState<'inbox' | 'rules' | 'templates' | 'log'>(initialTab);
   const [logChannelFilter, setLogChannelFilter] = useState<'all' | 'email' | 'in_app'>('all');
 
   // Create form states
@@ -326,7 +332,6 @@ const NotificationsPage: React.FC = () => {
   };
 
   const handleTabChange = (tab: typeof activeTab) => {
-    setActiveTab(tab);
     setSearchParams({ tab });
   };
 
