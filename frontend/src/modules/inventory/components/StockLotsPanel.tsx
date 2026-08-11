@@ -5,12 +5,19 @@
  * Each lot carries its own lot number, expiration date, and on-hand quantity,
  * so a supply officer can keep fresh units ready to swap onto apparatus during
  * equipment checks. Lots nearing (or past) expiration are highlighted.
+ *
+ * The panel also lists where the item is currently deployed. Stock on its own
+ * does not answer the question a recall or an expiring lot actually raises —
+ * which trucks carry this, and what is on each of them right now — and that
+ * link was previously only readable from the apparatus side.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, AlertTriangle, Clock, Loader2, PackagePlus } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Clock, Loader2, PackagePlus, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '@/services/inventoryService';
+import { schedulingService } from '@/modules/scheduling/services/api';
+import type { ItemDeployment } from '@/modules/scheduling/types/equipmentCheck';
 import type { InventoryLot, InventoryLotCreate } from '@/services/eventServices';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { formatDate, getTodayLocalDate } from '@/utils/dateFormatting';
@@ -40,6 +47,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<InventoryLotCreate>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [deployments, setDeployments] = useState<ItemDeployment[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +63,24 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Loaded separately from the lots: a department without the equipment-check
+  // module gets an empty list here, and that must not blank out the stock it
+  // came to this tab for.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await schedulingService.getItemDeployments(itemId);
+        if (!cancelled) setDeployments(rows);
+      } catch {
+        if (!cancelled) setDeployments([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [itemId]);
 
   const handleAdd = async () => {
     if (form.quantity == null || form.quantity < 0) {
@@ -329,6 +355,52 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
             );
           })}
         </ul>
+      )}
+
+      {deployments.length > 0 && (
+        <div className="space-y-2 pt-2">
+          <h4 className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
+            <Truck className="h-4 w-4" aria-hidden="true" />
+            On apparatus ({deployments.length})
+          </h4>
+          <p className="text-theme-text-muted text-xs">
+            Checklist positions this item fills. The date shown is what the truck is carrying now, not the shelf stock
+            above.
+          </p>
+          <ul className="divide-theme-surface-border border-theme-surface-border divide-y rounded-lg border">
+            {deployments.map((d) => (
+              <li key={d.templateItemId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                <div className="min-w-0">
+                  <span className="text-theme-text-primary text-sm font-medium">
+                    {d.apparatusName || d.apparatusType || d.templateName || 'Unassigned'}
+                  </span>
+                  <span className="text-theme-text-muted ml-2 text-xs">
+                    {d.compartmentName ? `${d.compartmentName} · ` : ''}
+                    {d.itemName}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  {d.lotNumber && <span className="text-theme-text-muted font-mono">Lot {d.lotNumber}</span>}
+                  {d.expirationDate && (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
+                        d.isExpired
+                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                          : (d.daysUntilExpiration ?? 999) <= 30
+                            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            : 'text-theme-text-muted'
+                      }`}
+                    >
+                      {d.isExpired ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                      {d.isExpired ? 'Expired ' : 'Exp '}
+                      {formatDate(d.expirationDate, tz)}
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

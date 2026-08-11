@@ -31,7 +31,7 @@ import { CreditCard, Pencil } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatDateCustom } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
@@ -1053,18 +1053,20 @@ export const MemberProfilePage: React.FC = () => {
                         <span className="text-theme-text-muted text-xs">Active</span>
                       </div>
                       <p className="text-theme-text-secondary text-xs">
-                        {formatDateCustom(
-                          leave.start_date + 'T00:00:00',
-                          { year: 'numeric', month: '2-digit', day: '2-digit' },
-                          tz
-                        )}{' '}
+                        {/* Calendar dates, not instants — run through a
+                            timezone these render a day early. */}
+                        {formatCalendarDate(leave.start_date, {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                        })}{' '}
                         &ndash;{' '}
                         {leave.end_date
-                          ? formatDateCustom(
-                              leave.end_date + 'T00:00:00',
-                              { year: 'numeric', month: '2-digit', day: '2-digit' },
-                              tz
-                            )
+                          ? formatCalendarDate(leave.end_date, {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                            })
                           : 'Permanent'}
                       </p>
                       {leave.reason && <p className="text-theme-text-muted mt-1 text-xs">{leave.reason}</p>}

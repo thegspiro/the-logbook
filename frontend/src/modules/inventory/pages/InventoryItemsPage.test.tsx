@@ -43,6 +43,9 @@ vi.mock('../../../hooks/useInventoryWebSocket', () => ({ useInventoryWebSocket: 
 vi.mock('../components/ItemFormModal', () => ({
   ItemFormModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>item-form-modal</div> : null),
 }));
+vi.mock('../components/ReceiveStockModal', () => ({
+  default: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>receive-stock-modal</div> : null),
+}));
 vi.mock('../../../components/MemberPickerModal', () => ({ MemberPickerModal: () => null }));
 vi.mock('../../../components/InventoryScanModal', () => ({ InventoryScanModal: () => null }));
 vi.mock('../../../components/ux/FloatingActionButton', () => ({ FloatingActionButton: () => null }));
@@ -109,6 +112,58 @@ describe('InventoryItemsPage', () => {
     // Desktop table + mobile card both render the name.
     expect((await screen.findAllByText('Cordless Drill')).length).toBeGreaterThan(0);
     expect(screen.getByText(/42 items/)).toBeInTheDocument();
+  });
+
+  it('shows lot stock as the quantity for a lot-stocked item', async () => {
+    // quantity says 50, but lot bookkeeping never writes that column — the
+    // in-date lots are the count that matters.
+    mockGetItems.mockResolvedValue({
+      items: [
+        makeItem({ name: '4x4 Gauze', tracking_type: 'pool', quantity: 50, lot_stock: 12, is_lot_stocked: true }),
+      ],
+      total: 1,
+    });
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findAllByText('4x4 Gauze');
+
+    expect(screen.getAllByText('12').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('in-date lots').length).toBeGreaterThan(0);
+    expect(screen.queryByText('50 / 50')).not.toBeInTheDocument();
+  });
+
+  it('shows zero rather than a stale quantity when every lot has expired', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [
+        makeItem({ name: 'Epi 1:1000', tracking_type: 'pool', quantity: 30, lot_stock: 0, is_lot_stocked: true }),
+      ],
+      total: 1,
+    });
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findAllByText('Epi 1:1000');
+
+    expect(screen.getAllByText('0').length).toBeGreaterThan(0);
+  });
+
+  it('leaves a non-lot item on its own quantity ledger', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ name: 'Spare Gloves', tracking_type: 'pool', quantity: 8, quantity_issued: 3 })],
+      total: 1,
+    });
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findAllByText('Spare Gloves');
+
+    expect(screen.getAllByText('5 / 8').length).toBeGreaterThan(0);
+    expect(screen.queryByText('in-date lots')).not.toBeInTheDocument();
+  });
+
+  it('opens the receive-stock modal', async () => {
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findAllByText('Cordless Drill');
+
+    await user.click(screen.getByRole('button', { name: /Receive Stock/ }));
+    expect(await screen.findByText('receive-stock-modal')).toBeInTheDocument();
   });
 
   it('opens the add-item modal', async () => {

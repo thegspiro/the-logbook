@@ -139,7 +139,7 @@ const LocationKioskPage: React.FC = () => {
       <div className="from-theme-nav-bg via-theme-surface to-theme-nav-bg flex min-h-screen items-center justify-center bg-linear-to-br">
         <div className="text-center">
           <div className="mb-6 inline-block h-16 w-16 animate-spin rounded-full border-t-4 border-b-4 border-red-500" />
-          <p className="text-xl text-white">Loading display...</p>
+          <p className="text-theme-text-primary text-xl">Loading display...</p>
         </div>
       </div>
     );
@@ -151,7 +151,7 @@ const LocationKioskPage: React.FC = () => {
       <div className="from-theme-nav-bg via-theme-surface to-theme-nav-bg flex min-h-screen items-center justify-center bg-linear-to-br p-8">
         <div className="max-w-md text-center">
           <MapPin className="text-theme-text-muted mx-auto mb-6 h-16 w-16" />
-          <h1 className="mb-4 text-2xl font-bold text-white">Display Unavailable</h1>
+          <h1 className="text-theme-text-primary mb-4 text-2xl font-bold">Display Unavailable</h1>
           <p className="text-theme-text-secondary">{error}</p>
         </div>
       </div>
@@ -164,13 +164,18 @@ const LocationKioskPage: React.FC = () => {
   const hasEvents = events.length > 0;
   const currentEvent = hasEvents ? events[currentEventIndex % events.length] : null;
 
+  // Every heading here uses `text-theme-text-primary`, not `text-white`. The
+  // background is a theme gradient whose middle stop is `theme-surface` — light
+  // in light mode — so a hard-coded white heading rendered white on white. The
+  // event name is the one thing a kiosk exists to show, and it was invisible to
+  // any department that had not switched the display to dark.
   return (
     <div className="from-theme-nav-bg via-theme-surface to-theme-nav-bg flex min-h-screen flex-col bg-linear-to-br">
       {/* Header bar */}
       <div className="flex items-center justify-between bg-black/30 px-8 py-4">
         <div className="flex items-center gap-3">
           <MapPin className="h-6 w-6 text-red-500" />
-          <h1 className="text-2xl font-bold text-white">{data.location_name}</h1>
+          <h1 className="text-theme-text-primary text-2xl font-bold">{data.location_name}</h1>
         </div>
         <div className="flex items-center gap-4">
           {connected ? (
@@ -206,7 +211,7 @@ const LocationKioskPage: React.FC = () => {
                 <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-green-400" />
                 Check-In Active
               </div>
-              <h2 className="mb-3 text-4xl font-bold text-white">{currentEvent.event_name}</h2>
+              <h2 className="text-theme-text-primary mb-3 text-4xl font-bold">{currentEvent.event_name}</h2>
               {currentEvent.event_type && (
                 <p className="text-theme-text-secondary mb-2 text-lg capitalize">
                   {currentEvent.event_type.replace('_', ' ')}

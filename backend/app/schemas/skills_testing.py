@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -16,15 +16,19 @@ from app.schemas.base import UTCResponseBase
 # Criterion & Section Schemas (template structure)
 # ============================================
 
+# The criterion types the scorer and the examiner screen both understand.
+# Anything outside this set is scored as nothing and rendered by the fallback
+# branch, so a template built with (say) "checkbox" looks plausible in the
+# builder and then contributes zero points to every percentage it appears in.
+CRITERION_TYPES = ("pass_fail", "score", "checklist", "time_limit", "statement")
+
 
 class SkillCriterionSchema(BaseModel):
     """Schema for a single evaluation criterion within a template section"""
 
     label: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    type: str = Field(
-        "pass_fail", max_length=50
-    )  # pass_fail, score, checklist, time_limit, statement
+    type: str = Field("pass_fail", max_length=50)
     required: bool = False
     sort_order: int = 0
     passing_score: Optional[float] = Field(None, ge=0)
@@ -40,6 +44,16 @@ class SkillCriterionSchema(BaseModel):
     # behaved — they mark themselves as a section renders, and that is nobody's
     # action, so it must not start a clock on its own.
     starts_timer: bool = False
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        if v not in CRITERION_TYPES:
+            raise ValueError(
+                f"Unknown criterion type '{v}'. Expected one of: "
+                + ", ".join(CRITERION_TYPES)
+            )
+        return v
 
 
 class SkillTemplateSectionSchema(BaseModel):

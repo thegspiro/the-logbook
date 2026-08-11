@@ -55,6 +55,7 @@ import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStat
 import { requirementTarget, requirementAction } from '../utils/pipelineProgress';
 import { useTimezone } from '../hooks/useTimezone';
 import {
+  formatCalendarDate,
   formatDate,
   formatDateCustom,
   formatNumber,
@@ -80,6 +81,11 @@ import { useNotificationCountStore } from '../hooks/useNotificationCount';
  * training progress, and recorded hours.
  */
 const INSTALL_BANNER_DISMISSED_KEY = 'installBannerDismissed';
+
+/** How many open shifts the dashboard panel lists before deferring to the
+ *  schedule. Matches the 5 that My Upcoming Shifts asks the API for, so the
+ *  two panels beside each other are the same height. */
+const OPEN_SHIFTS_SHOWN = 5;
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -481,15 +487,14 @@ const Dashboard: React.FC = () => {
   };
 
   const formatShiftDate = (dateStr: string) => {
-    return formatDateCustom(
-      dateStr + 'T00:00:00',
-      {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      },
-      tz
-    );
+    // A shift_date is a calendar date, not an instant — see formatCalendarDate.
+    // Padded to midnight and run through the department timezone, today's
+    // shift rendered as yesterday under "My Upcoming Shifts".
+    return formatCalendarDate(dateStr, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   const formatShiftTime = (timeStr?: string) => {
@@ -1190,7 +1195,13 @@ const Dashboard: React.FC = () => {
             <div className="text-theme-text-muted py-8 text-center text-sm">No open shifts available</div>
           ) : (
             <div className="space-y-2">
-              {openShifts.map((shift) => (
+              {/* Capped like every sibling panel — My Upcoming Shifts asks the
+                  API for 5, notifications show 8, upcoming events 5. This one
+                  rendered a month of open shifts in full, which on a department
+                  running two platoons is ~60 rows and turns the dashboard into
+                  a single scrolling list with everything else pushed off the
+                  bottom. "View Schedule" is the way to see them all. */}
+              {openShifts.slice(0, OPEN_SHIFTS_SHOWN).map((shift) => (
                 <div key={shift.id} className="bg-theme-surface-secondary rounded-lg p-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center space-x-3">
@@ -1278,6 +1289,12 @@ const Dashboard: React.FC = () => {
                   )}
                 </div>
               ))}
+              {openShifts.length > OPEN_SHIFTS_SHOWN && (
+                <p className="text-theme-text-muted pt-1 text-center text-xs">
+                  {openShifts.length - OPEN_SHIFTS_SHOWN} more open shift
+                  {openShifts.length - OPEN_SHIFTS_SHOWN === 1 ? '' : 's'} in the next 30 days
+                </p>
+              )}
             </div>
           )}
         </div>

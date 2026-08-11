@@ -139,8 +139,9 @@ Enable these as needed:
 - Medical Screening _(added 2026-03-13)_
 - Finance _(added 2026-03-12)_
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Module Management section showing the three categories of modules, each with enable/disable toggles. Show some optional modules enabled (green toggle) and some disabled (gray toggle)]_
+![Module management with a toggle for each optional feature](./images/08-32-module-management.png)
+
+The page groups what it shows into **Standard Modules** and **Additional Modules**, each row carrying its own Enable/Disable button. The core modules listed above are not shown at all — the header says so ("Core modules (Members, Events, Documents) are always active") rather than listing them as a third, un-toggleable group.
 
 > **Hint:** Disabling a module hides it from the navigation but does not delete any data. Re-enabling a module restores access to all previously entered data.
 
@@ -378,9 +379,6 @@ This page shows:
 
 > **Hint:** Regular errors about failed login attempts are normal (they indicate the rate limiting is working). Focus on Critical and Error severity items for actual system issues.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Error Monitor page showing a table of recent errors with columns for timestamp, Source, severity (color-coded badges), the user-facing message with the technical message beneath it, method/path/status, and an occurrence count]_
-
 ### What Now Reaches This Page _(2026-08-07)_
 
 Before this, the page received almost nothing. Most failures were visible only to
@@ -455,8 +453,6 @@ out. So:
 
 ## Scheduled Tasks
 
-Navigate to **Administration > Scheduled Tasks** to view and manage automated tasks.
-
 Scheduled tasks run automatically on a schedule:
 
 | Task                                  | Description                                                                          |
@@ -471,15 +467,21 @@ Scheduled tasks run automatically on a schedule:
 | **Process Scheduled Emails**          | Send pending pipeline automated emails (polls every 60 seconds) _(added 2026-03-13)_ |
 | **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                      |
 
-For each task you can see:
-
-- Last run time
-- Next scheduled run
-- Frequency
-- Enabled/disabled status
-
 > **Screenshot placeholder:**
 > _[Screenshot of the Scheduled Tasks page showing a list of tasks with name, frequency, last run time, next run time, and enabled toggle switches]_
+
+**Not yet built:** there is no **Administration > Scheduled Tasks** page. The
+tasks above are real and do run — see the in-process runner below — but the
+only way to inspect them is the API: `GET /scheduled/tasks` lists every task
+with its recommended cron schedule, and `POST /scheduled/run-task?task=<id>`
+triggers one by hand. That last one runs across **every** organization, so it
+is restricted to a platform System Owner (`system.run_tasks`), not a
+department admin.
+
+Note that even the API reports only the schedule. Last-run and next-run times
+and a per-task enabled flag — the columns the placeholder describes — are not
+stored anywhere, so a page for this would need backend work first. The
+placeholder stays open.
 
 ## In-Process Scheduled Task Runner (2026-03-25)
 
@@ -538,7 +540,12 @@ The following modules now include comprehensive `log_audit_event()` calls for HI
 
 All audit events are appended to the tamper-proof SHA-256 hash chain in the `audit_logs` table.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Security > Audit Log page filtered to "shift_report" events showing recent shift completion report audit entries with timestamps, acting user, event type (e.g., shift_report_reviewed), and metadata (report ID, review status)._
+Find these under **Administration → Organization Settings → Audit Log** and
+search for `shift_report`. The search box holds its own draft — it does not
+filter until you press **Apply** — while the severity and category dropdowns
+take effect the moment you change them.
+
+![The audit log searched for shift_report, listing review and update events](./images/08-54-audit-shift-reports.png)
 
 ### Shift Report Security Fix _(2026-04-07)_
 
@@ -551,7 +558,7 @@ A critical authorization bypass was identified and fixed on the `GET /shift-repo
 - `reviewer_notes` are **always stripped** for trainees regardless of visibility settings
 - Unauthorized access returns **403 Forbidden**
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Security > Audit Log page filtered to "medical" events showing recent medical screening audit entries with timestamps, user, and event details._
+![The audit log filtered to the medical screening category](./images/08-55-audit-medical.png)
 
 ## Pagination Standardization _(2026-03-29)_
 
@@ -577,14 +584,23 @@ All pages that previously used `navigate(-1)` (browser back button behavior) now
 
 ### Breadcrumb Navigation
 
-Pages in hierarchical sections now include breadcrumb trails showing the navigation path:
+Some sections carry a breadcrumb trail above the page heading, derived from the
+URL. A finance detail page reads:
 
 ```
-Dashboard > Scheduling > Shift Templates > Edit Template
+⌂ > Finance > Expenses
 ```
 
-> **Screenshot needed:**
-> _[Screenshot of a scheduling sub-page showing breadcrumb navigation at the top: "Scheduling > Templates > Edit Station 1 Template" with each segment clickable]_
+Two things about it worth knowing:
+
+- **The record itself is not a crumb.** The trail ends at the section, because
+  the last URL segment is the record's id and an id is not a label. The
+  record's name is the page heading directly beneath.
+- **It is not everywhere.** Finance, communications and a handful of other
+  sections have it; **scheduling does not** — its sub-pages use a "Back to …"
+  link instead, which every detail page has whether or not it also has a trail.
+
+![A breadcrumb trail at the top of an expense report detail page](./images/08-59-breadcrumbs.png)
 
 ---
 
@@ -626,7 +642,12 @@ Admins with the `audit.view` permission can read the audit trail directly. Navig
 
 ![Audit Log page with summary stat cards and the filter bar](./images/08-19-audit-log.png)
 
-> **Note:** The audit log is scoped to your organization — events for your department's users only. System-level events (such as scheduled jobs that have no acting user) are deliberately excluded from this view.
+> **Note:** The audit log is scoped to your organization. That scope is the
+> _only_ filter applied — an event recorded against your department with no
+> acting user, such as a kiosk guest sign-in or a scheduled job, still appears,
+> with **system** shown in italics in the User column. What the view never shows
+> is an event belonging to another department, or a platform-wide event recorded
+> against no organization at all.
 
 ### Rate Limiting
 
@@ -1119,13 +1140,17 @@ All API response schemas now inherit from `UTCResponseBase`, which automatically
 
 ### Dashboard Notification Management
 
-Dashboard notification cards now include **clear** and **dismiss** buttons directly on each card:
+Each card in the dashboard's Notifications panel carries a **dismiss** control
+— the **✕** on the right — which marks that notification as read and removes it
+from the panel. The panel header carries **Clear All**, which marks every
+notification in it as read at once.
 
-- **Dismiss**: Hides the notification from the user's dashboard (personal action)
-- **Clear**: Marks the notification as read
+> **Corrected 2026-08-10.** This previously described two controls on each
+> card, a dismiss and a checkmark "clear", with different effects. There is one
+> control per card, the ✕, and it is the mark-as-read action; "Clear All" is a
+> header action, not a per-card one.
 
-> **Screenshot needed:**
-> _[Screenshot of the Dashboard notifications area showing notification cards with dismiss (X) and clear (checkmark) buttons visible on each card]_
+![The dashboard Notifications panel — a dismiss control on each card and Clear All in the header](./images/08-60-dashboard-notification-cards.png)
 
 ### Department Messages
 
@@ -1148,17 +1173,33 @@ member notification controls — see
 
 ### Notification Channel Filter
 
-The Notifications page now includes a **channel filter** to view notifications by delivery method:
+The **Send Log** tab on the Notifications page carries a **channel filter** for
+narrowing the delivery history by method:
 
-| Filter | Shows                                                  |
-| ------ | ------------------------------------------------------ |
-| All    | All notifications regardless of delivery channel       |
-| Email  | Only email-delivered notifications                     |
-| In-App | Only in-app notifications (bell icon)                  |
-| SMS    | Only SMS-delivered notifications (when Twilio enabled) |
+| Filter | Shows                                     |
+| ------ | ----------------------------------------- |
+| All    | Every send regardless of delivery channel |
+| Email  | Only email sends                          |
+| In-App | Only in-app notifications (the bell icon) |
 
-> **Screenshot needed:**
-> _[Screenshot of the Notifications page showing channel filter tabs (All, Email, In-App, SMS) at the top with the In-App filter active]_
+> **Corrected 2026-08-10.** An **SMS** filter was listed here. The log records
+> two channels, email and in-app; SMS sends are not written to it, so there is
+> no fourth button. The filter is also on the Send Log tab specifically rather
+> than the page as a whole — the inbox has its own Show read control instead.
+
+Each row shows the subject, recipient, channel, send time and a delivery
+status: a green check for delivered, a red mark with the error on hover when
+not. An in-app notification counts as delivered as soon as it is written,
+since the row is what the member reads.
+
+![The delivery-log channel filter — All, Email and In-App — with In-App selected](./images/08-61-notification-channel-filter.png)
+
+**Not yet built:** the channel filter. The Notifications page's tabs are
+**My Notifications**, **Notification Rules**, **Email Templates** and
+**Send Log** — the first is the member's in-app inbox, and the last is the
+delivery history, where a channel column is the closest thing to the filter
+described above. Nothing on either lets you narrow the view to one channel.
+The placeholder stays open until it does.
 
 ## Email Deliverability (2026-03-22)
 
@@ -1196,8 +1237,10 @@ The `TimeQuarterHour` component has been redesigned with three separate dropdown
 
 This replaces the previous single text input that was harder to use on mobile and didn't enforce quarter-hour increments visually.
 
-> **Screenshot needed:**
-> _[Screenshot of the redesigned TimeQuarterHour component showing three separate dropdown selectors (Hour: "2", Minute: "30", AM/PM: "PM") in a compact horizontal layout]_
+The control is pictured in context — beside the date field it is normally
+paired with — under
+[Training → Creating a Recurring Training Session](./02-training.md#creating-a-recurring-training-session);
+this guide does not repeat the screenshot.
 
 ---
 
@@ -1207,8 +1250,7 @@ This replaces the previous single text input that was harder to use on mobile an
 
 The bell icon in the top navigation bar and the Notifications link in the side navigation now show an **unread count badge**. The badge updates automatically via smart polling — polling pauses when the browser tab is hidden and refetches immediately when you return to the tab.
 
-> **Screenshot needed:**
-> _[Screenshot of the top navigation bar showing the bell icon with a red badge showing "5" (unread count), next to the user avatar and settings gear]_
+![The top navigation bar with the bell icon carrying its unread-count badge](./images/08-62-topnav-bell-badge.png)
 
 ![Sidebar navigation with the unread notification badge](./images/08-31-sidebar-notification-badge.png)
 
@@ -1216,18 +1258,26 @@ The bell icon in the top navigation bar and the Notifications link in the side n
 
 A new **"Mark All Read"** button on the Notifications inbox clears all unread notifications in a single action. This uses a dedicated batch endpoint (`POST /notifications/logs/read-all`) for efficiency.
 
-> **Screenshot needed:**
-> _[Screenshot of the Notifications inbox page showing the "Mark All Read" button at the top right of the notification list, with several unread notifications (bold text) below]_
+![Notifications inbox with the mark-all-as-read action](./images/08-33-notifications-inbox.png)
 
 ### Read/Unread Filter and Pagination
 
-The Notifications inbox now includes:
+The Notifications inbox includes:
 
-- **"Show read" toggle** to filter between unread-only and all notifications
-- **"Load More" pagination** — notifications load 20 at a time with a "Load More" button at the bottom
+- a **Show read** checkbox beside the unread count, ticked by default, which
+  switches between all notifications and unread-only
+- **Load more** pagination — 20 at a time, with the button at the foot of the
+  list naming what is left ("Load more (18 remaining)"). It is absent once
+  everything is on screen
+- **Mark all as read**, top right, which appears only while something is unread
 
-> **Screenshot needed:**
-> _[Screenshot of the Notifications inbox showing the "Show read" toggle switch at the top, a list of 20 notifications with some read (lighter text) and some unread (bold), and a "Load More" button at the bottom]_
+Read notifications are drawn in muted text without the coloured left edge;
+unread ones keep both.
+
+> **Corrected 2026-08-10.** "Show read" is a checkbox, not a toggle switch, and
+> the button reads "Load more (N remaining)" rather than "Load More".
+
+![The notifications inbox with its Show read checkbox, unread count and Load more button](./images/08-63-inbox-show-read.png)
 
 ### Dashboard Notification Fixes
 
@@ -1301,38 +1351,46 @@ The email template editor has been significantly improved with new productivity 
 
 A **Discard** button appears when you have unsaved changes. Clicking it reverts the editor to the last saved state, discarding all modifications since the last save.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the template editor showing the "Discard" button highlighted in the toolbar, next to the Save button. Show the editor with some modified HTML content._
+![The template editor with unsaved changes, showing Discard beside Save](./images/08-56-template-discard.png)
 
 ### Reset to Default
 
 Each template can be reset to its built-in default content:
 
 1. Open the template in the editor
-2. Click **Reset to Default** in the toolbar
+2. Click **Reset** in the template's header — the dialog it opens is titled
+   "Reset to Default"
 3. Confirm the action in the dialog
 4. The template's subject, HTML body, text body, and CSS styles are restored to the application's defaults
 5. Custom CC/BCC recipients are **preserved** — only content is reset
 
 This is useful when a template has been heavily customized and you want to start fresh from the standard design.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Reset to Default" confirmation dialog showing which fields will be reset (Subject, HTML Body, Text Body, CSS) and which will be preserved (CC, BCC)._
+![The Reset to Default confirmation, naming what it restores and what it keeps](./images/08-57-template-reset-dialog.png)
 
 ### Send Test Email
 
 You can now send a test email to verify your template changes before they go live:
 
-1. Open the template in the editor
-2. Click **Send Test Email** in the toolbar
-3. The system sends the email using the current editor content (including unsaved changes) to the configured test recipient
-4. Check your email inbox to verify the rendering, links, and footer content
+1. Open the template and switch to the **Preview** tab — the button sits under
+   the rendered preview, not in the toolbar, and stays greyed out until a
+   preview has been generated
+2. Click **Send Test Email to Me**
+3. The system sends what you are looking at — the current editor content,
+   unsaved changes included — to **your own** address. There is no field for a
+   different recipient
+4. Check your inbox to verify the rendering, links, and footer content
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Send Test Email" button in the toolbar and the success toast notification showing "Test email sent to admin@example.com"._
+Sending needs a working mail transport. On a department that has not configured
+one, the button reports the failure rather than a delivery.
+
+![Send Test Email to Me, under the rendered preview it sends](./images/08-58-template-send-test.png)
 
 ### Template Search
 
 The template list now includes a **search field** that filters templates as you type. Search matches against template name and template type, making it faster to find specific templates in departments with many customized templates.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the template list sidebar showing the search field with "welcome" typed, and the filtered list showing only templates whose names contain "welcome" (e.g., "Welcome New Member", "Welcome Back")._
+![Email template sidebar filtered to templates matching welcome](./images/08-36-template-search.png)
 
 ### Standardized Email Footers
 
@@ -1390,7 +1448,7 @@ Two behaviours worth knowing:
 - **The category holding the template you are editing is forced open**, so your
   selection cannot scroll out of view while you work.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Email Templates sidebar showing seven collapsible category headers with counts (e.g. "Members & Accounts (9)"), one expanded with its templates listed and the currently-selected template highlighted._
+![Email template categories in the editor sidebar](./images/08-34-email-templates.png)
 
 ---
 
@@ -1433,7 +1491,7 @@ The resolved values refresh when an office is edited, when the **Officers** tab
 is loaded, and **nightly** — that last one is what catches a change made to the
 _member_ behind an office rather than to the assignment itself.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Officers tab showing the office list with holders, a "Linked member" column, an override indicator on one row, and the variables each office exposes._
+![Officers tab listing each office and the member holding it](./images/08-37-email-officers.png)
 
 See [DEPARTMENT_OFFICERS.md](../DEPARTMENT_OFFICERS.md) for the full variable
 catalogue and the API.
@@ -1475,7 +1533,9 @@ The Logbook now supports **Cloudflare Email Routing** as an email delivery platf
 | Email disabled in settings           | `send_batch` returns immediately without attempting delivery  |
 | Cloudflare API timeout               | Retried; failure logged to message history with error details |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Email Configuration page showing the Cloudflare platform selected, with Account ID and API Token fields, and a "Send Test Email" button._
+![Email configuration with the sending platform and credentials](./images/08-38-email-configuration.png)
+
+The credential fields are per-platform: pick **Cloudflare** and the Account ID and API Token appear beneath the sender fields. There is no **Send Test Email** button on this page — the closest thing is the test send in the email template editor, which uses whatever platform is configured here.
 
 ---
 
@@ -1518,13 +1578,13 @@ Four stat cards appear at the top of the page:
 
 Click any row to expand it and see the full **event metadata** — a JSON view of all data associated with the event (e.g., report ID, review status, affected member, old/new values).
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Audit Log page showing the summary stat cards at the top, the filter bar (search, severity, category dropdowns), and the event table with several rows. Show one row expanded to reveal the JSON event metadata._
+![The audit log with a row expanded to its JSON event metadata](./images/08-53-audit-log-expanded.png)
 
 ### Edge Cases
 
 | Scenario                              | Behavior                                    |
 | ------------------------------------- | ------------------------------------------- |
-| System-level events (no acting user)  | Excluded from org-scoped view               |
+| System-level events (no acting user)  | Shown, with **system** in the User column   |
 | Very large audit trail (100k+ events) | Paginated; server-side filtering            |
 | Multiple severity levels selected     | Events matching any selected severity shown |
 | Event with no metadata                | Expandable row shows empty JSON `{}`        |

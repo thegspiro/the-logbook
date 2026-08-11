@@ -409,6 +409,15 @@ export const MyChecklistsPage: React.FC = () => {
             <Play className="h-3.5 w-3.5" />
             Start a Check
           </button>
+          {/* A whole check is the wrong instrument for "we just used two of
+              these". This is the way to record that without starting one. */}
+          <Link
+            to="/scheduling/apparatus-inventory"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+          >
+            <Truck className="h-3.5 w-3.5" />
+            Apparatus Inventory
+          </Link>
           {canManage && (
             <Link
               to="/scheduling/settings?tab=equipment"

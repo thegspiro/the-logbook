@@ -4390,6 +4390,11 @@ class ShiftEquipmentCheckItem(Base):
     lot_number = Column(String(100), nullable=True)
     serial_found = Column(String(100), nullable=True)
     lot_found = Column(String(100), nullable=True)
+    # The expiration printed on the replacement unit the crew put on the truck.
+    # Its counterpart to serial_found/lot_found: without it a unit replaced in
+    # the field from untracked stock keeps the template's old date, so the item
+    # auto-fails every later check and never clears the supply worklist.
+    expiration_found = Column(Date, nullable=True)
     updated_serial = Column(Boolean, default=False, nullable=False, server_default="0")
     photo_urls = Column(JSON, nullable=True)
     is_expired = Column(Boolean, default=False, nullable=False)

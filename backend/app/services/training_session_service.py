@@ -75,10 +75,16 @@ class TrainingSessionService:
             if not session_data.course_id:
                 return None, "course_id is required when use_existing_course is true"
 
-            # Get existing course
+            # Get existing course.
+            # str(): the column is String(36) and course_id arrives as a UUID
+            # object from the schema, so binding it raw compares a UUID against
+            # a char column and matches nothing. The organization filter beside
+            # it was already cast; this one was not, which is why every cohort
+            # class failed with "Training course not found" while the course
+            # plainly existed.
             course_result = await self.db.execute(
                 select(TrainingCourse)
-                .where(TrainingCourse.id == session_data.course_id)
+                .where(TrainingCourse.id == str(session_data.course_id))
                 .where(TrainingCourse.organization_id == str(organization_id))
             )
             course = course_result.scalar_one_or_none()
@@ -225,9 +231,11 @@ class TrainingSessionService:
             if not session_data.course_id:
                 return [], "course_id is required when use_existing_course is true"
 
+            # str(): same String(36)-versus-UUID mismatch as the single-session
+            # path above.
             course_result = await self.db.execute(
                 select(TrainingCourse)
-                .where(TrainingCourse.id == session_data.course_id)
+                .where(TrainingCourse.id == str(session_data.course_id))
                 .where(TrainingCourse.organization_id == str(organization_id))
             )
             course = course_result.scalar_one_or_none()

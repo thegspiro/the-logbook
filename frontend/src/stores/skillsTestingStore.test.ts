@@ -299,6 +299,34 @@ describe('skillsTestingStore', () => {
       expect(useSkillsTestingStore.getState().activeSectionIndex).toBe(0);
     });
 
+    // The scoring screen jumps a resumed test to its first section with blank
+    // steps as soon as the data lands. A second load of the same test resolved
+    // afterwards and reset the index, putting the examiner back at section 1
+    // partway through an evaluation.
+    it('should keep the current section when reloading the test already open', async () => {
+      vi.mocked(skillsTestingService.getTest).mockResolvedValue(mockTest);
+      await useSkillsTestingStore.getState().loadTest('test-1');
+      useSkillsTestingStore.getState().setActiveSectionIndex(2);
+
+      await useSkillsTestingStore.getState().loadTest('test-1');
+
+      expect(useSkillsTestingStore.getState().activeSectionIndex).toBe(2);
+    });
+
+    it('should start a different test at its first section', async () => {
+      vi.mocked(skillsTestingService.getTest).mockResolvedValue(mockTest);
+      await useSkillsTestingStore.getState().loadTest('test-1');
+      useSkillsTestingStore.getState().setActiveSectionIndex(2);
+
+      vi.mocked(skillsTestingService.getTest).mockResolvedValue({
+        ...mockTest,
+        id: 'test-2',
+      });
+      await useSkillsTestingStore.getState().loadTest('test-2');
+
+      expect(useSkillsTestingStore.getState().activeSectionIndex).toBe(0);
+    });
+
     it('should create a test', async () => {
       vi.mocked(skillsTestingService.createTest).mockResolvedValue(mockTest);
 

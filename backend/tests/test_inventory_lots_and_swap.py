@@ -5,6 +5,9 @@ the camelCase supply-overview serialization, and the lot-swap request/response.
 """
 
 from app.schemas.equipment_check import (
+    ApparatusInventoryCompartment,
+    ApparatusInventoryItem,
+    ApparatusInventoryResponse,
     LotSwapRequest,
     LotSwapResponse,
     ReadyLot,
@@ -13,6 +16,8 @@ from app.schemas.equipment_check import (
 )
 from app.schemas.inventory import (
     ExpiringLotResponse,
+    InventoryLotBulkCreate,
+    InventoryLotBulkEntry,
     InventoryLotCreate,
     InventoryLotUpdate,
 )
@@ -58,6 +63,77 @@ class TestInventoryLotSchemas:
         )
         assert resp.item_name == "4x4 Gauze"
         assert resp.days_until_expiration == 12
+
+
+class TestApparatusInventorySchemas:
+    def test_serializes_camel_case_for_the_crew_view(self):
+        payload = ApparatusInventoryResponse(
+            apparatus_id="app-1",
+            apparatus_name="Engine 1",
+            compartments=[
+                ApparatusInventoryCompartment(
+                    compartment_id="c-1",
+                    compartment_name="Front Bumper",
+                    items=[
+                        ApparatusInventoryItem(
+                            template_item_id="ti-1",
+                            item_name="4x4 Gauze",
+                            restock_needed=True,
+                            restock_note="used two",
+                            ready_stock=6,
+                        )
+                    ],
+                )
+            ],
+        ).model_dump(by_alias=True)
+
+        assert payload["apparatusName"] == "Engine 1"
+        item = payload["compartments"][0]["items"][0]
+        assert item["restockNeeded"] is True
+        assert item["restockNote"] == "used two"
+        assert item["readyStock"] == 6
+
+    def test_an_item_defaults_to_no_outstanding_report(self):
+        item = ApparatusInventoryItem(template_item_id="ti-1", item_name="Epi")
+        assert item.restock_needed is False
+        assert item.ready_stock == 0
+
+
+class TestBulkReceiveSchemas:
+    def test_entry_carries_the_item_and_its_dates(self):
+        entry = InventoryLotBulkEntry(
+            inventory_item_id="i-1",
+            quantity=24,
+            lot_number="LOT-A",
+            expiration_date="2027-03-01",
+        )
+        assert entry.inventory_item_id == "i-1"
+        assert str(entry.expiration_date) == "2027-03-01"
+
+    def test_entry_rejects_a_zero_quantity(self):
+        # Unlike a standalone lot, a received line with no units is a slip:
+        # goods came through the door or the line should not be there.
+        try:
+            InventoryLotBulkEntry(inventory_item_id="i-1", quantity=0)
+        except Exception:
+            return
+        raise AssertionError("a received line of zero should be rejected")
+
+    def test_delivery_requires_at_least_one_line(self):
+        try:
+            InventoryLotBulkCreate(entries=[])
+        except Exception:
+            return
+        raise AssertionError("an empty delivery should be rejected")
+
+    def test_delivery_accepts_many_lines(self):
+        delivery = InventoryLotBulkCreate(
+            entries=[
+                InventoryLotBulkEntry(inventory_item_id=f"i-{n}", quantity=1)
+                for n in range(20)
+            ]
+        )
+        assert len(delivery.entries) == 20
 
 
 class TestSupplyAndSwapSchemas:

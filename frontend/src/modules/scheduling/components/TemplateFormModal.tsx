@@ -623,8 +623,11 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                 </span>
               </label>
               <p className="text-theme-text-muted mb-2 text-xs">
-                Define the crew structure for shifts created from this template. Toggle the switch to mark a position as
-                optional.
+                {/* "Toggle the switch" described a control that was never
+                    built: the Required/Optional control is a button whose
+                    label is its state, not a switch. */}
+                Define the crew structure for shifts created from this template. Click a position&apos;s Required badge
+                to make it optional.
               </p>
               {formData.positions.length > 0 && (
                 <div className="mb-2 space-y-2">
