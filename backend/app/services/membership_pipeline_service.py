@@ -4601,6 +4601,12 @@ class MembershipPipelineService:
 
         await self.db.commit()
 
+        # The commit expired every attribute on `link`, and the response below
+        # reads several of them — including the server-side `created_at`. Those
+        # reads are synchronous, so the lazy reload they trigger raises
+        # MissingGreenlet and the POST 500s on a link it did create.
+        await self.db.refresh(link)
+
         # Return enriched response
         linker_result = await self.db.execute(select(User).where(User.id == linked_by))
         linker = linker_result.scalar_one_or_none()
