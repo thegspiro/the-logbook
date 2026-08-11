@@ -433,6 +433,13 @@ PROGRAM_GATE_REQUIREMENTS = {
     "Probationary Firefighter Pipeline": "Hose Deployment",
 }
 
+# The one enrollment left past its deadline, so Expired and the reopen dialog
+# are reachable. Deliberately not one of the four recruits: their enrollments
+# are what the progression screenshots are built around.
+EXPIRED_ENROLLMENT_PROGRAM = "Recruit School Pipeline"
+EXPIRED_ENROLLMENT_USERNAME = "bhollis"
+EXPIRED_ENROLLMENT_DAYS_OVER = 23
+
 # Steps behind a checklist requirement, keyed on the requirement name.
 CHECKLIST_ITEMS = {
     "Station Duties Checklist": [
@@ -4539,8 +4546,72 @@ class Seeder:
                 )
         self._strip_phase_number_prefixes(programs)
         self._flag_gating_requirements(programs)
+        self._expire_one_enrollment(programs, members)
         self._advance_pipeline_progress(programs)
         return programs
+
+    def _expire_one_enrollment(self, programs: list[dict], members: list[dict]) -> None:
+        """Leave one enrollment past its deadline, so Expired is reachable.
+
+        Every seeded enrollment ran to 2027, so the expiry status, the Expired
+        filter and the reopen dialog had nothing to render — the officer's
+        Enrollments tab could only ever be shown in one state.
+
+        The member is one of the department's EMTs rather than one of the four
+        recruits, whose enrollments the progression shots are built around, and
+        the programme is Recruit School for the same reason. Enrolling with a
+        past target date is enough: the status is written the first time anyone
+        opens the enrollment, which is what the GET below does.
+        """
+        program = next(
+            (
+                p
+                for p in programs
+                if str(pick(p, "name") or "") == EXPIRED_ENROLLMENT_PROGRAM
+            ),
+            None,
+        )
+        if not program:
+            return
+        program_id = pick(program, "id")
+        enrollments = items(
+            self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+            "enrollments",
+        )
+        if any(str(pick(e, "status") or "") == "expired" for e in enrollments):
+            return
+        member = next(
+            (
+                m
+                for m in members
+                if str(pick(m, "username") or "") == EXPIRED_ENROLLMENT_USERNAME
+            ),
+            None,
+        )
+        user_id = pick(member or {}, "id")
+        if not user_id:
+            return
+        enrolled = {pick(e, "user_id") for e in enrollments}
+        if user_id not in enrolled:
+            self.api.post(
+                "/training/programs/enrollments",
+                {
+                    "program_id": program_id,
+                    "user_id": user_id,
+                    "target_completion_date": str(
+                        date.today() - timedelta(days=EXPIRED_ENROLLMENT_DAYS_OVER)
+                    ),
+                },
+            )
+            enrollments = items(
+                self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+                "enrollments",
+            )
+        for enrollment in enrollments:
+            if pick(enrollment, "user_id") == user_id:
+                # Reading it is what writes the status.
+                self.api.get(f"/training/programs/enrollments/{pick(enrollment, 'id')}")
+                break
 
     def _flag_gating_requirements(self, programs: list[dict]) -> None:
         """Mark one requirement per programme as the one to do first.
@@ -4560,9 +4631,7 @@ class Seeder:
             if not program_id or not gate_name:
                 continue
             links = items(
-                self.api.get(
-                    f"/training/programs/programs/{program_id}/requirements"
-                ),
+                self.api.get(f"/training/programs/programs/{program_id}/requirements"),
                 "requirements",
             )
             for link in links:

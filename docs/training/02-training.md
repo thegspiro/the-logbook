@@ -362,9 +362,12 @@ could read 100% complete while the background check was still outstanding. So th
 member is told **"+2 more steps your officer records"** rather than being shown a
 denominator that does not match what is on their screen.
 
-> **[SCREENSHOT NEEDED]:** _The requirement editor's checklist steps editor
-> showing several steps with the eye toggle, one step toggled to officer-only
-> (eye closed) with its greyed-out treatment._
+An officer-only step is not dimmed — it is **marked in amber, with the eye
+struck through**, and it sits in the list exactly where it was. The step is
+still yours to edit, rename and reorder; the toggle changes only who can read
+it.
+
+![The requirement editor's checklist steps — each with its own eye toggle, one switched to officer-only](./images/02-100-checklist-steps-editor.png)
 
 #### Edge cases
 
@@ -398,7 +401,14 @@ A **phase completes** when all of its required items are done. What happens next
 
 When a member advances, both the **member** and their **mentor(s)** are notified.
 
-> **[SCREENSHOT NEEDED]:** _A member's progress detail showing a completed phase marked ready to advance, with an officer-only "Advance to next phase" button because the phase requires approval._
+**Advance to next phase** is not conjured by the approval setting: it sits at the
+top of every phased member's progress detail, beside **Start new cycle**, for any
+officer who can manage training. What the approval setting decides is whether
+advancement _also_ happens on its own when the phase completes. The button is
+disabled only on the last phase, where it reads **Final phase reached**.
+
+The control is pictured in the reopen shot below — the same header, on an
+enrollment that also happens to have expired.
 
 #### Phase prerequisites _(2026-08-09)_
 
@@ -475,8 +485,13 @@ An enrollment past its target completion date now moves to **Expired**.
 - It happens **the moment anyone opens the enrollment**, and again in a **daily
   sweep** for the ones nobody opens.
 - Both the **member** and the **training officers** are told.
-- Officers can now **filter for expired enrollments**, which was impossible while
-  the status was never written.
+- Officers can **filter the Enrollments tab by status**, expired among them
+  _(2026-08-11)_. The list endpoint had taken a status since the day the status
+  was first written, but nothing on the tab asked for one, so finding the
+  enrollments that had run out meant reading every row. Filtering to a status
+  nobody holds says so, and offers **Show all statuses** back — it does not
+  invite you to enroll somebody, which is what the "no members enrolled"
+  message would have said.
 
 #### Reopening an expired enrollment
 
@@ -490,9 +505,11 @@ out of time.
   finished the work while expired comes back marked complete rather than waiting
   for the next edit to notice.
 
-> **[SCREENSHOT NEEDED]:** _An officer's Enrollments tab filtered to Expired,
-> showing an expired enrollment row with the Reopen action, and the reopen dialog
-> with its optional new target completion date._
+There is no separate reopen dialog: opening the member's progress from the
+Enrollments tab puts the whole thing at the top of that panel — how far they got
+before the deadline passed, the optional new deadline, and the button.
+
+![An expired enrollment opened by an officer — the deadline it ran past, and the reopen control with its optional new date](./images/02-101-expired-enrollment-reopen.png)
 
 #### Deadline reminders, per program _(2026-08-09)_
 

@@ -859,6 +859,16 @@ export type ProgramStructureType = 'sequential' | 'phases' | 'flexible';
 
 export type EnrollmentStatus = 'active' | 'completed' | 'expired' | 'on_hold' | 'withdrawn' | 'failed';
 
+/** Every enrollment status, in the order a status filter should offer them. */
+export const ENROLLMENT_STATUSES: readonly EnrollmentStatus[] = [
+  'active',
+  'completed',
+  'expired',
+  'on_hold',
+  'withdrawn',
+  'failed',
+];
+
 export type RequirementProgressStatus = 'not_started' | 'in_progress' | 'completed' | 'verified' | 'waived';
 
 /**

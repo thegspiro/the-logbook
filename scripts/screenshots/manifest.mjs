@@ -1953,6 +1953,77 @@ export const SHOTS = [
     selector: "div.fixed.inset-0 > div",
   },
   {
+    id: "02-100-checklist-steps-editor",
+    doc: "02-training.md",
+    line: 365,
+    anchor: "The checklist steps editor, with one step kept off the member's view",
+    alt: "The requirement editor's checklist steps — each with its own eye toggle, one switched to officer-only",
+    route: "/training/admin?page=setup&tab=requirements",
+    prepare: async (page) => {
+      await page.waitForTimeout(3000);
+      await page
+        .getByPlaceholder(/Search requirements/)
+        .first()
+        .fill("Station Duties");
+      await page.waitForTimeout(1500);
+      await page
+        .getByRole("button", { name: "Edit requirement" })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2500);
+      const editor = page
+        .locator("div:has(> span:text-is('Checklist steps'))")
+        .first();
+      await editor.waitFor({ timeout: 20_000 });
+      await editor.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    selector: "div:has(> span:text-is('Checklist steps'))",
+  },
+  {
+    id: "02-101-expired-enrollment-reopen",
+    doc: "02-training.md",
+    line: 483,
+    anchor: "The Enrollments tab filtered to Expired, and the reopen control",
+    alt: "An expired enrollment opened by an officer — the deadline it ran past, and the reopen control with its optional new date",
+    route: "/training/programs",
+    prepare: async (page) => {
+      const programId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/training/programs/programs", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const list = Array.isArray(rows) ? rows : [];
+        const wanted = list.find((row) => /Recruit School/.test(row.name || ""));
+        return wanted ? wanted.id : null;
+      });
+      if (!programId) throw new Error("02-101: no Recruit School pipeline");
+      await page.goto(
+        new URL(
+          `/training/programs/${programId}?tab=enrollments`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(3000);
+      await page.getByLabel("Status").selectOption("expired");
+      await page.waitForTimeout(1500);
+      await page
+        .getByRole("button", { name: /Manage progress for/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2500);
+      const reopen = page.getByRole("button", { name: /Reopen enrollment/ });
+      await reopen.waitFor({ timeout: 20_000 });
+      await reopen.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    // Stops short of pressing Reopen: doing so would clear the one expired
+    // enrollment the demo has.
+    selector: "div.fixed.inset-0 > div",
+  },
+  {
     id: "02-98-requirement-prerequisite",
     doc: "02-training.md",
     line: 445,
