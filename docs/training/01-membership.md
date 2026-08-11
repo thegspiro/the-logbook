@@ -480,8 +480,20 @@ and its reversal.
 
 > **Edge case:** If a prospect's desired membership type is changed from "Regular" to "Administrative" after they have already passed an election/vote stage, the system does not retroactively invalidate the vote. The coordinator should verify that the voting requirements for administrative members were met.
 
-> **Screenshot placeholder:**
-> _[Screenshot of a prospect detail drawer showing the prospect's info at the top, the current pipeline stage, step checklist with some items completed, and the "Transfer to Membership" button]_
+### The applicant's drawer, end to end
+
+Everything about one applicant is in the drawer, in this order: who they are and
+how to reach them, the membership type they asked for, the stage they are on and
+when they reached it, the events they are booked into, their documents, and the
+action bar. On the **last** stage the action bar's final button reads **Convert**
+rather than Advance — the same button, naming what it does there.
+
+![An applicant's drawer on the last stage of the pipeline — their details, the stage they are on, and Convert where Advance sits elsewhere](./images/01-35-applicant-drawer-final-stage.png)
+
+> **Checklist Progress reads "No checklist data recorded yet" for everyone.**
+> Nothing in the application records which checklist items are done — see
+> `docs/KNOWN_LIMITATIONS.md`. Track a checklist stage's items in the stage
+> notes until that is built, and leave the stage's item list unconfigured.
 
 ### Printing Applicant Badges
 

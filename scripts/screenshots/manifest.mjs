@@ -3027,6 +3027,32 @@ export const SHOTS = [
     selector: "div.fixed.inset-0",
   },
   {
+    id: "01-35-applicant-drawer-final-stage",
+    doc: "01-membership.md",
+    line: 487,
+    anchor: "A prospect detail drawer on the final stage",
+    alt: "An applicant's drawer on the last stage of the pipeline — their details, the stage they are on, and Convert where Advance sits elsewhere",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      await page.waitForTimeout(2500);
+      // The applicant on the final stage: the action bar's last button reads
+      // Convert rather than Advance there, which is the whole point of the
+      // shot, and the documents seeded onto this same applicant are below it.
+      await page
+        .locator("[role='button'][aria-label*='Bishop']")
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2500);
+      await page
+        .getByRole("button", { name: /^Convert$/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
+    },
+    // The drawer itself, from its header down: taller than the viewport, so
+    // the element rather than the screen.
+    selector: "div.drawer-panel",
+  },
+  {
     id: "01-34-desired-membership-type",
     doc: "01-membership.md",
     line: 480,

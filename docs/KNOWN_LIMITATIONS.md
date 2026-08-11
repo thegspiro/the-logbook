@@ -1007,6 +1007,33 @@ valuable half. Worth another attempt with a fresh idea about which of the
 member's shifts carry an unclaimed checklist — the first pass drove it from
 `/scheduling/my-shifts`, whose result did not line up with what the page lists.
 
+## Prospective Members — A Configured Checklist Stage Cannot Be Passed (2026-08-11)
+
+Blocking, for any department that fills in a checklist stage's item list.
+
+`_validate_step_completion` refuses to complete a `CHECKLIST` step until
+`action_result.completed_items` holds as many entries as the stage's configured
+`items` (when `require_all`, the default). **Nothing in the application ever
+writes that key.** `completeStep` sends only notes; there is no partial-progress
+endpoint, and no component renders the items as anything tickable. The drawer's
+**Checklist Progress** panel reads them back, which is why it says "No checklist
+data recorded yet" for every applicant.
+
+So an applicant on a checklist stage with items configured cannot be advanced —
+and cannot be skipped either, because **Skip Stage** goes through the same
+`complete-step` call and hits the same validator. The only escape is to empty
+the stage's item list, or to call the API by hand with the key.
+
+The demo pipeline's Onboarding stage has no items configured, which is why the
+board still moves.
+
+Fixing it properly is not a screenshot's worth of work: the items have to be
+rendered and ticked somewhere, and the ticks have to persist _before_ the step
+is completed — which means either a partial-progress endpoint or teaching
+`_validate_step_completion` to count the `action_result` arriving in the same
+call. Either is a deliberate change to how a stage is passed, so it belongs in
+its own piece of work rather than being slipped in under a documentation pass.
+
 ## External Training — The Mapping List Needs a Live Provider (2026-08-11)
 
 Held back. `02-training.md` asked for the Vector Solutions category mapping
