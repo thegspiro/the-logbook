@@ -129,11 +129,18 @@ async def list_templates(
 ):
     """List equipment check templates with optional filters."""
     service = EquipmentCheckService(db)
+    permissions = _collect_user_permissions(current_user)
+    visible_positions = None
+    if not _has_permission("equipment_check.view", permissions):
+        visible_positions = await service.get_user_check_positions(
+            str(current_user.id), str(current_user.organization_id)
+        )
     return await service.list_templates(
         organization_id=current_user.organization_id,
         apparatus_id=apparatus_id,
         apparatus_type=apparatus_type,
         check_timing=check_timing,
+        visible_positions=visible_positions,
     )
 
 
@@ -154,7 +161,17 @@ async def get_template(
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
-    template = await service.get_template(template_id, current_user.organization_id)
+    permissions = _collect_user_permissions(current_user)
+    visible_positions = None
+    if not _has_permission("equipment_check.view", permissions):
+        visible_positions = await service.get_user_check_positions(
+            str(current_user.id), str(current_user.organization_id)
+        )
+    template = await service.get_template(
+        template_id,
+        current_user.organization_id,
+        visible_positions=visible_positions,
+    )
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     return template
