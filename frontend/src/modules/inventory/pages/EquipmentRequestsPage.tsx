@@ -6,7 +6,18 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, ClipboardList, RefreshCw, Check, XCircle, Loader2, Filter, PackageCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  RefreshCw,
+  Check,
+  XCircle,
+  Loader2,
+  Filter,
+  PackageCheck,
+} from 'lucide-react';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';
 import type { EquipmentRequestItem, InventoryItem } from '../types';
@@ -18,10 +29,13 @@ import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 
 const EquipmentRequestsPage: React.FC = () => {
+  const pageSize = 25;
   const tz = useTimezone();
   const [requests, setRequests] = useState<EquipmentRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('pending');
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
   const [reviewModal, setReviewModal] = useState<{ open: boolean; request: EquipmentRequestItem | null }>({
     open: false,
     request: null,
@@ -43,14 +57,19 @@ const EquipmentRequestsPage: React.FC = () => {
   const loadRequests = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await inventoryService.getEquipmentRequests(statusFilter ? { status: statusFilter } : {});
+      const data = await inventoryService.getEquipmentRequests({
+        ...(statusFilter ? { status: statusFilter } : {}),
+        skip: page * pageSize,
+        limit: pageSize,
+      });
       setRequests(data.requests || []);
+      setTotal(data.total);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load requests'));
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [page, statusFilter]);
 
   useEffect(() => {
     void loadRequests();
@@ -154,7 +173,10 @@ const EquipmentRequestsPage: React.FC = () => {
           <select
             id="status-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(0);
+            }}
             className="form-input w-48"
           >
             <option value="pending">Pending</option>
@@ -234,6 +256,34 @@ const EquipmentRequestsPage: React.FC = () => {
           </div>
         )}
 
+        {!loading && total > 0 && (
+          <nav className="mt-6 flex items-center justify-between gap-4" aria-label="Equipment request pagination">
+            <p className="text-theme-text-muted text-sm">
+              Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-secondary btn-sm inline-flex items-center gap-1"
+                disabled={page === 0}
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-sm inline-flex items-center gap-1"
+                disabled={(page + 1) * pageSize >= total}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </nav>
+        )}
+
         {/* Mobile FAB */}
         <FloatingActionButton
           actions={[
@@ -248,10 +298,12 @@ const EquipmentRequestsPage: React.FC = () => {
                       ? 'Show All'
                       : 'Show Pending',
               icon: <Filter className="h-5 w-5" />,
-              onClick: () =>
+              onClick: () => {
+                setPage(0);
                 setStatusFilter((prev) =>
                   prev === 'pending' ? 'approved' : prev === 'approved' ? 'denied' : prev === 'denied' ? '' : 'pending'
-                ),
+                );
+              },
               color: 'bg-purple-600',
             },
             {

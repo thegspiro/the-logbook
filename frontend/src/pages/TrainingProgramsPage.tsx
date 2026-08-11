@@ -24,6 +24,7 @@ import { trainingProgramService, trainingService } from '../services/api';
 import RegistryImportModal from './RegistryImportModal';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { enumLabel } from '@/utils/displayValue';
 import type {
   TrainingProgram,
   TrainingRequirementEnhanced,
@@ -409,7 +410,7 @@ const TrainingProgramsPage: React.FC = () => {
                                 </span>
                               )}
                               <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-xs text-blue-700 dark:text-blue-400">
-                                {program.structure_type}
+                                {enumLabel(program.structure_type)}
                               </span>
                             </div>
                             {program.description && <p className="text-theme-text-muted mb-3">{program.description}</p>}
@@ -422,7 +423,7 @@ const TrainingProgramsPage: React.FC = () => {
                               )}
                               <div className="flex items-center space-x-1">
                                 <Users className="h-4 w-4" aria-hidden="true" />
-                                <span>0 enrolled</span>
+                                <span>{program.enrolled_count} enrolled</span>
                               </div>
                             </div>
                           </div>

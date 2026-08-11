@@ -7,7 +7,7 @@ and tracking pass/fail results for fire department skills assessments.
 """
 
 import html
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,9 +21,17 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.data.skill_sheet_library import (
+    SKILL_SHEETS,
+    build_template_payload,
+    iter_criteria,
+    sheet_by_slug,
+    slug_for,
+)
 from app.models.skills_testing import (
     ResultDisclosure,
     SkillTemplate,
+    SkillTemplateStatus,
     SkillTest,
     SkillTestResult,
     SkillTestStatus,
@@ -31,16 +39,20 @@ from app.models.skills_testing import (
 )
 from app.models.user import User, UserStatus
 from app.schemas.skills_testing import (
+    SkillSheetLibraryItem,
     SkillTemplateCreate,
     SkillTemplateListResponse,
     SkillTemplateResponse,
     SkillTemplateUpdate,
+    SkillTestBulkValidateRequest,
+    SkillTestBulkValidateResponse,
     SkillTestCancelRequest,
     SkillTestCandidateResponse,
     SkillTestCreate,
     SkillTestingSummaryResponse,
     SkillTestListResponse,
     SkillTestResponse,
+    SkillTestReturnRequest,
     SkillTestUpdate,
     SkillTestViewerCreate,
     SkillTestViewerResponse,
@@ -384,6 +396,140 @@ async def create_template(
         event_data={
             "template_id": str(new_template.id),
             "template_name": new_template.name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return new_template
+
+
+@router.get("/library", response_model=list[SkillSheetLibraryItem])
+async def list_library_sheets(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    The starter sheets a department can copy into its own library.
+
+    Skills Testing otherwise opens on an empty table and a New Template button,
+    and building an NREMT-style sheet from scratch is twenty minutes of typing
+    before the first candidate can be tested.
+
+    These are read from a static definition rather than seeded as system-level
+    rows: ``skill_templates.organization_id`` is NOT NULL, and making a tenancy
+    column nullable to hold shared records is a bigger change than the feature
+    needs. Copying on demand also gets the ownership right — an imported sheet
+    is the department's, editable and publishable like any other, not a shared
+    row that shifts under them when the application updates.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    existing = (
+        (
+            await db.execute(
+                select(SkillTemplate.name).where(
+                    SkillTemplate.organization_id == current_user.organization_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    held = {name for name in existing if name}
+
+    items: list[SkillSheetLibraryItem] = []
+    for sheet in SKILL_SHEETS:
+        criteria = [c for *_, c in iter_criteria(sheet)]
+        items.append(
+            SkillSheetLibraryItem(
+                slug=slug_for(sheet),
+                name=sheet["name"],
+                description=sheet.get("description"),
+                category=sheet.get("category"),
+                tags=sheet.get("tags") or [],
+                section_count=len(sheet["sections"]),
+                criteria_count=len(criteria),
+                critical_count=sum(
+                    1
+                    for c in criteria
+                    if c.get("required") and c.get("type") != "statement"
+                ),
+                passing_percentage=sheet.get("passing_percentage"),
+                time_limit_seconds=sheet.get("time_limit_seconds"),
+                already_imported=sheet["name"] in held,
+            )
+        )
+    return items
+
+
+@router.post(
+    "/library/{slug}/import",
+    response_model=SkillTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def import_library_sheet(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Copy a starter sheet into the department's own library.
+
+    Lands as a **draft**, deliberately. A published template can be selected for
+    a live evaluation, and a sheet nobody in the department has read yet should
+    not be. The officer reviews it — the printed blank sheet is the easiest way
+    — adjusts anything their SOPs word differently, and publishes it themselves.
+
+    Goes through ``SkillTemplateCreate`` rather than straight into the model, so
+    the criterion-type whitelist and every other schema rule apply to imported
+    content exactly as they do to hand-authored content. An import path that
+    bypassed that validation is how unscorable templates got into a database
+    once already.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    sheet = sheet_by_slug(slug)
+    if sheet is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No starter sheet with that id",
+        )
+
+    # Validated, not trusted. Same gate as an authored template.
+    payload = SkillTemplateCreate(**build_template_payload(sheet))
+
+    new_template = SkillTemplate(
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        name=payload.name,
+        description=payload.description,
+        category=payload.category,
+        sections=[s.model_dump() for s in payload.sections],
+        time_limit_seconds=payload.time_limit_seconds,
+        passing_percentage=payload.passing_percentage,
+        require_all_critical=payload.require_all_critical,
+        score_pass_fail_criteria=payload.score_pass_fail_criteria,
+        tags=payload.tags,
+        visibility=payload.visibility,
+        status=SkillTemplateStatus.DRAFT.value,
+    )
+
+    db.add(new_template)
+    await db.commit()
+    await db.refresh(new_template)
+
+    await log_audit_event(
+        db=db,
+        event_type="skill_template_imported",
+        event_category="training",
+        severity="info",
+        event_data={
+            "template_id": str(new_template.id),
+            "template_name": new_template.name,
+            "library_slug": slug,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -1382,6 +1528,35 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     return dt
 
 
+async def _lock_test_for_transition(
+    db: AsyncSession, test_id: UUID, organization_id: UUID
+) -> SkillTest | None:
+    """Fetch a test with its row locked for the rest of the transaction.
+
+    The three exits from a submitted result — validate, return and void — each
+    read the row, check its status and validation state, then write a *different*
+    set of columns. An unlocked read lets two of them pass their guards against
+    the same row and both commit: the second UPDATE touches columns the first
+    never wrote, so nothing collides and nothing is rejected. What lands is a row
+    claiming both transitions — ``validated_at`` set on an ``in_progress`` /
+    ``incomplete`` test, its requirement already credited, and the examiner
+    locked out of correcting it because writes reject a validated test.
+
+    ``FOR UPDATE`` makes the second caller wait for the first to commit and then
+    re-read, so its guard sees the transition that already happened and returns
+    the ordinary 400 instead of compounding it. Two officers working the same
+    review queue is the normal case, not a rare one — bulk validate makes a whole
+    screenful of these calls at once.
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == organization_id)
+        .with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 @router.post("/tests/{test_id}/complete", response_model=SkillTestResponse)
 async def complete_test(
     test_id: UUID,
@@ -1710,12 +1885,7 @@ async def validate_test(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    result = await db.execute(
-        select(SkillTest)
-        .where(SkillTest.id == str(test_id))
-        .where(SkillTest.organization_id == current_user.organization_id)
-    )
-    test = result.scalar_one_or_none()
+    test = await _lock_test_for_transition(db, test_id, current_user.organization_id)
 
     if not test:
         raise HTTPException(
@@ -1837,6 +2007,66 @@ async def validate_test(
     return _build_test_response(
         test, template, candidate, examiner, org_config=org_config
     )
+
+
+@router.post("/tests/bulk-validate", response_model=SkillTestBulkValidateResponse)
+async def bulk_validate_tests(
+    payload: SkillTestBulkValidateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Accept several submissions in one action.
+
+    After a drill night an officer has a queue of peer-run results to sign off,
+    and every other approval surface in the product has a bulk path. This is
+    that path — but validation is not a bulk *write*: each one credits a
+    pipeline requirement, spends an attempt against its cap, and notifies a
+    candidate.
+
+    So this does not reimplement any of it. It calls ``validate_test`` per id,
+    which means separation of duties, the attempt cap, the pipeline apply, the
+    audit entry and the notification all behave exactly as they do for a single
+    validation — there is no second implementation of the rules to drift.
+
+    **Partial success is the normal outcome**, not an error. A colleague may
+    have validated or voided one of the selection between the officer loading
+    the queue and pressing the button, and an officer capped out on one
+    candidate's attempts should still get the other nine signed off. Each
+    refusal is reported with its reason rather than failing the batch — and
+    because each validation commits as it goes, the ones that succeeded stand.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    validated: list[UUID] = []
+    skipped: list[dict] = []
+
+    for test_id in payload.test_ids:
+        try:
+            await validate_test(test_id=test_id, db=db, current_user=current_user)
+            validated.append(test_id)
+        except HTTPException as exc:
+            skipped.append({"test_id": str(test_id), "reason": exc.detail})
+
+    # One entry for the action itself, beside the per-test entries validate_test
+    # already wrote. A reader asking "why did nine results change at 21:40?"
+    # should find the answer as one deliberate act rather than infer it.
+    await log_audit_event(
+        db=db,
+        event_type="skill_tests_bulk_validated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "requested": len(payload.test_ids),
+            "validated": len(validated),
+            "skipped": skipped,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return SkillTestBulkValidateResponse(validated=validated, skipped=skipped)
 
 
 @router.post("/tests/{test_id}/release", response_model=SkillTestResponse)
@@ -2317,12 +2547,7 @@ async def void_test(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    result = await db.execute(
-        select(SkillTest)
-        .where(SkillTest.id == str(test_id))
-        .where(SkillTest.organization_id == current_user.organization_id)
-    )
-    test = result.scalar_one_or_none()
+    test = await _lock_test_for_transition(db, test_id, current_user.organization_id)
 
     if not test:
         raise HTTPException(
@@ -2427,6 +2652,132 @@ async def void_test(
         examiner,
         current_user,
         org_config=org_config,
+    )
+
+
+@router.post("/tests/{test_id}/return", response_model=SkillTestResponse)
+async def return_test_for_correction(
+    test_id: UUID,
+    return_data: SkillTestReturnRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Send a submitted result back to its examiner instead of accepting it.
+
+    The third exit from a pending submission, beside ``/validate`` and
+    ``/void``. Voiding is the right instrument for a result that was *wrong* —
+    the record survives with its reason, which is what a candidate who sat the
+    evaluation is owed. It is the wrong one for a result that was simply not
+    finished properly: "the captain mis-scored step 4, have him redo it" should
+    not cost a permanent, candidate-visible withdrawal and a second test.
+
+    A return spends no void. The test reopens to its examiner at
+    ``in_progress`` with every mark intact, so they correct the step rather than
+    re-running the evolution, and complete it again for review.
+
+    **Only an unvalidated submission can be returned.** Once an officer has
+    validated a result it has credited its requirement, spent an attempt and
+    become visible to the candidate — undoing that is a void, which releases all
+    three. Returning it would silently strip a result the candidate has already
+    been shown.
+
+    Practice attempts are never validated, so there is nothing to send back.
+
+    The candidate is deliberately **not** notified. Nothing has been claimed
+    about them yet — the submission never counted — and "your evaluation was
+    returned to the examiner" discloses both that they were tested and that
+    something was wrong with it, which is the officer's business with the
+    examiner until a result actually stands.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    test = await _lock_test_for_transition(db, test_id, current_user.organization_id)
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    if test.is_practice:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Practice attempts are not reviewed, so there is nothing to return",
+        )
+
+    if test.status != SkillTestStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only a completed test awaiting review can be returned",
+        )
+
+    if test.validated_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This result has already been validated. Void it instead — "
+                "that releases the requirement it credited and the attempt it "
+                "spent."
+            ),
+        )
+
+    test.status = SkillTestStatus.IN_PROGRESS.value
+    # The outcome goes with the status. Leaving a stale pass/fail on a reopened
+    # test would report a verdict for a submission nobody has accepted, and
+    # complete_test recomputes it from the marks anyway.
+    test.result = SkillTestResult.INCOMPLETE.value
+    test.completed_at = None
+    test.version = (test.version or 1) + 1
+    test.returned_at = datetime.now(timezone.utc)
+    test.returned_by = str(current_user.id)
+    test.return_reason = return_data.reason
+    test.return_count = (test.return_count or 0) + 1
+
+    await db.commit()
+    await db.refresh(test)
+
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
+    examiner = examiner_result.scalar_one_or_none()
+
+    await log_audit_event(
+        db=db,
+        event_type="skill_test_returned",
+        event_category="training",
+        severity="info",
+        event_data={
+            "test_id": str(test_id),
+            "template_name": template.name if template else None,
+            "candidate_id": test.candidate_id,
+            "candidate_name": _format_user_name(candidate) if candidate else None,
+            "examiner_id": test.examiner_id,
+            "examiner_name": _format_user_name(examiner) if examiner else None,
+            "reason": return_data.reason,
+            # The count is the part a reader needs: one return is a slip, a
+            # third is a training conversation.
+            "return_count": test.return_count,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _build_test_response(
+        test,
+        template,
+        candidate,
+        examiner,
+        org_config=await _org_training_config(db, current_user.organization_id),
+        returner=current_user,
     )
 
 
@@ -2665,6 +3016,312 @@ async def email_test_results(
 
 
 # ============================================
+# Export
+# ============================================
+
+
+def _csv_bool(value: object) -> str:
+    return "Yes" if value else "No"
+
+
+def _csv_dt(value: object) -> str:
+    """An ISO-8601 UTC stamp, or blank.
+
+    Deliberately not localized. Everything is stored as UTC, and an export is
+    read months later by an auditor in an unknown timezone — a bare local
+    string with no offset is the one format that cannot be checked.
+
+    Which is why the offset has to be *attached*: MySQL hands back naive
+    datetimes even for timezone-aware columns (see ``_ensure_utc``), so a plain
+    ``isoformat()`` emits ``2026-08-11T09:00:00`` — a stamp this function's own
+    header calls UTC and an auditor cannot tell from local time.
+    """
+    if not value:
+        return ""
+    if isinstance(value, datetime):
+        stamped = _ensure_utc(value)
+        return stamped.isoformat() if stamped else ""
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+@router.get("/tests/export/csv")
+async def export_tests_csv(
+    detail: str = Query(
+        "summary",
+        description="'summary' for one row per test, 'criteria' for one row per step",
+    ),
+    status_filter: str | None = Query(None, alias="status"),
+    pending_validation: bool = Query(
+        False,
+        description=(
+            "Only completed, unvalidated official results — the officer review "
+            "queue. Same predicate as GET /tests."
+        ),
+    ),
+    candidate_id: UUID | None = Query(None),
+    template_id: UUID | None = Query(None),
+    include_practice: bool = Query(False),
+    date_from: date | None = Query(
+        None, description="Only tests completed on or after this date (UTC)"
+    ),
+    date_to: date | None = Query(
+        None, description="Only tests completed on or before this date (UTC)"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Export skill test records as CSV, for an audit packet or a training file.
+
+    Officer-only, deliberately. The list endpoint runs a two-pass disclosure
+    filter so a member sees only what the policy allows; an export that tried
+    to honour the same rules would silently produce a different file for every
+    reader, which is the opposite of what an audit hand-off needs. Officers
+    already see every result in full, so restricting the route to
+    ``training.manage`` makes the file's contents a single, explainable thing.
+
+    ``detail=criteria`` emits one row per evaluated step — what a state or ISO
+    reviewer actually asks for — flattened through
+    :func:`iter_criterion_rows` so the outcomes match the scorecard exactly.
+
+    Practice attempts are excluded unless asked for: they are never validated,
+    credit nothing, and are purged on a retention sweep, so including them by
+    default would pad an audit file with runs the department does not consider
+    records.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    import io
+
+    from starlette.responses import StreamingResponse
+
+    from app.services.skills_testing_service import iter_criterion_rows
+    from app.utils.csv_export import SafeCsvWriter
+
+    if detail not in ("summary", "criteria"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="detail must be 'summary' or 'criteria'",
+        )
+
+    query = select(SkillTest).where(
+        SkillTest.organization_id == current_user.organization_id
+    )
+    if not include_practice:
+        query = query.where(SkillTest.is_practice == False)  # noqa: E712
+    # Mirrors GET /tests exactly. The review queue is not expressible as a
+    # status — it is a status *and* the absence of a validation — so without
+    # this the Export button under "Needs Validation" quietly widened to every
+    # official test on file, which is the one place a wrong export is least
+    # likely to be noticed and most likely to be handed to somebody.
+    if pending_validation:
+        query = query.where(
+            SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.status == SkillTestStatus.COMPLETED.value,
+            SkillTest.validated_at.is_(None),
+        )
+    if status_filter:
+        query = query.where(SkillTest.status == status_filter)
+    if candidate_id:
+        query = query.where(SkillTest.candidate_id == str(candidate_id))
+    if template_id:
+        query = query.where(SkillTest.template_id == str(template_id))
+    # Filtered on completion rather than creation: a test is a record from the
+    # moment it is completed, and a draft opened in December for an evaluation
+    # run in January belongs in January's packet.
+    if date_from:
+        query = query.where(
+            SkillTest.completed_at >= datetime.combine(date_from, time.min)
+        )
+    if date_to:
+        query = query.where(
+            SkillTest.completed_at <= datetime.combine(date_to, time.max)
+        )
+    query = query.order_by(SkillTest.completed_at.desc(), SkillTest.created_at.desc())
+
+    tests = (await db.execute(query)).scalars().all()
+
+    user_ids: set[str] = set()
+    template_ids: set[str] = set()
+    for t in tests:
+        user_ids.update(
+            i for i in (t.candidate_id, t.examiner_id, t.validated_by, t.voided_by) if i
+        )
+        template_ids.add(t.template_id)
+
+    users_map: dict[str, User] = {}
+    if user_ids:
+        users_map = {
+            u.id: u
+            for u in (await db.execute(select(User).where(User.id.in_(list(user_ids)))))
+            .scalars()
+            .all()
+        }
+    templates_map: dict[str, SkillTemplate] = {}
+    if template_ids:
+        templates_map = {
+            tmpl.id: tmpl
+            for tmpl in (
+                await db.execute(
+                    select(SkillTemplate).where(
+                        SkillTemplate.id.in_(list(template_ids))
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+
+    def name_of(user_id: str | None) -> str:
+        user = users_map.get(user_id) if user_id else None
+        return _format_user_name(user) if user else ""
+
+    output = io.StringIO()
+    # SafeCsvWriter neutralizes spreadsheet formula injection. Mandatory here
+    # rather than defensive: examiner notes, criterion labels and void reasons
+    # are all free text a member can influence, and this file is opened in
+    # Excel by whoever assembles the audit packet.
+    writer = SafeCsvWriter(output)
+
+    if detail == "summary":
+        writer.writerow(
+            [
+                "Test ID",
+                "Template",
+                "Category",
+                "Candidate",
+                "Examiner",
+                "Status",
+                "Result",
+                "Score %",
+                "Practice",
+                "Started (UTC)",
+                "Completed (UTC)",
+                "Elapsed (s)",
+                "Validated (UTC)",
+                "Validated By",
+                "Voided (UTC)",
+                "Voided By",
+                "Void Reason",
+                "Notes",
+            ]
+        )
+        for t in tests:
+            tmpl = templates_map.get(t.template_id)
+            writer.writerow(
+                [
+                    t.id,
+                    tmpl.name if tmpl else "",
+                    (tmpl.category or "") if tmpl else "",
+                    name_of(t.candidate_id),
+                    name_of(t.examiner_id),
+                    t.status or "",
+                    t.result or "",
+                    "" if t.overall_score is None else t.overall_score,
+                    _csv_bool(t.is_practice),
+                    _csv_dt(t.started_at),
+                    _csv_dt(t.completed_at),
+                    "" if t.elapsed_seconds is None else t.elapsed_seconds,
+                    _csv_dt(t.validated_at),
+                    name_of(t.validated_by),
+                    _csv_dt(t.voided_at),
+                    name_of(t.voided_by),
+                    t.void_reason or "",
+                    t.notes or "",
+                ]
+            )
+    else:
+        writer.writerow(
+            [
+                "Test ID",
+                "Template",
+                "Candidate",
+                "Examiner",
+                "Completed (UTC)",
+                "Test Result",
+                "Section #",
+                "Section",
+                "Step #",
+                "Step",
+                "Type",
+                "Critical",
+                "Outcome",
+                "Score",
+                "Max Score",
+                "Time (s)",
+                "Checklist",
+                "Step Notes",
+            ]
+        )
+        for t in tests:
+            tmpl = templates_map.get(t.template_id)
+            # The frozen snapshot, not the live template: a test is judged
+            # against the structure it was created with.
+            effective = resolve_test_template(t, tmpl)
+            if effective is None:
+                continue
+            candidate_name = name_of(t.candidate_id)
+            examiner_name = name_of(t.examiner_id)
+            completed = _csv_dt(t.completed_at)
+            for row in iter_criterion_rows(t, effective):
+                ticked = row["checklist"]
+                writer.writerow(
+                    [
+                        t.id,
+                        tmpl.name if tmpl else "",
+                        candidate_name,
+                        examiner_name,
+                        completed,
+                        t.result or "",
+                        row["section_index"] + 1,
+                        row["section_name"],
+                        row["criterion_index"] + 1,
+                        row["label"],
+                        row["type"],
+                        _csv_bool(row["critical"]),
+                        row["outcome"],
+                        "" if row["score"] is None else row["score"],
+                        "" if row["max_score"] is None else row["max_score"],
+                        "" if row["time_seconds"] is None else row["time_seconds"],
+                        (
+                            f"{sum(1 for c in ticked if c)}/{len(ticked)} ticked"
+                            if ticked
+                            else ""
+                        ),
+                        row["notes"] or "",
+                    ]
+                )
+
+    # A bulk read of every member's evaluation results leaving the system is
+    # exactly the access an audit trail exists to record.
+    await log_audit_event(
+        db=db,
+        event_type="skill_tests_exported",
+        event_category="training",
+        severity="info",
+        event_data={
+            "detail": detail,
+            "test_count": len(tests),
+            "include_practice": include_practice,
+            "candidate_id": str(candidate_id) if candidate_id else None,
+            "template_id": str(template_id) if template_id else None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=skill_tests_{detail}.csv"
+        },
+    )
+
+
+# ============================================
 # Summary / Stats
 # ============================================
 
@@ -2843,6 +3500,7 @@ def _build_test_response(
     view: str = ResultDisclosure.FULL.value,
     validator: User | None = None,
     org_config: object | None = None,
+    returner: User | None = None,
 ) -> SkillTestResponse:
     """Build a SkillTestResponse with denormalized names and template structure.
 
@@ -2893,6 +3551,11 @@ def _build_test_response(
         voided_at=_ensure_utc(test.voided_at),
         voided_by=test.voided_by,
         void_reason=test.void_reason,
+        returned_at=_ensure_utc(test.returned_at),
+        returned_by=test.returned_by,
+        returned_by_name=_format_user_name(returner) if returner else None,
+        return_reason=test.return_reason,
+        return_count=test.return_count or 0,
         validated_at=_ensure_utc(test.validated_at),
         validated_by=test.validated_by,
         pending_validation=is_pending_validation(test),

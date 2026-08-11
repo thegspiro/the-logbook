@@ -5,6 +5,7 @@ import {
   formatShortDateTime,
   formatTime,
   formatForDateTimeInput,
+  addCalendarDays,
   formatCalendarDate,
   localToUTC,
   getTodayLocalDate,
@@ -443,5 +444,41 @@ describe('formatCalendarDate', () => {
 
   it('defaults to a readable medium date', () => {
     expect(formatCalendarDate('2026-08-10')).toBe('Aug 10, 2026');
+  });
+});
+
+describe('addCalendarDays', () => {
+  // The manual shift-report form rolls the end date forward for an overnight
+  // shift. Doing that with `new Date()` + toISOString() asks what the UTC date
+  // is once the local clock has moved, so an officer filing at 21:00 in
+  // UTC-05:00 got an end date two days out — and a 36-hour shift.
+  it('moves forward a day', () => {
+    expect(addCalendarDays('2026-08-10', 1)).toBe('2026-08-11');
+  });
+
+  it('crosses a month boundary', () => {
+    expect(addCalendarDays('2026-08-31', 1)).toBe('2026-09-01');
+  });
+
+  it('crosses a year boundary', () => {
+    expect(addCalendarDays('2026-12-31', 1)).toBe('2027-01-01');
+  });
+
+  it('handles a leap day', () => {
+    expect(addCalendarDays('2028-02-28', 1)).toBe('2028-02-29');
+  });
+
+  it('moves back on a negative count', () => {
+    expect(addCalendarDays('2026-03-01', -1)).toBe('2026-02-28');
+  });
+
+  it('returns the same date for zero days', () => {
+    expect(addCalendarDays('2026-08-10', 0)).toBe('2026-08-10');
+  });
+
+  it('returns the input unchanged when it is not a calendar date', () => {
+    expect(addCalendarDays('', 1)).toBe('');
+    expect(addCalendarDays(null, 1)).toBe('');
+    expect(addCalendarDays('not-a-date', 1)).toBe('not-a-date');
   });
 });

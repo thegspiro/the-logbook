@@ -11,6 +11,7 @@ const mockVoidTest = vi.fn();
 const mockCancelTest = vi.fn();
 const mockReleaseTest = vi.fn();
 const mockValidateTest = vi.fn();
+const mockBulkValidateTests = vi.fn();
 
 const completedTest = {
   id: 'test-1',
@@ -74,13 +75,19 @@ vi.mock('../stores/skillsTestingStore', () => ({
     cancelTest: mockCancelTest,
     releaseTest: mockReleaseTest,
     validateTest: mockValidateTest,
+    bulkValidateTests: (...a: unknown[]) => mockBulkValidateTests(...a) as unknown,
     templates: [{ id: 'tpl-1', name: 'SCBA Evaluation' }],
     loadTemplates: mockLoadTemplates,
   }),
 }));
 
+const mockToastSuccess = vi.fn<(message: string) => void>();
+const mockToastError = vi.fn<(message: string) => void>();
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  default: {
+    success: (message: string) => mockToastSuccess(message),
+    error: (message: string) => mockToastError(message),
+  },
 }));
 
 const mockNavigate = vi.fn();
@@ -218,6 +225,109 @@ describe('SkillsTestingTestRecordsTab', () => {
       await user.click(screen.getByRole('button', { name: /^validate$/i }));
 
       expect(mockValidateTest).toHaveBeenCalledWith('test-4');
+    });
+  });
+
+  // After a drill night the queue is a list of peer-run results to sign off.
+  // Selection is confined to that view: elsewhere the list mixes drafts,
+  // practice runs and closed records, and no single action spans them.
+  describe('The review queue', () => {
+    const secondPending = { ...pendingTest, id: 'test-5', candidate_name: 'Dana Ruiz' };
+
+    async function openQueue(user: ReturnType<typeof userEvent.setup>) {
+      await user.selectOptions(screen.getByLabelText(/filter by status/i), 'pending_validation');
+    }
+
+    it('offers no selection outside the queue', () => {
+      mockTests = [completedTest, pendingTest];
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+
+      expect(screen.queryByLabelText(/select every result/i)).not.toBeInTheDocument();
+    });
+
+    it('selects and accepts the chosen results', async () => {
+      const user = userEvent.setup();
+      mockTests = [pendingTest, secondPending];
+      mockBulkValidateTests.mockResolvedValue({ validated: ['test-4'], skipped: [] });
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+      await openQueue(user);
+
+      await user.click(await screen.findByLabelText(/select john smith's scba evaluation result/i));
+      await user.click(screen.getByRole('button', { name: /accept 1/i }));
+
+      expect(mockBulkValidateTests).toHaveBeenCalledWith(['test-4']);
+    });
+
+    it('select-all covers exactly what is on screen', async () => {
+      const user = userEvent.setup();
+      mockTests = [pendingTest, secondPending];
+      mockBulkValidateTests.mockResolvedValue({ validated: ['test-4', 'test-5'], skipped: [] });
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+      await openQueue(user);
+
+      await user.click(await screen.findByLabelText(/select every result/i));
+      await user.click(screen.getByRole('button', { name: /accept 2/i }));
+
+      expect(mockBulkValidateTests).toHaveBeenCalledWith(['test-4', 'test-5']);
+    });
+
+    // Selecting rows the officer has filtered away is how a bulk action
+    // surprises someone.
+    it('select-all respects the search box', async () => {
+      const user = userEvent.setup();
+      mockTests = [pendingTest, secondPending];
+      mockBulkValidateTests.mockResolvedValue({ validated: ['test-5'], skipped: [] });
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+      await openQueue(user);
+      await user.type(screen.getByPlaceholderText(/search tests/i), 'Dana');
+
+      await user.click(await screen.findByLabelText(/select every result/i));
+      await user.click(screen.getByRole('button', { name: /accept 1/i }));
+
+      expect(mockBulkValidateTests).toHaveBeenCalledWith(['test-5']);
+    });
+
+    it('cannot accept with nothing selected', async () => {
+      const user = userEvent.setup();
+      mockTests = [pendingTest];
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+      await openQueue(user);
+
+      expect(await screen.findByRole('button', { name: /^accept$/i })).toBeDisabled();
+    });
+
+    // Partial success is the normal outcome — a colleague may have acted on one
+    // of the selection since the queue loaded. Reported, or the officer walks
+    // away believing the queue is clear.
+    it('reports what could not be accepted', async () => {
+      const user = userEvent.setup();
+      mockTests = [pendingTest, secondPending];
+      mockBulkValidateTests.mockResolvedValue({
+        validated: ['test-4'],
+        skipped: [{ test_id: 'test-5', reason: 'No attempts remaining' }],
+      });
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+      await openQueue(user);
+
+      await user.click(await screen.findByLabelText(/select every result/i));
+      await user.click(screen.getByRole('button', { name: /accept 2/i }));
+
+      expect(mockToastSuccess).toHaveBeenCalledWith('Accepted 1');
+      expect(mockToastError).toHaveBeenCalledWith('1 could not be accepted: No attempts remaining');
+    });
+
+    it('clears the selection when the filter changes', async () => {
+      const user = userEvent.setup();
+      mockTests = [pendingTest];
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+      await openQueue(user);
+      await user.click(await screen.findByLabelText(/select every result/i));
+      expect(screen.getByRole('button', { name: /accept 1/i })).toBeInTheDocument();
+
+      await user.selectOptions(screen.getByLabelText(/filter by status/i), 'completed');
+      await openQueue(user);
+
+      expect(await screen.findByRole('button', { name: /^accept$/i })).toBeDisabled();
     });
   });
 });
