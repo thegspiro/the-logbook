@@ -189,10 +189,15 @@ const ShiftCheckInPage: React.FC = () => {
         <div className="text-center">
           <h1 className="text-theme-text-primary text-xl font-bold">Shift Check-In</h1>
           <p className="text-theme-text-muted mt-1 text-sm">
-            {/* `shift_date` is a calendar date, not an instant — formatting it in
-                the org timezone shifted it a day earlier for anywhere west of
-                UTC, so the check-in card named yesterday's date. */}
-            {shift.apparatus_name || 'Shift'} &mdash;{' '}
+            {/* Either identifier names the rig — `unit_number` is required and
+                `name` an optional nickname — so falling back on the name alone
+                left the generic word "Shift" on the one screen whose whole job
+                is confirming which truck you are checking in to.
+
+                `shift_date` is a calendar date, not an instant — formatting it
+                in the org timezone shifted it a day earlier for anywhere west
+                of UTC, so this card named yesterday's date. */}
+            {[shift.apparatus_unit_number, shift.apparatus_name].filter(Boolean).join(' — ') || 'Shift'} &mdash;{' '}
             {formatCalendarDate(shift.shift_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}
           </p>
           <p className="text-theme-text-muted text-xs">
