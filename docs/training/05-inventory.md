@@ -1465,12 +1465,25 @@ Label generation has been significantly improved:
 
 ### Inventory Dashboard Scoping
 
-Non-admin users now see only their own assigned equipment on the inventory dashboard. This prevents information overload for regular members and aligns with role-based access principles.
+The **figures** on the inventory page are scoped to the member: the header counts
+their items, their overdue checkouts and the value of what they hold, not the
+department's. The low-stock alerts and the per-location breakdown of departmental
+stock are not shown to a non-admin at all.
 
-> **Screenshot needed:**
-> _[Screenshot comparison: left shows admin view with full department inventory summary, right shows member view with only "My Equipment" counts and items]_
+The **item list** is not scoped, and is not meant to be — `inventory.view` is
+what lets a member browse the department's catalogue in order to request from it.
+A member's own kit lives on **My Equipment**, which is the page to open to see
+what somebody actually holds: their permanent assignments, checkouts, issued
+consumables and pending requests, each with a Request Return action.
 
-> **Edge case:** Users with `inventory.manage` permission continue to see the full department inventory. The scoping applies only to users without admin permissions.
+![My Equipment as an ordinary member — the count tiles and their permanent assignments](./images/05-66-my-equipment.png)
+
+> **Edge case:** Users with `inventory.manage` (or `settings.manage`) see the department's figures rather than their own. The scoping applies only to users without those permissions.
+
+> **Fixed 2026-08-11.** The per-location panel was the one summary that never
+> checked. A member's page counted their own three items in its header and then
+> reported the department's entire stock and valuation in the panel directly
+> beneath it. Pull latest.
 
 ### Desktop Camera Scanning
 
@@ -1808,43 +1821,55 @@ The analysis shows:
 
 After analyzing, you can take four actions directly from the results:
 
-#### Generate Reorder Requests
+Three of the four appear only when the analysis produces something for them to
+act on, so a results page will not always show all four.
 
-Click **Generate Reorders** to automatically create purchase requests:
+#### Create Reorder Requests
+
+**Create reorder requests** sits under the size breakdown, and appears only when
+you asked the analysis to subtract current stock _and_ it found a shortfall:
 
 - One `ReorderRequest` per size with shortfall > 0
 - Pre-fills vendor, urgency, unit cost, and a descriptive note
 - All requests land in PENDING status for approval
 - The cost estimate from the analysis carries onto each request
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Generate Reorders" confirmation dialog showing a preview of the reorder requests to be created (e.g., "M: 5 units, L: 8 units, XL: 3 units — Total: 16 units, Est. cost: $1,280")._
+There is **no confirmation step**. The button files the requests, then replaces
+itself with "Created N reorder requests" and a **Review reorders** link. The
+preview is the panel above it — each size with what is needed, what is on hand,
+what to buy, and the cost of buying it.
 
-#### Bulk Issue from Stock
+![The size breakdown with each size's shortfall and cost, and the Create reorder requests button beneath it](./images/05-65-reorder-shortfall.png)
 
-Click **Issue from Stock** to distribute on-hand inventory:
+#### Issue On-Hand Stock
+
+**Issue on-hand stock** appears only when at least one needed size actually has
+stock on hand — there is no point offering it against an empty shelf:
 
 - Issues one unit per member from matching pool stock
 - Matches by member's size preference
 - Skips members without a size, with no matching stock, or over their allowance
-- Shows results: `{issued: 12, skipped: 4}` with per-member reasons for skips
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of the bulk-issue results showing "Issued: 12 members" with a green success list and "Skipped: 4 members" with reasons (e.g., "No size on file", "Over allowance", "No matching stock")._
+- This one _does_ confirm first, warning that members with no size on file or no
+  matching stock will be skipped
+- Afterwards the button is replaced by "Issued to N members, M skipped", with
+  the first five skip reasons listed and a count of any beyond that
 
 #### Request Sizes from Members
 
-Click **Request Sizes** to notify members who haven't recorded their size preference:
+**Request sizes** appears in a banner above the results, and only when somebody
+in the analysis has no size on file:
 
 - Sends in-app notifications directing them to `/inventory/my-equipment`
 - After members add their sizes, re-run the analysis to see updated results
-- Returns count of members notified
+- The banner then reads "Requested from N", so you can see it has been done
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Request Sizes" confirmation showing "8 members will be notified to add their shirt size" with a Send button._
+#### Export the Summary
 
-#### Download PDF Summary
+**CSV** and **PDF**, at the head of the Impacted Members table, export the
+analysis:
 
-Click **Download PDF** to generate a branded printable summary:
-
-- Includes org name, analysis date, all filter parameters, and size breakdown table
+- The PDF includes org name, analysis date, all filter parameters, and the size
+  breakdown table
 - Contact columns (email, phone) included only if org visibility settings allow
 - Suitable for budget approval meetings or procurement documentation
 

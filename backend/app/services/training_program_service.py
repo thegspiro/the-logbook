@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -893,6 +893,7 @@ class TrainingProgramService:
                         phase_id=phase_id,
                         requirement_id=str(req_input.requirement_id),
                         is_required=req_input.is_required,
+                        is_prerequisite=getattr(req_input, "is_prerequisite", False),
                         sort_order=req_input.sort_order or idx,
                         owns_requirement=False,
                     )
@@ -941,6 +942,7 @@ class TrainingProgramService:
                     phase_id=phase_id,
                     requirement_id=requirement.id,
                     is_required=req_input.is_required,
+                    is_prerequisite=getattr(req_input, "is_prerequisite", False),
                     sort_order=req_input.sort_order or idx,
                     # The requirement was created just above for this program,
                     # so unlinking it may clean it up.
@@ -996,7 +998,38 @@ class TrainingProgramService:
             query = query.where(TrainingProgram.is_template == is_template)
 
         result = await self.db.execute(query.order_by(TrainingProgram.name))
-        return result.scalars().all()
+        programs = list(result.scalars().all())
+        await self._attach_enrolled_counts(programs)
+        return programs
+
+    async def _attach_enrolled_counts(self, programs: List[TrainingProgram]) -> None:
+        """Stamp `enrolled_count` on each programme in the list.
+
+        The programme cards report how many members are on each pipeline. The
+        count was never sent, and the card rendered a hardcoded zero — so every
+        pipeline read "0 enrolled" however many members were working through
+        it. One grouped count for the whole page rather than a query per card.
+
+        Withdrawn enrollments are excluded: the number answers "how many people
+        am I running through this", not "how many ever started".
+        """
+        if not programs:
+            return
+
+        counts = await self.db.execute(
+            select(
+                ProgramEnrollment.program_id,
+                func.count(ProgramEnrollment.id),
+            )
+            .where(
+                ProgramEnrollment.program_id.in_([p.id for p in programs]),
+                ProgramEnrollment.status != EnrollmentStatus.WITHDRAWN,
+            )
+            .group_by(ProgramEnrollment.program_id)
+        )
+        by_program = {str(pid): total for pid, total in counts.all()}
+        for program in programs:
+            program.enrolled_count = by_program.get(str(program.id), 0)
 
     # ==================== Program Phase Methods ====================
 
