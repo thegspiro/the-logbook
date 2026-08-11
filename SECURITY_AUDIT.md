@@ -13,6 +13,10 @@
 > security posture and open items, see those documents,
 > [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md), and the
 > [`CHANGELOG.md`](CHANGELOG.md).
+>
+> **Latest review:** The current point-in-time adversarial review is
+> [`docs/security/RED_TEAM_REVIEW_2026-08.md`](docs/security/RED_TEAM_REVIEW_2026-08.md).
+> It records the residual security weaknesses still open after the July remediation work.
 
 ---
 
@@ -154,9 +158,9 @@
 ### 18. SQL Injection Risk in Migration Scripts
 
 **File:** `backend/main.py:681`
-**Issue:** `conn.execute(text(f"DROP TABLE IF EXISTS \`{safe_name}\`"))` — while the variable is named `safe_name`, it is constructed via string formatting into a raw SQL statement using `text()`. If the table name is derived from user input or configuration without proper validation, this could enable SQL injection. Similar patterns exist in `backend/scripts/verify_all_enums.py:51` and migration files.
+**Issue:** `conn.execute(text(f"DROP TABLE IF EXISTS \`{safe_name}\`"))`— while the variable is named`safe_name`, it is constructed via string formatting into a raw SQL statement using `text()`. If the table name is derived from user input or configuration without proper validation, this could enable SQL injection. Similar patterns exist in `backend/scripts/verify_all_enums.py:51`and migration files.
 **Severity:** Medium
-**Remediation:** Validate `safe_name` against a strict allowlist of known table names. Use parameterized queries where possible, or at minimum validate that the name matches `^[a-z_]+$` before interpolation.
+**Remediation:** Validate`safe_name`against a strict allowlist of known table names. Use parameterized queries where possible, or at minimum validate that the name matches`^[a-z_]+$` before interpolation.
 
 ### 19. Health Endpoint Exposes Internal Service State
 
@@ -215,30 +219,30 @@
 
 ## Summary Table
 
-| # | Severity | Category | Issue |
-|---|----------|----------|-------|
-| 1 | Critical | MITM | Database connection unencrypted by default |
-| 2 | Critical | MITM | Redis connection unencrypted |
-| 3 | Critical | Secrets | Insecure default secrets in source code |
-| 4 | High | Auth | JWT algorithm confusion / weak symmetric signing |
-| 5 | High | MITM | Cookies not `Secure` outside production |
-| 6 | High | Data Leak | Frontend nginx exposes API docs/schema |
-| 7 | High | Secrets | Elasticsearch default password |
-| 8 | High | Secrets | MinIO default credentials |
-| 9 | High | Data Leak | Login response leaks tokens in JSON body |
-| 10 | High | Data Leak | Refresh response leaks tokens in JSON body |
-| 11 | Medium | MITM | HTTPS not enforced by default |
-| 12 | Medium | Info Leak | Nginx server version disclosure |
-| 13 | Medium | Headers | Missing Permissions-Policy in frontend nginx |
-| 14 | Medium | Headers | Missing HSTS in frontend nginx |
-| 15 | Medium | Auth | Module axios instance not using shared factory |
-| 16 | Medium | Secrets | CSRF token stored in localStorage |
-| 17 | Medium | Data Leak | Sensitive data in sessionStorage during onboarding |
-| 18 | Medium | Injection | SQL injection risk in migration/startup scripts |
-| 19 | Medium | Info Leak | Health endpoint exposes internal service state |
-| 20 | Medium | Logging | DB_ECHO can log sensitive SQL queries |
-| 21 | Low | Secrets | Vote signing key falls back to SECRET_KEY |
-| 22 | Low | Auth | Rate limiter per-process bypass with workers |
-| 23 | Low | Data Leak | API cache not cleared on idle timeout |
-| 24 | Low | Config | Hardcoded Google DNS in nginx resolver |
-| 25 | Low | Data Leak | Mailhog exposes ports to host network |
+| #   | Severity | Category  | Issue                                              |
+| --- | -------- | --------- | -------------------------------------------------- |
+| 1   | Critical | MITM      | Database connection unencrypted by default         |
+| 2   | Critical | MITM      | Redis connection unencrypted                       |
+| 3   | Critical | Secrets   | Insecure default secrets in source code            |
+| 4   | High     | Auth      | JWT algorithm confusion / weak symmetric signing   |
+| 5   | High     | MITM      | Cookies not `Secure` outside production            |
+| 6   | High     | Data Leak | Frontend nginx exposes API docs/schema             |
+| 7   | High     | Secrets   | Elasticsearch default password                     |
+| 8   | High     | Secrets   | MinIO default credentials                          |
+| 9   | High     | Data Leak | Login response leaks tokens in JSON body           |
+| 10  | High     | Data Leak | Refresh response leaks tokens in JSON body         |
+| 11  | Medium   | MITM      | HTTPS not enforced by default                      |
+| 12  | Medium   | Info Leak | Nginx server version disclosure                    |
+| 13  | Medium   | Headers   | Missing Permissions-Policy in frontend nginx       |
+| 14  | Medium   | Headers   | Missing HSTS in frontend nginx                     |
+| 15  | Medium   | Auth      | Module axios instance not using shared factory     |
+| 16  | Medium   | Secrets   | CSRF token stored in localStorage                  |
+| 17  | Medium   | Data Leak | Sensitive data in sessionStorage during onboarding |
+| 18  | Medium   | Injection | SQL injection risk in migration/startup scripts    |
+| 19  | Medium   | Info Leak | Health endpoint exposes internal service state     |
+| 20  | Medium   | Logging   | DB_ECHO can log sensitive SQL queries              |
+| 21  | Low      | Secrets   | Vote signing key falls back to SECRET_KEY          |
+| 22  | Low      | Auth      | Rate limiter per-process bypass with workers       |
+| 23  | Low      | Data Leak | API cache not cleared on idle timeout              |
+| 24  | Low      | Config    | Hardcoded Google DNS in nginx resolver             |
+| 25  | Low      | Data Leak | Mailhog exposes ports to host network              |
