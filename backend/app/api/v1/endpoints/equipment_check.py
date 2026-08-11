@@ -975,12 +975,18 @@ async def upload_check_item_photos(
             )
 
         # Optimize: resize, strip EXIF, convert to WebP
-        optimized = optimize_image(
-            contents,
-            max_size=(1920, 1080),
-            quality=80,
-            output_format="WEBP",
-        )
+        try:
+            optimized = optimize_image(
+                contents,
+                max_size=(1920, 1080),
+                quality=80,
+                output_format="WEBP",
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid image {upload.filename}: {safe_error_detail(exc)}",
+            ) from exc
         encoded = base64.b64encode(optimized).decode()
         data_uri = f"data:image/webp;base64,{encoded}"
         new_urls.append(data_uri)

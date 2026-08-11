@@ -207,6 +207,7 @@ export interface PublicFormDef {
   description?: string;
   category: string;
   allow_multiple_submissions: boolean;
+  require_authentication: boolean;
   fields: PublicFormField[];
   organization_name?: string;
 }
