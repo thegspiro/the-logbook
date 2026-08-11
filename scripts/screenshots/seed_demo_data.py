@@ -3150,7 +3150,7 @@ class Seeder:
                                     {
                                         "name": item,
                                         "sort_order": item_order,
-                                        "check_type": "presence",
+                                        "check_type": "present",
                                         "is_required": True,
                                         "expected_quantity": 1,
                                     }
@@ -3206,7 +3206,7 @@ class Seeder:
                                 {
                                     "name": item,
                                     "sort_order": order,
-                                    "check_type": "presence",
+                                    "check_type": "present",
                                     "is_required": True,
                                     "expected_quantity": 1,
                                 }

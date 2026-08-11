@@ -952,14 +952,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <XCircle className="h-4 w-4" />
                 </button>
               )}
-              {canManageShift && isPast && !shift.is_finalized && !isCancelled && (
+              {/* Hidden while the checklist is open: this button and the one at
+                  the foot of that panel both finalise the shift, and showing
+                  both at once read as two different commitments. */}
+              {canManageShift && isPast && !shift.is_finalized && !isCancelled && !showFinalizeChecklist && (
                 <button
                   onClick={() => setShowFinalizeChecklist(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
-                  aria-label="Finalize shift"
+                  aria-label="Close out shift"
                 >
                   <CheckCircle2 className="h-4 w-4" />
-                  Finalize
+                  Close out shift
                 </button>
               )}
               <button
@@ -1108,7 +1111,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           {showFinalizeChecklist && (
             <div className="space-y-3 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
               <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-                <CheckCircle2 className="h-4 w-4 text-green-600" /> Pre-Finalization Checklist
+                <CheckCircle2 className="h-4 w-4 text-green-600" /> Before you close this shift
               </h4>
 
               <div className="space-y-2 text-sm">
@@ -1121,8 +1124,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         End-of-shift equipment checks incomplete
                       </span>
                       <p className="mt-0.5 text-xs text-red-600 dark:text-red-300">
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist(s) still pending.
-                        Equipment checks must be completed before finalizing.
+                        {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
+                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. These
+                        must be completed before you can close the shift.
                       </p>
                     </div>
                   </div>
@@ -1130,7 +1134,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <div className="flex items-center gap-2 rounded-md border border-green-500/20 bg-green-500/10 p-2">
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
                     <span className="text-green-700 dark:text-green-400">
-                      {completedEquipmentChecks.length} equipment check(s) completed
+                      {completedEquipmentChecks.length} equipment check
+                      {completedEquipmentChecks.length !== 1 ? 's' : ''} completed
                     </span>
                   </div>
                 ) : null}
@@ -1155,19 +1160,27 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         className={`mt-0.5 h-4 w-4 shrink-0 ${allOut ? 'text-green-600' : checkedIn.length > 0 ? 'text-amber-600' : 'text-theme-text-muted'}`}
                       />
                       <div>
+                        {/* "N of M" only reads as sense while N <= M. Somebody
+                            can check in to a shift they were never assigned to —
+                            covering at short notice, which is normal — and the
+                            officer then read "4 of 3 checked in". */}
                         <span className="text-theme-text-secondary text-sm">
-                          {checkedIn.length} of {totalAssigned} checked in
+                          {checkedIn.length > totalAssigned
+                            ? `${checkedIn.length} checked in (${totalAssigned} assigned)`
+                            : `${checkedIn.length} of ${totalAssigned} checked in`}
                           {checkedOut.length > 0 && `, ${checkedOut.length} checked out`}
                         </span>
                         {checkedIn.length < totalAssigned && totalAssigned > 0 && (
                           <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
-                            {totalAssigned - checkedIn.length} member(s) have not checked in
+                            {totalAssigned - checkedIn.length} member
+                            {totalAssigned - checkedIn.length !== 1 ? 's' : ''} never checked in
                           </p>
                         )}
                         {checkedIn.length > checkedOut.length && (
                           <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
-                            {checkedIn.length - checkedOut.length} member(s) still on shift &mdash; will be
-                            auto-checked-out at shift end time
+                            {checkedIn.length - checkedOut.length} member
+                            {checkedIn.length - checkedOut.length !== 1 ? 's' : ''} still on shift &mdash; will be
+                            checked out automatically at the shift end time
                           </p>
                         )}
                       </div>
@@ -1218,7 +1231,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 {shift.call_count !== undefined && shift.call_count !== null && (
                   <div className="bg-theme-surface border-theme-surface-border flex items-center gap-2 rounded-md border p-2">
                     <FileText className="text-theme-text-muted h-4 w-4 shrink-0" />
-                    <span className="text-theme-text-secondary">{shift.call_count} call(s) recorded</span>
+                    <span className="text-theme-text-secondary">
+                      {shift.call_count} call{shift.call_count !== 1 ? 's' : ''} recorded
+                    </span>
                   </div>
                 )}
 
@@ -1320,7 +1335,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   ) : (
                     <CheckCircle2 className="h-3.5 w-3.5" />
                   )}
-                  Finalize Shift
+                  Close out shift
                 </button>
               </div>
             </div>

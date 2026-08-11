@@ -65,6 +65,25 @@ const getShiftCardAppearance = (
   };
 };
 
+/**
+ * Plain-language reading of the staffing ratio, for the cells too small to
+ * carry it as text.
+ *
+ * The ratio on its own ("3/4") does not say which number is which, and the
+ * colour and icon are meaningless to anyone who has not been told what they
+ * mean — this is what a reader has instead of being told.
+ */
+const staffingTitle = (shift: ShiftRecord): string => {
+  const target = getStaffingTarget(shift);
+  if (target == null) {
+    return `${shift.attendee_count} crew assigned — no minimum set for this shift`;
+  }
+  const filled = `${shift.attendee_count} of ${target} positions filled`;
+  if (isUnderstaffed(shift)) return `Short-staffed — ${filled}`;
+  if (isFullyStaffed(shift)) return `Fully crewed — ${filled}`;
+  return filled;
+};
+
 type ShiftCardVariant = 'desktop-week' | 'mobile' | 'compact';
 
 interface ShiftCardProps {
@@ -95,7 +114,10 @@ const VARIANT_STYLES: Record<
     gap: 'gap-2',
     showNotes: true,
     showEndTime: true,
-    showStaffSuffix: false,
+    // The phone layout has always written "3/3 staff" and the desktop week a
+    // bare "3/3". The word is what makes the ratio readable without being
+    // told, and there is room for it here too.
+    showStaffSuffix: true,
   },
   mobile: {
     button: 'p-3 rounded-lg border text-sm',
@@ -138,6 +160,16 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
         onClick={() => onClick?.(shift)}
         className={`${v.button} w-full cursor-pointer text-left ${hoverRing} transition-all ${selectedRing} ${card.className} ${isCancelled ? 'opacity-50' : ''}`}
         style={card.style}
+        // A month cell fits a time, a unit code and a ratio and nothing more, so
+        // everything it cannot spell out is spelled out here.
+        title={[
+          shift.apparatus_name
+            ? `${shift.apparatus_unit_number ?? shift.apparatus_name} — ${shift.apparatus_name}`
+            : null,
+          staffingTitle(shift),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       >
         <p className={`truncate font-medium ${isCancelled ? 'line-through' : ''}`}>
           {isUnderstaffed(shift) ? (
@@ -193,13 +225,21 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
             <CheckCircle2 className={v.iconSize} />
           </span>
         ) : null}
-        <span className={`flex items-center opacity-70 ${iconGap} ${variant === 'mobile' ? 'text-xs' : ''}`}>
+        <span
+          className={`flex items-center opacity-70 ${iconGap} ${variant === 'mobile' ? 'text-xs' : ''}`}
+          title={staffingTitle(shift)}
+        >
           <Users className={v.iconSize} /> {shift.attendee_count}
           {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`}
           {v.showStaffSuffix ? ' staff' : ''}
         </span>
         {shift.apparatus_unit_number && (
-          <span className={`flex items-center opacity-70 ${iconGap} ${variant === 'mobile' ? 'text-xs' : ''}`}>
+          <span
+            className={`flex items-center opacity-70 ${iconGap} ${variant === 'mobile' ? 'text-xs' : ''}`}
+            // The cell has room for the unit number only. The name is what
+            // makes it recognisable, so it goes here rather than nowhere.
+            title={shift.apparatus_name ? `${shift.apparatus_unit_number} — ${shift.apparatus_name}` : undefined}
+          >
             <Truck className={v.iconSize} /> {shift.apparatus_unit_number}
           </span>
         )}

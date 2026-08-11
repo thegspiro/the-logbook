@@ -436,7 +436,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               onChange={toggleSelectAll}
               className="border-theme-input-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
             />
-            {selectedIds.size > 0 ? `${selectedIds.size} selected` : `Select all ${pendingAssigned.length} pending`}
+            {/* "pending" contradicted the Assigned badge on every row it
+                covered. These are assigned shifts awaiting the member's own
+                confirmation, so say that. */}
+            {selectedIds.size > 0
+              ? `${selectedIds.size} selected`
+              : `Select all ${pendingAssigned.length} awaiting your confirmation`}
           </label>
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-2">
@@ -488,7 +493,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 key={assignment.id}
                 className="bg-theme-surface border-theme-surface-border hover:border-theme-text-muted/30 rounded-xl border p-4 transition-colors sm:p-5"
               >
-                <div className="flex items-start justify-between gap-3 sm:items-center">
+                {/* Stacks on a phone so the actions get a full-width row of
+                    their own. They carry visible labels, and a phone has no
+                    hover to reveal a title attribute — four bare glyphs on the
+                    screen members open most is where a mis-tap costs a seat on
+                    the truck. */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                     {view === 'upcoming' &&
                       assignment.status === AssignmentStatus.ASSIGNED &&
@@ -516,6 +526,13 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                           : ''}
                       </p>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                        {shift?.apparatus_name && (
+                          <p className="text-theme-text-secondary text-xs font-medium">
+                            {shift.apparatus_unit_number
+                              ? `${shift.apparatus_unit_number} — ${shift.apparatus_name}`
+                              : shift.apparatus_name}
+                          </p>
+                        )}
                         <p className="text-theme-text-muted text-xs capitalize">Position: {assignment.position}</p>
                         <span
                           className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:hidden ${statusColor}`}
@@ -545,7 +562,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                  <div className="border-theme-surface-border flex shrink-0 flex-wrap items-center gap-2 border-t pt-3 sm:border-0 sm:pt-0">
                     <span
                       className={`hidden rounded-full border px-2.5 py-1 text-xs font-medium capitalize sm:inline-block ${statusColor}`}
                     >
@@ -560,8 +577,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                               void handleConfirm(assignment.id);
                             }}
                             disabled={confirmingId === assignment.id}
-                            className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 text-green-600 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
-                            title="Confirm shift"
+                            className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                            title="Confirm you are working this shift"
                             aria-label="Confirm shift assignment"
                           >
                             {confirmingId === assignment.id ? (
@@ -569,14 +586,19 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                             ) : (
                               <Check className="h-5 w-5" />
                             )}
+                            {/* Same verb as the bulk bar and the status badge —
+                                a third phrasing for one action is the drift
+                                this module already has too much of. */}
+                            <span>Confirm</span>
                           </button>
                           <button
                             onClick={() => setConfirmingDecline(assignment.id)}
-                            className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 text-red-500 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                            title="Decline shift"
+                            className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                            title="Give this shift up so it can be re-filled"
                             aria-label="Decline shift assignment"
                           >
                             <XCircle className="h-5 w-5" />
+                            <span>Decline</span>
                           </button>
                         </>
                       )}
@@ -606,21 +628,23 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                         onClick={() => {
                           void openSwapRequest(assignment);
                         }}
-                        className="text-theme-text-muted flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-500"
-                        title="Request swap"
+                        className="text-theme-text-secondary mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-600"
+                        title="Ask someone to trade shifts with you"
                         aria-label="Request shift swap"
                       >
                         <ArrowLeftRight className="h-5 w-5" />
+                        <span>Swap</span>
                       </button>
                     )}
                     {shift && onViewShift && (
                       <button
                         onClick={() => onViewShift(shift)}
-                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 transition-colors"
-                        title="View details"
+                        className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+                        title="Open the full shift details"
                         aria-label="View shift details"
                       >
                         <ChevronDown className="h-5 w-5" />
+                        <span>Details</span>
                       </button>
                     )}
                   </div>
