@@ -305,7 +305,6 @@ async def guest_check_in(
             attendee_id=str(UUID(int=0)),
             event_name=event.title,
             checked_in_at=now.isoformat(),
-            prospect_created=False,
             message="Thanks for signing in!",
         )
 
@@ -373,10 +372,7 @@ async def guest_check_in(
         ip_address=get_client_ip(request),
     )
 
-    org_name = org.name if org else "the department"
     message = f"You're signed in to {event.title}."
-    if prospect_created:
-        message += f" Someone from {org_name} will follow up with you about joining."
 
     return GuestCheckInResponse(
         status="checked_in",
@@ -385,6 +381,5 @@ async def guest_check_in(
         checked_in_at=(
             attendee.checked_in_at.isoformat() if attendee.checked_in_at else ""
         ),
-        prospect_created=prospect_created,
         message=message,
     )

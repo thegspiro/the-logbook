@@ -161,7 +161,7 @@ const GuestCheckInPage: React.FC = () => {
             </div>
           </div>
 
-          {result.prospect_created && (
+          {info.collects_prospect_details && (
             <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-left dark:border-green-500/30 dark:bg-green-500/10">
               <div className="flex items-start">
                 <UserPlus className="mt-0.5 mr-2 h-5 w-5 shrink-0 text-green-600" />
