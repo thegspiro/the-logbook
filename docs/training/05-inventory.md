@@ -682,8 +682,7 @@ for often did not exist.
 4. Set the **received date** once, for the whole delivery.
 5. Review and submit.
 
-> **Screenshot needed:**
-> _[Screenshot of the Receive Stock modal with four delivery lines filled in — different items, lot numbers, expirations and quantities — and the single received-date field above them]_
+![Receive Stock: four delivery lines, each its own item, lot and expiry, under one received date](./images/05-09-receive-stock-modal.png)
 
 **The whole delivery lands, or none of it does.** A partly applied delivery is
 worse than a rejected one: you cannot tell which lines landed, and re-entering it

@@ -4969,6 +4969,67 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "05-09-receive-stock-modal",
+    doc: "05-inventory.md",
+    line: 685,
+    anchor: "Screenshot of the Receive Stock modal with four delivery lines filled in",
+    alt: "Receive Stock: four delivery lines, each its own item, lot and expiry, under one received date",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // The toolbar button wraps onto two lines, so it is matched loosely
+      // rather than anchored.
+      await page.getByRole("button", { name: /Receive Stock/ }).first().click();
+      await page.getByPlaceholder("Search inventory…").first().waitFor({ timeout: 20_000 });
+
+      // A real delivery: four different consumables, four lot numbers, four
+      // dates. Nothing is submitted — the modal is a form, and the guide's
+      // claim ("the whole delivery lands, or none of it does") is about what
+      // happens after this screen, not on it.
+      const delivery = [
+        ["Naloxone", "NLX-2506", "2027-06-30", "12"],
+        ["Epinephrine", "EPI-4401", "2027-02-28", "8"],
+        ["Gauze", "GZ-1180", "2028-01-15", "60"],
+        ["Normal Saline", "NS-6612", "2027-11-30", "24"],
+      ];
+
+      for (let index = 0; index < delivery.length; index += 1) {
+        if (index > 0) {
+          await page.getByRole("button", { name: /^Add line$/ }).click();
+          await page.waitForTimeout(400);
+        }
+        const [term, lot, expiry, quantity] = delivery[index];
+        // Always the first: once a line has an item the picker replaces its
+        // input with a static row and an Unlink button, so the only search box
+        // left on screen belongs to the line just added.
+        const picker = page.getByPlaceholder("Search inventory…").first();
+        await picker.fill(term);
+        // The picker debounces, then renders its results as buttons.
+        await page.waitForTimeout(1_200);
+        await page
+          .getByRole("button", { name: new RegExp(term) })
+          .first()
+          .click({ timeout: 10_000 });
+        await page.waitForTimeout(300);
+        // Addressed by position, not by id: each line's field ids carry a key
+        // minted at render time, so there is nothing stable to name.
+        await page.locator('input[id^="lot-"]').nth(index).fill(lot);
+        await page.locator('input[id^="exp-"]').nth(index).fill(expiry);
+        await page.locator('input[id^="qty-"]').nth(index).fill(quantity);
+      }
+      // Back to the top of the modal body. Filling the last line leaves it
+      // scrolled to that field, which pushes the received-date field — the
+      // "one date for the whole delivery" half of the claim — off the top.
+      await page.getByLabel("Received").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(600);
+    },
+    // A frame tall enough for the whole dialog: four lines plus the date above
+    // them do not fit the default 900px, and a shorter frame clips whichever
+    // end the body happens to be scrolled to.
+    viewport: { width: 1440, height: 1250 },
+    selector: '[role="dialog"]',
+    fullPage: false,
+  },
+  {
     id: "05-07-item-stock-deployed",
     doc: "05-inventory.md",
     line: 730,
