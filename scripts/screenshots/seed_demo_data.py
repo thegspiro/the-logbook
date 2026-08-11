@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -69,7 +70,22 @@ class Throttle:
 
 
 # `_rate_limit_admin_reset` in app/api/v1/endpoints/users.py: 5 per 300s.
-ADMIN_RESET_THROTTLE = Throttle(max_calls=5, window_seconds=300)
+#
+# Overridable because the pacing only earns its cost when the ceiling is
+# actually there. A local demo stack seeded with `RATE_LIMIT_ENABLED=false`
+# has no admin-reset limiter to stay under, and a roster of twenty members
+# then spends the better part of an hour asleep waiting for a window that
+# does not exist. Set `SEED_ADMIN_RESET_WINDOW_SECONDS=0` in that case.
+#
+# Default unchanged: against any stack with the limiter on — which is every
+# real one, and the CI stack — the 300s window is what avoids the 15-minute
+# lockout, and guessing wrong there costs far more than the pacing does.
+ADMIN_RESET_WINDOW_SECONDS = float(
+    os.environ.get("SEED_ADMIN_RESET_WINDOW_SECONDS", "300")
+)
+ADMIN_RESET_THROTTLE = Throttle(
+    max_calls=5, window_seconds=ADMIN_RESET_WINDOW_SECONDS
+)
 
 # Shared password given to the seeded member accounts so the seeder can act as
 # them where the API has no admin-on-behalf-of route (event RSVPs). Demo-only.
@@ -2853,6 +2869,33 @@ class Seeder:
         "Normal Saline 1000mL": [("NS-5520", 148, 18)],
     }
 
+    # How many units to put aboard each position, and from how many lots — one
+    # entry per lot, drawn soonest-expiring first.
+    #
+    # Explicit rather than derived, because what each row has to *picture* is
+    # different and a uniform rule cannot produce all of it: two dates in one
+    # bracket, a position under par that still carries an expiry, and one at
+    # par for contrast.
+    DEPLOY_PLAN = {
+        # Two lots on one bracket, which is the case `check_item_deployed_lots`
+        # was added for and the only row that can picture "soonest aboard".
+        "Naloxone 4mg Nasal": [1, 1],
+        "Epinephrine 1:1000": [2],
+        # Deliberately under its target of 24, and drawn from a dated lot, so
+        # the row reads **short and dated** rather than short and blank. Doing
+        # this by recount instead would draw the shortfall back off
+        # soonest-first and eat the very lot the row needs.
+        "Gauze 4x4 Sterile": [18],
+        # One short of its target, so the row reaches the supply worklist —
+        # which is the only place the *expired* glove lot on the shelf is
+        # visible, struck through in this position's ready stock and refused by
+        # the swap. At par the position never appears and the guard cannot be
+        # pictured at all.
+        "Nitrile Gloves — Large": [3],
+        # Full here; the member's report below takes it to 4 of 6.
+        "Normal Saline 1000mL": [6],
+    }
+
     # compartment -> [(position name, catalog item or None, target quantity)]
     #
     # The None entries are load-bearing. A template where every position is
@@ -2900,8 +2943,9 @@ class Seeder:
 
         - one position carrying **two lots with two dates**, so the "soonest
           aboard" rule is visible rather than asserted;
-        - one position **short of par** (18 of 24), which is also the only thing
-          that makes the Set All to Par warning fire;
+        - one position **short of par** (18 of 24) that still carries an
+          expiry, which is also the only thing that makes the Set All to Par
+          warning fire;
         - one **restock report** raised by an ordinary member, so the row names
           a real person rather than the administrator who seeded it;
         - one **expired** lot on the shelf, struck through and refused by the
@@ -2932,7 +2976,6 @@ class Seeder:
             return {"skipped": "no linked positions"}
 
         self._deploy_lots(positions, catalog)
-        self._leave_one_short(positions)
         self._report_one_used(positions, str(pick(medic, "id")))
         return {
             "template_id": pick(template, "id"),
@@ -2984,12 +3027,20 @@ class Seeder:
                     "condition": "good",
                     "status": "available",
                     "tracking_type": "pool",
-                    # Not the real count. On-hand for a lot-stocked item comes
-                    # from its in-date lots; `quantity` is the fallback for
-                    # items with none, and is left at zero here so a screenshot
-                    # of the two-ledger Qty column cannot be read as the two
-                    # agreeing by luck.
-                    "quantity": 0,
+                    # Not the real count, and deliberately nothing like it.
+                    # On-hand for a lot-stocked item comes from its in-date
+                    # lots; `quantity` is only the fallback for items with
+                    # none, and nothing maintains it once lots exist. Setting
+                    # it to the floor keeps the two ledgers visibly different
+                    # in the items grid — a screenshot of the two-ledger Qty
+                    # column is worthless if the numbers agree by luck.
+                    #
+                    # One rather than zero because the API refuses a pool item
+                    # with no units ("Pool items must have a quantity of at
+                    # least 1"), which is the right rule for stock somebody is
+                    # about to issue and simply does not describe an item whose
+                    # real count lives in its lots.
+                    "quantity": 1,
                     "asset_tag": f"SUP-{2000 + index}",
                 }
                 if category_id:
@@ -3146,14 +3197,26 @@ class Seeder:
             )
             if not usable:
                 continue
-            take = usable[:2] if position == "Naloxone 4mg Nasal" else usable[:1]
-            for lot in take:
+            plan = self.DEPLOY_PLAN.get(position, [1])
+            # Zero the position before the first swap.
+            #
+            # A swap onto a position whose `quantity_on_truck` is NULL treats
+            # the target as units already aboard and gives them an undated row
+            # so they are not lost behind the incoming lot. That is right for a
+            # real truck being restocked and wrong here: nothing has ever been
+            # on this rig, so the phantom row inflates every count past its
+            # target and leaves an undated lot in a sheet whose whole subject is
+            # dates. Starting from an explicit zero makes the lots the count.
+            self.api.put(
+                f"/equipment-checks/items/{item_id}/quantity", {"quantity": 0}
+            )
+            for lot, quantity in zip(usable, plan):
                 try:
                     self.api.post(
                         f"/equipment-checks/items/{item_id}/swap",
                         {
                             "inventory_lot_id": pick(lot, "id"),
-                            "quantity": 1 if len(take) > 1 else 2,
+                            "quantity": quantity,
                         },
                     )
                 except ApiError as exc:
@@ -3166,20 +3229,6 @@ class Seeder:
                         f"supply: {position} refused lot "
                         f"{pick(lot, 'lot_number', 'lotNumber')}"
                     )
-
-    def _leave_one_short(self, positions: dict[str, str]) -> None:
-        """Record 18 of 24 gauze.
-
-        Two screens need a truck that is short. The supply worklist needs a row
-        that is under par rather than merely expiring, and **Set All to Par**
-        needs something whose count it would raise — its warning is suppressed
-        on a compartment already full, so a fully stocked demo department cannot
-        picture the guard at all.
-        """
-        item_id = positions.get("Gauze 4x4 Sterile")
-        if not item_id:
-            return
-        self.api.put(f"/equipment-checks/items/{item_id}/quantity", {"quantity": 18})
 
     def _report_one_used(self, positions: dict[str, str], apparatus_id: str) -> None:
         """Raise a restock report as an ordinary member, not as the chief.

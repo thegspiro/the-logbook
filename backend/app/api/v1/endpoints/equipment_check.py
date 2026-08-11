@@ -208,21 +208,25 @@ async def delete_template(
     template = await service.get_template(template_id, current_user.organization_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
-    tmpl_name = template.name
     deleted = await service.delete_template(template_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
-    await service.log_template_change(
-        organization_id=str(current_user.organization_id),
-        template_id=template_id,
-        user_id=str(current_user.id),
-        user_name=_user_display_name(current_user),
-        action="delete",
-        entity_type="template",
-        entity_id=template_id,
-        entity_name=tmpl_name,
-    )
-    await db.commit()
+    # No changelog entry, and there cannot be one.
+    #
+    # `template_change_logs.template_id` is a FK onto the template with
+    # ON DELETE CASCADE, so a row recording *this* deletion is either rejected
+    # or immediately cascaded away. It used to be written here, after
+    # `delete_template` had already committed — so every call inserted a child
+    # row for a parent that no longer existed, MySQL refused it with 1452, and
+    # the endpoint 500'd over a deletion that had in fact succeeded. Deleting a
+    # checklist template was impossible to do without an error, and the error
+    # said nothing about what had actually happened.
+    #
+    # The changelog is per-template by construction — `get_template_changelog`
+    # takes a template id — so it cannot outlive its template, and a durable
+    # record of the deletion belongs in the organization audit log rather than
+    # here. Sibling deletes (compartment, item) log against the *parent*
+    # template, which survives, and are unaffected.
 
 
 @router.post(
