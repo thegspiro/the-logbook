@@ -360,6 +360,7 @@ class PublicFormResponse(BaseModel):
     description: Optional[str] = None
     category: str
     allow_multiple_submissions: bool = True
+    require_authentication: bool = True
     fields: List[PublicFormFieldResponse] = []
     organization_name: Optional[str] = None
 

@@ -249,6 +249,9 @@ class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # How many members are on this pipeline. Computed for the list view — the
+    # programme cards report it, and without it they rendered a hardcoded zero.
+    enrolled_count: int = 0
 
     model_config = _response_config
 
@@ -741,6 +744,10 @@ class ProgramBuildRequirementInput(BaseModel):
     )
     allows_external_credit: bool = False
     is_required: bool = True
+    # Every other path that creates a link — create, clone, import — carries the
+    # prerequisite flag. Build did not, so a program assembled in one call came
+    # out with its gating requirements ungated and had to be patched afterwards.
+    is_prerequisite: bool = False
     sort_order: int = Field(default=0, ge=0)
 
     @field_validator("checklist_items", mode="before")

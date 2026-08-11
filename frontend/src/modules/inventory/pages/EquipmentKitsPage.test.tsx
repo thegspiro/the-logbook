@@ -121,10 +121,14 @@ describe('EquipmentKitsPage', () => {
     await user.click(screen.getByRole('button', { name: /Add Kit/ }));
     await user.type(await screen.findByPlaceholderText('e.g. New Recruit Kit'), 'Officer Kit');
     await user.type(screen.getByPlaceholderText('Custom item name'), 'Helmet');
+    await user.click(screen.getByLabelText('Optional'));
     await user.click(screen.getByRole('button', { name: 'Create Kit' }));
 
     await waitFor(() => expect(mockCreateEquipmentKit).toHaveBeenCalledTimes(1));
-    expect(mockCreateEquipmentKit.mock.calls[0]?.[0]).toMatchObject({ name: 'Officer Kit' });
+    expect(mockCreateEquipmentKit.mock.calls[0]?.[0]).toMatchObject({
+      name: 'Officer Kit',
+      line_items: [{ item_name: 'Helmet', optional: true }],
+    });
     expect(mockToastSuccess).toHaveBeenCalledWith('Kit created');
   });
 
@@ -139,6 +143,7 @@ describe('EquipmentKitsPage', () => {
             item_name: 'Helmet',
             quantity: 1,
             size_selectable: false,
+            optional: false,
             sort_order: 0,
           },
         ],

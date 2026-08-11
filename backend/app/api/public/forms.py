@@ -2,7 +2,7 @@
 Public Forms API Endpoints
 
 Public endpoints for viewing and submitting forms that are marked as public.
-No authentication required - these are accessible by anyone with the form's public URL slug.
+Viewing is anonymous; submission policy is enforced from each form's settings.
 
 Security measures:
 - Rate limiting per IP (10 submissions per minute, 60 views per minute)
@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_optional_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import (
@@ -24,7 +25,7 @@ from app.core.security_middleware import (
     get_client_ip,
     public_rate_limit,
 )
-from app.models.user import Organization
+from app.models.user import Organization, User
 from app.schemas.forms import (
     PublicFormFieldResponse,
     PublicFormResponse,
@@ -93,7 +94,7 @@ async def get_public_form(
     """
     Get a public form by its URL slug.
 
-    No authentication required.
+    No authentication is required to view a published public form.
     Only returns published forms that have public access enabled.
     """
     _validate_slug(slug)
@@ -129,6 +130,7 @@ async def get_public_form(
             form.category.value if hasattr(form.category, "value") else form.category
         ),
         allow_multiple_submissions=form.allow_multiple_submissions,
+        require_authentication=form.require_authentication,
         fields=fields,
         organization_name=org_name,
     )
@@ -145,25 +147,49 @@ async def submit_public_form(
     submission: PublicFormSubmissionCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     """
     Submit a public form.
 
-    No authentication required.
+    Authentication is enforced when required by the form policy.
     Only works for published forms with public access enabled.
     Includes rate limiting, honeypot detection, and input sanitization.
     """
     _validate_slug(slug)
 
-    # Per-form daily ceiling: bounds DB/email/integration abuse from a
-    # distributed flood that per-IP limiting alone cannot stop.
+    service = FormsService(db)
+    form = await service.get_form_by_slug(slug)
+    if not form:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Form not found or not available",
+        )
+
+    # These are authorization/workflow policies, not UI hints. A form that
+    # disallows repeat submissions also needs a stable authenticated identity;
+    # IP addresses and client-supplied email addresses are trivially bypassed.
+    if (
+        form.require_authentication or not form.allow_multiple_submissions
+    ) and not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication is required to submit this form.",
+        )
+    if current_user and str(current_user.organization_id) != str(form.organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Form not found or not available",
+        )
+
+    # Check the shared quota only after authorization. Otherwise anonymous
+    # requests can exhaust an authenticated form's allowance and deny service
+    # to legitimate members without ever being eligible to submit it.
     if await daily_cap_exceeded(f"pub_form:{slug}", settings.PUBLIC_FORM_DAILY_LIMIT):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="This form is not accepting further submissions today.",
         )
-
-    service = FormsService(db)
 
     # Get IP and user agent for tracking
     ip_address = get_client_ip(request)
@@ -177,6 +203,7 @@ async def submit_public_form(
         ip_address=ip_address,
         user_agent=user_agent,
         honeypot_value=submission.hp_website,
+        submitted_by=str(current_user.id) if current_user else None,
     )
 
     # Honeypot triggered - bot detected, return fake success

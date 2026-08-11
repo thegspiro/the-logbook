@@ -15,7 +15,7 @@
  */
 
 import React, { useState } from 'react';
-import { Ban, CheckCircle2, Send } from 'lucide-react';
+import { Ban, CheckCircle2, Send, Undo2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useSkillsTestingStore } from '../../stores/skillsTestingStore';
@@ -29,6 +29,11 @@ import { Modal } from '../Modal';
 /** Matches the backend's SkillTestVoidRequest minimum — a void stays visible in
  *  the member's history, so the record has to say why it was withdrawn. */
 export const MIN_VOID_REASON_LENGTH = 10;
+
+/** Matches SkillTestReturnRequest. Same floor as a void's reason, different
+ *  audience: this one tells the examiner what to fix, and an examiner who
+ *  reopens a test to "please correct" has learned nothing. */
+export const MIN_RETURN_REASON_LENGTH = 10;
 
 interface SkillTestOfficerActionsProps {
   test: SkillTest;
@@ -53,13 +58,16 @@ function candidateSeesLine(test: SkillTest, disclosure: string): string {
 
 export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = ({ test }) => {
   const tz = useTimezone();
-  const { validateTest, releaseTest, voidTest } = useSkillsTestingStore();
+  const { validateTest, releaseTest, voidTest, returnTest } = useSkillsTestingStore();
 
   const [validating, setValidating] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [voiding, setVoiding] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
+  const [returning, setReturning] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
 
   // Fall back to the permissive defaults the backend itself resolves to, so a
   // response predating these fields describes the behavior members already
@@ -96,6 +104,25 @@ export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = (
       toast.error(getErrorMessage(err, 'Failed to release result'));
     } finally {
       setReleasing(false);
+    }
+  };
+
+  const closeReturnModal = () => {
+    setReturnOpen(false);
+    setReturnReason('');
+  };
+
+  const handleReturn = async () => {
+    if (returnReason.trim().length < MIN_RETURN_REASON_LENGTH) return;
+    setReturning(true);
+    try {
+      await returnTest(test.id, returnReason.trim());
+      toast.success(`Sent back to ${test.examiner_name || 'the examiner'}`);
+      closeReturnModal();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to return result'));
+    } finally {
+      setReturning(false);
     }
   };
 
@@ -211,7 +238,30 @@ export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = (
             </div>
           )}
 
-          {/* Void — the rejection path, and the only way out of a wrong result. */}
+          {/* Send back — offered only on a submission nobody has accepted.
+              Once a result is validated it has credited a requirement, spent an
+              attempt and been shown to the candidate; undoing that is a void,
+              which releases all three. */}
+          {isPending && (
+            <div>
+              <button
+                onClick={() => setReturnOpen(true)}
+                className="bg-theme-surface border-theme-surface-border text-theme-text-secondary mobile-touch-target flex w-full items-center justify-center gap-2 rounded-xl border-2 py-3 font-medium transition-colors hover:border-blue-500 hover:text-blue-600"
+              >
+                <Undo2 className="h-4 w-4" />
+                Send back to examiner
+              </button>
+              <p className="text-theme-text-muted mt-2 text-xs">
+                For an evaluation that needs correcting rather than rejecting. It reopens for{' '}
+                {test.examiner_name || 'the examiner'} with every mark intact, so they fix the step and submit it again.
+                Nothing is recorded against {test.candidate_name || 'the candidate'} and they are not told — no result
+                has been decided yet.
+              </p>
+            </div>
+          )}
+
+          {/* Void — the other rejection path, and the only way out of a result
+              that already stands. */}
           <div>
             <button
               onClick={() => setVoidOpen(true)}
@@ -229,6 +279,56 @@ export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = (
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={returnOpen}
+        onClose={closeReturnModal}
+        title="Send back to examiner"
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={closeReturnModal}
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
+            >
+              Keep it here
+            </button>
+            <button
+              onClick={() => void handleReturn()}
+              disabled={returning || returnReason.trim().length < MIN_RETURN_REASON_LENGTH}
+              className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {returning ? 'Sending…' : 'Send back'}
+            </button>
+          </div>
+        }
+      >
+        <div className="modal-body space-y-3">
+          <p className="text-theme-text-secondary text-sm">
+            This reopens <span className="text-theme-text-primary font-medium">{test.template_name}</span> for{' '}
+            <span className="text-theme-text-primary font-medium">{test.examiner_name || 'the examiner'}</span> with
+            every mark they recorded still in place. Nothing is voided, nothing is recorded against{' '}
+            {test.candidate_name || 'the candidate'}, and they are not notified — there is no decided result yet.
+          </p>
+          <div>
+            <label htmlFor="return-reason-detail" className="form-label">
+              What needs correcting?
+            </label>
+            <textarea
+              id="return-reason-detail"
+              rows={3}
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              placeholder="e.g. Step 4 is marked pass but your note says the seal leaked — please re-check"
+              className="form-input"
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Required, at least {MIN_RETURN_REASON_LENGTH} characters. {test.examiner_name || 'The examiner'} sees this
+              when they reopen the test.
+            </p>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={voidOpen}

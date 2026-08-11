@@ -37,11 +37,13 @@ import { useAuthStore } from '../stores/authStore';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
+import { enumLabel } from '../utils/displayValue';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
 import { checklistDoneIds } from '../utils/checklistItems';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ENROLLMENT_STATUSES } from '../types/training';
 import type {
   TrainingProgram,
   ProgramPhase,
@@ -1203,6 +1205,10 @@ const PipelineDetailPage: React.FC = () => {
   const [phases, setPhases] = useState<ProgramPhase[]>([]);
   const [programReqs, setProgramReqs] = useState<ProgramRequirement[]>([]);
   const [enrollments, setEnrollments] = useState<ProgramEnrollmentWithUser[]>([]);
+  // The list endpoint has always taken a status, but nothing on this tab asked
+  // for one — so an officer looking for the enrollments that ran out of time
+  // had to read every row.
+  const [enrollmentStatus, setEnrollmentStatus] = useState('');
   const [loading, setLoading] = useState(true);
   // ?tab=enrollments is what the training notifications sent to a mentor link
   // to, so the tab has to be selectable from the URL.
@@ -1266,7 +1272,7 @@ const PipelineDetailPage: React.FC = () => {
   const loadEnrollments = async () => {
     if (!programId) return;
     try {
-      const data = await trainingProgramService.getProgramEnrollments(programId);
+      const data = await trainingProgramService.getProgramEnrollments(programId, enrollmentStatus || undefined);
       setEnrollments(data);
     } catch {
       // A plain member viewing this page may lack training.view_all/manage;
@@ -1278,7 +1284,7 @@ const PipelineDetailPage: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'enrollments') void loadEnrollments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, enrollmentStatus]);
 
   const handleDuplicate = async () => {
     if (!programId || !program) return;
@@ -1892,7 +1898,37 @@ const PipelineDetailPage: React.FC = () => {
 
         {activeTab === 'enrollments' && (
           <div>
-            {enrollments.length === 0 ? (
+            <div className="mb-3 flex items-center gap-2">
+              <label htmlFor="enrollment-status" className="text-theme-text-muted text-xs">
+                Status
+              </label>
+              <select
+                id="enrollment-status"
+                value={enrollmentStatus}
+                onChange={(e) => setEnrollmentStatus(e.target.value)}
+                className="form-input-sm w-44"
+              >
+                <option value="">All statuses</option>
+                {ENROLLMENT_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {enumLabel(status)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {enrollments.length === 0 && enrollmentStatus ? (
+              // Distinct from "nobody is enrolled": the filter is the reason
+              // the list is empty, and the way out is to clear it.
+              <div className="bg-theme-surface rounded-lg py-12 text-center">
+                <Users className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
+                <p className="text-theme-text-muted mb-4">
+                  No {enumLabel(enrollmentStatus).toLowerCase()} enrollments in this pipeline.
+                </p>
+                <button onClick={() => setEnrollmentStatus('')} className="btn-primary text-sm">
+                  Show all statuses
+                </button>
+              </div>
+            ) : enrollments.length === 0 ? (
               <div className="bg-theme-surface rounded-lg py-12 text-center">
                 <Users className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <p className="text-theme-text-muted mb-2">No members enrolled yet</p>
@@ -1923,7 +1959,7 @@ const PipelineDetailPage: React.FC = () => {
                     <div>
                       <p className="text-theme-text-primary font-medium">{enrollment.user_name}</p>
                       <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
-                        <span>Status: {enrollment.status}</span>
+                        <span>Status: {enumLabel(enrollment.status)}</span>
                         <span>{Math.round(enrollment.progress_percentage)}% complete</span>
                       </div>
                     </div>

@@ -4782,6 +4782,7 @@ class InventoryService:
                     item_name=item_data["item_name"],
                     quantity=item_data.get("quantity", 1),
                     size_selectable=item_data.get("size_selectable", False),
+                    optional=item_data.get("optional", False),
                     sort_order=idx,
                 )
                 self.db.add(kit_item)
@@ -4831,13 +4832,54 @@ class InventoryService:
     async def update_equipment_kit(
         self, kit_id: UUID, organization_id: UUID, data: dict
     ) -> Tuple[Optional[EquipmentKit], Optional[str]]:
-        """Update a kit's metadata (not its items)."""
+        """Update a kit's metadata and, when supplied, replace its line items."""
         try:
             kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
             if not kit:
                 return None, "Equipment kit not found"
+            line_items_data = data.pop("line_items", None)
             for key, value in data.items():
                 setattr(kit, key, value)
+            if line_items_data is not None:
+                replacement_items = []
+                for idx, item_data in enumerate(line_items_data):
+                    await assert_in_org(
+                        self.db,
+                        InventoryItem,
+                        item_data.get("item_id"),
+                        organization_id,
+                        allow_none=True,
+                        label="item",
+                    )
+                    await assert_in_org(
+                        self.db,
+                        InventoryCategory,
+                        item_data.get("category_id"),
+                        organization_id,
+                        allow_none=True,
+                        label="category",
+                    )
+                    replacement_items.append(
+                        EquipmentKitItem(
+                            kit_id=kit.id,
+                            item_id=(
+                                str(item_data["item_id"])
+                                if item_data.get("item_id")
+                                else None
+                            ),
+                            category_id=(
+                                str(item_data["category_id"])
+                                if item_data.get("category_id")
+                                else None
+                            ),
+                            item_name=item_data["item_name"],
+                            quantity=item_data.get("quantity", 1),
+                            size_selectable=item_data.get("size_selectable", False),
+                            optional=item_data.get("optional", False),
+                            sort_order=idx,
+                        )
+                    )
+                kit.line_items = replacement_items
             await self.db.flush()
             await self.db.refresh(kit)
             return kit, None
@@ -4887,14 +4929,7 @@ class InventoryService:
                         UUID(kit_item.item_id), organization_id
                     )
                     if not item:
-                        # INV-6: EquipmentKitItem has no `optional` column, so a
-                        # bare `kit_item.optional` raised AttributeError on this
-                        # (error-only) branch — caught by the outer except and
-                        # surfaced as a confusing generic failure. getattr with a
-                        # False default makes every item required (the intended
-                        # behavior until the `optional` field is actually
-                        # persisted — see the flagged follow-up).
-                        if not getattr(kit_item, "optional", False):
+                        if not kit_item.optional:
                             return (
                                 None,
                                 f"Required kit item not found: {kit_item.item_id}",
@@ -4917,7 +4952,7 @@ class InventoryService:
                             assigned_by=issued_by,
                         )
 
-                    if err and not getattr(kit_item, "optional", False):
+                    if err and not kit_item.optional:
                         return None, f"Failed to issue kit item: {err}"
                     if result:
                         issuances.append(result)
