@@ -548,11 +548,20 @@ From **Training > My Training**, find your program under **Active Program Enroll
 
 ![A member's full pipeline progress — the current phase marked You are here, with milestones and every requirement](./images/02-93-member-full-progress.png)
 
-### Attendance Warning for an Unreached Phase
+### Attending a session for a phase you have not reached
 
-If you RSVP to — or check into — a **training session tied to a phase you have not reached yet**, the system shows a **warning** that the session belongs to a later phase. You can choose to **proceed anyway** if you still want to attend.
+A training session can be **tied to a phase** of a program, and that tie is what
+credits your attendance to the right requirement.
 
-> **[SCREENSHOT NEEDED]:** _The attendance warning dialog shown when a member RSVPs to a session for a phase they have not reached, with "Proceed anyway" and "Cancel" options._
+**Nothing warns you, and nothing stops you, if the session belongs to a phase
+ahead of the one you are in.** You can RSVP and attend, and the hours are
+recorded. This is deliberate to the extent that attending early is rarely
+wrong — a recruit sitting in on a later drill loses nothing — but it does mean
+the session list is not filtered to what you are ready for, and an officer
+planning a phase-specific session should say so in its description.
+
+> A dialog offering **Proceed anyway** was described here before 2026-08-11. It
+> was never built; see `docs/KNOWN_LIMITATIONS.md`.
 
 ---
 
@@ -1300,7 +1309,21 @@ The Vector Solutions integration now includes:
 - **Improved type mapping**: Course types from Vector Solutions now correctly map to internal training types during import, preserving certification data and expiration dates
 - **Auto-sync scheduling**: After initial setup, syncs can be triggered manually or run on a scheduled basis via the background task system
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Vector Solutions category mapping table showing external VS categories on the left, internal training categories on the right with dropdown selectors, and a "Fetch Categories" button at the top. Show at least one mapped and one unmapped category._
+**Where the mappings live:** open the provider's **Mappings** button, which
+gives you a **Categories** tab and a **Users** tab, each counting what is still
+unmapped — "Categories (7 unmapped)". A category is one card per external
+category: its name, its external id and code, and a **dropdown of your own
+training categories**. Picking one saves immediately; setting it back to **Not
+mapped** unmaps it. Cards still unmapped are outlined in amber, and a mapped one
+carries a green **Mapped** — with **(auto)** when the sync matched it for you.
+
+> **The dropdown replaced a dead button** _(2026-08-11)_. Until then an unmapped
+> category showed a **Map Category** button with nothing behind it: clicking it
+> did nothing, and the only way to map a category was to call the API by hand.
+
+_No screenshot: the mapping list is populated by a sync against a live Vector
+Solutions account, so picturing it would mean inventing an external provider's
+data. See `docs/KNOWN_LIMITATIONS.md`._
 
 **Edge Cases:**
 
@@ -1356,13 +1379,15 @@ Officers can share training programs between departments:
 **Importing a Program:**
 
 1. Navigate to **Training > Programs**
-2. Click **Import Program**
-3. Upload the JSON package file
-4. The system validates the package structure and reports any conflicts
-5. Review the import preview showing what will be created
-6. Confirm the import
+2. Click **Import** and choose the JSON package file
+3. The package is imported **as soon as you choose the file** — a toast names
+   the program that was created, or says what was wrong with the file
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the import preview showing the program name, number of phases, requirements, and milestones that will be created, with a "Confirm Import" button._
+**There is no preview and no confirmation step.** A file that is not a program
+export is rejected before anything is created ("Invalid import format — missing
+'program' key"), so a mis-clicked file is not destructive, but a package that
+_is_ valid is imported without asking twice. Import into a scratch department
+first if you want to see what a package contains before it lands in yours.
 
 **Edge Cases:**
 

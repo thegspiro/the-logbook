@@ -1007,6 +1007,54 @@ valuable half. Worth another attempt with a fresh idea about which of the
 member's shifts carry an unclaimed checklist — the first pass drove it from
 `/scheduling/my-shifts`, whose result did not line up with what the page lists.
 
+## External Training — The Mapping List Needs a Live Provider (2026-08-11)
+
+Held back. `02-training.md` asked for the Vector Solutions category mapping
+list. Category mappings are **discovered by a sync against the provider's API**
+— the endpoints expose only GET and PATCH, so there is no supported way to bring
+a mapping into being without a real Vector Solutions account answering the sync.
+
+Seeding one would mean writing rows straight into the database and presenting
+invented external category names as a real integration's output, which is a
+worse outcome than no screenshot. The section now describes the list instead,
+which is accurate as far as it goes.
+
+The visit was not wasted: an unmapped category showed a **Map Category** button
+with no handler behind it. It is a category dropdown now, wired to the PATCH
+endpoint that had been there all along, and covered by
+`ExternalTrainingPage.test.tsx`.
+
+## Training — Program Import Has No Preview (2026-08-11)
+
+Not implemented. The guide described a preview of what an imported package would
+create, with a **Confirm Import** button. Choosing a file imports it there and
+then; the only checkpoint is the structural validation that rejects a file with
+no `program` key.
+
+A preview would mean a dry-run mode on `import_program_from_json` returning a
+summary rather than committing — worth doing, and not something to bolt onto a
+documentation pass. The guide now says plainly that there is no confirmation
+step.
+
+## Training — No Warning When a Session Is Ahead of Your Phase (2026-08-11)
+
+Not implemented. `02-training.md` described a dialog shown to a member who
+RSVPs to a session tied to a phase they have not reached — "the session belongs
+to a later phase", with **Proceed anyway** and **Cancel** — and asked for a
+screenshot of it.
+
+Nothing of the sort exists. `TrainingSession.phase_id` is stored, echoed back by
+the read endpoints and used to credit attendance, and that is the whole of it:
+no service consults it when a member RSVPs or checks in, and no component
+renders a warning. Searching the codebase for the wording, and reading the
+session service and its endpoints, turns up nothing on either side.
+
+The guide now says what actually happens — you may attend a session for any
+phase, and the hours are recorded — so the documentation is no longer wrong. The
+feature itself is a real one worth having, but it is a change to the RSVP path
+across the API and the UI, not a screenshot, and building it here would have
+been a feature shipped under cover of a documentation task.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked
