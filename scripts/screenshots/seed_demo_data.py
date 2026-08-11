@@ -2670,7 +2670,7 @@ class Seeder:
         # NEAR_EXPIRY_DAYS is therefore explicit rather than derived, and spans
         # both bands the view counts separately: Critical (<= 30 days) and
         # Warning (31-90).
-        near_expiry_days = [12, 26, 45, 78]
+        NEAR_EXPIRY_DAYS = [12, 26, 45, 78]
         for member_index, member in enumerate(members):
             user_id = pick(member, "id")
             if not user_id:
@@ -2693,8 +2693,8 @@ class Seeder:
                     "expiration_date": str(
                         # One record per member, for the first few members,
                         # expires inside the 90-day window the view filters on.
-                        TODAY + timedelta(days=near_expiry_days[member_index])
-                        if offset == 0 and member_index < len(near_expiry_days)
+                        TODAY + timedelta(days=NEAR_EXPIRY_DAYS[member_index])
+                        if offset == 0 and member_index < len(NEAR_EXPIRY_DAYS)
                         else completed + timedelta(days=365 + member_index * 3)
                     ),
                     "status": "completed",
