@@ -4590,13 +4590,26 @@ class Seeder:
                         None,
                     )
                     complete = index < done and not is_checklist
-                    payload: dict[str, Any] = (
-                        {"status": "completed"}
-                        if complete
-                        else {"status": "in_progress"}
+                    # A knowledge test is completed by *recording a score*, not
+                    # by setting a status: the score fills in the "Last score"
+                    # line and spends one of the requirement's attempts, and a
+                    # pass completes it by itself. Setting the status instead
+                    # leaves "Attempts: 0 / 3" beside a finished test.
+                    is_test = (
+                        pick(requirement, "requirement_type", "requirementType")
+                        == "knowledge_test"
                     )
-                    if complete and target:
-                        payload["progress_value"] = target
+                    payload: dict[str, Any]
+                    if complete and is_test:
+                        payload = {"test_score": 86}
+                    else:
+                        payload = (
+                            {"status": "completed"}
+                            if complete
+                            else {"status": "in_progress"}
+                        )
+                        if complete and target:
+                            payload["progress_value"] = target
                     try:
                         self.api.patch(
                             f"/training/programs/progress/{progress_id}", payload

@@ -312,12 +312,13 @@ Completing any requirement — of **any** type — counts toward the member's **
 
 > **Only officers can complete or credit a requirement.** Setting a numeric value (hours/shifts/calls/courses), recording a test score, or marking a requirement complete/verified/waived requires `training.manage`. A member viewing their own progress can mark a requirement **in progress**, but to get credit they submit their training for review — they can't set their own requirement to 100%.
 
-The controls on each requirement are **In progress**, **Mark complete** and
-**Reset**. There is no separate Verify button: a requirement an officer marks
-complete is verified in the same act, and picks up its **Verified** badge from
-that. A value-based requirement — hours, shifts, calls, courses — also carries
-its own input and **Save**, so the count can be credited without completing the
-requirement outright.
+The controls on each requirement are **In progress**, **Mark complete**,
+**Reopen** and **Reset** — Reopen appears once the requirement is complete, and
+Reset on anything that has been started at all. There is no separate Verify
+button: a requirement an officer marks complete is verified in the same act, and
+picks up its **Verified** badge from that. A value-based requirement — hours,
+shifts, calls, courses — also carries its own input and **Save**, so the count
+can be credited without completing the requirement outright.
 
 ![The officer's view of a member's pipeline progress, with the controls that credit and verify each requirement](./images/02-94-officer-progress-detail.png)
 
@@ -367,13 +368,15 @@ denominator that does not match what is on their screen.
 For a **knowledge test** requirement, the officer records the result:
 
 1. Open the member's progress detail and find the knowledge-test requirement.
-2. Enter either a **Pass/Fail** result or a **score percentage**.
+2. Type the **score percentage** and click **Record**. There is no Pass/Fail
+   control: pass and fail are derived from the score, and the field's own label
+   tells you the threshold — "Test score (%) · pass ≥ 70%".
 3. The system compares the score to the requirement's **passing score** (default **70%**). A score at or above the passing score is a **pass**, and a pass **completes the requirement**.
-4. Each entry counts against the requirement's **maximum attempts**. The current count is shown as **"Attempts: X / N"**. Once the maximum is reached, no further attempts can be recorded.
+4. Each entry counts against the requirement's **maximum attempts**. The current count is shown as **"Attempts: X / N"**, and the most recent result as **"Last score: 86% (pass)"**. Once the maximum is reached the field and the Record button are disabled, and the count is annotated "no attempts remaining".
 
 > **Note:** Knowledge-test scoring is **officer-entered** today. A member-facing, online test-taking feature is planned for a future release.
 
-> **[SCREENSHOT NEEDED]:** _The knowledge-test entry panel showing the Pass/Fail toggle and score percentage field, the passing score (70%), and the "Attempts: 1 / 3" counter._
+![A knowledge-test requirement — the last score with its pass, the attempts used, and the score field that records the next](./images/02-95-knowledge-test-entry.png)
 
 ### Phases & Advancing
 

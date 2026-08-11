@@ -1894,6 +1894,52 @@ export const SHOTS = [
     viewport: { width: 1800, height: 1300 },
   },
   {
+    id: "02-95-knowledge-test-entry",
+    doc: "02-training.md",
+    line: 379,
+    anchor: "The knowledge-test entry panel showing the last score",
+    alt: "A knowledge-test requirement — the last score with its pass, the attempts used, and the score field that records the next",
+    route: "/training/programs",
+    prepare: async (page) => {
+      const programId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/training/programs/programs", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const list = Array.isArray(rows) ? rows : [];
+        const wanted =
+          list.find((row) => /Probationary/.test(row.name || "")) || list[0];
+        return wanted ? wanted.id : null;
+      });
+      if (!programId) throw new Error("02-95: no training programme to open");
+      await page.goto(
+        new URL(
+          `/training/programs/${programId}?tab=enrollments`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(2500);
+      // The member whose written exam carries a recorded score, so the panel
+      // shows a used attempt rather than "Attempts: 0 / 3" beside an empty
+      // field. Recording one here instead would spend an attempt on every
+      // capture run.
+      await page
+        .getByText(/Nadia Belhaj/)
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2500);
+      const panel = page
+        .locator("div:has(> div > label:has-text('Test score'))")
+        .first();
+      await panel.waitFor({ timeout: 20_000 });
+      await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    selector: "div.fixed.inset-0 > div",
+  },
+  {
     id: "02-94-officer-progress-detail",
     doc: "02-training.md",
     line: 322,
