@@ -214,16 +214,16 @@ const TrainingRequirementsPage: React.FC = () => {
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-              <FileText className="h-8 w-8 text-red-700 dark:text-red-500" aria-hidden="true" />
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+              <FileText className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
               <span>Training Requirements</span>
             </h1>
             <p className="text-theme-text-muted mt-1">Manage department, state, and national training requirements</p>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => {
                 void fetchData();
@@ -455,9 +455,9 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
     <div className="card overflow-hidden">
       {/* Header */}
       <div className="p-6">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1">
-            <div className="mb-2 flex items-center space-x-3">
+            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <h3 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h3>
               {requirement.requirement_type && (
                 <span className="text-theme-text-primary rounded-sm bg-green-700 px-2 py-1 text-xs font-semibold">
@@ -563,7 +563,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="ml-4 flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2 sm:ml-4">
             <button
               onClick={onToggleActive}
               className={`rounded-lg p-2 transition-colors ${

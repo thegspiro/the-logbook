@@ -470,15 +470,15 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
     <div className={embedded ? '' : 'min-h-screen'}>
       <main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           {embedded ? (
             <p className="text-theme-text-muted text-sm">
               Organization-wide training course catalog ({courses.length} course{courses.length !== 1 ? 's' : ''})
             </p>
           ) : (
             <div>
-              <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-                <BookOpen className="h-8 w-8 text-red-700 dark:text-red-500" />
+              <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+                <BookOpen className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" />
                 <span>Course Library</span>
               </h1>
               <p className="text-theme-text-muted mt-1">

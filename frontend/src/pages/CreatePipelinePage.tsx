@@ -407,14 +407,17 @@ const StepPhases: React.FC<{
   onToggleExpand: (id: string) => void;
 }> = ({ phases, onAdd, onRemove, onUpdate, onToggleExpand }) => (
   <div className="space-y-6">
-    <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Program Phases</h2>
         <p className="text-theme-text-muted text-sm">
           Define the phases or stages of your training pipeline. Members progress through these in order.
         </p>
       </div>
-      <button onClick={onAdd} className="btn-primary flex items-center space-x-1 px-3 text-sm">
+      <button
+        onClick={onAdd}
+        className="btn-primary flex shrink-0 items-center space-x-1 self-start px-3 text-sm sm:self-auto"
+      >
         <Plus className="h-4 w-4" />
         <span>Add Phase</span>
       </button>
@@ -606,9 +609,9 @@ const StepRequirements: React.FC<{
     ) : (
       groups.map((phase) => (
         <div key={phase.key} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-theme-text-primary font-medium">{phase.title}</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => onAddRequirement(phase.key, 'library')}
                 className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-sm px-2 py-1 text-xs"
@@ -932,7 +935,7 @@ const StepMilestones: React.FC<{
     ) : (
       groups.map((phase) => (
         <div key={phase.key} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-theme-text-primary font-medium">{phase.title}</h3>
             <button
               onClick={() => onAddMilestone(phase.key)}
