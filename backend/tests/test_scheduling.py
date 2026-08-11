@@ -413,12 +413,18 @@ class TestShiftCRUD:
             org_id, restrict_checkin_to_assigned=True
         )
 
-        today = date.today()
+        # Bracket "now" rather than naming a fixed hour: check-in is bounded by
+        # the shift's own window (opens 2h before the start, closes 12h after
+        # the end), so a shift pinned to 07:00 put this test outside that window
+        # for every run after 19:00 UTC — it then failed on the window message
+        # instead of exercising the assignment restriction it is named for.
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         shift, _ = await svc.create_shift(
             uuid.UUID(org_id),
             {
-                "shift_date": today,
-                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+                "shift_date": now.date(),
+                "start_time": now - timedelta(hours=1),
+                "end_time": now + timedelta(hours=1),
             },
             uuid.UUID(user_id),
         )

@@ -194,10 +194,15 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     officer_id: str
     trainee_name: Optional[str] = None
     officer_name: Optional[str] = None
-    # Which shift the report covers, e.g. "B-5 — Brush 5". A report carried a
-    # person and a date only, so two filed on one day were told apart by
-    # author alone. Populated by ShiftCompletionService._attach_shift_labels.
+    # Which shift the report covers: the apparatus, e.g. "B-5 — Brush 5", and
+    # the shift's start. A report carried a person and a date only, so two filed
+    # on one day were told apart by author alone — and the start time is what
+    # separates a day shift from a night one on the same apparatus. The label is
+    # None for a shift with no apparatus (an event or a detail), which is why
+    # the time is sent independently. Both are populated by
+    # ShiftCompletionService._attach_shift_labels.
     shift_label: Optional[str] = None
+    shift_start_time: Optional[datetime] = None
 
     hours_on_shift: float
     calls_responded: int

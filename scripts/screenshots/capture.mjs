@@ -380,6 +380,14 @@ async function main() {
     const page = await sessions.pageFor(shot);
     try {
       await page.setViewportSize(viewportFor(shot));
+      if (shot.beforeNavigate) {
+        // Install route mocks before the first document request. This is used
+        // sparingly for provider-controlled configuration states (for example,
+        // showing both SSO choices without committing real OAuth secrets to the
+        // demo database). A prepare step is too late because the page fetches
+        // that configuration while mounting.
+        await shot.beforeNavigate(page);
+      }
       await page.goto(`${BASE_URL}${shot.route}`, {
         waitUntil: "domcontentloaded",
       });

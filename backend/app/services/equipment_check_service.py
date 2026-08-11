@@ -637,6 +637,12 @@ class EquipmentCheckService:
             item["is_expired"] = bool(expiration and expiration < today)
             if item.get("is_expired"):
                 item["status"] = "fail"
+            # "not_applicable" is the crew answering that the item is not on
+            # this apparatus, so there is no count to be short of. Expiry above
+            # still wins — that verdict comes from the department's own record —
+            # but a shortfall cannot be read off an item nobody is carrying.
+            if item.get("status") == "not_applicable":
+                continue
             req_qty = item.get("required_quantity")
             found_qty = item.get("quantity_found")
             if req_qty is not None and found_qty is not None and found_qty < req_qty:
@@ -1173,6 +1179,10 @@ class EquipmentCheckService:
         for item in all_items:
             if item.is_expired:
                 item.status = "fail"
+            # An item answered "not on truck" has no count to be short of; see
+            # _compute_check_status, which this mirrors.
+            if item.status == "not_applicable":
+                continue
             req_qty = item.required_quantity
             found_qty = item.quantity_found
             if req_qty is not None and found_qty is not None and found_qty < req_qty:
@@ -1591,7 +1601,7 @@ class EquipmentCheckService:
                         if tmpl.apparatus_id
                         else None
                     ),
-                    "lot_number": item.lot_number,
+                    "lot_number": self._soonest_lot_number(item),
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
@@ -1726,7 +1736,7 @@ class EquipmentCheckService:
                     "unit_of_measure": getattr(item, "unit_of_measure", None),
                     "deployed_lots": self._deployed_lot_payload(item),
                     "serial_number": item.serial_number,
-                    "lot_number": item.lot_number,
+                    "lot_number": self._soonest_lot_number(item),
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
@@ -1784,6 +1794,14 @@ class EquipmentCheckService:
         )
 
     @classmethod
+    def _soonest_dated_lot(cls, item: CheckTemplateItem):
+        """The first lot aboard that carries a date, or None."""
+        for lot in cls._deployed_lots(item):
+            if lot.expiration_date:
+                return lot
+        return None
+
+    @classmethod
     def _soonest_expiration(cls, item: CheckTemplateItem):
         """The earliest date aboard — the one that actually puts a truck out.
 
@@ -1791,10 +1809,26 @@ class EquipmentCheckService:
         lots recorded, which is every position a department has not yet
         restocked through the lot flow.
         """
-        for lot in cls._deployed_lots(item):
-            if lot.expiration_date:
-                return lot.expiration_date
+        lot = cls._soonest_dated_lot(item)
+        if lot is not None:
+            return lot.expiration_date
         return item.expiration_date if item.has_expiration else None
+
+    @classmethod
+    def _soonest_lot_number(cls, item: CheckTemplateItem) -> Optional[str]:
+        """The lot number belonging to the date this position reports.
+
+        ``item.lot_number`` is the scalar left over from the last swap, and on
+        a position carrying more than one lot it names a *different* lot from
+        the one ``_soonest_expiration`` reports. Rendered side by side that
+        reads as a single fact — "lot NLX-2411 expires 9/4" — about a lot that
+        expires six months later. The number has to come from the same row as
+        the date or it should not be shown at all.
+        """
+        lot = cls._soonest_dated_lot(item)
+        if lot is not None:
+            return lot.lot_number
+        return item.lot_number
 
     @classmethod
     def _on_truck(cls, item: CheckTemplateItem) -> Optional[int]:
@@ -2312,7 +2346,7 @@ class EquipmentCheckService:
                     # vehicle has no apparatus_id to name; say which type so the
                     # row is still actionable.
                     "apparatus_type": tmpl.apparatus_type,
-                    "lot_number": item.lot_number,
+                    "lot_number": self._soonest_lot_number(item),
                     "serial_number": item.serial_number,
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,

@@ -385,24 +385,69 @@ export const hoursBetweenTimesOfDay = (
 };
 
 /**
- * Whole days between a calendar date ("YYYY-MM-DD") and today.
+ * Whole days from one calendar date ("YYYY-MM-DD") to another.
  *
- * Negative in the past, 0 today, positive in the future. Both sides are
- * anchored at UTC midnight on purpose: only *today* depends on the viewer's
- * timezone, and running the target date through a zone as well moves it a day
- * for anywhere west of UTC — the same trap `formatCalendarDate` documents.
+ * Negative when `dateOnly` is before `basis`, 0 on the same day. Both sides are
+ * anchored at UTC midnight on purpose: a calendar date belongs to no timezone,
+ * and running either through a zone moves it a day for anywhere west of UTC —
+ * the same trap `formatCalendarDate` documents.
  *
  * Prefer this over `daysBetween` for a shift date, a due date or any other
  * date-only value; `daysBetween` parses its input as an instant.
  *
+ * @returns Day count, or null if either value is not a calendar date
+ */
+export const calendarDaysBetween = (
+  dateOnly: string | null | undefined,
+  basis: string | null | undefined
+): number | null => {
+  const parse = (value: string | null | undefined): number | null => {
+    if (!/^\d{4}-\d{2}-\d{2}/.test(value ?? '')) return null;
+    const ms = Date.parse((value ?? '').slice(0, 10) + 'T00:00:00Z');
+    return isNaN(ms) ? null : ms;
+  };
+  const target = parse(dateOnly);
+  const from = parse(basis);
+  if (target === null || from === null) return null;
+  return Math.round((target - from) / 86400000);
+};
+
+/**
+ * Whole days between a calendar date and today in the given timezone.
+ *
+ * Only *today* depends on the viewer's zone; see `calendarDaysBetween`, which
+ * does the arithmetic.
+ *
  * @returns Day count, or null if the value is not a calendar date
  */
-export const calendarDaysFromToday = (dateOnly: string | null | undefined, timezone?: string): number | null => {
-  if (!/^\d{4}-\d{2}-\d{2}/.test(dateOnly ?? '')) return null;
-  const target = Date.parse((dateOnly ?? '').slice(0, 10) + 'T00:00:00Z');
-  const base = Date.parse(getTodayLocalDate(timezone) + 'T00:00:00Z');
-  if (isNaN(target) || isNaN(base)) return null;
-  return Math.round((target - base) / 86400000);
+export const calendarDaysFromToday = (dateOnly: string | null | undefined, timezone?: string): number | null =>
+  calendarDaysBetween(dateOnly, getTodayLocalDate(timezone));
+
+/**
+ * Shift a calendar date by whole days, staying in calendar space.
+ *
+ * A shift date, a target completion date and a deadline are calendar dates, not
+ * instants: "the day after 2026-03-08" is 2026-03-09 for every viewer. Adding a
+ * day to a `new Date()` and reading it back with `toISOString()` answers a
+ * different question — what the UTC date is once the local clock has moved —
+ * and lands a day out either side of midnight.
+ *
+ * @param dateOnly - Calendar date "YYYY-MM-DD" (anything else is returned unchanged)
+ * @param days - Whole days to add; negative moves back
+ * @returns Calendar date "YYYY-MM-DD"
+ */
+export const addCalendarDays = (dateOnly: string | null | undefined, days: number): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly ?? '');
+  if (!match) return dateOnly ?? '';
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+  if (isNaN(date.getTime())) return dateOnly ?? '';
+  date.setUTCDate(date.getUTCDate() + days);
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'UTC',
+  }).format(date);
 };
 
 /**

@@ -32,6 +32,15 @@ const ShiftCheckInPage: React.FC = () => {
     duration_minutes?: number;
   } | null>(null);
   const [processing, setProcessing] = useState(false);
+  /**
+   * Whether this shift actually has an outstanding start-of-shift checklist.
+   *
+   * The button below points at one, and a department can have none configured —
+   * or have already completed them — in which case sending a member to the
+   * equipment-check tab promises something that is not there. Left false when
+   * the lookup fails: we only offer the step when we know it exists.
+   */
+  const [hasStartChecklist, setHasStartChecklist] = useState(false);
 
   useEffect(() => {
     if (!paramShiftId && !paramApparatusId) {
@@ -57,6 +66,8 @@ const ShiftCheckInPage: React.FC = () => {
         ]);
         setShift(shiftData);
         setAttendance(attendanceData);
+        const checklists = await schedulingService.getShiftChecklists(sid).catch(() => []);
+        setHasStartChecklist(checklists.some((c) => c.checkTiming === 'start_of_shift' && !c.isCompleted));
       } catch {
         toast.error('Unable to load shift');
       } finally {
@@ -249,15 +260,18 @@ const ShiftCheckInPage: React.FC = () => {
             </div>
             {/* Checking in used to lead nowhere, though the next thing to do —
                 the start-of-shift checklist — is one tap away on another tab of
-                another page. Check Out stays the prominent button: it is the one
+                another page. Only offered when the shift actually has one
+                outstanding. Check Out stays the prominent button: it is the one
                 that closes the shift out, hours later, from this same screen. */}
-            <button
-              onClick={() => void navigate(`/scheduling?tab=equipment-checks&shift=${resolvedShiftId}`)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-500/40 px-6 py-3 text-base font-semibold text-violet-700 transition-colors hover:bg-violet-500/10 dark:text-violet-300"
-            >
-              <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
-              Start-of-shift checklist
-            </button>
+            {hasStartChecklist && (
+              <button
+                onClick={() => void navigate(`/scheduling?tab=equipment-checks&shift=${resolvedShiftId}`)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-500/40 px-6 py-3 text-base font-semibold text-violet-700 transition-colors hover:bg-violet-500/10 dark:text-violet-300"
+              >
+                <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
+                Start-of-shift checklist
+              </button>
+            )}
             <button
               onClick={() => {
                 void handleCheckOut();

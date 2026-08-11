@@ -272,7 +272,7 @@ placeholders** for screens that have never been photographed:
 | `08-admin-reports.md`        | The Footers tab, the footer selector in the template editor, the Organization variable palette, the new email preview design                                                                                                              |
 
 **Four now have manifest entries** _(2026-08-11)_ —
-`03-57-apparatus-inventory`, `03-59-supply-worklist`,
+`03-95-apparatus-inventory`, `03-59-supply-worklist`,
 `05-53-items-grid-lot-stock` and `08-64-email-footers-tab`. Three are plain
 route visits; the apparatus one selects M-3 from the picker by the option's
 **value** rather than its label, since the label is built from two fields and

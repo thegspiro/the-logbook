@@ -546,10 +546,15 @@ export const inventoryService = {
   async getEquipmentRequests(params?: {
     status?: string;
     mine_only?: boolean;
-  }): Promise<{ requests: EquipmentRequestItem[]; total: number }> {
-    const response = await api.get<{ requests: EquipmentRequestItem[]; total: number }>('/inventory/requests', {
-      params,
-    });
+    skip?: number;
+    limit?: number;
+  }): Promise<{ requests: EquipmentRequestItem[]; total: number; skip: number; limit: number }> {
+    const response = await api.get<{ requests: EquipmentRequestItem[]; total: number; skip: number; limit: number }>(
+      '/inventory/requests',
+      {
+        params,
+      }
+    );
     return response.data;
   },
 

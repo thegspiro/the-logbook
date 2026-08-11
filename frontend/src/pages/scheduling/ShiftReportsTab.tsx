@@ -53,12 +53,13 @@ import type {
 } from '../../types/training';
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
 import {
   DEFAULT_SKILLS,
   DEFAULT_CALL_TYPE_OPTIONS,
   DEFAULT_COMPETENCY_LABELS,
   REVIEW_STATUS_STYLES,
+  shiftHoursForOneMember,
 } from '../../modules/scheduling/constants/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -84,10 +85,17 @@ export const ShiftReportsTab: React.FC = () => {
   const linkedShiftId = searchParams.get('shift') || undefined;
   const linkedReportId = searchParams.get('report') || undefined;
 
+  // Views an officer may be sent straight to. `create` is how the training
+  // module hands off — its "Go to Shift Reports" button links to
+  // ?tab=shift-reports&view=create — and only `drafts` was ever honoured, so
+  // that hand-off landed on the list of reports already filed.
+  const OFFICER_VIEWS: ViewMode[] = ['create', 'drafts', 'filed-by-me', 'pending-review', 'flagged'];
+
   const initialView = (): ViewMode => {
     if (linkedShiftId && canManage) return 'create';
-    const viewParam = searchParams.get('view');
-    if (viewParam === 'drafts' && canManage) return 'drafts';
+    const viewParam = searchParams.get('view') as ViewMode | null;
+    if (viewParam === 'my-reports') return 'my-reports';
+    if (viewParam && canManage && OFFICER_VIEWS.includes(viewParam)) return viewParam;
     return canManage ? 'filed-by-me' : 'my-reports';
   };
 
@@ -229,16 +237,7 @@ export const ShiftReportsTab: React.FC = () => {
         const shiftDate = shift.shift_date ?? getTodayLocalDate(tz);
         setLinkedShiftLabel(`${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`);
         setShiftApparatusType(shift.apparatus_type ?? null);
-        let hours = 0;
-        if (shift.total_hours && shift.total_hours > 0) {
-          hours = Math.round(shift.total_hours * 100) / 100;
-        } else if (shift.start_time && shift.end_time) {
-          const start = new Date(shift.start_time).getTime();
-          const end = new Date(shift.end_time).getTime();
-          if (end > start) {
-            hours = Math.round(((end - start) / 3600000) * 100) / 100;
-          }
-        }
+        const hours = shiftHoursForOneMember(shift);
         setForm((prev) => ({
           ...prev,
           shift_id: linkedShiftId,
@@ -332,7 +331,7 @@ export const ShiftReportsTab: React.FC = () => {
         end_date: getTodayLocalDate(tz),
         limit: 50,
       })
-      .then((res) => setShiftList(res.shifts))
+      .then((res) => setShiftList(res.shifts ?? []))
       .catch(() => {
         /* shifts not critical */
       })
@@ -460,7 +459,7 @@ export const ShiftReportsTab: React.FC = () => {
       ...prev,
       shift_id: shift.id,
       shift_date: shift.shift_date,
-      hours_on_shift: shift.total_hours || 0,
+      hours_on_shift: shiftHoursForOneMember(shift),
       calls_responded: shift.call_count || 0,
     }));
     setLinkedShiftLabel(`${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shift.shift_date}`);
@@ -991,8 +990,17 @@ export const ShiftReportsTab: React.FC = () => {
                 {dateStr}
               </p>
               {/* Person and date alone told two reports from one day apart by
-                  author, never by which shift they covered. */}
-              {report.shift_label && <p className="text-theme-text-muted truncate text-xs">{report.shift_label}</p>}
+                  author, never by which shift they covered. The start time is
+                  what separates a day shift from a night one on the same
+                  apparatus — and it is all there is to go on for a shift with
+                  no apparatus at all, like an event or a detail. */}
+              {(report.shift_label || report.shift_start_time) && (
+                <p className="text-theme-text-muted truncate text-xs">
+                  {[report.shift_label, report.shift_start_time ? formatTime(report.shift_start_time, tz) : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
                   {/* One decimal, like the summary table above. Raw, the same

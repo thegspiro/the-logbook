@@ -5,6 +5,8 @@ import {
   formatShortDateTime,
   formatTime,
   formatForDateTimeInput,
+  addCalendarDays,
+  calendarDaysBetween,
   formatCalendarDate,
   formatTimeOfDay,
   hoursBetweenTimesOfDay,
@@ -498,5 +500,72 @@ describe('hoursBetweenTimesOfDay', () => {
     expect(hoursBetweenTimesOfDay('08:00', '')).toBeNull();
     expect(hoursBetweenTimesOfDay(null, '20:00')).toBeNull();
     expect(hoursBetweenTimesOfDay('08:00', '24:00')).toBeNull();
+  });
+});
+
+describe('addCalendarDays', () => {
+  // The manual shift-report form rolls the end date forward for an overnight
+  // shift. Doing that with `new Date()` + toISOString() asks what the UTC date
+  // is once the local clock has moved, so an officer filing at 21:00 in
+  // UTC-05:00 got an end date two days out — and a 36-hour shift.
+  it('moves forward a day', () => {
+    expect(addCalendarDays('2026-08-10', 1)).toBe('2026-08-11');
+  });
+
+  it('crosses a month boundary', () => {
+    expect(addCalendarDays('2026-08-31', 1)).toBe('2026-09-01');
+  });
+
+  it('crosses a year boundary', () => {
+    expect(addCalendarDays('2026-12-31', 1)).toBe('2027-01-01');
+  });
+
+  it('handles a leap day', () => {
+    expect(addCalendarDays('2028-02-28', 1)).toBe('2028-02-29');
+  });
+
+  it('moves back on a negative count', () => {
+    expect(addCalendarDays('2026-03-01', -1)).toBe('2026-02-28');
+  });
+
+  it('returns the same date for zero days', () => {
+    expect(addCalendarDays('2026-08-10', 0)).toBe('2026-08-10');
+  });
+
+  it('returns the input unchanged when it is not a calendar date', () => {
+    expect(addCalendarDays('', 1)).toBe('');
+    expect(addCalendarDays(null, 1)).toBe('');
+    expect(addCalendarDays('not-a-date', 1)).toBe('not-a-date');
+  });
+});
+
+describe('calendarDaysBetween', () => {
+  // Both sides are calendar dates, so neither may pass through a timezone: a
+  // handoff's age is measured against the shift being viewed, and an archived
+  // shift must not call its own handoff months old.
+  it('counts forward and back', () => {
+    expect(calendarDaysBetween('2026-08-12', '2026-08-01')).toBe(11);
+    expect(calendarDaysBetween('2026-08-01', '2026-08-12')).toBe(-11);
+  });
+
+  it('is zero on the same day', () => {
+    expect(calendarDaysBetween('2026-08-12', '2026-08-12')).toBe(0);
+  });
+
+  it('crosses a month and a year boundary', () => {
+    expect(calendarDaysBetween('2026-09-01', '2026-08-31')).toBe(1);
+    expect(calendarDaysBetween('2027-01-01', '2026-12-31')).toBe(1);
+  });
+
+  // A DST transition shortens a local day to 23 hours; anchored at UTC these
+  // are still whole days apart.
+  it('is unaffected by a DST transition', () => {
+    expect(calendarDaysBetween('2026-03-09', '2026-03-08')).toBe(1);
+  });
+
+  it('returns null when either side is not a calendar date', () => {
+    expect(calendarDaysBetween('2026-08-12', null)).toBeNull();
+    expect(calendarDaysBetween('', '2026-08-12')).toBeNull();
+    expect(calendarDaysBetween('not-a-date', '2026-08-12')).toBeNull();
   });
 });

@@ -50,7 +50,7 @@ import type { ShiftCheckSummary } from '../../modules/scheduling/types/equipment
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
-  calendarDaysFromToday,
+  calendarDaysBetween,
   formatCalendarDate,
   formatTime,
   getTodayLocalDate,
@@ -654,6 +654,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   };
 
   const handleFinalize = async () => {
+    if (overrideBlocked) return;
     setPendingFlag('finalizing', true);
     try {
       const entries = Object.entries(manualHours)
@@ -664,6 +665,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         opts.override_incomplete_checks = true;
         if (overrideReason.trim()) opts.override_reason = overrideReason.trim();
       }
+
       if (passDownNotes.trim()) opts.pass_down_notes = passDownNotes.trim();
       const updated = await schedulingService.finalizeShift(shift.id, entries.length > 0 ? entries : undefined, opts);
       setShift(updated);
@@ -710,6 +712,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     return endOfShiftChecks.filter((c) => c.isCompleted);
   }, [endOfShiftChecks]);
 
+  /**
+   * Whether the close-out is barred by outstanding end-of-shift checks.
+   *
+   * The panel tells an officer that overriding records a reason, so an empty box
+   * cannot be allowed to pass: `handleFinalize` would drop `override_reason` and
+   * the audit event would record `null` — the checks bypassed with none of the
+   * accountability the screen promised.
+   */
+  const overrideBlocked =
+    requireEndOfShiftChecks && hasIncompleteEquipmentChecks && (!overrideChecks || overrideReason.trim().length === 0);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -727,7 +740,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   /**
    * Has the shift begun? Nobody can be present for a shift eight days out, so
    * "0/2 present" on one read as an alarm rather than as a fact not yet
-   * knowable. Attendance is only shown once this is true.
+   * knowable. Attendance is shown once this is true — or as soon as anybody has
+   * actually checked in, because the check-in window opens before the shift
+   * does (two hours by default, up to 24 via `checkin_opens_hours_before`), and
+   * a real arrival must never be hidden.
    */
   const hasStarted = useMemo(() => {
     const today = getTodayLocalDate(tz);
@@ -1025,10 +1041,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           {/* The date arrived raw ("2026-08-01") two lines under "Wednesday,
               August 12, 2026", eleven days stale, with nothing marking it as
               old — so a note left by a crew a week and a half ago read as
-              yesterday's. Written out, and told how long ago it was. */}
+              yesterday's. Written out, and told how long ago it was.
+              Measured against the shift on screen rather than against today:
+              the endpoint returns the last shift before *this* one, so an
+              archived shift would otherwise call its own handoff months old. */}
           {handoff?.pass_down_notes &&
             (() => {
-              const age = calendarDaysFromToday(handoff.shift_date, tz);
+              const age = calendarDaysBetween(handoff.shift_date, shift.shift_date);
               const ageWords = age === null || age >= 0 ? null : age === -1 ? 'yesterday' : `${Math.abs(age)} days ago`;
               return (
                 <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
@@ -1068,7 +1087,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       "2/3 staffed" — read as though the screen contradicted
                       itself. Each names its own subject now, in the wording the
                       close-out checklist already uses. */}
-                  {hasStarted && (
+                  {(hasStarted || presentCount > 0) && (
                     <span className="text-theme-text-primary">
                       {presentCount} of {activeAssignments.length} crew checked in
                     </span>
@@ -1377,13 +1396,21 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     Finalize anyway, with equipment checks outstanding
                   </label>
                   {overrideChecks && (
-                    <input
-                      type="text"
-                      value={overrideReason}
-                      onChange={(e) => setOverrideReason(e.target.value)}
-                      placeholder="Reason for override (logged)"
-                      className={inputCls}
-                    />
+                    <>
+                      <input
+                        type="text"
+                        value={overrideReason}
+                        onChange={(e) => setOverrideReason(e.target.value)}
+                        placeholder="Why are the checks outstanding?"
+                        aria-label="Reason for closing out with checks outstanding"
+                        className={inputCls}
+                      />
+                      {overrideReason.trim().length === 0 && (
+                        <p className="text-xs text-red-600 dark:text-red-300">
+                          A reason is required — it goes on the shift&apos;s record.
+                        </p>
+                      )}
+                    </>
                   )}
                   {!overrideChecks && (
                     <p className="text-xs text-red-600 dark:text-red-300">
@@ -1422,9 +1449,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   onClick={() => {
                     void handleFinalize();
                   }}
-                  disabled={
-                    pending.finalizing || (requireEndOfShiftChecks && hasIncompleteEquipmentChecks && !overrideChecks)
-                  }
+                  disabled={pending.finalizing || overrideBlocked}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
                 >
                   {pending.finalizing ? (

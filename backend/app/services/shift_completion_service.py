@@ -1066,6 +1066,7 @@ class ShiftCompletionService:
                 # cannot resolve the label safely, so leave it empty rather
                 # than reaching across tenants for it.
                 report.shift_label = None
+                report.shift_start_time = None
         return report
 
     async def update_report(
@@ -1160,13 +1161,21 @@ class ShiftCompletionService:
         reports: List[ShiftCompletionReport],
         organization_id: UUID,
     ) -> List[ShiftCompletionReport]:
-        """Name the shift each report covers.
+        """Say which shift each report covers.
 
         A report carried a person and a date and nothing else, so two reports
         filed on one day were told apart by author alone — a reader could not
-        see which truck either was about. `shift_label` is a transient
-        attribute, not a column: the response schema reads it via
-        `from_attributes` and nothing persists it.
+        see which truck, or which of a day and night pair, either was about.
+        Two transient attributes, not columns: the response schema reads them
+        via `from_attributes` and nothing persists them.
+
+        - ``shift_label`` names the apparatus, and is None for a shift that has
+          none (an event or a detail).
+        - ``shift_start_time`` is the shift's start, in UTC like every other
+          datetime the API returns. The frontend renders it in the department's
+          timezone; formatting a time here would mean picking a zone in the
+          service layer. It is what tells a day shift from a night one on the
+          same apparatus and date, so it is sent even when the label is None.
 
         Batched into two queries rather than a relationship: an eager
         `Shift -> Apparatus` chain hanging off this model would load on every
@@ -1175,6 +1184,7 @@ class ShiftCompletionService:
         """
         for report in reports:
             report.shift_label = None
+            report.shift_start_time = None
         shift_ids = {r.shift_id for r in reports if r.shift_id}
         if not shift_ids:
             return reports
@@ -1182,13 +1192,15 @@ class ShiftCompletionService:
         # Org-scoped even though the ids came from org-scoped reports: a
         # by-id fetch on a client-influenced id is scoped by default here.
         shift_rows = await self.db.execute(
-            select(Shift.id, Shift.apparatus_id).where(
+            select(Shift.id, Shift.apparatus_id, Shift.start_time).where(
                 Shift.id.in_(shift_ids),
                 Shift.organization_id == str(organization_id),
             )
         )
-        apparatus_by_shift = {str(row.id): row.apparatus_id for row in shift_rows}
-        apparatus_ids = {a for a in apparatus_by_shift.values() if a}
+        shifts_by_id = {
+            str(row.id): (row.apparatus_id, row.start_time) for row in shift_rows
+        }
+        apparatus_ids = {a for a, _ in shifts_by_id.values() if a}
         labels: Dict[str, str] = {}
         if apparatus_ids:
             apparatus_rows = await self.db.execute(
@@ -1208,7 +1220,11 @@ class ShiftCompletionService:
         for report in reports:
             if not report.shift_id:
                 continue
-            apparatus_id = apparatus_by_shift.get(str(report.shift_id))
+            found = shifts_by_id.get(str(report.shift_id))
+            if not found:
+                continue
+            apparatus_id, start_time = found
+            report.shift_start_time = start_time
             if apparatus_id:
                 report.shift_label = labels.get(str(apparatus_id))
         return reports

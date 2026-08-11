@@ -44,7 +44,7 @@ const makeRequest = (overrides: Record<string, unknown> = {}) => ({
 describe('EquipmentRequestsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetEquipmentRequests.mockResolvedValue({ requests: [makeRequest()] });
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [makeRequest()], total: 1, skip: 0, limit: 25 });
     mockGetItems.mockResolvedValue({
       items: [{ id: 'item-9', name: 'Radio XTS 5000', tracking_type: 'individual' }],
       total: 1,
@@ -58,7 +58,7 @@ describe('EquipmentRequestsPage', () => {
     expect(screen.getByText('Equipment Requests')).toBeInTheDocument();
     expect(screen.getByText('Review member requests for equipment')).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockGetEquipmentRequests).toHaveBeenCalledWith({ status: 'pending' });
+      expect(mockGetEquipmentRequests).toHaveBeenCalledWith({ status: 'pending', skip: 0, limit: 25 });
     });
   });
 
@@ -80,7 +80,7 @@ describe('EquipmentRequestsPage', () => {
   });
 
   it('shows empty state when no requests', async () => {
-    mockGetEquipmentRequests.mockResolvedValue({ requests: [] });
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [], total: 0, skip: 0, limit: 25 });
     renderWithRouter(<EquipmentRequestsPage />);
     await waitFor(() => {
       expect(screen.getByText('No Requests')).toBeInTheDocument();
@@ -91,12 +91,30 @@ describe('EquipmentRequestsPage', () => {
     const user = userEvent.setup();
     renderWithRouter(<EquipmentRequestsPage />);
     await waitFor(() => {
-      expect(mockGetEquipmentRequests).toHaveBeenCalledWith({ status: 'pending' });
+      expect(mockGetEquipmentRequests).toHaveBeenCalledWith({ status: 'pending', skip: 0, limit: 25 });
     });
     const select = screen.getByLabelText('Filter by status');
     await user.selectOptions(select, 'approved');
     await waitFor(() => {
-      expect(mockGetEquipmentRequests).toHaveBeenCalledWith({ status: 'approved' });
+      expect(mockGetEquipmentRequests).toHaveBeenCalledWith({ status: 'approved', skip: 0, limit: 25 });
+    });
+  });
+
+  it('loads the next page and displays the real result total', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest()],
+      total: 51,
+      skip: 0,
+      limit: 25,
+    });
+    renderWithRouter(<EquipmentRequestsPage />);
+
+    expect(await screen.findByText('Showing 1–25 of 51')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+
+    await waitFor(() => {
+      expect(mockGetEquipmentRequests).toHaveBeenLastCalledWith({ status: 'pending', skip: 25, limit: 25 });
     });
   });
 

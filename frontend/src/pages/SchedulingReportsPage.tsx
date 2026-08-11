@@ -33,7 +33,7 @@ import type {
   AvailabilityRecord,
 } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
+import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { DateRangePicker } from '../components/ux/DateRangePicker';
 
 type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability' | 'compliance';
@@ -130,10 +130,12 @@ export const SchedulingReportsPage: React.FC = () => {
 
   // Date ranges. Defaulted to this month: a report that opens on two empty
   // boxes makes the reader do setup work before it will say anything at all.
-  const [startDate, setStartDate] = useState(() => {
-    const now = new Date();
-    return toLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1), tz);
-  });
+  //
+  // The first of the month is sliced off the department's own calendar date.
+  // Building `new Date(y, m, 1)` and reformatting it in the department zone
+  // answers a different question — for a browser east of that zone it lands on
+  // the last day of the previous month, so the default range began a day early.
+  const [startDate, setStartDate] = useState(() => `${getTodayLocalDate(tz).slice(0, 7)}-01`);
   const [endDate, setEndDate] = useState(() => getTodayLocalDate(tz));
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);

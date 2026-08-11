@@ -891,7 +891,11 @@ export const PatternsTab: React.FC = () => {
                     className="mr-4 flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 max-sm:mt-4 sm:mr-5"
                   >
                     <Play className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span className="max-sm:sr-only">Generate shifts</span>
+                    {/* Never sr-only: hiding the text on a phone leaves the same
+                        bare glyph this change exists to replace. Shorter there,
+                        not absent. */}
+                    <span className="hidden sm:inline">Generate shifts</span>
+                    <span className="sm:hidden">Generate</span>
                   </button>
                 </div>
 

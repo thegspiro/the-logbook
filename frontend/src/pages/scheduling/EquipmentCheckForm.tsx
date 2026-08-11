@@ -1307,7 +1307,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         };
 
         return (
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="min-w-0 space-y-0.5 text-xs">
               {expected != null && (
                 <span className={`block ${getQtyColor()}`}>
@@ -1380,6 +1380,25 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <Plus className="h-4 w-4" />
               </button>
             </div>
+            {/* A counter cannot express "this is not on this apparatus": zero is
+                a shortfall, which the server force-fails. The answer clears the
+                count, because there is no number to record. */}
+            {!isExpired && (
+              <button
+                type="button"
+                data-action="not_applicable"
+                onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable', quantityFound: undefined })}
+                className={`flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                  effectiveStatus === 'not_applicable'
+                    ? 'bg-theme-text-muted text-white'
+                    : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted hover:text-theme-text-secondary border'
+                }`}
+                title="Not on the truck, or does not apply to this apparatus"
+              >
+                <MinusCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                Not on truck
+              </button>
+            )}
           </div>
         );
       }
