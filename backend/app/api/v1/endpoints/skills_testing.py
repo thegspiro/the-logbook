@@ -1528,6 +1528,35 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     return dt
 
 
+async def _lock_test_for_transition(
+    db: AsyncSession, test_id: UUID, organization_id: UUID
+) -> SkillTest | None:
+    """Fetch a test with its row locked for the rest of the transaction.
+
+    The three exits from a submitted result — validate, return and void — each
+    read the row, check its status and validation state, then write a *different*
+    set of columns. An unlocked read lets two of them pass their guards against
+    the same row and both commit: the second UPDATE touches columns the first
+    never wrote, so nothing collides and nothing is rejected. What lands is a row
+    claiming both transitions — ``validated_at`` set on an ``in_progress`` /
+    ``incomplete`` test, its requirement already credited, and the examiner
+    locked out of correcting it because writes reject a validated test.
+
+    ``FOR UPDATE`` makes the second caller wait for the first to commit and then
+    re-read, so its guard sees the transition that already happened and returns
+    the ordinary 400 instead of compounding it. Two officers working the same
+    review queue is the normal case, not a rare one — bulk validate makes a whole
+    screenful of these calls at once.
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == organization_id)
+        .with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 @router.post("/tests/{test_id}/complete", response_model=SkillTestResponse)
 async def complete_test(
     test_id: UUID,
@@ -1856,12 +1885,7 @@ async def validate_test(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    result = await db.execute(
-        select(SkillTest)
-        .where(SkillTest.id == str(test_id))
-        .where(SkillTest.organization_id == current_user.organization_id)
-    )
-    test = result.scalar_one_or_none()
+    test = await _lock_test_for_transition(db, test_id, current_user.organization_id)
 
     if not test:
         raise HTTPException(
@@ -2523,12 +2547,7 @@ async def void_test(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    result = await db.execute(
-        select(SkillTest)
-        .where(SkillTest.id == str(test_id))
-        .where(SkillTest.organization_id == current_user.organization_id)
-    )
-    test = result.scalar_one_or_none()
+    test = await _lock_test_for_transition(db, test_id, current_user.organization_id)
 
     if not test:
         raise HTTPException(
@@ -2674,12 +2693,7 @@ async def return_test_for_correction(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    result = await db.execute(
-        select(SkillTest)
-        .where(SkillTest.id == str(test_id))
-        .where(SkillTest.organization_id == current_user.organization_id)
-    )
-    test = result.scalar_one_or_none()
+    test = await _lock_test_for_transition(db, test_id, current_user.organization_id)
 
     if not test:
         raise HTTPException(
@@ -3016,9 +3030,17 @@ def _csv_dt(value: object) -> str:
     Deliberately not localized. Everything is stored as UTC, and an export is
     read months later by an auditor in an unknown timezone — a bare local
     string with no offset is the one format that cannot be checked.
+
+    Which is why the offset has to be *attached*: MySQL hands back naive
+    datetimes even for timezone-aware columns (see ``_ensure_utc``), so a plain
+    ``isoformat()`` emits ``2026-08-11T09:00:00`` — a stamp this function's own
+    header calls UTC and an auditor cannot tell from local time.
     """
     if not value:
         return ""
+    if isinstance(value, datetime):
+        stamped = _ensure_utc(value)
+        return stamped.isoformat() if stamped else ""
     return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
@@ -3029,6 +3051,13 @@ async def export_tests_csv(
         description="'summary' for one row per test, 'criteria' for one row per step",
     ),
     status_filter: str | None = Query(None, alias="status"),
+    pending_validation: bool = Query(
+        False,
+        description=(
+            "Only completed, unvalidated official results — the officer review "
+            "queue. Same predicate as GET /tests."
+        ),
+    ),
     candidate_id: UUID | None = Query(None),
     template_id: UUID | None = Query(None),
     include_practice: bool = Query(False),
@@ -3081,6 +3110,17 @@ async def export_tests_csv(
     )
     if not include_practice:
         query = query.where(SkillTest.is_practice == False)  # noqa: E712
+    # Mirrors GET /tests exactly. The review queue is not expressible as a
+    # status — it is a status *and* the absence of a validation — so without
+    # this the Export button under "Needs Validation" quietly widened to every
+    # official test on file, which is the one place a wrong export is least
+    # likely to be noticed and most likely to be handed to somebody.
+    if pending_validation:
+        query = query.where(
+            SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.status == SkillTestStatus.COMPLETED.value,
+            SkillTest.validated_at.is_(None),
+        )
     if status_filter:
         query = query.where(SkillTest.status == status_filter)
     if candidate_id:

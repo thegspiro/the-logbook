@@ -430,9 +430,16 @@ const SkillsTestingTemplatesTab: React.FC = () => {
         isOpen={libraryOpen}
         onClose={() => setLibraryOpen(false)}
         onImported={() => {
-          // Imported sheets land as drafts, so a list filtered to Published
-          // would show nothing new and read as a failed import.
-          void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
+          // Imported sheets land as drafts, so reloading the filter the user
+          // already had would show nothing new under Published or Archived and
+          // read as a failed import. Move the view to what the import actually
+          // produced — which is also where the next step is, since a draft has
+          // to be reviewed and published before anyone can test against it.
+          setStatusFilter('draft');
+          // Explicitly, not via the statusFilter effect: setting state to the
+          // value it already holds re-renders nothing, so an import made while
+          // already filtered to Draft would not refresh.
+          void loadTemplates({ status: 'draft' });
           void loadSummary();
         }}
       />

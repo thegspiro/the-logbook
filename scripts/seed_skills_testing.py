@@ -246,10 +246,20 @@ class Seeder:
         return by_name
 
     def candidates(self, limit: int) -> list[dict]:
-        """Members who can be tested, from the start-test picker's own source."""
-        people = items(
-            self.api.get("/training/skills-testing/candidates"), "candidates"
-        )
+        """Members who can be tested, from the administrator's member list.
+
+        Deliberately *not* the start-test picker's source. That endpoint is a
+        lookup, not a listing: ``q`` is required and matched against a name, so
+        that no request can enumerate the roster. A seeder has no name to search
+        for. It authenticates as an administrator, so it reads the member list
+        that account already has — which also carries usernames, letting the
+        peer examiner be excluded by identity rather than by a display name.
+        """
+        people = [
+            person
+            for person in items(self.api.get("/users"), "users", "items")
+            if str(pick(person, "status") or "").lower() == "active"
+        ]
         return people[:limit]
 
     def start_test(
@@ -464,26 +474,38 @@ def main() -> int:
         pending_sheet = sheets["Bleeding Control and Shock Management"]
         pending_template = templates.get(pending_sheet["name"])
         if pending_template:
-            # The examiner cannot also be the candidate — skills testing
-            # refuses that — so pick someone other than the peer examiner.
+            # The examiner cannot also be the candidate — separation of duties
+            # refuses that, and the refusal aborts the run — so pick someone
+            # other than the peer examiner. Matched on username: it is what was
+            # passed on the command line and what the roster carries, so the
+            # two are the same string. Comparing against a display name silently
+            # matched nobody, and "Jane Smith" != "jsmith" put the examiner back
+            # in the pool as their own candidate.
+            examiner_username = args.examiner_username.lower()
             candidate = next(
                 (
                     person
                     for person in people
-                    if str(pick(person, "name")).lower()
-                    != args.examiner_username.lower()
+                    if str(pick(person, "username") or "").lower() != examiner_username
                 ),
-                people[0],
+                None,
             )
-            seed_pending_validation(
-                args.base_url,
-                args.examiner_username,
-                args.examiner_password,
-                pending_template,
-                pending_sheet,
-                candidate,
-            )
-            print("  tests: 1 created (pending_validation)")
+            if candidate is None:
+                print(
+                    "  tests: pending_validation SKIPPED — the only member "
+                    f"found is the examiner ({args.examiner_username}). Seed "
+                    "another member to fill the officer review queue."
+                )
+            else:
+                seed_pending_validation(
+                    args.base_url,
+                    args.examiner_username,
+                    args.examiner_password,
+                    pending_template,
+                    pending_sheet,
+                    candidate,
+                )
+                print("  tests: 1 created (pending_validation)")
     else:
         print(
             "  tests: pending_validation SKIPPED — pass "

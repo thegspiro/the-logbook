@@ -28,39 +28,65 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "skill_tests",
-        sa.Column("returned_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    # SET NULL requires nullable — a departed officer's departure must not erase
-    # the fact that a test was returned.
-    op.add_column(
-        "skill_tests",
-        sa.Column("returned_by", sa.String(length=36), nullable=True),
-    )
-    op.add_column("skill_tests", sa.Column("return_reason", sa.Text(), nullable=True))
-    op.add_column(
-        "skill_tests",
-        sa.Column(
-            "return_count",
-            sa.Integer(),
-            nullable=False,
-            server_default=sa.text("0"),
-        ),
-    )
-    op.create_foreign_key(
-        "fk_skill_test_returned_by",
-        "skill_tests",
-        "users",
-        ["returned_by"],
-        ["id"],
-        ondelete="SET NULL",
-    )
+    inspector = sa.inspect(op.get_bind())
+
+    # skill_tests is a model-only table — nothing in the migration chain creates
+    # it, and create_all() materializes it with these columns already present.
+    # On a fresh chain run (CI) there is nothing to alter. Same guard as
+    # 20260807_0005, which added the void trail alongside these.
+    if not inspector.has_table("skill_tests"):
+        return
+
+    columns = {c["name"] for c in inspector.get_columns("skill_tests")}
+
+    if "returned_at" not in columns:
+        op.add_column(
+            "skill_tests",
+            sa.Column("returned_at", sa.DateTime(timezone=True), nullable=True),
+        )
+    if "returned_by" not in columns:
+        # SET NULL requires nullable — an officer's departure must not erase the
+        # fact that a test was returned.
+        op.add_column(
+            "skill_tests",
+            sa.Column("returned_by", sa.String(length=36), nullable=True),
+        )
+        op.create_foreign_key(
+            "fk_skill_test_returned_by",
+            "skill_tests",
+            "users",
+            ["returned_by"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+    if "return_reason" not in columns:
+        op.add_column(
+            "skill_tests", sa.Column("return_reason", sa.Text(), nullable=True)
+        )
+    if "return_count" not in columns:
+        op.add_column(
+            "skill_tests",
+            sa.Column(
+                "return_count",
+                sa.Integer(),
+                nullable=False,
+                server_default=sa.text("0"),
+            ),
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_skill_test_returned_by", "skill_tests", type_="foreignkey")
-    op.drop_column("skill_tests", "return_count")
-    op.drop_column("skill_tests", "return_reason")
-    op.drop_column("skill_tests", "returned_by")
-    op.drop_column("skill_tests", "returned_at")
+    inspector = sa.inspect(op.get_bind())
+
+    if not inspector.has_table("skill_tests"):
+        return
+
+    columns = {c["name"] for c in inspector.get_columns("skill_tests")}
+
+    if "returned_by" in columns:
+        op.drop_constraint(
+            "fk_skill_test_returned_by", "skill_tests", type_="foreignkey"
+        )
+    for column in ("return_count", "return_reason", "returned_by", "returned_at"):
+        if column in columns:
+            op.drop_column("skill_tests", column)

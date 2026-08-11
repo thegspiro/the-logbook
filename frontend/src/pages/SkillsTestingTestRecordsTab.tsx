@@ -429,7 +429,11 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               CSV in memory only to hand it back to the browser to save. */}
           <a
             href={`/api/v1/training/skills-testing/tests/export/csv?detail=criteria${
-              statusFilter && !pendingOnly ? `&status=${encodeURIComponent(statusFilter)}` : ''
+              pendingOnly
+                ? '&pending_validation=true'
+                : statusFilter
+                  ? `&status=${encodeURIComponent(statusFilter)}`
+                  : ''
             }`}
             className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 text-sm font-medium"
             title="Export test records as CSV — one row per evaluated step"
