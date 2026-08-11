@@ -2886,7 +2886,10 @@ class Seeder:
         # still holds pre-promotion ranks — and promoting this account is
         # precisely the case this guard is here to catch.
         examiner_id = pick(examiner, "id")
-        live = self.api.get(f"/users/{examiner_id}") if examiner_id else {}
+        # /with-roles, because there is no bare GET /users/{id} route — that
+        # path 404s, the ApiError fails this step on every run, and the queue
+        # goes back to being empty.
+        live = self.api.get(f"/users/{examiner_id}/with-roles") if examiner_id else {}
         live_rank = pick(live or {}, "rank") or pick(examiner, "rank") or ""
         if live_rank in OFFICER_RANKS:
             # ApiError rather than a bare RuntimeError: `step()` catches only
