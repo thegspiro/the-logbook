@@ -41,6 +41,10 @@ def _db(side_effect):
     db.execute = AsyncMock(side_effect=side_effect)
     db.add = MagicMock()
     db.flush = AsyncMock()
+    # The creates reload the row after flushing, because these models carry
+    # server-side column defaults that are unloaded until they do. Awaitable
+    # here or the service's `await db.refresh(...)` fails on a plain MagicMock.
+    db.refresh = AsyncMock()
     return db
 
 

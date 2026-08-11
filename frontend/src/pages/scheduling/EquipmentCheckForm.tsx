@@ -1604,11 +1604,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {item.description && (
               <p className={`text-theme-text-muted mt-0.5 text-xs ${isQuantity ? '' : 'ml-6'}`}>{item.description}</p>
             )}
-            {!isQuantity && (
+            {/* Show the caption only for a type we have words for. Falling back
+                to the raw value printed an internal token under the item name —
+                a template stored with check_type "presence" captioned every
+                item "presence", which reads as a typo to the crew. An
+                unrecognised type is now silent rather than confusing; the
+                backend rejects new ones, so this is for templates stored
+                before it did. */}
+            {!isQuantity && CHECK_TYPE_LABELS[item.checkType] && (
               <div className="mt-1 ml-6 flex items-center gap-2">
-                <span className="text-theme-text-muted text-[10px]">
-                  {CHECK_TYPE_LABELS[item.checkType] ?? item.checkType}
-                </span>
+                <span className="text-theme-text-muted text-[10px]">{CHECK_TYPE_LABELS[item.checkType]}</span>
               </div>
             )}
             {item.imageUrl && (

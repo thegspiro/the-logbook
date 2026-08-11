@@ -19,8 +19,37 @@ Severity is about consequence, not polish:
 | **Invites mistakes**  | The screen is readable, but the obvious reading is the wrong one. |
 | **Slows people down** | Clear enough once learned, more work than it needs to be.         |
 
-Counts: **1** blocks work, **19** invites mistakes, **18** slows people down,
-plus **9** code faults found and fixed (below).
+Counts: **19** invites mistakes, **19** slows people down, plus **9** code
+faults found and fixed (below).
+
+## Corrections to the first pass
+
+Implementing the fixes disproved four claims made here originally. They are
+corrected in place below; recorded together so the record shows what changed
+and why.
+
+- **The Create Template dialog was not unreachable.** The whole panel was the
+  scroll container, so Save was reachable by scrolling — there was simply
+  nothing on screen to say so. Regraded from _blocks work_ to _slows people
+  down_; the fix (fixed header, pinned footer, only the fields scrolling) stands.
+- **The My Shifts icons were not unlabelled.** All four carried `title` and
+  `aria-label`, so a screen reader and a desktop hover both got a name. The gap
+  was a **visible** label — and a phone has no hover at all, which is where this
+  screen is mostly used. They were also 40px against the project's 44px touch
+  minimum.
+- **Red is the app's primary colour, not a danger signal.** The original note on
+  Scheduling Reports said a red primary button reads as destructive. It does
+  not: `btn-primary` is `bg-red-600` throughout the app, and the active nav item
+  is red too. The real inconsistency is narrower — red serves as _both_ the
+  primary and the destructive colour, and there is a second, violet primary
+  treatment applied inline elsewhere.
+- **"presence" was bad data plus a missing guard, not a label.** `check_type` was
+  a free-form string with no validation, the demo seeder wrote `"presence"`
+  (not one of the nine supported types), and the form printed the raw token when
+  it could not find a label. A department building a template through the builder
+  would have seen "Present". Fixed at the root: the value is validated on write,
+  an unrecognised one renders no caption rather than a raw token, and the seeder
+  was corrected.
 
 ---
 
@@ -46,39 +75,67 @@ Two notes on the last two:
   _because members hold submit_ — applied to eight sibling endpoints, but not to
   the two the member-facing page depends on.
 
-A wider scan found ~25 more sites in the services layer with the same
-`add` → `flush` → `return`-without-`refresh` shape as the timestamp bug. They
-are **not** all bugs — only those whose object is serialised through a response
-model requiring the timestamps — and confirming each needs tracing to its
-endpoint. That sweep is **not** done and is the obvious follow-up.
+### The follow-up sweep — done, and the "~25 sites" figure was wrong
+
+An earlier draft of this review reported "~25 more sites" with the same
+`add` → `flush` → `return`-without-`refresh` shape. That count was inflated by a
+detector that only recognised `refresh(obj)` and missed the two-argument
+`refresh(obj, ["created_at", "updated_at"])` form the codebase actually favours.
+Re-scanned properly: **85 sites already refresh** and 12 did not, of which 4
+discard the return value entirely (`_create_compartment`,
+`log_template_change`, `_create_record_from_submission`) or serialise no
+timestamps (`set_consent`, whose endpoint builds its own dict — safe because the
+session runs `expire_on_commit=False`). The codebase was far more consistent than
+the first pass implied.
+
+That left **8 real bugs**, all fixed and each verified returning 201 against a
+running stack: donors, donations, pledges and fundraising events; grant budget
+items, expenditures, compliance tasks and notes.
+
+Two things that sweep taught, both of which corrected the original diagnosis:
+
+- **It is not only the timestamps.** `POST /grants/donors` still 500'd after a
+  two-column refresh, because `Donor` also server-defaults `country`,
+  `total_donated`, `donation_count`, `is_anonymous` and `active` — every unloaded
+  column raises `MissingGreenlet` when the response model reads it. A full
+  `refresh(obj)` is the correct fix; the two-column form is only sufficient where
+  timestamps are the sole server-side defaults.
+- **A central fix exists and was rejected.** `__mapper_args__ =
+{"eager_defaults": True}` on the declarative `Base` would close the whole class
+  at once. On MySQL, which has no `RETURNING` for this, it costs a `SELECT` after
+  _every_ `INSERT` app-wide — including audit logging and bulk operations. Too
+  broad a trade for eight endpoints, and it would diverge from the explicit
+  refresh the other 85 sites already use.
 
 ---
 
 ## 01 · Shift scheduling
 
-**Invites mistakes — the calendar speaks in codes nobody defined.** Cells read
+**Invites mistakes — the calendar speaks in codes nobody defined.** ✅ **Fixed.** Cells read
 `7:00 AM B-5 (3/3)` with a green tick or amber triangle. Nothing says `B-5` is
 Brush 5, that `(3/3)` counts filled positions, or that amber means short. The
 module already solves this three times over: the phone layout writes
 "3/3 staff", the shift drawer writes "B-5 — Brush 5", Open Shifts writes
 "3 / 4 filled". Use that wording on desktop and add a one-line key.
 
-**Invites mistakes — two stat tiles, one number.** "Scheduled Shifts" reads 66
+**Invites mistakes — two stat tiles, one number.** ✅ **Fixed.** "Scheduled Shifts" reads 66
 and "This Month" also reads 66. "Hours Worked This Month — 868.1" never says
 whose; it is the department's. Name the window and the subject in the label.
 
-**Blocks work — the Create Template dialog hides its own Save button.** The
-dialog is taller than the window: the last option is cut off mid-sentence and
-Save is below the fold with no scroll affordance. Give the body its own scroll
-area and pin the footer.
+**Slows people down — the Create Template dialog buries its own Save button.**
+✅ **Fixed.** The dialog is taller than the window and the whole panel was the
+scroll container, so the last option ended mid-sentence and Save sat below the
+fold with no scrollbar or shadow to say the form continued. Reachable, but only
+if you guessed. The header and footer are pinned now and only the fields scroll.
 
 **Slows people down — three fields for two facts.** Start time, end time _and_
 duration, with duration pre-filled `12` regardless, so the two can disagree.
 Start and end are six blank dropdowns. Cards behind the dialog show 24-hour
 times while the form uses AM/PM.
 
-**Slows people down — colour is picked by typing a hex code** (`#dc2626`), and
-defaults to red, the colour the calendar uses for trouble.
+**Slows people down — colour is picked by typing a hex code** (`#dc2626`). A raw
+hex field is developer-facing; offer six or eight named swatches. The default is
+also red, which the calendar itself uses for a shift in trouble.
 
 **Slows people down — officer tools sit below the whole calendar.** Seven cards
 under an "ADMINISTRATION" heading, reached only after scrolling a full month
@@ -92,13 +149,17 @@ the page prints its title twice.
 ## 02 · Assignment
 
 **Invites mistakes — four unlabelled buttons on the member's most-used screen.**
-Every My Shifts row ends in a green tick, a red circled cross, a swap arrow and
-a chevron, with no text anywhere. Nothing distinguishes "confirm I'm working
-this" from "give this shift up", and the red one looks destructive. This is the
-riskiest screen in the module: guessing wrong leaves a truck unstaffed. Label
-them, or reduce to one primary action plus a menu that names each choice.
+✅ **Fixed.** Every My Shifts row ended in a green tick, a red circled cross, a
+swap arrow and a chevron with no visible text. All four did carry `title` and
+`aria-label`, so a screen reader and a desktop hover got a name — but a phone
+has no hover, and this is a phone screen. Nothing on it distinguished "confirm
+I'm working this" from "give this shift up", and the red one read as a delete.
+The riskiest screen in the module: guessing wrong leaves a truck unstaffed. They
+now read Confirm / Decline / Swap / Details, matching the bulk bar's verbs rather
+than inventing a third phrasing, and sit on their own full-width row on a phone
+at the project's 44px touch minimum (they were 40px).
 
-**Invites mistakes — the bulk header contradicts its rows.** "Select all 4
+**Invites mistakes — the bulk header contradicts its rows.** ✅ **Fixed.** "Select all 4
 pending" above four rows badged **Assigned**.
 
 **Invites mistakes — "0/2 present" on a shift eight days out.** Nobody can be
@@ -112,7 +173,7 @@ bare icons, two of them destructive.
 **Invites mistakes — an uncaptioned hours chip** beside each crew member
 (`12h`, `11.9h`). Scheduled, credited or worked — the three differ in practice.
 
-**Slows people down — My Shifts never says which truck.** Date, time and
+**Slows people down — My Shifts never says which truck.** ✅ **Fixed.** Date, time and
 "Position: Officer", but no apparatus or station: the one fact that tells you
 where to go. Every other view shows it.
 
@@ -133,9 +194,13 @@ Check".** The badge is _when_, the button is _what you do now_, and together
 they contradict. The filter chips "All / Start / End" repeat it. Spell the
 timing out and rename the button "Open checklist".
 
-**Invites mistakes — every item is captioned "presence"**, the internal name
-for the kind of check. Ask the question instead ("On the truck?") or show
-nothing.
+**Invites mistakes — every item was captioned "presence"**. ✅ **Fixed.** Not a
+wording choice: `check_type` was an unvalidated free-form string, the demo seeder
+wrote `"presence"` — not one of the nine types the form can render — and the
+caption fell back to printing the raw value. The value is now validated on write
+against the set the template builder offers, an unrecognised one renders no
+caption at all rather than an internal token, and the seeder was corrected. A
+department using the builder always saw the proper label ("Present").
 
 **Invites mistakes — the checklist forgets its shift.** Once open, the only
 heading is the template name; apparatus, date and shift are gone, so two trucks
@@ -146,7 +211,7 @@ running the same template produce identical screens.
 failure or buried in a note, and the compliance reports then count it as a
 fault.
 
-**Invites mistakes — check-in accepts a shift that ended days ago.** Verified
+**Invites mistakes — check-in accepts a shift that ended days ago.** ✅ **Fixed.** Verified
 against the running app: opening the check-in link for a shift that ended
 31 July and pressing Check In returned `200` on 11 August and stamped the
 arrival time as _now_. The only guard is whether an officer finalised the shift;
@@ -197,42 +262,45 @@ both. Separate "must fix first" from "noted on the record".
 start-of-shift one.** Same layout, same buttons, same "Submit Report"; only the
 template name differs.
 
-**Slows people down — "Finalize" appears twice at once** (drawer header and
+**Slows people down — "Finalize" appears twice at once** ✅ **Fixed.** (drawer header and
 panel) and is the least plain word on the screen. One button, "Close out shift".
 
-**Slows people down — machine plurals and a raw date.** "1 equipment check(s)
+**Slows people down — machine plurals and a raw date.** ✅ **Partly fixed** (plurals; the stale-handoff date remains). "1 equipment check(s)
 completed", "1 call(s) recorded", and a handoff banner headed "Handoff from
 previous shift (2026-08-01)" — an ISO date two lines under "Wednesday,
 August 12, 2026", eleven days stale with nothing marking it as old.
 
 ## 05 · Shift reports
 
-**Invites mistakes — crew members are labelled "Trainee".** The summary table's
+**Invites mistakes — crew members are labelled "Trainee".** ✅ **Fixed.** The summary table's
 first column is headed **TRAINEE** and the block is "Trainee Summary", listing
 everyone who worked. Settings itself says reports cover all crew and that
 training evaluations are a separate, optional add-on.
 
-**Invites mistakes — people are rated 1–5 stars with no published scale.** Every
+**Invites mistakes — people are rated 1–5 stars with no published scale.** ✅ **Fixed.** Every
 report carries a rating and the table an "AVG RATING" column; nowhere does the
 screen say what three stars means or what is being measured. Settings has a
 "Rating Scale" section — surface those words next to the stars.
 
-**Invites mistakes — "My Reports" and "Filed by Me"** are reports about you and
+**Invites mistakes — "My Reports" and "Filed by Me"** ✅ **Fixed.** are reports about you and
 reports you wrote, and both readings fit both labels. "About me" / "Written by
 me".
 
-**Invites mistakes — approved is the absence of a badge.** Draft, Pending Review
+**Invites mistakes — approved is the absence of a badge.** ✅ **Fixed.** Draft, Pending Review
 and Flagged have pills; a finished report has none, so the most important state
 is inferred from a gap.
 
 **Invites mistakes — hours are formatted four ways and disagree with
-themselves.** One screen shows `6h`, `12h`, `11.87h`, `11.73h`, and the same
+themselves.** ✅ **Fixed.** One screen shows `6h`, `12h`, `11.87h`, `11.73h`, and the same
 record reads `11.9` in the summary table and `11.87h` in the row below it.
 
 **Slows people down — Scheduling Reports opens blank.** Five report types, all
 starting on "Select a Date Range" with two empty `mm/dd/yyyy` boxes: no default
-range, no presets, and the primary button is red, which everywhere else means
-danger. Default to this month and add presets.
+range and no presets, so every visit begins with typing. Default to this month,
+add "Last 30 days / This month / This year", and use the app's own
+`DateRangePicker` rather than bare native inputs. (An earlier draft of this
+review called the red Generate button a danger signal — see Corrections: red is
+the app's primary colour.)
 
 **Slows people down — reports do not say which shift they cover** — person and
 date only, so two reports from one day are told apart by author alone.
