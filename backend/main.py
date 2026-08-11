@@ -1071,7 +1071,8 @@ def run_migrations():
             )
             return
 
-        # Check for revision mismatch (renamed migration files)
+        # Never reinterpret an unknown revision as a fresh database. Doing so
+        # would send an existing database through the destructive fast path.
         if current_rev and current_rev != INITIAL_SQL_REVISION:
             try:
                 script_dir.get_revision(current_rev)
@@ -1080,18 +1081,13 @@ def run_migrations():
                     f"Revision lookup failed for '{current_rev}': {rev_err}",
                     exc_info=True,
                 )
-                startup_status.set_phase(
-                    "migrations", "Fixing migration version mismatch..."
-                )
-                logger.warning(
-                    f"Migration revision '{current_rev}' not found. "
-                    "Clearing invalid version..."
-                )
-                with engine.connect() as conn:
-                    conn.execute(text("DELETE FROM alembic_version"))
-                    conn.commit()
-                current_rev = None
-                logger.info("Cleared invalid migration version")
+                startup_status.set_phase("migrations", "Migration version mismatch")
+                raise RuntimeError(
+                    f"Database migration revision '{current_rev}' is not present "
+                    "in this release. Refusing destructive fresh-database "
+                    "initialization; restore the missing migration or repair the "
+                    "revision explicitly."
+                ) from rev_err
 
         # === FAST-PATH: Fresh database initialization ===
         # On first boot, the SQL init script stamps to INITIAL_SQL_REVISION.
