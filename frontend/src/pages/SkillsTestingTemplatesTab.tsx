@@ -17,15 +17,18 @@ import {
   BarChart3,
   Copy,
   Pencil,
+  Printer,
   Trash2,
   Eye,
   Send,
   CheckCircle2,
+  BookOpen,
 } from 'lucide-react';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type { SkillTemplateListItem } from '../types/skillsTesting';
 import { FormStatus } from '../constants/enums';
 import { ConfirmDialog } from '../components/ux';
+import { SkillSheetLibraryModal } from '../components/training/SkillSheetLibraryModal';
 
 // ── Shared sub-components ──────────────────────────────────────
 
@@ -50,17 +53,33 @@ const SummaryCard: React.FC<{
   value: string | number;
   icon: React.ReactNode;
   color: string;
-}> = ({ label, value, icon, color }) => (
-  <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+  /** Makes the tile the way into the work it counts. Only some are actionable —
+   *  a pass rate is a fact, a queue is a job. */
+  onClick?: () => void;
+}> = ({ label, value, icon, color, onClick }) => {
+  const body = (
     <div className="flex items-center justify-between">
-      <div>
+      <div className="text-left">
         <p className="text-theme-text-muted text-sm">{label}</p>
         <p className="text-theme-text-primary mt-1 text-2xl font-bold">{value}</p>
       </div>
       <div className={`rounded-lg p-3 ${color}`}>{icon}</div>
     </div>
-  </div>
-);
+  );
+
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        className="bg-theme-surface border-theme-surface-border w-full rounded-lg border p-4 transition-colors hover:border-purple-500/60"
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">{body}</div>;
+};
 
 const TemplateRow: React.FC<{
   template: SkillTemplateListItem;
@@ -68,8 +87,9 @@ const TemplateRow: React.FC<{
   onView: () => void;
   onPublish: () => void;
   onDuplicate: () => void;
+  onPrint: () => void;
   onDelete: () => void;
-}> = ({ template, onEdit, onView, onPublish, onDuplicate, onDelete }) => (
+}> = ({ template, onEdit, onView, onPublish, onDuplicate, onPrint, onDelete }) => (
   <tr className="hover:bg-theme-surface-hover transition-colors">
     <td className="px-4 py-3">
       <div>
@@ -128,6 +148,16 @@ const TemplateRow: React.FC<{
         >
           <Copy className="text-theme-text-muted h-4 w-4" />
         </button>
+        {/* The paper fallback for a burn tower or apparatus bay with no signal.
+            Offered on drafts too — an author proofreads a sheet far more
+            easily on the printed form than in the builder. */}
+        <button
+          onClick={onPrint}
+          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          title="Print blank sheet"
+        >
+          <Printer className="text-theme-text-muted h-4 w-4" />
+        </button>
         <button
           onClick={onDelete}
           className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
@@ -163,6 +193,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
   const [publishTarget, setPublishTarget] = useState<SkillTemplateListItem | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<SkillTemplateListItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   useEffect(() => {
     void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
@@ -232,6 +263,10 @@ const SkillsTestingTemplatesTab: React.FC = () => {
               value={summary.pending_validation}
               icon={<CheckCircle2 className="h-5 w-5 text-purple-600" />}
               color="bg-purple-100 dark:bg-purple-900/30"
+              // The tile counted the queue without being a way into it, so an
+              // officer read "3" and then had to find the right tab and set a
+              // dropdown to see which three.
+              onClick={() => void navigate('/training/admin?page=skills-testing&tab=tests&status=pending_validation')}
             />
           ) : (
             <SummaryCard
@@ -279,6 +314,13 @@ const SkillsTestingTemplatesTab: React.FC = () => {
             <option value="archived">Archived</option>
           </select>
           <button
+            onClick={() => setLibraryOpen(true)}
+            className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+          >
+            <BookOpen className="h-4 w-4" />
+            <span className="hidden sm:inline">Add from library</span>
+          </button>
+          <button
             onClick={() => void navigate('/training/skills-testing/templates/new')}
             className="btn-primary flex items-center gap-2 font-medium"
           >
@@ -297,12 +339,20 @@ const SkillsTestingTemplatesTab: React.FC = () => {
         <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
           <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted">No templates found</p>
-          <button
-            onClick={() => void navigate('/training/skills-testing/templates/new')}
-            className="btn-primary mt-4 text-sm"
-          >
-            Create Your First Template
-          </button>
+          {/* Where a new department actually lands, so the library is offered
+              first: copying a ready-made NREMT sheet is a shorter path to a
+              first evaluation than authoring one from a blank form. */}
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <button onClick={() => setLibraryOpen(true)} className="btn-primary text-sm">
+              Browse the sheet library
+            </button>
+            <button
+              onClick={() => void navigate('/training/skills-testing/templates/new')}
+              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+            >
+              Start from scratch
+            </button>
+          </div>
         </div>
       ) : (
         <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
@@ -357,6 +407,16 @@ const SkillsTestingTemplatesTab: React.FC = () => {
                     onView={() => void navigate(`/training/skills-testing/templates/${template.id}`)}
                     onPublish={() => setPublishTarget(template)}
                     onDuplicate={() => void handleDuplicate(template.id)}
+                    // A new tab: the print view calls window.print() on load,
+                    // and navigating the current tab would drop an officer out
+                    // of the templates list to get back to a print dialog.
+                    onPrint={() =>
+                      window.open(
+                        `/training/skills-testing/print/template?id=${encodeURIComponent(template.id)}`,
+                        '_blank',
+                        'noopener'
+                      )
+                    }
                     onDelete={() => setArchiveTarget(template)}
                   />
                 ))}
@@ -365,6 +425,24 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      <SkillSheetLibraryModal
+        isOpen={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onImported={() => {
+          // Imported sheets land as drafts, so reloading the filter the user
+          // already had would show nothing new under Published or Archived and
+          // read as a failed import. Move the view to what the import actually
+          // produced — which is also where the next step is, since a draft has
+          // to be reviewed and published before anyone can test against it.
+          setStatusFilter('draft');
+          // Explicitly, not via the statusFilter effect: setting state to the
+          // value it already holds re-renders nothing, so an import made while
+          // already filtered to Draft would not refresh.
+          void loadTemplates({ status: 'draft' });
+          void loadSummary();
+        }}
+      />
 
       <ConfirmDialog
         isOpen={publishTarget !== null}

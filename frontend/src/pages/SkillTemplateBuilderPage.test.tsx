@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SkillTemplateBuilderPage from './SkillTemplateBuilderPage';
@@ -133,6 +133,37 @@ describe('SkillTemplateBuilderPage', () => {
   });
 
   describe('Validation', () => {
+    // A scored step's points come entirely from max_score — without one it is
+    // marked by the examiner and contributes nothing to the percentage. Same
+    // silent-zero shape as the unrenderable criterion type, caught here rather
+    // than in the API schema because the template PUT resends every section.
+    it('refuses to save a scored step with no max points', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await user.type(screen.getByPlaceholderText(/SCBA Proficiency Evaluation/i), 'Pump Ops');
+      await user.type(screen.getByPlaceholderText(/section name/i), 'Draft');
+      await user.type(screen.getByPlaceholderText(/dons scba/i), 'Priming technique');
+      await user.selectOptions(screen.getByDisplayValue('Pass / Fail'), 'score');
+
+      const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
+      await user.click(saveButtons[saveButtons.length - 1] as HTMLElement);
+
+      expect(screen.getByText(/Scored steps need a max points value/i)).toBeInTheDocument();
+      expect(mockCreateTemplate).not.toHaveBeenCalled();
+    });
+
+    it('warns inline while the max points box is still empty', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await user.selectOptions(screen.getByDisplayValue('Pass / Fail'), 'score');
+      expect(screen.getByText(/earns no points toward the score/i)).toBeInTheDocument();
+
+      await user.type(screen.getByPlaceholderText('3'), '5');
+      expect(screen.queryByText(/earns no points toward the score/i)).not.toBeInTheDocument();
+    });
+
     it('should show validation errors when template name is empty', async () => {
       const user = userEvent.setup();
       renderWithRouter(<SkillTemplateBuilderPage />);
@@ -278,6 +309,30 @@ describe('SkillTemplateBuilderPage', () => {
           result_release: 'on_release',
         })
       );
+    });
+
+    // The API returns roles ordered by `priority DESC`, which is an
+    // authorization ranking rather than an org chart — IT Manager is seeded at
+    // 100, above Fire Chief at 95 — so rank order opens the list with the most
+    // privileged account rather than the most senior officer. In a checkbox
+    // list someone is scanning for a title, alphabetical is what they can
+    // predict before they look.
+    it('lists positions alphabetically, not in the order the API returns', async () => {
+      mockGetRoles.mockResolvedValue([
+        { id: 'r1', name: 'IT Manager', slug: 'it-manager', priority: 100 },
+        { id: 'r2', name: 'Fire Chief', slug: 'fire-chief', priority: 95 },
+        { id: 'r3', name: 'Deputy Chief', slug: 'deputy-chief', priority: 90 },
+        { id: 'r4', name: 'Assistant Chief', slug: 'assistant-chief', priority: 85 },
+      ]);
+      renderWithRouter(<SkillTemplateBuilderPage />);
+
+      await screen.findByRole('checkbox', { name: 'Fire Chief' });
+      const picker = screen.getByRole('group', { name: /also visible to these positions/i });
+      const names = within(picker)
+        .getAllByRole('checkbox')
+        .map((box) => box.getAttribute('aria-label') || (box as HTMLInputElement).labels?.[0]?.textContent?.trim());
+
+      expect(names).toEqual(['Assistant Chief', 'Deputy Chief', 'Fire Chief', 'IT Manager']);
     });
 
     it('sends selected position slugs, not names or ids', async () => {
@@ -444,6 +499,11 @@ describe('SkillTemplateBuilderPage', () => {
       await user.click(timingCheckbox());
       // Author changes their mind: it becomes a scored step instead.
       await user.selectOptions(screen.getByDisplayValue('Statement'), 'score');
+      // A scored step needs a maximum or it earns nothing, and saving is
+      // blocked without one. Incidental to what this test is about — the
+      // starts_timer flag not surviving the type change — but the template
+      // would not be saveable otherwise.
+      await user.type(screen.getByPlaceholderText('3'), '5');
 
       const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
       await user.click(saveButtons[saveButtons.length - 1] as HTMLElement);

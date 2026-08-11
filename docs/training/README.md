@@ -2,6 +2,10 @@
 
 Welcome to the training documentation for The Logbook. These guides are designed to help new users learn the system and serve as a reference for experienced users.
 
+> **Maintainers:** See the [training materials review and screenshot plan](./TRAINING_MATERIALS_REVIEW.md)
+> for the current learning-design recommendations, screenshot priorities, and
+> image acceptance checklist.
+
 ---
 
 ## Guides

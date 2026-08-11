@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ClipboardCheck,
   FileText,
+  Printer,
   Timer,
   Trash2,
   User,
@@ -109,9 +110,30 @@ export const MySkillTestResultPage: React.FC = () => {
         Back to My Training
       </button>
 
-      <div>
-        <h1 className="text-theme-text-primary text-2xl font-bold">{currentTest.template_name}</h1>
-        <p className="text-theme-text-muted text-sm">{isPractice ? 'Practice attempt' : 'Official skills test'}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-theme-text-primary text-2xl font-bold">{currentTest.template_name}</h1>
+          <p className="text-theme-text-muted text-sm">{isPractice ? 'Practice attempt' : 'Official skills test'}</p>
+        </div>
+        {/* Offered only once there is an outcome to print. A result still
+            awaiting sign-off has none — the API withholds it — and the print
+            page refuses one anyway, so surfacing the button would promise
+            something it cannot deliver. */}
+        {isComplete && (
+          <button
+            onClick={() =>
+              window.open(
+                `/training/skills-testing/print/scorecard?id=${encodeURIComponent(currentTest.id)}`,
+                '_blank',
+                'noopener'
+              )
+            }
+            className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 text-sm"
+          >
+            <Printer className="h-4 w-4" aria-hidden="true" />
+            Print
+          </button>
+        )}
       </div>
 
       {isPractice && (
