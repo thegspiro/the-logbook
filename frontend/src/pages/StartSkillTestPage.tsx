@@ -48,9 +48,13 @@ export const StartSkillTestPage: React.FC = () => {
   // Search results only — the roster is never held client-side, because the
   // endpoint behind it will not return one.
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
-  // The candidate the user actually picked, kept separately: it has to survive
-  // the search results being replaced or cleared.
-  const [selectedCandidate, setSelectedCandidate] = useState<MemberOption | null>(null);
+  // The candidates the user picked, kept separately from the search results so
+  // they survive those being replaced or cleared.
+  //
+  // A list, because drill night is a batch: twelve people through one SCBA
+  // evolution used to mean twelve trips back to this page, re-picking the same
+  // sheet each time. One entry behaves exactly as it did before.
+  const [candidates, setCandidates] = useState<MemberOption[]>([]);
   // The `?template=` hand-off applies exactly once, so hitting "Change" isn't
   // undone by the next render.
   const preselectApplied = useRef(false);
@@ -63,7 +67,6 @@ export const StartSkillTestPage: React.FC = () => {
   const modeChosen = useRef(false);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [selectedCandidateId, setSelectedCandidateId] = useState('');
   const [notes, setNotes] = useState('');
   const [isPractice, setIsPractice] = useState(false);
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
@@ -109,13 +112,12 @@ export const StartSkillTestPage: React.FC = () => {
   // hand out a roster to pick your own name out of.
   useEffect(() => {
     if (selfCandidateApplied.current || isOfficer) return;
-    if (!isPractice || !user?.id || selectedCandidateId) return;
+    if (!isPractice || !user?.id || candidates.length > 0) return;
     const ownName = `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim();
     if (!ownName) return;
     selfCandidateApplied.current = true;
-    setSelectedCandidateId(user.id);
-    setSelectedCandidate({ id: user.id, name: ownName });
-  }, [isOfficer, isPractice, user?.id, user?.first_name, user?.last_name, selectedCandidateId]);
+    setCandidates([{ id: user.id, name: ownName }]);
+  }, [isOfficer, isPractice, user?.id, user?.first_name, user?.last_name, candidates.length]);
 
   // Server-side candidate search, debounced — shared with the viewers panel so
   // both pickers over this population behave identically. The endpoint requires
@@ -157,7 +159,8 @@ export const StartSkillTestPage: React.FC = () => {
   // program requirement). Caught here so a member who defaulted into their own
   // name and then switched to Official is told why, rather than being handed a
   // 400 after filling the form in.
-  const isSelfCandidate = !!user?.id && selectedCandidateId === user.id;
+  const isSelfCandidate = !!user?.id && candidates.some((c) => c.id === user.id);
+  const isBatch = candidates.length > 1;
   const selfOfficialBlocked = !isPractice && isSelfCandidate;
   const showRequirementStep = !isPractice && isOfficer;
 
@@ -166,7 +169,7 @@ export const StartSkillTestPage: React.FC = () => {
       toast.error('Please select a template');
       return;
     }
-    if (!selectedCandidateId) {
+    if (candidates.length === 0) {
       toast.error('Please select a candidate');
       return;
     }
@@ -177,23 +180,59 @@ export const StartSkillTestPage: React.FC = () => {
 
     setIsStarting(true);
     try {
-      const test = await createTest({
-        template_id: selectedTemplateId,
-        candidate_id: selectedCandidateId,
-        ...(notes.trim() ? { notes: notes.trim() } : {}),
-        // Only a real (non-practice) test with an explicit override needs to send
-        // a requirement; otherwise the backend inherits the template's default.
-        ...(!isPractice && overrideRequirementId ? { requirement_id: overrideRequirementId } : {}),
-        is_practice: isPractice,
-      });
+      // Created one at a time rather than through a bulk endpoint: each is an
+      // ordinary test creation, so every service-layer rule — separation of
+      // duties, the attempt cap, the requirement link — applies per candidate
+      // with nothing new to keep in step.
+      //
+      // Sequential rather than Promise.all, deliberately: the attempt cap is
+      // checked against tests already recorded, so firing a squad's worth
+      // together could let a candidate past a cap that two racing requests both
+      // read as not yet reached.
+      const created = [];
+      const failed: string[] = [];
+      for (const candidate of candidates) {
+        try {
+          created.push(
+            await createTest({
+              template_id: selectedTemplateId,
+              candidate_id: candidate.id,
+              ...(notes.trim() ? { notes: notes.trim() } : {}),
+              // Only a real (non-practice) test with an explicit override needs to send
+              // a requirement; otherwise the backend inherits the template's default.
+              ...(!isPractice && overrideRequirementId ? { requirement_id: overrideRequirementId } : {}),
+              is_practice: isPractice,
+            })
+          );
+        } catch (err: unknown) {
+          // One refusal must not discard the rest of the squad — a candidate
+          // out of attempts is a fact about them, not about the drill.
+          failed.push(`${candidate.name}: ${getErrorMessage(err, 'could not be started')}`);
+        }
+      }
+
+      const first = created[0];
+      if (!first) {
+        toast.error(failed[0] ?? 'Failed to start test');
+        return;
+      }
+      if (failed.length > 0) {
+        toast.error(`${failed.length} could not be started — ${failed[0]}`);
+      }
+
       toast.success(
-        isPractice
-          ? 'Practice session started'
-          : isOfficer
-            ? 'Test session started'
-            : 'Test session started — a training officer will validate the result'
+        isBatch
+          ? `${created.length} test${created.length === 1 ? '' : 's'} queued — starting with ${candidates[0]?.name ?? 'the first'}`
+          : isPractice
+            ? 'Practice session started'
+            : isOfficer
+              ? 'Test session started'
+              : 'Test session started — a training officer will validate the result'
       );
-      void navigate(`/training/skills-testing/test/${test.id}/active`);
+      // Straight into the first. The rest wait in the records list, which is
+      // what "queued" means here: the examiner works down them as the squad
+      // comes up instead of returning to this page for each one.
+      void navigate(`/training/skills-testing/test/${first.id}/active`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to start test'));
     } finally {
@@ -356,29 +395,41 @@ export const StartSkillTestPage: React.FC = () => {
         <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
           <h2 className="text-theme-text-primary mb-3 flex items-center gap-2 text-lg font-semibold">
             <User className="h-5 w-5 text-red-600" />
-            3. Select Candidate
+            3. Select Candidates
           </h2>
 
-          {selectedCandidate ? (
-            <div className="flex items-center justify-between rounded-lg border border-green-500/30 bg-green-100 p-3 dark:bg-green-900/30">
-              <div>
-                <p className="font-medium text-green-800 dark:text-green-200">
-                  {selectedCandidate.name}
-                  {isSelfCandidate && <span className="ml-2 text-sm font-normal">(you)</span>}
+          {candidates.length > 0 && (
+            <div className="mb-3 space-y-2">
+              {candidates.map((candidate) => (
+                <div
+                  key={candidate.id}
+                  className="flex items-center justify-between rounded-lg border border-green-500/30 bg-green-100 p-3 dark:bg-green-900/30"
+                >
+                  <p className="font-medium text-green-800 dark:text-green-200">
+                    {candidate.name}
+                    {candidate.id === user?.id && <span className="ml-2 text-sm font-normal">(you)</span>}
+                  </p>
+                  <button
+                    onClick={() => setCandidates((current) => current.filter((c) => c.id !== candidate.id))}
+                    aria-label={`Remove ${candidate.name}`}
+                    className="text-sm text-green-700 underline dark:text-green-300"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              {isBatch && (
+                <p className="text-theme-text-muted text-xs">
+                  {candidates.length} tests will be created against this sheet. You start with {candidates[0]?.name};
+                  the rest wait in the records list until you get to them.
                 </p>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedCandidateId('');
-                  setSelectedCandidate(null);
-                }}
-                aria-label="Change candidate"
-                className="text-sm text-green-700 underline dark:text-green-300"
-              >
-                Change
-              </button>
+              )}
             </div>
-          ) : (
+          )}
+
+          {/* The search stays open after a pick, so adding the next person is
+              one more tap rather than a trip back through this page. */}
+          {
             <>
               <div className="relative mb-3">
                 <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -407,8 +458,7 @@ export const StartSkillTestPage: React.FC = () => {
                     <button
                       key={m.id}
                       onClick={() => {
-                        setSelectedCandidateId(m.id);
-                        setSelectedCandidate(m);
+                        setCandidates((current) => (current.some((c) => c.id === m.id) ? current : [...current, m]));
                         setMemberSearch('');
                       }}
                       className="border-theme-surface-border w-full rounded-lg border p-3 text-left transition-colors hover:border-red-500/50"
@@ -430,7 +480,7 @@ export const StartSkillTestPage: React.FC = () => {
                 </div>
               )}
             </>
-          )}
+          }
 
           {selfOfficialBlocked && (
             <div className="alert-warning mt-3 flex items-start gap-2">
@@ -497,13 +547,19 @@ export const StartSkillTestPage: React.FC = () => {
         {/* Start Button */}
         <button
           onClick={() => void handleStart()}
-          disabled={!selectedTemplateId || !selectedCandidateId || selfOfficialBlocked || isStarting}
+          disabled={!selectedTemplateId || candidates.length === 0 || selfOfficialBlocked || isStarting}
           className={`flex w-full items-center justify-center gap-3 rounded-xl py-4 text-lg font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
             isPractice ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'
           }`}
         >
           <Play className="h-6 w-6" />
-          {isStarting ? 'Starting...' : isPractice ? 'Begin Practice' : 'Begin Evaluation'}
+          {isStarting
+            ? 'Starting...'
+            : isBatch
+              ? `Start ${candidates.length} Evaluations`
+              : isPractice
+                ? 'Begin Practice'
+                : 'Begin Evaluation'}
         </button>
       </main>
     </div>
