@@ -21,6 +21,47 @@ fix:
 
 ---
 
+## Resolved 2026-08-11
+
+Everything the first pass flagged has now been **written**, not just noted.
+Kept here rather than deleted, because the record of what changed and why is
+what a future reader needs when a take does not match the page.
+
+| Script | What was done                                                                                                                                                                                                               |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **06** | Dashboard chapter rewritten against the real page; new **RECORDING WHAT YOU USED** section (15:30 – 17:30); every chapter and clip timestamp re-cut; runtime estimate raised to 22–26 min in the series overview            |
+| **07** | Email chapter expanded from 25 seconds to 2 minutes and renamed **…FINDING THINGS, SIGNING THEM, AND CLOSING THEM**; footers, organization variables and the design change all written; chapters 6–7 re-timed; new clip row |
+| **04** | New **WHAT'S EXPIRING ON YOUR TRUCKS** beat (20:15 – 21:30); chapters 6–8 re-timed; new clip row. The dashboard flag is downgraded to a B-roll note — the narration there was always correct                                |
+| **08** | All five proposed shorts written in full: **8AA** – **8AE**                                                                                                                                                                 |
+
+**One correction to the first pass.** It said script 06's "Training Status"
+widget did not exist. More precisely: there is no permanent widget with a
+green/amber/red state, but there **is** a red certification banner that appears
+only when something is expired or within 60 days, and a **My Training Progress**
+panel that renders only for members enrolled in a pipeline. The rewrite is
+written against those two, and carries a production note that both are
+conditional — a demo account without them is a shorter page than the narration
+walks.
+
+### Deliberately not done
+
+**03 — IT Manager / System Admin: the `alembic heads` beat.** Judged not worth
+it. The duplicate-revision-id problem is a _contributor_ concern — it bites
+someone writing a migration on a branch, not an operator running `git pull`. The
+operator-facing half (recognising a crash on start) is already covered by
+`WHEN THE APP REFUSES TO START`, and adding to that section ripples timings
+through three chapters of a 40-minute script for about fifteen seconds of
+content. `docs/TROUBLESHOOTING.md` and `docs/ALEMBIC_MIGRATIONS.md` are the
+right homes and both now carry it.
+
+**A pre-existing timing overlap in script 04**, unrelated to this work:
+`CLOSING & PUBLISHING RESULTS (17:30 – 18:00)` and
+`DEPARTMENT ANNOUNCEMENTS (17:45 – 18:00)` overlap by fifteen seconds. Left
+alone — it predates these changes and a timing audit across the whole series is
+its own pass.
+
+---
+
 ## Flagged by the 2026-08-10 → 08-11 changes
 
 Two branches landed on 2026-08-10 that reach the scripts: the **email template

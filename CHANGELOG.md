@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Communications: the Email Templates tabs are addressable (2026-08-11)
+
+**Fixed**
+
+- **None of the five tabs on the Email Templates page could be linked to.** The
+  page held its tab in plain `useState('templates')`, so `?tab=footers` — or any
+  other value — landed on Templates. Two costs, and the second is what made this
+  worth fixing rather than noting:
+
+  - A secretary could not send a colleague a link to the **footer library**,
+    which is the tab a colleague is most likely to be pointed at.
+  - The screenshot harness could only ever capture the default tab. That is
+    exactly how `02-21`/`02-41` and `04-20`/`17-01` came to be **byte-identical
+    images published under different captions** — all four were hub routes
+    defaulting to a tab nobody asked for.
+
+  All five now round-trip: `?tab=templates`, `?tab=footers`, `?tab=officers`,
+  `?tab=scheduled`, `?tab=history`. The query value is validated against the
+  declared tab list rather than cast, so `?tab=nonsense` falls back to Templates
+  instead of rendering nothing. Same fix, and the same two reasons, as the
+  Notifications page took on 2026-08-10.
+
+  A test pins **every call site**, because a single missed `setActiveTab` is the
+  whole defect: that one tab silently stops round-tripping while the other four
+  look fine.
+
+---
+
+### Demo seeder: supply state, and a check type nothing could read (2026-08-11)
+
+Not shipped behaviour — this is `scripts/screenshots/seed_demo_data.py`, which
+builds the demo department every documentation screenshot is taken against.
+
+**Added**
+
+- **`seed_supply_tracking`.** The supply screens that landed on 2026-08-10 had
+  no data behind them, so every one of them rendered truthfully and pictured
+  nothing. The step builds the whole loop on the medic unit: five dated
+  consumables with shelf lots, catalog links on the counted positions, and lots
+  actually deployed on the truck.
+
+  The end state is deliberately **mixed**, because each filter on the supply
+  worklist needs a row and a screenshot of one uniform state teaches nothing:
+
+  | Seeded                                                   | What it makes picturable                                                                                    |
+  | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+  | Naloxone from **two lots with two dates** on one bracket | The lots sheet, and the "soonest aboard" rule                                                               |
+  | Gauze at **18 of 24**                                    | The amber short count — and the Set All to Par warning, which is suppressed on a compartment already at par |
+  | A restock report raised **by the demo member**           | A worklist row naming a real reporter, which is the whole claim about who may record use                    |
+  | One **already-expired** shelf lot                        | The struck-through row, and the swap refusing it                                                            |
+  | Three positions left **unlinked**                        | The toolbar's coverage count, and the bulk-match dialog                                                     |
+
+**Fixed**
+
+- **Every seeded checklist item used a check type nothing recognises.** The
+  seeder wrote `"check_type": "presence"`. The column is a free `String(30)` so
+  the API accepted it, but the eight types the check form knows spell it
+  **`present`** — and an unrecognised value falls through the form's switch to
+  the pass/fail branch. So every seeded item rendered **Pass / Fail** buttons
+  under a guide describing Present / Missing, and nothing anywhere reported a
+  problem.
+
+  New rows are written correctly, and `_repair_check_types` rewrites the ones a
+  long-lived demo database already holds — re-seeding does not touch a template
+  that exists by name, so without the repair the old rows would never change.
+
+  Same shape as the skills-testing `"checkbox"` criterion type
+  (`KNOWN_LIMITATIONS.md`, 2026-08-10). **Worth assuming there are more of these
+  wherever a type is stored as a free string** rather than validated on the way
+  in.
+
+- **`seed_equipment_checks` picked its template by position, not by name.** It
+  took `templates[0]` and submitted every seeded check against it, so any step
+  that created a template first would both suppress the Engine Daily Check _and_
+  silently become the template the equipment-check screenshots picture. The new
+  supply step is exactly such a step. Selected by name now, and ordered after it
+  as well — ordering that does not depend on the fix is one less thing to get
+  wrong later.
+
+---
+
 ### Supplies: the shelf and the truck are now one loop (2026-08-10)
 
 The largest single change in this release. An inventory item's ready stock and a
@@ -39,7 +120,7 @@ below is that loop being closed.
   recorded is lost and every derived count matches what the item reported before.
 
 - **`check_template_items.quantity_on_truck` — how many are actually aboard.**
-  The row recorded how many an apparatus *should* carry (`required_quantity`,
+  The row recorded how many an apparatus _should_ carry (`required_quantity`,
   the state-mandated floor, and `expected_quantity`, the department's own
   target) but never how many it has. "Used two of the four" had nowhere to go,
   so a box down to its last unit and one just opened looked identical.
@@ -49,12 +130,12 @@ below is that loop being closed.
 
   Four things move the count, and they mean different things:
 
-  | Action | Meaning |
-  | ------ | ------- |
-  | **Minus** on the apparatus page | Consumption — the count drops *and* a restock report goes up with it |
-  | **Plus** | A hand restock |
-  | **Swap** | Draws N units off a shelf lot and puts N on the truck; defaults to the shortfall, so filling a gap needs no arithmetic |
-  | **An equipment check** | A recount — a crew standing at the compartment outranks a running total that has drifted |
+  | Action                          | Meaning                                                                                                                |
+  | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+  | **Minus** on the apparatus page | Consumption — the count drops _and_ a restock report goes up with it                                                   |
+  | **Plus**                        | A hand restock                                                                                                         |
+  | **Swap**                        | Draws N units off a shelf lot and puts N on the truck; defaults to the shortfall, so filling a gap needs no arithmetic |
+  | **An equipment check**          | A recount — a crew standing at the compartment outranks a running total that has drifted                               |
 
 - **`check_template_items.restock_needed` — a report raised at the moment of
   use.** The only writes to a checklist item came from an equipment check, so a
@@ -197,7 +278,7 @@ below is that loop being closed.
   carrying the previous and new lot/expiration and the shelf lot it came from.
 
 - **A quantity item arrives on the check form carrying the running count, and
-  arrives unchecked.** It used to be seeded from the *last check's* count, which
+  arrives unchecked.** It used to be seeded from the _last check's_ count, which
   is the wrong memory now that a running one exists: a crew that pulled two at
   03:00 opened the morning check at the four the last check had seen — the exact
   drift this work removes, reintroduced at the screen where it matters most. The
@@ -323,7 +404,7 @@ below is that loop being closed.
 - **The supply worklist showed a "300d left" countdown against an item listed for
   being short**, which reads as an expiry warning for something ten months out.
 - **Ranks rendered as "Deputy_chief"** on the impact planner's member table. CSS
-  `capitalize` uppercases the first letter of each *word*, and a snake_case value
+  `capitalize` uppercases the first letter of each _word_, and a snake_case value
   is one word. `enumLabel` already solved this but lived in the facilities
   module's types file; it moved to `utils/displayValue.ts` and is re-exported from
   `facilities/types` so the 27 existing imports keep working.
@@ -371,11 +452,11 @@ review.
   **Named rather than singular** because a department does not want to say the
   same thing to everybody:
 
-  | Footer | Who gets it |
-  | ------ | ----------- |
-  | **Internal** | Members. The routine "do not reply" close. The default. |
-  | **Public** | Outside the department. Invites a reply and carries the mailing address — telling somebody who asked the station to visit their school not to reply was wrong. Event requesters and applicants get this one. |
-  | **Official notice** | On the record: separations, property return, election results. |
+  | Footer              | Who gets it                                                                                                                                                                                                  |
+  | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+  | **Internal**        | Members. The routine "do not reply" close. The default.                                                                                                                                                      |
+  | **Public**          | Outside the department. Invites a reply and carries the mailing address — telling somebody who asked the station to visit their school not to reply was wrong. Event requesters and applicants get this one. |
+  | **Official notice** | On the record: separations, property return, election results.                                                                                                                                               |
 
   Departments can rename, reword, add and delete these; a footer names its own
   lines and toggles the contact and address blocks. Managed at
@@ -396,12 +477,12 @@ review.
   founded year, tax ID, and the three department identifiers (FDID, state ID,
   department ID). The description and the organization type were missing too.
 
-  | Variable | Why it exists |
-  | -------- | ------------- |
-  | `organization_tax_id` | A 501(c)(3) asking for money is expected to state its EIN on the message that asks |
-  | `organization_identifier` / `organization_identifier_label` | Whichever of the three identifiers the department nominated, **with the name of the scheme**, so an official notice can read "FDID 12345" and be right about which one that is |
-  | `organization_founded_year`, `organization_county` | The "Serving X County since 1923" line departments write by hand today |
-  | `organization_fax`, `organization_description`, `organization_type` | Completeness |
+  | Variable                                                            | Why it exists                                                                                                                                                                  |
+  | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+  | `organization_tax_id`                                               | A 501(c)(3) asking for money is expected to state its EIN on the message that asks                                                                                             |
+  | `organization_identifier` / `organization_identifier_label`         | Whichever of the three identifiers the department nominated, **with the name of the scheme**, so an official notice can read "FDID 12345" and be right about which one that is |
+  | `organization_founded_year`, `organization_county`                  | The "Serving X County since 1923" line departments write by hand today                                                                                                         |
+  | `organization_fax`, `organization_description`, `organization_type` | Completeness                                                                                                                                                                   |
 
   Which columns reach templates is now a **two-map ledger** —
   `ORGANIZATION_FIELD_VARIABLES` for the ones offered and
@@ -482,7 +563,7 @@ review.
   "the one marked default"** — so a department that changes its default reaches
   every template that has not overridden it, without a data migration.
 - **An unrecognised key resolves to the default rather than to nothing.**
-  Deleting a footer should cost the templates naming it their *choice*, not their
+  Deleting a footer should cost the templates naming it their _choice_, not their
   footer. The Footers screen says how many templates use each one before you
   delete it.
 - **The library lives in `Organization.settings`**, like the officer directory and
@@ -557,7 +638,7 @@ reported by a test.
 - **The Create Training Session wizard shifted its own date/time fields on every
   render.** `DateTimeQuarterHour` emits a local wall-clock string, but the value
   bindings sent it back out through `formatForDateTimeInput()`, which parses a
-  bare string as an *instant* and re-renders it in the organization's timezone.
+  bare string as an _instant_ and re-renders it in the organization's timezone.
   The field lost the org's UTC offset **once per interaction, compounding**:
   setting 15 September 9:00 AM and then adjusting the hour, minute and meridiem in
   turn left 14 September 9:00 PM behind.
@@ -643,7 +724,7 @@ reported by a test.
   `activeSectionIndex: 0` unconditionally, and a second in-flight load resolved
   after the scoring screen had jumped to the first section with blank steps and
   undid it — so a half-scored evaluation reopened at section 1 with no clue why.
-  Only a *different* test starts at the top now.
+  Only a _different_ test starts at the top now.
 - **The prospect drawer's Linked Events badge read "public Education".** The badge
   is an inline span butted against the date before it, so `capitalize` saw
   "AMpublic education" as one word. `inline-block` gives it its own line-box start.
@@ -793,9 +874,9 @@ reported by a test.
 
   Two switches on the event, both off by default, under **Check-In Settings**:
 
-  | Setting                                  | Effect                                                                                |
-  | ---------------------------------------- | ------------------------------------------------------------------------------------- |
-  | **Allow guest check-in**                 | Shows the guest QR code and opens the public sign-in page for this event               |
+  | Setting                                         | Effect                                                                             |
+  | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+  | **Allow guest check-in**                        | Shows the guest QR code and opens the public sign-in page for this event           |
   | **Create a prospective member from each guest** | Additionally opens a pipeline record for every guest who supplies an email address |
 
   Off by default is deliberate: turning the first one on exposes an
@@ -962,6 +1043,7 @@ reported by a test.
 ---
 
 ### Background saves: a failure is shown instead of written to the console
+
 (2026-08-09)
 
 **Fixed**
@@ -1058,6 +1140,7 @@ reported by a test.
 ---
 
 ### Training: checklist requirements are signed off step by step, and an
+
 enrollment can finally expire (2026-08-09)
 
 **Fixed**
@@ -1115,6 +1198,7 @@ enrollment can finally expire (2026-08-09)
 ---
 
 ### Training: three pipeline settings that were stored but never acted on
+
 (2026-08-09)
 
 **Fixed**
@@ -1222,6 +1306,7 @@ enrollment can finally expire (2026-08-09)
 ---
 
 ### Scheduling: a tab click opens the tab, and settings match the rest of the app
+
 (2026-08-09)
 
 **Fixed**
@@ -1271,6 +1356,7 @@ enrollment can finally expire (2026-08-09)
 ---
 
 ### Interface: 283 hand-rolled form controls now use the shared utilities
+
 (2026-08-10)
 
 **Changed**
@@ -1461,6 +1547,7 @@ enrollment can finally expire (2026-08-09)
 > as a fixture holding a literal permission list.
 
 ---
+
 ### Fixed
 
 - **Medical screening: saving a record with an unrecognized screening type or
@@ -1622,7 +1709,7 @@ enrollment can finally expire (2026-08-09)
   unchanged, and reports you can't run no longer appear in the list); expense-report
   reimbursements are now visible only to their submitter unless you're a finance
   manager; and an integration's configuration now requires integrations-admin access
-  to view. Features that only need to know whether an integration is *connected*
+  to view. Features that only need to know whether an integration is _connected_
   (such as meeting setup) keep working through a new status-only view that carries no
   configuration.
 

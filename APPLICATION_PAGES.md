@@ -753,6 +753,13 @@ permissions.
 > save could leave `default_key` naming a footer the same request deleted.
 >
 > Permission: `settings.manage` **or** `organization.update_settings`.
+>
+> **Deep-linkable tabs** _(2026-08-11)_: `?tab=templates`, `?tab=footers`,
+> `?tab=officers`, `?tab=scheduled`, `?tab=history`. The page held its tab in
+> plain state, so none of the five could be linked — a secretary could not send
+> a colleague a link to the footer library, and the screenshot harness could
+> only ever capture the default. Same fix, and the same reason, as the
+> Notifications page took on 2026-08-10.
 
 ---
 
