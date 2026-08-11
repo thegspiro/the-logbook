@@ -727,8 +727,7 @@ apparatus**: the checklist positions this item fills, which apparatus and
 compartment each one is, what that truck is carrying right now, and the soonest
 expiration aboard.
 
-> **Screenshot needed:**
-> _[Screenshot of an inventory item's Stock tab showing the ready-lots table above a "Deployed on apparatus" list of three checklist positions, each naming its apparatus, compartment, on-truck count and soonest expiration]_
+![An item's Stock Lots tab: the shelf lots above, and the checklist positions carrying it below](./images/05-58-item-stock-deployed.png)
 
 This is the direction a **recall** is worked from — you are holding the item and
 need to know which rigs to go to. The opposite direction ("what is expiring on my
@@ -1533,11 +1532,22 @@ The equipment check template builder no longer crashes when editing templates. T
 
 ### Camera Error Handling
 
-- **InventoryScanModal**: Error messages from camera failures now show specific details (e.g., "Camera permission denied" instead of "An error occurred")
-- **Errors stay visible**: Camera error messages no longer auto-dismiss, giving you time to read and act on them
+The scanner names **which** camera problem you have, because the fix differs:
+a blocked permission sends you to browser settings, a device with no camera
+does not (there is nothing there to grant), a camera held by another app asks
+you to close it, and a page served over plain HTTP says so. The four messages
+are listed in `10-mobile-pwa.md`, which is where the scanner is documented in
+full.
 
-> **Screenshot needed:**
-> _[Screenshot of the InventoryScanModal showing a camera error message: "Camera permission denied. Please allow camera access in your browser settings." with a "Try Again" button below]_
+- **Errors stay visible** — camera error messages do not auto-dismiss, so there
+  is time to read and act on them
+- **The manual field is always there.** On any browser where the camera fails,
+  the barcode / serial-number input still works, so a failed camera slows the
+  job down rather than stopping it. There is no separate "Try Again" button:
+  the scan control stays where it was, and retrying is the same click
+
+The refused-camera state is pictured in `10-mobile-pwa.md`; it is the same
+banner in both scanners.
 
 ### WebSocket Reliability
 

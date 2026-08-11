@@ -4955,6 +4955,27 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "05-58-item-stock-deployed",
+    doc: "05-inventory.md",
+    line: 730,
+    anchor: "Screenshot of an inventory item's Stock tab showing the ready-lots table",
+    alt: "An item's Stock Lots tab: the shelf lots above, and the checklist positions carrying it below",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // Naloxone by name: it is the item `seed_supply_tracking` deploys on M-3
+      // in two lots with two dates, which is the whole point of the panel —
+      // shelf stock above, and what is actually on a truck below it.
+      await openFirstFromApi(
+        "/inventory/items?limit=200",
+        (id) => `/inventory/items/${id}?tab=stock`,
+        "items",
+        (item) => item.name === "Naloxone 4mg Nasal",
+      )(page);
+      await page.waitForTimeout(2_500);
+    },
+    fullPage: true,
+  },
+  {
     id: "05-53-items-variant-capsules",
     doc: "05-inventory.md",
     line: 1423,
