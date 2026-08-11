@@ -1953,6 +1953,50 @@ export const SHOTS = [
     selector: "div.fixed.inset-0 > div",
   },
   {
+    id: "02-102-shift-report-crew-form",
+    doc: "02-training.md",
+    line: 1000,
+    anchor: "The shift report form with a shift chosen and its crew loaded",
+    alt: "A shift completion report — the hours and calls carried over from the shift, its crew listed, and the buttons that file the batch",
+    route: "/scheduling?tab=shift-reports&view=create",
+    prepare: async (page) => {
+      await page.waitForTimeout(3500);
+      // Shift-first: the form has nothing to show until a shift is picked, and
+      // picking one is what fills the hours and loads the crew.
+      // A shift with a crew, not the first row: a one-member shift pictures a
+      // batch form filing one report.
+      await page
+        .locator("button", { hasText: /[3-9] members ·/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2500);
+      const submit = page.getByRole("button", { name: /Submit Report/ });
+      await submit.waitFor({ timeout: 20_000 });
+      await submit.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    // Stops short of pressing Submit: filing the batch is finite, and the
+    // shift's reports would exist on the next run.
+    selector: "div.bg-theme-surface.rounded-xl:has(h3:text-is('New Shift Completion Report'))",
+  },
+  {
+    id: "02-103-shift-report-drafts",
+    doc: "02-training.md",
+    line: 1143,
+    anchor: "The Drafts view listing reports waiting to be finished",
+    alt: "The Drafts view — each draft with its shift date, trainee, hours and calls, and the control that opens it to finish",
+    route: "/scheduling?tab=shift-reports&view=drafts",
+    prepare: async (page) => {
+      await page.waitForTimeout(3500);
+      await page
+        .getByText(/Submit All Drafts|draft/i)
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    viewport: { width: 1400, height: 900 },
+  },
+  {
     id: "02-100-checklist-steps-editor",
     doc: "02-training.md",
     line: 365,

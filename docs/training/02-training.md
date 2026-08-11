@@ -986,18 +986,33 @@ Before filing shift reports, officers should **finalize the shift**. This create
 
 ### Auto-Population from Shift Data
 
-When creating or completing a shift report, the system can auto-populate data from shift records:
+The form is **shift-first**: you pick the shift, and it fills itself in from
+what the shift already knows.
 
-1. Select a **shift date** and **trainee** in the report form
-2. The system calls the **shift preview** endpoint to pull:
-   - **Hours on shift** from ShiftAttendance duration
-   - **Calls responded** from ShiftCall records where the trainee is in `responding_members`
-   - **Call types** from the incident types of matching ShiftCall records
-3. Auto-populated fields display an **(auto)** badge in the form
-4. Officers can edit all auto-populated values before submitting
-5. The `data_sources` field tracks which fields were auto-populated vs manually entered for audit purposes
+1. Go to **Shift Scheduling → Shift Reports → + New** and pick a shift from the
+   list of the last fortnight — each row names the apparatus, the date, and how
+   many members and calls it carried.
+2. **Hours on Shift** and **Calls Responded** arrive filled from the shift, and
+   the **crew arrives with it**, each member tagged with the position they rode
+   and — where they are enrolled in a pipeline — the pipeline they are a trainee
+   on.
+3. Everything is editable before you file. The tick box beside each member
+   controls who a report is filed for; **Evaluate** opens the rating and
+   narrative fields for a trainee.
+4. The `data_sources` field records which values were carried over and which
+   the officer typed, for audit.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form showing auto-populated hours and calls fields with the (auto) badge, plus the performance rating stars and narrative text areas below._
+![A shift completion report — the hours and calls carried over from the shift, its crew listed, and the buttons that file the batch](./images/02-102-shift-report-crew-form.png)
+
+> **There is no "(auto)" badge.** The carried-over values are ordinary editable
+> fields; nothing marks them apart on screen. What tells them apart afterwards
+> is `data_sources` on the filed report.
+
+> **Hours are the shift's, not the crew's** _(2026-08-11)_. Until then the form
+> pre-filled each member's hours from the shift's **total crew hours**, so a
+> three-person twelve-hour shift offered to credit every rider with 35.6 hours —
+> and those hours feed requirement progress and the state reports built on it.
+> Check the figure on any report filed before that date.
 
 ### Draft Reports and Review Workflow _(2026-03-28)_
 
@@ -1131,24 +1146,33 @@ If no mapping exists for the shift's apparatus type, the system falls back to th
 
 Officers can save incomplete shift completion reports as drafts:
 
-1. Begin filling in the report form
+1. Begin filling in the report form — the two buttons sit together at its foot,
+   **Save as Draft** outlined and **Submit Report** filled (carrying the count
+   when the crew is more than one: **Submit Reports (3)**)
 2. Click **Save as Draft** instead of Submit
 3. The report is saved with `review_status: "draft"` — no pipeline progress is triggered
 4. Return to the **Drafts** view in the Shift Reports tab to see all saved drafts
-5. Click **Edit** on a draft to complete it
+5. Open a draft — the chevron on its right expands it in place — to finish and
+   file it. **Submit All Drafts** files the lot at once, and files **your own**
+   drafts only
 6. On final submission, the report transitions to `approved` or `pending_review`, and deferred pipeline progress is applied
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form showing the two action buttons at the bottom: "Save as Draft" (outlined/secondary) and "Submit Report" (primary/filled), with the form partially completed._
+![The Drafts view — each draft with its shift date, trainee, hours and calls, and the control that opens it to finish](./images/02-103-shift-report-drafts.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Drafts view in ShiftReportsTab showing a list of saved draft reports with shift date, trainee name, auto-populated hours/calls, and an "Edit" button to complete each draft._
+Drafts are also **created for you**: finalizing a shift raises one per trainee
+on it, which is why the view can have rows in it before you have saved anything.
 
-### Auto-Filter Trainee List _(2026-04-04)_
+### The crew comes from the shift _(2026-04-04)_
 
-When filing a shift report and linking it to a specific shift, the trainee dropdown automatically filters to show only members who were assigned to that shift. This prevents accidentally filing a report for someone who wasn't on duty.
+The form has no trainee dropdown to filter. Picking the shift loads **its crew**
+— the members who were on it — each with their position, and you tick the ones a
+report is for. There is nothing to filter because there is nothing but the shift's
+own members on screen; the "Filtered to shift members" badge described here
+before 2026-08-11 never existed.
 
-For ad-hoc reports (no shift selected), the full member list is shown.
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form showing the trainee dropdown with a smaller filtered list (only 4-5 names) when a shift is selected, with a note or badge saying "Filtered to shift members"._
+A report **not** tied to a shift is filed from **Manual Shift Report Entry**
+(above), which searches the whole member directory precisely because there is no
+shift to draw a crew from.
 
 ### Edge Cases
 
