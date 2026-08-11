@@ -665,7 +665,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
           {/* History table */}
           {trendData.history.length > 0 && (
             <div>
-              <h4 className="text-theme-text-secondary mb-2 text-xs font-semibold">Check History</h4>
+              <h4 className="text-theme-text-secondary mb-2 text-xs font-semibold">Past results</h4>
               <div className="bg-theme-surface border-theme-surface-border overflow-x-auto rounded-xl border">
                 <table className="w-full text-sm">
                   <thead>

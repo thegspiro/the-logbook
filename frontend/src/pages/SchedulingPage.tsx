@@ -538,7 +538,9 @@ const SchedulingPage: React.FC = () => {
               <Clock className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Scheduling & Shifts</h1>
+              {/* The nav calls this "Shift Scheduling"; the page called itself
+                  "Scheduling & Shifts". Two names for one screen. */}
+              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Shift Scheduling</h1>
               <p className="text-theme-text-muted text-sm">Manage schedules, sign up for shifts, and handle trades</p>
             </div>
           </div>

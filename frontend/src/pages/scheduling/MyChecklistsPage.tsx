@@ -350,7 +350,7 @@ export const MyChecklistsPage: React.FC = () => {
 
         <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-theme-text-primary text-lg font-semibold">Check Details</h2>
+            <h2 className="text-theme-text-primary text-lg font-semibold">Completed checklist</h2>
             {statusBadge(selectedCheck.overallStatus)}
           </div>
 
@@ -446,9 +446,9 @@ export const MyChecklistsPage: React.FC = () => {
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
           >
             <Play className="h-3.5 w-3.5" aria-hidden="true" />
-            Start an unscheduled check
+            Unscheduled checklist
           </button>
-          {/* A whole check is the wrong instrument for "we just used two of
+          {/* A whole checklist is the wrong instrument for "we just used two of
               these". This is the way to record that without starting one. */}
           <Link
             to="/scheduling/apparatus-inventory"
@@ -470,11 +470,11 @@ export const MyChecklistsPage: React.FC = () => {
       </div>
 
       {/* ============================================================= */}
-      {/* Active Checklists Section                                      */}
+      {/* Checklists due now and coming up                               */}
       {/* ============================================================= */}
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-theme-text-primary text-base font-semibold">Active Checklists</h2>
+          <h2 className="text-theme-text-primary text-base font-semibold">Due now and coming up</h2>
           {activeChecklists.length > 1 && (
             <div className="border-theme-surface-border bg-theme-surface flex items-center gap-1 rounded-lg border p-0.5">
               {(
@@ -659,7 +659,7 @@ export const MyChecklistsPage: React.FC = () => {
       </section>
 
       {/* ============================================================= */}
-      {/* Check History Section                                          */}
+      {/* Completed-checklist history                                    */}
       {/* ============================================================= */}
       <section>
         <button
@@ -668,7 +668,7 @@ export const MyChecklistsPage: React.FC = () => {
           aria-expanded={showHistory}
           aria-controls="check-history-content"
         >
-          <h2 className="text-theme-text-primary text-base font-semibold">Check History</h2>
+          <h2 className="text-theme-text-primary text-base font-semibold">Completed checklists</h2>
           {showHistory ? (
             <ChevronUp className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
           ) : (
@@ -766,7 +766,7 @@ export const MyChecklistsPage: React.FC = () => {
             />
             <div className="border-theme-surface-border bg-theme-surface relative w-full max-w-md rounded-xl border shadow-xl">
               <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
-                <h2 className="text-theme-text-primary text-base font-semibold">Select a Checklist</h2>
+                <h2 className="text-theme-text-primary text-base font-semibold">Pick a checklist</h2>
                 <button
                   onClick={() => setShowTemplatePicker(false)}
                   className="text-theme-text-muted hover:bg-theme-surface-hover rounded-lg p-1 transition-colors"
@@ -784,7 +784,7 @@ export const MyChecklistsPage: React.FC = () => {
                 ) : availableTemplates.length === 0 ? (
                   <div className="py-8 text-center">
                     <ClipboardCheck className="text-theme-text-muted mx-auto h-10 w-10" />
-                    <p className="text-theme-text-muted mt-3 text-sm">No active check templates available.</p>
+                    <p className="text-theme-text-muted mt-3 text-sm">No checklists are set up yet.</p>
                     {canManage && (
                       <Link
                         to="/scheduling/settings?tab=equipment"

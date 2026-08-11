@@ -2264,7 +2264,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             </div>
           )}
 
-          {/* Calls / Runs logged during this shift */}
+          {/* Calls logged during this shift */}
           <div className="pt-1">
             <ShiftCallsSection
               shiftId={shift.id}

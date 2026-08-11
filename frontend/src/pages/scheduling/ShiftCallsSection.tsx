@@ -277,8 +277,10 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-          <Flame className="h-4 w-4 text-orange-500" />
-          Calls / Runs
+          <Flame className="h-4 w-4 text-orange-500" aria-hidden="true" />
+          {/* "Calls / Runs" offered two words for one thing. Calls, which is
+              what the count, the log button and the close-out row already say. */}
+          Calls
           {!loading && calls.length > 0 && (
             <span className="text-theme-text-muted text-xs font-normal">({calls.length})</span>
           )}
