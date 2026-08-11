@@ -3701,6 +3701,20 @@ export const SHOTS = [
     // one item every row reports the pool figure and the two ledgers cannot be
     // told apart, which is the entire subject of the caption.
     route: "/inventory/items",
+    prepare: async (page) => {
+      // Filtered to a term matching both ledgers. The grid is alphabetical and
+      // the lot-stocked consumables sit mid-list, so an unfiltered shot shows
+      // one kind or the other depending on where the fold lands — and the whole
+      // claim is that the two are distinguishable side by side.
+      const search = page.getByPlaceholder(/search/i).first();
+      await search.waitFor({ timeout: 20_000 });
+      await search.fill("s");
+      await page.waitForTimeout(1_800);
+    },
+    // Slightly taller than the default frame so the last row in view is a whole
+    // row: at 900px the fold lands through "in-date lots" and reads as a
+    // clipped control rather than a list that continues.
+    viewport: { width: 1440, height: 1010 },
     fullPage: false,
   },
 
@@ -4955,7 +4969,7 @@ export const SHOTS = [
     fullPage: true,
   },
   {
-    id: "05-58-item-stock-deployed",
+    id: "05-07-item-stock-deployed",
     doc: "05-inventory.md",
     line: 730,
     anchor: "Screenshot of an inventory item's Stock tab showing the ready-lots table",

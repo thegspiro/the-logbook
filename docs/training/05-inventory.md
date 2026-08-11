@@ -658,8 +658,7 @@ pool count beside it, and the CSV export carries the same number in its own
 which ledger it came from, so a number that disagrees with the item's Quantity
 field reads as the count that matters rather than as a bug.
 
-> **Screenshot needed:**
-> _[Screenshot of the inventory items grid with two consumable rows visible — one showing a Qty figure annotated "in-date lots" and one showing a plain pool figure — so the two ledgers can be told apart]_
+![Items grid showing a lot-stocked Qty labelled "in-date lots" beside a plain pool figure](./images/05-53-items-grid-lot-stock.png)
 
 > **Why the two disagree.** For anything kept as dated stock, the item's
 > **Quantity** field is not maintained at all: receiving a lot does not touch it,
@@ -727,7 +726,7 @@ apparatus**: the checklist positions this item fills, which apparatus and
 compartment each one is, what that truck is carrying right now, and the soonest
 expiration aboard.
 
-![An item's Stock Lots tab: the shelf lots above, and the checklist positions carrying it below](./images/05-58-item-stock-deployed.png)
+![An item's Stock Lots tab: the shelf lots above, and the checklist positions carrying it below](./images/05-07-item-stock-deployed.png)
 
 This is the direction a **recall** is worked from — you are holding the item and
 need to know which rigs to go to. The opposite direction ("what is expiring on my
