@@ -51,8 +51,7 @@ UNAUTHORIZED = {
 # rejects bad credentials rather than downgrading to anonymous).
 FORM_AUTH = {
     401: _response(
-        "This form requires authentication, or the supplied credentials "
-        "are invalid."
+        "This form requires authentication, or the supplied credentials are invalid."
     ),
 }
 
