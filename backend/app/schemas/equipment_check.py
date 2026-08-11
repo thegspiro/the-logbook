@@ -303,14 +303,13 @@ class CheckItemResultSubmit(BaseModel):
     lot_number: Optional[str] = Field(None, max_length=100)
     serial_found: Optional[str] = Field(None, max_length=100)
     lot_found: Optional[str] = Field(None, max_length=100)
-    # Expiration read off a unit replaced during this check. Written back onto
-    # the template item alongside lot_found so the truck's record reflects the
-    # unit actually on it.
+    # Expiration read off a unit replaced during this check. This is retained
+    # as check evidence; authoritative template dates change through inventory
+    # lot swaps rather than ordinary check submissions.
     expiration_found: Optional[date] = None
     photo_urls: Optional[List[str]] = None
-    # Advisory only: the server recomputes expiry from the template item (or
-    # expiration_found) so a client cannot pass an expired item by asserting it
-    # is fine. Kept for checks submitted without a template item to resolve.
+    # Advisory only: the server recomputes expiry from the template item so a
+    # client cannot pass an expired item by asserting it is fine.
     is_expired: bool = False
     expiration_date: Optional[date] = None
     notes: Optional[str] = None

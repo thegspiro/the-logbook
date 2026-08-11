@@ -24,6 +24,7 @@ from app.models.apparatus import (
 )
 from app.models.inventory import InventoryItem, InventoryLot
 from app.models.training import (
+    AssignmentStatus,
     Shift,
     ShiftAssignment,
     ShiftEquipmentCheck,
@@ -95,9 +96,17 @@ class EquipmentCheckService:
         return await self.get_template(template.id, organization_id)
 
     async def get_template(
-        self, template_id: str, organization_id: str
+        self,
+        template_id: str,
+        organization_id: str,
+        visible_positions: Optional[set[str]] = None,
     ) -> Optional[EquipmentCheckTemplate]:
-        """Get a template with all compartments and items."""
+        """Get a template with all compartments and items.
+
+        ``visible_positions`` restricts submit-only users to active templates
+        that are either general or assigned to one of their shift positions.
+        ``None`` preserves unrestricted access for template administrators.
+        """
         result = await self.db.execute(
             select(EquipmentCheckTemplate)
             .where(
@@ -111,6 +120,10 @@ class EquipmentCheckService:
             )
         )
         template = result.scalars().first()
+        if template is not None and not self._template_visible_to_submitter(
+            template, visible_positions
+        ):
+            return None
         if template is not None:
             items = [i for c in template.compartments for i in c.items]
             await self._attach_unit_labels(organization_id, items)
@@ -158,8 +171,9 @@ class EquipmentCheckService:
         apparatus_id: Optional[str] = None,
         apparatus_type: Optional[str] = None,
         check_timing: Optional[str] = None,
+        visible_positions: Optional[set[str]] = None,
     ) -> List[EquipmentCheckTemplate]:
-        """List templates with optional filters."""
+        """List templates with optional filters and submitter visibility."""
         query = (
             select(EquipmentCheckTemplate)
             .where(EquipmentCheckTemplate.organization_id == organization_id)
@@ -179,7 +193,40 @@ class EquipmentCheckService:
             query = query.where(EquipmentCheckTemplate.check_timing == check_timing)
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return [
+            template
+            for template in result.scalars().all()
+            if self._template_visible_to_submitter(template, visible_positions)
+        ]
+
+    @staticmethod
+    def _template_visible_to_submitter(
+        template: EquipmentCheckTemplate,
+        visible_positions: Optional[set[str]],
+    ) -> bool:
+        """Apply the narrow template scope used for submit-only access."""
+        if visible_positions is None:
+            return True
+        assigned_positions = set(template.assigned_positions or [])
+        return bool(template.is_active) and (
+            not assigned_positions or bool(assigned_positions & visible_positions)
+        )
+
+    async def get_user_check_positions(
+        self, user_id: str, organization_id: str
+    ) -> set[str]:
+        """Return shift positions the user may perform equipment checks as."""
+        result = await self.db.execute(
+            select(ShiftAssignment.position)
+            .join(Shift, Shift.id == ShiftAssignment.shift_id)
+            .where(
+                ShiftAssignment.user_id == user_id,
+                Shift.organization_id == organization_id,
+                ShiftAssignment.position.is_not(None),
+            )
+            .distinct()
+        )
+        return {position for position in result.scalars().all() if position}
 
     async def update_template(
         self,
@@ -607,19 +654,13 @@ class EquipmentCheckService:
         item_data: Dict[str, Any],
         tmpl_item: Optional[CheckTemplateItem],
     ) -> Optional[date]:
-        """The expiration that governs this item result, newest source wins.
+        """Resolve the authoritative expiration for this item result.
 
-        ``expiration_found`` is what the crew read off a unit they replaced
-        during the check and therefore supersedes the template's stored date.
-        Otherwise the template is authoritative: it is the department's record
-        of what is on the truck, and it is what the supply worklist and the
-        next check will both read. The client's own ``expiration_date`` is only
-        consulted when no template item resolves (a check submitted with no
-        template linkage at all).
+        The template is authoritative because changes to its expiration must
+        go through the validated inventory-lot swap flow. ``expiration_found``
+        remains part of the check result as an observation, but a check
+        submitter cannot use it to clear an expired equipment record.
         """
-        found = item_data.get("expiration_found")
-        if found:
-            return found
         if tmpl_item is not None:
             return tmpl_item.expiration_date if tmpl_item.has_expiration else None
         return item_data.get("expiration_date")
@@ -634,9 +675,9 @@ class EquipmentCheckService:
 
         Expiry is recomputed here rather than taken from the submitted
         ``is_expired`` flag: it decides whether a safety-critical item is
-        force-failed, so it must come from the department's own record (or from
-        the replacement the crew just logged), not from whatever the client
-        asserted. ``item["is_expired"]`` and ``item["expiration_date"]`` are
+        force-failed, so it must come from the department's own record, not
+        from whatever the client asserted. ``item["is_expired"]`` and
+        ``item["expiration_date"]`` are
         normalized in place so the stored result agrees with the verdict.
 
         Returns (total, completed, failed, overall_status).
@@ -680,11 +721,9 @@ class EquipmentCheckService:
     ) -> bool:
         """Write a swapped-in unit's identifiers back onto the template item.
 
-        The template row is the department's record of what is physically on
-        the apparatus, so a replacement logged during a check has to land there
-        — the next check, the expiry auto-fail and the supply worklist all read
-        it. The expiration in particular: without it a replaced unit keeps the
-        old date and fails every check from then on.
+        Serial and lot observations remain synchronized for existing behavior.
+        Expiration observations are deliberately not applied here: only the
+        validated inventory-lot swap flow may change the authoritative date.
 
         Returns True when the template actually changed.
         """
@@ -694,19 +733,13 @@ class EquipmentCheckService:
             tmpl_item.serial_number or ""
         )
         lot_changed = lot_found and lot_found != (tmpl_item.lot_number or "")
-        expiration_changed = (
-            expiration_found and expiration_found != tmpl_item.expiration_date
-        )
-        if not (serial_changed or lot_changed or expiration_changed):
+        if not (serial_changed or lot_changed):
             return False
 
         if serial_found:
             tmpl_item.serial_number = serial_found
         if lot_found:
             tmpl_item.lot_number = lot_found
-        if expiration_found:
-            tmpl_item.has_expiration = True
-            tmpl_item.expiration_date = expiration_found
         return True
 
     async def _create_check_items(
@@ -813,6 +846,7 @@ class EquipmentCheckService:
         self,
         items_data: List[Dict[str, Any]],
         organization_id: str,
+        template_id: str,
     ) -> Dict[str, CheckTemplateItem]:
         """Load CheckTemplateItem records referenced by the submitted items.
 
@@ -838,6 +872,7 @@ class EquipmentCheckService:
                 .where(
                     CheckTemplateItem.id.in_(template_item_ids),
                     EquipmentCheckTemplate.organization_id == organization_id,
+                    EquipmentCheckTemplate.id == template_id,
                 )
             )
             for ti in tmpl_result.scalars().all():
@@ -854,6 +889,7 @@ class EquipmentCheckService:
         organization_id: str,
         checked_by: str,
         data: Dict[str, Any],
+        allow_manage: bool = False,
     ) -> ShiftEquipmentCheck:
         """Submit an equipment check for a shift."""
         result = await self.db.execute(
@@ -866,11 +902,44 @@ class EquipmentCheckService:
         if not shift:
             raise ValueError("Shift not found")
 
+        # A submit grant permits members to perform checks, but does not grant
+        # org-wide authority over every shift.  Limit ordinary submitters to
+        # shifts they actively crew; the named shift officer and equipment
+        # check managers have an explicit per-shift/org-wide override.
+        assignment = None
+        is_shift_officer = str(shift.shift_officer_id or "") == str(checked_by)
+        if not allow_manage and not is_shift_officer:
+            assignment_result = await self.db.execute(
+                select(ShiftAssignment).where(
+                    ShiftAssignment.shift_id == shift_id,
+                    ShiftAssignment.organization_id == organization_id,
+                    ShiftAssignment.user_id == checked_by,
+                    ShiftAssignment.assignment_status.in_(
+                        [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
+                    ),
+                )
+            )
+            assignment = assignment_result.scalars().first()
+            if not assignment:
+                raise PermissionError("Not authorized to submit a check for this shift")
+
         items_data = data.pop("items", [])
         template_id = data.get("template_id")
 
         if not items_data:
             raise ValueError("At least one checklist item is required")
+
+        if template_id:
+            position = getattr(assignment, "position", None)
+            if hasattr(position, "value"):
+                position = position.value
+            applicable_templates = await self._resolve_templates(
+                shift,
+                organization_id,
+                None if allow_manage or is_shift_officer else position,
+            )
+            if str(template_id) not in {str(t.id) for t in applicable_templates}:
+                raise ValueError("Template is not applicable to this shift")
 
         # Prevent duplicate submission for same shift+template
         if template_id:
@@ -902,7 +971,7 @@ class EquipmentCheckService:
         # from the template item (see _compute_check_status), so the map has to
         # exist before any item can be force-failed.
         template_items_map = await self._load_template_items_map(
-            items_data, organization_id
+            items_data, organization_id, template_id
         )
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map
@@ -1049,8 +1118,12 @@ class EquipmentCheckService:
         # See submit_check: the template map decides expiry, so it is loaded
         # before the status computation rather than just before the write.
         template_items_map = await self._load_template_items_map(
-            items_data, organization_id
+            items_data, organization_id, template_id
         )
+        submitted_ids = {item["template_item_id"] for item in items_data}
+        invalid = submitted_ids - template_items_map.keys()
+        if invalid:
+            raise ValueError(f"Items do not belong to template: {', '.join(invalid)}")
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map
         )
@@ -1133,7 +1206,7 @@ class EquipmentCheckService:
         # the template too — otherwise which write path the crew happened to
         # take decides whether the truck's record gets updated.
         template_items_map = await self._load_template_items_map(
-            items_data, organization_id
+            items_data, organization_id, check.template_id
         )
         today = date.today()
 
@@ -1606,7 +1679,7 @@ class EquipmentCheckService:
                         if tmpl.apparatus_id
                         else None
                     ),
-                    "lot_number": item.lot_number,
+                    "lot_number": self._soonest_lot_number(item),
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
@@ -1741,7 +1814,7 @@ class EquipmentCheckService:
                     "unit_of_measure": getattr(item, "unit_of_measure", None),
                     "deployed_lots": self._deployed_lot_payload(item),
                     "serial_number": item.serial_number,
-                    "lot_number": item.lot_number,
+                    "lot_number": self._soonest_lot_number(item),
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
@@ -1799,6 +1872,14 @@ class EquipmentCheckService:
         )
 
     @classmethod
+    def _soonest_dated_lot(cls, item: CheckTemplateItem):
+        """The first lot aboard that carries a date, or None."""
+        for lot in cls._deployed_lots(item):
+            if lot.expiration_date:
+                return lot
+        return None
+
+    @classmethod
     def _soonest_expiration(cls, item: CheckTemplateItem):
         """The earliest date aboard — the one that actually puts a truck out.
 
@@ -1806,10 +1887,26 @@ class EquipmentCheckService:
         lots recorded, which is every position a department has not yet
         restocked through the lot flow.
         """
-        for lot in cls._deployed_lots(item):
-            if lot.expiration_date:
-                return lot.expiration_date
+        lot = cls._soonest_dated_lot(item)
+        if lot is not None:
+            return lot.expiration_date
         return item.expiration_date if item.has_expiration else None
+
+    @classmethod
+    def _soonest_lot_number(cls, item: CheckTemplateItem) -> Optional[str]:
+        """The lot number belonging to the date this position reports.
+
+        ``item.lot_number`` is the scalar left over from the last swap, and on
+        a position carrying more than one lot it names a *different* lot from
+        the one ``_soonest_expiration`` reports. Rendered side by side that
+        reads as a single fact — "lot NLX-2411 expires 9/4" — about a lot that
+        expires six months later. The number has to come from the same row as
+        the date or it should not be shown at all.
+        """
+        lot = cls._soonest_dated_lot(item)
+        if lot is not None:
+            return lot.lot_number
+        return item.lot_number
 
     @classmethod
     def _on_truck(cls, item: CheckTemplateItem) -> Optional[int]:
@@ -2327,7 +2424,7 @@ class EquipmentCheckService:
                     # vehicle has no apparatus_id to name; say which type so the
                     # row is still actionable.
                     "apparatus_type": tmpl.apparatus_type,
-                    "lot_number": item.lot_number,
+                    "lot_number": self._soonest_lot_number(item),
                     "serial_number": item.serial_number,
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,

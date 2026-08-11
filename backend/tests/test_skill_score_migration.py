@@ -39,6 +39,22 @@ def _load_migration():
     return module
 
 
+def test_preserves_the_previously_released_revision_in_the_graph():
+    """Databases stamped before the migration rename remain upgradeable."""
+    module = _load_migration()
+    compatibility_path = _VERSIONS / "20260809_0002_preserve_released_revision.py"
+    spec = importlib.util.spec_from_file_location(
+        "released_score_pass_fail_revision", compatibility_path
+    )
+    compatibility = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(compatibility)
+
+    assert compatibility.revision == "20260809_0002"
+    assert compatibility.down_revision == "20260809_0001"
+    assert "20260809_0002" in module.down_revision
+    assert "20260810_0001" in module.down_revision
+
+
 def _skill_templates(metadata: sa.MetaData) -> sa.Table:
     """The subset of the real table the migration touches."""
     return sa.Table(

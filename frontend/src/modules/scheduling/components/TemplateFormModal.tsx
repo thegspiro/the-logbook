@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import { enumLabel } from '../../../utils/displayValue';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { X, Truck, Users, Plus, Minus, Copy, PartyPopper } from 'lucide-react';
 import type { ApparatusOption } from '../services/api';
@@ -332,7 +333,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                     : apparatusOptions.map((o) => (
                         <option key={o.id} value={o.id}>
                           {o.unit_number ? `${o.unit_number} — ${o.name}` : o.name}
-                          {o.apparatus_type ? ` (${o.apparatus_type})` : ''}
+                          {o.apparatus_type ? ` (${enumLabel(o.apparatus_type)})` : ''}
                         </option>
                       ))}
                 </select>
