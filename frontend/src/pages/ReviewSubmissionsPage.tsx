@@ -26,7 +26,7 @@ import { trainingSubmissionService, trainingService, trainingProgramService } fr
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
-import { SubmissionStatus } from '../constants/enums';
+import { SubmissionStatus, TRAINING_TYPE_LABELS } from '../constants/enums';
 import { EmptyState } from '../components/ux';
 import type {
   TrainingSubmission,
@@ -64,15 +64,6 @@ const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; ic
     color: 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
     icon: RotateCcw,
   },
-};
-
-const TRAINING_TYPE_LABELS: Record<TrainingType, string> = {
-  certification: 'Certification',
-  continuing_education: 'Continuing Education',
-  skills_practice: 'Skills Practice',
-  orientation: 'Orientation',
-  refresher: 'Refresher',
-  specialty: 'Specialty',
 };
 
 const StatusBadge: React.FC<{ status: SubmissionStatus }> = ({ status }) => {

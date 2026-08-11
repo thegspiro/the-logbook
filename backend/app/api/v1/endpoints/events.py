@@ -147,6 +147,15 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         check_in_minutes_before=event.check_in_minutes_before,
         check_in_minutes_after=event.check_in_minutes_after,
         require_checkout=event.require_checkout,
+        # Both guest flags have to be listed explicitly. This builder names
+        # every field rather than validating from the ORM object, so a field it
+        # forgets falls back to the schema default — and for these two that
+        # default is False, which is a plausible value rather than an error.
+        # The read reported guest check-in as off however it was stored, and
+        # because the edit form loads from here, opening that form and saving
+        # anything wrote the false back and switched the feature off.
+        allow_guest_check_in=event.allow_guest_check_in,
+        guest_check_in_creates_prospect=event.guest_check_in_creates_prospect,
         custom_fields=event.custom_fields,
         attachments=event.attachments,
         is_recurring=event.is_recurring or False,
@@ -157,6 +166,8 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         recurrence_week_ordinal=event.recurrence_week_ordinal,
         recurrence_month=event.recurrence_month,
         recurrence_parent_id=event.recurrence_parent_id,
+        recurrence_exceptions=event.recurrence_exceptions,
+        rolling_recurrence=event.rolling_recurrence or False,
         template_id=event.template_id,
         is_draft=event.is_draft or False,
         is_cancelled=event.is_cancelled,

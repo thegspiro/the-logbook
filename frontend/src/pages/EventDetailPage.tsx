@@ -46,6 +46,39 @@ import EventEndConfirmModal from '../components/event-detail/EventEndConfirmModa
 import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfirmModal';
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 
+/**
+ * `custom_fields` keys that are not custom fields.
+ *
+ * Two kinds of bookkeeping share the column with what a coordinator typed:
+ * the training block above renders its own keys, and the scheduled tasks use
+ * it to remember what they have already sent. Neither belongs in the "Event
+ * Details" list, which is otherwise a faithful dump of the column — a member
+ * opening an event saw "Validation Notification Sent: true" beside the
+ * description.
+ */
+const HIDDEN_CUSTOM_FIELD_KEYS = new Set([
+  // Rendered by the training-specific block above.
+  'course_name',
+  'course_code',
+  'credit_hours',
+  'training_type',
+  'instructor',
+  'issuing_agency',
+  'certification_name',
+  'certification_expiry_months',
+  'issues_certification',
+  'auto_create_records',
+  'expiration_months',
+  // Written by the scheduler to avoid re-sending; internal bookkeeping.
+  'reminders_sent',
+  'validation_notification_sent',
+  'series_end_reminder_sent',
+]);
+
+/** True when the column holds anything the Event Details card would draw. */
+const hasVisibleCustomFields = (fields: Record<string, unknown>): boolean =>
+  Object.keys(fields).some((key) => !HIDDEN_CUSTOM_FIELD_KEYS.has(key));
+
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -1037,8 +1070,12 @@ export const EventDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Custom Fields / Training Session Details */}
-            {event.custom_fields && Object.keys(event.custom_fields).length > 0 && (
+            {/* Custom Fields / Training Session Details.
+                Gated on there being something *visible* to show. Keying it on
+                the column being non-empty drew an empty purple card for any
+                event the scheduler had touched, since its bookkeeping keys
+                count towards the length but never render. */}
+            {event.custom_fields && hasVisibleCustomFields(event.custom_fields) && (
               <div className="bg-theme-surface rounded-lg border-l-4 border-purple-600 p-6 shadow-sm backdrop-blur-xs">
                 <div className="mb-4 flex items-center">
                   <svg
@@ -1170,22 +1207,7 @@ export const EventDetailPage: React.FC = () => {
 
                   {/* Generic custom fields (excludes training-specific keys) */}
                   {Object.entries(event.custom_fields)
-                    .filter(
-                      ([key]) =>
-                        ![
-                          'course_name',
-                          'course_code',
-                          'credit_hours',
-                          'training_type',
-                          'instructor',
-                          'issuing_agency',
-                          'certification_name',
-                          'certification_expiry_months',
-                          'issues_certification',
-                          'auto_create_records',
-                          'expiration_months',
-                        ].includes(key)
-                    )
+                    .filter(([key]) => !HIDDEN_CUSTOM_FIELD_KEYS.has(key))
                     .map(([key, value]) => (
                       <div key={key}>
                         <p className="text-theme-text-secondary text-sm font-medium">

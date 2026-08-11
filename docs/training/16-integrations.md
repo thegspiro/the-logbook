@@ -86,7 +86,7 @@ The integrations page shows:
 4. Click **Test Connection** to verify credentials
 5. Save to activate
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of an integration connection dialog (e.g., Slack) showing the webhook URL field, test connection button, and save button._
+![Slack connect dialog with its webhook URL field](./images/16-02-slack-connect.png)
 
 ---
 
@@ -173,7 +173,7 @@ Add this URL as a webhook in Documenso and have it send the secret in the `X-Doc
 
 Once Documenso is connected, a **Document Upload** pipeline stage gains a **Collection Method** option — switch it from *Upload* to *Documenso e-signature*. Applicants then see a "Documents sent for signature" note on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Documenso connect dialog showing the API Token, API Base URL, and Webhook Secret fields with the generated callback URL displayed below the secret field._
+![Documenso connect dialog with its API token and webhook fields](./images/16-04-documenso-connect.png)
 
 ---
 
@@ -280,7 +280,7 @@ The matcher reads whatever reference the payer or the department attached:
 - **Apply to order** — settles the order. For an unmatched payment, enter the order to credit first. This writes through the normal payment path, so the order timeline, the member's receipt email, and the window rollups all behave as if it had been marked paid by hand.
 - **Dismiss** — for payments that aren't store orders at all (a donation, a dues payment, a refund). An applied payment cannot be dismissed.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the PayPal connect dialog showing the Environment dropdown, Client ID/Secret fields, Webhook ID field with the generated callback URL below it, and the "Settle orders automatically" checkbox._
+![PayPal connect dialog with environment and credential fields](./images/16-06-paypal-connect.png)
 
 For the full store walkthrough, see [Department Store](./18-storefront.md).
 

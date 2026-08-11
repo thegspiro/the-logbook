@@ -65,8 +65,13 @@ import type {
   ItemTrendResponse,
   TemplateChangeLogResponse,
   SupplyOverview,
+  ApparatusInventory,
+  ItemDeployedLots,
+  ItemDeployment,
+  ItemRestockState,
   LotSwapResult,
 } from '../types/equipmentCheck';
+import { blankToNull } from '@/utils/formValues';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -777,9 +782,61 @@ export const schedulingService = {
     });
     return response.data;
   },
-  async swapItemLot(templateItemId: string, inventoryLotId: string): Promise<LotSwapResult> {
+  async getApparatusInventory(apparatusId: string): Promise<ApparatusInventory> {
+    const response = await api.get<ApparatusInventory>(`/equipment-checks/apparatus/${apparatusId}/inventory`);
+    return response.data;
+  },
+  async reportItemUsed(templateItemId: string, note?: string, quantityUsed?: number): Promise<ItemRestockState> {
+    const response = await api.post<ItemRestockState>(`/equipment-checks/items/${templateItemId}/used`, {
+      // Create payload: a blank note is omitted rather than sent as "".
+      note: note?.trim() || undefined,
+      quantity_used: quantityUsed || undefined,
+    });
+    return response.data;
+  },
+  async getItemDeployedLots(templateItemId: string): Promise<ItemDeployedLots> {
+    const response = await api.get<ItemDeployedLots>(`/equipment-checks/items/${templateItemId}/deployed-lots`);
+    return response.data;
+  },
+  /**
+   * Correct one lot aboard — count, lot number and date together.
+   *
+   * Update payload: `lotNumber` / `expirationDate` are omitted when not being
+   * changed and sent as an explicit null to clear, so a corrected box cannot
+   * silently keep the old expiration.
+   */
+  async updateDeployedLot(
+    templateItemId: string,
+    deployedLotId: string,
+    changes: { quantity: number; lotNumber?: string | null; expirationDate?: string | null }
+  ): Promise<ItemDeployedLots> {
+    const body: Record<string, unknown> = { quantity: changes.quantity };
+    if (changes.lotNumber !== undefined) body.lot_number = blankToNull(changes.lotNumber);
+    if (changes.expirationDate !== undefined) body.expiration_date = blankToNull(changes.expirationDate);
+    const response = await api.put<ItemDeployedLots>(
+      `/equipment-checks/items/${templateItemId}/deployed-lots/${deployedLotId}`,
+      body
+    );
+    return response.data;
+  },
+  async setItemQuantity(templateItemId: string, quantity: number): Promise<ItemRestockState> {
+    const response = await api.put<ItemRestockState>(`/equipment-checks/items/${templateItemId}/quantity`, {
+      quantity,
+    });
+    return response.data;
+  },
+  async clearItemRestock(templateItemId: string): Promise<ItemRestockState> {
+    const response = await api.delete<ItemRestockState>(`/equipment-checks/items/${templateItemId}/used`);
+    return response.data;
+  },
+  async getItemDeployments(inventoryItemId: string): Promise<ItemDeployment[]> {
+    const response = await api.get<ItemDeployment[]>(`/equipment-checks/supply/item-deployments/${inventoryItemId}`);
+    return response.data;
+  },
+  async swapItemLot(templateItemId: string, inventoryLotId: string, quantity = 1): Promise<LotSwapResult> {
     const response = await api.post<LotSwapResult>(`/equipment-checks/items/${templateItemId}/swap`, {
       inventory_lot_id: inventoryLotId,
+      quantity,
     });
     return response.data;
   },

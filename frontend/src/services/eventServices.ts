@@ -760,10 +760,23 @@ export interface InventoryItem {
   quantity_issued: number;
   unit_of_measure?: string;
   reorder_point?: number;
+  /**
+   * Ready units across the item's in-date stock lots.
+   *
+   * Lots and `quantity` are separate ledgers — receiving a lot does not touch
+   * `quantity`, and an equipment-check swap decrements only the lot — so for a
+   * consumable kept as dated stock this is the real count and `quantity` is
+   * whatever it was last set to. Null when the item has no lots.
+   */
+  lot_stock?: number | null;
+  /** True when the item is stocked as lots, so `lot_stock` is the count to show. */
+  is_lot_stocked?: boolean;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;
   assigned_to_user_id?: string;
+  /** Only the item detail endpoint sends this; list endpoints leave it unset. */
+  assigned_to_name?: string;
   assigned_date?: string;
   min_rank_order?: number | null;
   restricted_to_positions?: string[] | null;
@@ -794,6 +807,7 @@ export interface MaintenanceRecord {
   completed_date?: string;
   next_due_date?: string;
   performed_by?: string;
+  performed_by_name?: string;
   vendor_name?: string;
   cost?: number;
   condition_before?: string;
@@ -980,7 +994,9 @@ export interface EquipmentKit {
   created_at: string;
   updated_at: string;
   created_by?: string;
+  /** Only on the detail response; the list omits them and sends item_count. */
   line_items?: EquipmentKitItem[];
+  item_count?: number;
 }
 
 export interface EquipmentKitItem {
@@ -1568,6 +1584,11 @@ export interface InventoryLotCreate {
   quantity: number;
   received_date?: string | undefined;
   notes?: string | undefined;
+}
+
+/** One line of a received delivery: which item, and the lot it arrived as. */
+export interface InventoryLotBulkEntry extends InventoryLotCreate {
+  inventory_item_id: string;
 }
 
 export interface InventoryLotUpdate {

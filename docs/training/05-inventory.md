@@ -175,8 +175,7 @@ Equipment kits bundle multiple inventory items into a named package for streamli
 5. Confirm the issuance.
 6. Each component item is individually assigned/issued to the member with its own tracking record.
 
-> **Screenshot needed:**
-> _[Screenshot of the Equipment Kit detail view showing the kit name, description, a table of component items with name, category, and quantity columns, and the "Issue Kit to Member" button. Show a member's size preferences being applied to a coat variant selection]_
+![Equipment kit detail listing its component items](./images/05-50-equipment-kit-detail.png)
 
 > **Hint:** Issuing a kit creates individual assignment/issuance records for each component. Returning kit components is done individually — there is no "return entire kit" operation, since components may be returned at different times or in different conditions.
 
@@ -213,8 +212,7 @@ Members can record their preferred uniform and PPE sizes, making equipment order
 
 > **Privacy note:** Size preferences are body-measurement data. The size-preference endpoints (`/inventory/my/`, `/inventory/members/`) are excluded from client-side caching and are gated by permission (`inventory.view` to read another member's, `inventory.manage` to edit).
 
-> **Screenshot needed:**
-> _[Screenshot of the Size Preferences modal titled "Sizes — Jane Doe" showing the two-column grid of fields: Shirt Size (dropdown) and Shirt Style (dropdown) on top, Pant Waist and Pant Inseam text inputs, Jacket Size and Glove Size dropdowns, Boot Size dropdown and Boot Width text input, Hat Size text input, and the "Save Sizes" button]_
+![Size preferences modal for one member](./images/05-46-size-preferences.png)
 
 ---
 
@@ -228,30 +226,43 @@ When creating a new uniform or PPE item that comes in multiple sizes and styles,
 
 1. Navigate to **Inventory Admin > Items** and click **Add Item**
 2. Fill in the base item details (name, category, description)
-3. Toggle **Generate Sizes & Styles** to enable variant generation
+3. Switch on **Generate Sizes & Styles**. The switch appears only on a _new_
+   item whose category is a uniform, PPE, tool or equipment type — it is
+   hidden while editing an existing item, and disappears if you change the
+   category to one that does not support variants
+4. Pick **Sizes** from the chips. Eleven are offered: XXS, XS, S, M, L, XL,
+   XXL, 3XL, 4XL, One Size and Custom. At least one is required
+5. Optionally pick **Styles**. Ten are offered: Short Sleeve, Long Sleeve,
+   Men's, Women's, Unisex, V-Neck, Crew Neck, Polo, Button Down and Quarter Zip
+6. Optionally enter **Colors** as a comma-separated list (e.g. "Navy, White")
+7. Read the preview panel, which shows the total and how it was reached —
+   "16 items will be created / 4 sizes × 2 styles × 2 colors". The submit
+   button counts along with it and reads **Create 16 Items**
+8. Set **Starting Quantity** under _Quantity Per Variant_ — it applies to each
+   generated item, not to the batch — then submit. The system creates every
+   combination as a pool item and groups them under a new `ItemVariantGroup`
 
-> **Screenshot needed:**
-> _[Screenshot of the ItemFormModal showing the "Generate Sizes & Styles" toggle enabled, with chip-based multi-select fields for Sizes (showing XS, S, M, L, XL, 2XL chips) and Styles (showing Regular, Long, Short chips), a colors text input with "Black, Navy" entered, and a live preview badge showing "12 items will be created"]_
+> **Corrected 2026-08-10.** The size chips were listed as "XS, S, M, L, XL,
+> 2XL" (the label is **XXL**, and five more sizes exist), and the styles as
+> "Regular, Long, Short" — three cuts that have never been in the list. The
+> real styles are garment cuts, which is why the example below is a uniform
+> shirt rather than a turnout coat.
 
-4. Select **sizes** from the chip-based multi-select (e.g., S, M, L, XL, 2XL)
-5. Select **styles** from the chip-based multi-select (e.g., Regular, Long, Short)
-6. Enter **colors** as a comma-separated list (e.g., "Black, Navy, Red")
-7. Review the live preview showing the total count: `sizes × colors × styles`
-8. Click **Create** — the system generates all combinations as individual pool items grouped under a new `ItemVariantGroup`
+![The Generate Sizes & Styles block with sizes and styles picked and the resulting item count](./images/05-62-generate-variants.png)
 
 ### Example
 
-For a turnout coat with:
+For a uniform polo shirt with:
 
 - 4 sizes: S, M, L, XL
-- 2 styles: Regular, Long
-- 2 colors: Black, Tan
+- 2 styles: Short Sleeve, Long Sleeve
+- 2 colors: Navy, White
 
 The system creates `4 × 2 × 2 = 16` pool items:
 
-- Turnout Coat - S / Regular / Black
-- Turnout Coat - S / Regular / Tan
-- Turnout Coat - S / Long / Black
+- Uniform Polo Shirt - S / Short Sleeve / Navy
+- Uniform Polo Shirt - S / Short Sleeve / White
+- Uniform Polo Shirt - S / Long Sleeve / Navy
 - ... (16 total)
 
 All 16 items are linked under a single variant group and share the base description and category.
@@ -415,11 +426,28 @@ Items can be permanently assigned to members. Assigned items appear on the membe
 
 **Required Permission:** `inventory.manage`
 
+There are two ways in, and which one you want depends on whether you are
+starting from the item or from the person.
+
+**From the item** — one item, one member:
+
 1. Open the item detail view.
-2. Click **Assign to Member**.
-3. Select the member from the dropdown.
-4. Set the assignment date and any notes.
-5. Save.
+2. In the **Assignment** card, click **Assign Item**. (It appears only on
+   individually-tracked items that are not already assigned; an assigned one
+   offers **Unassign** instead.)
+3. Search for the member and pick them. The assignment is written immediately —
+   the date is stamped for you, and there is no notes or condition field on this
+   path.
+
+**From the member** — kitting somebody out, several items at once:
+
+1. Go to **Inventory Admin > Members Equipment**.
+2. Click **Assign** on their row.
+3. Scan each item, or type a name, barcode, serial or asset tag and press
+   **Enter**. Items stack up in a list with a quantity each, and anything added
+   twice is refused with a notice rather than counted twice.
+4. Click **Assign _n_ Items**. Each item is applied independently, so one
+   failure does not lose the rest — the result list says what happened to each.
 
 ### Viewing Your Assignments
 
@@ -428,8 +456,7 @@ Your assigned items appear in two places:
 - **Your Member Profile** - Under the "Assigned Inventory" section
 - **Inventory > Items** - Items assigned to you are marked with your name
 
-> **Screenshot placeholder:**
-> _[Screenshot of the item assignment form showing the member selector dropdown, assignment date, condition selector, notes field, and save button]_
+![Assigning items to a member by scanning or searching, with two items staged](./images/05-57-assign-scan-modal.png)
 
 ---
 
@@ -465,24 +492,30 @@ For items that are temporarily loaned (not permanently assigned), use the checko
 
 For events or training sessions where multiple items need to be processed at once, use batch operations.
 
+Both batch screens start from a **member**, not from a list of items — you pick
+the person on **Inventory Admin > Members Equipment** and the screen then works
+on their gear. There is no separate "Batch Checkout" or "Batch Return" entry in
+the admin menu.
+
 ### Batch Checkout
 
-1. Navigate to **Inventory Admin**.
-2. Use **Batch Checkout** to select multiple items and a single borrower.
-3. Set the expected return date.
-4. Confirm all items at once.
+1. Go to **Inventory Admin > Members Equipment**.
+2. Click **Assign** on the member's row.
+3. Scan each item, or type a name, barcode, serial or asset tag and press
+   **Enter**. Each addition appears in a staged list with its own quantity.
+4. Click **Assign _n_ Items**.
 
 Each item is processed individually — if one item fails (e.g., already checked out), the others still succeed. The results screen shows per-item success/failure status.
 
 ### Batch Return
 
-1. Navigate to **Inventory Admin**.
-2. Use **Batch Return** to process multiple returns at once.
+1. Go to **Inventory Admin > Members Equipment**.
+2. Click **Return** on the member's row. Everything they hold is listed and
+   selected, with **Select All** / **Deselect All** above it.
 3. For each item, set the return condition (excellent, good, fair, poor, damaged).
 4. Invalid conditions are rejected — the system does not silently fall back to a default.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the batch checkout interface with multiple item checkboxes, a member selector, and per-item status results]_
+![Returning several items at once, each with its own condition](./images/05-58-return-items-modal.png)
 
 > **Hint:** Batch operations validate each item independently. If an item is assigned to a different user than expected (e.g., due to a concurrent change), that item's return will fail with a clear error message while the rest succeed.
 
@@ -490,19 +523,23 @@ Each item is processed individually — if one item fails (e.g., already checked
 
 ## Barcode and QR Scanning
 
-Items can be looked up by scanning their barcode or QR code:
+Scanning is **inside the assign and return flows**, not a lookup screen of its
+own. You choose the person and what you are doing first, then scan; there is no
+"scan an item and pick an action afterwards" step.
 
-1. Navigate to **Inventory**.
-2. Click the **Scan** button.
-3. Use your device's camera to scan the barcode or QR code.
-4. The system looks up the item and displays its details.
+1. Go to **Inventory Admin > Members Equipment** (or **Assign Items** from the
+   items list, which asks who first).
+2. Click **Assign** or **Return** on the member's row.
+3. Click **Start Camera** and hold the barcode or QR code up to it. Each
+   successful read adds the item to the staged list.
+4. Repeat for every item, then confirm the whole batch.
 
-From the scan result, you can check out, return, or view the item's full details. If a code matches multiple items (e.g., the same serial number in different categories), all matches are displayed.
+If a code matches multiple items (e.g., the same serial number in different categories), all matches are displayed.
 
 > **Screenshot placeholder:**
-> _[Screenshot of the barcode scan interface showing the camera viewfinder and a recently scanned item result with quick action buttons (Check Out, Return, View Details)]_
+> _[Screenshot of the scan modal with the camera running and an item just read into the staged list]_
 
-> **Hint:** Barcode scanning works best with a device that has a camera. On desktop, you can use a USB barcode scanner, which types the code into the search field. If scanning fails, check that the barcode is clean and well-lit; a specific error message will indicate whether the item was not found or a network error occurred.
+> **Hint:** Barcode scanning works best with a device that has a camera. On desktop, you can use a USB barcode scanner, which types the code into the search field — as does typing a name, serial or asset tag by hand, which is the same path. If scanning fails, check that the barcode is clean and well-lit; a specific error message will indicate whether the item was not found or a network error occurred.
 
 ---
 
@@ -528,8 +565,7 @@ Generate barcode labels for inventory items to attach to equipment.
 
 Labels include a Code128 barcode (with the required quiet-zone margins), the item name, and the asset tag or serial number.
 
-> **Screenshot needed:**
-> _[Screenshot of the barcode print page Settings panel showing the Label Size grid with the eight presets plus a highlighted "Custom size" card, the Width/Height (in) inputs revealed below it, the Copies field, the Additional Info chips (Location/Category/Condition), and the PDF / Print Labels buttons]_
+![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
 ### Connecting a Sticker / Label Printer
 
@@ -537,15 +573,24 @@ Both paths produce **actual-size** barcodes — the key to making them scannable
 
 1. Install your label printer's driver and load the label stock.
 2. Pick the matching preset, or choose **Custom size** and enter the label's real dimensions. **Your choice is remembered per position and per module** — it's saved to your highest-priority position (role) and scoped to the area of the app you're printing from, so whoever fills that role gets the same printer on any computer. Different teams that use different printers each keep their own (e.g., the Quartermaster keeps a Rollo for inventory, the apparatus team keeps a different printer, the outreach team another). The choice is also cached locally so it loads instantly.
-3. Click **Print Test Label** (thermal presets) to download a single-label PDF and confirm alignment and orientation before printing the whole batch.
+3. Click **Download Test Label** to get a single-label PDF and confirm alignment and orientation before printing the whole batch.
 4. When printing, select the label printer, set **Scale** to **100%** (disable "Fit to page" / "Shrink to fit"), set margins to **None**, and set the paper/media size to the label stock.
 
 > **Rollo and other roll-fed printers:** Two Rollo presets are built in — **Rollo 4" × 6"** (portrait shipping labels) and **Rollo / Thermal 2" × 1"** (small asset labels) — and any other Rollo roll works via **Custom size**. The **PDF** path is recommended: it generates each label at the exact size, pre-rotated for the printer's feed direction.
 
 > **Auto-rotate (roll-fed printers):** Rollo, Brother, and generic thermal printers feed labels narrow-edge first. For landscape labels, leave **Auto-rotate for roll-fed** on so the PDF content is pre-rotated and reads correctly. Dymo drivers rotate on their own, so their presets default to auto-rotate **off**.
 
-> **Screenshot needed:**
-> _[Screenshot of the thermal-label settings showing the "Print Test Label" button, the "Auto-rotate for roll-fed" toggle, the feed-direction diagram (portrait vs landscape page), and the blue "Set scaling to 100%" guidance banner]_
+**Settings** at the top right opens the panel these steps refer to. **Label
+Size** is a grid of nine clickable cards — four Dymo sizes, two Rollo, a 1"
+square thermal tag, Letter Paper (Grid) for Avery 5160 sheets, and **Custom
+size** — not a dropdown. Below them sit copies per item, the extra details to
+print under the barcode, and the orientation block.
+
+> **Corrected 2026-08-10.** The button is **Download Test Label**, not "Print
+> Test Label"; it produces a single-label PDF rather than sending anything to
+> a printer.
+
+![The label settings panel — size presets, auto-rotate, and the test-label download](./images/05-64-label-settings.png)
 
 ---
 
@@ -565,8 +610,7 @@ Navigate to **Inventory Admin** and check the **Maintenance Due** section for it
 4. Enter the maintenance type, date, description, and cost.
 5. Save.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the maintenance section on an item detail page, showing past maintenance records in a timeline and the "Add Maintenance Record" form with type dropdown, date, description, and cost fields]_
+![Item inspections tab listing its service history](./images/05-52-item-maintenance.png)
 
 ---
 
@@ -849,14 +893,20 @@ Navigate to **Inventory Admin > Variant Groups** (`/inventory/admin/variant-grou
 
 ### Creating a Variant Group
 
-1. Click **Create Group**.
-2. Enter the group name, description, and category.
+1. Click **Add Group**. The **Add Variant Group** dialog opens.
+2. Enter the group **Name** (the only required field), an optional
+   **Description**, and pick a **Category**.
 3. Set pricing: **Base Price** and **Replacement Cost**.
-4. Select the **Unit of Measure** (each, pair, set, etc.).
-5. Click **Save**.
+4. Type the **Unit of Measure** — it is a free-text field, not a list, so
+   "each", "pair", "set" or anything else your department uses is accepted.
+5. Click **Create Group**. (Opening an existing group shows the same dialog
+   with **Update Group** instead.)
 
-> **Screenshot needed:**
-> _[Screenshot of the Variant Group create/edit modal showing a group named "Structural Coat" with base price $895.00, replacement cost $1,200.00, category "PPE", and unit of measure "each"]_
+> **Corrected 2026-08-10.** The entry button is **Add Group**, not "Create
+> Group" — that is the submit button inside the dialog — the unit of measure
+> is typed rather than selected, and there is no "Save".
+
+![The variant group form with its name, category, pricing and unit-of-measure fields](./images/05-63-variant-group-modal.png)
 
 ### Managing Variant Groups
 
@@ -1243,19 +1293,20 @@ The inventory admin dashboard has been redesigned with **grouped card sections**
 
 ### New Layout
 
-The admin hub now organizes pages into logical groups:
+The hub opens with a low-stock banner (when anything is under its threshold),
+three headline cards — **Items**, **Members** and **Checkouts**, each carrying
+its own figure — and then the rest of the pages in three groups:
 
-| Group                     | Pages                                                                     |
-| ------------------------- | ------------------------------------------------------------------------- |
-| **Items & Stock**         | Manage Items, Pool Items, Categories, Variant Groups                      |
-| **Equipment Kits**        | Equipment Kits management                                                 |
-| **Member Equipment**      | Members Inventory, Active Checkouts                                       |
-| **Requests & Workflows**  | Equipment Requests, Return Requests, Write-Off Requests, Reorder Requests |
-| **Maintenance & Reports** | Maintenance Records, Charges & Fees                                       |
-| **Import & Labels**       | CSV Import, Barcode Label Printing                                        |
+| Group                    | Pages                                                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| **Inventory Management** | Pool Items, Categories, Equipment Kits, Variant Groups, Issuance Allowances, Impact Planner, Maintenance, Storage Areas |
+| **Requests & Workflows** | Equipment Requests, Return Requests, Charges, Write-Offs, Reorder Requests, Expiring on Apparatus                       |
+| **Tools**                | Import / Export, Department Store                                                                                       |
 
-> **Screenshot needed:**
-> _[Screenshot of the redesigned Inventory Admin Hub showing grouped card sections — "Items & Stock" group with Manage Items, Pool Items, Categories, and Variant Groups cards, each with an icon, title, and item count badge]_
+Only the cards with something outstanding carry a count — Reorder Requests
+shows how many are pending, the rest are plain links.
+
+![The inventory admin hub with its cards grouped into sections](./images/05-60-admin-hub-groups.png)
 
 ### New Admin Pages
 
@@ -1328,10 +1379,11 @@ The Storage Areas page now shows the **actual inventory items** assigned to each
 
 ### Barcode and Asset Tag Always Visible
 
-The item detail page now **always shows** barcode and asset tag fields, displaying `--` as a placeholder when no value is set. Previously, these fields were hidden when empty, making it unclear whether the item had been assigned a barcode.
+The item detail page now **always shows** the Barcode and Asset Tag fields — they sit in the **Basic Info** card alongside name, category and status — displaying `--` when no value is set. Previously they were hidden when empty, making it unclear whether the item had been assigned a barcode at all. The same `--` convention runs through the other cards, so an item with no recorded size or colour reads as blank rather than as missing sections.
 
-> **Screenshot needed:**
-> _[Screenshot of an item detail page sidebar showing the barcode field with a Code128 barcode image, the asset tag field showing "AT-2024-001", and below them a second item with barcode showing "--" and asset tag showing "--"]_
+The barcode is printed rather than drawn here: **Print Barcode** in the page header opens the label page. The detail view shows the number, not an image of the code.
+
+![An item's barcode and asset tag on its detail page](./images/05-61-item-barcode-fields.png)
 
 ### Barcode Numbering
 
@@ -1383,8 +1435,7 @@ Storage areas now display the inventory items assigned to each area:
    - Condition indicator
 4. Click on any item to navigate directly to its detail page
 
-> **Screenshot needed:**
-> _[Screenshot of the Storage Areas page with one area expanded showing 3-4 inventory items in an inline panel, each with name, serial number, and status badge. Show the expand/collapse arrow on the area header]_
+![Storage area expanded to show the items stored in it](./images/05-48-storage-area-items.png)
 
 ### Always-Visible Barcode & Asset Tag
 
@@ -1425,7 +1476,7 @@ Inventory items that belong to a variant group now display compact **colored pil
 
 These capsules appear on inventory item cards across all pages: Items List, Item Detail, My Equipment, Pool Items, and Variant Groups. They provide an at-a-glance understanding of which variant an item represents without opening the detail view.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Inventory Items List showing several item cards, with variant items displaying colored capsule badges (e.g., a "Turnout Coat" card showing blue "L" capsule, purple "Navy" capsule, and amber "Regular" capsule)._
+![The inventory items list with size, colour and style capsules on the variant items](./images/05-53-items-variant-capsules.png)
 
 ### Stock Matrix on Variant Groups Page
 
@@ -1437,7 +1488,7 @@ The Variant Groups page now displays a **stock matrix** showing all size × colo
 - Low-stock indicators on individual variants below threshold (dimmed with warning icon)
 - Variants with zero stock are dimmed but remain visible for reorder visibility
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Variant Groups page showing a variant group expanded into the stock matrix view. Show a grid with sizes across the top (S, M, L, XL, 2XL), colors/styles down the left (Navy/Regular, Navy/Long, Black/Regular), and stock quantities in each cell. Highlight one cell with a low-stock warning indicator._
+![Variant group stock matrix of quantities by size and colour](./images/05-49-variant-stock-matrix.png)
 
 ### Size, Color & Style Filters
 
@@ -1451,15 +1502,17 @@ The Items List page now includes three new filter dropdowns for variant-based fi
 
 These filters work alongside existing category, status, condition, and location filters. Selecting a size filter, for example, shows only items with that size variant attribute — useful for quickly finding all "XL" items across all categories.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Items List filter bar showing the three new dropdown filters (Size, Color, Style) alongside the existing Category and Status filters. Show the Size dropdown open with options like "S", "M", "L", "XL"._
+![Items list filter bar with the size, colour and style dropdowns](./images/05-47-items-filter-bar.png)
 
 ### Barcode Label Improvements
 
 - **Layout fixes**: Corrected content overflow on Dymo 30334 and Rollo 4×6 label formats. Fixed quiet zone spacing on Code128 barcodes
-- **Content customization**: Before generating labels, you can now choose which fields appear on each label: item name, serial number, asset tag, barcode, category, and location. This lets you create compact labels with only essential info for small thermal printers
+- **Content customization**: The item name, its barcode and its asset tag always print. Under **Additional info on label** you can add up to three more — **Location**, **Category** and **Condition** — as toggles, so a small thermal label can carry only what fits
 - **Print preview**: A live preview shows the label layout before generating the final PDF, so you can verify the content fits your chosen label size
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the InventoryBarcodePrintPage showing the content customization checkboxes (Name, Serial, Asset Tag, Category, Location), the label format dropdown, and a live preview of a barcode label._
+The label size is chosen from a grid of presets rather than a dropdown, and
+**Custom size** at the end of it takes exact dimensions for any sticker printer.
+The page is pictured under [Label printing](#label-printing) above.
 
 ### Edge Cases
 
@@ -1485,9 +1538,9 @@ The Inventory Admin Hub now includes a **quick "Assign to Member" action** for s
 
 This workflow is designed for events like annual PPE distribution where you need to process many members quickly — scan their badge, then scan the items they're receiving.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Inventory Admin Hub showing the "Assign to Member" button in the header, and below it the standard admin navigation cards._
+![The inventory admin hub with Assign to Member in the header above the navigation cards](./images/05-54-admin-hub-assign.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the member picker modal showing the search field and a list of members with name, rank, and station. Show the badge scan icon next to the search field._
+![The member picker opened from Assign to Member, with its search field and roster](./images/05-55-member-picker.png)
 
 ### Edge Cases
 
@@ -1556,7 +1609,7 @@ Inventory barcodes now use a **per-organization sequential scheme** instead of r
 - Barcodes are assigned at **item creation time** (no longer lazily on first read)
 - Migration `20260610_0001` reassigned existing items and seeded each org's counter
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of an inventory item detail page showing the sequential barcode value (e.g., "INV-000042") displayed in the barcode sidebar._
+![An item's Basic Info card, its sequential barcode value beside the asset tag](./images/05-56-item-barcode-value.png)
 
 ### Edge Cases
 
@@ -1623,10 +1676,10 @@ The analysis shows:
   - Shortfall (needing minus on-hand)
   - Unit cost (if available)
   - Estimated cost (shortfall × unit cost)
-- **Total purchase cost estimate**: Sum of all size line costs
+- **Totals**: the count to buy and the estimated cost, shown as two badges beside the panel heading rather than as a footer row
 - **Member list**: Expandable table showing each member's name, rank, station, size, and whether they need the item, need a replacement, or are over their allowance
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the analysis results showing summary cards at the top (e.g., "42 members analyzed, 28 need item, 3 need replacement, 5 missing sizes"), the size breakdown table with shortfall and cost columns, and the total cost estimate at the bottom._
+![Impact planner results with its summary cards, size breakdown and cost estimate](./images/05-59-impact-planner-results.png)
 
 ### Taking Action from the Analysis
 

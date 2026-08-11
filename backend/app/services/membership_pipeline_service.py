@@ -4009,7 +4009,17 @@ class MembershipPipelineService:
         # Build stage timeline — only include public-visible steps
         completed_stages = []
         if prospect.step_progress:
-            for sp in sorted(prospect.step_progress, key=lambda p: p.created_at):
+            # Pipeline position, not created_at. Progress rows for an applicant
+            # who moves several stages in quick succession share a timestamp to
+            # the second, and the DATETIME tie then renders the applicant's own
+            # status page with its stages in an arbitrary order.
+            for sp in sorted(
+                prospect.step_progress,
+                key=lambda p: (
+                    p.step.sort_order if p.step else 0,
+                    p.created_at,
+                ),
+            ):
                 if str(sp.step_id) not in public_step_ids:
                     continue
                 completed_stages.append(

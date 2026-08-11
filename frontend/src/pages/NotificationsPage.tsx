@@ -131,8 +131,18 @@ const NotificationsPage: React.FC = () => {
   const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const initialTab =
-    searchParams.get('tab') === 'inbox' ? ('inbox' as const) : canView ? ('rules' as const) : ('inbox' as const);
+  // All four tabs are addressable, not just the inbox. `?tab=log` used to
+  // fall through to the rules tab, so a link to the Send Log — the one tab
+  // anyone has cause to send somebody — opened the wrong screen.
+  const requestedTab = searchParams.get('tab');
+  const initialTab: 'inbox' | 'rules' | 'templates' | 'log' =
+    requestedTab === 'inbox'
+      ? 'inbox'
+      : canView && (requestedTab === 'rules' || requestedTab === 'templates' || requestedTab === 'log')
+        ? requestedTab
+        : canView
+          ? 'rules'
+          : 'inbox';
   const [activeTab, setActiveTab] = useState<'inbox' | 'rules' | 'templates' | 'log'>(initialTab);
   const [logChannelFilter, setLogChannelFilter] = useState<'all' | 'email' | 'in_app'>('all');
 
@@ -317,12 +327,7 @@ const NotificationsPage: React.FC = () => {
 
   const handleTabChange = (tab: typeof activeTab) => {
     setActiveTab(tab);
-    if (tab === 'inbox') {
-      setSearchParams({ tab: 'inbox' });
-    } else {
-      searchParams.delete('tab');
-      setSearchParams(searchParams);
-    }
+    setSearchParams({ tab });
   };
 
   if (loading && loadingInbox) {

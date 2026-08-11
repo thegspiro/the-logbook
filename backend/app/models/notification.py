@@ -121,6 +121,21 @@ class NotificationRule(Base):
         return f"<NotificationRule(name={self.name}, trigger={self.trigger})>"
 
 
+def _delivered_default(context) -> bool:
+    """An in-app notification is delivered the moment its row exists.
+
+    There is no send step for the in-app channel — the row *is* the delivery,
+    and the member sees it in their inbox immediately. But `delivered`
+    defaulted to False and six of the write sites that create in-app rows
+    never set it, so the Send Log showed a red "Not delivered" against
+    notifications the member had already opened and read. An explicitly passed
+    `delivered=` still wins over this default, which is what email needs.
+    """
+    params = context.get_current_parameters()
+    channel = params.get("channel")
+    return getattr(channel, "value", channel) == NotificationChannel.IN_APP.value
+
+
 class NotificationLog(Base):
     """
     Notification Log model
@@ -164,7 +179,7 @@ class NotificationLog(Base):
 
     # Status
     sent_at = Column(DateTime(timezone=True), server_default=func.now())
-    delivered = Column(Boolean, default=False)
+    delivered = Column(Boolean, default=_delivered_default)
     read = Column(Boolean, default=False)
     read_at = Column(DateTime(timezone=True))
     pinned = Column(Boolean, default=False)

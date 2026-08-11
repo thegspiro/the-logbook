@@ -23,6 +23,15 @@ import { ClipboardList } from 'lucide-react';
  *  is a property of a *completed* test, so it maps to its own query param. */
 const PENDING_FILTER = 'pending_validation';
 
+/** Whether a test can still be scored — the only kind of row that offers a way
+ *  back into the evaluation.
+ *
+ *  Named positively rather than testing `!completed_at`: cancelled and voided
+ *  tests have no completion date either, and treating "no completion date" as
+ *  "still in progress" is what offered a cancelled test "Tap to start" and
+ *  routed it to the scoring screen. */
+const isOpenForScoring = (test: SkillTestListItem): boolean => test.status === 'draft' || test.status === 'in_progress';
+
 // ── Sub-components ─────────────────────────────────────────────
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -97,9 +106,16 @@ const TestCard: React.FC<{
             {test.completed_at ? (
               <p className="text-theme-text-muted text-xs">{formatDate(test.completed_at, tz)}</p>
             ) : (
-              <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                {test.started_at ? 'Tap to resume' : 'Tap to start'}
-              </p>
+              /* Gated on status, not on the absence of completed_at. A
+                 cancelled test has no completion date either, and offering it
+                 "Tap to start" invited the officer back into an evaluation that
+                 is closed — the one row on this screen that is explicitly
+                 read-only. */
+              isOpenForScoring(test) && (
+                <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                  {test.started_at ? 'Tap to resume' : 'Tap to start'}
+                </p>
+              )
             )}
           </div>
           {/* Three different ways a test leaves the active list, and they are
@@ -383,9 +399,9 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               // one the officer is looking at.
               onClick={() =>
                 void navigate(
-                  test.completed_at
-                    ? `/training/skills-testing/test/${test.id}`
-                    : `/training/skills-testing/test/${test.id}/active`
+                  isOpenForScoring(test)
+                    ? `/training/skills-testing/test/${test.id}/active`
+                    : `/training/skills-testing/test/${test.id}`
                 )
               }
               onDelete={() => setDeleteTarget(test)}

@@ -20,6 +20,7 @@ import {
   ArrowUpDown,
   Plus,
   Package,
+  PackagePlus,
   AlertTriangle,
   Wrench,
   ChevronRight,
@@ -42,6 +43,7 @@ import { Modal } from '../../../components/Modal';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import { ItemFormModal } from '../components/ItemFormModal';
+import ReceiveStockModal from '../components/ReceiveStockModal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import type {
@@ -78,6 +80,11 @@ function locLabel(item: InventoryItem, locs: Location[]): string {
 }
 
 function qtyLabel(item: InventoryItem): string {
+  // For an item kept as dated stock lots, the lots are the count. `quantity`
+  // is a separate ledger that lot bookkeeping never writes to, so showing it
+  // here would report a stale number for every consumable the supply officer
+  // manages — the same disagreement the reorder alert had to be taught about.
+  if (item.is_lot_stocked) return String(item.lot_stock ?? 0);
   if (item.tracking_type !== 'pool') return '-';
   const available = item.quantity - item.quantity_issued;
   return `${available} / ${item.quantity}`;
@@ -235,6 +242,14 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   </td>
                   <td data-label="Qty" className="text-theme-text-muted px-3 py-3 text-center tabular-nums">
                     {qtyLabel(item)}
+                    {item.is_lot_stocked && (
+                      <span
+                        className="text-theme-text-muted block text-[10px] leading-tight"
+                        title="Ready units across in-date stock lots. Expired lots are not counted — they cannot be issued or swapped onto an apparatus."
+                      >
+                        in-date lots
+                      </span>
+                    )}
                   </td>
                   <td data-label="Condition" className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>
                     {item.condition.replace(/_/g, ' ')}
@@ -324,6 +339,7 @@ const InventoryItemsPage: React.FC = () => {
   const [skip, setSkip] = useState(0);
   const [selIds, setSelIds] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState('');
@@ -645,6 +661,14 @@ const InventoryItemsPage: React.FC = () => {
               className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
             >
               <UserPlus className="h-4 w-4" /> Assign
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={() => setReceiveOpen(true)}
+              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+            >
+              <PackagePlus className="h-4 w-4" /> Receive Stock
             </button>
           )}
           {canManage && (
@@ -991,6 +1015,8 @@ const InventoryItemsPage: React.FC = () => {
         storageAreas={storageAreas}
         editItem={editItem}
       />
+
+      <ReceiveStockModal isOpen={receiveOpen} onClose={() => setReceiveOpen(false)} onReceived={refresh} />
 
       {/* Quick-assign: pick a member, then assign items to them */}
       <MemberPickerModal

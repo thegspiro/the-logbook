@@ -292,6 +292,10 @@ const PurchaseRequestDetailPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Rendered by the loading and not-found branches above too — without it
+          here the trail showed while the request was fetching and disappeared
+          when it loaded. */}
+      <Breadcrumbs />
       {/* Back link */}
       <Link
         to="/finance/purchase-requests"

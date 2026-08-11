@@ -64,6 +64,9 @@ Recommended crontab (add to host or container cron):
 # Weekly on Mondays at 8:00 AM — NFPA PPE retirement alerts
 0 8 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=nfpa_retirement_alerts
 
+# Weekly on Mondays at 7:15 AM — expiring supplies on apparatus + replacement stock
+15 7 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=supply_expiration_alerts
+
 # Daily at 6:30 AM — compliance auto-report generation (monthly on configured day, yearly on Jan 1)
 30 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_auto_reports
 
@@ -89,7 +92,7 @@ Recommended crontab (add to host or container cron):
 
 import html as _html
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from loguru import logger
 from sqlalchemy import or_, select
@@ -254,6 +257,12 @@ SCHEDULE = {
         "frequency": "weekly",
         "recommended_time": "Monday 08:00",
         "cron": "0 8 * * 1",
+    },
+    "supply_expiration_alerts": {
+        "description": "Send weekly alerts for consumables expiring on apparatus and the replacement lots held for them, flagging which have no in-date stock behind them",
+        "frequency": "weekly",
+        "recommended_time": "Monday 07:15",
+        "cron": "15 7 * * 1",
     },
     "compliance_auto_reports": {
         "description": "Generate and email scheduled compliance reports (monthly on configured day, yearly on Jan 1)",
@@ -3367,15 +3376,22 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             return 0
 
         items_html = ""
-        for item in low_stock:
+        any_from_lots = False
+        for item, on_hand, from_lots in low_stock:
             cat_name = item.category.name if item.category else "Uncategorized"
+            any_from_lots = any_from_lots or from_lots
+            # Name the ledger the figure came from. For a lot-stocked item it
+            # will not match the item's own quantity column, and an unexplained
+            # mismatch reads as a bug rather than as the count that matters.
+            source = "in-date lots" if from_lots else "on hand"
             items_html += (
                 f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
                 f"{_html.escape(item.name)}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
                 f"{_html.escape(cat_name)}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
-                f"<strong style='color:#dc2626;'>{item.quantity}</strong></td>"
+                f"<strong style='color:#dc2626;'>{on_hand}</strong>"
+                f"<br><span style='color:#6b7280;font-size:11px;'>{source}</span></td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
                 f"{item.reorder_point}</td></tr>"
             )
@@ -3398,7 +3414,15 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             "Low Stock Alert",
             "<p>The following inventory items are at or below their reorder point:</p>"
             f"{table_html}"
-            "<p>Please review and reorder as needed.</p>",
+            + (
+                "<p style='color:#6b7280;font-size:13px;'>Items kept as dated "
+                "stock lots are counted from their in-date lots — expired lots "
+                "cannot be issued or swapped onto an apparatus, so they do not "
+                "count as stock on hand.</p>"
+                if any_from_lots
+                else ""
+            )
+            + "<p>Please review and reorder as needed.</p>",
             header_color="#dc2626",
         )
 
@@ -3648,6 +3672,188 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
         return 0
 
     return await _for_each_org(db, "nfpa_retirement_alerts", process)
+
+
+async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Alert supply officers about expiring supplies. Weekly on Mondays at 07:15.
+
+    Covers both ends of the same shelf-to-truck loop: consumables deployed on
+    apparatus (from the equipment-check templates) and the replacement lots
+    held in inventory. Reporting them together is the point — a deployed item
+    with no in-date lot behind it is a reorder, while one with stock ready is
+    only a swap, and the officer cannot tell those apart from either module on
+    its own.
+
+    Weekly rather than daily: an item that has actually expired already fails
+    its apparatus on every check and notifies through that path, so this alert
+    exists to get ahead of the date, and a daily version of it would be noise.
+    """
+    from datetime import date as _date
+
+    from app.services.email_service import EmailService, wrap_email_body
+    from app.services.equipment_check_service import EquipmentCheckService
+    from app.services.inventory_service import InventoryService
+
+    window_days = 30
+
+    def _cell(content: str, extra: str = "") -> str:
+        return (
+            f"<td style='padding:6px 12px;border-bottom:1px solid #eee;{extra}'>"
+            f"{content}</td>"
+        )
+
+    def _days_label(days: Optional[int], color: str) -> str:
+        if days is None:
+            return "&mdash;"
+        text = "expired" if days < 0 else f"{days}d"
+        return f"<strong style='color:{color};'>{text}</strong>"
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        check_service = EquipmentCheckService(db_session)
+        overview = await check_service.get_supply_overview(str(org.id), window_days)
+        deployed = overview.get("items", [])
+
+        inventory_service = InventoryService(db_session)
+        lot_rows = await inventory_service.get_expiring_lots(str(org.id), window_days)
+
+        if not deployed and not lot_rows:
+            return 0
+
+        today = _date.today()
+
+        # Split by whether a replacement is actually on hand: "swap it" and
+        # "order it" are different jobs, and the officer plans the week around
+        # which one each row is.
+        needs_reorder = [i for i in deployed if i.get("ready_stock", 0) <= 0]
+        swap_ready = [i for i in deployed if i.get("ready_stock", 0) > 0]
+
+        def _deployed_section(title: str, rows: list, color: str, note: str) -> str:
+            if not rows:
+                return ""
+            body = ""
+            for item in rows:
+                days = item.get("days_until_expiration")
+                body += (
+                    "<tr>"
+                    + _cell(_html.escape(str(item.get("item_name") or "Unknown")))
+                    + _cell(_html.escape(str(item.get("apparatus_name") or "&mdash;")))
+                    + _cell(
+                        _html.escape(str(item.get("compartment_name") or "&mdash;"))
+                    )
+                    + _cell(_html.escape(str(item.get("expiration_date") or "&mdash;")))
+                    + _cell(_days_label(days, color), "text-align:center;")
+                    + _cell(
+                        str(item.get("ready_stock", 0)),
+                        "text-align:center;",
+                    )
+                    + "</tr>"
+                )
+            return f"""
+                <h3 style="color:{color};margin-top:16px;">{title} ({len(rows)})</h3>
+                <p style="color:#6b7280;font-size:13px;margin:4px 0;">{note}</p>
+                <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+                    <thead><tr style="background:#f3f4f6;">
+                        <th style="padding:8px 12px;text-align:left;">Item</th>
+                        <th style="padding:8px 12px;text-align:left;">Apparatus</th>
+                        <th style="padding:8px 12px;text-align:left;">Compartment</th>
+                        <th style="padding:8px 12px;text-align:left;">Expires</th>
+                        <th style="padding:8px 12px;text-align:center;">In</th>
+                        <th style="padding:8px 12px;text-align:center;">Ready stock</th>
+                    </tr></thead>
+                    <tbody>{body}</tbody>
+                </table>
+                """
+
+        def _lot_section() -> str:
+            if not lot_rows:
+                return ""
+            body = ""
+            for lot, item_name in lot_rows:
+                days = (
+                    (lot.expiration_date - today).days if lot.expiration_date else None
+                )
+                color = "#dc2626" if days is not None and days < 0 else "#ca8a04"
+                body += (
+                    "<tr>"
+                    + _cell(_html.escape(item_name or "Unknown"))
+                    + _cell(_html.escape(lot.lot_number or "&mdash;"))
+                    + _cell(_html.escape(str(lot.expiration_date or "&mdash;")))
+                    + _cell(_days_label(days, color), "text-align:center;")
+                    + _cell(str(lot.quantity), "text-align:center;")
+                    + "</tr>"
+                )
+            return f"""
+                <h3 style="color:#ca8a04;margin-top:16px;">
+                    Replacement stock on the shelf ({len(lot_rows)})
+                </h3>
+                <p style="color:#6b7280;font-size:13px;margin:4px 0;">
+                    Stock that expires before it can be deployed. A lot past its
+                    date is refused by the swap, so pull it and reorder.
+                </p>
+                <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+                    <thead><tr style="background:#f3f4f6;">
+                        <th style="padding:8px 12px;text-align:left;">Item</th>
+                        <th style="padding:8px 12px;text-align:left;">Lot</th>
+                        <th style="padding:8px 12px;text-align:left;">Expires</th>
+                        <th style="padding:8px 12px;text-align:center;">In</th>
+                        <th style="padding:8px 12px;text-align:center;">Qty</th>
+                    </tr></thead>
+                    <tbody>{body}</tbody>
+                </table>
+                """
+
+        html_body = wrap_email_body(
+            org,
+            "Expiring Supplies",
+            f"<p>Supplies expiring within {window_days} days:</p>"
+            + _deployed_section(
+                "On apparatus — no replacement stock",
+                needs_reorder,
+                "#dc2626",
+                "Nothing in-date on the shelf to swap in. These need ordering.",
+            )
+            + _deployed_section(
+                "On apparatus — replacement ready",
+                swap_ready,
+                "#ea580c",
+                "In-date stock is on hand; swap it in during the next check.",
+            )
+            + _lot_section(),
+            header_color="#dc2626",
+        )
+
+        admin_result = await db_session.execute(
+            select(User)
+            .where(User.organization_id == str(org.id))
+            .where(User.is_active == True)  # noqa: E712
+            .where(User.email.isnot(None))
+        )
+        admin_emails = [
+            u.email
+            for u in admin_result.scalars().all()
+            if u.role in ("admin", "owner", "quartermaster") and u.email
+        ]
+        if not admin_emails:
+            return 0
+
+        email_svc = EmailService(organization=org)
+        success_count, _ = await email_svc.send_email(
+            to_emails=admin_emails,
+            subject=(
+                f"Expiring Supplies — {len(deployed)} on apparatus, "
+                f"{len(lot_rows)} in stock"
+            ),
+            html_body=html_body,
+            text_body=(
+                f"{len(deployed)} item(s) on apparatus and {len(lot_rows)} "
+                f"stock lot(s) expire within {window_days} days. "
+                f"{len(needs_reorder)} have no replacement stock on hand."
+            ),
+        )
+        return 1 if success_count > 0 else 0
+
+    return await _for_each_org(db, "supply_expiration_alerts", process)
 
 
 async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
@@ -4651,6 +4857,7 @@ TASK_RUNNERS = {
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
+    "supply_expiration_alerts": run_supply_expiration_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
     "message_history_cleanup": run_message_history_cleanup,
     "publish_scheduled_messages": run_publish_scheduled_messages,
@@ -4718,6 +4925,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,
     "nfpa_retirement_alerts": 604800,
+    "supply_expiration_alerts": 604800,
     "audit_log_archival": 604800,
     # Every 30 minutes — off-host audit shipping (no-op unless configured)
     "audit_log_ship": 1800,

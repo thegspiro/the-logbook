@@ -59,6 +59,7 @@ import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { schedulingService } from '@/modules/scheduling';
 import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
 import InventoryItemPicker from '@/modules/scheduling/components/InventoryItemPicker';
+import { blankToNull, numberOrNull } from '@/utils/formValues';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -1192,31 +1193,32 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const comp = compartments[compartmentIdx];
     const item = comp?.items[itemIdx];
     if (item?.id) {
+      // Update path: a cleared field must travel as an explicit null. Omitting
+      // it means "leave alone" to the backend's exclude_unset dump, which is
+      // why unlinking an inventory item or wiping an expiration date used to
+      // report success and change nothing. `name` and `expiration_warning_days`
+      // stay `|| undefined` — they are NOT NULL columns with no cleared state.
       const apiPatch: Record<string, unknown> = {};
       if (patch.name !== undefined) apiPatch.name = patch.name || undefined;
-      if (patch.description !== undefined) apiPatch.description = patch.description.trim() || undefined;
+      if (patch.description !== undefined) apiPatch.description = blankToNull(patch.description);
       if (patch.checkType !== undefined) apiPatch.check_type = patch.checkType;
       if (patch.isRequired !== undefined) apiPatch.is_required = patch.isRequired;
-      if (patch.requiredQuantity !== undefined)
-        apiPatch.required_quantity = patch.requiredQuantity ? Number(patch.requiredQuantity) : undefined;
-      if (patch.expectedQuantity !== undefined)
-        apiPatch.expected_quantity = patch.expectedQuantity ? Number(patch.expectedQuantity) : undefined;
+      if (patch.requiredQuantity !== undefined) apiPatch.required_quantity = numberOrNull(patch.requiredQuantity);
+      if (patch.expectedQuantity !== undefined) apiPatch.expected_quantity = numberOrNull(patch.expectedQuantity);
       if (patch.criticalMinimumQuantity !== undefined)
-        apiPatch.critical_minimum_quantity = patch.criticalMinimumQuantity
-          ? Number(patch.criticalMinimumQuantity)
-          : undefined;
-      if (patch.minLevel !== undefined) apiPatch.min_level = patch.minLevel ? Number(patch.minLevel) : undefined;
-      if (patch.levelUnit !== undefined) apiPatch.level_unit = patch.levelUnit.trim() || undefined;
-      if (patch.serialNumber !== undefined) apiPatch.serial_number = patch.serialNumber.trim() || undefined;
-      if (patch.lotNumber !== undefined) apiPatch.lot_number = patch.lotNumber.trim() || undefined;
-      if (patch.inventoryItemId !== undefined) apiPatch.inventory_item_id = patch.inventoryItemId || undefined;
+        apiPatch.critical_minimum_quantity = numberOrNull(patch.criticalMinimumQuantity);
+      if (patch.minLevel !== undefined) apiPatch.min_level = numberOrNull(patch.minLevel);
+      if (patch.levelUnit !== undefined) apiPatch.level_unit = blankToNull(patch.levelUnit);
+      if (patch.serialNumber !== undefined) apiPatch.serial_number = blankToNull(patch.serialNumber);
+      if (patch.lotNumber !== undefined) apiPatch.lot_number = blankToNull(patch.lotNumber);
+      if (patch.inventoryItemId !== undefined) apiPatch.inventory_item_id = blankToNull(patch.inventoryItemId);
       if (patch.hasExpiration !== undefined) apiPatch.has_expiration = patch.hasExpiration;
-      if (patch.expirationDate !== undefined) apiPatch.expiration_date = patch.expirationDate.trim() || undefined;
+      if (patch.expirationDate !== undefined) apiPatch.expiration_date = blankToNull(patch.expirationDate);
       if (patch.expirationWarningDays !== undefined)
         apiPatch.expiration_warning_days = patch.expirationWarningDays
           ? Number(patch.expirationWarningDays)
           : undefined;
-      if (patch.imageUrl !== undefined) apiPatch.image_url = patch.imageUrl.trim() || undefined;
+      if (patch.imageUrl !== undefined) apiPatch.image_url = blankToNull(patch.imageUrl);
 
       if (Object.keys(apiPatch).length > 0) {
         scheduleAutoSaveItem(item.id, apiPatch);
@@ -3607,8 +3609,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       add: 'text-green-600',
                       update: 'text-blue-600',
                       delete: 'text-red-600',
+                      swap: 'text-violet-600',
                     };
-                    const actionLabels: Record<string, string> = { add: 'Added', update: 'Updated', delete: 'Removed' };
+                    const actionLabels: Record<string, string> = {
+                      add: 'Added',
+                      update: 'Updated',
+                      delete: 'Removed',
+                      // A swap is logged by the check screen, not typed here —
+                      // labelling it "Updated" would hide where it came from.
+                      swap: 'Swapped fresh stock onto',
+                    };
                     return (
                       <div key={entry.id} className="border-theme-surface-border rounded-md border p-3">
                         <div className="flex items-start justify-between gap-2">

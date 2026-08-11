@@ -2152,6 +2152,12 @@ class CheckTemplateItem(Base):
     required_quantity = Column(Integer, nullable=True)
     expected_quantity = Column(Integer, nullable=True)
     critical_minimum_quantity = Column(Integer, nullable=True)
+    # How many are on the truck right now, as against required/expected, which
+    # say how many *should* be. NULL means nobody has counted since the item
+    # was defined, and the template's expected figure stands in — the record of
+    # what was stocked is the best available answer until a crew contradicts it,
+    # and reading NULL as zero would report every untouched truck as empty.
+    quantity_on_truck = Column(Integer, nullable=True)
     min_level = Column(Float, nullable=True)
     level_unit = Column(String(50), nullable=True)  # psi, %, gallons, etc.
     serial_number = Column(String(100), nullable=True)
@@ -2161,6 +2167,16 @@ class CheckTemplateItem(Base):
     expiration_date = Column(Date, nullable=True)
     expiration_warning_days = Column(Integer, default=30, nullable=False)
 
+    # Raised by whoever used or pulled the unit, at the time they did it, so
+    # the gap is on the record rather than waiting to be discovered by the
+    # next crew's morning check. Cleared by swapping fresh stock in.
+    restock_needed = Column(Boolean, default=False, nullable=False, server_default="0")
+    restock_reported_at = Column(DateTime(timezone=True), nullable=True)
+    restock_reported_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    restock_note = Column(Text, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -2168,11 +2184,21 @@ class CheckTemplateItem(Base):
 
     # Relationships
     compartment = relationship("CheckTemplateCompartment", back_populates="items")
+    # lazy="selectin" rather than a per-query option: this collection is read
+    # by the count, the expiry and every screen that shows either, and a missed
+    # eager-load in an async session is a MissingGreenlet at runtime rather
+    # than a slow query. One extra select per item fetch is the cheaper risk.
+    deployed_lots = relationship(
+        "CheckItemDeployedLot",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     __table_args__ = (
         Index("idx_check_item_compartment", "compartment_id"),
         Index("idx_check_item_equipment", "equipment_id"),
         Index("idx_check_item_inventory", "inventory_item_id"),
+        Index("idx_check_item_restock", "restock_needed"),
     )
 
 
@@ -2218,3 +2244,70 @@ class TemplateChangeLog(Base):
         Index("idx_tmpl_changelog_template", "template_id"),
         Index("idx_tmpl_changelog_created", "created_at"),
     )
+
+
+class CheckItemDeployedLot(Base):
+    """A lot physically on the apparatus for one checklist position.
+
+    A position that carries four of something can be carrying four units from
+    three different lots with three different expiration dates. The single
+    ``lot_number`` / ``expiration_date`` pair on ``CheckTemplateItem`` can only
+    describe one of them, so the truck's real exposure — the *soonest* date
+    aboard — was unrepresentable, and restocking a partial shortfall silently
+    overwrote the date of the units already there.
+
+    Each row is one lot's presence on one position. The position's on-truck
+    count is the sum of these, and the date that matters is the earliest.
+
+    Lot number and expiration are snapshotted rather than read through
+    ``inventory_lot_id``: shelf lots get consumed and deleted, and what is on
+    the truck must remain answerable after the shelf record is gone.
+    """
+
+    __tablename__ = "check_item_deployed_lots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    template_item_id = Column(
+        String(36),
+        ForeignKey("check_template_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # The shelf lot it was drawn from, kept for provenance. Nullable because a
+    # depleted lot may be deleted while its units are still on a truck.
+    inventory_lot_id = Column(
+        String(36),
+        ForeignKey("inventory_lots.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    lot_number = Column(String(100), nullable=True)
+    expiration_date = Column(Date, nullable=True)
+    quantity = Column(Integer, default=0, nullable=False, server_default="0")
+
+    deployed_at = Column(DateTime(timezone=True), server_default=func.now())
+    deployed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        # Serves both the per-item drill-in and the first-expiring-first-out
+        # consumption order.
+        Index("idx_deployed_lot_item_exp", "template_item_id", "expiration_date"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<CheckItemDeployedLot(item={self.template_item_id}, "
+            f"lot={self.lot_number}, qty={self.quantity})>"
+        )

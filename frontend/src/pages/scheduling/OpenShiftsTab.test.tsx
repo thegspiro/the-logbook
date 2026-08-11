@@ -101,4 +101,15 @@ describe('OpenShiftsTab', () => {
     // The date filter label "From:" is always visible
     expect(screen.getByText('From:')).toBeInTheDocument();
   });
+
+  it('gives the date filter an explicit desktop width', () => {
+    // `form-input` is w-full. Pinned with `sm:flex-none` and no width of its
+    // own, that resolved against the whole row rather than the space left
+    // beside the filter icon and the "From:" label — the field overflowed by
+    // exactly their width and painted over the Refresh button. jsdom has no
+    // layout, so the guard is on the declaration that caused it.
+    renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
+    const input = screen.getByLabelText('Filter open shifts from date');
+    expect(input.className).toMatch(/sm:w-\S+/);
+  });
 });

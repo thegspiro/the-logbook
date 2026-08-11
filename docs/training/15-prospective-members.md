@@ -206,7 +206,7 @@ For stages with explicit completion criteria:
 | **Withdraw**   | Applicant archived; typically at applicant's request              |
 | **Reactivate** | Returns a held, withdrawn, or inactive applicant to active status |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the applicant detail drawer showing the action buttons: Advance (green), Move Back (yellow), Hold (gray), Reject (red), and Withdraw (orange)._
+![Applicant drawer action bar with the stage-movement buttons](./images/15-05-applicant-actions.png)
 
 ---
 
@@ -272,16 +272,27 @@ is no change to what you see; the change is to what was being sent behind it.
 
 ## Applicant Detail View
 
-Click an applicant card to open the **detail drawer** with:
+Click an applicant card to open the **detail drawer**. It is a single scrolling
+column of sections rather than a tab strip — everything is on one surface, and
+the sections that do not apply to this applicant are simply absent:
 
-- **Overview**: Name, email, phone, membership type, current stage, time in stage
-- **Activity Log**: Chronological record of all actions (stage changes, emails sent, documents uploaded)
-- **Documents**: Uploaded files with download links
-- **Interviews**: Interview records with recommendations
-- **Events**: Linked events (orientations, ride-alongs)
-- **Election Package**: (if at election vote stage) Package details and ballot status
+- **Contact Information**: Email and phone, editable in place
+- **Desired Membership Type**: Regular or administrative
+- **Application Data**: What they submitted, when there is a linked application
+- **Current Stage**: The stage and when they entered it
+- **Linked Events**: Orientations, ride-alongs and open houses, with **Link Event**
+- **Progress**: The stage rail, "_n_ of _m_ stages completed", and time in pipeline
+- **Checklist Progress**, **Approval Status**, **Reference Checks**,
+  **Medical Screenings**, **Interview Requirement**: shown when the current
+  stage carries that requirement
+- **Election Package**: at the election-vote stage only
+- **Stage History**: Every stage entered, with its date
+- **Notes** and **Activity Log**: the log is collapsed until you open it
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the applicant detail drawer showing the overview tab with applicant info, current stage indicator, days in stage, and the tabbed content area (Activity, Documents, Interviews, Events, Election Package)._
+The action bar pins to the bottom: **Advance**, **Reject**, **Withdraw**,
+**Hold**, **Skip**, and **Interview**.
+
+![Applicant detail drawer on its overview tab, with the stage indicator and tab row](./images/15-14-applicant-drawer-overview.png)
 
 ---
 
@@ -367,7 +378,7 @@ When an applicant advances to an **Election Vote** stage, the system automatical
 | **Elected**         | Membership vote passed                 |
 | **Not Elected**     | Membership vote failed                 |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Election Package section in the applicant detail drawer, showing the package status badge, applicant snapshot fields, supporting statement text area, and "Mark Ready for Ballot" button._
+![Election package section showing the package status for an applicant at the vote](./images/15-08-election-package.png)
 
 See [Elections & Voting > Prospective Member Election Packages](./14-elections.md#prospective-member-election-packages) for the voting workflow.
 
@@ -396,7 +407,7 @@ When an applicant has completed all pipeline stages:
 - The `converted_to_member_id` field links to the new user
 - Activity log records the conversion with timestamp
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Convert to Member modal showing membership type selector, membership ID field, rank dropdown, station dropdown, role checkboxes, and Send Welcome Email toggle._
+![Convert to member modal with membership type, ID and rank fields](./images/15-09-convert-modal.png)
 
 ### Edge Cases
 
@@ -576,7 +587,7 @@ Applicants receive a link to check their application status without logging in:
 - Token is generated when the applicant is created and included in automated emails
 - Token does not rotate on page view (stable link)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the public application status page showing the department name, applicant name, a progress bar with completed stages checked and the current stage highlighted, and a "What's Next" section._
+![Public application status page showing an applicant's progress through the pipeline](./images/15-13-application-status.png)
 
 ---
 

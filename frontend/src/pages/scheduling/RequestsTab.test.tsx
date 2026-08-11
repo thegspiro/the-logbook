@@ -141,4 +141,13 @@ describe('RequestsTab', () => {
       expect(screen.getByRole('combobox')).toBeInTheDocument();
     });
   });
+
+  it('gives the status filter an explicit desktop width', async () => {
+    // Same defect as the Open Shifts date filter: `form-input` is w-full, so
+    // under `sm:flex-none` the control overflowed its row by the width of the
+    // filter icon beside it and spilled past the page's right edge.
+    renderWithRouter(<RequestsTab />);
+    const select = await screen.findByLabelText('Filter requests by status');
+    expect(select.className).toMatch(/sm:w-\S+/);
+  });
 });
