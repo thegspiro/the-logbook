@@ -55,12 +55,12 @@ def _template_item(**kwargs) -> CheckTemplateItem:
 
 
 class TestResolveExpiration:
-    def test_found_date_supersedes_template(self, service):
+    def test_found_date_does_not_supersede_template(self, service):
         item = _template_item()
         resolved = service._resolve_expiration(
             {"template_item_id": "ti-1", "expiration_found": NEXT_YEAR}, item
         )
-        assert resolved == NEXT_YEAR
+        assert resolved == YESTERDAY
 
     def test_template_beats_client_supplied_date(self, service):
         item = _template_item()
@@ -101,7 +101,7 @@ class TestComputeCheckStatus:
         assert items[0]["is_expired"] is True
         assert (total, completed, failed, overall) == (1, 1, 1, "fail")
 
-    def test_replacement_date_clears_the_auto_fail(self, service):
+    def test_replacement_date_cannot_clear_the_auto_fail(self, service):
         items = [
             {
                 "template_item_id": "ti-1",
@@ -112,10 +112,10 @@ class TestComputeCheckStatus:
         _, _, failed, overall = service._compute_check_status(
             items, {"ti-1": _template_item()}
         )
-        assert items[0]["status"] == "pass"
-        assert items[0]["is_expired"] is False
-        assert items[0]["expiration_date"] == NEXT_YEAR
-        assert (failed, overall) == (0, "pass")
+        assert items[0]["status"] == "fail"
+        assert items[0]["is_expired"] is True
+        assert items[0]["expiration_date"] == YESTERDAY
+        assert (failed, overall) == (1, "fail")
 
     def test_item_expiring_today_is_not_yet_expired(self, service):
         items = [{"template_item_id": "ti-1", "status": "pass"}]
@@ -151,21 +151,23 @@ class TestComputeCheckStatus:
 
 
 class TestApplyFoundValuesToTemplate:
-    def test_expiration_written_back_to_template(self, service):
+    def test_expiration_is_not_written_back_to_template(self, service):
         item = _template_item()
         changed = service._apply_found_values_to_template(
             item, lot_found="LOT-77", expiration_found=NEXT_YEAR
         )
         assert changed is True
         assert item.lot_number == "LOT-77"
-        assert item.expiration_date == NEXT_YEAR
+        assert item.expiration_date == YESTERDAY
         assert item.has_expiration is True
 
-    def test_expiration_turns_on_tracking_for_an_untracked_item(self, service):
+    def test_expiration_does_not_turn_on_tracking_for_an_untracked_item(self, service):
         item = _template_item(has_expiration=False, expiration_date=None)
-        assert service._apply_found_values_to_template(item, expiration_found=TOMORROW)
-        assert item.has_expiration is True
-        assert item.expiration_date == TOMORROW
+        assert not service._apply_found_values_to_template(
+            item, expiration_found=TOMORROW
+        )
+        assert item.has_expiration is False
+        assert item.expiration_date is None
 
     def test_unchanged_values_do_not_flag_an_update(self, service):
         item = _template_item(lot_number="LOT-1")
@@ -257,7 +259,7 @@ class TestCreateCheckItems:
         created = await service._create_check_items(
             "check-1", items_data, {"ti-1": tmpl_item}, "org-1"
         )
-        assert tmpl_item.expiration_date == NEXT_YEAR
+        assert tmpl_item.expiration_date == YESTERDAY
         assert created[0].expiration_found == NEXT_YEAR
         # Flags the result so the report shows the truck's record was changed.
         assert created[0].updated_serial is True
