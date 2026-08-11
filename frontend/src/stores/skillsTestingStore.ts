@@ -71,6 +71,9 @@ interface SkillsTestingState {
   discardPracticeTest: (id: string) => Promise<void>;
   voidTest: (id: string, reason: string) => Promise<SkillTest>;
   returnTest: (id: string, reason: string) => Promise<SkillTest>;
+  bulkValidateTests: (
+    ids: string[]
+  ) => Promise<{ validated: string[]; skipped: { test_id: string; reason: string }[] }>;
   cancelTest: (id: string, reason?: string) => Promise<SkillTest>;
   validateTest: (id: string) => Promise<SkillTest>;
   releaseTest: (id: string) => Promise<SkillTest>;
@@ -362,6 +365,20 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
       return returned;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to return test');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
+  bulkValidateTests: async (ids: string[]) => {
+    set({ error: null });
+    try {
+      // The caller refetches: partial success means the rows that did validate
+      // must leave the queue while the ones that did not stay, and patching
+      // that in place would have to reimplement the server's per-id verdict.
+      return await skillsTestingService.bulkValidateTests(ids);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to accept results');
       set({ error: msg });
       throw err;
     }

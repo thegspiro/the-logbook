@@ -51,17 +51,33 @@ const SummaryCard: React.FC<{
   value: string | number;
   icon: React.ReactNode;
   color: string;
-}> = ({ label, value, icon, color }) => (
-  <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+  /** Makes the tile the way into the work it counts. Only some are actionable —
+   *  a pass rate is a fact, a queue is a job. */
+  onClick?: () => void;
+}> = ({ label, value, icon, color, onClick }) => {
+  const body = (
     <div className="flex items-center justify-between">
-      <div>
+      <div className="text-left">
         <p className="text-theme-text-muted text-sm">{label}</p>
         <p className="text-theme-text-primary mt-1 text-2xl font-bold">{value}</p>
       </div>
       <div className={`rounded-lg p-3 ${color}`}>{icon}</div>
     </div>
-  </div>
-);
+  );
+
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        className="bg-theme-surface border-theme-surface-border w-full rounded-lg border p-4 transition-colors hover:border-purple-500/60"
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">{body}</div>;
+};
 
 const TemplateRow: React.FC<{
   template: SkillTemplateListItem;
@@ -244,6 +260,10 @@ const SkillsTestingTemplatesTab: React.FC = () => {
               value={summary.pending_validation}
               icon={<CheckCircle2 className="h-5 w-5 text-purple-600" />}
               color="bg-purple-100 dark:bg-purple-900/30"
+              // The tile counted the queue without being a way into it, so an
+              // officer read "3" and then had to find the right tab and set a
+              // dropdown to see which three.
+              onClick={() => void navigate('/training/admin?page=skills-testing&tab=tests&status=pending_validation')}
             />
           ) : (
             <SummaryCard

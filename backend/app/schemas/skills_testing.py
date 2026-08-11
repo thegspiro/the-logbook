@@ -296,6 +296,32 @@ class SkillTestCancelRequest(BaseModel):
     reason: Optional[str] = Field(None, max_length=1000)
 
 
+class SkillTestBulkValidateRequest(BaseModel):
+    """Accept several submissions in one action.
+
+    Capped rather than unbounded: each validation credits a pipeline
+    requirement, spends an attempt and notifies a candidate, so a request is a
+    burst of side effects and not just a write. The cap keeps one click's worth
+    of consequences reviewable — and a queue longer than this is a sign the
+    officer should be filtering, not selecting all.
+    """
+
+    test_ids: List[UUID] = Field(..., min_length=1, max_length=50)
+
+
+class SkillTestBulkValidateResponse(BaseModel):
+    """What actually happened, per test.
+
+    Partial success is the normal case — a colleague may have validated or
+    voided one of the selection between the officer loading the queue and
+    acting on it — so this reports each outcome rather than failing the whole
+    batch on the first refusal.
+    """
+
+    validated: List[UUID] = Field(default_factory=list)
+    skipped: List[dict] = Field(default_factory=list)
+
+
 class SkillTestReturnRequest(BaseModel):
     """Send a submitted result back to its examiner instead of accepting it.
 

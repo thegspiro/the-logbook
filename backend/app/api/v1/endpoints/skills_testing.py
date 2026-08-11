@@ -35,6 +35,8 @@ from app.schemas.skills_testing import (
     SkillTemplateListResponse,
     SkillTemplateResponse,
     SkillTemplateUpdate,
+    SkillTestBulkValidateRequest,
+    SkillTestBulkValidateResponse,
     SkillTestCancelRequest,
     SkillTestCandidateResponse,
     SkillTestCreate,
@@ -1838,6 +1840,66 @@ async def validate_test(
     return _build_test_response(
         test, template, candidate, examiner, org_config=org_config
     )
+
+
+@router.post("/tests/bulk-validate", response_model=SkillTestBulkValidateResponse)
+async def bulk_validate_tests(
+    payload: SkillTestBulkValidateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Accept several submissions in one action.
+
+    After a drill night an officer has a queue of peer-run results to sign off,
+    and every other approval surface in the product has a bulk path. This is
+    that path — but validation is not a bulk *write*: each one credits a
+    pipeline requirement, spends an attempt against its cap, and notifies a
+    candidate.
+
+    So this does not reimplement any of it. It calls ``validate_test`` per id,
+    which means separation of duties, the attempt cap, the pipeline apply, the
+    audit entry and the notification all behave exactly as they do for a single
+    validation — there is no second implementation of the rules to drift.
+
+    **Partial success is the normal outcome**, not an error. A colleague may
+    have validated or voided one of the selection between the officer loading
+    the queue and pressing the button, and an officer capped out on one
+    candidate's attempts should still get the other nine signed off. Each
+    refusal is reported with its reason rather than failing the batch — and
+    because each validation commits as it goes, the ones that succeeded stand.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    validated: list[UUID] = []
+    skipped: list[dict] = []
+
+    for test_id in payload.test_ids:
+        try:
+            await validate_test(test_id=test_id, db=db, current_user=current_user)
+            validated.append(test_id)
+        except HTTPException as exc:
+            skipped.append({"test_id": str(test_id), "reason": exc.detail})
+
+    # One entry for the action itself, beside the per-test entries validate_test
+    # already wrote. A reader asking "why did nine results change at 21:40?"
+    # should find the answer as one deliberate act rather than infer it.
+    await log_audit_event(
+        db=db,
+        event_type="skill_tests_bulk_validated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "requested": len(payload.test_ids),
+            "validated": len(validated),
+            "skipped": skipped,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return SkillTestBulkValidateResponse(validated=validated, skipped=skipped)
 
 
 @router.post("/tests/{test_id}/release", response_model=SkillTestResponse)

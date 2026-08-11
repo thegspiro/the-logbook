@@ -1305,6 +1305,18 @@ export const skillsTestingService = {
     await api.delete(`/training/skills-testing/tests/${testId}/discard`);
   },
 
+  /** Accept several submissions at once. Partial success is normal — the
+   *  response reports which ids were skipped and why. */
+  async bulkValidateTests(
+    testIds: string[]
+  ): Promise<{ validated: string[]; skipped: { test_id: string; reason: string }[] }> {
+    const response = await api.post<{ validated: string[]; skipped: { test_id: string; reason: string }[] }>(
+      '/training/skills-testing/tests/bulk-validate',
+      { test_ids: testIds }
+    );
+    return response.data;
+  },
+
   async validateTest(testId: string): Promise<SkillTest> {
     const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/validate`);
     return response.data;
