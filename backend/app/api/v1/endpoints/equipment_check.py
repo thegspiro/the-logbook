@@ -1535,9 +1535,7 @@ async def clear_item_restock(
     template_item_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
-        )
+        require_permission("equipment_check.manage", "inventory.manage")
     ),
 ):
     """Withdraw a restock report — restocked by hand, or raised in error."""
@@ -1584,13 +1582,8 @@ async def swap_item_lot(
     template_item_id: str,
     data: LotSwapRequest,
     db: AsyncSession = Depends(get_db),
-    # Includes equipment_check.submit: a member who has just taken a unit off
-    # the truck is the one holding the replacement, and requiring an officer to
-    # record it is how the bracket stays empty until morning.
     current_user: User = Depends(
-        require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
-        )
+        require_permission("equipment_check.manage", "inventory.manage")
     ),
 ):
     """Swap a ready-stock lot onto the apparatus for a checklist item.
