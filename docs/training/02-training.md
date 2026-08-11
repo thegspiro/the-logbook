@@ -312,7 +312,14 @@ Completing any requirement — of **any** type — counts toward the member's **
 
 > **Only officers can complete or credit a requirement.** Setting a numeric value (hours/shifts/calls/courses), recording a test score, or marking a requirement complete/verified/waived requires `training.manage`. A member viewing their own progress can mark a requirement **in progress**, but to get credit they submit their training for review — they can't set their own requirement to 100%.
 
-> **[SCREENSHOT NEEDED]:** _A member's enrollment progress detail showing requirements grouped by phase, each with a status control (Complete / In Progress / Reopen), an officer "Verify" action, and inputs for logging hours, shifts, calls, or courses._
+The controls on each requirement are **In progress**, **Mark complete** and
+**Reset**. There is no separate Verify button: a requirement an officer marks
+complete is verified in the same act, and picks up its **Verified** badge from
+that. A value-based requirement — hours, shifts, calls, courses — also carries
+its own input and **Save**, so the count can be credited without completing the
+requirement outright.
+
+![The officer's view of a member's pipeline progress, with the controls that credit and verify each requirement](./images/02-94-officer-progress-detail.png)
 
 ### Working Through a Checklist Requirement _(2026-08-09)_
 

@@ -249,6 +249,9 @@ class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # How many members are on this pipeline. Computed for the list view — the
+    # programme cards report it, and without it they rendered a hardcoded zero.
+    enrolled_count: int = 0
 
     model_config = _response_config
 

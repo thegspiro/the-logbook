@@ -1894,6 +1894,48 @@ export const SHOTS = [
     viewport: { width: 1800, height: 1300 },
   },
   {
+    id: "02-94-officer-progress-detail",
+    doc: "02-training.md",
+    line: 322,
+    anchor: "A member's enrollment progress detail showing requirements grouped by phase",
+    alt: "The officer's view of a member's pipeline progress, with the controls that credit and verify each requirement",
+    route: "/training/programs",
+    prepare: async (page) => {
+      // The Enrollments tab of a pipeline, which is a route of its own —
+      // `/training/programs/:programId`, not `/training/pipelines/...`.
+      const programId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/training/programs/programs", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const list = Array.isArray(rows) ? rows : [];
+        // The probationary pipeline: the longest of the three, so its phases
+        // show finished, in-flight and untouched requirements at once.
+        const wanted =
+          list.find((row) => /Probationary/.test(row.name || "")) || list[0];
+        return wanted ? wanted.id : null;
+      });
+      if (!programId) throw new Error("02-94: no training programme to open");
+      await page.goto(
+        new URL(
+          `/training/programs/${programId}?tab=enrollments`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForTimeout(2500);
+      // A member with progress to act on, not the first row for its own sake.
+      await page
+        .getByText(/Nadia Belhaj/)
+        .first()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(2500);
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
+    fullPage: true,
+  },
+  {
     id: "02-93-member-full-progress",
     doc: "02-training.md",
     line: 501,

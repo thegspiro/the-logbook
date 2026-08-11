@@ -891,6 +891,8 @@ export interface TrainingProgram {
   target_position?: string;
   target_roles?: string[];
   structure_type: ProgramStructureType;
+  /** Members currently on this pipeline, withdrawn enrollments excluded. */
+  enrolled_count: number;
   prerequisite_program_ids?: string[];
   allows_concurrent_enrollment: boolean;
   time_limit_days?: number;
