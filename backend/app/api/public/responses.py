@@ -46,6 +46,15 @@ UNAUTHORIZED = {
     401: _response("Missing or invalid API key."),
 }
 
+# Form submission: a form whose policy requires a signed-in member, or a
+# caller who supplied credentials that failed validation (optional auth
+# rejects bad credentials rather than downgrading to anonymous).
+FORM_AUTH = {
+    401: _response(
+        "This form requires authentication, or the supplied credentials are invalid."
+    ),
+}
+
 # Token-addressed routes: an unknown or expired token is the normal failure.
 TOKEN_ADDRESSED = {**RATE_LIMITED, **NOT_FOUND}
 
