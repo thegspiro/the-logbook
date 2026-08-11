@@ -3007,8 +3007,9 @@ class TrainingProgramService:
         pre-flight validator and the apply itself so both judge eligibility the
         same way. Returns (row, None) or (None, error_message).
 
-        ``completed_on`` is the training's completion date, checked against the
-        requirement's freshness window when both are present."""
+        ``completed_on`` is the training's completion date. A requirement with a
+        freshness window rejects a missing date because freshness cannot be
+        verified."""
         enrollment_result = await self.db.execute(
             select(ProgramEnrollment)
             .join(TrainingProgram)
@@ -3041,11 +3042,17 @@ class TrainingProgramService:
         # A requirement with a freshness window rejects an old completion even
         # on an explicit officer sign-off: "CPR within the last 180 days" is the
         # point of the requirement, so crediting a three-year-old record would
-        # quietly defeat it. Callers that have no date to check pass None.
-        if completed_on is not None:
-            _, requirement = row
-            cutoff = recency_cutoff(requirement, date.today())
-            if cutoff is not None and completed_on < cutoff:
+        # quietly defeat it. An undated completion must fail closed when a
+        # window is configured because its freshness cannot be verified.
+        _, requirement = row
+        cutoff = recency_cutoff(requirement, date.today())
+        if cutoff is not None:
+            if completed_on is None:
+                return None, (
+                    "That training has no completion date, so it can't be credited "
+                    f"toward this requirement's {requirement.recency_days}-day window."
+                )
+            if completed_on < cutoff:
                 return None, (
                     f"That training was completed on {completed_on.isoformat()}, "
                     f"outside this requirement's {requirement.recency_days}-day "
@@ -3093,10 +3100,10 @@ class TrainingProgramService:
         test) are marked complete. Runs through ``update_requirement_progress`` so
         percentage, auto-completion, rollup, and phase advancement all fire.
 
-        It is, however, gated by the requirement's freshness window when
-        ``completed_on`` is supplied — an officer may waive delivery method, but
-        not the "must be within the last N days" rule that defines the
-        requirement.
+        It is, however, gated by the requirement's freshness window. An officer
+        may waive delivery method, but not the "must be within the last N days"
+        rule that defines the requirement; an undated completion therefore
+        cannot satisfy a freshness window.
 
         Returns ``(applied, error_message)``.
         """
