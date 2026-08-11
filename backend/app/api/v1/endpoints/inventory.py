@@ -2061,11 +2061,27 @@ async def get_summary_by_location(
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
-    Get inventory summary grouped by location
+    Get inventory summary grouped by location.
+
+    Only admins (inventory.manage or settings.manage) see the department's
+    per-location totals. Regular users receive an empty list — matching
+    `/summary`, which returns a member their own holdings, and `/low-stock`,
+    which returns them nothing. This endpoint was the one of the three that
+    never branched, so a member's inventory page reported their own three items
+    in its header and the department's entire stock and valuation in the panel
+    directly beneath it.
 
     **Authentication required**
     **Requires permission: inventory.view**
     """
+    user_perms = _collect_user_permissions(current_user)
+    is_admin = _has_permission("inventory.manage", user_perms) or _has_permission(
+        "settings.manage", user_perms
+    )
+
+    if not is_admin:
+        return []
+
     service = InventoryService(db)
     return await service.get_summary_by_location(
         organization_id=current_user.organization_id

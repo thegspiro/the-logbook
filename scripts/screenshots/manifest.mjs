@@ -1894,6 +1894,25 @@ export const SHOTS = [
     viewport: { width: 1800, height: 1300 },
   },
   {
+    id: "05-66-my-equipment",
+    doc: "05-inventory.md",
+    line: 1357,
+    anchor: "Screenshot of My Equipment as an ordinary member",
+    alt: "My Equipment as an ordinary member — the count tiles and their permanent assignments",
+    // My Equipment rather than the inventory page: the item list on the latter
+    // is the department catalogue by design, and only its figures are scoped.
+    auth: "member",
+    route: "/inventory/my-equipment",
+    prepare: async (page) => {
+      await page
+        .getByRole("heading", { name: /My Equipment/i })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1500);
+    },
+    fullPage: false,
+  },
+  {
     id: "05-65-reorder-shortfall",
     doc: "05-inventory.md",
     line: 1706,

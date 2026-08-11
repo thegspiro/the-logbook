@@ -1342,12 +1342,25 @@ Label generation has been significantly improved:
 
 ### Inventory Dashboard Scoping
 
-Non-admin users now see only their own assigned equipment on the inventory dashboard. This prevents information overload for regular members and aligns with role-based access principles.
+The **figures** on the inventory page are scoped to the member: the header counts
+their items, their overdue checkouts and the value of what they hold, not the
+department's. The low-stock alerts and the per-location breakdown of departmental
+stock are not shown to a non-admin at all.
 
-> **Screenshot needed:**
-> _[Screenshot comparison: left shows admin view with full department inventory summary, right shows member view with only "My Equipment" counts and items]_
+The **item list** is not scoped, and is not meant to be — `inventory.view` is
+what lets a member browse the department's catalogue in order to request from it.
+A member's own kit lives on **My Equipment**, which is the page to open to see
+what somebody actually holds: their permanent assignments, checkouts, issued
+consumables and pending requests, each with a Request Return action.
 
-> **Edge case:** Users with `inventory.manage` permission continue to see the full department inventory. The scoping applies only to users without admin permissions.
+![My Equipment as an ordinary member — the count tiles and their permanent assignments](./images/05-66-my-equipment.png)
+
+> **Edge case:** Users with `inventory.manage` (or `settings.manage`) see the department's figures rather than their own. The scoping applies only to users without those permissions.
+
+> **Fixed 2026-08-11.** The per-location panel was the one summary that never
+> checked. A member's page counted their own three items in its header and then
+> reported the department's entire stock and valuation in the panel directly
+> beneath it. Pull latest.
 
 ### Desktop Camera Scanning
 
