@@ -16,14 +16,15 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Eye, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Eye, Search, Trash2, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { skillsTestingService, userService } from '../../services/api';
+import { skillsTestingService } from '../../services/api';
 import type { SkillTestViewer } from '../../types/skillsTesting';
-import type { User } from '../../types/user';
 import { formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
+import { useMemberSearch } from '../../hooks/useMemberSearch';
+import { MEMBER_SEARCH_MIN_CHARS } from '../../constants/config';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { Skeleton } from '../ux/Skeleton';
 
@@ -37,28 +38,26 @@ interface TestViewersPanelProps {
   examinerId: string;
 }
 
-function memberName(user: User): string {
-  const full = `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim();
-  return full || user.full_name || user.username;
-}
-
 export const TestViewersPanel: React.FC<TestViewersPanelProps> = ({ testId, candidateId, examinerId }) => {
   const tz = useTimezone();
   const [viewers, setViewers] = useState<SkillTestViewer[]>([]);
-  const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // A name lookup rather than a roster in a dropdown. The panel used to load
+  // every member into a `<select>` — unscannable past a few dozen people, and
+  // far more data than naming one person needs. Same control the start-test
+  // candidate picker uses, over the same search-only endpoint.
+  const [search, setSearch] = useState('');
+  const { results, loading: searching, error: searchError, tooShort } = useMemberSearch(search);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const [grants, users] = await Promise.all([skillsTestingService.getTestViewers(testId), userService.getUsers()]);
-      setViewers(grants);
-      setMembers(users);
+      setViewers(await skillsTestingService.getTestViewers(testId));
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load who can see this result'));
     } finally {
@@ -70,23 +69,23 @@ export const TestViewersPanel: React.FC<TestViewersPanelProps> = ({ testId, cand
     void load();
   }, [load]);
 
-  // Everyone who could still be granted: not the candidate, not the examiner,
-  // and not already holding a grant.
-  const selectableMembers = useMemo(() => {
+  // Anyone who could still be granted: not the candidate (policy already
+  // decides what they see), not the examiner (they see what they recorded, so
+  // a grant would be a no-op the officer could not tell had done nothing), and
+  // nobody already holding one. Filtered from the search results rather than
+  // from a roster, so the exclusions still apply to whatever the lookup found.
+  const grantable = useMemo(() => {
     const granted = new Set(viewers.map((v) => v.user_id));
-    return members
-      .filter((m) => m.id !== candidateId && m.id !== examinerId && !granted.has(m.id))
-      .sort((a, b) => memberName(a).localeCompare(memberName(b)));
-  }, [members, viewers, candidateId, examinerId]);
+    return results.filter((m) => m.id !== candidateId && m.id !== examinerId && !granted.has(m.id));
+  }, [results, viewers, candidateId, examinerId]);
 
-  const handleAdd = async () => {
-    if (!selectedId) return;
+  const handleAdd = async (userId: string, name: string) => {
     setAdding(true);
     try {
-      const grant = await skillsTestingService.addTestViewer(testId, selectedId);
+      const grant = await skillsTestingService.addTestViewer(testId, userId);
       setViewers((current) => [...current, grant]);
-      setSelectedId('');
-      toast.success(`${grant.user_name ?? 'Member'} can now see this result`);
+      setSearch('');
+      toast.success(`${grant.user_name ?? name} can now see this result`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to grant access'));
     } finally {
@@ -159,38 +158,58 @@ export const TestViewersPanel: React.FC<TestViewersPanelProps> = ({ testId, cand
             </ul>
           )}
 
-          {selectableMembers.length > 0 ? (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <label htmlFor="add-test-viewer" className="sr-only">
-                Member to grant access to
-              </label>
-              <select
+          <div>
+            <label htmlFor="add-test-viewer" className="sr-only">
+              Search for a member to grant access to
+            </label>
+            <div className="relative">
+              <Search
+                className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+                aria-hidden="true"
+              />
+              <input
                 id="add-test-viewer"
-                value={selectedId}
-                onChange={(e) => setSelectedId(e.target.value)}
-                className="form-input flex-1 text-sm"
-              >
-                <option value="">Add someone…</option>
-                {selectableMembers.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {memberName(member)}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => void handleAdd()}
-                disabled={!selectedId || adding}
-                className="mobile-touch-target flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {adding ? <Plus className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                {adding ? 'Adding…' : 'Add'}
-              </button>
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Add someone — search by name…"
+                className="form-input w-full pl-9 text-sm"
+              />
             </div>
-          ) : (
-            <p className="text-theme-text-muted text-xs">
-              Everyone else in the department already has access to this result.
-            </p>
-          )}
+
+            {searchError ? (
+              <p className="mt-2 text-xs text-red-600 dark:text-red-400">{searchError}</p>
+            ) : tooShort ? (
+              // Prompted rather than reported as "no matches": the search was
+              // never sent, so there is nothing to have found.
+              search.trim().length > 0 && (
+                <p className="text-theme-text-muted mt-2 text-xs">
+                  Type at least {MEMBER_SEARCH_MIN_CHARS} characters of a name.
+                </p>
+              )
+            ) : searching ? (
+              <p className="text-theme-text-muted mt-2 text-xs">Searching…</p>
+            ) : grantable.length === 0 ? (
+              <p className="text-theme-text-muted mt-2 text-xs">
+                No members match, or everyone who does already sees this result.
+              </p>
+            ) : (
+              <ul className="border-theme-surface-border divide-theme-surface-border mt-2 max-h-48 divide-y overflow-y-auto rounded-lg border">
+                {grantable.map((member) => (
+                  <li key={member.id}>
+                    <button
+                      onClick={() => void handleAdd(member.id, member.name)}
+                      disabled={adding}
+                      className="hover:bg-theme-surface-hover mobile-touch-target flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors disabled:opacity-50"
+                    >
+                      <UserPlus className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="text-theme-text-primary truncate">{member.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </>
       )}
     </div>

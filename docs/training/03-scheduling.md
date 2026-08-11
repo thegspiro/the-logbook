@@ -2,6 +2,53 @@
 
 The Scheduling module manages duty rosters, shift assignments, attendance tracking, time-off requests, swap requests, and shift compliance reporting. It supports multiple shift patterns and provides both calendar and list views for managing your department's schedule.
 
+## Lesson at a Glance
+
+|                   |                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Audience**      | Members managing their availability; officers managing coverage and closeout                                     |
+| **Permissions**   | Members use self-service actions; management requires scheduling permission or assignment as the shift's officer |
+| **Prerequisites** | Scheduling module enabled and at least one upcoming shift                                                        |
+| **Member path**   | About 15 minutes                                                                                                 |
+| **Officer path**  | About 30 minutes; configuration is separate reference work                                                       |
+| **Last verified** | 2026-08-11                                                                                                       |
+| **Owner**         | Department scheduling officer                                                                                    |
+
+By the end of the essential path, members can interpret their roster, request
+an open shift, and choose the correct absence or swap workflow. Officers can
+review a request, verify staffing impact, and close a shift without losing
+attendance or readiness information.
+
+> **Practice safely:** Use a demo shift or a future shift designated by your
+> scheduling officer. Never withdraw, swap, cancel, reopen, or finalize a real
+> operational shift solely for practice.
+
+### 15-Minute Member Path
+
+1. Use [My Shifts](#my-shifts) to verify your next assignment and status.
+2. Review [Open Shifts](#open-shifts) and identify one shift you are eligible to request; do not submit unless authorized.
+3. Compare [Time-Off Requests](#time-off-requests) with [Shift Swap Requests](#shift-swap-requests) and decide which fits a planned absence.
+4. Find the durable request or assignment status that would confirm success.
+
+### Officer Coverage and Closeout Path
+
+1. Open the shift detail panel and compare assigned staffing with the target.
+2. Review pending assignment, time-off, or swap requests and their coverage impact.
+3. Record attendance and required checks during the shift.
+4. Before finalizing, verify attendance, reports, end-of-shift checks, and any override reason.
+
+### Try It: Cover a Future Vacancy
+
+- **Starting state:** A demo future shift is one member below its staffing
+  target.
+- **Task:** A member identifies and requests the open shift. An officer reviews
+  the request and confirms the resulting roster and coverage count.
+- **Success:** The member sees a durable request/assignment status and the
+  officer sees the updated roster; neither relies only on a toast.
+- **Variation:** Accepting the member would trigger an hours advisory. Explain
+  whether the warning blocks the assignment and what the officer should
+  consider.
+
 ---
 
 ## Table of Contents
@@ -2155,7 +2202,8 @@ the old one and get a new one.
 > **Note:** The feed is read-only and shows roughly the last two months through
 > the next year of your assigned (non-cancelled) shifts.
 
-![Subscribe to my shifts card showing the calendar feed URL and its controls](./images/03-34-calendar-subscribe.png)
+> **Screenshot omitted for security:** Expanding this card reveals a private
+> calendar-feed credential. Do not capture or publish the expanded card.
 
 ### The On-Duty Officer Can Run Their Own Shift
 

@@ -22,7 +22,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -175,7 +175,15 @@ async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
             },
         )
     except Exception:
-        pass  # Never let WS publishing break an API response
+        # Real-time delivery is best-effort, but failures still need to be
+        # visible to operators instead of disappearing silently.
+        from loguru import logger
+
+        logger.exception(
+            "Failed to publish inventory WebSocket event org={} action={}",
+            org_id,
+            action,
+        )
 
 
 async def _planner_contact_visibility(db, organization_id) -> dict:
@@ -3291,6 +3299,9 @@ async def list_equipment_requests(
     if status_filter:
         query = query.where(EquipmentRequest.status == status_filter)
 
+    count_query = select(func.count()).select_from(query.order_by(None).subquery())
+    total = int((await db.execute(count_query)).scalar_one())
+
     query = query.order_by(EquipmentRequest.created_at.desc()).offset(skip).limit(limit)
 
     result = await db.execute(query)
@@ -3337,7 +3348,7 @@ async def list_equipment_requests(
             }
             for r in requests
         ],
-        "total": len(requests),
+        "total": total,
         "skip": skip,
         "limit": limit,
     }
@@ -3523,12 +3534,6 @@ async def list_storage_areas(
         query = query.where(StorageArea.location_id == location_id)
     if parent_id:
         query = query.where(StorageArea.parent_id == parent_id)
-    elif not flat and not location_id:
-        # For tree view, start with top-level items
-        query = query.where(StorageArea.parent_id.is_(None))
-
-    result = await db.execute(query)
-    areas = result.scalars().all()
 
     count_result = await db.execute(
         select(
@@ -3560,22 +3565,22 @@ async def list_storage_areas(
             ),
         )
 
+    # Use the same filtered row set for flat and tree responses. Previously the
+    # tree branch discarded `location_id` and `parent_id` by re-querying every
+    # area in the organization.
+    result = await db.execute(query)
+    areas = result.scalars().all()
+
     if flat:
         return [build_response(a) for a in areas]
 
-    # Build tree: load all areas for this org to build complete tree
-    all_result = await db.execute(
-        select(StorageArea)
-        .where(StorageArea.organization_id == str(current_user.organization_id))
-        .where(StorageArea.is_active == True)  # noqa: E712
-        .order_by(StorageArea.sort_order, StorageArea.name)
-    )
-    all_areas = all_result.scalars().all()
-    area_map = {a.id: build_response(a) for a in all_areas}
+    # Build the requested hierarchy. When a filtered row's parent is outside
+    # the result set, that row becomes a root of the returned subtree.
+    area_map = {a.id: build_response(a) for a in areas}
 
     # Attach children to parents
     roots = []
-    for a in all_areas:
+    for a in areas:
         resp = area_map[a.id]
         if a.parent_id and a.parent_id in area_map:
             resp["parent_name"] = area_map[a.parent_id]["name"]
@@ -5332,7 +5337,7 @@ async def update_equipment_kit(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
-    Update a kit's metadata.
+    Update a kit's metadata and optionally replace its line items.
 
     **Authentication required**
     **Requires permission: inventory.manage**

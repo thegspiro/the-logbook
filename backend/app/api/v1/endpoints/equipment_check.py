@@ -318,6 +318,22 @@ async def link_inventory_items(
     if changed is None:
         raise HTTPException(status_code=404, detail="Template not found")
 
+    if changed:
+        await service.log_template_change(
+            organization_id=str(current_user.organization_id),
+            template_id=template_id,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="update",
+            entity_type="template",
+            entity_id=template_id,
+            changes={
+                "inventory_links": data.links,
+                "changed_count": changed,
+            },
+        )
+        await db.commit()
+
     coverage = await service.get_link_coverage(
         template_id, current_user.organization_id
     )
@@ -971,12 +987,18 @@ async def upload_check_item_photos(
             )
 
         # Optimize: resize, strip EXIF, convert to WebP
-        optimized = optimize_image(
-            contents,
-            max_size=(1920, 1080),
-            quality=80,
-            output_format="WEBP",
-        )
+        try:
+            optimized = optimize_image(
+                contents,
+                max_size=(1920, 1080),
+                quality=80,
+                output_format="WEBP",
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid image {upload.filename}: {safe_error_detail(exc)}",
+            ) from exc
         encoded = base64.b64encode(optimized).decode()
         data_uri = f"data:image/webp;base64,{encoded}"
         new_urls.append(data_uri)

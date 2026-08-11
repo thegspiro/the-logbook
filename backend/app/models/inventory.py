@@ -2061,6 +2061,10 @@ class EquipmentKitItem(Base):
     # Whether the member picks a size variant (for pool items with variants)
     size_selectable = Column(Boolean, default=False)
 
+    # Optional lines may be skipped when the catalog item is unavailable or
+    # cannot be issued; required lines still fail the kit operation.
+    optional = Column(Boolean, nullable=False, default=False, server_default="0")
+
     # Sort order within the kit
     sort_order = Column(Integer, default=0)
 
