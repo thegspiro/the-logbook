@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
-import { LogIn, LogOut, Loader2, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { LogIn, LogOut, Loader2, CheckCircle2, Clock, AlertCircle, ClipboardCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
@@ -161,19 +161,29 @@ const ShiftCheckInPage: React.FC = () => {
   }
 
   if (!shift) {
+    /* The old message — "This QR code may be invalid or you may not have access
+       to this shift" — blamed a code that may never have been used: this page is
+       also reached by typing the URL, from a notification, or from a stale
+       bookmark. Two guesses, neither actionable. Whether a shift was asked for
+       at all is the one thing we do know, so each case says its own sentence. */
+    const askedForAShift = Boolean(paramShiftId || paramApparatusId);
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="text-center">
-          <AlertCircle className="mx-auto mb-3 h-12 w-12 text-red-500" />
-          <h1 className="text-theme-text-primary mb-1 text-xl font-bold">Shift Not Found</h1>
+        <div className="max-w-sm text-center">
+          <AlertCircle className="mx-auto mb-3 h-12 w-12 text-red-500" aria-hidden="true" />
+          <h1 className="text-theme-text-primary mb-1 text-xl font-bold">
+            {askedForAShift ? "We couldn't open that shift" : 'Which shift?'}
+          </h1>
           <p className="text-theme-text-muted mb-4 text-sm">
-            This QR code may be invalid or you may not have access to this shift.
+            {askedForAShift
+              ? 'The shift may have been deleted, or you may not be assigned to it. If you are working it, ask an officer to record your attendance.'
+              : 'This page checks you in to one particular shift. Scan the code on the apparatus, or open the shift from My Shifts and check in from there.'}
           </p>
           <button
-            onClick={() => void navigate('/scheduling')}
+            onClick={() => void navigate('/scheduling?tab=my-shifts')}
             className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
           >
-            Go to Scheduling
+            Go to My Shifts
           </button>
         </div>
       </div>
@@ -237,6 +247,17 @@ const ShiftCheckInPage: React.FC = () => {
                 </p>
               </div>
             </div>
+            {/* Checking in used to lead nowhere, though the next thing to do —
+                the start-of-shift checklist — is one tap away on another tab of
+                another page. Check Out stays the prominent button: it is the one
+                that closes the shift out, hours later, from this same screen. */}
+            <button
+              onClick={() => void navigate(`/scheduling?tab=equipment-checks&shift=${resolvedShiftId}`)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-500/40 px-6 py-3 text-base font-semibold text-violet-700 transition-colors hover:bg-violet-500/10 dark:text-violet-300"
+            >
+              <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
+              Start-of-shift checklist
+            </button>
             <button
               onClick={() => {
                 void handleCheckOut();
