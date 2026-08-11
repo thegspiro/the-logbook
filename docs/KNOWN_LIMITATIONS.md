@@ -546,8 +546,9 @@ one card. The backend serves exactly one feed route,
 `/api/public/v1/calendar/{token}.ics`, scoped to the member's own shifts.
 
 So the filtered feeds the guide describes — all events, training only — do not
-exist on either side. Both placeholders are left open. The subscribe card is
-captured instead against the guide-03 placeholder that actually describes it.
+exist on either side. Both placeholders are left open. The guide-03 subscribe
+card is also deliberately not captured because expanding it exposes the
+calendar feed's bearer credential.
 
 Most of the rest of guide 16 needs a live third-party account (a Salesforce
 sync status, a connected Cal.com bookings panel, a warning state carrying a

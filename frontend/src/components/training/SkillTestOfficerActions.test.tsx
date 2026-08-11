@@ -8,12 +8,14 @@ import type { SkillTest } from '../../types/skillsTesting';
 const mockValidateTest = vi.fn();
 const mockReleaseTest = vi.fn();
 const mockVoidTest = vi.fn();
+const mockReturnTest = vi.fn();
 
 vi.mock('../../stores/skillsTestingStore', () => ({
   useSkillsTestingStore: () => ({
     validateTest: (...args: unknown[]) => mockValidateTest(...args) as unknown,
     releaseTest: (...args: unknown[]) => mockReleaseTest(...args) as unknown,
     voidTest: (...args: unknown[]) => mockVoidTest(...args) as unknown,
+    returnTest: (...args: unknown[]) => mockReturnTest(...args) as unknown,
   }),
 }));
 
@@ -290,6 +292,85 @@ describe('SkillTestOfficerActions', () => {
 
       expect(screen.getByText(/Accepting confirms/)).toHaveTextContent(/full scorecard/);
       expect(screen.queryByRole('button', { name: /release to candidate/i })).not.toBeInTheDocument();
+    });
+  });
+
+  // The third exit from a pending submission. Voiding is right for a result
+  // that was *wrong*; this is for one that was not finished properly, and it
+  // must not cost a permanent, candidate-visible withdrawal.
+  describe('Sending a submission back to its examiner', () => {
+    it('is offered only while the result is still pending', () => {
+      const { rerender } = render(<SkillTestOfficerActions test={buildTest({ pending_validation: true })} />);
+      expect(screen.getByRole('button', { name: /send back to examiner/i })).toBeInTheDocument();
+
+      rerender(
+        <SkillTestOfficerActions
+          test={buildTest({ pending_validation: false, validated_at: '2026-08-08T20:00:00Z' })}
+        />
+      );
+      expect(screen.queryByRole('button', { name: /send back to examiner/i })).not.toBeInTheDocument();
+    });
+
+    it('says the candidate is neither told nor marked', async () => {
+      const user = userEvent.setup();
+      render(<SkillTestOfficerActions test={buildTest({ pending_validation: true })} />);
+
+      await user.click(screen.getByRole('button', { name: /send back to examiner/i }));
+
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByText(/Nothing is voided/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/they are not notified/i)).toBeInTheDocument();
+    });
+
+    it('will not send without a reason the examiner can act on', async () => {
+      const user = userEvent.setup();
+      render(<SkillTestOfficerActions test={buildTest({ pending_validation: true })} />);
+      await user.click(screen.getByRole('button', { name: /send back to examiner/i }));
+
+      const send = screen.getByRole('button', { name: /^send back$/i });
+      expect(send).toBeDisabled();
+
+      await user.type(screen.getByLabelText(/what needs correcting/i), 'too short');
+      expect(send).toBeDisabled();
+
+      await user.type(screen.getByLabelText(/what needs correcting/i), ' — recheck step 4');
+      expect(send).toBeEnabled();
+    });
+
+    it('sends the trimmed reason and closes on success', async () => {
+      const user = userEvent.setup();
+      mockReturnTest.mockResolvedValue({});
+      render(<SkillTestOfficerActions test={buildTest({ pending_validation: true })} />);
+      await user.click(screen.getByRole('button', { name: /send back to examiner/i }));
+
+      await user.type(screen.getByLabelText(/what needs correcting/i), '  Step 4 contradicts your note  ');
+      await user.click(screen.getByRole('button', { name: /^send back$/i }));
+
+      expect(mockReturnTest).toHaveBeenCalledWith('test-1', 'Step 4 contradicts your note');
+      expect(mockToastSuccess).toHaveBeenCalledWith('Sent back to Gabriel Spiro');
+    });
+
+    it('keeps the dialog open and reports the failure when the send fails', async () => {
+      const user = userEvent.setup();
+      mockReturnTest.mockRejectedValue(new Error('Network Error'));
+      render(<SkillTestOfficerActions test={buildTest({ pending_validation: true })} />);
+      await user.click(screen.getByRole('button', { name: /send back to examiner/i }));
+
+      await user.type(screen.getByLabelText(/what needs correcting/i), 'Recheck step 4 please');
+      await user.click(screen.getByRole('button', { name: /^send back$/i }));
+
+      expect(mockToastError).toHaveBeenCalledWith('Network Error');
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    // Voiding remains the only way out of a result that already stands, so it
+    // stays offered in both states.
+    it('leaves void available whether or not the result is pending', () => {
+      const { rerender } = render(<SkillTestOfficerActions test={buildTest({ pending_validation: true })} />);
+      expect(screen.getByRole('button', { name: /void result/i })).toBeInTheDocument();
+
+      rerender(<SkillTestOfficerActions test={buildTest({ pending_validation: false })} />);
+      expect(screen.getByRole('button', { name: /void result/i })).toBeInTheDocument();
     });
   });
 });

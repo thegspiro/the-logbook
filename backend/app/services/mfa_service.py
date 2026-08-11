@@ -14,9 +14,9 @@ import time
 
 import pyotp
 
-# Recovery codes: human-friendly, single-use. 10 codes of 10 hex chars.
+# Recovery codes: human-friendly, single-use. New codes carry 80 bits of entropy.
 RECOVERY_CODE_COUNT = 10
-_RECOVERY_CODE_BYTES = 5  # 10 hex chars
+_RECOVERY_CODE_BYTES = 10
 
 
 def generate_secret() -> str:
@@ -76,11 +76,11 @@ def verify_totp_get_timestep(
 
 
 def generate_recovery_codes(count: int = RECOVERY_CODE_COUNT) -> list[str]:
-    """Generate single-use recovery codes (formatted ``xxxxx-xxxxx``)."""
+    """Generate single-use recovery codes (formatted in four groups)."""
     codes = []
     for _ in range(count):
         raw = secrets.token_hex(_RECOVERY_CODE_BYTES)
-        codes.append(f"{raw[:5]}-{raw[5:]}")
+        codes.append("-".join(raw[i : i + 5] for i in range(0, len(raw), 5)))
     return codes
 
 

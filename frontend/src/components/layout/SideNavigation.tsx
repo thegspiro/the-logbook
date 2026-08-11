@@ -163,6 +163,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
     { label: 'Dashboard', path: '/dashboard', icon: Home },
+    { label: 'Learning Center', path: '/learning', icon: BookOpen },
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },

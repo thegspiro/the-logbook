@@ -20,6 +20,9 @@
  *   theme    'dark' to shoot in dark mode; default light. The app's theme
  *            defaults to "system", so this is driven by the context's
  *            colorScheme rather than by clicking the theme switcher
+ *   beforeNavigate optional async (page) hook for installing a route mock
+ *            before the page mounts; reserve this for provider configuration
+ *            that cannot contain real credentials in the demo database
  *   prepare  optional async (page) => void that drives the UI into the pictured
  *            state (open a modal, switch a tab, expand a panel)
  *   selector optional CSS/locator to clip to instead of the full viewport
@@ -2877,6 +2880,29 @@ export const SHOTS = [
     alt: "The Logbook login page with username and password fields",
     route: "/login",
     auth: "anonymous",
+  },
+  {
+    id: "00-21-login-sso-options",
+    doc: "00-getting-started.md",
+    line: 85,
+    anchor: "Login page showing the username/password fields",
+    alt: "Login page with Google and Microsoft single sign-on choices",
+    route: "/login",
+    auth: "anonymous",
+    beforeNavigate: async (page) => {
+      // The UI needs only these booleans. Real client ids and secrets are
+      // deliberately absent from the screenshot department.
+      await page.route("**/api/v1/auth/oauth-config", async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            googleEnabled: true,
+            microsoftEnabled: true,
+          }),
+        });
+      });
+    },
   },
   {
     id: "00-04-dashboard-overview",
@@ -6821,18 +6847,6 @@ export const SHOTS = [
     route: "/integrations",
     prepare: openIntegrationConnect("Slack"),
     fullPage: false,
-  },
-  {
-    id: "03-34-calendar-subscribe",
-    doc: "03-scheduling.md",
-    line: 1617,
-    anchor: 'The "Subscribe to my shifts" card on My Shifts',
-    alt: "Subscribe to my shifts card showing the calendar feed URL and its controls",
-    route: "/scheduling?tab=my-shifts",
-    // The card is collapsed until the member asks for the link, which is
-    // deliberate: it holds a token that grants read access to their roster.
-    prepare: clickByName(/subscribe to my shifts/i),
-    fullPage: true,
   },
   {
     id: "13-06-expiring-screenings",

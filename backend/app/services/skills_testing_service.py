@@ -329,6 +329,61 @@ def build_score_breakdown(test: SkillTest, template: SkillTemplate) -> dict[str,
     }
 
 
+def iter_criterion_rows(test: SkillTest, template: Any):
+    """Yield one flat row per criterion on ``test``, in sheet order.
+
+    Exists so an export or a printed scorecard can list what was recorded
+    against each step without re-deriving the matching and outcome rules that
+    :func:`build_score_breakdown` already owns. Those rules are not obvious —
+    results are matched positionally with a label fallback, statements are not
+    judged, and a non-critical scored step is never reported as passed or
+    failed — and a second implementation of them would drift the moment one
+    side was fixed.
+
+    Callers must pass the template :func:`resolve_test_template` returned, not
+    the live row: a test is judged against the structure frozen when it was
+    created.
+
+    Each row is a dict with ``section_index``, ``section_name``,
+    ``criterion_index``, ``label``, ``type``, ``critical``, ``outcome`` (the
+    same vocabulary ``_criterion_outcome`` uses), and whichever of ``score`` /
+    ``max_score`` / ``time_seconds`` / ``checklist`` carries the evidence for
+    that type, plus the examiner's ``notes``.
+    """
+    section_results = getattr(test, "section_results", None) or []
+    template_sections = getattr(template, "sections", None) or []
+
+    for section_idx, section in enumerate(template_sections):
+        if not isinstance(section, dict):
+            continue
+        sr_match = _find_section_result(section_results, section_idx, section)
+
+        for ci, criterion in enumerate(section.get("criteria", []) or []):
+            if not isinstance(criterion, dict):
+                continue
+            cr_result = _find_criterion_result(sr_match, section_idx, ci, criterion)
+            recorded = cr_result or {}
+            checklist = recorded.get("checklist_completed")
+
+            yield {
+                "section_index": section_idx,
+                "section_name": section.get("name") or f"Section {section_idx + 1}",
+                "criterion_index": ci,
+                "label": criterion.get("label") or f"Criterion {ci + 1}",
+                "type": criterion.get("type") or "pass_fail",
+                "critical": bool(criterion.get("required", False)),
+                "outcome": _criterion_outcome(criterion, cr_result),
+                "score": recorded.get("score"),
+                "max_score": criterion.get("max_score"),
+                "time_seconds": recorded.get("time_seconds"),
+                # Rendered as "3/5 ticked" by callers; the raw list is kept so a
+                # caller that wants the individual boxes still has them.
+                "checklist": checklist if isinstance(checklist, list) else None,
+                "checklist_items": criterion.get("checklist_items") or None,
+                "notes": recorded.get("notes"),
+            }
+
+
 def calculate_test_result(
     test: SkillTest, template: SkillTemplate
 ) -> tuple[float | None, str]:
@@ -371,6 +426,28 @@ def is_pending_validation(test: SkillTest) -> bool:
     if getattr(test, "status", None) != SkillTestStatus.COMPLETED.value:
         return False
     return getattr(test, "validated_at", None) is None
+
+
+def is_under_correction(test: SkillTest) -> bool:
+    """Whether ``test`` is a submission an officer sent back, not yet resubmitted.
+
+    Deliberately *not* folded into ``is_pending_validation``: a returned test is
+    not in anyone's review queue, and the officer counts and the queue filter
+    both read that predicate. This one answers a different question — has this
+    result been submitted once and bounced? — and only the disclosure rules ask
+    it.
+
+    A test reopened this way sits at ``in_progress`` with every mark intact, so
+    without this it reads to the disclosure rules as an evaluation still in
+    progress and discloses in full.
+    """
+    from app.models.skills_testing import SkillTestStatus
+
+    if getattr(test, "is_practice", False):
+        return False
+    if getattr(test, "returned_at", None) is None:
+        return False
+    return getattr(test, "status", None) == SkillTestStatus.IN_PROGRESS.value
 
 
 class AttemptLimitReached(Exception):
@@ -740,7 +817,10 @@ def resolve_result_view(
         if not getattr(test, "released_at", None):
             return ResultDisclosure.NONE.value
 
-    if is_pending_validation(test):
+    # A returned test is between submissions: it has been sat and marked, but
+    # the officer bounced it and nothing about it stands. Same answer as a
+    # pending one — the reader may know it exists, not how it went.
+    if is_pending_validation(test) or is_under_correction(test):
         return RESULT_VIEW_PENDING
 
     return disclosure
@@ -776,6 +856,18 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
         # The breakdown is the score restated as arithmetic — leaving it would
         # hand over the very outcome the rest of this branch withholds.
         withheld["score_breakdown"] = None
+        # The correction trail is the officer's business with the examiner.
+        # "Step 4 contradicts your note" tells the candidate both that something
+        # was wrong with their evaluation and what the examiner is being asked
+        # to change, before anyone has decided the result stands.
+        withheld["return_reason"] = None
+        withheld["returned_at"] = None
+        withheld["returned_by"] = None
+        withheld["returned_by_name"] = None
+        # Zero rather than None: the field is a non-optional count, and zero is
+        # what a test that was never returned carries — so a returned one is
+        # indistinguishable from a clean one, which is the point.
+        withheld["return_count"] = 0
         return withheld
 
     if view != ResultDisclosure.SCORES.value:
