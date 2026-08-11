@@ -4969,6 +4969,44 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "05-10-bulk-add-items",
+    doc: "05-inventory.md",
+    line: 705,
+    anchor: "Screenshot of the Add Several modal with eight pasted lines",
+    alt: "Add Several: eight pasted lines and the parsed preview of name, quantity and unit",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Add Several/ })
+        .first()
+        .click();
+      const box = page.locator("textarea").first();
+      await box.waitFor({ timeout: 20_000 });
+      // Eight lines, three of them using the `| quantity | unit` suffix the
+      // hint under the box describes, and two naming items the catalog already
+      // holds — those are reported after submitting, not marked here. See the
+      // guide note beside this image.
+      await box.fill(
+        [
+          "Naloxone 4mg Nasal",
+          "Burn Sheet, Sterile | 6 | Each",
+          "Job Shirt",
+          "Cervical Collar, Adjustable | 4 | Each",
+          "Nasopharyngeal Airway Set",
+          "Trauma Shears, 7.5in | 12 | Each",
+          "Emergency Blanket",
+          "Glucometer Test Strips",
+        ].join("\n"),
+      );
+      await page.waitForTimeout(900);
+    },
+    selector: '[role="dialog"]',
+    // The detector fires on the Category select's "No category" — the honest
+    // default for a paste that has not chosen one, not a page that failed.
+    allowEmptyState: true,
+    fullPage: false,
+  },
+  {
     id: "05-09-receive-stock-modal",
     doc: "05-inventory.md",
     line: 685,

@@ -698,11 +698,20 @@ one-item-at-a-time modal.
 
 1. Go to **Inventory**.
 2. Click **Add Several**.
-3. Paste or type one item per line.
-4. Review the parsed preview and submit.
+3. Paste or type one item per line. A name on its own is enough; add
+   `| quantity | unit` after it to set those too.
+4. Pick a **category** and a **tracking** type for the whole paste — they apply
+   to every line, so paste one kind of thing at a time. **Counted** is right for
+   anything a checklist counts: a bracket holds four gauze, not gauze #7.
+5. Review the parsed preview and submit.
 
-> **Screenshot needed:**
-> _[Screenshot of the Add Several modal with eight pasted lines in the input and the parsed preview beside it, showing two lines marked as already existing in the catalog]_
+![Add Several: eight pasted lines and the parsed preview of name, quantity and unit](./images/05-10-bulk-add-items.png)
+
+The preview shows what each line **parsed to** — name, quantity, unit — with an
+em dash where a line gave none. It does **not** flag names the catalog already
+holds: that check runs on the server, and the ones it skipped are named back to
+you in the result message after you submit. Two of the eight lines above are
+already in this department's catalog, and nothing on this screen says so.
 
 **Names already in the catalog are skipped and reported, not rejected**, so you
 can re-paste a list after it grows and only the new lines are created. As with
