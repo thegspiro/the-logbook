@@ -39,7 +39,7 @@ Fixing an error means resolving its root cause. The following are **not** fixes:
 
 ### Hard Stop Before Continuing
 
-This is the escalation path from response #2 above — the *only* sanctioned
+This is the escalation path from response #2 above — the _only_ sanctioned
 alternative to fixing an error, never a license to ignore one. If fixing a
 discovered error would genuinely exceed the scope of the current task (e.g.,
 hundreds of strict-mode violations across unrelated files), **stop and report
@@ -149,6 +149,49 @@ Strict mode is **on** (`"strict": true` in `frontend/tsconfig.json`) with additi
 
 All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps to `./src/*`.
 
+### Two TypeScript installs — do not "tidy" this away
+
+The frontend depends on TypeScript twice, on purpose:
+
+| Declared as                                     | Version | Used by                                          |
+| ----------------------------------------------- | ------- | ------------------------------------------------ |
+| `typescript`                                    | 5.9.3   | typescript-eslint (type-aware lint rules)        |
+| `typescript-native` (npm alias of `typescript`) | 7.0.2   | `npm run typecheck`, `npm run build`, the editor |
+
+**typescript-eslint cannot run on TypeScript 7.** It throws `typescript-eslint does
+not support TS 7.0` from a hard version guard, and every published version caps
+its peer range at `<6.1.0` (typescript-eslint#10940 tracks TS >=7.1 support). A
+workspace can only declare one package named `typescript`, and npm resolves a
+peer against the workspace's own copy — so the linter's TypeScript has to be the
+one named `typescript`, and the compiler gets the alias.
+
+This is not cosmetic. Before it was set up this way, `rm package-lock.json &&
+npm install` failed outright with ERESOLVE: the lockfile in the repo could not be
+regenerated, and any bump of typescript-eslint broke the install.
+
+Consequences worth knowing:
+
+- `npm run typecheck` / `npm run build` go through `frontend/scripts/tsc-native.mjs`,
+  which resolves the aliased compiler. Plain `tsc` on `PATH` is the **5.9.3** one —
+  both installs ship a `tsc` bin and npm links only one, so do not "simplify" the
+  scripts back to bare `tsc` or you will silently typecheck with 5.9.3 (~12x
+  slower: ~41s vs ~3.5s, measured).
+- **Point your editor at the aliased compiler**, or it will report 5.9.3's
+  errors while CI reports 7.0.2's. In VS Code, set this in your local
+  `.vscode/settings.json` (the directory is gitignored, so this cannot be
+  committed for you — and the tracked copy's stale
+  `frontend/node_modules/typescript/lib` no longer exists, since npm hoists
+  both installs to the repo root):
+
+  ```json
+  "typescript.tsdk": "node_modules/typescript-native/lib"
+  ```
+
+- Type-aware lint runs against 5.9.3 while the build uses 7.0.2. That gap is
+  forced by upstream, not chosen. **When typescript-eslint ships TS 7 support,
+  collapse this back to a single `typescript` dependency** and delete the alias,
+  the wrapper script, and this section.
+
 ## Testing
 
 ### Frontend (Vitest + Testing Library)
@@ -180,24 +223,26 @@ The test setup (`src/test/setup.ts`) automatically mocks `window.matchMedia`, `I
 - **Navigation mocks** — `mockNavigate`, `mockUseParams`
 
 **Component test pattern:**
+
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 ```
 
-**Store test pattern** (mock dependencies *before* importing the store):
+**Store test pattern** (mock dependencies _before_ importing the store):
+
 ```typescript
 const mockLogin = vi.fn();
-vi.mock('../services/api', () => ({
+vi.mock("../services/api", () => ({
   authService: { login: (...args: unknown[]) => mockLogin(...args) as unknown },
 }));
 // Import store AFTER mocks are in place
-import { useMyStore } from './myStore';
+import { useMyStore } from "./myStore";
 
 // Access state via getState(), reset in beforeEach:
 beforeEach(() => {
-  useMyStore.setState({ /* initial state */ });
+  useMyStore.setState({/* initial state */});
   vi.clearAllMocks();
 });
 ```
@@ -292,19 +337,19 @@ backend/app/
 
 ### Naming Conventions
 
-| Item | Frontend | Backend |
-|------|----------|---------|
-| Components / Pages | `PascalCase.tsx` | N/A |
-| Hooks | `useCamelCase.ts` | N/A |
-| Stores | `camelCaseStore.ts` | N/A |
-| Services | `camelCase.ts` | `snake_case_service.py` |
-| Types | `PascalCase` (interfaces) | `PascalCase` (Pydantic/Enum classes) |
-| Utilities | `camelCase.ts` | `snake_case.py` |
-| DB tables | N/A | `plural_snake_case` |
-| DB columns | N/A | `snake_case` |
-| API endpoints | N/A | `snake_case` functions, `/kebab-case` URLs |
-| Constants | `SCREAMING_SNAKE` | `SCREAMING_SNAKE` |
-| Enums (frontend) | `as const` objects + extracted type | N/A |
+| Item               | Frontend                            | Backend                                    |
+| ------------------ | ----------------------------------- | ------------------------------------------ |
+| Components / Pages | `PascalCase.tsx`                    | N/A                                        |
+| Hooks              | `useCamelCase.ts`                   | N/A                                        |
+| Stores             | `camelCaseStore.ts`                 | N/A                                        |
+| Services           | `camelCase.ts`                      | `snake_case_service.py`                    |
+| Types              | `PascalCase` (interfaces)           | `PascalCase` (Pydantic/Enum classes)       |
+| Utilities          | `camelCase.ts`                      | `snake_case.py`                            |
+| DB tables          | N/A                                 | `plural_snake_case`                        |
+| DB columns         | N/A                                 | `snake_case`                               |
+| API endpoints      | N/A                                 | `snake_case` functions, `/kebab-case` URLs |
+| Constants          | `SCREAMING_SNAKE`                   | `SCREAMING_SNAKE`                          |
+| Enums (frontend)   | `as const` objects + extracted type | N/A                                        |
 
 ### Frontend Patterns
 
@@ -324,8 +369,8 @@ backend/app/
 - **Types:** Defined as `interface` (not `type`) for domain objects. One file per domain in `types/`. Enums use `as const` objects with an extracted type of the same name (value union pattern):
   ```typescript
   export const EventType = {
-    BUSINESS_MEETING: 'business_meeting',
-    TRAINING: 'training',
+    BUSINESS_MEETING: "business_meeting",
+    TRAINING: "training",
   } as const;
   export type EventType = (typeof EventType)[keyof typeof EventType];
   ```
@@ -411,10 +456,10 @@ These are recurring errors identified from the project's change history. Follow 
 
 ```typescript
 // WRONG — empty string passes through ??
-const phone = formData.phone?.trim() ?? undefined;  // '' ?? undefined === ''
+const phone = formData.phone?.trim() ?? undefined; // '' ?? undefined === ''
 
 // CORRECT — empty string is converted to undefined by ||
-const phone = formData.phone?.trim() || undefined;   // '' || undefined === undefined
+const phone = formData.phone?.trim() || undefined; // '' || undefined === undefined
 ```
 
 **Rule:** When converting form values to send to the API, always use `||` (logical OR), never `??` (nullish coalescing), to coerce empty strings to `undefined` so they are omitted from the JSON payload. This applies to all optional string fields in forms, onboarding flows, modals, and CSV exports.
@@ -428,19 +473,19 @@ never left the browser, and the old value survives behind a success toast.
 
 Three states, three distinct wire values:
 
-| Intent | Send | Backend reads it as |
-| ------ | ---- | ------------------- |
-| Leave the field alone | **omit the key** | untouched |
-| Clear the field | **`null`** | write NULL |
-| Set a value | the value | write the value |
+| Intent                | Send             | Backend reads it as |
+| --------------------- | ---------------- | ------------------- |
+| Leave the field alone | **omit the key** | untouched           |
+| Clear the field       | **`null`**       | write NULL          |
+| Set a value           | the value        | write the value     |
 
 ```typescript
 // CREATE — omit blanks so "" never reaches a Pydantic validator
 const phone = formData.phone?.trim() || undefined;
 
 // UPDATE — send an explicit null so the clear actually persists
-import { blankToNull, numberOrNull } from '@/utils/formValues';
-const phone = blankToNull(formData.phone);          // '' -> null
+import { blankToNull, numberOrNull } from "@/utils/formValues";
+const phone = blankToNull(formData.phone); // '' -> null
 const hours = numberOrNull(formData.requiredHours); // '' -> null
 ```
 
@@ -491,10 +536,10 @@ With `noUncheckedIndexedAccess: true`, array indexing and `.split()` results ret
 
 ```typescript
 // WRONG — TS error: string | undefined is not assignable to string
-const datePart = isoString.split('T')[0];
+const datePart = isoString.split("T")[0];
 
 // CORRECT — provide a fallback
-const datePart = isoString.split('T')[0] ?? '';
+const datePart = isoString.split("T")[0] ?? "";
 ```
 
 **Rule:** Always add `?? defaultValue` after indexed access (`arr[0]`, `.split()[n]`, `Object.keys()[n]`). Never use non-null assertions (`!`) as a workaround — use safe fallbacks instead.
@@ -666,7 +711,7 @@ result = await db.execute(
 ```
 
 **14b — `require_permission(...)` does NOT scope the object (XC-3).** A permission
-dependency only asserts the caller holds the permission *in their own org*. An
+dependency only asserts the caller holds the permission _in their own org_. An
 admin update/delete that then fetches the target by a path/body id without an org
 filter lets an org-A admin mutate an org-B row. Always resolve the target through
 an org-scoped fetch (e.g. `get_election(id, current_user.organization_id)`)
@@ -676,7 +721,7 @@ before mutating it — the permission check is not enough.
 (XC-1).** When a create/update stores a client-supplied foreign key
 (`user_id`, `category_id`, `apparatus_id`, `template_id`, `pipeline_id`,
 `assignee_id`, …), verify that referenced row is in the caller's org before
-storing it. Even when the write is org-stamped (so it can't be *read*
+storing it. Even when the write is org-stamped (so it can't be _read_
 cross-tenant), an unvalidated FK persists a dangling/mis-attributed reference —
 and in some cases (e.g. an eager-loaded template relationship with no org filter
 on the join) it leaks the other org's data back in the response. Prefer a shared
@@ -685,7 +730,7 @@ on the join) it leaks the other org's data back in the response. Prefer a shared
 **Rule:** When writing or reviewing any endpoint/service that takes an id or FK
 from the client: (1) org-scope every by-id query, (2) resolve mutation targets
 through an org-scoped fetch even behind `require_permission`, (3) validate
-client-supplied FK ids are in-org before persisting them. Also fail *closed* in
+client-supplied FK ids are in-org before persisting them. Also fail _closed_ in
 access-control helpers — if a referenced folder/parent can't be resolved, deny,
 don't grant.
 
@@ -726,12 +771,13 @@ nothing, with no error and no clue as to why.
 
 ```typescript
 // WRONG — suppressible, and indistinguishable from Cancel when it is
-if (!window.confirm('Delete this?')) return;
-const reason = window.prompt('Reason?');
+if (!window.confirm("Delete this?")) return;
+const reason = window.prompt("Reason?");
 
 // CORRECT — same control flow, promise-based
 const confirm = useConfirm();
-if (!(await confirm({ message: 'Delete this?', confirmLabel: 'Delete' }))) return;
+if (!(await confirm({ message: "Delete this?", confirmLabel: "Delete" })))
+  return;
 ```
 
 - `useConfirm()` returns **only** `confirm()`. The dialog is rendered once by
@@ -785,17 +831,18 @@ Reference files: `.env.example` (quick start), `.env.example.full` (all options)
 
 ### Required (Production)
 
-| Variable | Purpose |
-|----------|---------|
-| `SECRET_KEY` | JWT signing key (64+ chars) |
-| `ENCRYPTION_KEY` | AES-256 key (64-char hex) |
-| `ENCRYPTION_SALT` | Key derivation salt (32-char hex) |
-| `DB_PASSWORD` | MySQL user password |
-| `MYSQL_ROOT_PASSWORD` | MySQL root password |
-| `REDIS_PASSWORD` | Redis auth password |
-| `ALLOWED_ORIGINS` | Comma-separated CORS origins |
+| Variable              | Purpose                           |
+| --------------------- | --------------------------------- |
+| `SECRET_KEY`          | JWT signing key (64+ chars)       |
+| `ENCRYPTION_KEY`      | AES-256 key (64-char hex)         |
+| `ENCRYPTION_SALT`     | Key derivation salt (32-char hex) |
+| `DB_PASSWORD`         | MySQL user password               |
+| `MYSQL_ROOT_PASSWORD` | MySQL root password               |
+| `REDIS_PASSWORD`      | Redis auth password               |
+| `ALLOWED_ORIGINS`     | Comma-separated CORS origins      |
 
 Generate secrets:
+
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(64))"   # SECRET_KEY
 python3 -c "import secrets; print(secrets.token_hex(32))"        # ENCRYPTION_KEY
@@ -804,28 +851,28 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 
 ### Core Application
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ENVIRONMENT` | `development` | `development`, `staging`, or `production` |
-| `DEBUG` | `false` | Never `true` in production |
-| `DB_HOST` | `localhost` | MySQL hostname (`mysql` in Docker) |
-| `DB_PORT` | `3306` | MySQL port |
-| `DB_NAME` | `intranet_db` | Database name |
-| `DB_USER` | `intranet_user` | Database user |
-| `REDIS_HOST` | `localhost` | Redis hostname (`redis` in Docker) |
-| `REDIS_PORT` | `6379` | Redis port |
-| `FRONTEND_PORT` | `3000` | Frontend exposed port |
-| `BACKEND_PORT` | `3001` | Backend exposed port |
-| `LOG_LEVEL` | `INFO` | Logging level |
-| `ENABLE_DOCS` | `true` | API docs at `/docs` (disable in prod) |
+| Variable        | Default         | Purpose                                   |
+| --------------- | --------------- | ----------------------------------------- |
+| `ENVIRONMENT`   | `development`   | `development`, `staging`, or `production` |
+| `DEBUG`         | `false`         | Never `true` in production                |
+| `DB_HOST`       | `localhost`     | MySQL hostname (`mysql` in Docker)        |
+| `DB_PORT`       | `3306`          | MySQL port                                |
+| `DB_NAME`       | `intranet_db`   | Database name                             |
+| `DB_USER`       | `intranet_user` | Database user                             |
+| `REDIS_HOST`    | `localhost`     | Redis hostname (`redis` in Docker)        |
+| `REDIS_PORT`    | `6379`          | Redis port                                |
+| `FRONTEND_PORT` | `3000`          | Frontend exposed port                     |
+| `BACKEND_PORT`  | `3001`          | Backend exposed port                      |
+| `LOG_LEVEL`     | `INFO`          | Logging level                             |
+| `ENABLE_DOCS`   | `true`          | API docs at `/docs` (disable in prod)     |
 
 ### Frontend (Vite)
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `VITE_API_URL` | `/api/v1` | API base URL |
-| `VITE_BACKEND_URL` | `http://localhost:3001` | Backend URL for Vite dev proxy |
-| `VITE_SESSION_KEY` | (random per session) | Onboarding session encryption key — set a 32+ char value in production |
+| Variable           | Default                 | Purpose                                                                |
+| ------------------ | ----------------------- | ---------------------------------------------------------------------- |
+| `VITE_API_URL`     | `/api/v1`               | API base URL                                                           |
+| `VITE_BACKEND_URL` | `http://localhost:3001` | Backend URL for Vite dev proxy                                         |
+| `VITE_SESSION_KEY` | (random per session)    | Onboarding session encryption key — set a 32+ char value in production |
 
 ### Optional Services
 
