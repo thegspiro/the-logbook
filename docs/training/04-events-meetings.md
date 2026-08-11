@@ -1085,24 +1085,18 @@ The ballot email dispatch system has been significantly hardened:
 
 ### Election Report Email
 
-> **Screenshot needed:**
-> _[Screenshot of the election detail page with the "Send Report Email" button visible in the actions area, and the report email preview showing round-by-round results]_
-
 **Not yet built.** There is no **Send Report Email** button on the election
 detail page. Results are shared by exporting them from the Results tab, or by
-generating the pre-meeting package. The placeholder stays open.
+generating the pre-meeting package.
 
 ### Upcoming Business Meetings
-
-> **Screenshot needed:**
-> _[Screenshot of the election detail page showing the "Upcoming Business Meetings" section with a list of upcoming meetings and "Link" buttons]_
 
 **Not yet built.** The election detail page has no **Upcoming Business
 Meetings** section and no **Link to Election** control. The link itself is
 real — an election carries `meeting_id` and `event_id`, and an event it is
 linked to shows a **Linked Elections** card (see below) — but it is set when
 the election is created, or through the API, not from a list of candidate
-meetings. Two placeholders stay open.
+meetings.
 
 ### Edge Cases — Elections (2026-03-19)
 
@@ -1311,16 +1305,13 @@ matrix above.
 
 ### Election Meeting Integration
 
-> **Screenshot needed:**
-> _[Screenshot of the election detail page "Upcoming Business Meetings" section showing a list of upcoming meetings with dates and "Link to Election" buttons]_
-
 **Not yet built** — the same gap as [Upcoming Business Meetings](#upcoming-business-meetings). An election does carry a meeting/event link, and the linked event shows a **Linked Elections** card; what is missing is the section on the election side that lists meetings to link to.
 
 | Troubleshooting                     | Solution                                                                                                                            |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Ballot emails sent but 0 recipients | Fixed 2026-03-22 — eligibility now uses `membership_type`. Check that members have the correct membership type and email addresses. |
 | Election error messages are generic | Fixed 2026-03-22 — errors now include specific guidance.                                                                            |
-| Can't find report email button      | Look for "Send Report Email" in the election detail page actions area.                                                              |
+| Can't find report email button      | There is no such button. Export results from the Results tab, or send the pre-meeting package.                                      |
 
 ---
 
@@ -1349,14 +1340,17 @@ Officers can populate an election's ballot recipient list directly from a linked
 
 1. Open the election detail page
 2. Navigate to the **Ballot** tab
-3. Click **Import Attendees** and select the linked event
-4. Checked-in attendees from the event are added to the ballot recipient list
+3. Click **Import Attendees from Meeting** (or **… from Event**)
+4. Checked-in attendees are added to the ballot recipient list
 5. Members already in the ballot list are automatically skipped
 
 This streamlines the workflow for in-meeting elections where only present members should vote.
 
-> **Screenshot needed:**
-> _[Screenshot of the election Ballot tab showing the "Import Attendees" button with a dropdown of linked events, and a success message "12 attendees imported, 3 already in list (skipped)"]_
+> **There is no event picker.** The control is a single button that imports from
+> **the** meeting or event this election is already linked to — it names which
+> one, and it only appears when the election has such a link and is still in
+> **draft**. An election already taking nominations or open for voting does not
+> show it: the recipient list is settled by then.
 
 ### Quick-Link Buttons on Upcoming Meetings
 
