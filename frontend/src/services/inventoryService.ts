@@ -16,6 +16,8 @@ import type {
   EquipmentRequestItem,
   WriteOffRequestItem,
   InventoryItemCreate,
+  InventoryItemBulkEntry,
+  InventoryItemBulkResult,
   ItemIssuance,
   InventoryItemsListResponse,
   ItemHistoryEvent,
@@ -182,6 +184,11 @@ export const inventoryService = {
 
   async createItem(data: InventoryItemCreate): Promise<InventoryItem> {
     const response = await api.post<InventoryItem>('/inventory/items', data);
+    return response.data;
+  },
+
+  async createItemsBulk(entries: InventoryItemBulkEntry[]): Promise<InventoryItemBulkResult> {
+    const response = await api.post<InventoryItemBulkResult>('/inventory/items/bulk', { entries });
     return response.data;
   },
 

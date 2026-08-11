@@ -21,7 +21,8 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 
 export interface ConfirmOptions {
-  message: string;
+  /** Accepts a node so a decision that turns on a list can be shown as one. */
+  message: React.ReactNode;
   title?: string;
   confirmLabel?: string;
   cancelLabel?: string;

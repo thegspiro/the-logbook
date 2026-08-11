@@ -66,6 +66,7 @@ from app.models.user import (
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels
+from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 
 # Valid status→condition combinations.  If a status is listed here,
@@ -4246,6 +4247,85 @@ class InventoryService:
         for lot in lots:
             await self.db.refresh(lot)
         return lots
+
+    async def create_items_bulk(
+        self,
+        organization_id,
+        entries: List[Dict[str, Any]],
+        created_by,
+    ) -> Tuple[List[InventoryItem], List[str]]:
+        """Create many catalog items at once, skipping names already on file.
+
+        Stocking a catalog is a list-shaped job — a department types up its
+        consumables once, thirty lines at a time — and the one-item-per-modal
+        form is what leaves that catalog half-built. A half-built catalog is
+        what leaves checklist positions unlinked, which is what leaves
+        expirations untracked.
+
+        Returns ``(created, skipped_names)``. A name that already exists is
+        skipped rather than rejected: re-pasting a list after adding two lines
+        to it is the normal way this gets used, and failing the whole batch for
+        the twenty-eight that already landed would punish exactly that.
+
+        All or nothing on *errors*, though — a validation failure writes
+        nothing, because a partially-applied paste gives the officer no way to
+        tell where the list stopped.
+        """
+        if not entries:
+            return [], []
+
+        existing = await self.db.execute(
+            select(InventoryItem.name).where(
+                InventoryItem.organization_id == organization_id
+            )
+        )
+        seen = {normalize_name(n) for n in existing.scalars().all() if n}
+
+        items: List[InventoryItem] = []
+        skipped: List[str] = []
+
+        for entry in entries:
+            data = dict(entry)
+            name = (data.get("name") or "").strip()
+            if not name:
+                raise ValueError("Every item needs a name")
+
+            key = normalize_name(name)
+            # Guards against duplicates already on file *and* repeats within
+            # this paste, which is where a copied spreadsheet column usually
+            # goes wrong.
+            if key in seen:
+                skipped.append(name)
+                continue
+            seen.add(key)
+
+            data["name"] = name
+            cat_err = await self._validate_category_requirements(data, organization_id)
+            if cat_err:
+                raise ValueError(f"{name}: {cat_err}")
+
+            # INV-4 (XC-1): category/location/storage ids arrive from the
+            # client on every row of the paste, not just the first.
+            await self._assert_item_fks_in_org(data, organization_id)
+
+            if data.get("tracking_type") == "pool" and data.get("quantity", 1) < 1:
+                raise ValueError(
+                    f"{name}: pool items must have a quantity of 1 or more"
+                )
+
+            if not data.get("barcode"):
+                data["barcode"] = await self._next_sequential_barcode(organization_id)
+
+            item = InventoryItem(
+                organization_id=organization_id, created_by=created_by, **data
+            )
+            self.db.add(item)
+            items.append(item)
+
+        await self.db.commit()
+        for item in items:
+            await self.db.refresh(item)
+        return items, skipped
 
     async def update_lot(
         self,

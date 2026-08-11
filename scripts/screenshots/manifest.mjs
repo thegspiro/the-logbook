@@ -4069,7 +4069,11 @@ export const SHOTS = [
     anchor:
       "Screenshot of Settings → Security showing the Privacy Choices section with three",
     alt: "Account security settings showing the privacy choices section",
-    route: "/settings/account",
+    // Privacy Choices lives on the Security tab; this shot was landing on
+    // Account, byte-identical to 00-09-account-settings. Note the canonical
+    // path: /settings/account is a <Navigate to="/account"> with no query, so
+    // React Router drops ?tab= on the redirect and the param never arrives.
+    route: "/account?tab=security",
     fullPage: true,
   },
 
@@ -4118,7 +4122,11 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Expiring Certifications page showing a table of upcoming expirations",
     alt: "Expiring certifications table sorted by expiration date",
-    route: "/training/admin",
+    // Bare /training/admin lands on the Dashboard overview, so this and
+    // 02-41 captured the same default tab under two different captions —
+    // byte-identical files, neither showing what it claims. The hub keys
+    // this view as expiring-certs (page=dashboard).
+    route: "/training/admin?tab=expiring-certs",
     fullPage: true,
   },
   {
@@ -4148,6 +4156,32 @@ export const SHOTS = [
       "Screenshot of the compliance report showing a requirement (e.g., 'Monthly Minimum Shifts:",
     alt: "Scheduling compliance report with per-member shift totals",
     route: "/scheduling/reports",
+    // The page opens on Member Hours with an empty picker and "Select a Date
+    // Range" where the report goes, so a plain route visit captured a
+    // placeholder rather than the compliance report the placeholder asks for.
+    //
+    // Each tab carries its own filter bar, so the controls here are the
+    // compliance tab's, not the ones visible on arrival: a single optional
+    // Reference Date (no range), and a button reading "Check Compliance"
+    // rather than "Generate Report". Its results are gated on hasSearched,
+    // which only the submit sets — the date alone renders nothing.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: /shift compliance/i })
+        .click({ timeout: 10_000 });
+      await page
+        .getByRole("button", { name: /check compliance/i })
+        .click({ timeout: 10_000 });
+      // Wait for the results themselves, not for the placeholder to vanish:
+      // loadCompliance sets hasSearched *before* awaiting the fetch, so the
+      // empty state disappears on click and a "hidden" wait resolves instantly
+      // — asserting nothing, and happily shooting an errored or empty response
+      // under the compliance caption. The filter toggle renders only in the
+      // results branch, so it is the real signal.
+      await page
+        .getByRole("button", { name: /non-compliant only/i })
+        .waitFor({ state: "visible", timeout: 20_000 });
+    },
     fullPage: true,
   },
   {
@@ -4709,7 +4743,10 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Event Requests tab showing a list of requests with",
     alt: "Event requests tab listing incoming requests with status badges",
-    route: "/events/admin",
+    // /events/admin defaults to the Create Event tab, so this was
+    // byte-identical to 04-05-create-event under a different caption — the
+    // same defect as 02-21/02-41.
+    route: "/events/admin?tab=requests",
     fullPage: true,
   },
   {
@@ -4729,7 +4766,9 @@ export const SHOTS = [
     anchor:
       "The Training Admin Reports tab showing the Compliance, Hours Summary, and Certification",
     alt: "Training admin reports tab with the compliance, hours, and certification cards",
-    route: "/training/admin",
+    // See 02-41's twin above: bare /training/admin is the Dashboard overview.
+    // Reports lives under the Enhancements page.
+    route: "/training/admin?tab=reports",
     fullPage: true,
   },
   {

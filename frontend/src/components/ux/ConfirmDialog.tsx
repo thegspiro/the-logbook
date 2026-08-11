@@ -14,7 +14,13 @@ interface ConfirmDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   title?: string;
-  message: string;
+  /**
+   * A node, not just a string: some decisions turn on a list rather than a
+   * sentence. Ten items short of par read as an unparseable run of names in
+   * prose, and prose cannot say *how* short each one is — which is the whole
+   * basis for the answer. Strings remain valid, and are still centred.
+   */
+  message: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'danger' | 'warning' | 'info';
@@ -58,13 +64,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm" aria-describedby="confirm-dialog-message">
-      <div className="flex flex-col items-center text-center">
+      <div className="flex flex-col items-center">
         <div className={`h-12 w-12 rounded-full ${config.iconBg} mb-4 flex items-center justify-center`}>
           <Icon className={`h-6 w-6 ${config.iconColor}`} />
         </div>
-        <p id="confirm-dialog-message" className="text-theme-text-secondary text-sm">
+        <div id="confirm-dialog-message" className="text-theme-text-secondary w-full text-center text-sm">
           {message}
-        </p>
+        </div>
       </div>
       <div className="mt-6 flex gap-3">
         <button onClick={onClose} disabled={loading} className="btn-secondary flex-1">

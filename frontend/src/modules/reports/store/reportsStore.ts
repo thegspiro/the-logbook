@@ -171,7 +171,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to generate report');
       set({ generatingReportType: null, error: message });
-      throw new Error(message);
+      throw new Error(message, { cause: err });
     }
   },
 

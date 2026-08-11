@@ -82,6 +82,8 @@ export type {
   NFPASummary,
   NFPARetirementDueItem,
   InventoryImportResult,
+  InventoryItemBulkEntry,
+  InventoryItemBulkResult,
   SizeVariantCreate,
   BulkIssuanceTarget,
   BulkIssuanceResponse,

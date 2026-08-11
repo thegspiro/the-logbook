@@ -70,6 +70,8 @@ import type {
   ItemDeployment,
   ItemRestockState,
   LotSwapResult,
+  InventoryMatchesResult,
+  InventoryLinkResult,
 } from '../types/equipmentCheck';
 import { blankToNull } from '@/utils/formValues';
 
@@ -877,6 +879,20 @@ export const schedulingService = {
   },
   async reorderItems(compartmentId: string, orderedIds: string[]): Promise<void> {
     await api.put(`/equipment-checks/compartments/${compartmentId}/items/reorder`, { ordered_ids: orderedIds });
+  },
+
+  // --- Catalog linking ---
+  async getInventoryMatches(templateId: string): Promise<InventoryMatchesResult> {
+    const response = await api.get<InventoryMatchesResult>(
+      `/equipment-checks/templates/${templateId}/inventory-matches`
+    );
+    return response.data;
+  },
+  async linkInventoryItems(templateId: string, links: Record<string, string | null>): Promise<InventoryLinkResult> {
+    const response = await api.post<InventoryLinkResult>(`/equipment-checks/templates/${templateId}/inventory-links`, {
+      links,
+    });
+    return response.data;
   },
 
   // =====================================================================

@@ -6,7 +6,7 @@ and shift equipment check submissions.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
@@ -815,6 +815,77 @@ class LotSwapResponse(BaseModel):
     # because the truck is still short.
     restock_needed: bool = False
     quantity_on_truck: Optional[int] = None
+
+
+# ============================================
+# Catalog Linking (template setup)
+# ============================================
+
+
+class LinkCoverage(BaseModel):
+    """How much of a template is wired to the inventory catalog."""
+
+    model_config = _camel_config
+
+    # Headers and unnamed rows are excluded — they are captions, not stock, so
+    # counting them would understate coverage that is in fact complete.
+    linkable: int = 0
+    linked: int = 0
+    unlinked: int = 0
+
+
+class InventoryMatchSuggestion(BaseModel):
+    """One catalog item proposed for an unlinked checklist position."""
+
+    model_config = _camel_config
+
+    id: str
+    name: str
+    # 1.0 only when the two names normalize identically. The review screen
+    # pre-selects those and nothing else: a subset match ("Oxygen Mask" against
+    # "Oxygen Mask Adult") scores high but is exactly the case a person needs
+    # to arbitrate.
+    score: float
+    confidence: str
+
+
+class InventoryMatch(BaseModel):
+    """An unlinked checklist position and what the catalog might call it."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    item_name: str
+    check_type: Optional[str] = None
+    suggestions: List[InventoryMatchSuggestion] = []
+
+
+class InventoryMatchesResponse(BaseModel):
+    """Proposed links for a whole template. Nothing here has been written."""
+
+    model_config = _camel_config
+
+    coverage: LinkCoverage
+    matches: List[InventoryMatch] = []
+
+
+class InventoryLinkRequest(BaseModel):
+    """Apply a reviewed set of catalog links.
+
+    Maps template item id -> inventory item id. An explicit null unlinks, so
+    the same call that made a wrong match can undo it.
+    """
+
+    links: Dict[str, Optional[str]] = Field(..., min_length=1)
+
+
+class InventoryLinkResponse(BaseModel):
+    """What the link pass changed, and where coverage stands afterwards."""
+
+    model_config = _camel_config
+
+    linked: int = 0
+    coverage: LinkCoverage
 
 
 # CheckTemplateItemResponse references DeployedLot, which is declared with the
