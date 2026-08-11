@@ -10,7 +10,7 @@ import io
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
@@ -21,6 +21,7 @@ from app.models.training import (
     RecertificationPathway,
     RenewalTask,
     RenewalTaskStatus,
+    SkillEvaluation,
     TrainingCategory,
     TrainingCourse,
     TrainingEffectivenessEvaluation,
@@ -267,6 +268,27 @@ class InstructorQualificationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _validate_references(self, organization_id: str, data: dict) -> None:
+        """Ensure qualification foreign keys belong to the current tenant."""
+        references = (
+            ("user_id", User),
+            ("course_id", TrainingCourse),
+            ("skill_evaluation_id", SkillEvaluation),
+            ("category_id", TrainingCategory),
+        )
+        for field, model in references:
+            reference_id = data.get(field)
+            if reference_id is None:
+                continue
+            result = await self.db.execute(
+                select(model.id).where(
+                    model.id == reference_id,
+                    model.organization_id == organization_id,
+                )
+            )
+            if result.scalar_one_or_none() is None:
+                raise ValueError(f"Invalid {field}")
+
     async def get_qualifications(
         self,
         organization_id: str,
@@ -283,10 +305,19 @@ class InstructorQualificationService:
         """
         query = (
             select(InstructorQualification, User, TrainingCourse)
-            .outerjoin(User, User.id == InstructorQualification.user_id)
+            .outerjoin(
+                User,
+                and_(
+                    User.id == InstructorQualification.user_id,
+                    User.organization_id == organization_id,
+                ),
+            )
             .outerjoin(
                 TrainingCourse,
-                TrainingCourse.id == InstructorQualification.course_id,
+                and_(
+                    TrainingCourse.id == InstructorQualification.course_id,
+                    TrainingCourse.organization_id == organization_id,
+                ),
             )
             .where(InstructorQualification.organization_id == organization_id)
         )
@@ -310,6 +341,7 @@ class InstructorQualificationService:
         self, organization_id: str, data: dict, created_by: str
     ) -> InstructorQualification:
         """Create an instructor qualification"""
+        await self._validate_references(organization_id, data)
         qual = InstructorQualification(
             organization_id=organization_id,
             created_by=created_by,
@@ -334,6 +366,7 @@ class InstructorQualificationService:
         qual = result.scalar_one_or_none()
         if not qual:
             raise ValueError("Qualification not found")
+        await self._validate_references(organization_id, data)
         apply_updates(qual, data)
         await self.db.flush()
         # See update_pathway: server-side `updated_at` stays expired after a

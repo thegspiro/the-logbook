@@ -332,7 +332,9 @@ describe('publicFormsService', () => {
 
       const result = await publicFormsService.getForm('my-form-slug');
 
-      expect(mockAxiosGet).toHaveBeenCalledWith('/api/public/v1/forms/my-form-slug');
+      expect(mockAxiosGet).toHaveBeenCalledWith('/api/public/v1/forms/my-form-slug', {
+        withCredentials: true,
+      });
       expect(result).toEqual(form);
     });
   });
@@ -345,7 +347,11 @@ describe('publicFormsService', () => {
 
       const result = await publicFormsService.submitForm('my-form-slug', data);
 
-      expect(mockAxiosPost).toHaveBeenCalledWith('/api/public/v1/forms/my-form-slug/submit', { data });
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        '/api/public/v1/forms/my-form-slug/submit',
+        { data },
+        { withCredentials: true }
+      );
       expect(result).toEqual(response);
     });
 
@@ -356,7 +362,8 @@ describe('publicFormsService', () => {
 
       expect(mockAxiosPost).toHaveBeenCalledWith(
         '/api/public/v1/forms/slug/submit',
-        expect.objectContaining({ website: 'bot-value' })
+        expect.objectContaining({ website: 'bot-value' }),
+        { withCredentials: true }
       );
     });
 

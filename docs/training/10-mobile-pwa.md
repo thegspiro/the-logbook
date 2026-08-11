@@ -17,7 +17,8 @@ This guide covers installing the app, understanding offline behavior, using mobi
 7. [Push Notifications on Mobile](#push-notifications-on-mobile)
 8. [Mobile-Optimized Features](#mobile-optimized-features)
 9. [Tips for Mobile Use](#tips-for-mobile-use)
-10. [Troubleshooting](#troubleshooting)
+10. [Check Your Understanding](#check-your-understanding)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -414,6 +415,32 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 
 ---
 
+## Check Your Understanding
+
+1. You tap Submit on a training record while offline. What proves that the
+   server eventually received it?
+2. The camera permission is denied during a scan. What is the safe recovery
+   path?
+3. Why should you avoid assuming that every browser shows the same installation
+   prompt?
+
+<details>
+<summary>Check your answers</summary>
+
+1. The offline indicator proves only that the device queued it. Wait for the
+   queue to synchronize after connectivity returns, then verify that the record
+   appears in Training with its durable **Pending Review** status.
+2. Allow camera access in browser or operating-system settings and retry. Use
+   the provided manual-entry/search option if permission cannot be granted; do
+   not work around it with an unapproved scanning app.
+3. Installation is controlled partly by the operating system and browser. iOS,
+   Android, Chrome, Safari, and Firefox expose different menus and prompts, so
+   follow the instructions for the device actually in use.
+
+</details>
+
+---
+
 ## Troubleshooting
 
 | Issue                                                               | Solution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -432,7 +459,7 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 | No "Push notifications" toggle at all                               | On iPhone/iPad: you are browsing in Safari rather than running the installed app — install it first. On any platform: your department may not have push enabled on its deployment.                                                                                                                                                                                                                                                                                                      |
 | Push stopped after reinstalling the app                             | Subscriptions are tied to the app install on that device. Turn the toggle back on.                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Page not loading — "Network error"                                  | The app requires an internet connection for all data operations. Check your Wi-Fi or cellular signal. Try refreshing the page.                                                                                                                                                                                                                                                                                                                                                          |
-| Form submission failed                                              | Check your connection. The app does not queue submissions — if the network is unavailable at the moment you tap Submit, the submission fails. Wait for connectivity and try again.                                                                                                                                                                                                                                                                                                      |
+| Form submission did not synchronize                                 | Training submissions and event RSVPs queue in IndexedDB while offline. Restore connectivity, use the sync indicator to retry if needed, and verify the durable result in Training or Events. Other forms may still require connectivity; preserve the entered values and follow the error shown by that form.                                                                                                                                                                           |
 | App icon disappeared from home screen                               | Some devices remove PWA icons after system updates or storage cleanups. Reinstall following the steps above.                                                                                                                                                                                                                                                                                                                                                                            |
 | Dark mode not applying in PWA                                       | Dark mode follows the app's theme setting (My Account > Appearance), not the device's system setting. Toggle it from within the app.                                                                                                                                                                                                                                                                                                                                                    |
 | "Update Available" notification not appearing                       | The version detection checks periodically. If you suspect you're on an old version, force refresh with Ctrl+Shift+R or close and reopen the app.                                                                                                                                                                                                                                                                                                                                        |

@@ -9,6 +9,7 @@ import type {
   SkillTemplate,
   SkillTemplateCreate,
   SkillTemplateListItem,
+  SkillSheetLibraryItem,
   SkillTemplateUpdate,
   SkillTest,
   SkillTestCreate,
@@ -1227,6 +1228,21 @@ export const skillsTestingService = {
     return response.data;
   },
 
+  /** The starter sheets a department can copy into its own library. */
+  async getLibrarySheets(): Promise<SkillSheetLibraryItem[]> {
+    const response = await api.get<SkillSheetLibraryItem[]>('/training/skills-testing/library');
+    return asArray(response.data);
+  },
+
+  /** Copy one in. It lands as a draft — a sheet nobody in the department has
+   *  read yet should not be selectable for a live evaluation. */
+  async importLibrarySheet(slug: string): Promise<SkillTemplate> {
+    const response = await api.post<SkillTemplate>(
+      `/training/skills-testing/library/${encodeURIComponent(slug)}/import`
+    );
+    return response.data;
+  },
+
   async createTemplate(data: SkillTemplateCreate): Promise<SkillTemplate> {
     const response = await api.post<SkillTemplate>('/training/skills-testing/templates', data);
     return response.data;
@@ -1305,6 +1321,18 @@ export const skillsTestingService = {
     await api.delete(`/training/skills-testing/tests/${testId}/discard`);
   },
 
+  /** Accept several submissions at once. Partial success is normal — the
+   *  response reports which ids were skipped and why. */
+  async bulkValidateTests(
+    testIds: string[]
+  ): Promise<{ validated: string[]; skipped: { test_id: string; reason: string }[] }> {
+    const response = await api.post<{ validated: string[]; skipped: { test_id: string; reason: string }[] }>(
+      '/training/skills-testing/tests/bulk-validate',
+      { test_ids: testIds }
+    );
+    return response.data;
+  },
+
   async validateTest(testId: string): Promise<SkillTest> {
     const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/validate`);
     return response.data;
@@ -1342,6 +1370,13 @@ export const skillsTestingService = {
 
   async voidTest(testId: string, reason: string): Promise<SkillTest> {
     const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/void`, { reason });
+    return response.data;
+  },
+
+  /** Send a submission back to its examiner rather than accepting or voiding
+   *  it. Reopens the test at in_progress with every mark intact. */
+  async returnTest(testId: string, reason: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/return`, { reason });
     return response.data;
   },
 

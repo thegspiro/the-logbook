@@ -12,6 +12,7 @@ IMAGE_SIZE_LIMITS = {
     "photo": (1920, 1080),
     "thumbnail": (200, 200),
 }
+MAX_INPUT_PIXELS = 25_000_000
 
 
 def optimize_image(
@@ -26,29 +27,33 @@ def optimize_image(
     - Strips EXIF metadata (privacy)
     - Converts to WebP for smaller file sizes
     - Resizes to fit within max_size while preserving aspect ratio
-    - Falls back to original bytes if processing fails
+    - Rejects the upload if processing fails
     """
-    try:
-        img = Image.open(BytesIO(file_bytes))
-
-        # Convert RGBA to RGB for JPEG/WebP compatibility
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-
-        # Resize if larger than max dimensions (preserve aspect ratio)
-        img.thumbnail(max_size, Image.LANCZOS)
-
-        # Save optimized
-        output = BytesIO()
-        img.save(output, format=output_format, quality=quality, optimize=True)
-        optimized = output.getvalue()
-
-        saved_pct = (1 - len(optimized) / len(file_bytes)) * 100 if file_bytes else 0
-        logger.debug(
-            f"Image optimized: {len(file_bytes)} -> {len(optimized)} bytes ({saved_pct:.0f}% reduction)"
+    img = Image.open(BytesIO(file_bytes))
+    if img.width * img.height > MAX_INPUT_PIXELS:
+        raise Image.DecompressionBombError(
+            f"Image contains {img.width * img.height} pixels; "
+            f"limit is {MAX_INPUT_PIXELS}"
         )
+    img.verify()
+    img = Image.open(BytesIO(file_bytes))
+    img.load()
 
-        return optimized
-    except Exception as e:
-        logger.warning(f"Image optimization failed, using original: {e}")
-        return file_bytes
+    # Convert RGBA to RGB for JPEG/WebP compatibility
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+
+    # Resize if larger than max dimensions (preserve aspect ratio)
+    img.thumbnail(max_size, Image.LANCZOS)
+
+    # Save optimized
+    output = BytesIO()
+    img.save(output, format=output_format, quality=quality, optimize=True)
+    optimized = output.getvalue()
+
+    saved_pct = (1 - len(optimized) / len(file_bytes)) * 100 if file_bytes else 0
+    logger.debug(
+        f"Image optimized: {len(file_bytes)} -> {len(optimized)} bytes ({saved_pct:.0f}% reduction)"
+    )
+
+    return optimized

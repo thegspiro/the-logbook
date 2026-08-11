@@ -546,8 +546,9 @@ one card. The backend serves exactly one feed route,
 `/api/public/v1/calendar/{token}.ics`, scoped to the member's own shifts.
 
 So the filtered feeds the guide describes — all events, training only — do not
-exist on either side. Both placeholders are left open. The subscribe card is
-captured instead against the guide-03 placeholder that actually describes it.
+exist on either side. Both placeholders are left open. The guide-03 subscribe
+card is also deliberately not captured because expanding it exposes the
+calendar feed's bearer credential.
 
 Most of the rest of guide 16 needs a live third-party account (a Salesforce
 sync status, a connected Cal.com bookings panel, a warning state carrying a
@@ -914,6 +915,216 @@ that names the accepted values. Two things this does **not** cover:
   deliberate — turning `score_pass_fail_criteria` on by default would change
   the meaning of every percentage already on record. Such a sheet scores by
   section average and says so.
+
+## Training — Nothing Creates a Skill Evaluation (2026-08-10)
+
+`SkillEvaluation` is read in two places and written in none.
+
+`GET /training/module-config/skill-names` feeds the linkage indicator on
+**Scheduling → Settings → Shift Reports**, which tags each apparatus-type skill
+green when its name matches a skill evaluation and amber when it does not.
+`ShiftCompletionService._resolve_skill_evaluations` uses the same table to turn
+a 1–5 score on a shift report into a `SkillCheckoff` and, through that, into
+competency history and pipeline progress.
+
+There is no create endpoint, no update endpoint and no screen. Searching the
+backend for a constructor finds only the model definition itself. The only path
+by which a department can acquire a row is `org_template_registry`, which copies
+the table when an organization is provisioned from a department template — and
+that merely moves rows that already exist somewhere.
+
+The consequences are quiet rather than loud, which is why this went unnoticed:
+
+- Every skill tag in the settings panel reads amber, on every department. The
+  legend explaining the two colours is gated on `skillEvalNames.size > 0`, so it
+  never renders either — the amber is not even labelled.
+- Skill scores on shift reports are stored on the report and go no further. No
+  checkoff is created, no competency score is recorded, and a pipeline
+  requirement waiting on that skill is never progressed. The officer entering
+  the score gets no indication that it stopped there.
+- `POST /training/skill-evaluations/{id}/check-evaluator`, which decides who may
+  sign a skill off, can only ever 404.
+
+Recorded rather than fixed: the missing piece is a skills-definition CRUD screen
+with an evaluator-permission editor, which is a feature rather than a repair.
+The screenshot placeholder for the linkage tags is held back until there is a
+mixed green/amber state to picture — a column of amber would document the gap
+as though it were the design — and `docs/training/03-scheduling.md` now says
+plainly that every tag reads amber and why.
+
+Note also that the matching is **case-insensitive** on both sides
+(`eval_by_lower` in the service, `item.toLowerCase()` in the panel). The guide
+previously described it as case-sensitive; corrected.
+
+## Equipment Checks — A Member Could Not Open One (2026-08-11)
+
+EC-7 widened `GET /shifts/{id}/checklists` to accept `equipment_check.view` OR
+`equipment_check.submit`, on the explicit grounds that a member holds `.submit`
+and "the check-performing flow keeps working". Its siblings were not widened,
+and the compartments and items on a template _are_ the check form.
+
+So the member's own page listed every checklist due to them — rig, timing,
+date, "0/9 items", **Start Check** — and every route from that list into the
+form returned 403. `MyChecklistsPage` calls `GET /templates/{id}` to open a due
+checklist, to start an ad-hoc one and to resume a part-finished one, and
+`GET /templates` to populate its "Start a Check" picker. All four were
+`equipment_check.view` only.
+
+Fixed by accepting either permission on both reads, matching the checklists
+endpoint and for the same stated reason. The writes are deliberately untouched
+— editing a template stays a manage right — and the test guards that boundary
+as well as the widening.
+
+Found while trying to seed a completed and a part-answered checklist for the
+demo member: the seeder acts as the member for exactly the reason the product
+does, and hit the same 403.
+
+## Scheduling — The Hold-Over Roster Needs Platoons (2026-08-11)
+
+`docs/training/03-scheduling.md` described the hold-over roster as appearing
+"when a shift has a gap (member on leave or open position)". The panel is
+gated on `platoonsEnabled && shift.platoon && platoonRoster.length > 0` — it is
+the _platoon_ roster, and a department that does not run platoons never sees it
+however short a shift is. The guide now says so, and points at the crew board's
+own Assign controls as the way to fill a gap otherwise.
+
+The screenshot is held back rather than fabricated: picturing it needs platoons
+enabled and shifts generated from a platoon pattern, neither of which the demo
+department runs, and switching platoons on would put a platoon badge across
+every calendar card in the guide's other scheduling screenshots.
+
+## Screenshot Seeding — The Member's Own Checklists (2026-08-11)
+
+Deferred. My Equipment Checklists is scoped to the signed-in member's own
+shifts, and the checks the seeder files as the administrator do not appear on
+it, so every row reads "Not Started". The page documented as showing a finished
+check beside a resumable one can picture neither, and the Resume control and its
+progress bar cannot be photographed.
+
+A step to file them as the member was written and removed after two attempts: it
+ran clean and filed nothing, and a seeder step that silently does nothing is
+worse than no step. It uncovered the 403 recorded above, which was the more
+valuable half. Worth another attempt with a fresh idea about which of the
+member's shifts carry an unclaimed checklist — the first pass drove it from
+`/scheduling/my-shifts`, whose result did not line up with what the page lists.
+
+The same scoping blocks the **incomplete-check warning** ("Submit an incomplete
+check? — _N_ of _M_ items have not been checked"), which is raised from the
+check form before anything is written and would otherwise be a
+straightforward capture. Two attempts to reach the form failed: the checklist
+rows are empty for the administrator the harness signs in as, and driving it
+through **Start a Check** did not get as far as the template picker either.
+Reaching it needs the seeding above, or a member session whose own shift carries
+an unstarted checklist.
+
+## Screenshot Seeding — Apparatus Inventory Was Empty For Every Truck (2026-08-11, resolved)
+
+Resolved the same day by `seed_supply_tracking`, which stocks **M-3** with a
+catalog of dated consumables, a checklist bound to that apparatus by id, and
+deployed-lot rows saying what is aboard. Recorded here because the diagnosis
+still applies to any department whose inventory page is bare:
+
+`GET /equipment-checks/apparatus/{id}/inventory` joins template compartments to
+an apparatus by `EquipmentCheckTemplate.apparatus_id`. A checklist bound by
+`apparatus_type` — what a template that applies to every engine looks like —
+supplies checklists for shifts but stocks no particular truck, and a rig with
+only type-bound templates shows an empty inventory. That is documented in
+`03-scheduling.md` as a callout rather than left for the reader to discover.
+
+Two things the seeding turned up, both now fixed:
+
+- A position nobody has counted reports its **target** as the units aboard — a
+  NULL count means "not counted since this was defined", not "empty" — and the
+  first swap materializes that assumption as a real undated lot row before
+  adding the swapped units on top. A seeder that fills a fresh position without
+  counting it to zero first leaves the truck holding roughly double its par
+  behind a phantom lot with no number and no date.
+- The lot number a position reported came from `CheckTemplateItem.lot_number`,
+  the scalar left over from the last swap, while the date beside it came from
+  the soonest-expiring deployed lot. On a position carrying several lots those
+  are different lots, and the pair reads as one false fact about a specific lot.
+  Both now come from the same row (`_soonest_lot_number`).
+
+An id-bound template also attaches to that apparatus's **shifts**, because
+`_resolve_templates` matches by `apparatus_id` **or** `apparatus_type`. M-3
+carries no seeded shift checklists, so nothing already published moved; a future
+template bound to a rig that does needs the neighbouring equipment-check shots
+re-captured and diffed before applying.
+
+## Prospective Members — A Configured Checklist Stage Cannot Be Passed (2026-08-11)
+
+Blocking, for any department that fills in a checklist stage's item list.
+
+`_validate_step_completion` refuses to complete a `CHECKLIST` step until
+`action_result.completed_items` holds as many entries as the stage's configured
+`items` (when `require_all`, the default). **Nothing in the application ever
+writes that key.** `completeStep` sends only notes; there is no partial-progress
+endpoint, and no component renders the items as anything tickable. The drawer's
+**Checklist Progress** panel reads them back, which is why it says "No checklist
+data recorded yet" for every applicant.
+
+So an applicant on a checklist stage with items configured cannot be advanced —
+and cannot be skipped either, because **Skip Stage** goes through the same
+`complete-step` call and hits the same validator. The only escape is to empty
+the stage's item list, or to call the API by hand with the key.
+
+The demo pipeline's Onboarding stage has no items configured, which is why the
+board still moves.
+
+Fixing it properly is not a screenshot's worth of work: the items have to be
+rendered and ticked somewhere, and the ticks have to persist _before_ the step
+is completed — which means either a partial-progress endpoint or teaching
+`_validate_step_completion` to count the `action_result` arriving in the same
+call. Either is a deliberate change to how a stage is passed, so it belongs in
+its own piece of work rather than being slipped in under a documentation pass.
+
+## External Training — The Mapping List Needs a Live Provider (2026-08-11)
+
+Held back. `02-training.md` asked for the Vector Solutions category mapping
+list. Category mappings are **discovered by a sync against the provider's API**
+— the endpoints expose only GET and PATCH, so there is no supported way to bring
+a mapping into being without a real Vector Solutions account answering the sync.
+
+Seeding one would mean writing rows straight into the database and presenting
+invented external category names as a real integration's output, which is a
+worse outcome than no screenshot. The section now describes the list instead,
+which is accurate as far as it goes.
+
+The visit was not wasted: an unmapped category showed a **Map Category** button
+with no handler behind it. It is a category dropdown now, wired to the PATCH
+endpoint that had been there all along, and covered by
+`ExternalTrainingPage.test.tsx`.
+
+## Training — Program Import Has No Preview (2026-08-11)
+
+Not implemented. The guide described a preview of what an imported package would
+create, with a **Confirm Import** button. Choosing a file imports it there and
+then; the only checkpoint is the structural validation that rejects a file with
+no `program` key.
+
+A preview would mean a dry-run mode on `import_program_from_json` returning a
+summary rather than committing — worth doing, and not something to bolt onto a
+documentation pass. The guide now says plainly that there is no confirmation
+step.
+
+## Training — No Warning When a Session Is Ahead of Your Phase (2026-08-11)
+
+Not implemented. `02-training.md` described a dialog shown to a member who
+RSVPs to a session tied to a phase they have not reached — "the session belongs
+to a later phase", with **Proceed anyway** and **Cancel** — and asked for a
+screenshot of it.
+
+Nothing of the sort exists. `TrainingSession.phase_id` is stored, echoed back by
+the read endpoints and used to credit attendance, and that is the whole of it:
+no service consults it when a member RSVPs or checks in, and no component
+renders a warning. Searching the codebase for the wording, and reading the
+session service and its endpoints, turns up nothing on either side.
+
+The guide now says what actually happens — you may attend a session for any
+phase, and the hours are recorded — so the documentation is no longer wrong. The
+feature itself is a real one worth having, but it is a change to the RSVP path
+across the API and the UI, not a screenshot, and building it here would have
+been a feature shipped under cover of a documentation task.
 
 ## Scheduling — The Compliance Report Counts Member-Requirement Pairs (2026-08-10)
 

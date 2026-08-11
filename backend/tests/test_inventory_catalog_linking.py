@@ -14,7 +14,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.api.v1.endpoints import equipment_check as equipment_check_endpoint
 from app.models.apparatus import CheckTemplateItem
+from app.schemas.equipment_check import InventoryLinkRequest
 from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_service import InventoryService
 from app.utils.name_matching import (
@@ -394,6 +396,65 @@ class TestLinkInventoryItems:
             await service.link_inventory_items("tmpl-1", "org-1", {"a": "inv-1"})
             is None
         )
+
+
+class TestLinkInventoryItemsEndpoint:
+    async def test_records_bulk_link_changes_in_template_history(
+        self, monkeypatch, mock_db
+    ):
+        service = MagicMock()
+        service.link_inventory_items = AsyncMock(return_value=2)
+        service.log_template_change = AsyncMock()
+        service.get_link_coverage = AsyncMock(
+            return_value={"linkable": 2, "linked": 1, "unlinked": 1}
+        )
+        monkeypatch.setattr(
+            equipment_check_endpoint, "EquipmentCheckService", lambda db: service
+        )
+        user = MagicMock(id="user-1", organization_id="org-1")
+        user.first_name = "Alex"
+        user.last_name = "Rivera"
+        links = {"item-1": "inventory-1", "item-2": None}
+
+        response = await equipment_check_endpoint.link_inventory_items(
+            "tmpl-1", InventoryLinkRequest(links=links), mock_db, user
+        )
+
+        assert response["linked"] == 2
+        service.log_template_change.assert_awaited_once_with(
+            organization_id="org-1",
+            template_id="tmpl-1",
+            user_id="user-1",
+            user_name="Alex Rivera",
+            action="update",
+            entity_type="template",
+            entity_id="tmpl-1",
+            changes={"inventory_links": links, "changed_count": 2},
+        )
+        # The service commits link mutations; this commit persists the audit row.
+        mock_db.commit.assert_awaited_once()
+
+    async def test_does_not_record_history_for_a_no_op(self, monkeypatch, mock_db):
+        service = MagicMock()
+        service.link_inventory_items = AsyncMock(return_value=0)
+        service.log_template_change = AsyncMock()
+        service.get_link_coverage = AsyncMock(
+            return_value={"linkable": 1, "linked": 1, "unlinked": 0}
+        )
+        monkeypatch.setattr(
+            equipment_check_endpoint, "EquipmentCheckService", lambda db: service
+        )
+        user = MagicMock(id="user-1", organization_id="org-1")
+
+        await equipment_check_endpoint.link_inventory_items(
+            "tmpl-1",
+            InventoryLinkRequest(links={"item-1": "inventory-1"}),
+            mock_db,
+            user,
+        )
+
+        service.log_template_change.assert_not_awaited()
+        mock_db.commit.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
