@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 from app.models.skills_testing import ResultDisclosure, ResultRelease
 from app.services.skills_testing_service import (
+    RESULT_VIEW_PENDING,
     redact_test_for_view,
     resolve_disclosure_policy,
     resolve_result_view,
@@ -269,3 +270,94 @@ class TestRedaction:
             == "hesitant, needed two prompts"
         )
         assert len(payload["section_results"][0]["criteria_results"]) == 2
+
+
+class TestReturnedForCorrection:
+    """A submission the officer sent back to its examiner.
+
+    Returning reopens the test at ``in_progress`` with every mark intact, which
+    is what lets the examiner fix step 4 instead of re-running the evolution.
+    It also means the row stops matching ``is_pending_validation`` — and the
+    candidate, who saw nothing while it was pending, would suddenly see the
+    whole scorecard plus the reason it was bounced. The return endpoint
+    deliberately does not even notify them.
+    """
+
+    def _returned(self, **overrides):
+        fields = {
+            "status": "in_progress",
+            "validated_at": None,
+            "returned_at": "2026-08-11T09:00:00Z",
+        }
+        fields.update(overrides)
+        return _test(**fields)
+
+    def test_the_candidate_still_sees_only_that_it_exists(self):
+        assert _view(self._returned()) == RESULT_VIEW_PENDING
+
+    def test_a_named_viewer_sees_no_more_than_the_candidate(self):
+        assert (
+            _view(
+                self._returned(),
+                user_id=STRANGER,
+                named_viewer_ids={STRANGER},
+            )
+            == RESULT_VIEW_PENDING
+        )
+
+    def test_the_examiner_still_sees_it_in_full(self):
+        """They are the one being asked to correct it."""
+        assert _view(self._returned(), user_id=EXAMINER) == ResultDisclosure.FULL.value
+
+    def test_an_officer_still_sees_it_in_full(self):
+        assert _view(self._returned(), is_officer=True) == ResultDisclosure.FULL.value
+
+    def test_a_practice_attempt_is_not_affected(self):
+        """Practice runs are the candidate's own drill notes and are never
+        submitted, so nothing about them is ever awaiting anyone."""
+        test = self._returned(is_practice=True)
+        assert _view(test) == ResultDisclosure.FULL.value
+
+    def test_an_ordinary_in_progress_test_is_unchanged(self):
+        """The guard keys on having been returned, not on the status alone."""
+        assert (
+            _view(_test(status="in_progress", validated_at=None))
+            == ResultDisclosure.FULL.value
+        )
+
+    def test_a_resubmitted_test_goes_back_to_pending(self):
+        """Completing it again puts it in the officer's queue, where the
+        ordinary pending rule already covers it."""
+        test = self._returned(status="completed")
+        assert _view(test) == RESULT_VIEW_PENDING
+
+    def test_the_correction_trail_is_withheld(self):
+        """The reason names what the examiner got wrong. Telling the candidate
+        discloses both that something was wrong with their evaluation and what
+        is being changed, before anyone has decided the result stands."""
+        redacted = redact_test_for_view(
+            {
+                "result": "pass",
+                "overall_score": 91.0,
+                "notes": "solid",
+                "section_results": [{"section_id": "section-0"}],
+                "score_breakdown": {"percentage": 91.0},
+                "return_reason": "Step 4 contradicts your note — recheck",
+                "returned_at": "2026-08-11T09:00:00Z",
+                "returned_by": "user-officer",
+                "returned_by_name": "Dana Ruiz",
+                "return_count": 2,
+            },
+            RESULT_VIEW_PENDING,
+        )
+
+        assert redacted["return_reason"] is None
+        assert redacted["returned_at"] is None
+        assert redacted["returned_by"] is None
+        assert redacted["returned_by_name"] is None
+        # Zero, not None: the field is a non-optional count, and zero is what a
+        # never-returned test carries — so the two are indistinguishable.
+        assert redacted["return_count"] == 0
+        # And the outcome itself is still withheld, as for any pending view.
+        assert redacted["overall_score"] is None
+        assert redacted["score_breakdown"] is None

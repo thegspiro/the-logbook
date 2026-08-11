@@ -1,7 +1,26 @@
 # Application Review — Inventory (Tier B)
 
 **Prefix:** `INV2` · **Iteration:** B3 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-08-11 (follow-up)
+
+---
+
+## Follow-up (2026-08-11) — pagination, storage filters, and optional kit lines
+
+- Equipment-request pagination now runs a filtered count query and returns the
+  real total instead of the current page length. The admin page exposes 25-row
+  previous/next navigation and sends explicit `skip`/`limit` parameters.
+- Storage-area tree responses now use the same filtered query as flat responses;
+  `location_id` and `parent_id` are no longer discarded by an unfiltered reload.
+- INV-6 is closed: equipment-kit lines persist an `optional` flag through the
+  database model, migration, API schemas, service, frontend contracts, and kit
+  editor. Optional missing/failed lines are skipped; required lines still fail.
+- Best-effort WebSocket publishing remains non-blocking but now logs exceptions
+  with organization and action context.
+
+Focused DB-free backend and frontend regression tests cover the filtering,
+pagination-total, page-navigation, and optional-line editor behavior.
 
 ---
 

@@ -20,6 +20,7 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
@@ -212,15 +213,26 @@ async def delete_template(
     deleted = await service.delete_template(template_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
-    await service.log_template_change(
-        organization_id=str(current_user.organization_id),
-        template_id=template_id,
+    # The deletion cannot be recorded in the template's own changelog:
+    # `template_change_logs.template_id` is a NOT NULL foreign key to the row
+    # being deleted, so the insert failed with MySQL 1452 and every template
+    # delete returned a 500. The changelog is also only ever read back per
+    # template (`GET /templates/{id}/changelog`), so a surviving delete row
+    # would be unreachable anyway. A template's edit history dies with the
+    # template; the fact that someone deleted it belongs in the org-wide
+    # audit log, which outlives both.
+    await log_audit_event(
+        db=db,
+        event_type="equipment_check_template_deleted",
+        event_category="equipment_check",
+        severity="warning",
+        event_data={
+            "template_id": template_id,
+            "template_name": tmpl_name,
+        },
         user_id=str(current_user.id),
-        user_name=_user_display_name(current_user),
-        action="delete",
-        entity_type="template",
-        entity_id=template_id,
-        entity_name=tmpl_name,
+        username=current_user.username,
+        organization_id=str(current_user.organization_id),
     )
     await db.commit()
 
@@ -305,6 +317,22 @@ async def link_inventory_items(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if changed is None:
         raise HTTPException(status_code=404, detail="Template not found")
+
+    if changed:
+        await service.log_template_change(
+            organization_id=str(current_user.organization_id),
+            template_id=template_id,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="update",
+            entity_type="template",
+            entity_id=template_id,
+            changes={
+                "inventory_links": data.links,
+                "changed_count": changed,
+            },
+        )
+        await db.commit()
 
     coverage = await service.get_link_coverage(
         template_id, current_user.organization_id
@@ -959,12 +987,18 @@ async def upload_check_item_photos(
             )
 
         # Optimize: resize, strip EXIF, convert to WebP
-        optimized = optimize_image(
-            contents,
-            max_size=(1920, 1080),
-            quality=80,
-            output_format="WEBP",
-        )
+        try:
+            optimized = optimize_image(
+                contents,
+                max_size=(1920, 1080),
+                quality=80,
+                output_format="WEBP",
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid image {upload.filename}: {safe_error_detail(exc)}",
+            ) from exc
         encoded = base64.b64encode(optimized).decode()
         data_uri = f"data:image/webp;base64,{encoded}"
         new_urls.append(data_uri)

@@ -1722,6 +1722,7 @@ class EquipmentKitItemCreate(BaseModel):
     item_name: str = Field(..., min_length=1, max_length=255)
     quantity: int = Field(default=1, ge=1)
     size_selectable: bool = False
+    optional: bool = False
 
 
 class EquipmentKitCreate(BaseModel):
@@ -1744,6 +1745,9 @@ class EquipmentKitUpdate(BaseModel):
     restricted_to_roles: Optional[List[str]] = None
     min_rank_order: Optional[int] = None
     active: Optional[bool] = None
+    line_items: Optional[List[EquipmentKitItemCreate]] = Field(
+        default=None, min_length=1
+    )
 
 
 class EquipmentKitItemResponse(BaseModel):
@@ -1756,6 +1760,7 @@ class EquipmentKitItemResponse(BaseModel):
     item_name: str
     quantity: int
     size_selectable: bool = False
+    optional: bool = False
     sort_order: int = 0
 
     model_config = _response_config
