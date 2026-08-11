@@ -1685,43 +1685,55 @@ The analysis shows:
 
 After analyzing, you can take four actions directly from the results:
 
-#### Generate Reorder Requests
+Three of the four appear only when the analysis produces something for them to
+act on, so a results page will not always show all four.
 
-Click **Generate Reorders** to automatically create purchase requests:
+#### Create Reorder Requests
+
+**Create reorder requests** sits under the size breakdown, and appears only when
+you asked the analysis to subtract current stock _and_ it found a shortfall:
 
 - One `ReorderRequest` per size with shortfall > 0
 - Pre-fills vendor, urgency, unit cost, and a descriptive note
 - All requests land in PENDING status for approval
 - The cost estimate from the analysis carries onto each request
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Generate Reorders" confirmation dialog showing a preview of the reorder requests to be created (e.g., "M: 5 units, L: 8 units, XL: 3 units — Total: 16 units, Est. cost: $1,280")._
+There is **no confirmation step**. The button files the requests, then replaces
+itself with "Created N reorder requests" and a **Review reorders** link. The
+preview is the panel above it — each size with what is needed, what is on hand,
+what to buy, and the cost of buying it.
 
-#### Bulk Issue from Stock
+![The size breakdown with each size's shortfall and cost, and the Create reorder requests button beneath it](./images/05-65-reorder-shortfall.png)
 
-Click **Issue from Stock** to distribute on-hand inventory:
+#### Issue On-Hand Stock
+
+**Issue on-hand stock** appears only when at least one needed size actually has
+stock on hand — there is no point offering it against an empty shelf:
 
 - Issues one unit per member from matching pool stock
 - Matches by member's size preference
 - Skips members without a size, with no matching stock, or over their allowance
-- Shows results: `{issued: 12, skipped: 4}` with per-member reasons for skips
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of the bulk-issue results showing "Issued: 12 members" with a green success list and "Skipped: 4 members" with reasons (e.g., "No size on file", "Over allowance", "No matching stock")._
+- This one _does_ confirm first, warning that members with no size on file or no
+  matching stock will be skipped
+- Afterwards the button is replaced by "Issued to N members, M skipped", with
+  the first five skip reasons listed and a count of any beyond that
 
 #### Request Sizes from Members
 
-Click **Request Sizes** to notify members who haven't recorded their size preference:
+**Request sizes** appears in a banner above the results, and only when somebody
+in the analysis has no size on file:
 
 - Sends in-app notifications directing them to `/inventory/my-equipment`
 - After members add their sizes, re-run the analysis to see updated results
-- Returns count of members notified
+- The banner then reads "Requested from N", so you can see it has been done
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the "Request Sizes" confirmation showing "8 members will be notified to add their shirt size" with a Send button._
+#### Export the Summary
 
-#### Download PDF Summary
+**CSV** and **PDF**, at the head of the Impacted Members table, export the
+analysis:
 
-Click **Download PDF** to generate a branded printable summary:
-
-- Includes org name, analysis date, all filter parameters, and size breakdown table
+- The PDF includes org name, analysis date, all filter parameters, and the size
+  breakdown table
 - Contact columns (email, phone) included only if org visibility settings allow
 - Suitable for budget approval meetings or procurement documentation
 

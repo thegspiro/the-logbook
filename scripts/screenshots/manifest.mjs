@@ -692,6 +692,37 @@ async function openBatchReportForm(page) {
   await page.waitForTimeout(1200);
 }
 
+/**
+ * Fill the impact planner's filters and run an analysis.
+ *
+ * A size breakdown and a stock category, or the results are a member list with
+ * none of the per-size shortfall and cost columns — and none of the four
+ * actions the guide documents underneath them.
+ */
+async function runImpactAnalysis(page) {
+  const sizeField = page.locator('select[aria-label="Size needed"]');
+  const sizes = await sizeField
+    .locator("option")
+    .evaluateAll((els) => els.map((e) => e.getAttribute("value")).filter(Boolean));
+  if (sizes[0]) await sizeField.selectOption(sizes[0]);
+  await page.waitForTimeout(600);
+  // The stock select only renders once a size field is chosen, and only a
+  // stock category turns the size panel into shortfall-and-cost columns.
+  const stock = page
+    .locator("select")
+    .filter({ hasText: /subtract current stock/i });
+  const opts = await stock
+    .locator("option")
+    .evaluateAll((els) => els.map((e) => e.getAttribute("value")).filter(Boolean));
+  if (opts[0]) await stock.selectOption(opts[0]);
+  await page.waitForTimeout(400);
+  await page
+    .getByRole("button", { name: /Analyze Impact/i })
+    .click({ timeout: 15_000 });
+  // The analysis is a round trip over the whole roster.
+  await page.waitForTimeout(3000);
+}
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -1863,6 +1894,34 @@ export const SHOTS = [
     viewport: { width: 1800, height: 1300 },
   },
   {
+    id: "05-65-reorder-shortfall",
+    doc: "05-inventory.md",
+    line: 1706,
+    anchor: "Screenshot of the reorder shortfall panel",
+    alt: "The size breakdown with each size's shortfall and cost, and the Create reorder requests button beneath it",
+    route: "/inventory/admin/impact-planner",
+    prepare: async (page) => {
+      await runImpactAnalysis(page);
+      // Deliberately stops before the click. There is no confirmation step —
+      // the button files the requests immediately — so capturing the result
+      // would mean creating four reorder requests on every run of the harness.
+      // The panel above the button is the preview.
+      const button = page.getByRole("button", {
+        name: /Create reorder requests/i,
+      });
+      await button.waitFor({ timeout: 20_000 });
+      await button.scrollIntoViewIfNeeded({ timeout: 10_000 });
+      // Then back up, so the size rows the button acts on are in frame with it.
+      // Clipping to the button's own container gets the urgency select and the
+      // button and nothing else, which pictures the control rather than the
+      // decision.
+      await page.evaluate(() => window.scrollBy(0, -320));
+      await page.waitForTimeout(500);
+    },
+    viewport: { width: 1440, height: 900 },
+    fullPage: false,
+  },
+  {
     id: "05-59-impact-planner-results",
     doc: "05-inventory.md",
     line: 1652,
@@ -1870,34 +1929,7 @@ export const SHOTS = [
     alt: "Impact planner results with its summary cards, size breakdown and cost estimate",
     route: "/inventory/admin/impact-planner",
     prepare: async (page) => {
-      // A size breakdown and a stock category, or the results are a member
-      // list with none of the per-size shortfall and cost columns this
-      // section is about.
-      const sizeField = page.locator('select[aria-label="Size needed"]');
-      const sizes = await sizeField
-        .locator("option")
-        .evaluateAll((els) =>
-          els.map((e) => e.getAttribute("value")).filter(Boolean),
-        );
-      if (sizes[0]) await sizeField.selectOption(sizes[0]);
-      await page.waitForTimeout(600);
-      // The stock select only renders once a size field is chosen, and only a
-      // stock category turns the size panel into shortfall-and-cost columns.
-      const stock = page
-        .locator("select")
-        .filter({ hasText: /subtract current stock/i });
-      const opts = await stock
-        .locator("option")
-        .evaluateAll((els) =>
-          els.map((e) => e.getAttribute("value")).filter(Boolean),
-        );
-      if (opts[0]) await stock.selectOption(opts[0]);
-      await page.waitForTimeout(400);
-      await page
-        .getByRole("button", { name: /Analyze Impact/i })
-        .click({ timeout: 15_000 });
-      // The analysis is a round trip over the whole roster.
-      await page.waitForTimeout(3000);
+      await runImpactAnalysis(page);
       // Analysing scrolls the results into view; the summary cards and the
       // size-and-cost panel this section is about are at the top of them.
       await page.evaluate(() => window.scrollTo(0, 0));
