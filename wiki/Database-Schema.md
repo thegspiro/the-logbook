@@ -89,15 +89,17 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `basic_apparatus` | Lightweight vehicle records for scheduling |
 | `equipment_check_templates` | Master equipment check templates with timing and position assignment *(2026-03-19)* |
 | `check_template_compartments` | Named sections within a template, nested via `parent_compartment_id` *(2026-03-19)* |
-| `check_template_items` | Individual check items with type, expiration, serial/lot tracking *(2026-03-19)* |
+| `check_template_items` | Individual check items with type, expiration, serial/lot tracking *(2026-03-19)*. Now also the **live** state of a position: `quantity_on_truck` (NULL = never counted, target stands in), `restock_needed` + `restock_reported_by`/`_at`/`_note`, and the `inventory_item_id` catalog link everything hangs off *(2026-08-10)* |
+| `check_item_deployed_lots` | **One row per lot's presence on one position** *(2026-08-10)*. A position's count is the sum of these and its expiration the earliest; lot number and date are snapshotted so a deleted shelf lot does not erase the truck's record |
 | `shift_equipment_checks` | Submitted check records linked to shifts; `shift_id` nullable for standalone ad-hoc checks; composite indexes on `(shift_id, template_id)` *(updated 2026-04-04)* |
-| `shift_equipment_check_items` | Individual item results within a submitted check *(2026-03-19)* |
+| `shift_equipment_check_items` | Individual item results within a submitted check *(2026-03-19)*. `expiration_found` is the counterpart to `serial_found`/`lot_found` — what the crew read off a replacement unit, written back onto the template item on submit *(2026-08-10)* |
 
 ### Inventory
 
 | Table | Description |
 |-------|-------------|
 | `inventory_items` | Equipment items (individual or pool, with `tracking_type`). Barcodes are per-organization sequential numbers (`INV-000001` …) assigned at creation time; the prefix/counter live in `organizations.settings["barcode"]` *(2026-06-10)* |
+| `inventory_lots` | A dated batch of a consumable held as ready stock (lot number, expiration, quantity, received date). **The source of "on hand" for any item that has lots**; expired lots count as zero, because the equipment-check swap refuses them and counting them would hide the shortage *(documented 2026-08-10)* |
 | `inventory_categories` | Item categories |
 | `item_assignments` | Member ↔ item assignments |
 | `item_issuances` | Pool item issue/return records |
@@ -236,6 +238,53 @@ The `organizations.settings` JSON column stores email platform configuration und
 | `microsoft_client_secret` | string (encrypted) | microsoft | Azure AD Client Secret |
 | `cloudflare_account_id` | string | cloudflare | Cloudflare Account ID (32-char hex) |
 | `cloudflare_api_token` | string (encrypted) | cloudflare | Cloudflare API token with email sending permission |
+
+---
+
+## Recent Schema Changes (2026-08-10)
+
+### New Tables
+
+| Table | Migration | Description |
+|-------|-----------|-------------|
+| `check_item_deployed_lots` | `20260810_0008` | One lot's presence on one checklist position: `template_item_id` (CASCADE), `inventory_lot_id` (**SET NULL** — a depleted shelf lot may be deleted while its units are still on a truck), snapshotted `lot_number` / `expiration_date`, `quantity`, `deployed_at` / `deployed_by`. Indexed `idx_deployed_lot_item_exp` on (`template_item_id`, `expiration_date`), which serves both the drill-in and the first-expiring-first-out consumption order. **Existing single-lot data is migrated across**, so nothing already recorded is lost and every derived count matches what the item reported before |
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `email_templates` | `footer_key` | String(32), nullable | `20260810_0004` | Which named footer this template closes with. **NULL means the department's default**, so changing the default reaches every template that has not overridden it without a data migration |
+| `shift_equipment_check_items` | `expiration_found` | Date, nullable | `20260810_0005` | What the crew read off a replacement unit. Without it, a field-replaced item kept the old date, was force-failed on every submission, held its apparatus in a deficiency state and never left the supply worklist |
+| `check_template_items` | `restock_needed` | Boolean, NOT NULL, default `0` | `20260810_0006` | Raised by whoever used the unit, at the time they used it |
+| `check_template_items` | `restock_reported_at` | DateTime(tz), nullable | `20260810_0006` | |
+| `check_template_items` | `restock_reported_by` | String(36), nullable, FK `users` **SET NULL** | `20260810_0006` | |
+| `check_template_items` | `restock_note` | Text, nullable | `20260810_0006` | |
+| `check_template_items` | `quantity_on_truck` | Integer, **nullable** | `20260810_0007` | The live count. **NULL means nobody has counted since the item was defined** and the target stands in — reading NULL as zero would report every untouched truck as stripped |
+
+### New Indexes
+
+| Table | Index | Columns | Migration |
+|-------|-------|---------|-----------|
+| `check_template_items` | `idx_check_item_restock` | `restock_needed` | `20260810_0006` |
+| `check_item_deployed_lots` | `idx_deployed_lot_org` | `organization_id` | `20260810_0008` |
+| `check_item_deployed_lots` | `idx_deployed_lot_item` | `template_item_id` | `20260810_0008` |
+| `check_item_deployed_lots` | `idx_deployed_lot_item_exp` | `template_item_id`, `expiration_date` | `20260810_0008` |
+
+### Data-only migrations
+
+| Migration | Effect |
+|-----------|--------|
+| `20260810_0003` | NULLs `email_templates.css_styles` on rows still holding a **verbatim** copy of one of the two stylesheets ever shipped as a default, so untouched templates start tracking the built-in stylesheet. A department that edited its CSS matches neither string and is left alone. Downgrade re-fills NULLs, so the column is never left NULL for code that predates the fallback |
+
+> **These four check migrations were renumbered from `0003`–`0006` to
+> `0005`–`0008`.** `main` landed the email-template pair at `20260810_0003` /
+> `_0004` while the branch was open, and both branches had numbered from
+> `20260810_0002`. Two revision IDs with two files each is **not a merge conflict
+> git can see** — it is a chain Alembic refuses to load, and the backend crashes
+> on startup rather than at review. Run `alembic heads` after merging main rather
+> than assuming a documented head is current.
+
+**Current head: `20260810_0008`.**
 
 ---
 

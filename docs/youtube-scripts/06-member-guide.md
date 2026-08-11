@@ -63,6 +63,24 @@ tablet, checking training status on a laptop.]**
 
 ### THE MEMBER DASHBOARD (2:30 – 4:00)
 
+> **⚠️ SCRIPT UPDATE NEEDED (2026-08-11) — the widget tour below is wrong.** See
+> [SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md#06--the-member-experience).
+>
+> - **There is no "Training Status" widget.** The dashboard has an hours row,
+>   department messages, notifications, **two** shift panels, upcoming events,
+>   recent activity, an ID card and an equipment panel. Rewrite the tour against
+>   the real page before recording.
+> - **"My Shifts" is two panels**, not one: My Upcoming Shifts and Open Shifts.
+>   The Open Shifts panel is capped at five with an "N more" line as of
+>   2026-08-10; before that it rendered every open shift in the next 30 days, so
+>   older B-roll shows a page thousands of pixels tall.
+>
+> **Also missing from this guide: a chapter on reporting supplies you used**
+> (Scheduling → Equipment Checks → **Apparatus Inventory** → tap **−**). It is
+> member-facing crew work that needs no officer permission — which is the whole
+> point of it — and it currently appears in no script. Two to three minutes,
+> placed after the shift chapter.
+
 **[SCREEN: The main Dashboard loads. Show it from a member's perspective —
 fewer widgets than the Chief's view but still informative.]**
 

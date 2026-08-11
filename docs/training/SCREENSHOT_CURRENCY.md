@@ -197,6 +197,96 @@ All remaining images. Guides, with the count of captured images each:
 
 ---
 
+## Images invalidated by the 2026-08-10 → 08-11 changes
+
+**Read this before trusting the "Re-captured 2026-08-10" note above.** That pass
+ran at **22:34 UTC** and covered guides 02, 03 and 09. Two large branches merged
+**after** it:
+
+| Branch                                    | Merged               | What it changed on screen                                                                                                      |
+| ----------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Email template catalogue + footer library | 2026-08-10 **22:45** | The whole outgoing-email design, and a new **Footers** tab on the Email Templates page                                         |
+| Inventory ↔ equipment-check supply loop   | 2026-08-10 **23:22** | The template builder toolbar, the check form, the inventory items grid and toolbar, the inventory admin hub, and two new pages |
+
+So **no capture in the repository postdates the supply work**, and the guide-08
+email screenshots predate the email redesign by 21 hours. Everything below is
+flagged by comparing each image's last-captured timestamp against the commit that
+changed the screen it pictures — not by opening it, which is the check that still
+has to happen.
+
+### A. Stale because of the supply / catalog-linking work
+
+Nothing in this group has ever been captured against the shipped code.
+
+| Image                               | Captured    | What is now different                                                                                                                                                 |
+| ----------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `03-22-equipment-check-builder.png` | 08-10 22:34 | The toolbar now carries a **linked / unlinked count**, and the quick-add bar is a **catalog search** with a "create in inventory" option rather than a plain name box |
+| `03-25-equipment-checks-tab.png`    | 08-10 22:34 | The **My Equipment Checklists** header now carries an **Apparatus Inventory** link beside "Start a Check"                                                             |
+| `05-01-inventory-items.png`         | 08-10 01:11 | The **Qty** column reads ready units across in-date lots for lot-stocked items and is labelled **"in-date lots"**                                                     |
+| `05-47-items-filter-bar.png`        | 08-10 01:11 | The Manage Items toolbar now carries **Receive Stock**, **Add Several** and **Import CSV** that was previously unreachable from this page                             |
+| `05-25-admin-hub.png`               | 08-08 00:45 | The hub now links out to **Scheduling → Supply** (Expiring on Apparatus)                                                                                              |
+
+### B. Stale because of the email redesign
+
+Guide 08 was **not** part of the 22:34 re-capture. All three images show the
+retired full-bleed red band over a grey slab; outgoing mail is now a white card
+on a grey page.
+
+| Image                                                  | Captured    | What is now different                                                                                                                                                                   |
+| ------------------------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `08-34-email-templates.png`                            | 08-10 01:11 | Preview pane shows the old design; the tab strip is missing **Footers**                                                                                                                 |
+| `08-36-template-search.png`                            | 08-10 01:11 | Same page, same two changes                                                                                                                                                             |
+| `08-37-email-officers.png`                             | 08-10 01:11 | Same page, same two changes                                                                                                                                                             |
+| `18-01-member-storefront.png`, `18-02-store-admin.png` | 08-08       | **Check before re-shooting.** The storefront's _emails_ moved onto the shared theme; these two picture the store's own screens and may be unaffected. Listed so the question gets asked |
+
+### C. Stale because the pictured screen was fixed after the shot
+
+All captured at **08-10 01:11**, before the fix landed the same day.
+
+| Image                                                                                             | What is now different                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `00-04-dashboard-overview.png`, `00-07-dashboard-panels.png`                                      | The **Open Shifts** panel is capped at five with an "N more" line. It previously rendered every open shift in the next 30 days — 48 rows on the demo department, which is why the dashboard in these shots is 6,930px tall with the ID card and equipment panels pushed off the bottom. Shift dates in **My Upcoming Shifts** were also rendering a day early for some viewers |
+| `11-05-budget-detail.png`, `11-12-purchase-request-detail.png`, `11-14-expense-report-detail.png` | **Breadcrumbs now render on the loaded record.** They previously appeared only in the loading and not-found states, so these three shots have no breadcrumb trail where the shipped page has one                                                                                                                                                                               |
+| `05-45-impact-planner.png` (08-08)                                                                | Ranks rendered as **"Deputy_chief"** with the underscore. Fixed 2026-08-10                                                                                                                                                                                                                                                                                                     |
+| `06-21-apparatus-evoc-level.png` (08-08)                                                          | **Setting this field returned a server error when the shot was taken**, and once any apparatus had a level, the fleet list returned one too. The form works now, and the guide text around it was corrected: the levels are per-organization records, not a fixed Basic/Intermediate/Advanced triple                                                                           |
+
+### D. Verified current — do not re-shoot on this pass
+
+| Image(s)                                                                  | Why                                                             |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Everything in guides **02**, **03** and **09** except `03-22` and `03-25` | Captured 08-10 22:34 against the current code for those screens |
+| `01-08-member-audit-history.png`                                          | Re-captured after the event-type filter and details-panel fixes |
+| `08-60` … `08-63` (notification shots)                                    | Captured after the delivered-status and `?tab=` fixes           |
+| The 15-prospective-members set                                            | The Linked Events badge capitalization fix is in these captures |
+
+### Screenshots that do not exist yet
+
+The 2026-08-11 documentation pass added **18 new `[SCREENSHOT NEEDED]`
+placeholders** for screens that have never been photographed:
+
+| Guide                        | Placeholders added                                                                                                                                                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `03-scheduling.md`           | Apparatus Inventory page, the lots sheet, the report-used sheet, the quick-add catalog search, the bulk inventory-match dialog, the check form with carry-over banner, the Set All to Par warning, the Expiring on Apparatus worklist (8) |
+| `05-inventory.md`            | The two-ledger items grid, the Receive Stock modal, the Add Several modal, an item's Stock tab with deployed positions                                                                                                                    |
+| `06-apparatus-facilities.md` | The Operators tab, the Add Operator member picker                                                                                                                                                                                         |
+| `08-admin-reports.md`        | The Footers tab, the footer selector in the template editor, the Organization variable palette, the new email preview design                                                                                                              |
+
+**None of these have manifest entries yet.** Two of them —
+`/scheduling/apparatus-inventory` and `/scheduling/supply/expiring` — are plain
+route visits and are the cheapest to add; the rest need `prepare` steps to open a
+modal or a sheet, and several need seed data that does not exist (a position
+carrying two lots with two dates, a truck below par, a restock report raised by a
+member).
+
+**The seeder needs work before most of these can be shot.** Specifically it needs
+to: link some checklist positions to catalog items, put more than one lot on at
+least one position, leave at least one position short of par, and raise at least
+one restock report. Without those, the pages render truthfully but picture
+nothing the sections describe — which is the failure mode the top of this file
+documents at length.
+
+---
+
 ## Re-capturing
 
 See [`scripts/screenshots/README.md`](../../scripts/screenshots/README.md). The

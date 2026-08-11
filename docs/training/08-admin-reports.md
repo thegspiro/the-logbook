@@ -1194,12 +1194,33 @@ since the row is what the member reads.
 
 ![The delivery-log channel filter — All, Email and In-App — with In-App selected](./images/08-61-notification-channel-filter.png)
 
-**Not yet built:** the channel filter. The Notifications page's tabs are
-**My Notifications**, **Notification Rules**, **Email Templates** and
-**Send Log** — the first is the member's in-app inbox, and the last is the
-delivery history, where a channel column is the closest thing to the filter
-described above. Nothing on either lets you narrow the view to one channel.
-The placeholder stays open until it does.
+> **Superseded.** A paragraph here said the channel filter was "not yet built"
+> and that the placeholder stayed open until it was. It shipped, and the
+> screenshot above is of it. Removed 2026-08-11 — a stale "not yet built" note
+> under a picture of the thing is worse than no note.
+
+### Linking Someone to a Tab _(fixed 2026-08-10)_
+
+The Notifications page has four tabs — **My Notifications**, **Notification
+Rules**, **Email Templates** and **Send Log** — and all four are now addressable:
+
+| Link                           | Opens                                        |
+| ------------------------------ | -------------------------------------------- |
+| `/notifications?tab=inbox`     | My Notifications (the member's in-app inbox) |
+| `/notifications?tab=rules`     | Notification Rules                           |
+| `/notifications?tab=templates` | Email Templates                              |
+| `/notifications?tab=log`       | Send Log                                     |
+
+Previously only one of the four worked: the rest fell through to the rules tab,
+and switching tabs **deleted** the parameter rather than updating it. So the Send
+Log — the one screen anyone has cause to send a colleague a link to — could not
+be linked at all. Tabs a member does not have permission for still do not open.
+
+> **In-app notifications no longer show as "Not delivered."** The Send Log used
+> to put a red mark and an error tooltip on in-app notifications the member had
+> already opened and read. There is no send step for the in-app channel: **the
+> row is the delivery.** Corrected 2026-08-10; email bounces still report
+> correctly.
 
 ## Email Deliverability (2026-03-22)
 
@@ -1449,6 +1470,135 @@ Two behaviours worth knowing:
   selection cannot scroll out of view while you work.
 
 ![Email template categories in the editor sidebar](./images/08-34-email-templates.png)
+
+---
+
+## Email Footers: One Library Instead of 35 Copies (2026-08-10)
+
+Every default template ended with the same block of text — "This is an automated
+message from …", the contact line, the address. It was **copy-pasted into all 35
+bodies**: 32 copies of the first line, 25 of the second.
+
+Two consequences you may have hit:
+
+- Changing the wording meant opening 35 templates one at a time.
+- Once you had edited a template by hand, the only way to pick up a corrected
+  footer was **Reset** — which throws away the rest of that template's edits too.
+
+The footer is now a **library your department edits once**, and each template
+names which footer it closes with.
+
+### The three seeded footers
+
+Named rather than singular, because a department does not want to say the same
+thing to everybody:
+
+| Footer              | Who it is for                                                                                                                                                                                                                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Internal**        | Members. The routine "do not reply" close. **This is the default**                                                                                                                                                                                                                     |
+| **Public**          | People outside the department. **Invites a reply** and carries the mailing address — telling somebody who asked the station to visit their school not to reply was wrong, and mail to the public is expected to carry a physical address. Event requesters and applicants get this one |
+| **Official notice** | On the record: separations, property return, election results                                                                                                                                                                                                                          |
+
+You can rename, reword, add and delete these. Each footer names its own lines and
+has switches for the contact block and the address block.
+
+### Editing them
+
+**Required Permission:** `settings.manage` or `organization.update_settings`
+
+1. Go to **Communications → Email Templates**.
+2. Open the **Footers** tab.
+3. Edit a footer, or add one.
+4. Mark one as the department default.
+5. Save.
+
+> **Screenshot needed:**
+> _[Screenshot of the Footers tab showing the three seeded footers in a list with the Internal one marked as default, one expanded to show its lines, the contact/address toggles, and the "N templates use this" count beside each]_
+
+To point a specific template at a specific footer, open that template and choose
+its footer in the editor.
+
+> **Screenshot needed:**
+> _[Screenshot of the email template editor with the footer selector visible, set to "Public", and the preview pane below showing that footer rendered at the bottom of the message]_
+
+### Things worth knowing before you delete one
+
+| Scenario                                      | What happens                                                                                                                            |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| A template has no footer chosen               | It uses **the one marked default**. Change your default and every such template follows, immediately                                    |
+| You delete a footer that templates were using | Those templates fall back to the **default**, not to no footer at all. Losing a footer entirely is never the right answer to a deletion |
+| Before you delete                             | The screen tells you **how many templates use it**, so it is a decision rather than a guess                                             |
+| You edit one footer and save                  | The **whole library** saves. A per-footer save could leave your default pointing at a footer the same save deleted                      |
+| Your department has never opened this screen  | The library is seeded on first read, and the code defaults behind each template already render the right footer                         |
+| You put a variable in a footer line           | It is substituted like anywhere else. Footer text is escaped first, and so are the values substituted into it                           |
+
+### Two lines that moved
+
+"A copy has been placed in your member file" and "Please retain this email for
+your records" used to sit in the boilerplate. They are genuinely per-notice, not
+per-department, so they moved into the notices that mean them, or into the
+**Official notice** footer.
+
+---
+
+## More Department Fields You Can Put in an Email (2026-08-10)
+
+Seven fields you fill in on Organization Settings could be typed in and then
+never used. They are now variables available to **every template and every footer
+line**:
+
+| Variable                                                          | What it is for                                                                                                                                                                              |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{{organization_tax_id}}`                                         | A 501(c)(3) asking for money is expected to state its EIN on the message that asks                                                                                                          |
+| `{{organization_identifier}}` `{{organization_identifier_label}}` | Whichever of **FDID / state ID / department ID** your department nominated, **plus the name of the scheme** — so an official notice reads "FDID 12345" and is right about which one that is |
+| `{{organization_founded_year}}` `{{organization_county}}`         | The "Serving Fairfax County since 1923" line departments write by hand today                                                                                                                |
+| `{{organization_fax}}`                                            | Still expected on official correspondence by some agencies                                                                                                                                  |
+| `{{organization_description}}` `{{organization_type}}`            | Completeness                                                                                                                                                                                |
+
+> **Screenshot needed:**
+> _[Screenshot of the template editor's variable palette expanded on the Organization group, showing the new identifier, tax ID, county and founded-year variables alongside the existing name/phone/address ones]_
+
+> **Addresses outside the US keep their last line.** The address composer read
+> every column except country, so a Canadian department's address lost its
+> bottom line. The country is now appended — except when it is the "USA" the
+> field defaults to, since printing that under every US department's own address
+> is a line of noise.
+
+---
+
+## Email Look and Delivery Fixes (2026-08-10)
+
+Several of these are things a **recipient** was seeing, so they are worth knowing
+about even if you never open the template editor.
+
+| What was wrong                                                                                                                                        | Now                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Only the first paragraph of an email was styled.** Gmail strips the stylesheet, so this was the spacing most recipients actually saw                | Every paragraph is styled                                                  |
+| The inventory notice's removed-items list and the ballot eligibility summary's recipient list **arrived as visible angle brackets**                   | Rendered as the lists they are                                             |
+| Departments that had never opened the Email Templates screen received footers reading a literal **`{{organization_phone}}`**                          | Filled in — that path is the normal one until the screen is first opened   |
+| A member of the public who asked the department to attend their event got bare **"Reason:"** lines                                                    | Optional blocks appear only when there is something in them                |
+| The duplicate-application notice **printed its contact line twice**                                                                                   | Once                                                                       |
+| Three header colours and the small footer contact line **failed WCAG AA contrast** against their text                                                 | Corrected                                                                  |
+| **"Send Test Email to Me" reported success for an email nobody received** — it posted a blank recipient, SMTP rejected it, and the screen said 200 OK | Sends, or tells you why it did not                                         |
+| A backslash in a public contact's name **corrupted the event-request notice**                                                                         | Handled — and these sends now appear in Message History for the first time |
+
+Three notices your department sends most often — **shift assignment**, **shift
+decline** and **shift reminder** — were listed on the Email Templates screen but
+composed in code, so the mail you send most was the mail you could not reword.
+They now have real template rows with documented variables and sample data.
+
+> **Your emails will look different.** One stylesheet, one document shell and one
+> table style are now shared by templates, the storefront and the election
+> report. The design is a white card on a grey page — system font stack, rounded
+> header band, consistent paragraph rhythm — replacing the full-bleed red band
+> over a grey slab.
+>
+> **If you never edited a template's CSS, you now track the built-in
+> stylesheet**, so future improvements reach you automatically. Templates whose
+> CSS you _did_ edit are left exactly as they are.
+
+> **Screenshot needed:**
+> _[Screenshot of the email preview pane showing the new white-card-on-grey design — rounded header band, a details table, and the footer — so departments can see what their outgoing mail now looks like]_
 
 ---
 

@@ -50,6 +50,12 @@ Both = leadership oversight."]**
 
 ### DASHBOARD OVERVIEW (2:00 – 3:30)
 
+> **⚠️ B-ROLL ONLY (2026-08-11).** The narration holds. The **Open Shifts** panel
+> is capped at five with an "N more" line as of 2026-08-10; before that it
+> rendered every open shift in the next 30 days, so any screen capture taken
+> earlier shows a page several thousand pixels tall. Re-shoot the screen, keep
+> the audio.
+
 **[SCREEN: The main Dashboard page with all widgets visible.]**
 
 > "The dashboard is the first thing you see when you log in. It's designed to
@@ -487,6 +493,18 @@ who's swapping, which shifts, and the impact on coverage.]**
 > emergency, and that override is written to the audit log with their reason."
 
 **[CALLOUT: "Accountability without getting in the way of the run."]**
+
+> **⚠️ SCRIPT UPDATE NEEDED (2026-08-11) — add a supply beat here.** See
+> [SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md#04--fire-chief--department-leadership-guide).
+>
+> **Scheduling → Supply** ("Expiring on Apparatus") answers a question chiefs
+> actually ask: what is about to expire on my trucks, and is there stock behind
+> it. It splits the list by whether an in-date lot is actually available, because
+> "swap it" and "order it" are different jobs and the week is planned around
+> which one each row is. There is also a **weekly alert** now, so this is no
+> longer something a supply officer has to remember to go and look at.
+>
+> Roughly 60–90 seconds, right after the close-out rules.
 
 > "You can also require that only rostered members check in, so attendance
 > matches the crew that actually worked. And if something needs fixing after a
