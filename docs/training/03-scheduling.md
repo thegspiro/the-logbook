@@ -823,8 +823,7 @@ any member with `equipment_check.submit` — the default member position — bec
 recording what you just used is crew work, and putting it behind an officer
 permission is the thing that leaves the bracket empty until morning.
 
-> **Screenshot needed:**
-> _[Screenshot of the Apparatus Inventory page on a phone with an engine selected, showing two compartments expanded — one position at full count in green, one short with an amber count, and one showing a lots-aboard chip with two dates]_
+![Apparatus Inventory on a phone: compartments with per-position counts and the lots aboard](./images/03-57-apparatus-inventory.png)
 
 Each position offers up to five actions, and they mean different things:
 
@@ -836,8 +835,7 @@ Each position offers up to five actions, and they mean different things:
 | **Flag** | Damaged, contaminated, missing or recalled — **on a counted position, where − already records use.** It is the honest way to say "this needs attention" without pretending a unit was consumed |
 | **Lots** | Opens the lots aboard. A position carrying lots opens them **instead of** offering a stepper — two units with two dates cannot be moved by one plus or minus                                   |
 
-> **Screenshot needed:**
-> _[Screenshot of the lots sheet open over the Apparatus Inventory page on a phone, showing two lots for one position with different expiration dates, each with its own count field and a Remove control, and the sheet sitting clear of the bottom tab bar]_
+![The lots sheet: two lots on one position, each with its own count, date and Remove](./images/03-58-lots-aboard-sheet.png)
 
 **Headers and free-text lines do not appear here.** They are checklist
 scaffolding — "Check all seals", "Officer's compartment" — not things anyone
@@ -861,8 +859,7 @@ and the officer plans the week around which one each row is.
 Three summary pills sit above the list: how many rows need attention, how many
 have ready stock behind them, and how many need ordering.
 
-> **Screenshot needed:**
-> _[Screenshot of the Expiring on Apparatus page with the three summary pills visible, the 30/60/90 window selector, and at least four rows: one expiring with ready stock, one expired and struck through, one flagged "needs restock" from a crew report, and one short of its target showing "2/4"]_
+![Expiring on Apparatus: summary pills, the window selector, and rows in four different states](./images/03-59-supply-worklist.png)
 
 **Expired shelf stock is struck through and cannot be swapped.** Offering it
 would put expired supplies in service and fail the item on the very next check,
@@ -876,8 +873,7 @@ report carries who raised it, when, and an optional note, and it appears on the
 supply worklist beside the expiring items — to a supply officer, "expires
 Thursday" and "the crew used it last night" are the same job.
 
-> **Screenshot needed:**
-> _[Screenshot of the "report used" sheet on a phone showing the quantity stepper, the optional note field, and the confirm button, with the position's name and current count visible above it]_
+![The report-used sheet: quantity stepper, optional note, and the position's current count](./images/03-60-report-used-sheet.png)
 
 **A report is settled only when the truck is back at its target.** Two of four
 back is still a truck short two, and clearing the flag there would close the gap
@@ -933,11 +929,9 @@ now two paths:
 2. **For checklists you already have.** A bulk pass proposes a catalog item for
    every unlinked position on the template. Read down the list once and apply it.
 
-> **Screenshot needed:**
-> _[Screenshot of the template builder's quick-add bar with a partial search term typed and a dropdown of three catalog matches below it, each showing the item name and its tracking type, plus the "create in inventory" option at the bottom]_
+![The quick-add bar searching the inventory catalog, with matches and the create-and-link option](./images/03-61-quick-add-catalog-search.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the bulk inventory-match dialog listing six unlinked positions with proposed catalog items, two pre-selected with an "exact" badge and the rest showing "strong"/"weak" confidence chips left unselected, with the linked/unlinked coverage count in the header]_
+![The bulk match dialog: exact matches pre-selected, a close match left for a person to arbitrate](./images/03-62-bulk-inventory-match.png)
 
 **Only exact name matches are pre-selected.** A close match is deliberately never
 pre-selected: "Oxygen Mask" scores high against both the adult and the pediatric

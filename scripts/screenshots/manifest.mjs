@@ -233,6 +233,59 @@ export function openFirstFromApi(apiPath, routeFor, listKey, match) {
   };
 }
 
+/**
+ * Put the medic unit's stocked inventory on screen.
+ *
+ * The Apparatus Inventory page opens on "Select an apparatus…", which is an
+ * empty state rather than the screen — every shot of it has to pick a rig
+ * first. M-3 is the one `seed_supply_tracking` stocks: two lots on the drug
+ * bag, gauze and gloves under par, and a restock report from a member.
+ *
+ * Selected by the option's **value**, not its label. The label is built from
+ * two fields ("M-3 — Medic 3"), so matching it as a string breaks the moment
+ * either one is edited.
+ */
+export async function selectMedicApparatus(page) {
+  const select = page.locator("#apparatus-select");
+  await select.waitFor({ timeout: 20_000 });
+  const value = await page
+    .locator("#apparatus-select option")
+    .filter({ hasText: "M-3" })
+    .first()
+    .getAttribute("value");
+  if (!value) {
+    throw new Error("selectMedicApparatus: no M-3 in the apparatus picker");
+  }
+  await select.selectOption(value);
+  // Wait on the compartments rather than a timeout: they load on selection,
+  // and without this the shot catches a spinner over an otherwise-right page.
+  await page
+    .getByText(/Drug Bag|Trauma Bag/i)
+    .first()
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(600);
+}
+
+/**
+ * Open a checklist template in the builder, by name.
+ *
+ * By name through the API rather than by clicking the settings list: that list
+ * is ordered and grows, so a positional click quietly opens a different
+ * template as the demo department fills out — the failure `openFirstFromApi`
+ * exists to prevent.
+ */
+export function openTemplateNamed(name) {
+  return async (page) => {
+    await openFirstFromApi(
+      "/equipment-checks/templates",
+      (id) => `/scheduling/equipment-check-templates/${id}`,
+      "templates",
+      (t) => (t.name ?? "") === name,
+    )(page);
+    await page.waitForTimeout(1_500);
+  };
+}
+
 /** True for an event that has started but not finished. */
 export const isInProgress = (event) => {
   const now = new Date().toISOString();
@@ -2576,7 +2629,111 @@ export const SHOTS = [
     anchor: "Screenshot of the Expiring on Apparatus page with the three summary pills",
     alt: "Expiring on Apparatus: summary pills, the window selector, and rows in four different states",
     route: "/scheduling/supply/expiring",
+    // "No stock" here is a **badge on a populated row** — the Nozzle position,
+    // which is short and has nothing behind it, and is the one row on this page
+    // that pictures "order it" rather than "swap it". The empty-state check
+    // matches it as a whole short line and holds the shot back; the page is the
+    // opposite of empty, carrying five rows across every filter it offers.
+    allowEmptyState: true,
     fullPage: true,
+  },
+
+  {
+    id: "03-58-lots-aboard-sheet",
+    doc: "03-scheduling.md",
+    line: 840,
+    anchor: "Screenshot of the lots sheet open over the Apparatus Inventory page",
+    alt: "The lots sheet: two lots on one position, each with its own count, date and Remove",
+    auth: "member",
+    route: "/scheduling/apparatus-inventory",
+    viewport: "mobile",
+    prepare: async (page) => {
+      await selectMedicApparatus(page);
+      // The lot-count button is the only trigger and renders only above zero.
+      // `.first()` is the naloxone position — the one seeded with two lots, and
+      // the only one that can picture two dates in one bracket. A position with
+      // a single lot opens a stepper instead.
+      const lots = page.getByRole("button", { name: /\d+ lots?/ }).first();
+      await lots.waitFor({ timeout: 20_000 });
+      await lots.click();
+      await page.waitForTimeout(900);
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-60-report-used-sheet",
+    doc: "03-scheduling.md",
+    line: 880,
+    anchor: 'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
+    alt: "The report-used sheet: quantity stepper, optional note, and the position's current count",
+    auth: "member",
+    route: "/scheduling/apparatus-inventory",
+    viewport: "mobile",
+    prepare: async (page) => {
+      await selectMedicApparatus(page);
+      // "Flag" on a counted position, "Used" on one with no target — the same
+      // report by either name, so match both rather than assuming which the
+      // seeder produced for the first row.
+      const trigger = page.getByRole("button", { name: /^(Flag|Used)$/ }).first();
+      await trigger.waitFor({ timeout: 20_000 });
+      await trigger.click();
+      await page.waitForTimeout(900);
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-61-quick-add-catalog-search",
+    doc: "03-scheduling.md",
+    line: 937,
+    anchor: "Screenshot of the template builder's quick-add bar with \"gau\" typed",
+    alt: "The quick-add bar searching the inventory catalog, with matches and the create-and-link option",
+    route: "/scheduling",
+    prepare: async (page) => {
+      await openTemplateNamed("Medic 3 Supply Check")(page);
+      const search = page
+        .getByPlaceholder(/Search inventory or type a new item name/i)
+        .first();
+      await search.waitFor({ timeout: 20_000 });
+      // Centred, not merely "in view". The results open *below* the input, so
+      // `scrollIntoViewIfNeeded` — which stops as soon as the input itself is
+      // on screen — leaves the dropdown clipped by the bottom of the viewport,
+      // and the dropdown is the entire subject of the shot.
+      await search.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+      // Typed one key at a time: the dropdown opens on input events, and
+      // `fill` emits a single change rather than a keystroke each.
+      await search.pressSequentially("gau", { delay: 120 });
+      await page.waitForTimeout(1_500);
+    },
+    fullPage: false,
+  },
+  {
+    id: "03-62-bulk-inventory-match",
+    doc: "03-scheduling.md",
+    line: 940,
+    anchor: "Screenshot of the bulk inventory-match dialog on an unlinked engine checklist",
+    alt: "The bulk match dialog: exact matches pre-selected, a close match left for a person to arbitrate",
+    route: "/scheduling",
+    prepare: async (page) => {
+      // The **engine** checklist, not the medic's. `seed_supply_tracking` links
+      // every stock position on the medic, so its dialog has nothing to propose
+      // — the right end state and the wrong picture. The engine template is the
+      // case this feature exists for: a checklist nobody has linked, carrying
+      // two exact matches (Portable radio, Thermal imaging camera), one close
+      // match left unticked (Spare cylinder → SCBA Spare Cylinder), and six
+      // lines that are not stock at all.
+      await openTemplateNamed("Engine Daily Check")(page);
+      const coverage = page
+        .getByRole("button", { name: /\d+\/\d+ linked/ })
+        .first();
+      await coverage.waitFor({ timeout: 20_000 });
+      await coverage.click();
+      await page
+        .getByText(/items are linked to inventory/i)
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: false,
   },
 
   // ── 04 Events & Meetings ────────────────────────────────────────────

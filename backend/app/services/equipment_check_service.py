@@ -1591,7 +1591,7 @@ class EquipmentCheckService:
                         if tmpl.apparatus_id
                         else None
                     ),
-                    "lot_number": item.lot_number,
+                    "lot_number": self._soonest_lot_number(item),
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
@@ -1726,7 +1726,7 @@ class EquipmentCheckService:
                     "unit_of_measure": getattr(item, "unit_of_measure", None),
                     "deployed_lots": self._deployed_lot_payload(item),
                     "serial_number": item.serial_number,
-                    "lot_number": item.lot_number,
+                    "lot_number": self._soonest_lot_number(item),
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
@@ -1795,6 +1795,32 @@ class EquipmentCheckService:
             if lot.expiration_date:
                 return lot.expiration_date
         return item.expiration_date if item.has_expiration else None
+
+    @classmethod
+    def _soonest_lot_number(cls, item: CheckTemplateItem) -> Optional[str]:
+        """The lot number of the unit that ``_soonest_expiration`` reports.
+
+        These two have to be read as a pair. The date is derived across every
+        lot aboard; ``item.lot_number`` is the legacy scalar holding whichever
+        lot was restocked **last**. On a position carrying more than one, the
+        summary line paired one lot's number with another lot's date — a crew
+        reading "Lot NLX-2411, expires 4 Sep" would go looking for the wrong
+        box, because NLX-2411 is the one that expires in March and the box
+        expiring in September is NLX-2405.
+
+        That is the exact substitution `check_item_deployed_lots` was added to
+        prevent, surviving in the one line most likely to be read at a glance.
+        """
+        for lot in cls._deployed_lots(item):
+            if lot.expiration_date:
+                return lot.lot_number
+        # No dated lot: an undated row aboard still names its own box, and a
+        # position with no lots at all falls back to the scalar, which is
+        # consistent there because it is also where the date came from.
+        for lot in cls._deployed_lots(item):
+            if lot.lot_number:
+                return lot.lot_number
+        return item.lot_number
 
     @classmethod
     def _on_truck(cls, item: CheckTemplateItem) -> Optional[int]:
