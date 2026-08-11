@@ -3456,6 +3456,7 @@ class EquipmentCheckService:
                 "pass_count": 0,
                 "fail_count": 0,
                 "not_checked_count": 0,
+                "not_applicable_count": 0,
             }
         )
 
@@ -3468,6 +3469,8 @@ class EquipmentCheckService:
                 buckets[period_key]["pass_count"] += 1
             elif item.status == "fail":
                 buckets[period_key]["fail_count"] += 1
+            elif item.status == "not_applicable":
+                buckets[period_key]["not_applicable_count"] += 1
             else:
                 buckets[period_key]["not_checked_count"] += 1
 
@@ -3477,6 +3480,7 @@ class EquipmentCheckService:
                 "pass_count": v["pass_count"],
                 "fail_count": v["fail_count"],
                 "not_checked_count": v["not_checked_count"],
+                "not_applicable_count": v["not_applicable_count"],
             }
             for k, v in sorted(buckets.items())
         ]

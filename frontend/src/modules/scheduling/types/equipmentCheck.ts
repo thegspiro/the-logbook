@@ -302,12 +302,30 @@ export interface EquipmentCheckTemplateUpdate {
 // Shift Equipment Check Submission
 // ============================================================================
 
+/**
+ * How an item was answered.
+ *
+ * `not_applicable` is a real answer rather than a fault: a tool legitimately
+ * off the truck used to have to be filed as a failure, which the compliance
+ * reports then counted as one. It counts as answered wherever completeness is
+ * measured, and never toward failures.
+ */
+export type CheckItemStatus = 'pass' | 'fail' | 'not_checked' | 'not_applicable';
+
+/** How each answer reads on screen. Never print the raw token. */
+export const CHECK_ITEM_STATUS_LABELS: Record<string, string> = {
+  pass: 'Pass',
+  fail: 'Fail',
+  not_checked: 'Not checked',
+  not_applicable: 'Not on truck',
+};
+
 export interface CheckItemResultSubmit {
   template_item_id: string;
   compartment_name: string;
   item_name: string;
   check_type?: string | undefined;
-  status: 'pass' | 'fail' | 'not_checked';
+  status: CheckItemStatus;
   quantity_found?: number | undefined;
   required_quantity?: number | undefined;
   critical_minimum_quantity?: number | undefined;
@@ -353,7 +371,7 @@ export interface ShiftEquipmentCheckItemRecord {
   compartmentName: string;
   itemName: string;
   checkType?: string;
-  status: 'pass' | 'fail' | 'not_checked';
+  status: CheckItemStatus;
   quantityFound?: number;
   requiredQuantity?: number;
   criticalMinimumQuantity?: number;
@@ -489,6 +507,8 @@ export interface ItemTrendEntry {
   passCount: number;
   failCount: number;
   notCheckedCount: number;
+  /** Answered "not on truck" — an answer, unlike notCheckedCount. */
+  notApplicableCount?: number;
 }
 
 export interface ItemTrendResponse {

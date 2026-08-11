@@ -11,6 +11,7 @@ import {
   ChevronUp,
   Settings,
   Loader2,
+  MinusCircle,
   Truck,
   Calendar,
   Play,
@@ -20,7 +21,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftEquipmentCheckRecord, EquipmentCheckTemplate } from '../../modules/scheduling/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../../modules/scheduling/services/api';
-import { formatCalendarDate, formatDate, formatTime } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatDate, formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useAuthStore } from '../../stores/authStore';
@@ -65,6 +66,17 @@ const statusBadge = (status: string) => {
           Failed
         </span>
       );
+    case 'not_applicable':
+      return (
+        <span
+          className="bg-theme-surface-hover text-theme-text-muted inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+          role="status"
+          aria-live="polite"
+        >
+          <MinusCircle className="h-3 w-3" aria-hidden="true" />
+          Not on truck
+        </span>
+      );
     case 'in_progress':
     case 'incomplete':
       return (
@@ -91,6 +103,36 @@ const statusBadge = (status: string) => {
   }
 };
 
+/**
+ * Whole days between a calendar date and today, both written as "YYYY-MM-DD".
+ *
+ * Deliberately string arithmetic anchored at UTC midnight: a shift date belongs
+ * to no timezone, and `daysBetween` runs its input through the viewer's zone,
+ * which moves a date west of UTC back a day. Same trap `formatCalendarDate`
+ * documents.
+ */
+const daysUntilCalendarDate = (dateOnly: string | undefined, today: string): number | null => {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(dateOnly ?? '')) return null;
+  const target = Date.parse((dateOnly ?? '').slice(0, 10) + 'T00:00:00Z');
+  const base = Date.parse(today + 'T00:00:00Z');
+  if (isNaN(target) || isNaN(base)) return null;
+  return Math.round((target - base) / 86400000);
+};
+
+/** "Today", "Tomorrow", "In 5 days", "3 days ago" — when this check is due. */
+const dueLabel = (days: number): string => {
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  if (days === -1) return 'Yesterday';
+  if (days > 1) return `In ${days} days`;
+  return `${Math.abs(days)} days ago`;
+};
+
+const TIMING_LABELS: Record<string, string> = {
+  start_of_shift: 'Start of shift',
+  end_of_shift: 'End of shift',
+};
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -103,6 +145,7 @@ export const MyChecklistsPage: React.FC = () => {
 
   const [searchParams] = useSearchParams();
   const highlightShiftId = searchParams.get('shift') || undefined;
+  const today = getTodayLocalDate(timezone);
 
   // Active checklists
   const [loading, setLoading] = useState(true);
@@ -119,6 +162,9 @@ export const MyChecklistsPage: React.FC = () => {
   const [activeTemplate, setActiveTemplate] = useState<EquipmentCheckTemplate | null>(null);
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
   const [activeCheckId, setActiveCheckId] = useState<string | null>(null);
+  const [activeShiftContext, setActiveShiftContext] = useState<
+    { apparatusName?: string; shiftDate?: string; checkTiming?: string } | undefined
+  >(undefined);
 
   // Standalone check template picker
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -189,6 +235,13 @@ export const MyChecklistsPage: React.FC = () => {
       setActiveTemplate(template);
       setActiveShiftId(checklist.shiftId);
       setActiveCheckId(checklist.checkId || null);
+      // The open checklist keeps saying which shift it belongs to; without this
+      // two trucks on one template produce the same screen.
+      setActiveShiftContext({
+        apparatusName: checklist.apparatusName,
+        shiftDate: checklist.shiftDate,
+        checkTiming: checklist.checkTiming,
+      });
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load check template'));
     }
@@ -198,6 +251,7 @@ export const MyChecklistsPage: React.FC = () => {
     setActiveTemplate(null);
     setActiveShiftId(null);
     setActiveCheckId(null);
+    setActiveShiftContext(undefined);
     toast.success('Equipment check submitted successfully');
     void fetchActiveChecklists();
     if (showHistory) {
@@ -219,6 +273,7 @@ export const MyChecklistsPage: React.FC = () => {
     setActiveTemplate(null);
     setActiveShiftId(null);
     setActiveCheckId(null);
+    setActiveShiftContext(undefined);
   }, [confirm]);
 
   const handleOpenTemplatePicker = useCallback(async () => {
@@ -289,6 +344,7 @@ export const MyChecklistsPage: React.FC = () => {
           onComplete={handleComplete}
           onBack={() => void handleBack()}
           existingCheckId={activeCheckId || undefined}
+          shiftContext={activeShiftContext}
         />
       </Suspense>
     );
@@ -406,8 +462,8 @@ export const MyChecklistsPage: React.FC = () => {
             onClick={() => void handleOpenTemplatePicker()}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
           >
-            <Play className="h-3.5 w-3.5" />
-            Start a Check
+            <Play className="h-3.5 w-3.5" aria-hidden="true" />
+            Start an unscheduled check
           </button>
           {/* A whole check is the wrong instrument for "we just used two of
               these". This is the way to record that without starting one. */}
@@ -441,8 +497,8 @@ export const MyChecklistsPage: React.FC = () => {
               {(
                 [
                   ['all', 'All'],
-                  ['start_of_shift', 'Start'],
-                  ['end_of_shift', 'End'],
+                  ['start_of_shift', 'Start of shift'],
+                  ['end_of_shift', 'End of shift'],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -480,13 +536,25 @@ export const MyChecklistsPage: React.FC = () => {
             {activeChecklists
               .filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter)
               .slice()
+              /* Six checklists five to nine days out looked exactly as due as
+                 today's. Soonest first, and a shift arrived at from the drawer
+                 still comes to the top; within a day, the start-of-shift check
+                 precedes the end-of-shift one because that is the order they
+                 are done in. */
               .sort((a, b) => {
-                if (!highlightShiftId) return 0;
-                const aMatch = a.shiftId === highlightShiftId ? 0 : 1;
-                const bMatch = b.shiftId === highlightShiftId ? 0 : 1;
-                return aMatch - bMatch;
+                if (highlightShiftId) {
+                  const aMatch = a.shiftId === highlightShiftId ? 0 : 1;
+                  const bMatch = b.shiftId === highlightShiftId ? 0 : 1;
+                  if (aMatch !== bMatch) return aMatch - bMatch;
+                }
+                const byDate = (a.shiftDate ?? '').localeCompare(b.shiftDate ?? '');
+                if (byDate !== 0) return byDate;
+                const timingRank = (t: string) => (t === 'start_of_shift' ? 0 : 1);
+                return timingRank(a.checkTiming) - timingRank(b.checkTiming);
               })
               .map((checklist) => {
+                const days = daysUntilCalendarDate(checklist.shiftDate, today);
+                const isDueNow = days !== null && days <= 0;
                 const total = checklist.totalItems ?? 0;
                 const completed = checklist.completedItems ?? 0;
                 const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -514,7 +582,7 @@ export const MyChecklistsPage: React.FC = () => {
                             : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
                         }`}
                       >
-                        {checklist.checkTiming === 'start_of_shift' ? 'Start' : 'End'}
+                        {TIMING_LABELS[checklist.checkTiming] ?? checklist.checkTiming}
                       </span>
                     </div>
 
@@ -530,6 +598,19 @@ export const MyChecklistsPage: React.FC = () => {
                           day: 'numeric',
                         })}
                       </span>
+                      {days !== null && (
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                            days < 0
+                              ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                              : days === 0
+                                ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                                : 'bg-theme-surface-hover text-theme-text-muted'
+                          }`}
+                        >
+                          {dueLabel(days)}
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-theme-text-primary text-sm font-medium">{checklist.templateName}</p>
@@ -563,11 +644,20 @@ export const MyChecklistsPage: React.FC = () => {
 
                     <div className="mt-3 flex items-center justify-between">
                       {statusBadge(checklist.status)}
+                      {/* The card badge said when the check belongs ("End") and
+                          the button said what to do ("Start Check"), so the two
+                          read as a contradiction. The button names the action
+                          only — and a check that is not due yet is still
+                          openable, just not dressed as the urgent one. */}
                       <button
                         onClick={() => void handleStartCheck(checklist)}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          isDueNow || isStarted
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover border'
+                        }`}
                       >
-                        {isStarted ? 'Continue' : 'Start Check'}
+                        {isStarted ? 'Continue checklist' : 'Open checklist'}
                       </button>
                     </div>
                   </div>
@@ -752,7 +842,7 @@ export const MyChecklistsPage: React.FC = () => {
                                   : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
                               }`}
                             >
-                              {tmpl.checkTiming === 'start_of_shift' ? 'Start' : 'End'}
+                              {TIMING_LABELS[tmpl.checkTiming ?? ''] ?? tmpl.checkTiming}
                             </span>
                           </div>
                         </div>

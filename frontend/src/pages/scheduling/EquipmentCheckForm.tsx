@@ -29,6 +29,7 @@ import {
   Camera,
   Info,
   Minus,
+  MinusCircle,
   Plus,
   Type,
   WifiOff,
@@ -61,6 +62,7 @@ import type {
   ShiftEquipmentCheckCreate,
   StandaloneEquipmentCheckCreate,
   CheckType,
+  CheckItemStatus,
   LastCheckItemResult,
   DeployedLot,
 } from '../../modules/scheduling/types/equipmentCheck';
@@ -80,10 +82,23 @@ interface EquipmentCheckFormProps {
   onBack?: () => void;
   previewMode?: boolean;
   existingCheckId?: string | undefined;
+  /**
+   * Which shift this check belongs to. Once the checklist was open the only
+   * heading was the template name, so two trucks running the same template
+   * produced identical screens and a member could fill in the wrong one with
+   * nothing on the page to catch it.
+   */
+  shiftContext?:
+    | {
+        apparatusName?: string | undefined;
+        shiftDate?: string | undefined;
+        checkTiming?: string | undefined;
+      }
+    | undefined;
 }
 
 interface ItemResult {
-  status: 'pass' | 'fail' | 'not_checked';
+  status: CheckItemStatus;
   quantityFound?: number | undefined;
   levelReading?: number | undefined;
   serialNumber?: string | undefined;
@@ -255,6 +270,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   onBack,
   previewMode,
   existingCheckId,
+  shiftContext,
 }) => {
   const { confirm } = useConfirm();
   const tz = useTimezone();
@@ -393,12 +409,27 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   }).length;
   const progressPercent = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
 
-  const allRequiredChecked = checkableItems
-    .filter((item) => item.isRequired)
-    .every((item) => {
-      const result = results[item.id];
-      return result && result.status !== 'not_checked';
-    });
+  /** "Brush 5 · Start of shift · Sat, Aug 16" — whichever of the three we know. */
+  const shiftContextLine = [
+    shiftContext?.apparatusName,
+    shiftContext?.checkTiming === 'start_of_shift'
+      ? 'Start of shift'
+      : shiftContext?.checkTiming === 'end_of_shift'
+        ? 'End of shift'
+        : undefined,
+    shiftContext?.shiftDate
+      ? formatCalendarDate(shiftContext.shiftDate, { weekday: 'short', month: 'short', day: 'numeric' })
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const unansweredRequiredCount = checkableItems.filter((item) => {
+    if (!item.isRequired) return false;
+    const result = results[item.id];
+    return !result || result.status === 'not_checked';
+  }).length;
+  const allRequiredChecked = unansweredRequiredCount === 0;
 
   // --------------------------------------------------------------------------
   // Handlers
@@ -1137,6 +1168,33 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
     const effectiveStatus = isExpired ? 'fail' : currentStatus;
 
+    /**
+     * Pass or Fail with nothing between forced a crew to file a legitimately
+     * absent tool as a fault — and the compliance report then counted it as
+     * one. "Not on truck" is the third honest answer: it counts as answered,
+     * never as failed, and reads as itself on the report.
+     *
+     * It is not offered for an expired item: the department's own record says
+     * the unit aboard is out of date, and that verdict is the server's to make
+     * (see `_compute_check_status`), not something an answer here can retire.
+     */
+    const notApplicableButton = isExpired ? null : (
+      <button
+        type="button"
+        data-action="not_applicable"
+        onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable' })}
+        className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
+          effectiveStatus === 'not_applicable'
+            ? 'bg-theme-text-muted text-white'
+            : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted hover:text-theme-text-secondary border'
+        }`}
+        title="Not on the truck, or does not apply to this apparatus"
+      >
+        <MinusCircle className="h-4 w-4" aria-hidden="true" />
+        Not on truck
+      </button>
+    );
+
     const passFailButtons = (
       <div className="flex items-center gap-2">
         <button
@@ -1166,6 +1224,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <XCircle className="h-4 w-4" />
           Fail
         </button>
+        {notApplicableButton}
       </div>
     );
 
@@ -1203,6 +1262,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <XCircle className="h-4 w-4" />
               Missing
             </button>
+            {notApplicableButton}
           </div>
         );
 
@@ -1579,7 +1639,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             ? 'border-green-500/30 bg-green-500/5'
             : effectiveStatus === 'fail'
               ? 'border-red-500/30 bg-red-500/5'
-              : 'border-theme-surface-border bg-theme-surface'
+              : effectiveStatus === 'not_applicable'
+                ? 'border-theme-surface-border bg-theme-surface-hover/40'
+                : 'border-theme-surface-border bg-theme-surface'
         }`}
       >
         {/* Item header */}
@@ -1588,7 +1650,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               {!isQuantity && <TypeIcon className="text-theme-text-muted h-4 w-4 flex-shrink-0" />}
               <span className="text-theme-text-primary text-sm font-medium">{item.name}</span>
-              {item.isRequired && <span className="text-[10px] font-medium text-red-500 uppercase">Required</span>}
+              {/* REQUIRED was stamped on every item, in red — the same red a
+                  failed item wears — which told the reader nothing and spent the
+                  page's one alarm colour. The few optional ones are the news. */}
+              {!item.isRequired && <span className="text-theme-text-muted text-[10px] font-medium">Optional</span>}
               {renderExpirationBadge(item)}
             </div>
             {swapOverrides[item.id] && (
@@ -1842,10 +1907,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               return (
                 <div key={comp.id}>
                   {/* Compartment header — collapsible */}
+                  {/* Sticky: the compartment heading scrolled away, so a member
+                      a dozen items into "Cab" had nothing on screen saying so. */}
                   <button
                     type="button"
                     onClick={() => toggleCompartmentCollapse(comp.id)}
-                    className={`w-full rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] ${STATUS_COLORS[status]}`}
+                    className={`bg-theme-bg sticky top-[76px] z-10 w-full rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] ${STATUS_COLORS[status]}`}
                     aria-expanded={!isCollapsed}
                     aria-label={`${comp.name}, ${checked} of ${checkable.length} checked, ${STATUS_LABELS[status] ?? ''}`}
                   >
@@ -1951,31 +2018,36 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               />
             </div>
 
-            <button
-              type="button"
-              onClick={() => void handleSubmit()}
-              disabled={submitting || !allRequiredChecked}
-              className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {isOnline ? 'Submitting...' : 'Saving offline...'}
-                </>
-              ) : (
-                <>
-                  {isOnline ? <CheckCircle className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
-                  {isOnline ? 'Submit Report' : 'Save Offline'}
-                </>
-              )}
-            </button>
+            {/* Sticky: on a real engine inventory Submit sat several screens
+                below the last item, and the count of what was still unanswered
+                was at the very top. Both travel with the crew now. */}
+            <div className="bg-theme-bg border-theme-surface-border action-bar-safe sticky bottom-0 z-20 -mx-3 space-y-2 border-t px-3">
+              <button
+                type="button"
+                onClick={() => void handleSubmit()}
+                disabled={submitting || !allRequiredChecked}
+                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {isOnline ? 'Submitting...' : 'Saving offline...'}
+                  </>
+                ) : (
+                  <>
+                    {isOnline ? <CheckCircle className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+                    {isOnline ? 'Submit Report' : 'Save Offline'}
+                  </>
+                )}
+              </button>
 
-            {!allRequiredChecked && (
-              <p className="text-theme-text-muted text-center text-xs">
-                <AlertTriangle className="mr-1 inline h-3 w-3" />
-                All required items must be checked before submitting.
-              </p>
-            )}
+              {!allRequiredChecked && (
+                <p className="text-theme-text-muted text-center text-xs">
+                  <AlertTriangle className="mr-1 inline h-3 w-3" aria-hidden="true" />
+                  {unansweredRequiredCount} required item{unansweredRequiredCount === 1 ? '' : 's'} still to answer.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -2019,23 +2091,29 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         </div>
       )}
 
-      {/* Header */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      {/* Header. Sticky, because progress used to live only at the top: on a
+          real engine inventory a member scrolled to the very end to find out
+          they had missed something in the cab. It also carries the shift — the
+          template name alone is identical for two trucks running one template. */}
+      <div className="bg-theme-bg sticky top-0 z-20 -mx-3 space-y-2 px-3 pt-2 pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             {onBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2 transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface shrink-0 rounded-lg p-2 transition-colors"
                 aria-label="Go back"
               >
                 <ArrowLeft className="h-5 w-5" aria-hidden="true" />
               </button>
             )}
-            <h1 className="text-theme-text-primary text-lg font-bold">{template.name}</h1>
+            <div className="min-w-0">
+              <h1 className="text-theme-text-primary truncate text-lg font-bold">{template.name}</h1>
+              {shiftContextLine && <p className="text-theme-text-muted truncate text-xs">{shiftContextLine}</p>}
+            </div>
           </div>
-          <span className="text-theme-text-secondary text-sm font-medium">
+          <span className="text-theme-text-secondary shrink-0 text-sm font-medium">
             {checkedItems}/{totalItems}
           </span>
         </div>

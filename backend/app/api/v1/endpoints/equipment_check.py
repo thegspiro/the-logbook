@@ -1154,6 +1154,7 @@ async def export_csv(
                 "Pass",
                 "Fail",
                 "Not Checked",
+                "Not On Truck",
             ]
         )
         for t in data.get("trends", []):
@@ -1163,6 +1164,7 @@ async def export_csv(
                     t.get("pass_count", 0),
                     t.get("fail_count", 0),
                     t.get("not_checked_count", 0),
+                    t.get("not_applicable_count", 0),
                 ]
             )
     else:
