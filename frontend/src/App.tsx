@@ -82,6 +82,7 @@ import { FinanceApprovalPage } from './pages/FinanceApprovalPage';
 
 // Public legal pages (privacy policy / terms of service)
 const LegalPage = lazyWithRetry(() => import('./pages/legal/LegalPage'));
+const LearningCenterPage = lazyWithRetry(() => import('./pages/LearningCenterPage'));
 
 /**
  * Main Application Component
@@ -129,6 +130,7 @@ function App() {
                   >
                     {/* Main Dashboard */}
                     <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/learning" element={<LearningCenterPage />} />
 
                     {/* Feature Modules */}
                     {getApparatusRoutes()}
