@@ -1476,6 +1476,15 @@ async def update_deployed_lot(
     This is how a crew that changed a drug out makes the application say what
     the box in the bag says. Zero quantity removes the lot from the truck.
     """
+    updates = data.model_dump(exclude_unset=True)
+    if {"lot_number", "expiration_date"} & updates.keys():
+        permissions = _collect_user_permissions(current_user)
+        can_manage_lot_metadata = _has_permission(
+            "equipment_check.manage", permissions
+        ) or _has_permission("inventory.manage", permissions)
+        if not can_manage_lot_metadata:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     service = EquipmentCheckService(db)
     try:
         result = await service.update_deployed_lot(
@@ -1483,7 +1492,7 @@ async def update_deployed_lot(
             deployed_lot_id=deployed_lot_id,
             organization_id=str(current_user.organization_id),
             user=current_user,
-            updates=data.model_dump(exclude_unset=True),
+            updates=updates,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
