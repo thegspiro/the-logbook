@@ -557,7 +557,7 @@ export const ManualShiftReportPage: React.FC = () => {
         </div>
 
         {/* Submit */}
-        <div className="border-theme-surface-border flex items-center gap-3 border-t pt-2">
+        <div className="border-theme-surface-border flex flex-wrap items-center gap-3 border-t pt-2">
           <button
             onClick={() => {
               void handleSubmit(true);

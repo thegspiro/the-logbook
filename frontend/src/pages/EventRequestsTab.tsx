@@ -523,7 +523,7 @@ const EventRequestsTab: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <div className="text-theme-text-muted mt-1 flex items-center gap-3 text-sm">
+                        <div className="text-theme-text-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusCfg.color}`}
                           >

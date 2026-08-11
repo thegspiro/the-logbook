@@ -400,7 +400,7 @@ export const MembersAdminPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex items-start justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-theme-text-primary text-2xl font-bold">Members Administration</h2>
             <p className="text-theme-text-muted mt-1 text-sm">
@@ -415,7 +415,7 @@ export const MembersAdminPage: React.FC = () => {
             // through to the catch-all and bounced the user to the dashboard.
             <Link
               to="/members/admin?tab=add"
-              className="btn-primary inline-flex items-center rounded-md text-sm font-medium"
+              className="btn-primary inline-flex shrink-0 items-center self-start rounded-md text-sm font-medium sm:self-auto"
             >
               <svg
                 className="mr-2 -ml-1 h-5 w-5"
@@ -631,7 +631,7 @@ export const MembersAdminPage: React.FC = () => {
               return (
                 <div key={role.id} className="bg-theme-surface shadow-sm backdrop-blur-xs sm:rounded-lg">
                   <div className="border-theme-surface-border border-b px-6 py-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="flex items-center gap-3">
                           <h3 className="text-theme-text-primary text-lg font-medium">{role.name}</h3>
@@ -648,7 +648,7 @@ export const MembersAdminPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => handleEditMembers(role)}
-                        className="hover:bg-theme-surface-hover rounded-md border border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        className="hover:bg-theme-surface-hover shrink-0 self-start rounded-md border border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-800 sm:self-auto dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Manage Members
                       </button>

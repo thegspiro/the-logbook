@@ -648,7 +648,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   disabled={saving}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
                 <div>
                   <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">City</label>
                   <input

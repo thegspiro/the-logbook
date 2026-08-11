@@ -159,7 +159,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           )}
         </div>
 
-        <div className="flex items-end gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
             <label htmlFor="new-task-label" className="text-theme-text-muted mb-1 block text-xs font-medium">
               Task Name

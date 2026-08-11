@@ -80,9 +80,9 @@ const WriteOffsPage: React.FC = () => {
           Back to Admin
         </Link>
 
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-600 p-2">
+            <div className="shrink-0 rounded-lg bg-red-600 p-2">
               <FileX className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -94,7 +94,7 @@ const WriteOffsPage: React.FC = () => {
             onClick={() => {
               void loadWriteOffs();
             }}
-            className="btn-secondary btn-md"
+            className="btn-secondary btn-md shrink-0 self-start sm:self-auto"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -134,7 +134,7 @@ const WriteOffsPage: React.FC = () => {
               <div key={wo.id} className="card-secondary p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center gap-2">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
                       <h3 className="text-theme-text-primary text-sm font-semibold">{wo.item_name}</h3>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_BADGES[wo.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}

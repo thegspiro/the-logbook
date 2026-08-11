@@ -397,7 +397,7 @@ export default function ComplianceRequirementsConfigPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-theme-surface-border bg-theme-surface flex gap-1 rounded-lg border p-1">
+      <div className="border-theme-surface-border bg-theme-surface hscroll flex gap-1 rounded-lg border p-1">
         {tabs.map((tab: { id: ActiveTab; label: string; icon: ReactElement }) => (
           <button
             key={tab.id}
@@ -515,7 +515,7 @@ export default function ComplianceRequirementsConfigPage() {
           {/* Threshold preview */}
           <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
             <h3 className="text-theme-text-secondary mb-3 text-sm font-medium">Status Preview</h3>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-green-500" />
                 <span className="text-theme-text-primary text-sm">
@@ -795,7 +795,7 @@ export default function ComplianceRequirementsConfigPage() {
             <div key={profile.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-theme-text-primary font-semibold">{profile.name}</h3>
                     {!profile.isActive && (
                       <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-400">

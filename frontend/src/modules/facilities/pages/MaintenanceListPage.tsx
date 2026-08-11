@@ -67,7 +67,7 @@ export default function MaintenanceListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => void navigate('/facilities')}
@@ -83,7 +83,10 @@ export default function MaintenanceListPage() {
             </p>
           </div>
         </div>
-        <button onClick={() => openCreate()} className="btn-primary flex items-center gap-2 py-2.5 text-sm">
+        <button
+          onClick={() => openCreate()}
+          className="btn-primary flex shrink-0 items-center gap-2 self-start py-2.5 text-sm sm:self-auto"
+        >
           <Plus className="h-4 w-4" /> New Record
         </button>
       </div>
@@ -172,7 +175,7 @@ export default function MaintenanceListPage() {
                     </span>
                   )}
                 </div>
-                <div className="text-theme-text-muted flex items-center gap-3 text-xs">
+                <div className="text-theme-text-muted flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                   <span>{getFacilityName(record.facilityId)}</span>
                   {record.scheduledDate && (
                     <span className="flex items-center gap-1">
@@ -293,7 +296,7 @@ export default function MaintenanceListPage() {
                   </select>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelCls}>Scheduled Date</label>
                   <input
@@ -313,7 +316,7 @@ export default function MaintenanceListPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelCls}>Performed By</label>
                   <input
@@ -333,7 +336,7 @@ export default function MaintenanceListPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelCls}>Cost ($)</label>
                   <input
@@ -364,7 +367,7 @@ export default function MaintenanceListPage() {
                 />
               </div>
             </div>
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+            <div className="border-theme-surface-border flex flex-wrap items-center justify-end gap-3 border-t p-6">
               <button
                 onClick={() => setShowModal(false)}
                 className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm transition-colors"

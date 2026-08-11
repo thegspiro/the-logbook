@@ -123,12 +123,12 @@ const EventCheckInMonitoringPage: React.FC = () => {
         >
           ← Back to Event
         </Link>
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-theme-text-primary text-3xl font-bold">Check-In Monitoring</h1>
+            <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Check-In Monitoring</h1>
             <p className="text-theme-text-secondary mt-1 text-xl">{stats.event_name}</p>
           </div>
-          <div className="text-right">
+          <div className="sm:text-right">
             <div className="text-theme-text-muted text-sm">Last updated: {formatTime(lastUpdated, tz)}</div>
             <div className="mt-1">
               {stats.is_check_in_active ? (

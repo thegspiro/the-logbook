@@ -505,7 +505,7 @@ export const MinutesDetailPage: React.FC = () => {
               )}
             </div>
             {linkedEvent ? (
-              <div className="mt-2 flex items-center gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-3">
                 <span className="rounded-sm bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                   Business Meeting
                 </span>
@@ -694,7 +694,7 @@ export const MinutesDetailPage: React.FC = () => {
 
           {/* Add Section Form */}
           {showAddSection && (
-            <div className="card-secondary flex items-end gap-3 p-4" role="form" aria-label="Add new section">
+            <div className="card-secondary flex flex-wrap items-end gap-3 p-4" role="form" aria-label="Add new section">
               <div className="flex-1">
                 <label htmlFor="new-section-title" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                   Section Title

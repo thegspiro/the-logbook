@@ -146,12 +146,15 @@ export const RoleManagementPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-theme-text-primary text-2xl font-bold">Role Management</h2>
             <p className="text-theme-text-muted mt-1 text-sm">Create and manage custom roles and permissions</p>
           </div>
-          <button onClick={handleCreate} className="btn-info inline-flex items-center rounded-md text-sm font-medium">
+          <button
+            onClick={handleCreate}
+            className="btn-info inline-flex shrink-0 items-center self-start rounded-md text-sm font-medium sm:self-auto"
+          >
             Create Custom Role
           </button>
         </div>
@@ -168,7 +171,7 @@ export const RoleManagementPage: React.FC = () => {
               <li key={role.id} className="px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <h3 className="text-theme-text-primary text-lg font-medium">{role.name}</h3>
                       {role.is_system && (
                         <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">

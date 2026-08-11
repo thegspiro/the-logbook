@@ -267,7 +267,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
         {data.members.length === 0 ? (
           <p className="text-theme-text-muted py-4 text-sm">No member data available.</p>
         ) : (
-          <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
+          <div className="bg-theme-surface border-theme-surface-border overflow-x-auto rounded-xl border">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
@@ -650,7 +650,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                   );
                 })}
               </div>
-              <div className="text-theme-text-muted mt-3 flex items-center gap-4 text-xs">
+              <div className="text-theme-text-muted mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                 <span className="flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-sm bg-slate-400" /> Not applicable
                 </span>

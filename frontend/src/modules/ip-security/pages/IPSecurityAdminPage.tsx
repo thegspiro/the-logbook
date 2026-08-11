@@ -170,7 +170,7 @@ const IPSecurityAdminPage: React.FC = () => {
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-600 p-2">
+            <div className="shrink-0 rounded-lg bg-red-600 p-2">
               <Shield className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -180,7 +180,7 @@ const IPSecurityAdminPage: React.FC = () => {
           </div>
           <button
             onClick={refresh}
-            className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
+            className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
@@ -414,7 +414,7 @@ const IPSecurityAdminPage: React.FC = () => {
         {/* Add Country Modal */}
         <Modal isOpen={countryModal} onClose={() => setCountryModal(false)} title="Add Blocked Country">
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="country-code" className={labelClass}>
                   Country Code

@@ -122,9 +122,9 @@ export const MedicalScreeningPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <Stethoscope className="text-theme-text-muted h-6 w-6" />
+          <Stethoscope className="text-theme-text-muted h-6 w-6 shrink-0" />
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold">Medical Screening</h1>
             <p className="text-theme-text-muted text-sm">
@@ -138,7 +138,7 @@ export const MedicalScreeningPage: React.FC = () => {
               setEditingRequirement(null);
               setShowRequirementForm(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 sm:self-auto"
           >
             <Plus className="h-4 w-4" />
             Add Requirement
@@ -150,7 +150,7 @@ export const MedicalScreeningPage: React.FC = () => {
               setEditingRecord(null);
               setShowRecordForm(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 sm:self-auto"
           >
             <Plus className="h-4 w-4" />
             Add Record
@@ -173,7 +173,7 @@ export const MedicalScreeningPage: React.FC = () => {
 
       {/* Tabs */}
       <div className="border-theme-surface-border mb-6 border-b">
-        <div className="flex gap-1">
+        <div className="hscroll flex gap-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (

@@ -236,14 +236,14 @@ export default function ApparatusBasicPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-3xl font-bold">Apparatus & Vehicles</h1>
+          <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Apparatus & Vehicles</h1>
           <p className="text-theme-text-secondary mt-1">
             Define your department's vehicles and crew positions for shift scheduling
           </p>
         </div>
-        <button onClick={openCreate} className="btn-primary flex items-center gap-2 py-2.5">
+        <button onClick={openCreate} className="btn-primary flex shrink-0 items-center gap-2 py-2.5">
           <Plus className="h-4 w-4" /> Add Apparatus
         </button>
       </div>
@@ -334,7 +334,7 @@ export default function ApparatusBasicPage() {
                   </div>
                 </div>
 
-                <div className="mb-3 flex items-center gap-2">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
                   <span className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium">
                     <Wrench className="h-3 w-3" /> {typeInfo?.label}
                   </span>

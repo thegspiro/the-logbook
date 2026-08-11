@@ -229,9 +229,9 @@ const MinutesPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center space-x-3">
-            <div className="rounded-lg bg-cyan-600 p-2">
+            <div className="shrink-0 rounded-lg bg-cyan-600 p-2">
               <ClipboardList className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -244,7 +244,7 @@ const MinutesPage: React.FC = () => {
           {canManage && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center space-x-2 rounded-lg bg-cyan-600 px-4 py-2 text-white transition-colors hover:bg-cyan-700"
+              className="flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-600 px-4 py-2 text-white transition-colors hover:bg-cyan-700 sm:self-auto"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               <span>Record Minutes</span>

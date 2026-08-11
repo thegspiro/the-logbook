@@ -448,7 +448,7 @@ const SubmissionForm: React.FC<{
       </div>
 
       {/* Buttons */}
-      <div className="border-theme-surface-border flex items-center justify-between border-t pt-4">
+      <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-3 border-t pt-4">
         <div className="text-theme-text-muted text-xs">
           {config.require_approval
             ? 'Your submission will be reviewed by a training officer.'
@@ -600,7 +600,7 @@ const SubmitTrainingPage: React.FC = () => {
                           <h3 className="text-theme-text-primary font-medium">{sub.course_name}</h3>
                           <StatusBadge status={sub.status} />
                         </div>
-                        <div className="text-theme-text-muted flex items-center space-x-4 text-xs">
+                        <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                           <span>{sub.hours_completed}h</span>
                           <span>{sub.completion_date}</span>
                           {sub.instructor && <span>Instructor: {sub.instructor}</span>}
