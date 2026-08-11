@@ -96,6 +96,29 @@ class SkillTemplateCreate(BaseModel):
     result_viewer_positions: Optional[List[str]] = None
 
 
+class SkillSheetLibraryItem(BaseModel):
+    """One sheet in the starter library, as the picker lists it.
+
+    Summary only — an officer choosing between ten sheets needs the discipline
+    and the shape, not 100 criteria on screen. The full structure arrives when
+    they import it, and from then on it is their template to edit.
+    """
+
+    slug: str
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    section_count: int = 0
+    criteria_count: int = 0
+    critical_count: int = 0
+    passing_percentage: Optional[float] = None
+    time_limit_seconds: Optional[int] = None
+    # Set when the department already holds a template with this name, so the
+    # picker can say "already added" instead of quietly making a second copy.
+    already_imported: bool = False
+
+
 class SkillTemplateUpdate(BaseModel):
     """Schema for updating a skill template"""
 
@@ -277,6 +300,44 @@ class SkillTestCancelRequest(BaseModel):
     reason: Optional[str] = Field(None, max_length=1000)
 
 
+class SkillTestBulkValidateRequest(BaseModel):
+    """Accept several submissions in one action.
+
+    Capped rather than unbounded: each validation credits a pipeline
+    requirement, spends an attempt and notifies a candidate, so a request is a
+    burst of side effects and not just a write. The cap keeps one click's worth
+    of consequences reviewable — and a queue longer than this is a sign the
+    officer should be filtering, not selecting all.
+    """
+
+    test_ids: List[UUID] = Field(..., min_length=1, max_length=50)
+
+
+class SkillTestBulkValidateResponse(BaseModel):
+    """What actually happened, per test.
+
+    Partial success is the normal case — a colleague may have validated or
+    voided one of the selection between the officer loading the queue and
+    acting on it — so this reports each outcome rather than failing the whole
+    batch on the first refusal.
+    """
+
+    validated: List[UUID] = Field(default_factory=list)
+    skipped: List[dict] = Field(default_factory=list)
+
+
+class SkillTestReturnRequest(BaseModel):
+    """Send a submitted result back to its examiner instead of accepting it.
+
+    The reason is mandatory and non-trivial for the same purpose as a void's,
+    but a different audience: a void explains a withdrawal to whoever reads the
+    candidate's record later, while this tells the examiner what to fix. An
+    examiner who reopens a test to "please correct" has learned nothing.
+    """
+
+    reason: str = Field(..., min_length=10, max_length=1000)
+
+
 class SkillTestVoidRequest(BaseModel):
     """Schema for voiding an official test result.
 
@@ -331,6 +392,15 @@ class SkillTestResponse(UTCResponseBase):
     voided_at: Optional[datetime] = None
     voided_by: Optional[UUID] = None
     void_reason: Optional[str] = None
+
+    # Return trail — populated while a submission is back with its examiner for
+    # correction, and cleared on the next completion. The examiner screen reads
+    # these to show what the officer asked to be fixed.
+    returned_at: Optional[datetime] = None
+    returned_by: Optional[UUID] = None
+    returned_by_name: Optional[str] = None
+    return_reason: Optional[str] = None
+    return_count: int = 0
 
     # Validation trail — an official result counts only once a training officer
     # signs it off. Unset while a member-run test awaits review; set in the same
