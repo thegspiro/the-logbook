@@ -7,6 +7,8 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { userService } from '../../../services/api';
+import type { User } from '../../../types/user';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { apparatusOperatorService, evocLevelService } from '../services/api';
 import type { ApparatusOperator, ApparatusOperatorCreate, ApparatusOperatorUpdate, EvocLevel } from '../types';
@@ -63,6 +65,7 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
   const [f, setF] = useState<FormData>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [evocLevels, setEvocLevels] = useState<EvocLevel[]>([]);
+  const [members, setMembers] = useState<User[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -71,6 +74,12 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
         .then(setEvocLevels)
         .catch(() => {
           /* EVOC levels may not be configured */
+        });
+      void userService
+        .getUsers()
+        .then(setMembers)
+        .catch(() => {
+          /* the picker falls back to disabled rather than to a UUID box */
         });
     }
   }, [isOpen]);
@@ -101,7 +110,7 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editOperator && !f.userId) {
-      toast.error('Please enter a user ID');
+      toast.error('Please select a member');
       return;
     }
 
@@ -154,18 +163,26 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={editOperator ? 'Edit Operator' : 'Add Operator'} size="md">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-        {/* User ID - only for new operators */}
+        {/* Member — only for new operators; an operator's member never changes */}
         {!editOperator && (
           <div>
-            <label className={labelClass}>User ID *</label>
-            <input
-              type="text"
+            <label className={labelClass} htmlFor="operator-member">
+              Member *
+            </label>
+            <select
+              id="operator-member"
               className={inputClass}
               value={f.userId}
               onChange={(e) => up('userId', e.target.value)}
-              placeholder="Enter user ID"
               required
-            />
+            >
+              <option value="">Select a member...</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.first_name} {member.last_name}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 

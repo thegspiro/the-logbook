@@ -916,6 +916,7 @@ const CompetencySection: React.FC = () => {
 };
 
 const InstructorsSection: React.FC = () => {
+  const tz = useTimezone();
   const loadQualData = useCallback(() => instructorService.getQualifications(), []);
   const {
     data: qualifications,
@@ -983,10 +984,12 @@ const InstructorsSection: React.FC = () => {
               {qualifications.map((qual) => (
                 <tr key={qual.id} className="border-theme-surface-border/50 border-b">
                   <td className="text-theme-text-primary py-2 pr-4">{qual.user_name || qual.user_id}</td>
-                  <td className="py-2 pr-4 capitalize">{qual.qualification_type}</td>
+                  {/* The stored values are snake_case (`lead_instructor`), so
+                      `capitalize` alone leaves the underscore on screen. */}
+                  <td className="py-2 pr-4 capitalize">{qual.qualification_type.replace(/_/g, ' ')}</td>
                   <td className="py-2 pr-4">{qual.certification_level || '-'}</td>
                   <td className="py-2 pr-4">{qual.certification_number || '-'}</td>
-                  <td className="py-2 pr-4">{qual.expiration_date || '-'}</td>
+                  <td className="py-2 pr-4">{qual.expiration_date ? formatDate(qual.expiration_date, tz) : '-'}</td>
                   <td className="py-2">
                     <span
                       className={`rounded-sm px-2 py-0.5 text-xs ${
@@ -1134,7 +1137,9 @@ const EffectivenessSection: React.FC = () => {
                       {ev.knowledge_gain_percentage != null ? (
                         <span className={ev.knowledge_gain_percentage >= 0 ? 'text-green-600' : 'text-red-600'}>
                           {ev.knowledge_gain_percentage > 0 ? '+' : ''}
-                          {ev.knowledge_gain_percentage}%
+                          {/* Computed as a ratio of two scores, so it arrives
+                              with full float precision (58.620689655…). */}
+                          {ev.knowledge_gain_percentage.toFixed(1)}%
                         </span>
                       ) : (
                         '-'
@@ -1153,6 +1158,7 @@ const EffectivenessSection: React.FC = () => {
 };
 
 const MultiAgencySection: React.FC = () => {
+  const tz = useTimezone();
   const loadExerciseData = useCallback(() => multiAgencyService.getExercises(), []);
   const { data: exercises, loading, reload: loadData } = useLoadData(loadExerciseData, [] as MultiAgencyTraining[]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1198,7 +1204,7 @@ const MultiAgencySection: React.FC = () => {
                   <h4 className="text-theme-text-primary font-medium">{exercise.exercise_name}</h4>
                   <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                     <span className="capitalize">{exercise.exercise_type.replace(/_/g, ' ')}</span>
-                    <span>{exercise.exercise_date}</span>
+                    <span>{formatDate(exercise.exercise_date, tz)}</span>
                     {exercise.total_participants && <span>{exercise.total_participants} participants</span>}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">

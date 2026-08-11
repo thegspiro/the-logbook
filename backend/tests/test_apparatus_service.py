@@ -49,6 +49,7 @@ def org_id():
 def _result(value):
     r = MagicMock()
     r.scalar_one_or_none.return_value = value
+    r.scalar_one.return_value = value
     return r
 
 
@@ -67,13 +68,16 @@ class TestUpdateOperatorFKValidation:
 
     async def test_no_evoc_change_skips_validation(self, service, mock_db, org_id):
         operator = MagicMock(spec=ApparatusOperator)
-        # Only the operator fetch runs; assert_in_org(None, allow_none) makes no
-        # query, so a second execute would be an error (StopIteration).
-        mock_db.execute.side_effect = [_result(operator)]
+        # Two queries, neither of them a validation: the operator fetch, then
+        # the post-commit reload that loads evoc_level for the response.
+        # assert_in_org(None, allow_none) makes no query of its own, so a third
+        # execute would be one (StopIteration).
+        mock_db.execute.side_effect = [_result(operator), _result(operator)]
 
         data = ApparatusOperatorUpdate(is_active=False)
         result = await service.update_operator(str(uuid4()), data, org_id)
         assert result is operator
+        assert mock_db.execute.await_count == 2
 
 
 class TestUpdateApparatusFKValidation:

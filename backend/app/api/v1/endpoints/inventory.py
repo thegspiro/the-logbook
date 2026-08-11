@@ -92,6 +92,8 @@ from app.schemas.inventory import (
     InventoryCategoryCreate,
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
+    InventoryItemBulkCreate,
+    InventoryItemBulkResult,
     InventoryItemCreate,
     InventoryItemResponse,
     InventoryItemUpdate,
@@ -518,6 +520,62 @@ async def create_item(
     )
 
     return new_item
+
+
+@router.post(
+    "/items/bulk",
+    response_model=InventoryItemBulkResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_items_bulk(
+    data: InventoryItemBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create many inventory items in one pass.
+
+    Names already in the catalog are skipped and reported, not rejected, so a
+    list can be re-pasted after it grows. Any validation failure writes
+    nothing.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    try:
+        items, skipped = await service.create_items_bulk(
+            organization_id=current_user.organization_id,
+            entries=[e.model_dump(exclude_unset=True) for e in data.entries],
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(str(e)),
+        )
+
+    if items:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_items_bulk_created",
+            event_category="inventory",
+            severity="info",
+            event_data={"count": len(items), "skipped": len(skipped)},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "items_bulk_created",
+            {"count": len(items)},
+        )
+
+    return InventoryItemBulkResult(
+        created=len(items),
+        skipped=skipped,
+        item_ids=[item.id for item in items],
+    )
 
 
 @router.get("/items/export")
@@ -1129,7 +1187,12 @@ async def get_item(
             detail="Item not found",
         )
 
-    return item
+    payload = InventoryItemResponse.model_validate(item)
+    if item.assigned_to_user:
+        # The detail page's Assignment card prints who holds the item; without
+        # a name it showed the raw user id.
+        payload.assigned_to_name = item.assigned_to_user.full_name
+    return payload
 
 
 @router.get("/items/{item_id}/history")
@@ -1983,7 +2046,13 @@ async def get_item_maintenance_history(
         skip=skip,
         limit=limit,
     )
-    return maintenance_records
+    responses = []
+    for record in maintenance_records:
+        payload = MaintenanceRecordResponse.model_validate(record)
+        if record.technician:
+            payload.performed_by_name = record.technician.full_name
+        responses.append(payload)
+    return responses
 
 
 @router.get("/maintenance/due", response_model=list[InventoryItemResponse])
@@ -5180,7 +5249,12 @@ async def list_equipment_kits(
     kits = await service.get_equipment_kits(
         current_user.organization_id, active_only=active_only
     )
-    return [EquipmentKitResponse.model_validate(k) for k in kits]
+    responses = []
+    for kit in kits:
+        payload = EquipmentKitResponse.model_validate(kit)
+        payload.item_count = len(kit.line_items or [])
+        responses.append(payload)
+    return responses
 
 
 @router.post(

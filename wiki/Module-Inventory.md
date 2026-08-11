@@ -46,6 +46,11 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Taxonomy Soft-Delete** — *(2026-06-09)* `DELETE` endpoints for categories (blocked when active items reference them), variant groups, and equipment kits set `active = False` and audit-log rather than hard-deleting
 - **NFPA 1851 Inspection Detail** — *(2026-06-09)* Maintenance records can persist structured NFPA Ch. 6–8 inspection results (assessment booleans, contamination level, SCBA fields, recommendation) to `nfpa_inspection_details` when supplied
 - **Inventory Impact Planner** — *(2026-06-23)* Quartermaster planning tool (`/inventory/admin/impact-planner`) for scoping a prospective new issue. Filter the roster (status, membership type, rank, station, position) and see who is impacted, the size each needs (from member size preferences), and who already holds a comparable item. Optional layers: net per-size demand against on-hand stock for the exact quantity to buy, estimate cost from item prices, treat worn or NFPA-expired gear as needing replacement, and warn when members are over their issuance allowance. Acts on the result — draft pre-priced per-size **reorder requests**, **bulk-issue** matching on-hand pool stock, **request sizes** from members with none on file (in-app notification), export **PDF/CSV**, and **save/load named plans** (`inventory_impact_plans`). Member contact details honour the org's `contact_info_visibility` settings
+- **Dated Stock Lots** — *(2026-08-10)* Consumables are held as dated lots (`inventory_lots`) rather than one flat count. **On-hand comes from in-date lots** for any item that has them and from `InventoryItem.quantity` for the rest; expired lots count as zero, because the equipment-check swap refuses them and counting them would hide the shortage most in need of ordering. One shared helper backs the reorder alert, the items grid and the CSV export, so the three cannot disagree
+- **Receive Stock (bulk lots)** — *(2026-08-10)* Record a whole delivery in one pass: item, lot number, expiration and quantity per line, one received date for the lot of it. `POST /inventory/lots/bulk` validates every item is in the caller's org and **applies all lines or none** — a partly applied delivery is worse than a rejected one
+- **Add Several (bulk item create)** — *(2026-08-10)* Paste a list of catalog items. Names already in the catalog are **skipped and reported, not rejected**, so a list can be re-pasted after it grows; any validation failure writes nothing
+- **Shelf-to-Truck Link** — *(2026-08-10)* An inventory item's stock tab lists the apparatus checklist positions it fills and what each truck is carrying now (`GET /equipment-checks/supply/item-deployments/{id}`) — the direction a recall or an expiring lot is actually worked from, because the officer is holding the item. The forward direction lives in the [Scheduling module](Module-Scheduling)'s supply worklist
+- **RFC 4180 CSV Parsing** — *(2026-08-10)* CSV import and paste paths use a real parser. `"Gauze Pads, 4x4 Sterile"` is one field; the previous `split(',')` readers shifted every column after it, so the import preview disagreed with what the import would actually do
 
 ---
 
@@ -90,6 +95,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 |-------|---------|
 | `inventory_categories` | Item categories with type, requirements, low-stock thresholds |
 | `inventory_items` | Items with serial/barcode/asset tag, condition, status, tracking type |
+| `inventory_lots` | A dated batch of a consumable held as ready stock: lot number, expiration, quantity, received date. **The source of "on hand" for any item that has lots** *(documented 2026-08-10)* |
 | `item_assignments` | Permanent/temporary assignments of individual items to members |
 | `item_issuances` | Pool item issuance records (quantity tracking) |
 | `checkout_records` | Temporary checkout records with expected return dates |
@@ -149,11 +155,28 @@ PATCH  /api/v1/inventory/categories/{id}                 # Update category
 ```
 GET    /api/v1/inventory/items                           # List items (with filters)
 POST   /api/v1/inventory/items                           # Create item
+POST   /api/v1/inventory/items/bulk                      # Create many items; existing names skipped + reported (2026-08-10)
 GET    /api/v1/inventory/items/{id}                      # Get item details
 PATCH  /api/v1/inventory/items/{id}                      # Update item
 POST   /api/v1/inventory/items/{id}/retire               # Retire item
-GET    /api/v1/inventory/items/export                    # Export items as CSV
+GET    /api/v1/inventory/items/export                    # Export items as CSV (carries a Ready Lot Stock column)
 ```
+
+### Stock Lots *(2026-08-10)*
+
+```
+GET    /api/v1/inventory/items/{item_id}/lots            # Lots held for an item
+POST   /api/v1/inventory/items/{item_id}/lots            # Add one dated lot
+POST   /api/v1/inventory/lots/bulk                       # Receive a delivery — all lines or none (2026-08-10)
+PATCH  /api/v1/inventory/lots/{lot_id}                   # Correct a lot
+DELETE /api/v1/inventory/lots/{lot_id}                   # Remove a lot
+GET    /api/v1/inventory/lots/expiring                   # Shelf lots nearing their date
+```
+
+> **Expired lots are not ready stock.** They are excluded from the on-hand count,
+> flagged in the payload, struck through in the UI and **refused by the
+> equipment-check swap** — putting expired supplies in service would fail the
+> item on the next check.
 
 ### Assignments & Issuances
 

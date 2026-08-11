@@ -124,8 +124,7 @@ button, within thumb reach. Tap **More** to open the full navigation drawer.
 - On tablets and desktop it does not appear at all: the side or top navigation is
   already visible there, so the bar would be redundant.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the app on a phone in standalone mode showing the bottom tab bar with four labelled icons and a "More" button, and the top mobile header clear of the status bar]_
+![Bottom navigation bar as it appears on a phone](./images/10-12-mobile-bottom-nav.png)
 
 ### Everything Is Thumb-Sized Now _(2026-08-08)_
 
@@ -537,6 +536,12 @@ The notification unread count badge is now visible on both mobile and desktop:
 
 > **Screenshot needed:**
 > _[Screenshot of the mobile top navigation bar showing the hamburger menu, page title, and bell icon with a red "3" badge]_
+
+On a phone the bell is **inside the menu**, not on the bar. The collapsed top
+bar is the department logo, the department name, and the hamburger — there is
+no page title and no bell on it. Open the menu and the Notifications entry
+carries the red unread count. The placeholder stays open until there is a
+screen matching what it describes.
 
 ---
 

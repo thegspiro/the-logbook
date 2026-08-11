@@ -8659,6 +8659,10 @@ It prints both `.env` lines already filled in, in the exact encoding each consum
 
 **Edge Case:** The migration-chain guard now asserts a single head. It already caught duplicate ids, dangling parents and multiple roots, but a fork passes all three while still leaving `upgrade head` ambiguous.
 
+**Recurred 2026-08-10 — the third time.** `main` landed `20260810_0003`/`_0004` for email templates while an inventory branch, open at the same time, had numbered its own four migrations from the same `20260810_0002` parent. The branch's migrations were renumbered to `_0005`–`_0008` before merging.
+
+Worth internalising, because the shape is identical every time: **two revision ids with two files each is not a merge conflict git can see.** Both branches add files git happily keeps, and the collision only surfaces when Alembic tries to build the revision map — at backend startup, not at review. The guard catches it in CI; the habit that avoids it is running `alembic heads` **after merging main into your branch**, not just before writing the migration. A head documented in `docs/ALEMBIC_MIGRATIONS.md` is correct as of the day it was written and is not a substitute for asking.
+
 ---
 
 ---

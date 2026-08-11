@@ -380,6 +380,17 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/admin/variant-groups` | Variant Groups            | `inventory.manage` |
 | `/inventory/print-labels`         | Barcode Label Printing    | Authenticated      |
 
+> **Receiving a delivery and stocking the catalog are both one-pass jobs now** _(2026-08-10)_. Two modals open from the items list (`/inventory`, and the same screen at `/inventory/admin/items`):
+>
+> | Modal             | What it does                                                                                                                                                                                                                                                                                                                                                    |
+> | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **Receive Stock** | One dated lot per line — item, lot number, expiration, quantity — with a single received date for the whole delivery. Posts to `POST /inventory/lots/bulk`, which **applies all lines or none**: a partly applied delivery is worse than a rejected one, because the officer cannot tell which lines landed and re-entering it would double-count whatever did. |
+> | **Add Several**   | Paste a list of catalog items. Names already in the catalog are **skipped and reported, not rejected**, so a list can be re-pasted after it grows. Any validation failure writes nothing.                                                                                                                                                                       |
+>
+> The CSV import at `/inventory/import` was built and routed but unreachable from the items page; an **Import CSV** button now sits beside these two.
+>
+> **The Qty column reads from in-date lots** for any item that has them, labelled "in-date lots" so it is not mistaken for the pool figure beside it, and the CSV export carries the same number in a **Ready Lot Stock** column. `InventoryItem.quantity` is not maintained for lot-stocked consumables — receiving a lot does not touch it and an equipment-check swap decrements only the lot — so the grid used to report whatever the number happened to be when the item was created. An item whose lots have all expired reads as **zero**, not as its stale quantity.
+
 > The admin dashboard provides summary statistics and quick-link navigation with grouped card sections. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests, equipment kits, and variant groups. The **Issuance Allowances** page (`/inventory/admin/allowances`) configures per-category issue limits by role and period (annual/career/one-time). The **Impact Planner** (`/inventory/admin/impact-planner`) scopes a prospective new issue: filter the roster to see who is impacted and the sizes needed, net demand against on-hand stock for the quantity to buy, estimate cost, then act on it (draft reorders, bulk-issue stock, request missing sizes, export PDF/CSV, save named plans). Member uniform/PPE sizing is captured via the **Size Preferences** modal — members edit their own (`/inventory/my/size-preferences`) and quartermasters edit any member's (`/inventory/members/{user_id}/size-preferences`). The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance). Non-admin users see only their own assigned equipment on the inventory dashboard.
 
 ---
@@ -471,13 +482,59 @@ Sections are defined in
 
 ### Equipment Check Pages (2026-03-19)
 
-| URL                                                 | Page                             | Permission               |
-| --------------------------------------------------- | -------------------------------- | ------------------------ |
-| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `equipment_check.manage` |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `equipment_check.manage` |
-| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `equipment_check.manage` |
+| URL                                                 | Page                             | Permission                                                                |
+| --------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------- |
+| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `equipment_check.manage`                                                  |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `equipment_check.manage`                                                  |
+| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`                                                       |
+| `/scheduling?tab=equipment-checks`                  | My Equipment Checklists          | Authenticated                                                             |
+| `/scheduling/supply/expiring`                       | Expiring on Apparatus            | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
+| `/scheduling/apparatus-inventory`                   | Apparatus Inventory              | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
 
-> The **Template Builder** provides a drag-and-drop interface for creating structured checklists with nested compartments and multiple check types (pass/fail, quantity, level, date/lot, reading). The **Reports** page has three tabs: Compliance Dashboard, Failure/Deficiency Log, and Item Trend History with CSV and PDF export.
+> The **Template Builder** provides a drag-and-drop interface for creating structured checklists with nested compartments and multiple check types (pass/fail, quantity, level, date/lot, reading). Its quick-add bar searches the inventory catalog as you type, so **adding a position and linking it to a catalog item are one act** _(2026-08-10)_ — and the toolbar carries a linked/unlinked count, because everything the supply screens can do hangs off `inventory_item_id`. For checklists that already exist there is a reviewed bulk pass that proposes a catalog item for every unlinked position; **only exact name matches are pre-selected**, since "Oxygen Mask" scores high against both the adult and the pediatric mask. The **Reports** page has three tabs: Compliance Dashboard, Failure/Deficiency Log, and Item Trend History with CSV and PDF export.
+
+#### Expiring on Apparatus (`/scheduling/supply/expiring`) _(documented 2026-08-10)_
+
+The supply officer's worklist. Reached from **Scheduling → Supply** (the tile
+carries a count badge) and from the **Inventory Admin Hub**. Lists checklist
+positions that are expiring, expired, short of target, or reported used, each with
+the ready replacement stock behind it.
+
+| Control    | Options                                       |
+| ---------- | --------------------------------------------- |
+| Look-ahead | 30 / 60 / 90 days                             |
+| Filter     | All · Needs restock · Used or short · Expired |
+| Sort       | Soonest expiry · By apparatus                 |
+
+Summary pills count rows needing attention, rows with ready stock, and rows that
+need ordering. **Expired shelf stock is struck through and cannot be swapped** —
+offering it would put expired supplies in service and fail the item on the next
+check.
+
+#### Apparatus Inventory (`/scheduling/apparatus-inventory`) _(added 2026-08-10)_
+
+The standing view of one truck, outside any check. Reached from **My Equipment
+Checklists → Apparatus Inventory**. Pick an apparatus and see its tracked
+positions compartment by compartment: what is aboard, the lots and dates on each
+position, and the ready stock behind it.
+
+**It is deliberately crew-level.** An equipment check is a scheduled, signed pass
+over a whole apparatus that produces a report; a crew that used the last of
+something at 03:00 needs somewhere to put that fact _now_, not at the next
+morning's check. So the page and every write on it accept
+`equipment_check.submit` — the default member position — as well as the manage
+permissions.
+
+| Action on a position | What it means                                                                                                                     |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **−**                | Consumption. The count drops and a restock report goes up with it, drawing soonest-expiring-first                                 |
+| **+**                | A hand restock                                                                                                                    |
+| **Swap**             | Draws N units off a shelf lot onto the truck; defaults to the shortfall                                                           |
+| **Flag**             | Damaged, contaminated or missing — on a counted position, where **−** already records use                                         |
+| **Lots**             | A position carrying lots opens them rather than offering a stepper: two units with two dates cannot be moved by one plus or minus |
+
+> **Headers and free-text lines do not appear here.** They are checklist
+> scaffolding, not things anyone stocks.
 
 ---
 
@@ -548,6 +605,13 @@ Sections are defined in
 | URL              | Page                      | Permission    |
 | ---------------- | ------------------------- | ------------- |
 | `/notifications` | Notification Rules & Logs | Authenticated |
+
+> **Deep-linkable tabs** _(fixed 2026-08-10)_: `?tab=inbox`, `?tab=rules`,
+> `?tab=templates`, `?tab=log`. Previously only one of the four was
+> addressable — the rest fell through to the rules tab, and switching tabs
+> deleted the parameter rather than updating it, so the Send Log (the one screen
+> anyone has cause to send a colleague a link to) could not be linked at all. All
+> four now round-trip, still gated on the permission that shows them.
 
 > Three-tab interface: **Notification Rules** (list, create, enable/disable rules with trigger/category/channel configuration), **Email Templates** (link to template management), and **Send Log** (table view with channel filter: All / Email / In-App, mark-all-read, status indicators). Summary statistics cards show total rules, active rules, and combined send count.
 
@@ -671,6 +735,31 @@ Sections are defined in
 | `/messages`                       | Messages                  | Authenticated          |
 | `/communications/messages`        | Message Administration    | `notifications.manage` |
 | `/communications/email-templates` | Email Template Management | `settings.manage`      |
+
+> The Email Templates page has a **Footers** tab _(2026-08-10)_. The footer used
+> to be copy-pasted into all 35 default bodies; it is now a named library on the
+> organization, and each template names the footer it closes with. Three are
+> seeded — **Internal** (members, the default), **Public** (outside the
+> department: invites a reply and carries the mailing address) and **Official
+> notice** (on the record: separations, property return, election results) — and
+> a department can rename, reword, add and delete them.
+>
+> **Edge cases:** a template's `footer_key` of NULL means "the one marked
+> default", so changing the default reaches every template that has not
+> overridden it. An **unrecognised key resolves to the default rather than to
+> nothing** — deleting a footer should cost the templates naming it their
+> _choice_, not their footer — and the screen says how many templates use each
+> one before you delete it. The library **saves whole**, because a per-footer
+> save could leave `default_key` naming a footer the same request deleted.
+>
+> Permission: `settings.manage` **or** `organization.update_settings`.
+>
+> **Deep-linkable tabs** _(2026-08-11)_: `?tab=templates`, `?tab=footers`,
+> `?tab=officers`, `?tab=scheduled`, `?tab=history`. The page held its tab in
+> plain state, so none of the five could be linked — a secretary could not send
+> a colleague a link to the footer library, and the screenshot harness could
+> only ever capture the default. Same fix, and the same reason, as the
+> Notifications page took on 2026-08-10.
 
 ---
 

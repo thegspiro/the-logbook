@@ -34,6 +34,7 @@ import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { Skeleton } from '../../../components/ux/Skeleton';
 import { SortableHeader, type SortDirection } from '../../../components/ux/SortableHeader';
+import { enumLabel } from '@/utils/displayValue';
 import type {
   ImpactPlannerOptions,
   ImpactPlannerRequest,
@@ -995,7 +996,7 @@ const ImpactPlannerPage: React.FC = () => {
                                 )}
                               </td>
                               <td className="text-theme-text-secondary hidden px-3 py-2.5 sm:table-cell">
-                                <span className="capitalize">{m.rank || '—'}</span>
+                                <span>{enumLabel(m.rank) || '—'}</span>
                                 {m.station && <span className="text-theme-text-muted block text-xs">{m.station}</span>}
                               </td>
                               {result.size_field && (

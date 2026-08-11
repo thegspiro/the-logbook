@@ -19,8 +19,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Check, Clock, Loader2, Pencil, X } from 'lucide-react';
 import type { DeployedLot } from '../types/equipmentCheck';
-import { formatDate } from '@/utils/dateFormatting';
-import { useTimezone } from '@/hooks/useTimezone';
+import { formatCalendarDate } from '@/utils/dateFormatting';
 
 interface LotsAboardPanelProps {
   lots: DeployedLot[];
@@ -39,7 +38,6 @@ interface DraftState {
 }
 
 const LotsAboardPanel: React.FC<LotsAboardPanelProps> = ({ lots, onSave, onRemove, busy = false, heading }) => {
-  const tz = useTimezone();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState>({ lotNumber: '', expirationDate: '', quantity: '1' });
   const [saving, setSaving] = useState(false);
@@ -164,7 +162,7 @@ const LotsAboardPanel: React.FC<LotsAboardPanelProps> = ({ lots, onSave, onRemov
                   >
                     {lot.isExpired ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
                     {lot.expirationDate
-                      ? `${lot.isExpired ? 'Expired' : 'Expires'} ${formatDate(lot.expirationDate, tz)}`
+                      ? `${lot.isExpired ? 'Expired' : 'Expires'} ${formatCalendarDate(lot.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
                       : 'No expiration recorded'}
                   </p>
                 </div>

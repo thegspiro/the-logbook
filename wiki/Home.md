@@ -132,6 +132,54 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### August 2026 — Supplies: the Shelf and the Truck Are One Loop
+
+- **A crew can record what they used, when they used it.** An equipment check is
+  a scheduled, signed pass over a whole apparatus. Until now it was also the only
+  way anything about a truck's stock could be written down, so a crew that used
+  the last of something at 03:00 left it for the next morning's check to find —
+  which is exactly the window in which a truck runs a call short. The new
+  **Apparatus Inventory** page is the standing view of a truck: what is aboard,
+  the lots and dates on each position, and the ready stock behind it. It is
+  crew-level, not officer-level.
+- **A position's expiration is now the soonest date actually aboard.** A bracket
+  holding four of something can be holding units from three lots with three
+  dates; the record could describe only one of them, and the one it kept was
+  whichever was restocked last. Each lot aboard is now recorded separately, so
+  restocking two of four no longer hides the older units behind a later date.
+- **On-hand comes from in-date lots.** A consumable stocked purely through dated
+  lots could sit at zero ready units and never trip the reorder alert. Expired
+  shelf stock counts as zero — the swap refuses it anyway, and counting it would
+  hide the shortage most in need of ordering.
+- **Receiving a delivery is one pass**, not a page per item, and adding a
+  checklist position now searches the catalog as you type so the link that makes
+  all of this work gets made at the moment the position is created.
+- **A weekly alert reports both ends of the loop together**, split by whether an
+  in-date lot is actually behind each row — "swap it" and "order it" are
+  different jobs.
+
+See [Scheduling](Module-Scheduling#supply-tracking-the-shelf-and-the-truck-as-one-loop-2026-08-10)
+and [Inventory](Module-Inventory).
+
+### August 2026 — Email: One Design, and a Footer Library Instead of 35 Copies
+
+- **The footer is a named library the department edits once.** It used to be
+  copy-pasted into all 35 default bodies, so changing the wording meant opening
+  35 templates one at a time. Three are seeded — **Internal** (members),
+  **Public** (invites a reply, carries the mailing address) and **Official
+  notice** — and a department can rename, reword, add and delete them.
+- **Three notices departments send most often finally have template rows.** Shift
+  assignment, decline and reminder were composed in code, so the mail sent most
+  often was the mail that could not be reworded.
+- **Nine more department fields can go in an email** — tax ID, FDID/state ID (with
+  the name of the scheme), county, founded year, fax and more.
+- **One stylesheet, one document shell**, shared by templates, the storefront and
+  the election report; and templates nobody has edited now **track** the built-in
+  stylesheet instead of carrying a frozen copy, so improvements reach existing
+  departments.
+
+See [Communications](Module-Communications#email-footer-library-2026-08-10).
+
 ### August 2026 — Skills Testing: Anyone Can Examine, an Officer Signs It Off
 
 - **Any member can now run an official skills test.** Every skills-testing

@@ -326,8 +326,12 @@ section "6. TypeScript Compilation"
 
 if [[ -f "frontend/package.json" ]] && [[ -f "frontend/tsconfig.json" ]]; then
     if [[ -d "frontend/node_modules" ]]; then
-        echo "  Running tsc --noEmit..."
-        if (cd frontend && npx tsc --noEmit 2>&1); then
+        # Via the package script, not `npx tsc`: `tsc` on PATH is the
+        # TypeScript 5.9.3 that typescript-eslint needs, while the project
+        # compiles with the 7.0.2 installed under the `typescript-native`
+        # alias. See "Two TypeScript installs" in CLAUDE.md.
+        echo "  Running npm run typecheck..."
+        if (cd frontend && npm run typecheck 2>&1); then
             pass "TypeScript compilation succeeded (no errors)"
         else
             fail "TypeScript compilation failed"

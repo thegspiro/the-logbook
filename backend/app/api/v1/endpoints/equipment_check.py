@@ -39,6 +39,9 @@ from app.schemas.equipment_check import (
     EquipmentCheckTemplateResponse,
     EquipmentCheckTemplateUpdate,
     FailureLogResponse,
+    InventoryLinkRequest,
+    InventoryLinkResponse,
+    InventoryMatchesResponse,
     ItemDeployedLots,
     ItemDeployment,
     ItemQuantityRequest,
@@ -115,7 +118,13 @@ async def list_templates(
     apparatus_type: str | None = Query(None),
     check_timing: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    # EC-7: view OR submit (see get_shift_checklists). The member-facing
+    # "Start a Check" picker lists templates to choose from, so gating this
+    # behind the officer's view permission leaves the picker empty for the
+    # people the feature is for.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """List equipment check templates with optional filters."""
     service = EquipmentCheckService(db)
@@ -134,7 +143,13 @@ async def list_templates(
 async def get_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    # EC-7: view OR submit (see get_shift_checklists). This is the endpoint the
+    # check form itself loads — the member taps "Start Check" on a checklist
+    # assigned to them, and without submit here the form never opens, so the
+    # whole start/end-of-shift flow 403s for the crew it is meant for.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
@@ -235,6 +250,66 @@ async def clone_template(
         return template
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+# =====================================================================
+# Catalog Linking (template setup)
+# =====================================================================
+
+
+@router.get(
+    "/templates/{template_id}/inventory-matches",
+    response_model=InventoryMatchesResponse,
+)
+async def suggest_inventory_matches(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Propose a catalog item for each unlinked position on this template.
+
+    Read-only — nothing is linked until the reviewed set comes back through
+    ``POST /templates/{id}/inventory-links``.
+
+    **Requires permission: equipment_check.manage**
+    """
+    service = EquipmentCheckService(db)
+    result = await service.suggest_inventory_matches(
+        template_id, current_user.organization_id
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return result
+
+
+@router.post(
+    "/templates/{template_id}/inventory-links",
+    response_model=InventoryLinkResponse,
+)
+async def link_inventory_items(
+    template_id: str,
+    data: InventoryLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Apply a reviewed set of catalog links to this template's items.
+
+    **Requires permission: equipment_check.manage**
+    """
+    service = EquipmentCheckService(db)
+    try:
+        changed = await service.link_inventory_items(
+            template_id, current_user.organization_id, data.links
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if changed is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    coverage = await service.get_link_coverage(
+        template_id, current_user.organization_id
+    )
+    return {"linked": changed, "coverage": coverage or {}}
 
 
 # =====================================================================

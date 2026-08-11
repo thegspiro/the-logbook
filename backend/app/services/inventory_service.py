@@ -66,6 +66,7 @@ from app.models.user import (
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels
+from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 
 # Valid status→condition combinations.  If a status is listed here,
@@ -100,6 +101,39 @@ BARCODE_MIN_DIGITS = 6
 def _format_sequential_barcode(prefix: str, number: int) -> str:
     """Render a sequential barcode, e.g. ``INV-000001``."""
     return f"{prefix}{number:0{BARCODE_MIN_DIGITS}d}"
+
+
+# Sizes whose display form is not just the code upper-cased. Mirrors the
+# frontend's STANDARD_SIZES labels so an item named here matches the label the
+# member picked from.
+_SIZE_LABELS = {
+    "xxl": "XXL",
+    "xxxl": "3XL",
+    "xxxxl": "4XL",
+    "one_size": "One Size",
+    "custom": "Custom",
+}
+
+
+def _size_label(size: str) -> str:
+    """Display form of a stored size code — ``l`` reads as ``L``.
+
+    Numeric sizes (boot 10.5, waist 34) are returned unchanged; upper-casing
+    them would be a no-op but the explicit path keeps that obvious.
+    """
+    code = (size or "").strip()
+    if not code:
+        return ""
+    # Accept a value that has already been through here ("One Size") as well as
+    # the stored code ("one_size").
+    key = code.lower().replace(" ", "_")
+    if key in _SIZE_LABELS:
+        return _SIZE_LABELS[key]
+    if any(character.isdigit() for character in code):
+        return code
+    if "_" in code or " " in code:
+        return code.replace("_", " ").title()
+    return code.upper()
 
 
 # Supported extra-line field keys that can be requested on labels.
@@ -693,7 +727,12 @@ class InventoryService:
             query = query.where(InventoryItem.category_id.in_(select(cat_subq)))
 
         if assigned_to:
-            query = query.where(InventoryItem.assigned_to_user_id == assigned_to)
+            # str(): the column is String(36) and the parameter is a UUID, so
+            # the comparison bound a UUID against a char column and matched
+            # nothing at all — "everything issued to this member" answered
+            # "nothing" for every member. Every other id filter here already
+            # casts; this one was the exception.
+            query = query.where(InventoryItem.assigned_to_user_id == str(assigned_to))
 
         if location_id:
             query = query.where(InventoryItem.location_id == str(location_id))
@@ -3585,7 +3624,11 @@ class InventoryService:
         items_created: List[InventoryItem] = []
 
         for size, color, style in combos:
-            name_parts = [base_name, size]
+            # Sizes arrive as the stored codes ("l", "xxl", "one_size") because
+            # that is what the size picker submits. Styles were already being
+            # humanised here; sizes were not, so a coat came out named
+            # "Structural Coat — l" everywhere the item name is shown.
+            name_parts = [base_name, _size_label(size)]
             if color:
                 name_parts.append(color)
             if style:
@@ -4205,6 +4248,85 @@ class InventoryService:
             await self.db.refresh(lot)
         return lots
 
+    async def create_items_bulk(
+        self,
+        organization_id,
+        entries: List[Dict[str, Any]],
+        created_by,
+    ) -> Tuple[List[InventoryItem], List[str]]:
+        """Create many catalog items at once, skipping names already on file.
+
+        Stocking a catalog is a list-shaped job — a department types up its
+        consumables once, thirty lines at a time — and the one-item-per-modal
+        form is what leaves that catalog half-built. A half-built catalog is
+        what leaves checklist positions unlinked, which is what leaves
+        expirations untracked.
+
+        Returns ``(created, skipped_names)``. A name that already exists is
+        skipped rather than rejected: re-pasting a list after adding two lines
+        to it is the normal way this gets used, and failing the whole batch for
+        the twenty-eight that already landed would punish exactly that.
+
+        All or nothing on *errors*, though — a validation failure writes
+        nothing, because a partially-applied paste gives the officer no way to
+        tell where the list stopped.
+        """
+        if not entries:
+            return [], []
+
+        existing = await self.db.execute(
+            select(InventoryItem.name).where(
+                InventoryItem.organization_id == organization_id
+            )
+        )
+        seen = {normalize_name(n) for n in existing.scalars().all() if n}
+
+        items: List[InventoryItem] = []
+        skipped: List[str] = []
+
+        for entry in entries:
+            data = dict(entry)
+            name = (data.get("name") or "").strip()
+            if not name:
+                raise ValueError("Every item needs a name")
+
+            key = normalize_name(name)
+            # Guards against duplicates already on file *and* repeats within
+            # this paste, which is where a copied spreadsheet column usually
+            # goes wrong.
+            if key in seen:
+                skipped.append(name)
+                continue
+            seen.add(key)
+
+            data["name"] = name
+            cat_err = await self._validate_category_requirements(data, organization_id)
+            if cat_err:
+                raise ValueError(f"{name}: {cat_err}")
+
+            # INV-4 (XC-1): category/location/storage ids arrive from the
+            # client on every row of the paste, not just the first.
+            await self._assert_item_fks_in_org(data, organization_id)
+
+            if data.get("tracking_type") == "pool" and data.get("quantity", 1) < 1:
+                raise ValueError(
+                    f"{name}: pool items must have a quantity of 1 or more"
+                )
+
+            if not data.get("barcode"):
+                data["barcode"] = await self._next_sequential_barcode(organization_id)
+
+            item = InventoryItem(
+                organization_id=organization_id, created_by=created_by, **data
+            )
+            self.db.add(item)
+            items.append(item)
+
+        await self.db.commit()
+        for item in items:
+            await self.db.refresh(item)
+        return items, skipped
+
     async def update_lot(
         self,
         lot_id: str,
@@ -4674,13 +4796,20 @@ class InventoryService:
     async def get_equipment_kits(
         self, organization_id: UUID, active_only: bool = True
     ) -> List[EquipmentKit]:
-        """List equipment kits for an organization."""
+        """List equipment kits for an organization.
+
+        Line items are eager-loaded so the caller can report how many each kit
+        holds — the list card shows that count, and without them every kit read
+        "0 items".
+        """
         query = select(EquipmentKit).where(
             EquipmentKit.organization_id == str(organization_id)
         )
         if active_only:
             query = query.where(EquipmentKit.active.is_(True))
-        query = query.order_by(EquipmentKit.name)
+        query = query.order_by(EquipmentKit.name).options(
+            selectinload(EquipmentKit.line_items)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

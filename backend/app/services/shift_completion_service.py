@@ -123,7 +123,7 @@ class ShiftCompletionService:
         trainee_id: str,
         shift_date: date,
         hours_on_shift: float,
-        calls_responded: int = 0,
+        calls_responded: Optional[int] = None,
         call_types: Optional[list] = None,
         shift_id: Optional[str] = None,
         performance_rating: Optional[int] = None,
@@ -219,9 +219,17 @@ class ShiftCompletionService:
             actual_calls, actual_types = await self._get_trainee_call_data_from_shift(
                 shift_id, trainee_id
             )
-            calls_responded = actual_calls
-            data_sources["calls_responded"] = "shift_calls"
-            if actual_types:
+            # Auto-population fills what the officer left blank; it does not
+            # overwrite what they typed. The call count is an editable field on
+            # the report form, pre-filled from these same records and badged
+            # "(auto)", so a value arriving here is a deliberate correction —
+            # a shift whose runs were logged against the wrong crew, or a
+            # member who rode in on one and not the other. Overwriting it
+            # acknowledged the edit with a 201 and stored the old number.
+            if calls_responded is None:
+                calls_responded = actual_calls
+                data_sources["calls_responded"] = "shift_calls"
+            if call_types is None and actual_types:
                 call_types = actual_types
                 data_sources["call_types"] = "shift_calls"
 
@@ -231,6 +239,12 @@ class ShiftCompletionService:
             if actual_hours:
                 hours_on_shift = actual_hours
                 data_sources["hours_on_shift"] = "shift_attendance"
+
+        # `None` only ever meant "the officer did not supply one"; past this
+        # point it is a number that gets stored and counted against call-type
+        # requirements.
+        if calls_responded is None:
+            calls_responded = 0
 
         # Validate enrollment_id if provided
         if enrollment_id:
@@ -488,8 +502,15 @@ class ShiftCompletionService:
                     trainee_id=member_id,
                     shift_date=shift_date,
                     hours_on_shift=hours_on_shift,
-                    calls_responded=calls_responded,
-                    call_types=call_types,
+                    # The batch form collects one call count for the *shift*,
+                    # not for each member of the crew. Handing it to a
+                    # per-trainee report would credit every rider with every
+                    # run, so a linked shift defers to the per-trainee figure
+                    # derived from the run log — which is what this path has
+                    # always stored, back when create_report overwrote the
+                    # argument unconditionally.
+                    calls_responded=(None if shift_id else calls_responded),
+                    call_types=(None if shift_id else call_types),
                     shift_id=shift_id,
                     performance_rating=evaluation.get("performance_rating"),
                     areas_of_strength=evaluation.get("areas_of_strength"),

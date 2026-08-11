@@ -22,7 +22,7 @@ import type { MemberAuditLogEntry } from '../types/user';
 import type { UserWithRoles } from '../types/role';
 
 type EventTypeFilter =
-  'all' | 'profile_update' | 'status_change' | 'role_change' | 'password_reset' | 'login' | 'membership_change';
+  'all' | 'profile_update' | 'status_change' | 'role_change' | 'password_reset' | 'membership_change';
 
 const EVENT_TYPE_OPTIONS: { value: EventTypeFilter; label: string }[] = [
   { value: 'all', label: 'All Events' },
@@ -30,9 +30,28 @@ const EVENT_TYPE_OPTIONS: { value: EventTypeFilter; label: string }[] = [
   { value: 'status_change', label: 'Status Changes' },
   { value: 'role_change', label: 'Role Changes' },
   { value: 'password_reset', label: 'Password Resets' },
-  { value: 'login', label: 'Logins' },
+  // No "Logins" option: this endpoint only returns member-management events,
+  // and a sign-in is not one of them — the entry could never match anything,
+  // filter bug or not. Logins are in the security audit log.
   { value: 'membership_change', label: 'Membership Changes' },
 ];
+
+/** Event-data keys the expanded panel does not print.
+ *
+ *  Every one of them is the raw id of somebody the row already names — the
+ *  member whose page this is, and the "by <username>" on the entry itself. The
+ *  panel dumped `event_data` verbatim, so opening an entry showed two
+ *  36-character UUIDs and no fact the reader did not already have. */
+const HIDDEN_EVENT_DATA_KEYS = new Set([
+  'updated_user_id',
+  'updated_by',
+  'target_user_id',
+  'viewed_user_id',
+  'deleted_user_id',
+  'new_user_id',
+  'changed_by_user_id',
+  'user_id',
+]);
 
 const SEVERITY_STYLES: Record<string, { dot: string; label: string }> = {
   info: { dot: 'bg-blue-500', label: 'Info' },
@@ -255,7 +274,10 @@ export const MemberAuditHistoryPage: React.FC = () => {
             {entries.map((entry, index) => {
               const severityStyle = getSeverityStyle(entry.severity);
               const isExpanded = expandedEntryIds.has(entry.id);
-              const hasEventData = entry.event_data && Object.keys(entry.event_data).length > 0;
+              const shownEventData = Object.entries(entry.event_data ?? {}).filter(
+                ([key]) => !HIDDEN_EVENT_DATA_KEYS.has(key)
+              );
+              const hasEventData = shownEventData.length > 0;
               const isLast = index === entries.length - 1;
 
               return (
@@ -314,7 +336,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
                             Event Data
                           </p>
                           <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-                            {Object.entries(entry.event_data ?? {}).map(([key, value]) => (
+                            {shownEventData.map(([key, value]) => (
                               <div key={key} className="flex flex-col">
                                 <span className="text-theme-text-muted text-xs">{formatEventDataKey(key)}</span>
                                 <span className="text-theme-text-secondary text-sm wrap-break-word">

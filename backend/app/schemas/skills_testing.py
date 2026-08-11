@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -16,20 +16,11 @@ from app.schemas.base import UTCResponseBase
 # Criterion & Section Schemas (template structure)
 # ============================================
 
-# The only criterion types the examiner screen knows how to render. Anything
-# else draws no input control at all — the step gets a notes box and nothing to
-# score it with — so the examiner cannot mark it, and under
-# ``require_all_critical`` an unscored critical step counts as a failure. A
-# template built from an unrecognized type is therefore not merely odd-looking:
-# every evaluation run against it is a guaranteed fail worth 0%.
-#
-# This was live: a seeder wrote ``"checkbox"``, which is not one of these, and
-# the whole demo dataset scored 0%. The field used to be a bare ``str``, so
-# nothing rejected it. Keep in step with CriterionType in
-# frontend/src/types/skillsTesting.ts.
-CRITERION_TYPES = frozenset(
-    {"pass_fail", "score", "checklist", "time_limit", "statement"}
-)
+# The criterion types the scorer and the examiner screen both understand.
+# Anything outside this set is scored as nothing and rendered by the fallback
+# branch, so a template built with (say) "checkbox" looks plausible in the
+# builder and then contributes zero points to every percentage it appears in.
+CRITERION_TYPES = ("pass_fail", "score", "checklist", "time_limit", "statement")
 
 
 class SkillCriterionSchema(BaseModel):
@@ -54,25 +45,15 @@ class SkillCriterionSchema(BaseModel):
     # action, so it must not start a clock on its own.
     starts_timer: bool = False
 
-    @model_validator(mode="after")
-    def _check_type_is_renderable(self) -> "SkillCriterionSchema":
-        """Reject a criterion the examiner screen could not score.
-
-        Only the type itself is enforced. The per-type companion fields are
-        deliberately *not* required here: a ``score`` criterion saved before
-        ``max_score`` was routinely filled in would otherwise start failing on
-        every subsequent edit, because the template PUT resends every section.
-        The builder already blocks the two that make a step unusable
-        (a checklist with no items, a statement with no text) at the point the
-        author can still fix them.
-        """
-        if self.type not in CRITERION_TYPES:
-            allowed = ", ".join(sorted(CRITERION_TYPES))
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        if v not in CRITERION_TYPES:
             raise ValueError(
-                f"Unknown criterion type {self.type!r} on {self.label!r}. "
-                f"Must be one of: {allowed}."
+                f"Unknown criterion type '{v}'. Expected one of: "
+                + ", ".join(CRITERION_TYPES)
             )
-        return self
+        return v
 
 
 class SkillTemplateSectionSchema(BaseModel):

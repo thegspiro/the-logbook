@@ -33,6 +33,7 @@ from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
 from app.utils.model_updates import apply_updates
+from app.utils.name_matching import best_matches
 from app.utils.org_scoping import is_in_org
 
 
@@ -2472,6 +2473,202 @@ class EquipmentCheckService:
             "restock_needed": bool(item.restock_needed),
             "quantity_on_truck": self._on_truck(item),
         }
+
+    # ------------------------------------------------------------------
+    # Catalog Linking (template setup)
+    # ------------------------------------------------------------------
+
+    # A header is a caption, not a thing on the truck, and a check position
+    # with no name cannot be matched against anything.
+    _UNLINKABLE_CHECK_TYPES = frozenset({"header"})
+
+    async def _get_template_row(
+        self, template_id: str, organization_id: str
+    ) -> Optional[EquipmentCheckTemplate]:
+        """Org-scoped template fetch without the compartment/item graph.
+
+        ``get_template`` eager-loads every compartment, item and deployed lot
+        and resolves unit labels; the linking paths only need to know the
+        template is the caller's before they touch it.
+        """
+        result = await self.db.execute(
+            select(EquipmentCheckTemplate).where(
+                EquipmentCheckTemplate.id == template_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+        )
+        return result.scalars().first()
+
+    async def _linkable_items(
+        self, template_id: str, organization_id: str
+    ) -> List[CheckTemplateItem]:
+        """Every item on a template that could carry a catalog link."""
+        result = await self.db.execute(
+            select(CheckTemplateItem)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                EquipmentCheckTemplate.id == template_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+            .order_by(
+                CheckTemplateCompartment.sort_order.asc(),
+                CheckTemplateItem.sort_order.asc(),
+            )
+        )
+        return [
+            item
+            for item in result.scalars().all()
+            if (item.check_type or "") not in self._UNLINKABLE_CHECK_TYPES
+            and (item.name or "").strip()
+        ]
+
+    async def get_link_coverage(
+        self, template_id: str, organization_id: str
+    ) -> Optional[Dict[str, int]]:
+        """How much of this template is wired to the catalog.
+
+        Expiration, lot and restock tracking all hang off the catalog link, so
+        an unlinked position is one the supply side cannot see. Without a count
+        the holes are invisible — a template can look complete and still track
+        nothing.
+        """
+        template = await self._get_template_row(template_id, organization_id)
+        if not template:
+            return None
+
+        items = await self._linkable_items(template_id, organization_id)
+        linked = sum(1 for i in items if i.inventory_item_id)
+        return {
+            "linkable": len(items),
+            "linked": linked,
+            "unlinked": len(items) - linked,
+        }
+
+    async def suggest_inventory_matches(
+        self,
+        template_id: str,
+        organization_id: str,
+        limit_per_item: int = 3,
+    ) -> Optional[Dict[str, Any]]:
+        """Propose a catalog item for each unlinked position on a template.
+
+        This is the rescue path for the checklists that already exist: they
+        were typed as free text long before the catalog link existed, and
+        linking them one item at a time through the picker is work nobody will
+        do on a 200-line rig checklist.
+
+        Suggests only — nothing is written. Scores come back with the proposal
+        so the review screen can pre-select the exact matches and leave every
+        judgement call to the person reading it.
+        """
+        template = await self._get_template_row(template_id, organization_id)
+        if not template:
+            return None
+
+        items = await self._linkable_items(template_id, organization_id)
+        unlinked = [i for i in items if not i.inventory_item_id]
+        linked_count = len(items) - len(unlinked)
+
+        coverage = {
+            "linkable": len(items),
+            "linked": linked_count,
+            "unlinked": len(unlinked),
+        }
+        if not unlinked:
+            return {"coverage": coverage, "matches": []}
+
+        catalog = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.name).where(
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+            )
+        )
+        candidates = [(cid, cname) for cid, cname in catalog.all() if cname]
+
+        matches: List[Dict[str, Any]] = []
+        for item in unlinked:
+            suggestions = best_matches(item.name, candidates, limit=limit_per_item)
+            matches.append(
+                {
+                    "template_item_id": item.id,
+                    "item_name": item.name,
+                    "check_type": item.check_type,
+                    "suggestions": suggestions,
+                }
+            )
+
+        return {"coverage": coverage, "matches": matches}
+
+    async def link_inventory_items(
+        self,
+        template_id: str,
+        organization_id: str,
+        links: Dict[str, Optional[str]],
+    ) -> Optional[int]:
+        """Apply a reviewed set of catalog links in one transaction.
+
+        All or nothing. A half-applied link pass leaves the reviewer with no
+        way to tell which rows landed, and re-running it would re-propose the
+        ones that already succeeded alongside the ones that did not.
+
+        A ``None`` value unlinks — the review screen has to be able to undo a
+        wrong match as cheaply as it made one.
+        """
+        if not links:
+            return 0
+
+        template = await self._get_template_row(template_id, organization_id)
+        if not template:
+            return None
+
+        # XC-1: both sides are client-supplied ids. Resolving the template
+        # items through the org-scoped template (rather than by id alone) is
+        # what stops a caller pointing this at another department's checklist.
+        items_by_id = {
+            item.id: item
+            for item in await self._linkable_items(template_id, organization_id)
+        }
+        unknown_items = set(links) - set(items_by_id)
+        if unknown_items:
+            raise ValueError(
+                f"{len(unknown_items)} item(s) are not on this template "
+                f"and were not linked"
+            )
+
+        wanted = {str(v) for v in links.values() if v}
+        if wanted:
+            found = await self.db.execute(
+                select(InventoryItem.id).where(
+                    InventoryItem.id.in_(wanted),
+                    InventoryItem.organization_id == organization_id,
+                )
+            )
+            known = set(found.scalars().all())
+            missing = wanted - known
+            if missing:
+                raise ValueError(
+                    f"{len(missing)} inventory item(s) are not in your "
+                    f"inventory and were not linked"
+                )
+
+        changed = 0
+        for item_id, inventory_item_id in links.items():
+            item = items_by_id[item_id]
+            new_value = str(inventory_item_id) if inventory_item_id else None
+            if item.inventory_item_id == new_value:
+                continue
+            item.inventory_item_id = new_value
+            changed += 1
+
+        await self.db.commit()
+        return changed
 
     # ------------------------------------------------------------------
     # Private Helpers

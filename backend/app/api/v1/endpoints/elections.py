@@ -882,6 +882,11 @@ async def update_election(
         "position_eligibility",
         "meeting_date",
         "meeting_id",
+        # `event_id` belongs here beside `meeting_id`: the block below
+        # validates it is in-org before applying, so leaving it off the
+        # allowlist meant the check ran and the value was then dropped —
+        # PATCH returned 200 and the link was never made.
+        "event_id",
         "start_date",
         "end_date",
         "anonymous_voting",
@@ -898,6 +903,15 @@ async def update_election(
         "max_runoff_rounds",
         "quorum_type",
         "quorum_value",
+        # These four are on ElectionUpdate and are ordinary Election columns,
+        # but were never listed here — so setting them answered 200 and
+        # changed nothing. Two of them drive scheduled behaviour, which made
+        # the omission worse than cosmetic: an election configured to open
+        # itself could not be told to stop.
+        "auto_open",
+        "nomination_deadline",
+        "reminder_hours_before_close",
+        "tie_policy",
     }
     # Validate a re-pointed meeting/event link is in-org before applying it,
     # so an admin can't repoint their election at another org's meeting/event

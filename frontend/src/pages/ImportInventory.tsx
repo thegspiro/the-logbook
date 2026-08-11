@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { inventoryService } from '../services/api';
 import type { InventoryImportResult } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { parseCsvRecords, csvValue } from '@/utils/csv';
 
 interface PreviewRow {
   name: string;
@@ -46,69 +47,42 @@ const ImportInventory: React.FC = () => {
     setValidating(true);
     try {
       const text = await csvFile.text();
-      const rows = text.split('\n').map((row) => row.split(','));
+      // The backend parses this file properly on import; this preview used to
+      // split on bare commas, so an item named "Gauze Pads, 4x4" previewed as
+      // "Gauze Pads" with every later column shifted — the preview disagreed
+      // with what the import would actually do, which is worse than no preview.
+      const { headers, rows } = parseCsvRecords(text);
 
-      if (!rows[0] || rows[0].length === 0) {
+      if (headers.length === 0) {
         toast.error('The file is empty or has no header row.');
         setValidating(false);
         return;
       }
 
-      const headers = rows[0].map((h) => h.trim().toLowerCase().replace(/"/g, ''));
-      const nameIdx = headers.findIndex((h) => h === 'name');
-
-      if (nameIdx === -1) {
+      if (!headers.includes('name')) {
         toast.error('Missing required "Name" column. Download the template for the correct format.');
         setValidating(false);
         return;
       }
 
-      const findCol = (names: string[]) => {
-        for (const n of names) {
-          const idx = headers.indexOf(n);
-          if (idx !== -1) return idx;
-        }
-        return -1;
-      };
-
-      const catIdx = findCol(['category', 'category_name', 'categoryname']);
-      const typeIdx = findCol(['item type', 'item_type', 'itemtype', 'type']);
-      const snIdx = findCol(['serial number', 'serial_number', 'serialnumber']);
-      const statusIdx = findCol(['status']);
-      const condIdx = findCol(['condition']);
-      const qtyIdx = findCol(['quantity']);
-      const trackIdx = findCol(['tracking type', 'tracking_type', 'trackingtype']);
-
-      // Count data rows (skip header, skip empty rows)
-      let dataRowCount = 0;
-      const preview: PreviewRow[] = [];
-
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.join('').trim() === '') continue;
-        dataRowCount++;
-
-        if (preview.length < 5) {
-          const getValue = (idx: number) => (idx >= 0 ? row[idx]?.trim().replace(/"/g, '') || '' : '');
-          preview.push({
-            name: getValue(nameIdx),
-            category: getValue(catIdx),
-            itemType: getValue(typeIdx),
-            serialNumber: getValue(snIdx),
-            status: getValue(statusIdx),
-            condition: getValue(condIdx),
-            quantity: getValue(qtyIdx),
-            trackingType: getValue(trackIdx),
-          });
-        }
-      }
-
-      if (dataRowCount === 0) {
+      if (rows.length === 0) {
         toast.error('No data rows found in the file.');
         setValidating(false);
         return;
       }
 
+      const preview: PreviewRow[] = rows.slice(0, 5).map((record) => ({
+        name: csvValue(record, 'name'),
+        category: csvValue(record, 'category', 'category name'),
+        itemType: csvValue(record, 'item type', 'type'),
+        serialNumber: csvValue(record, 'serial number'),
+        status: csvValue(record, 'status'),
+        condition: csvValue(record, 'condition'),
+        quantity: csvValue(record, 'quantity'),
+        trackingType: csvValue(record, 'tracking type'),
+      }));
+
+      const dataRowCount = rows.length;
       setTotalRows(dataRowCount);
       setPreviewData(preview);
       toast.success(`File validated! Found ${dataRowCount} item${dataRowCount === 1 ? '' : 's'} to import.`);

@@ -42,7 +42,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLot } from '../../services/eventServices';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { formatDate, getTodayLocalDate } from '../../utils/dateFormatting';
+import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import {
@@ -95,6 +95,59 @@ interface ItemResult {
   photoFiles?: File[] | undefined;
   notes?: string | undefined;
 }
+
+/** How many short items the par warning names before it starts summarizing. */
+const SHORTFALL_PREVIEW_LIMIT = 6;
+
+/**
+ * What "Set All to Par" would overwrite, itemized.
+ *
+ * A compartment can easily have a dozen items below par, and the answer to
+ * "are these really full?" depends on which ones and by how much. Joined into
+ * a sentence those names become an unreadable run with no numbers in it — the
+ * crew would be agreeing to something they cannot read. A list gives each
+ * item its own line and shows the size of the claim being made on its behalf,
+ * capped so the dialog cannot grow past a glance.
+ */
+const ShortfallList: React.FC<{
+  items: CheckTemplateItem[];
+  results: Record<string, ItemResult>;
+}> = ({ items, results }) => {
+  const shown = items.slice(0, SHORTFALL_PREVIEW_LIMIT);
+  const remaining = items.length - shown.length;
+
+  return (
+    <div className="space-y-3 text-left">
+      <p>
+        {items.length === 1 ? 'This item is' : `These ${items.length} items are`} below the required quantity. Recording{' '}
+        {items.length === 1 ? 'it' : 'them'} at par says the missing stock is now on the truck.
+      </p>
+      <ul className="border-theme-surface-border divide-theme-surface-border divide-y rounded-md border">
+        {shown.map((item) => {
+          const required = item.requiredQuantity ?? item.expectedQuantity;
+          const found = results[item.id]?.quantityFound;
+          return (
+            <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
+              <span className="text-theme-text-primary min-w-0 truncate">{item.name}</span>
+              <span className="text-theme-text-muted shrink-0 font-mono text-xs">
+                {found ?? 0} → {required ?? 0}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {remaining > 0 && (
+        <p className="text-theme-text-muted text-xs">
+          and {remaining} more item{remaining === 1 ? '' : 's'} below par
+        </p>
+      )}
+      {/* Same weight as the lead, not muted fine print: this is the condition
+          the whole decision turns on, and rendering it as the faintest thing
+          on screen inverts what the crew should read first. */}
+      <p className="text-theme-text-primary font-medium">Only do this if you have actually restocked.</p>
+    </div>
+  );
+};
 
 // ============================================================================
 // Helpers
@@ -813,11 +866,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     async (compartment: CheckTemplateCompartment) => {
       const raising = shortOfPar(compartment);
       if (raising.length > 0) {
-        const names = raising.map((i) => i.name).join(', ');
         const ok = await confirm({
-          title: 'Record these at full?',
-          message: `${names} ${raising.length === 1 ? 'is' : 'are'} showing below the required quantity. Setting the compartment to par records ${raising.length === 1 ? 'it' : 'them'} as full — only do this if you have restocked.`,
-          confirmLabel: 'Yes, they are full',
+          title: raising.length === 1 ? 'Record this at full?' : `Record ${raising.length} items at full?`,
+          message: <ShortfallList items={raising} results={results} />,
+          confirmLabel: raising.length === 1 ? 'Yes, it is full' : 'Yes, they are full',
           cancelLabel: 'Keep the counts',
           variant: 'warning',
         });
@@ -837,7 +889,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return next;
       });
     },
-    [checkableIn, shortOfPar, confirm]
+    // `results` is read to show each shortfall, so a stale closure here would
+    // put last render's counts in front of the crew.
+    [checkableIn, shortOfPar, confirm, results]
   );
 
   const hasQuantityItems = useCallback(
@@ -1543,7 +1597,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 Swapped in
                 {swapOverrides[item.id]?.lotNumber ? ` Lot ${swapOverrides[item.id]?.lotNumber}` : ' fresh stock'}
                 {swapOverrides[item.id]?.expirationDate
-                  ? ` · exp ${formatDate(swapOverrides[item.id]?.expirationDate, tz)}`
+                  ? ` · exp ${formatCalendarDate(swapOverrides[item.id]?.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
                   : ''}
               </p>
             )}
@@ -2053,8 +2107,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                         {lot.lot_number || 'No lot #'}
                       </p>
                       <p className="text-theme-text-muted text-xs">
-                        {lot.expiration_date ? `Exp ${formatDate(lot.expiration_date, tz)}` : 'No expiration'} ·{' '}
-                        {lot.quantity} ready
+                        {lot.expiration_date
+                          ? `Exp ${formatCalendarDate(lot.expiration_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                          : 'No expiration'}{' '}
+                        · {lot.quantity} ready
                       </p>
                     </div>
                     <button

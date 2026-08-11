@@ -14,6 +14,7 @@ Covers:
   - Update field whitelist enforcement
 """
 
+import json
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -969,3 +970,134 @@ class TestShiftDataPreview:
         assert await svc.validate_shift_ownership(d["shift_id"], uuid.UUID(d["org_id"]))
         assert not await svc.validate_shift_ownership(d["shift_id"], uuid.uuid4())
         assert not await svc.validate_shift_ownership(_uid(), uuid.UUID(d["org_id"]))
+
+
+# ── Auto-population vs. the officer's own entry ──────────────────────
+
+
+class TestCallCountAutoPopulation:
+    """A linked shift fills the call count in; it does not overrule it.
+
+    The report form's call-count field is editable and pre-filled from the same
+    run log the service reads, so a value that arrives on the request is a
+    correction — a run logged against the wrong crew, a member who rode in on
+    one call and not another. Overwriting it answered 201 and stored the old
+    number, which is indistinguishable from the edit having been saved.
+    """
+
+    async def _log_call(self, db_session, d, riders, incident_type):
+        await db_session.execute(
+            text(
+                "INSERT INTO shift_calls (id, shift_id, organization_id, "
+                "incident_type, responding_members) "
+                "VALUES (:id, :sid, :org, :it, :rm)"
+            ),
+            {
+                "id": _uid(),
+                "sid": d["shift_id"],
+                "org": d["org_id"],
+                "it": incident_type,
+                "rm": json.dumps(riders),
+            },
+        )
+        await db_session.flush()
+
+    async def test_derives_count_when_officer_supplies_none(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"]], "EMS")
+        await self._log_call(db_session, d, [d["crew_1"]], "Structure Fire")
+        svc = ShiftCompletionService(db_session)
+
+        report = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+
+        assert report.calls_responded == 2
+        assert sorted(report.call_types) == ["EMS", "Structure Fire"]
+        assert report.data_sources["calls_responded"] == "shift_calls"
+
+    async def test_keeps_the_count_the_officer_typed(
+        self, db_session, setup_shift_with_crew
+    ):
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"]], "EMS")
+        svc = ShiftCompletionService(db_session)
+
+        report = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=3,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+
+        assert report.calls_responded == 3
+        assert "calls_responded" not in report.data_sources
+
+    async def test_an_explicit_zero_is_not_treated_as_absent(
+        self, db_session, setup_shift_with_crew
+    ):
+        """The distinction the old `int = 0` default could not express."""
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"]], "EMS")
+        svc = ShiftCompletionService(db_session)
+
+        report = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=0,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+
+        assert report.calls_responded == 0
+
+    async def test_batch_still_derives_per_trainee(
+        self, db_session, setup_shift_with_crew
+    ):
+        """The batch form's count is per *shift*, so it must not fan out.
+
+        crew_1 rode two calls and crew_2 one; handing both the shift-wide
+        figure would credit crew_2 with a run they were not on.
+        """
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"], d["crew_2"]], "EMS")
+        await self._log_call(db_session, d, [d["crew_1"]], "Structure Fire")
+        svc = ShiftCompletionService(db_session)
+
+        result = await svc.batch_create_reports(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            shift_id=d["shift_id"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            calls_responded=2,
+            call_types=["EMS", "Structure Fire"],
+            officer_narrative=None,
+            crew_member_ids=[d["crew_1"], d["crew_2"]],
+            trainee_evaluations=None,
+        )
+
+        by_trainee = {
+            r.trainee_id: r
+            for r in await svc.get_reports_by_officer(
+                uuid.UUID(d["org_id"]), d["officer_id"]
+            )
+        }
+        assert result["created"] == 2
+        assert by_trainee[d["crew_1"]].calls_responded == 2
+        assert by_trainee[d["crew_2"]].calls_responded == 1

@@ -232,7 +232,18 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     set({ testLoading: true, error: null });
     try {
       const test = await skillsTestingService.getTest(id);
-      set({ currentTest: test, testLoading: false, activeSectionIndex: 0 });
+      // Only a *different* test starts at section 1. Re-loading the one
+      // already open — a second in-flight load, a retry after a failed save,
+      // a manual refresh — used to reset the index unconditionally, and it
+      // resolved after the screen had already jumped the examiner to the
+      // first section with blank steps. The jump ran, then this overwrote it,
+      // and a half-scored evaluation reopened at section 1 with no clue why.
+      const sameTest = get().currentTest?.id === test.id;
+      set({
+        currentTest: test,
+        testLoading: false,
+        ...(sameTest ? {} : { activeSectionIndex: 0 }),
+      });
     } catch (err: unknown) {
       set({
         testLoading: false,

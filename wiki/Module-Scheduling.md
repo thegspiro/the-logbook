@@ -206,6 +206,8 @@ days, so the platoons tile to exactly one on-duty platoon per day:
 | URL | Page | Permission |
 |-----|------|------------|
 | `/scheduling` | Scheduling Hub | Authenticated |
+| `/scheduling/supply/expiring` | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `equipment_check.view`, `inventory.view` |
+| `/scheduling/apparatus-inventory` | Apparatus Inventory *(2026-08-10)* | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
 
 ### Scheduling Tabs
 
@@ -239,6 +241,34 @@ GET    /api/v1/scheduling/reports/*           # Scheduling reports
 GET    /api/v1/scheduling/apparatus          # List basic apparatus
 GET    /api/v1/scheduling/shifts/{id}/unavailable-members  # Unavailable user IDs for assignment filtering
 GET    /api/v1/scheduling/my-attendance-history            # My attendance history (optional start_date/end_date, embeds shift date/time) (2026-05-29)
+```
+
+### Equipment-Check Supply Endpoints *(2026-08-10)*
+
+Everything below lives under `/api/v1/equipment-checks`. Reads accept
+`equipment_check.view` / `inventory.view`; **writes accept
+`equipment_check.submit`** — the default member position — as well as
+`equipment_check.manage` / `inventory.manage`, because recording what you just
+used is crew work and gating it behind a manage permission is what leaves the
+gap for the next morning's check to find.
+
+```
+GET    /supply/expiring-items?days_ahead=30              # The supply worklist: expiring, expired,
+                                                         #   short or reported-used positions, with
+                                                         #   the ready stock behind each
+GET    /supply/item-deployments/{inventory_item_id}      # Reverse lookup: which trucks carry this item
+GET    /apparatus/{apparatus_id}/inventory               # Standing view of one truck, outside any check
+
+POST   /items/{template_item_id}/used                    # Report used/pulled — raises a restock report
+DELETE /items/{template_item_id}/used                    # Withdraw the report (also clears reporter + note)
+PUT    /items/{template_item_id}/quantity                # Recount; reconciles against the deployed lots
+POST   /items/{template_item_id}/swap                    # Move a ready lot onto the truck
+
+GET    /items/{template_item_id}/deployed-lots           # Lots aboard, soonest-to-expire first
+PUT    /items/{template_item_id}/deployed-lots/{lot_id}  # Correct one lot: count + number + date together
+
+GET    /templates/{template_id}/inventory-matches        # Propose a catalog item per unlinked position
+POST   /templates/{template_id}/inventory-links          # Apply a reviewed set of links
 ```
 
 ---
@@ -379,7 +409,7 @@ GET    /api/v1/scheduling/my-attendance-history            # My attendance histo
 | `/scheduling/settings` | Scheduling Settings | `scheduling.manage` |
 | `/scheduling/equipment-check-templates/new` | Equipment Check Template Builder | `equipment_check.manage` |
 | `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template | `equipment_check.manage` |
-| `/scheduling/equipment-check-reports` | Equipment Check Reports | `equipment_check.manage` |
+| `/scheduling/equipment-check-reports` | Equipment Check Reports | `scheduling.manage` |
 
 ### Data Model Changes (2026-03-19)
 
@@ -784,4 +814,73 @@ New granular toggles in the **Shift Reports Settings Panel** extend the existing
 
 ---
 
-**See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus)
+## Supply Tracking: the shelf and the truck as one loop (2026-08-10)
+
+An equipment check is a scheduled, signed pass over a whole apparatus that
+produces a report. Until this landed it was also the **only** way anything about
+a truck's stock could be written down, so a crew that used the last of something
+at 03:00 had nowhere to put that fact — it waited to be found by the next
+morning's check, which is exactly the window in which a truck runs a call short.
+
+### What a checklist position now records
+
+| Column | Meaning |
+|--------|---------|
+| `required_quantity` | The state-mandated floor. Outranks `expected_quantity` where both exist |
+| `expected_quantity` | The department's own target |
+| `quantity_on_truck` | The **live** count. **NULL means nobody has counted since the item was defined**, and the target stands in — reading NULL as zero would report every untouched truck as stripped |
+| `restock_needed` (+ `restock_reported_by` / `_at` / `_note`) | A report raised by whoever used the unit, at the time they used it |
+| `inventory_item_id` | The catalog link everything above hangs off |
+
+### Lots aboard, not one lot per position
+
+`check_item_deployed_lots` holds **one row per lot's presence on one position**.
+A position that carries four of something can be carrying units from three lots
+with three dates; the single `lot_number` / `expiration_date` pair on the
+template item could only ever describe one of them, and the one recorded was
+whichever was restocked last. The truck's real exposure — the **soonest date
+aboard** — was unrepresentable.
+
+- A position's count is the **sum** of its deployed lots; its expiration is the
+  **earliest** of them. The supply worklist, the apparatus view, the check form
+  and the item-to-apparatus lookup all read those derivations.
+- Lot number and expiration are **snapshotted** onto the deployed row rather than
+  read through `inventory_lot_id` (`ON DELETE SET NULL`), because shelf lots get
+  consumed and deleted and what is on a truck has to remain answerable after the
+  shelf record is gone.
+- **Consumption draws first-expiring-first-out.** Undated lots sort last — an
+  undated unit is never the one that needs using up.
+
+### Edge cases
+
+| Scenario | Behavior |
+|----------|----------|
+| A crew reports more used than the record held | Draws what was there. That is a correction to the record, not a negative quantity |
+| A position carries units with no lot row, and a lot is added | The existing units are given a row **first**, or the lot sum would become the authority and the uncounted units would vanish |
+| A recount lands over the record | The surplus goes into an **undated** row — the honest answer to when found stock expires is that nobody knows |
+| A recount lands under the record | The difference comes off soonest-expiring-first, like any other consumption |
+| A lot is drawn down to zero | The row is removed, so a spent box stops contributing its date to the position's reading |
+| A restock puts the truck part-way back | The report **stays open**. Two of four back is still a truck short two; clearing the flag there would close the gap on paper and leave it open on the apparatus |
+| A counted position is below target with no report behind it | It reaches the supply worklist anyway, showing the numbers |
+| Shelf stock has expired | Excluded from the on-hand count, flagged in the payload, struck through in the UI and **refused by the swap** |
+| Everything on a position has expired | Counted as **expired**, reported apart from *expiring*, and the count renders red — two of two expired units meet the number and are still nothing a crew can use |
+| Headers and free-text checklist lines | Not shown on the apparatus view. They are scaffolding, not things anyone stocks |
+| A template is cloned | The catalog link is carried across. It used to be dropped, silently severing tracking on the copy — which is how a department stands up its second engine |
+
+### Where the numbers come from on a check form
+
+A quantity item arrives carrying the **running on-truck count**, with the last
+check's number as the fallback for items never counted. It arrives with **no
+pass/fail status**: a pre-filled number is a starting point to correct, not an
+assertion, so the progress counter reflects what was actually looked at. A crew
+could otherwise open a sixty-item check, submit it untouched, and file a complete
+report against a truck nobody had looked at.
+
+**"Confirm Counts" leads; "Set All to Par" warns.** They are different claims —
+"the numbers are right" versus "it is all full" — and only the second used to
+have a button. Set All to Par now names the items whose count it would raise; a
+compartment already at par is untouched and stays one tap.
+
+---
+
+**See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus) | [Inventory Module](Module-Inventory)

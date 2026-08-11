@@ -129,7 +129,12 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
             aria-label="Filter open shifts from date"
-            className="form-input flex-1 sm:flex-none"
+            // `form-input` carries w-full. Under `sm:flex-none` that resolves
+            // against the whole row rather than the space left beside the icon
+            // and the "From:" label, so the field overflowed its container by
+            // exactly their width and painted over the Refresh button. An
+            // explicit desktop width is also all a date field needs.
+            className="form-input flex-1 sm:w-44 sm:flex-none"
           />
         </div>
         <button

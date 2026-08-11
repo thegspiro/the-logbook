@@ -1,5 +1,12 @@
 # The Logbook — YouTube Tutorial Series Overview
 
+> **Before recording anything, read
+> [SCRIPT_CURRENCY.md](./SCRIPT_CURRENCY.md).** It tracks which scripts have gone
+> out of date against the application and what has to change before the take —
+> which is the cheap moment to fix it. As of **2026-08-11** it flags corrections
+> in scripts **04**, **06** and **07**, a possible addition to **03**, and five
+> proposed new shorts.
+
 ## Series Structure
 
 This document outlines the complete YouTube tutorial series for The Logbook, an
@@ -21,7 +28,7 @@ services.
 | 4   | Fire Chief & Department Leadership Guide                                | Chiefs, Deputy Chiefs, Presidents      | 25–30 min   |
 | 5   | Training Officer, Part 1 — Building Your Training Program               | Training officers, compliance officers | 13–15 min   |
 | 16  | Training Officer, Part 2 — Evaluating, Reporting & Running the Calendar | Training officers, compliance officers | 15–18 min   |
-| 6   | The Member Experience — Your Day-to-Day Guide                           | All members, firefighters, engineers   | 18–22 min   |
+| 6   | The Member Experience — Your Day-to-Day Guide                           | All members, firefighters, engineers   | 22–26 min   |
 | 7   | Secretary & Administrative Officer Guide                                | Secretaries, treasurers, admin staff   | 20–25 min   |
 
 > **Scripts 5 and 16 are one guide in two parts.** They were a single 26-minute

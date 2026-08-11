@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useCallback, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Mail,
   AlertCircle,
@@ -56,6 +57,16 @@ interface PreviewMember {
  * in email_template_service.py when context is empty.
  */
 
+/**
+ * The page's tabs, in the order they render.
+ *
+ * Declared as a value rather than a bare union so the `?tab=` parameter can be
+ * validated against it — a union alone gives nothing to check an arbitrary
+ * query string against at runtime.
+ */
+const EMAIL_TEMPLATES_TABS = ['templates', 'footers', 'officers', 'scheduled', 'history'] as const;
+type EmailTemplatesTab = (typeof EMAIL_TEMPLATES_TABS)[number];
+
 const EmailTemplatesPage: React.FC = () => {
   const {
     templates,
@@ -82,9 +93,26 @@ const EmailTemplatesPage: React.FC = () => {
   const footerDefaultKey = useFootersStore((s) => s.defaultKey);
   const fetchFooters = useFootersStore((s) => s.fetchFooters);
 
-  const [activeTab, setActiveTab] = useState<'templates' | 'footers' | 'officers' | 'scheduled' | 'history'>(
-    'templates'
-  );
+  // All five tabs are addressable. They were plain state, so a link to the
+  // Footers library — the one tab a secretary has cause to send a colleague —
+  // always landed on Templates, and the screenshot harness could only ever
+  // shoot the default.
+  //
+  // Derived from the URL rather than mirrored into state. Mirroring reads the
+  // parameter once, on mount, so every *later* URL change is ignored — and the
+  // Back button is exactly that: click Footers then Officers, press Back, and
+  // the address bar says `?tab=footers` while the page still renders Officers.
+  // One source of truth removes the class of bug rather than patching the
+  // instance, and there is no state left to fall out of step.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab: EmailTemplatesTab = EMAIL_TEMPLATES_TABS.includes(requestedTab as EmailTemplatesTab)
+    ? (requestedTab as EmailTemplatesTab)
+    : 'templates';
+
+  const handleTabChange = (tab: EmailTemplatesTab) => {
+    setSearchParams({ tab });
+  };
   const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [members, setMembers] = useState<PreviewMember[]>([]);
@@ -281,7 +309,7 @@ const EmailTemplatesPage: React.FC = () => {
         {/* Tab Bar */}
         <div className="border-theme-surface-border mb-6 flex items-center gap-1 border-b">
           <button
-            onClick={() => setActiveTab('templates')}
+            onClick={() => handleTabChange('templates')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'templates'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -292,7 +320,7 @@ const EmailTemplatesPage: React.FC = () => {
             Templates
           </button>
           <button
-            onClick={() => setActiveTab('footers')}
+            onClick={() => handleTabChange('footers')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'footers'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -303,7 +331,7 @@ const EmailTemplatesPage: React.FC = () => {
             Footers
           </button>
           <button
-            onClick={() => setActiveTab('officers')}
+            onClick={() => handleTabChange('officers')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'officers'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -314,7 +342,7 @@ const EmailTemplatesPage: React.FC = () => {
             Officers
           </button>
           <button
-            onClick={() => setActiveTab('scheduled')}
+            onClick={() => handleTabChange('scheduled')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'scheduled'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -325,7 +353,7 @@ const EmailTemplatesPage: React.FC = () => {
             Scheduled
           </button>
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => handleTabChange('history')}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'history'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'

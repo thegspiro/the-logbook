@@ -26,8 +26,7 @@ import type { SupplyExpiringItem } from '../../modules/scheduling/types/equipmen
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLotCreate } from '../../services/eventServices';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { formatDate } from '../../utils/dateFormatting';
-import { useTimezone } from '../../hooks/useTimezone';
+import { formatCalendarDate } from '../../utils/dateFormatting';
 
 const WINDOW_OPTIONS = [30, 60, 90];
 
@@ -46,7 +45,6 @@ function emptyLotForm(): InventoryLotCreate {
 }
 
 const SupplyExpiringPage: React.FC = () => {
-  const tz = useTimezone();
   const [daysAhead, setDaysAhead] = useState(30);
   const [items, setItems] = useState<SupplyExpiringItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -272,7 +270,16 @@ const SupplyExpiringPage: React.FC = () => {
                         </span>
                       )}
                       {item.compartmentName && <span>· {item.compartmentName}</span>}
-                      {item.expirationDate && <span>· Exp {formatDate(item.expirationDate, tz)}</span>}
+                      {item.expirationDate && (
+                        <span>
+                          · Exp{' '}
+                          {formatCalendarDate(item.expirationDate, {
+                            year: 'numeric',
+                            month: 'numeric',
+                            day: 'numeric',
+                          })}
+                        </span>
+                      )}
                       {item.lotNumber && <span>· Lot {item.lotNumber}</span>}
                     </div>
                     {item.restockNeeded && item.restockNote && (
@@ -327,7 +334,9 @@ const SupplyExpiringPage: React.FC = () => {
                         title={lot.isExpired ? 'Expired — cannot be deployed' : undefined}
                       >
                         {lot.lotNumber || 'No lot'} · {lot.quantity}×
-                        {lot.expirationDate ? ` · ${formatDate(lot.expirationDate, tz)}` : ''}
+                        {lot.expirationDate
+                          ? ` · ${formatCalendarDate(lot.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                          : ''}
                         {lot.isExpired ? ' · expired' : ''}
                       </span>
                     ))}

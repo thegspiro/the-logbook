@@ -143,6 +143,41 @@ describe('VariantGroupsPage', () => {
     expect(await screen.findByText(/Stock Matrix/)).toBeInTheDocument();
   });
 
+  it('orders stock matrix rows by size, not by the order items arrive in', async () => {
+    // The API returns variants in no particular order; the rows are built from
+    // a Set, so without an explicit sort the grid reads S, L, XL, M.
+    const variant = (size: string, quantity: number) => ({
+      id: `i-${size}`,
+      organization_id: 'org-1',
+      name: `Class A Uniform — ${size.toUpperCase()}`,
+      standard_size: size,
+      color: 'Navy',
+      quantity,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+    mockGetVariantGroups.mockResolvedValue([makeGroup()]);
+    mockGetVariantGroup.mockResolvedValue(
+      makeGroup({
+        items: [variant('l', 4), variant('xs', 1), variant('xl', 5), variant('m', 3)] as never,
+      })
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<VariantGroupsPage />);
+    await screen.findByText('Class A Uniform');
+
+    await user.click(screen.getByRole('button', { name: 'View Class A Uniform' }));
+    await screen.findByText(/Stock Matrix/);
+
+    // Row text is the size run together with its quantity ("xs1"); the size is
+    // upper-cased in CSS, so compare against the stored codes.
+    const sizes = screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => (row.textContent ?? '').replace(/[\d\s]/g, ''));
+    expect(sizes).toEqual(['xs', 'm', 'l', 'xl']);
+  });
+
   it('hides management actions without the manage permission', async () => {
     mockCheckPermission.mockReturnValue(false);
     mockGetVariantGroups.mockResolvedValue([makeGroup()]);

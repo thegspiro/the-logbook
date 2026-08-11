@@ -39,6 +39,18 @@ const unfinishedTest = {
   completed_at: undefined,
 };
 
+// A cancelled test has no completion date either, which is why "not completed"
+// was the wrong test for "still scoreable".
+const cancelledTest = {
+  ...completedTest,
+  id: 'test-3',
+  template_name: 'Ladder Evolution',
+  status: 'cancelled' as const,
+  result: 'incomplete' as const,
+  overall_score: undefined,
+  completed_at: undefined,
+};
+
 const practiceTest = {
   ...completedTest,
   id: 'test-3',
@@ -101,6 +113,27 @@ describe('SkillsTestingTestRecordsTab', () => {
       renderWithRouter(<SkillsTestingTestRecordsTab />);
 
       expect(screen.getByText('Tap to resume')).toBeInTheDocument();
+    });
+
+    // A cancelled test is closed. It has no completion date, so gating the
+    // affordance on `completed_at` offered it as resumable and routed it to the
+    // scoring screen — the one row the guide calls read-only.
+    it('offers no way back into a cancelled test', () => {
+      mockTests = [cancelledTest];
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+
+      expect(screen.queryByText('Tap to resume')).not.toBeInTheDocument();
+      expect(screen.queryByText('Tap to start')).not.toBeInTheDocument();
+    });
+
+    it('opens a cancelled test on its scorecard, not the scoring screen', async () => {
+      const user = userEvent.setup();
+      mockTests = [cancelledTest];
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+
+      await user.click(screen.getByText('Ladder Evolution'));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/training/skills-testing/test/test-3');
     });
 
     it('opens an unfinished test on the scoring screen', async () => {

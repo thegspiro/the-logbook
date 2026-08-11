@@ -7,8 +7,7 @@ const mockGetConnectedStatus = vi.fn();
 const mockGetIntegrations = vi.fn();
 vi.mock('../services/api', () => ({
   integrationsService: {
-    getConnectedIntegrationStatus: (...args: unknown[]) =>
-      mockGetConnectedStatus(...args) as unknown,
+    getConnectedIntegrationStatus: (...args: unknown[]) => mockGetConnectedStatus(...args) as unknown,
     getIntegrations: (...args: unknown[]) => mockGetIntegrations(...args) as unknown,
   },
 }));

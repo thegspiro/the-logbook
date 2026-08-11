@@ -168,7 +168,7 @@ const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz
                           </span>
                         )}
                         {!ev.custom_category && (
-                          <span className="bg-theme-surface-secondary ml-1.5 rounded px-1.5 py-0.5 text-[10px] capitalize">
+                          <span className="bg-theme-surface-secondary ml-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] capitalize">
                             {ev.event_type.replace(/_/g, ' ')}
                           </span>
                         )}
@@ -209,7 +209,11 @@ const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz
                 <p className="text-theme-text-muted text-xs">
                   {link.event_start ? formatDateTime(link.event_start, tz) : 'No date'}
                   {(link.custom_category || link.event_type) && (
-                    <span className="bg-theme-surface-secondary ml-1.5 rounded px-1.5 py-0.5 text-[10px] capitalize">
+                    // inline-block, not inline: `capitalize` finds word breaks
+                    // in the line box, and an inline span butted against the
+                    // date before it makes "AMpublic education" one word — the
+                    // badge rendered "public Education" with a lowercase p.
+                    <span className="bg-theme-surface-secondary ml-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] capitalize">
                       {link.custom_category ?? (link.event_type ?? '').replace(/_/g, ' ')}
                     </span>
                   )}

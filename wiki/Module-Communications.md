@@ -30,11 +30,12 @@ _rules_ and the member notification inbox are covered under
 
 ## Pages
 
-| Page                        | Route                             | Audience    | Permission             |
-| --------------------------- | --------------------------------- | ----------- | ---------------------- |
-| Messages (inbox)            | `/messages`                       | All members | Authenticated          |
-| Department Messages (admin) | `/communications/messages`        | Officers    | `notifications.manage` |
-| Email Templates             | `/communications/email-templates` | Admins      | `settings.manage`      |
+| Page                        | Route                                         | Audience    | Permission                                                                                  |
+| --------------------------- | --------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
+| Messages (inbox)            | `/messages`                                   | All members | Authenticated                                                                               |
+| Department Messages (admin) | `/communications/messages`                    | Officers    | `notifications.manage`                                                                      |
+| Email Templates             | `/communications/email-templates`             | Admins      | `settings.manage`                                                                           |
+| ↳ **Footers** tab           | `/communications/email-templates?tab=footers` | Admins      | `settings.manage` **or** `organization.update_settings` _(2026-08-10; linkable 2026-08-11)_ |
 
 Members also see recent messages on the **dashboard** "Department Messages" card
 and in the notification **bell**.
@@ -152,6 +153,140 @@ to the assignment.
 
 See [DEPARTMENT_OFFICERS.md](../docs/DEPARTMENT_OFFICERS.md) for the full catalogue
 and API.
+
+## Email Footer Library (2026-08-10)
+
+The footer was copy-pasted into all 35 default bodies: 32 copies of "This is an
+automated message from …" and 25 of the contact line. Changing the wording meant
+opening 35 templates one at a time — and once a template had been edited by hand,
+the only way back was **Reset**, which discards the rest of that template's edits
+too.
+
+It is now a **named library on the organization**, with each template naming the
+footer it closes with. Named rather than singular because a department does not
+want to say the same thing to everybody:
+
+| Seeded footer       | Audience                                                                                                                                                                                                                                                                            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Internal**        | Members. The routine "do not reply" close. The default                                                                                                                                                                                                                              |
+| **Public**          | Outside the department. Invites a reply and carries the mailing address. Event requesters and applicants get this one — telling somebody who asked the station to visit their school not to reply was wrong, and a physical address is what mail to the public is expected to carry |
+| **Official notice** | On the record: separations, property return, election results                                                                                                                                                                                                                       |
+
+Departments can rename, reword, add and delete these; a footer names its own
+lines and toggles the contact and address blocks.
+
+### How it renders
+
+Mechanically the footer is two more variables, `{{footer_html}}` and
+`{{footer_text}}`, that `build_context` injects like the organization ones — so
+**every** render path picks it up, including the code defaults behind a template
+row and the one-off bodies `wrap_email_body` builds for scheduled tasks.
+
+It is resolved **a step before** the template body, because rendering is a single
+substitution pass: a `{{organization_name}}` sitting inside an already-substituted
+`{{footer_html}}` would mail as those literal braces.
+
+### Storage and API
+
+- `email_templates.footer_key VARCHAR(32) NULL` — which footer this template
+  closes with. **NULL means "the one marked default"**, so a department that
+  changes its default reaches every template that has not overridden it, without
+  a data migration.
+- The library itself lives in `Organization.settings`, like the officer directory
+  and for the same reason: rendering is synchronous and already receives the
+  organization, so it needs no extra query on any send path.
+
+> **All five tabs on this page are addressable** as of 2026-08-11:
+> `?tab=templates`, `?tab=footers`, `?tab=officers`, `?tab=scheduled`,
+> `?tab=history`. They were plain component state, so the footer library — the
+> tab a colleague is most likely to be pointed at — could not be linked, and the
+> screenshot harness could only ever capture the default. Same fix as the
+> Notifications page took on 2026-08-10, and for the same two reasons.
+
+```
+GET    /api/v1/email-templates/footers        # The library, seeded on first read,
+                                              #   with a live per-footer usage count
+PUT    /api/v1/email-templates/footers        # Replace the library (whole, not per-footer)
+```
+
+### Edge cases
+
+| Scenario                                        | Behavior                                                                                                                                                                                                  |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A template names a footer that has been deleted | Resolves to the **default**, not to nothing. Deleting a footer should cost the templates naming it their _choice_, not their footer. The screen says how many templates use each one before you delete it |
+| `Organization.settings` is malformed            | Falls back to the seeded library rather than raising. **Mail has to keep going out**                                                                                                                      |
+| An admin types HTML into a footer line          | Footer text is escaped before its variables are substituted, and the substituted values are escaped too                                                                                                   |
+| A per-footer save                               | Not offered. The library saves **whole**, because a partial save could leave `default_key` naming a footer the same request deleted                                                                       |
+
+## Organization Variables (2026-08-10)
+
+Seven fields a department fills in on Organization Settings could not be put in
+an email or a footer. All are now `{{organization_*}}` variables available to
+every template and to footer lines:
+
+| Variable                                                            | Why                                                                                                                                                                                      |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `organization_tax_id`                                               | A 501(c)(3) asking for money is expected to state its EIN on the message that asks                                                                                                       |
+| `organization_identifier` / `organization_identifier_label`         | Whichever of FDID / state ID / department ID the department nominated, **with the name of the scheme**, so an official notice can read "FDID 12345" and be right about which one that is |
+| `organization_founded_year`, `organization_county`                  | The "Serving X County since 1923" line departments write by hand today                                                                                                                   |
+| `organization_fax`, `organization_description`, `organization_type` | Completeness                                                                                                                                                                             |
+
+Which columns reach templates is a **two-map ledger** —
+`ORGANIZATION_FIELD_VARIABLES` for the ones offered and
+`ORGANIZATION_FIELDS_WITHOUT_VARIABLES` for the ones deliberately withheld, with
+the reason. A column in neither is one nobody ruled on, and the catalogue test
+names it. That is what keeps the gap from silently regrowing the next time a
+column is added.
+
+The address composer now appends the **country**, except when it is the `"USA"`
+the column defaults to — printing it unconditionally would put a line of noise
+under every US department's own address.
+
+## Email Design & Rendering (2026-08-10)
+
+- **One stylesheet, one document shell, one table style.**
+  `app/services/email_theme.py` is shared by the template service, the storefront
+  and the election report, replacing three copies with drifting hex codes. The
+  design is a white card on a grey page — system font stack, rounded header band,
+  consistent paragraph rhythm, light table headers.
+- **Untouched templates track the built-in stylesheet.** `create_template` used
+  to copy `DEFAULT_CSS` into every row, freezing an organization's templates on
+  whatever shipped the day they signed up. The service stores NULL and falls back
+  at render time; migration `20260810_0003` clears the rows still holding a
+  verbatim copy of a shipped default and leaves edited ones alone.
+- **The preview endpoint runs the CSS inliner**, so what an admin approves is
+  what ships.
+- **Three notices gained template rows.** `shift_assignment`, `shift_decline` and
+  `shift_reminder` were listed by the enum and the screen but composed in code —
+  **the mail departments send most often was the mail they could not reword.**
+
+### Fixed (2026-08-10)
+
+- **The CSS inliner styled the first paragraph of every email and nothing after
+  it.** `".parent child"` rules stopped at the first closing tag inside the
+  parent. Gmail strips `<style>`, so that was the spacing most recipients
+  actually saw. It now scopes by element depth, and declarations are normalised
+  so a quoted font name cannot close the style attribute it lands in.
+- **`items_removed_html` and `recipients_html` were missing from
+  `_RAW_HTML_VARIABLES`**, so those lists were escaped and mailed as visible
+  angle brackets.
+- **The code-default fallback never filled in the organization variables** — and
+  that path is the normal one until somebody opens the Email Templates screen,
+  which is the only thing that creates the rows. Those departments were receiving
+  footers reading a literal `{{organization_phone}}`.
+- **The event-request status notice labelled Scheduled Date, Reason and Message
+  unconditionally**, so a member of the public was getting bare "Reason:" lines.
+- **The event-request fallback fed values to `re.sub` as replacement strings**, so
+  a backslash in a public contact name was read as a group reference. Routing it
+  through `_render_with_fallback` also gets these sends into Message History for
+  the first time.
+- **Three header colours failed WCAG AA against their white text** (`#f59e0b`
+  2.2:1, `#d97706` 3.2:1, `#059669` 3.8:1), as did the 11px `#9ca3af` contact
+  line in every footer.
+- **"Send Test Email to Me" posted a blank recipient.** SMTP rejected it, the
+  endpoint returned 200, and the UI reported success for an email nobody
+  received.
+- The duplicate-application notice printed its contact line twice.
 
 ### Fixed
 

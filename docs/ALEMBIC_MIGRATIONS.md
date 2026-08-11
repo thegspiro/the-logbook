@@ -16,9 +16,29 @@
 
 ## Current Head
 
-> **Update (2026-08-05):** The current head is **`20260805_0010`**
-> (`20260805_0010_reconcile_index_set.py`). **New migrations must set
-> `down_revision = "20260805_0010"`.**
+> **Update (2026-08-10):** The current head is **`20260810_0008`**
+> (`20260810_0008_add_deployed_lots.py`). **New migrations must set
+> `down_revision = "20260810_0008"`.**
+>
+> Past `20260805_0010` the chain runs `20260806_*` → `20260807_*` →
+> `20260808_0001` (skill test validation) → `0002` (owns_requirement) → `0003`
+> (drop the shift-equipment-check apparatus FK) → `20260809_0001` (guest
+> check-in) → `20260810_0001` (encrypt medical-screening PHI) → `0002`
+> (`score_pass_fail_criteria`) → `0003` (email templates track default CSS) →
+> `0004` (`email_templates.footer_key`) → `0005` (`expiration_found`) → `0006`
+> (restock flag + companions) → `0007` (`quantity_on_truck`) → `0008`
+> (`check_item_deployed_lots`).
+>
+> **`20260810_0005`–`_0008` were renumbered from `_0003`–`_0006`.** `main` landed
+> the email-template pair at `_0003`/`_0004` while the check branch was open, and
+> both branches had numbered from `20260810_0002`. Two revision IDs with two
+> files each is not a merge conflict git can see — it is a chain Alembic refuses
+> to load, and the backend **crashes on startup** rather than failing at review.
+> This is the third time that has happened; **run `alembic heads` before writing
+> a migration and again after merging main.**
+>
+> **Superseded (2026-08-05):** The head was **`20260805_0010`**
+> (`20260805_0010_reconcile_index_set.py`).
 >
 > Past `20260802_0010` (storefront email templates) the chain runs
 > `20260805_0001` (course syllabus and cohorts) → `0002` (merge) → `0101` →

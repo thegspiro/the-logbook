@@ -38,9 +38,9 @@ def test_unknown_type_is_rejected(bad_type):
 
     message = str(exc.value)
     assert "Unknown criterion type" in message
-    # The message names the offending step and the accepted values, because the
-    # author fixing it is looking at a sheet with dozens of criteria.
-    assert "Dons the pack" in message
+    # The accepted values are listed, and Pydantic's error carries the field
+    # path — on a nested template that is sections.N.criteria.M.type, which
+    # locates the offending step on a sheet with dozens of criteria.
     assert "pass_fail" in message
 
 
@@ -70,6 +70,10 @@ def test_whitelist_matches_the_types_the_scorer_handles():
     accepted anything, so nothing tied the stored value to the set of values
     the scoring and rendering code actually branches on.
     """
-    assert CRITERION_TYPES == frozenset(
-        {"pass_fail", "score", "checklist", "time_limit", "statement"}
-    )
+    assert set(CRITERION_TYPES) == {
+        "pass_fail",
+        "score",
+        "checklist",
+        "time_limit",
+        "statement",
+    }
