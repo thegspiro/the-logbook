@@ -976,25 +976,35 @@ class TestShiftDataPreview:
 
 
 class TestEquipmentCheckTrainingLink:
-    def test_report_identity_supports_onboarding_apparatus(self):
-        from app.models.apparatus import Apparatus
-        from app.models.training import (
-            BasicApparatus,
-            Shift,
-            ShiftCompletionReport,
+    async def test_report_identity_supports_onboarding_apparatus(self):
+        """The shift label resolves through basic_apparatus when the shift's
+        apparatus_id references an onboarding-era row rather than a full
+        Apparatus record — _attach_shift_labels retries unclaimed ids there."""
+        from app.models.training import ShiftCompletionReport
+
+        report = ShiftCompletionReport()
+        report.shift_id = "shift-1"
+
+        shifts_result = MagicMock()
+        shifts_result.__iter__ = lambda self: iter(
+            [SimpleNamespace(id="shift-1", apparatus_id="ba-1", start_time=None)]
+        )
+        no_full_apparatus = MagicMock()
+        no_full_apparatus.__iter__ = lambda self: iter([])
+        basic_result = MagicMock()
+        basic_result.__iter__ = lambda self: iter(
+            [SimpleNamespace(id="ba-1", unit_number="E-1", name="Engine 1")]
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[shifts_result, no_full_apparatus, basic_result]
         )
 
-        apparatus = BasicApparatus(unit_number="E-1", name="Engine 1")
-        shift = Shift()
-        shift.basic_apparatus = apparatus
-        report = ShiftCompletionReport()
-        report.shift = shift
+        [labeled] = await ShiftCompletionService(db)._attach_shift_labels(
+            [report], uuid.uuid4()
+        )
 
-        assert report.apparatus_name == "E-1"
-
-        shift.basic_apparatus = None
-        shift.apparatus = Apparatus(unit_number="T-2", name="Old Reliable")
-        assert report.apparatus_name == "T-2"
+        assert labeled.shift_label == "E-1 — Engine 1"
 
     async def test_trainee_checks_become_auditable_report_tasks(self):
         check = SimpleNamespace(

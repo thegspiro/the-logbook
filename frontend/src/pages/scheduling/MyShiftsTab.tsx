@@ -549,8 +549,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                           if (att.checked_out_at && att.duration_minutes) {
                             const hrs = Math.round((att.duration_minutes / 60) * 10) / 10;
                             return (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-400">
-                                <Clock className="h-3 w-3" /> {hrs}h
+                              <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium whitespace-nowrap text-green-700 dark:text-green-400">
+                                <Clock className="h-3 w-3" aria-hidden="true" /> {hrs}h worked
                               </span>
                             );
                           }

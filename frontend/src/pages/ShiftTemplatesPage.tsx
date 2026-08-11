@@ -20,7 +20,7 @@ import { schedulingService } from '../modules/scheduling/services/api';
 import type { ApparatusOption } from '../modules/scheduling/services/api';
 import type { ShiftTemplateCreate, ShiftPatternCreate } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
 import TemplateFormModal from '../modules/scheduling/components/TemplateFormModal';
 import PatternFormModal from '../modules/scheduling/components/PatternFormModal';
 import GenerateShiftsModal from '../modules/scheduling/components/GenerateShiftsModal';
@@ -372,7 +372,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                           Shift Time
                         </p>
                         <p className="text-theme-text-primary text-sm font-medium">
-                          {template.start_time_of_day} - {template.end_time_of_day}
+                          {formatTimeOfDay(template.start_time_of_day)} - {formatTimeOfDay(template.end_time_of_day)}
                         </p>
                       </div>
                       <div className="bg-theme-surface rounded-lg p-2">

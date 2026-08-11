@@ -29,6 +29,7 @@ import type {
   EquipmentCheckTemplate,
   CheckTemplateItem,
 } from '../../modules/scheduling/types/equipmentCheck';
+import { CHECK_ITEM_STATUS_LABELS } from '../../modules/scheduling/types/equipmentCheck';
 import { DateRangePicker } from '../../components/ux/DateRangePicker';
 import { Pagination } from '../../components/ux/Pagination';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -598,11 +599,12 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
             <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4">
               <div className="flex h-40 items-end gap-1">
                 {trendData.trends.map((entry) => {
-                  const total = entry.passCount + entry.failCount + entry.notApplicableCount + entry.notCheckedCount;
+                  const notApplicable = entry.notApplicableCount ?? 0;
+                  const total = entry.passCount + entry.failCount + entry.notCheckedCount + notApplicable;
                   const maxHeight = 128;
                   const passH = total > 0 ? (entry.passCount / total) * maxHeight : 0;
                   const failH = total > 0 ? (entry.failCount / total) * maxHeight : 0;
-                  const notApplicableH = total > 0 ? (entry.notApplicableCount / total) * maxHeight : 0;
+                  const notApplicableH = total > 0 ? (notApplicable / total) * maxHeight : 0;
                   const notCheckedH = total > 0 ? (entry.notCheckedCount / total) * maxHeight : 0;
                   return (
                     <div key={entry.period} className="flex flex-1 flex-col items-center gap-0.5">
@@ -619,6 +621,13 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                             className="w-full rounded-t-sm bg-red-500"
                             style={{ height: failH }}
                             title={`Fail: ${entry.failCount}`}
+                          />
+                        )}
+                        {notApplicableH > 0 && (
+                          <div
+                            className="bg-theme-text-muted/70 w-full rounded-t-sm"
+                            style={{ height: notApplicableH }}
+                            title={`Not on truck: ${notApplicable}`}
                           />
                         )}
                         {notCheckedH > 0 && (
@@ -652,6 +661,9 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                   <span className="h-2.5 w-2.5 rounded-sm bg-red-500" /> Fail
                 </span>
                 <span className="flex items-center gap-1">
+                  <span className="bg-theme-text-muted/70 h-2.5 w-2.5 rounded-sm" /> Not on truck
+                </span>
+                <span className="flex items-center gap-1">
                   <span className="bg-theme-text-muted/40 h-2.5 w-2.5 rounded-sm" /> Not checked
                 </span>
               </div>
@@ -663,7 +675,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
           {/* History table */}
           {trendData.history.length > 0 && (
             <div>
-              <h4 className="text-theme-text-secondary mb-2 text-xs font-semibold">Check History</h4>
+              <h4 className="text-theme-text-secondary mb-2 text-xs font-semibold">Past results</h4>
               <div className="bg-theme-surface border-theme-surface-border overflow-x-auto rounded-xl border">
                 <table className="w-full text-sm">
                   <thead>
@@ -702,11 +714,9 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                             {h.status === 'fail' || h.status === 'out_of_service' ? (
                               <XCircle className="h-3 w-3" />
                             ) : null}
-                            {h.status === 'not_applicable'
-                              ? 'Not applicable'
-                              : h.status === 'out_of_service'
-                                ? 'Out of service'
-                                : h.status.replace('_', ' ')}
+                            {/* Never the raw token: an item answered
+                                "not_applicable" printed as itself here. */}
+                            {CHECK_ITEM_STATUS_LABELS[h.status] ?? h.status}
                           </span>
                         </td>
                         <td className="text-theme-text-secondary px-4 py-2">{h.checkedByName ?? '-'}</td>
