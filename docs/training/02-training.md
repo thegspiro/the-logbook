@@ -703,7 +703,7 @@ Both actions require `training.manage` and are recorded in the audit log.
 
 **Required Permission:** `training.manage`
 
-When you finalize a training session, what happens next depends on the **Require instructor confirmation** checkbox set when the session was created (Step 3 of **Training > Create Session**):
+When you finalize a training session, what happens next depends on the **Require instructor confirmation** checkbox set when the session was created. It is on the third step of the create form, headed **Settings**, under _Attendance & Completion Settings_ — the form is a tab of **Training Admin > Records > Sessions**, and `/training/sessions/new` redirects there:
 
 - **Unchecked (default)** — Finalizing the session **immediately completes** every attendee's training record. No separate approval step and no confirmation email are sent.
 - **Checked** — The session stays **pending** after you finalize it. The records are not completed until an officer confirms via the approval notification that is emailed to the department's training officers.
@@ -712,7 +712,7 @@ When you finalize a training session, what happens next depends on the **Require
 2. If **Require instructor confirmation** was off, the attendees' records are marked complete right away.
 3. If it was on, the session remains pending until an officer opens the emailed confirmation and approves it.
 
-> **[SCREENSHOT NEEDED]:** _The Create Training Session form (Step 3) showing the "Require instructor confirmation" checkbox with its helper text "Training records will be marked as 'pending' until instructor confirms completion."_
+![Step 3 of the Create Session form — the settings, with Require instructor confirmation among them](./images/02-91-session-confirmation-toggle.png)
 
 > **Hint:** Leave **Require instructor confirmation** off for routine drills you want completed the moment you finalize them. Turn it on only when a second officer must sign off before records count.
 
@@ -777,7 +777,7 @@ Each training requirement can override the department default. When adding or ed
 - **Count the current (in-progress) month** — Always includes this month for this requirement.
 - **Stop at the end of the previous month** — Excludes the in-progress month — useful for drills held late in the month so members aren't flagged early.
 
-> **[SCREENSHOT NEEDED]:** _The requirement add/edit form showing the "Evaluation Period" dropdown with the three options (use department default / count current month / stop at previous month)._
+![The Evaluation Period selector on a requirement, with the note on what it changes](./images/02-92-requirement-evaluation-period.png)
 
 > **Hint:** This setting only affects requirement compliance windows, proration, and overdue checks. Certifications that are **expiring soon** are always flagged using the real current date, regardless of the Evaluation Period setting.
 

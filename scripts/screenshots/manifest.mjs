@@ -1894,6 +1894,67 @@ export const SHOTS = [
     viewport: { width: 1800, height: 1300 },
   },
   {
+    id: "02-91-session-confirmation-toggle",
+    doc: "02-training.md",
+    line: 715,
+    anchor: "The Create Training Session form (Step 3)",
+    alt: "Step 3 of the Create Session form — the settings, with Require instructor confirmation among them",
+    // `/training/sessions/new` redirects here; the form is a tab of the
+    // training admin page rather than a route of its own.
+    route: "/training/admin?page=records&tab=sessions",
+    prepare: async (page) => {
+      // Step 3 is behind two Next buttons, and Next is disabled until the
+      // step's required fields are filled: a title and a type on step 1, the
+      // date and times on step 2.
+      // The labels are not associated with their inputs, so `getByLabel` finds
+      // nothing — reach the field by its placeholder.
+      await page
+        .getByPlaceholder(/CPR\/AED Renewal Training/i)
+        .first()
+        .fill("Ladder Company Drill", { timeout: 20_000 });
+      await page.waitForTimeout(300);
+      for (let step = 0; step < 2; step += 1) {
+        const next = page.getByRole("button", { name: /^Next/ }).first();
+        await next.waitFor({ timeout: 15_000 });
+        await next.click();
+        await page.waitForTimeout(1200);
+      }
+      await page
+        .locator("#require_completion_confirmation")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: false,
+  },
+  {
+    id: "02-92-requirement-evaluation-period",
+    doc: "02-training.md",
+    line: 780,
+    anchor: "The requirement add/edit form showing the",
+    alt: "The Evaluation Period selector on a requirement, with the note on what it changes",
+    route: "/training/requirements",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Create Requirement/i })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .locator("#req-include-current-month")
+        .waitFor({ timeout: 15_000 });
+      // The dialog scrolls in its own container, so an element clip otherwise
+      // stops at the top of the form and never reaches this control.
+      await page
+        .locator("#req-include-current-month")
+        .evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(800);
+    },
+    // The dialog, not the field. A native select cannot be photographed with
+    // its list open, and the control clipped on its own is three lines of text
+    // with nothing to say which form they belong to — the three options are
+    // enumerated in the prose above.
+    selector: "div.fixed.inset-0 > div",
+  },
+  {
     id: "05-66-my-equipment",
     doc: "05-inventory.md",
     line: 1357,
