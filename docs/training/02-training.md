@@ -2,6 +2,51 @@
 
 The Training module tracks courses, certifications, training requirements, program enrollments, external training integrations, and compliance reporting. It is designed for both members submitting their training records and officers managing department-wide training requirements.
 
+## Lesson at a Glance
+
+|                   |                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------- |
+| **Audience**      | Members completing training; training officers managing records and compliance  |
+| **Permissions**   | Members use their own records; officer tasks require `training.manage`          |
+| **Prerequisites** | Training module enabled; at least one course configured for submission practice |
+| **Member path**   | About 15 minutes                                                                |
+| **Officer path**  | About 30 minutes; the full reference is longer                                  |
+| **Last verified** | 2026-08-11                                                                      |
+| **Owner**         | Department training officer                                                     |
+
+By the end of the essential path, members can submit training and verify its
+status. Officers can review the submission, make a defensible decision, and
+confirm that approved credit appears in history and compliance.
+
+> **Practice safely:** Use a designated practice course or demo department. Do
+> not approve invented training in production. If production is the only option,
+> read the workflow and use an existing pending record without changing it.
+
+### 15-Minute Member Path
+
+1. Review [My Training](#my-training-dashboard) and note one active requirement.
+2. Follow [Submitting Training Records](#submitting-training-records) using a real completed activity or designated practice course.
+3. Return to My Training and confirm the record is **Pending Review**.
+4. After an officer acts, verify the decision and credited hours in your history.
+
+### Officer Review Path
+
+1. Open the [Officer Dashboard](#officer-dashboard) and locate the pending submission.
+2. Use [Reviewing Submissions](#reviewing-submissions) to verify the course, date, hours, notes, and evidence.
+3. Approve only when the evidence supports the record; otherwise reject it with a useful reason.
+4. Confirm that an approval updates the member's history and relevant [compliance](#compliance-matrix).
+
+### Try It: Submission to Credit
+
+- **Starting state:** A designated learner has submitted a two-hour practice
+  drill.
+- **Task:** The learner finds the submission status; an officer reviews the
+  evidence and decides it; the learner then verifies the result.
+- **Success:** Both people can point to the durable record status and credited
+  hours—not only a temporary success message.
+- **Variation:** The certificate shows a different date than the submission.
+  What should the reviewer verify before deciding?
+
 ---
 
 ## Table of Contents
