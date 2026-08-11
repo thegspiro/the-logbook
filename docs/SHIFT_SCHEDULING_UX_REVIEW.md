@@ -22,6 +22,14 @@ Severity is about consequence, not polish:
 Counts: **19** invites mistakes, **19** slows people down, plus **9** code
 faults found and fixed (below).
 
+**Status: all 38 findings are fixed**, across two passes — the first closed 14
+and the code faults, the second the remaining 24. Each finding below carries the
+fix that closed it, and four claims the work disproved are corrected in place
+(next section). Two of the second pass's fixes reached past the wording they were
+raised about: "not on truck" needed a third answer in the schema, the service and
+the item trend, and a shift report needed the backend to say which shift it
+covers.
+
 ## Corrections to the first pass
 
 Implementing the fixes disproved four claims made here originally. They are
@@ -128,23 +136,34 @@ scroll container, so the last option ended mid-sentence and Save sat below the
 fold with no scrollbar or shadow to say the form continued. Reachable, but only
 if you guessed. The header and footer are pinned now and only the fields scroll.
 
-**Slows people down — three fields for two facts.** Start time, end time _and_
-duration, with duration pre-filled `12` regardless, so the two can disagree.
-Start and end are six blank dropdowns. Cards behind the dialog show 24-hour
-times while the form uses AM/PM.
+**Slows people down — three fields for two facts.** ✅ **Fixed.** Start time, end time
+_and_ duration, with duration pre-filled `12` regardless, so the two could
+disagree and nothing said which won. The length is derived from the times and
+read back as a sentence ("7:00 AM to 7:00 PM — 12 hours, ending the next day");
+a tour longer than a day is the one case that cannot be derived, so it keeps a
+number field behind a checkbox that says what it is for. The AM/PM the form
+always used now matches the template lists behind it, which printed raw 24-hour
+strings — `formatTimeOfDay` re-spells a time of day without going near a
+timezone, for the same reason `formatCalendarDate` exists.
 
-**Slows people down — colour is picked by typing a hex code** (`#dc2626`). A raw
-hex field is developer-facing; offer six or eight named swatches. The default is
-also red, which the calendar itself uses for a shift in trouble.
+**Slows people down — colour is picked by typing a hex code** (`#dc2626`).
+✅ **Fixed.** A raw hex field is developer-facing: eight named swatches instead,
+and the default is blue rather than the red the calendar uses for a shift in
+trouble.
 
-**Slows people down — officer tools sit below the whole calendar.** Seven cards
-under an "ADMINISTRATION" heading, reached only after scrolling a full month
-grid; on a phone each carries an external-link arrow though they are ordinary
-pages, and the Supply badge shows an orange `1` with nothing to say what it
-counts.
+**Slows people down — officer tools sit below the whole calendar.** ✅ **Fixed.**
+Seven cards under an "ADMINISTRATION" heading, reached only after scrolling a
+full month grid; on a phone each carried an external-link arrow though they are
+ordinary pages, and the Supply badge showed an orange `1` with nothing to say
+what it counted. They are a strip headed "Officer tools" above the tab content,
+visible on every tab, with no arrows, and the badge reads "1 expiring".
 
 **Slows people down — patterns open collapsed** with nothing to read or do, and
-the page prints its title twice.
+the page prints its title twice. ✅ **Fixed.** The page and the component inside
+it both printed "Shift Patterns", one line apart; the page keeps the title. A
+pattern row was one wide button ending in a bare chevron, so the only thing a
+pattern exists for — generating shifts — was behind a glyph: the toggle reads
+Details / Hide and Generate shifts is on the row.
 
 ## 02 · Assignment
 
@@ -162,37 +181,48 @@ at the project's 44px touch minimum (they were 40px).
 **Invites mistakes — the bulk header contradicts its rows.** ✅ **Fixed.** "Select all 4
 pending" above four rows badged **Assigned**.
 
-**Invites mistakes — "0/2 present" on a shift eight days out.** Nobody can be
-present for a future shift, so the zero reads as an alarm; and the two
-denominators differ (`0/2` present, `2/3` staffed), which makes the pair look
-self-contradictory. Show attendance only once the shift has started.
+**Invites mistakes — "0/2 present" on a shift eight days out.** ✅ **Fixed.**
+Nobody can be present for a future shift, so the zero read as an alarm; and the
+two denominators differed (`0/2` present, `2/3` staffed), which made the pair
+look self-contradictory. Attendance appears once the shift has begun — decided
+against the department's clock, not the browser's — and both counts name their
+subject: "2 of 3 crew checked in", "3 of 4 positions filled".
 
 **Invites mistakes — an unlabelled delete in the drawer header**, one of four
-bare icons, two of them destructive.
+bare icons, two of them destructive. ✅ **Fixed.** Same finding as My Shifts and
+the same fix: Edit, Delete and Cancel shift say so on a panel that is mostly
+used on a phone, where there is no hover to reveal the `title` each carried. The
+close ✕ stays a glyph.
 
 **Invites mistakes — an uncaptioned hours chip** beside each crew member
-(`12h`, `11.9h`). Scheduled, credited or worked — the three differ in practice.
+(`12h`, `11.9h`). ✅ **Fixed.** Scheduled, credited or worked — the three differ
+in practice, and this one is worked, from check-in to check-out. It says so, and
+the check-in chip beside it gives the time instead of a bare arrow.
 
 **Slows people down — My Shifts never says which truck.** ✅ **Fixed.** Date, time and
 "Position: Officer", but no apparatus or station: the one fact that tells you
 where to go. Every other view shows it.
 
-**Slows people down — Assign opens a form you cannot see.** The form renders at
-the bottom of the drawer without scrolling to it, so on a 900px window the
-button appears to do almost nothing.
+**Slows people down — Assign opens a form you cannot see.** ✅ **Fixed.** The form
+renders at the foot of a drawer taller than the window, so on a 900px window the
+button appeared to do almost nothing. It scrolls into view.
 
 **Slows people down — "Assign" and "Sign Up" side by side**, with the
-difference (someone else vs. me) never stated.
+difference (someone else vs. me) never stated. ✅ **Fixed.** Worse on a phone,
+where Assign collapsed to a bare icon next to a button reading "Join". They read
+"Assign someone" and "Sign myself up" — the difference is in the labels.
 
 **Slows people down — internal phrasing on screen:** "Positions from B-5 +
-shift customizations" describes how the list is computed.
+shift customizations" describes how the list is computed. ✅ **Fixed.** It names
+the rig, and says plainly when this shift departs from it.
 
 ## 03 · Start of shift
 
 **Invites mistakes — a card reading "End" above a button reading "Start
-Check".** The badge is _when_, the button is _what you do now_, and together
-they contradict. The filter chips "All / Start / End" repeat it. Spell the
-timing out and rename the button "Open checklist".
+Check".** ✅ **Fixed.** The badge is _when_, the button is _what you do now_, and
+together they contradicted. The badge and the filter chips spell out "Start of
+shift" / "End of shift", and the button reads Open checklist (or Continue
+checklist).
 
 **Invites mistakes — every item was captioned "presence"**. ✅ **Fixed.** Not a
 wording choice: `check_type` was an unvalidated free-form string, the demo seeder
@@ -202,14 +232,20 @@ against the set the template builder offers, an unrecognised one renders no
 caption at all rather than an internal token, and the seeder was corrected. A
 department using the builder always saw the proper label ("Present").
 
-**Invites mistakes — the checklist forgets its shift.** Once open, the only
-heading is the template name; apparatus, date and shift are gone, so two trucks
-running the same template produce identical screens.
+**Invites mistakes — the checklist forgets its shift.** ✅ **Fixed.** Once open the
+only heading was the template name; apparatus, date and timing are all in the
+header now, the timing as a badge in the colour of the card it was opened
+from — which is also what distinguishes the close-out checklist from the
+start-of-shift one.
 
-**Invites mistakes — Pass or Fail, nothing between.** No "not applicable", no
-"out of service". A tool legitimately off the truck must be recorded as a
-failure or buried in a note, and the compliance reports then count it as a
-fault.
+**Invites mistakes — Pass or Fail, nothing between.** ✅ **Fixed.** A tool
+legitimately off the truck had to be recorded as a failure or buried in a note,
+and the compliance reports then counted it as a fault. "Not on truck" is a third
+answer: it counts as answered wherever completeness is measured and never toward
+failures — in `_compute_check_status`, in the compartment roll-up, and in the
+item trend, which gets its own bucket rather than lumping an answer in with
+"nobody looked". Deliberately not offered for an expired item: that verdict is
+the server's to make and no answer here can retire it.
 
 **Invites mistakes — check-in accepts a shift that ended days ago.** ✅ **Fixed.** Verified
 against the running app: opening the check-in link for a shift that ended
@@ -220,29 +256,40 @@ The product already has the concept — Scheduling Settings carries "Checklist
 Timing — start/end of shift windows" — so bound check-in the same way and say on
 screen why the button is off.
 
-**Slows people down — checking in leads nowhere.** After a successful check-in
-nothing points at the start-of-shift checklist, which lives on another tab of
-another page.
+**Slows people down — checking in leads nowhere.** ✅ **Fixed.** The start-of-shift
+checklist is a button on the confirmation. Check Out stays the prominent one:
+it is what the same screen is for hours later.
 
 **Slows people down — REQUIRED on all nine items**, in red, the same red used
-for a failed item. Mark the optional ones instead.
+for a failed item. ✅ **Fixed.** The optional ones are the news, so those are what
+carry a badge.
 
-**Slows people down — checklists days away look as due as today's.** Six
-checklists five to nine days out, active buttons, no ordering by urgency,
-nothing marking what is due on this shift.
+**Slows people down — checklists days away look as due as today's.** ✅ **Fixed.**
+Soonest first, with Today / Tomorrow / In 5 days on each card, and a check not
+yet due wears the secondary button rather than the urgent one. Still openable —
+being early is not an error.
 
-**Slows people down — no progress or submit within reach.** Progress (`0/9`) is
-at the top, Submit at the very bottom, compartment headings scroll away. The
-demo checklist has nine items; a real engine inventory runs to dozens, so a
-member scrolls to the end to find out they missed one in the cab. Pin progress
-and Submit; make compartment headings sticky.
+**Slows people down — no progress or submit within reach.** ✅ **Fixed.** The demo
+checklist has nine items; a real engine inventory runs to dozens, so a member
+scrolled to the end to find out they had missed one in the cab. The header
+(title, shift, count, progress) is sticky, the compartment heading is sticky
+under it, and Submit sits in a sticky bottom bar naming how many required items
+are still unanswered.
 
 **Slows people down — two buttons a letter apart:** "Start a Check" (page
-header, unscheduled) and "Start Check" (card, assigned).
+header, unscheduled) and "Start Check" (card, assigned). ✅ **Fixed.** The header
+button reads "Unscheduled checklist", the card "Open checklist". More broadly,
+check / checklist / report were used interchangeably for three different things:
+a _checklist_ is what you fill in and a _check_ is the record of having filled
+one in, so the page reads "Due now and coming up", "Completed checklists" and
+"Pick a checklist".
 
 **Slows people down — the not-found message blames a QR code that was never
-used.** Opening the page without a shift shows "This QR code may be invalid or
-you may not have access to this shift" — two guesses, neither actionable.
+used.** ✅ **Fixed.** "This QR code may be invalid or you may not have access to
+this shift" was two guesses, neither actionable, on a page also reached by
+typing the URL, from a notification, or from a stale bookmark. Whether a shift
+was asked for at all is the one thing we know, so the two cases say different
+things and both offer My Shifts.
 
 ## 04 · End of shift
 
@@ -253,22 +300,28 @@ understaffed — 3 of 4 positions filled." It tells an officer what they are
 signing off with no jargon at all. Everything below is wording on top of a
 screen that already works.
 
-**Invites mistakes — nothing says which rows block the close-out.** The amber
-"Ran understaffed" row looks like a barrier but is not; the shift finalises
-anyway. Green and amber are equally passable, which trains officers to ignore
-both. Separate "must fix first" from "noted on the record".
+**Invites mistakes — nothing says which rows block the close-out.** ✅ **Fixed.**
+Green and amber were equally passable, which trains an officer to skim both. Two
+headed groups: "Must be resolved first" and "Noted on the record". That surfaced
+a related lie — the pending-checks row always claimed the checks "must be
+completed before you can close the shift", including when end-of-shift
+enforcement was off, which is the default and closes the shift regardless.
 
 **Invites mistakes — the close-out checklist is indistinguishable from the
-start-of-shift one.** Same layout, same buttons, same "Submit Report"; only the
-template name differs.
+start-of-shift one.** ✅ **Fixed.** Same layout, same buttons, same "Submit
+Report"; only the template name differed. Its header now carries the timing as a
+badge, in the colour of the card it was opened from.
 
 **Slows people down — "Finalize" appears twice at once** ✅ **Fixed.** (drawer header and
 panel) and is the least plain word on the screen. One button, "Close out shift".
 
-**Slows people down — machine plurals and a raw date.** ✅ **Partly fixed** (plurals; the stale-handoff date remains). "1 equipment check(s)
-completed", "1 call(s) recorded", and a handoff banner headed "Handoff from
-previous shift (2026-08-01)" — an ISO date two lines under "Wednesday,
-August 12, 2026", eleven days stale with nothing marking it as old.
+**Slows people down — machine plurals and a raw date.** ✅ **Fixed.** "1 equipment
+check(s) completed", "1 call(s) recorded", and a handoff banner headed "Handoff
+from previous shift (2026-08-01)" — an ISO date two lines under "Wednesday,
+August 12, 2026", eleven days stale with nothing marking it as old. It reads
+"Handoff from the previous shift — Sat, Aug 1 (11 days ago)", and past three days
+it says outright that this is the most recent pass-down on the apparatus rather
+than a note from the last crew on duty.
 
 ## 05 · Shift reports
 
@@ -294,16 +347,21 @@ is inferred from a gap.
 themselves.** ✅ **Fixed.** One screen shows `6h`, `12h`, `11.87h`, `11.73h`, and the same
 record reads `11.9` in the summary table and `11.87h` in the row below it.
 
-**Slows people down — Scheduling Reports opens blank.** Five report types, all
-starting on "Select a Date Range" with two empty `mm/dd/yyyy` boxes: no default
-range and no presets, so every visit begins with typing. Default to this month,
-add "Last 30 days / This month / This year", and use the app's own
-`DateRangePicker` rather than bare native inputs. (An earlier draft of this
+**Slows people down — Scheduling Reports opens blank.** ✅ **Fixed.** Five report
+types, all starting on "Select a Date Range" with two empty `mm/dd/yyyy` boxes:
+no default range and no presets, so every visit began with typing. The range
+defaults to this month, the inputs are the app's own `DateRangePicker` — which
+grew a "This month" preset — and the active report runs as soon as there is a
+range to run it over, including after a tab switch. (An earlier draft of this
 review called the red Generate button a danger signal — see Corrections: red is
 the app's primary colour.)
 
 **Slows people down — reports do not say which shift they cover** — person and
 date only, so two reports from one day are told apart by author alone.
+✅ **Fixed.** The response carries `shift_label` ("B-5 — Brush 5"), resolved in
+two batched queries rather than by a relationship: an eager Shift → Apparatus
+chain would load on every query that touches a report, and a lazy one raises
+`MissingGreenlet` the moment a response model reads it.
 
 ---
 
@@ -337,6 +395,9 @@ version of nearly every unclear screen; it is just not applied evenly.
 | Currently says                              | Say instead                   | Where                       |
 | ------------------------------------------- | ----------------------------- | --------------------------- |
 | `presence`                                  | On the truck?                 | Under every checklist item  |
+| `Start Check` (on a card badged End)        | Open checklist                | Checklist cards             |
+| `Check History`                             | Completed checklists          | My Equipment Checklists     |
+| `Active Checklists`                         | Due now and coming up         | My Equipment Checklists     |
 | `Start` / `End` badge                       | Start of shift / End of shift | Checklist cards and filters |
 | `TRAINEE`                                   | Crew member                   | Shift report summary table  |
 | `Finalize`                                  | Close out shift               | Shift drawer                |
@@ -349,16 +410,40 @@ version of nearly every unclear screen; it is just not applied evenly.
 | `Calls / Runs`                              | Pick one — Calls              | Shift drawer                |
 | `1 equipment check(s)`                      | 1 equipment check             | Close-out checklist         |
 
-Also: the nav says **Shift Scheduling** while the page says **Scheduling &
-Shifts**; and check / checklist / report are used interchangeably for three
-different things.
+Also: the nav said **Shift Scheduling** while the page said **Scheduling &
+Shifts** and the onboarding registry had a third copy of the second — all three
+say Shift Scheduling now; and check / checklist / report were used
+interchangeably for three different things, which the last row of the list above
+settles.
 
-## Where to start
+Every row in this table is in place.
 
-1. **Label the four icons in My Shifts** — highest stakes, smallest change.
-2. **Bound check-in to the shift** — the only data-integrity finding.
-3. **Make the calendar say what it means**, using the wording the phone layout
-   already uses, plus a two-line key.
-4. **Fix the clipped template dialog** — a form whose Save button cannot be seen.
-5. **Retire "presence", "Trainee" and "Finalize"**, and publish the star-rating
-   scale next to the stars.
+## What the two passes actually changed
+
+The order the work was done in, and what each item turned out to cost:
+
+1. **Labelled the four icons in My Shifts** — highest stakes, smallest change,
+   and it set the verbs (Confirm / Decline / Swap / Details) that the drawer
+   header and the crew board then matched.
+2. **Bound check-in to the shift** — the only data-integrity finding. The
+   product already had the concept in Scheduling Settings; the endpoint did not
+   consult it.
+3. **Made the calendar say what it means**, in the wording the phone layout
+   already used.
+4. **Fixed the clipped template dialog**, then the form inside it: one length
+   derived from the times instead of three fields for two facts.
+5. **Retired the internal vocabulary** — `presence`, `TRAINEE`, `Finalize`,
+   `Feature Toggles`, `Calls / Runs`, "Positions from B-5 + shift
+   customizations" — and settled on one word per thing: a _checklist_ is what you
+   fill in, a _check_ is the record of having filled one in, a _report_ is the
+   shift report.
+6. **Gave the crew somewhere to stand on a long checklist** — sticky progress,
+   sticky compartment heading, sticky Submit — and a third answer for a tool
+   that is legitimately off the truck.
+
+Three of these needed backend work, and it is worth saying why: a wording
+finding is sometimes a data finding wearing a label. "Every item was captioned
+presence" was an unvalidated free-form column. "Pass or Fail, nothing between"
+was a missing enum value, a roll-up that counted answers as faults, and a report
+bucket. "Reports do not say which shift they cover" was a field the API never
+sent.
