@@ -12,7 +12,7 @@
  * via a searchable member dropdown.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import {
   X,
@@ -96,6 +96,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEquipmentChecks, setShowEquipmentChecks] = useState(false);
+  const assignFormRef = useRef<HTMLDivElement>(null);
   const [equipmentCheckSummaries, setEquipmentCheckSummaries] = useState<ShiftCheckSummary[]>([]);
   const [platoonRoster, setPlatoonRoster] = useState<PlatoonRosterEntry[]>([]);
 
@@ -489,6 +490,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     setMemberSearch('');
     setShowBulkAssign(false);
     setShowAssignForm(true);
+    window.setTimeout(() => assignFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
 
   const openBulkAssign = () => {
@@ -929,27 +931,30 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       });
                       setIsEditing(!isEditing);
                     }}
-                    className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-500"
+                    className="text-theme-text-muted flex min-h-[44px] items-center justify-center gap-1 rounded-lg px-2 text-xs transition-colors hover:bg-violet-500/10 hover:text-violet-500"
                     aria-label="Edit shift"
                   >
                     <Pencil className="h-4 w-4" />
+                    <span>Edit</span>
                   </button>
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                    className="text-theme-text-muted flex min-h-[44px] items-center justify-center gap-1 rounded-lg px-2 text-xs transition-colors hover:bg-red-500/10 hover:text-red-500"
                     aria-label="Delete shift"
                   >
                     <Trash2 className="h-4 w-4" />
+                    <span>Delete</span>
                   </button>
                 </>
               )}
               {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (
                 <button
                   onClick={() => setShowCancelConfirm(true)}
-                  className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-amber-500/10 hover:text-amber-500"
+                  className="text-theme-text-muted flex min-h-[44px] items-center justify-center gap-1 rounded-lg px-2 text-xs transition-colors hover:bg-amber-500/10 hover:text-amber-500"
                   aria-label="Cancel shift"
                 >
                   <XCircle className="h-4 w-4" />
+                  <span>Cancel</span>
                 </button>
               )}
               {/* Hidden while the checklist is open: this button and the one at
@@ -981,7 +986,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           {handoff?.pass_down_notes && (
             <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
               <p className="mb-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
-                Handoff from previous shift{handoff.shift_date ? ` (${handoff.shift_date})` : ''}
+                Handoff from previous shift
+                {handoff.shift_date
+                  ? ` · ${formatDateCustom(new Date(`${handoff.shift_date}T12:00:00`), { month: 'short', day: 'numeric', year: 'numeric' }, tz)}`
+                  : ''}
+                {handoff.shift_date
+                  ? ` · ${Math.max(0, Math.floor((shiftDate.getTime() - new Date(`${handoff.shift_date}T12:00:00`).getTime()) / 86400000))} days earlier`
+                  : ''}
               </p>
               <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{handoff.pass_down_notes}</p>
             </div>
@@ -990,6 +1001,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           {/* Readiness — present vs assigned, staffing, outstanding start checks */}
           {!shift.is_finalized &&
             !isCancelled &&
+            !(!isPast && shift.shift_date > getTodayLocalDate(tz)) &&
             activeAssignments.length > 0 &&
             (() => {
               const checkedInIds = new Set(allAttendance.filter((a) => a.checked_in_at).map((a) => a.user_id));
@@ -1003,7 +1015,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 <div className="bg-theme-surface border-theme-surface-border flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2 text-xs">
                   <span className="text-theme-text-secondary font-semibold">Readiness</span>
                   <span className="text-theme-text-primary">
-                    {presentCount}/{activeAssignments.length} present
+                    {presentCount}/{activeAssignments.length} checked in
                   </span>
                   {target > 0 && (
                     <span
@@ -1121,7 +1133,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
                     <div>
                       <span className="font-medium text-red-700 dark:text-red-400">
-                        End-of-shift equipment checks incomplete
+                        Must fix before close-out: end-of-shift equipment checks incomplete
                       </span>
                       <p className="mt-0.5 text-xs text-red-600 dark:text-red-300">
                         {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
@@ -1245,7 +1257,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                       <span className="text-amber-700 dark:text-amber-400">
-                        Ran understaffed — {activeAssignments.length} of {target} positions filled.
+                        Recorded warning (does not block close-out): ran understaffed — {activeAssignments.length} of{' '}
+                        {target} positions filled.
                       </span>
                     </div>
                   );
@@ -1644,8 +1657,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               </div>
               {shift.apparatus_id && (
                 <p className="text-theme-text-muted mb-2 text-[10px]">
-                  Positions from {shift.apparatus_unit_number ?? 'apparatus'}
-                  {shift.positions && shift.positions.length > 0 ? ' + shift customizations' : ''}
+                  Crew positions for {shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
                 </p>
               )}
               <div className="space-y-2">
@@ -1711,7 +1723,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     onClick={() => setShowAssignForm(!showAssignForm)}
                     className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
                   >
-                    <UserPlus className="h-3.5 w-3.5" /> Assign
+                    <UserPlus className="h-3.5 w-3.5" /> Assign member
                   </button>
                 )}
               </div>
@@ -1756,7 +1768,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 </div>
               )}
               {showAssignForm && (
-                <div className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4">
+                <div
+                  ref={assignFormRef}
+                  className="border-theme-surface-border bg-theme-surface-hover/30 scroll-mt-24 space-y-3 rounded-lg border p-4"
+                >
                   <h4 className="text-theme-text-primary text-sm font-medium">Assign Member</h4>
                   {/* Step 1: Position selection */}
                   <div>

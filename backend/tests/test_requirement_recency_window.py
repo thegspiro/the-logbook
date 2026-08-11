@@ -187,16 +187,17 @@ class TestApplyTargetRespectsWindow:
         )
         assert ok is True
 
-    async def test_caller_without_a_date_is_not_blocked(self):
-        """Callers that can't supply a completion date keep working."""
+    async def test_record_without_a_date_is_rejected_when_window_is_set(self):
         svc = _apply_service(_requirement(recency_days=180))
-        ok, _ = await svc.validate_apply_target(
+        ok, error = await svc.validate_apply_target(
             user_id="u1",
             organization_id="org-1",
             program_id="prog-1",
             requirement_id="req-1",
         )
-        assert ok is True
+        assert ok is False
+        assert "no completion date" in error
+        assert "180-day window" in error
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -8109,6 +8109,32 @@ docker logs -f intranet-backend 2>&1 | grep --line-buffered "ERROR"
 
 The webhook receiver validates the Salesforce organization id, so outbound messages from another org are rejected. The Integrations page carries connection status, last sync timestamp and sync history for per-run detail.
 
+### Problem: A Salesforce service-account connection cannot obtain a token
+
+**Check the endpoint:** `instance_url` must be the org's HTTPS My Domain URL,
+for example `https://yourorg.my.salesforce.com`. Client-credentials tokens are
+requested from that org-specific `/services/oauth2/token` endpoint.
+
+**Check the Connected App:** enable **OAuth 2.0 Client Credentials Flow** and
+select a dedicated **Run As** user in the Connected App policies. The integration
+requires the consumer key and consumer secret, but no refresh token and no Run
+As user password.
+
+**Check least-privilege access:** the Run As user needs **API Enabled**, plus
+read/write access to only the Salesforce objects and fields enabled for sync.
+Authentication can succeed while later describe, query, or record operations
+fail if those permissions are absent.
+
+### Problem: A pull reports a pagination or rate-limit failure
+
+The Salesforce client retries HTTP 429 responses up to three times, honoring
+`Retry-After` when Salesforce supplies it and otherwise using bounded
+exponential backoff. Idempotent reads also retry transient 5xx responses; writes
+are not automatically retried after ambiguous 5xx responses because doing so
+could create duplicates. If any later SOQL page still fails, the entire pull is
+reported as failed rather than applying an incomplete result set. Correct the
+rate-limit or availability issue and run the pull again.
+
 ---
 
 ---

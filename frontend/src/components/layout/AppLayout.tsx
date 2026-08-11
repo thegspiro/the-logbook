@@ -162,16 +162,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <TopProgressBar />
         <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
         <CommandPalette />
-        {/* Skip to main content link for keyboard users */}
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-red-600 focus:px-4 focus:py-2 focus:text-white focus:ring-2 focus:ring-white focus:outline-hidden"
-        >
-          Skip to main content
-        </a>
         <SideNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
         <div className="mobile-header-offset flex min-h-screen flex-col md:ml-64">
-          <div className="flex-1" id="main-content" role="main">
+          <div className="flex-1" id="main-content" role="main" tabIndex={-1}>
             <PageTransition>{content}</PageTransition>
           </div>
           {/* Reserve room so the fixed bottom bar never covers the footer. */}
@@ -204,15 +197,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <TopProgressBar />
       <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
       <CommandPalette />
-      {/* Skip to main content link for keyboard users */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-red-600 focus:px-4 focus:py-2 focus:text-white focus:ring-2 focus:ring-white focus:outline-hidden"
-      >
-        Skip to main content
-      </a>
       <TopNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
-      <div className="flex-1" id="main-content" role="main">
+      <div className="flex-1" id="main-content" role="main" tabIndex={-1}>
         <PageTransition>{content}</PageTransition>
       </div>
       {/* Reserve room so the fixed bottom bar never covers the footer. */}

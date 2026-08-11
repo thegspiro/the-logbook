@@ -324,9 +324,14 @@ Connect The Logbook to Salesforce for bidirectional synchronization of members, 
 
 1. Navigate to **Integrations** and find the **Salesforce CRM** card
 2. Click **Connect**
-3. Enter your Salesforce **Instance URL** (e.g., `https://yourorg.salesforce.com`)
+3. Enter your Salesforce **My Domain Instance URL** (e.g., `https://yourorg.my.salesforce.com`)
 4. Enter your Salesforce **Client ID** and **Client Secret** (from a Salesforce Connected App)
-5. The system tests the connection and, on success, saves the integration
+5. Choose one authentication method:
+   - Click **Connect with Salesforce** for interactive authorization; or
+   - For unattended sync, enable **OAuth 2.0 Client Credentials Flow** on the
+     Connected App, select a dedicated least-privilege **Run As** user, and
+     leave the refresh token empty
+6. Run the readiness check and preview before enabling automatic sync
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Integrations page showing the Salesforce CRM card with connection status (Connected/Disconnected), last sync timestamp, and Connect/Disconnect/Sync Now buttons._
 
@@ -351,9 +356,15 @@ To receive real-time updates from Salesforce:
 
 **Edge Cases:**
 
-- If Salesforce rate limits are hit during a bulk sync, the system pauses and retries with exponential backoff
-- If a member is deleted in Logbook but exists in Salesforce, the behavior depends on your conflict resolution setting
-- OAuth tokens auto-refresh when expired; no manual re-authentication needed
+- Rate-limited requests retry up to three times using Salesforce's
+  `Retry-After` value or bounded exponential backoff
+- A failed later page of a paginated Salesforce query fails the pull rather
+  than applying partial results
+- There is no configurable conflict-resolution policy; `push`, `pull`, or
+  `both` determines which side is allowed to write, and the permitted write
+  that runs last wins
+- Access tokens renew automatically. Client-credentials connections request a
+  new short-lived token without storing the Run As user's password
 
 ---
 

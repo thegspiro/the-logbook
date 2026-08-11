@@ -33,6 +33,7 @@ what a future reader needs when a take does not match the page.
 | **07** | Email chapter expanded from 25 seconds to 2 minutes and renamed **…FINDING THINGS, SIGNING THEM, AND CLOSING THEM**; footers, organization variables and the design change all written; chapters 6–7 re-timed; new clip row |
 | **04** | New **WHAT'S EXPIRING ON YOUR TRUCKS** beat (20:15 – 21:30); chapters 6–8 re-timed; new clip row. The dashboard flag is downgraded to a B-roll note — the narration there was always correct                                |
 | **08** | All five proposed shorts written in full: **8AA** – **8AE**                                                                                                                                                                 |
+| **03** | Salesforce service-account setup added to External Integrations: My Domain, client credentials, dedicated Run As user, least privilege, readiness/preview, external IDs, sync direction, retry and pagination behavior      |
 
 **One correction to the first pass.** It said script 06's "Training Status"
 widget did not exist. More precisely: there is no permanent widget with a

@@ -20,17 +20,15 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ size = 'md', mes
   };
 
   const spinner = (
-    <div className="text-center">
+    <div className="text-center" role="status" aria-live="polite" aria-atomic="true">
       <div
         className={`inline-block animate-spin rounded-full ${sizeClasses[size]} border-red-600`}
-        role="status"
-        aria-live="polite"
-        aria-label="Loading"
+        aria-hidden="true"
       />
-      {message && (
-        <p className="text-theme-text-secondary mt-4 text-lg" aria-live="polite">
-          {message}
-        </p>
+      {message ? (
+        <p className="text-theme-text-secondary mt-4 text-lg">{message}</p>
+      ) : (
+        <span className="sr-only">Loading</span>
       )}
     </div>
   );

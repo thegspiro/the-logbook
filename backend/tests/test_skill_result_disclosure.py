@@ -249,6 +249,26 @@ class TestRedaction:
         assert section["notes"] is None
         assert section["criteria_results"][0]["notes"] is None
 
+    def test_scores_view_drops_the_correction_trail(self):
+        payload = self._payload()
+        payload.update(
+            {
+                "return_reason": "Step 4 contradicts your note — recheck",
+                "returned_at": "2026-08-11T09:00:00Z",
+                "returned_by": "user-officer",
+                "returned_by_name": "Dana Ruiz",
+                "return_count": 2,
+            }
+        )
+
+        result = redact_test_for_view(payload, "scores")
+
+        assert result["return_reason"] is None
+        assert result["returned_at"] is None
+        assert result["returned_by"] is None
+        assert result["returned_by_name"] is None
+        assert result["return_count"] == 0
+
     def test_scores_view_drops_the_section_review_note(self):
         """Review notes are stored as a pseudo-criterion rather than a field of
         their own, so dropping the obvious `notes` keys alone would leak them."""

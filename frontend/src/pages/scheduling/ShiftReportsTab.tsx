@@ -32,6 +32,7 @@ import {
   TrendingUp,
   Users,
   Save,
+  Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StarRating from '../../modules/scheduling/components/StarRating';
@@ -53,7 +54,7 @@ import type {
 } from '../../types/training';
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import { formatDateCustom, formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
 import {
   DEFAULT_SKILLS,
   DEFAULT_CALL_TYPE_OPTIONS,
@@ -990,6 +991,14 @@ export const ShiftReportsTab: React.FC = () => {
                 {dateStr}
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                {(report.apparatus_name || report.shift_start_time) && (
+                  <span className="text-theme-text-secondary flex items-center gap-1 text-xs font-medium">
+                    <Truck className="h-3 w-3" />
+                    {[report.apparatus_name, report.shift_start_time ? formatTime(report.shift_start_time, tz) : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                )}
                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
                   {/* One decimal, like the summary table above. Raw, the same
                       record read 11.87h here and 11.9 up there. */}

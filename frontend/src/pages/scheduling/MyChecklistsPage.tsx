@@ -55,6 +55,7 @@ const statusBadge = (status: string) => {
       );
     case 'failed':
     case 'fail':
+    case 'out_of_service':
       return (
         <span
           className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
@@ -62,7 +63,13 @@ const statusBadge = (status: string) => {
           aria-live="polite"
         >
           <XCircle className="h-3 w-3" aria-hidden="true" />
-          Failed
+          {status === 'out_of_service' ? 'Out of service' : 'Failed'}
+        </span>
+      );
+    case 'not_applicable':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+          Not applicable
         </span>
       );
     case 'in_progress':
@@ -289,6 +296,15 @@ export const MyChecklistsPage: React.FC = () => {
           onComplete={handleComplete}
           onBack={() => void handleBack()}
           existingCheckId={activeCheckId || undefined}
+          shiftContext={
+            activeChecklists
+              .filter((checklist) => checklist.shiftId === activeShiftId)
+              .map((checklist) => ({
+                apparatusName: checklist.apparatusName,
+                shiftDate: checklist.shiftDate,
+                checkTiming: checklist.checkTiming,
+              }))[0]
+          }
         />
       </Suspense>
     );
@@ -407,7 +423,7 @@ export const MyChecklistsPage: React.FC = () => {
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
           >
             <Play className="h-3.5 w-3.5" />
-            Start a Check
+            Start an Unscheduled Check
           </button>
           {/* A whole check is the wrong instrument for "we just used two of
               these". This is the way to record that without starting one. */}
@@ -441,8 +457,8 @@ export const MyChecklistsPage: React.FC = () => {
               {(
                 [
                   ['all', 'All'],
-                  ['start_of_shift', 'Start'],
-                  ['end_of_shift', 'End'],
+                  ['start_of_shift', 'Start of shift'],
+                  ['end_of_shift', 'End of shift'],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -481,7 +497,16 @@ export const MyChecklistsPage: React.FC = () => {
               .filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter)
               .slice()
               .sort((a, b) => {
-                if (!highlightShiftId) return 0;
+                const today = new Intl.DateTimeFormat('en-CA', {
+                  timeZone: timezone,
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                }).format(new Date());
+                const aToday = a.shiftDate.slice(0, 10) === today ? 0 : 1;
+                const bToday = b.shiftDate.slice(0, 10) === today ? 0 : 1;
+                if (aToday !== bToday) return aToday - bToday;
+                if (!highlightShiftId) return a.shiftDate.localeCompare(b.shiftDate);
                 const aMatch = a.shiftId === highlightShiftId ? 0 : 1;
                 const bMatch = b.shiftId === highlightShiftId ? 0 : 1;
                 return aMatch - bMatch;
@@ -514,7 +539,7 @@ export const MyChecklistsPage: React.FC = () => {
                             : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
                         }`}
                       >
-                        {checklist.checkTiming === 'start_of_shift' ? 'Start' : 'End'}
+                        {checklist.checkTiming === 'start_of_shift' ? 'Start of shift' : 'End of shift'}
                       </span>
                     </div>
 
@@ -567,7 +592,7 @@ export const MyChecklistsPage: React.FC = () => {
                         onClick={() => void handleStartCheck(checklist)}
                         className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
                       >
-                        {isStarted ? 'Continue' : 'Start Check'}
+                        {isStarted ? 'Continue checklist' : 'Open checklist'}
                       </button>
                     </div>
                   </div>

@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { axe } from 'vitest-axe';
 import { Users } from 'lucide-react';
@@ -21,6 +21,7 @@ import { Collapsible } from './Collapsible';
 import { ProgressSteps } from './ProgressSteps';
 import { Tooltip } from './Tooltip';
 import { Skeleton, SkeletonCard } from './Skeleton';
+import { LoadingSpinner } from '../LoadingSpinner';
 
 describe('UX component accessibility', () => {
   it('ConfirmDialog has no axe violations', async () => {
@@ -126,6 +127,13 @@ describe('UX component accessibility', () => {
         <SkeletonCard />
       </div>
     );
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('LoadingSpinner exposes one concise status message', async () => {
+    const { container } = render(<LoadingSpinner message="Loading members" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading members');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(await axe(container)).toHaveNoViolations();
   });
 });
