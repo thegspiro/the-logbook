@@ -164,16 +164,23 @@ const ShiftCheckInPage: React.FC = () => {
 
         {/* Status and action */}
         {!attendance?.checked_in_at ? (
-          <button
-            onClick={() => {
-              void handleCheckIn();
-            }}
-            disabled={processing || shift.is_finalized}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-          >
-            {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogIn className="h-6 w-6" />}
-            Check In
-          </button>
+          <>
+            <button
+              onClick={() => {
+                void handleCheckIn();
+              }}
+              disabled={processing || shift.is_finalized || shift.checkin_open === false}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+            >
+              {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogIn className="h-6 w-6" />}
+              Check In
+            </button>
+            {/* Say why it is unavailable. Offering a live-looking button that the
+                API then refuses is the state this replaces. */}
+            {shift.checkin_closed_reason && !shift.is_finalized && (
+              <p className="text-center text-xs text-amber-600 dark:text-amber-400">{shift.checkin_closed_reason}</p>
+            )}
+          </>
         ) : !attendance?.checked_out_at ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3">

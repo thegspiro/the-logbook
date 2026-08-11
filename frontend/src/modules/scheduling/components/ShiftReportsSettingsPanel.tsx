@@ -113,6 +113,10 @@ const DEFAULT_SETTINGS: ShiftReportSettings = {
   checklist_timing: {
     start_of_shift_enabled: true,
     end_of_shift_enabled: true,
+    // Generous on purpose: the point is to stop a link from last week, not to
+    // police punctuality. Matches ChecklistTimingSettings on the backend.
+    checkin_opens_hours_before: 2,
+    checkin_closes_hours_after: 12,
   },
   post_shift_validation: {
     enabled: true,
@@ -313,7 +317,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   // ── Checklist timing helpers ──
 
   const updateChecklistTiming = useCallback(
-    (field: keyof ShiftReportSettings['checklist_timing'], value: boolean) => {
+    (field: keyof ShiftReportSettings['checklist_timing'], value: boolean | number) => {
       const updated: ShiftReportSettings = {
         ...settings,
         checklist_timing: { ...settings.checklist_timing, [field]: value },
@@ -513,6 +517,52 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   </p>
                 </div>
               </label>
+            </div>
+
+            <div className="border-theme-surface-border mt-5 border-t pt-5">
+              <h4 className="text-theme-text-primary text-sm font-medium">When members can check in</h4>
+              <p className="text-theme-text-muted mt-1 mb-3 text-xs">
+                Outside this window the Check In button is switched off and says why. Widen it if your crews are held
+                over on long call-backs; a shift that has been closed out is always shut regardless.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="checkin-opens" className="form-label">
+                    Opens before the start
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="checkin-opens"
+                      type="number"
+                      min={0}
+                      max={24}
+                      value={settings.checklist_timing.checkin_opens_hours_before}
+                      onChange={(e) => updateChecklistTiming('checkin_opens_hours_before', Number(e.target.value))}
+                      disabled={saving}
+                      className="form-input w-24"
+                    />
+                    <span className="text-theme-text-muted text-xs">hours early</span>
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="checkin-closes" className="form-label">
+                    Closes after the end
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="checkin-closes"
+                      type="number"
+                      min={0}
+                      max={72}
+                      value={settings.checklist_timing.checkin_closes_hours_after}
+                      onChange={(e) => updateChecklistTiming('checkin_closes_hours_after', Number(e.target.value))}
+                      disabled={saving}
+                      className="form-input w-24"
+                    />
+                    <span className="text-theme-text-muted text-xs">hours after</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );
