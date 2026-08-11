@@ -24,6 +24,7 @@ from app.models.apparatus import (
 )
 from app.models.inventory import InventoryItem, InventoryLot
 from app.models.training import (
+    AssignmentStatus,
     Shift,
     ShiftAssignment,
     ShiftEquipmentCheck,
@@ -839,6 +840,7 @@ class EquipmentCheckService:
         organization_id: str,
         checked_by: str,
         data: Dict[str, Any],
+        allow_manage: bool = False,
     ) -> ShiftEquipmentCheck:
         """Submit an equipment check for a shift."""
         result = await self.db.execute(
@@ -851,11 +853,44 @@ class EquipmentCheckService:
         if not shift:
             raise ValueError("Shift not found")
 
+        # A submit grant permits members to perform checks, but does not grant
+        # org-wide authority over every shift.  Limit ordinary submitters to
+        # shifts they actively crew; the named shift officer and equipment
+        # check managers have an explicit per-shift/org-wide override.
+        assignment = None
+        is_shift_officer = str(shift.shift_officer_id or "") == str(checked_by)
+        if not allow_manage and not is_shift_officer:
+            assignment_result = await self.db.execute(
+                select(ShiftAssignment).where(
+                    ShiftAssignment.shift_id == shift_id,
+                    ShiftAssignment.organization_id == organization_id,
+                    ShiftAssignment.user_id == checked_by,
+                    ShiftAssignment.assignment_status.in_(
+                        [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
+                    ),
+                )
+            )
+            assignment = assignment_result.scalars().first()
+            if not assignment:
+                raise PermissionError("Not authorized to submit a check for this shift")
+
         items_data = data.pop("items", [])
         template_id = data.get("template_id")
 
         if not items_data:
             raise ValueError("At least one checklist item is required")
+
+        if template_id:
+            position = getattr(assignment, "position", None)
+            if hasattr(position, "value"):
+                position = position.value
+            applicable_templates = await self._resolve_templates(
+                shift,
+                organization_id,
+                None if allow_manage or is_shift_officer else position,
+            )
+            if str(template_id) not in {str(t.id) for t in applicable_templates}:
+                raise ValueError("Template is not applicable to this shift")
 
         # Prevent duplicate submission for same shift+template
         if template_id:

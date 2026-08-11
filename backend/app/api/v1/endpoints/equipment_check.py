@@ -633,7 +633,9 @@ async def submit_check(
     shift_id: str,
     data: ShiftEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.submit", "equipment_check.manage")
+    ),
 ):
     """Submit an equipment check for a shift."""
     service = EquipmentCheckService(db)
@@ -643,8 +645,13 @@ async def submit_check(
             organization_id=current_user.organization_id,
             checked_by=str(current_user.id),
             data=data.model_dump(exclude_unset=True),
+            allow_manage=_has_permission(
+                "equipment_check.manage", _collect_user_permissions(current_user)
+            ),
         )
         return check
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
