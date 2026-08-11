@@ -7334,6 +7334,55 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "04-03-election-eligibility",
+    doc: "04-events-meetings.md",
+    line: 1288,
+    anchor: "Screenshot of the election detail page showing voter eligibility breakdown",
+    alt: "An election's voter-eligibility panel: which membership types may vote, and how many members each holds",
+    route: "/elections",
+    prepare: async (page) => {
+      // `?tab=eligibility` only started working on 2026-08-11 — plain state
+      // before that, so this shot would have silently captured the Ballot tab.
+      await openFirstFromApi(
+        "/elections",
+        (id) => `/elections/${id}?tab=eligibility`,
+        "elections",
+        (election) => election.title === "Annual Officer Elections",
+      )(page);
+      await page.waitForTimeout(2_500);
+      // The roster is collapsed on arrival — it is a member-by-member list and
+      // the tab does not assume you want it open. The breakdown the caption
+      // names lives inside it.
+      await page
+        .getByRole("button", { name: /Voter Eligibility Roster/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(2_000);
+      // Two artifacts of driving the page rather than reading it: the click
+      // leaves focus on the roster header, which reveals the "Skip to main
+      // content" link, and a full-page shot paints the fixed sidebar once at
+      // whatever offset the page is scrolled to. Blur, then frame the roster
+      // itself.
+      // Plain JS: this file is `.mjs`, so a TypeScript cast will not parse.
+      await page.evaluate(() => document.activeElement?.blur?.());
+      // `scrollIntoViewIfNeeded` is a no-op when the element is already within
+      // the (tall) frame, which leaves the roster pinned to the bottom edge
+      // with its summary cards cut off. Scroll it to the top of the frame.
+      await page
+        .getByText("Voter Eligibility Roster")
+        .first()
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(800);
+    },
+    // The detector fires on the roster's zeroes — nobody ineligible, nobody
+    // overridden, nobody voted yet in an election still taking nominations.
+    // Those are the honest counts, and three of the four are what a
+    // secretary hopes to see.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1250 },
+    fullPage: false,
+  },
+  {
     id: "04-12-linked-elections",
     doc: "04-events-meetings.md",
     line: 1184,

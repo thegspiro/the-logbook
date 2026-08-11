@@ -568,14 +568,11 @@ attendance_pct = meetings_attended / eligible_meetings × 100
 
 Where `eligible_meetings = total_meetings − per_meeting_waivers − meetings_during_leave`.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Attendance Dashboard showing a table of members with their attendance percentage, number of meetings attended, meetings on leave, and voting eligibility status]_
-
 **Not yet built:** there is no Attendance Dashboard screen. The calculation
 above is real and the data is served by `GET /meetings/attendance/dashboard`,
 which the frontend even has a client method for — but nothing calls it, so no
 page renders the table. Per-meeting attendance is visible on each meeting's
-own record in the meantime. The placeholder stays open.
+own record in the meantime.
 
 ### Leave of Absence & Meeting Attendance
 
@@ -1285,8 +1282,23 @@ Voter eligibility now correctly uses `User.membership_type` instead of role slug
 - A member with membership_type "active" **is** eligible for operational items regardless of their assigned roles
 - See the [Elections Voter Eligibility](#elections-and-voting) section above for the full eligibility matrix
 
-> **Screenshot needed:**
-> _[Screenshot of the election detail page showing voter eligibility breakdown — listing eligible membership types and the count of members in each type]_
+![The Voter Eligibility Roster: four counts, then every member with the ballot items they qualify for](./images/04-03-election-eligibility.png)
+
+The **Eligibility** tab on an election answers this member by member rather than
+by membership type. Four counts head it — will receive a ballot, ineligible,
+secretary overrides, already voted — and beneath them every member is listed
+with the number of ballot items they qualify for ("3/3"), a tick if they will
+get a ballot, and a **reason** when they will not. Filter chips narrow the list
+to any one of those four states, and the search box takes a membership type as
+well as a name or email, which is the closest thing to a per-type breakdown.
+
+> **The tab is addressable.** `/elections/<id>?tab=eligibility` opens straight
+> onto it, so the roster can be sent to a colleague, and the Back button works
+> after a tab change.
+
+A member's row expands to show which items they are eligible for and why, so a
+disputed exclusion is answerable from this screen without cross-referencing the
+matrix above.
 
 ### Ballot Email Improvements
 
