@@ -1333,13 +1333,31 @@ class MembershipPipelineService:
         if current_idx >= len(sorted_steps) - 1:
             raise ValueError("Prospect is already at the final stage")
 
-        return await self.complete_step(
+        advanced = await self.complete_step(
             prospect_id=prospect_id,
             organization_id=organization_id,
             step_id=str(sorted_steps[current_idx].id),
             completed_by=advanced_by,
             notes=notes,
         )
+
+        # complete_step records the step-level event ("step_completed");
+        # "prospect_advanced" is the established audit action reports and the
+        # activity feed reconstruct movements from, so an explicit advance
+        # still writes it — only after the gated completion succeeded.
+        next_step = sorted_steps[current_idx + 1]
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="prospect_advanced",
+            details={
+                "to_step_id": str(next_step.id),
+                "to_step_name": next_step.name,
+                "notes": notes,
+            },
+            performed_by=advanced_by,
+        )
+        await self.db.commit()
+        return advanced
 
     # =========================================================================
     # Bulk Actions
