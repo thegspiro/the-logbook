@@ -1,5 +1,10 @@
 # Unraid Quick Start
 
+> **Published copy — not the canonical source.** The maintained original is
+> [`unraid/QUICK-START.md`](https://github.com/thegspiro/the-logbook/blob/main/unraid/QUICK-START.md),
+> and this page may lag behind it. Make content changes there first, then
+> mirror them here.
+
 **One command to install The Logbook on Unraid:**
 
 ```bash

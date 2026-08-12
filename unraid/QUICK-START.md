@@ -1,6 +1,9 @@
 # 🚀 The Logbook - Unraid Quick Start
 
-**Updated: January 2026** - Includes automatic container cleanup and latest package updates!
+> **Canonical source.** A condensed copy of this guide is published to the
+> GitHub Wiki from [`wiki/Unraid-Quick-Start.md`](../wiki/Unraid-Quick-Start.md).
+> The two are not synced automatically — if you change this file, update the
+> wiki page too.
 
 ## One-Line Installation
 
