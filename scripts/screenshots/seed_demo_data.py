@@ -5531,7 +5531,66 @@ class Seeder:
         self._flag_gating_requirements(programs)
         self._expire_one_enrollment(programs, members)
         self._advance_pipeline_progress(programs)
+        self._complete_one_enrollment(programs)
         return programs
+
+    COMPLETED_PIPELINE_NAME = "Driver / Operator Pipeline"
+
+    def _complete_one_enrollment(self, programs: list[dict]) -> None:
+        """Finish one of the demo member's programs, so Completed is reachable.
+
+        Every enrollment was active or expired, so the "Program Completed!"
+        banner on the dashboard, and the completed state of an enrollment
+        generally, had no data behind them.
+
+        The Driver / Operator pipeline is the one finished: it is the shortest
+        of the member's three, and leaving the Probationary Firefighter one
+        part-done keeps the in-progress enrollment the progress screenshots are
+        built around.
+
+        Requirements are marked complete one by one and the enrollment
+        auto-completes when the rollup reaches 100% — there is no "complete this
+        enrollment" endpoint, and setting the status directly would skip the
+        rollup and the completion notification.
+        """
+        # Listed per programme: there is no GET on /programs/enrollments — that
+        # path is POST-only and answers 405.
+        everyone: list[dict] = []
+        target = None
+        for program in programs:
+            program_id = pick(program, "id")
+            if not program_id:
+                continue
+            rows = items(
+                self.api.get(f"/training/programs/programs/{program_id}/enrollments"),
+                "enrollments",
+            )
+            everyone.extend(rows)
+            if pick(program, "name") == self.COMPLETED_PIPELINE_NAME:
+                target = next(
+                    (e for e in rows if pick(e, "status") == "active"), target
+                )
+
+        # Idempotent on the state: once one enrollment is completed there is
+        # nothing to do, and re-running must not finish a second programme.
+        if not target or any(pick(e, "status") == "completed" for e in everyone):
+            return
+
+        detail = self.api.get(f"/training/programs/enrollments/{pick(target, 'id')}")
+        for row in items(detail, "requirement_progress"):
+            if pick(row, "status") in ("completed", "verified", "waived"):
+                continue
+            row_id = pick(row, "id")
+            if not row_id:
+                continue
+            try:
+                self.api.patch(
+                    f"/training/programs/progress/{row_id}",
+                    {"status": "completed"},
+                )
+            except ApiError as exc:
+                self.blocked.append(f"complete enrollment: {exc}")
+                return
 
     def _expire_one_enrollment(self, programs: list[dict], members: list[dict]) -> None:
         """Leave one enrollment past its deadline, so Expired is reachable.

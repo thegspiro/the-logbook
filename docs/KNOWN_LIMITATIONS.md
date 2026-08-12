@@ -1315,6 +1315,31 @@ Two related facts worth carrying:
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
 
+## Training — The "Program Completed!" Banner Is Unreachable (2026-08-12)
+
+`Dashboard.tsx` renders a green **Program Completed!** line in an enrollment
+card when `enrollment.status === 'completed'`. Nothing can reach it: the only
+caller of `getMyEnrollments` is that same page, and it asks for
+`getMyEnrollments('active')` — a status filter passed through to
+`/training/programs/enrollments/me`. A completed enrollment is therefore never
+in the list the card is rendered from, and the string appears nowhere else in
+the frontend.
+
+Confirmed against a real completed enrollment: the demo member's Driver /
+Operator pipeline is now finished at 100% (seeded, so the completed state has
+data behind it at last), and it is simply absent from the dashboard rather than
+shown with the banner.
+
+Two readings, and picking between them is a product decision rather than a
+correctness fix — which is why this is recorded rather than patched:
+
+- The dashboard _should_ surface recently completed programs, and the filter is
+  the bug. A member finishing a programme currently sees it vanish.
+- The banner is vestigial from before the filter and should be deleted.
+
+`docs/training/02-training.md` asked for a screenshot of this banner; that
+placeholder is retired. Needs an owner decision.
+
 ## Integrations — No Detail Page, No Error History, No Event Triggers (2026-08-12)
 
 `docs/training/16-integrations.md` described three things around integration

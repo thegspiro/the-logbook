@@ -2208,7 +2208,15 @@ After each shift, the shift officer finalizes the shift (creating draft reports 
 | Search & Rescue   | 3                   | 3                     | 3 → 3 → 4         | Complete          |
 | Ventilation       | 3                   | 3                     | 2 → 3 → 4         | Complete          |
 
-> **[SCREENSHOT NEEDED]:** _The Phase 2 detail view showing the six skill requirements with observation counts, score progressions displayed as small bar charts, and status indicators (green checkmarks for complete, yellow progress bars for in-progress)._
+> **There is no phase detail view, and no score bar charts _(2026-08-12)_.**
+> The table above is a summary of the worked example, not a screen. Phases are
+> not separately routable — there is no `/phases/:id` page — and a member's
+> phases are shown together on their enrollment (pictured under
+> [Enrolling Members](#enrolling-members)), each requirement giving its
+> progress as a percentage and a bar. Per-skill score progressions such as
+> "2 → 3 → 4" are not charted anywhere in the training module; the only bar
+> charts in the application are in scheduling and events reporting. A skill's
+> score history is on the member's skill checkoffs, not on the phase.
 
 **Edge case — unmatched call type:** On April 18, Engine 1 responds to a carbon monoxide alarm. The shift officer files a completion report for that call, but the call type "CO Investigation" does not match any Phase 2 requirement's `required_call_types`. The 2 hours from that shift are counted toward Alex's overall program hours but no specific Phase 2 requirement is credited. The system logs this in `progress_notes`: "Call type 'CO Investigation' did not match any Phase 2 requirements."
 
@@ -2268,7 +2276,13 @@ Capt. Davis conducts a final evaluation session with Alex, reviews her performan
 
 Alex's membership status is now eligible for upgrade from **Probationary** to **Active** (see [Membership Management — Member Lifecycle](./01-membership.md)). The compliance matrix shows Alex green across all requirements.
 
-> **[SCREENSHOT NEEDED]:** _The completed program dashboard showing 100% progress, all 4 phases with green checkmarks, the total hours summary, and a "Program Completed" banner with the completion date._
+> **A finished programme disappears from the dashboard _(2026-08-12)_.** There
+> is a **Program Completed!** banner in the dashboard's enrollment card, but
+> nothing can reach it: the dashboard asks only for **active** enrollments, so a
+> programme drops off the list the moment it completes rather than being shown
+> as finished. Check a member's completion on their enrollment itself, or on the
+> compliance matrix, not on their dashboard. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#training--the-program-completed-banner-is-unreachable-2026-08-12).
 
 **Edge case — insufficient hours:** If Alex had only accumulated 38 of the required 40 supervised hours, the system would show 95% on that requirement (38/40). Capt. Davis can navigate to the requirement detail to see exactly which shifts contributed hours: a table listing each shift date, officer, hours credited, and call types. This transparency helps identify whether additional shifts need to be scheduled.
 
