@@ -164,13 +164,21 @@ const FileStorageChoice: React.FC = () => {
   const handleContinue = async () => {
     if (!fileStoragePlatform) return;
 
+    // Credential-bearing platforms are persisted by the configuration page.
+    // Saving an empty config here used to overwrite already-entered secrets
+    // when a user went Back from a later step and continued again.
+    if (fileStoragePlatform !== 'other') {
+      void navigate('/onboarding/file-storage-config');
+      return;
+    }
+
     const { data, error: _apiError } = await execute(
       async () => {
-        // SECURITY: Save file storage choice to server
-        // If platform requires API keys/secrets, they'll be entered in the config page
+        // "Configure later" has no configuration page, so persist that
+        // explicit outcome here.
         const response = await apiClient.saveFileStorageConfig({
           platform: fileStoragePlatform,
-          config: {}, // Config will be added in next step if needed
+          config: {},
         });
 
         if (response.error) {
@@ -187,18 +195,13 @@ const FileStorageChoice: React.FC = () => {
     );
 
     if (data) {
-      toast.success('File storage platform saved');
-
-      // Route based on selection
-      if (fileStoragePlatform === 'other') {
-        void navigate('/onboarding/authentication');
-      } else {
-        void navigate('/onboarding/file-storage-config');
-      }
+      toast.success('File storage will be configured later');
+      void navigate('/onboarding/authentication');
     }
   };
 
   const currentYear = new Date().getFullYear();
+  const previousRoute = emailPlatform === 'other' ? '/onboarding/email-platform' : '/onboarding/email-config';
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
@@ -212,7 +215,7 @@ const FileStorageChoice: React.FC = () => {
         <div className="w-full max-w-5xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
-            <BackButton to="/onboarding/email-config" />
+            <BackButton to={previousRoute} />
             <ResetProgressButton />
           </div>
 

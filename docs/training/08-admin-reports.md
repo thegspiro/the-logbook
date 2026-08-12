@@ -253,13 +253,19 @@ The **Pipeline Overview** report shows prospect counts per pipeline stage with c
 **Configuring Stage Groups:**
 
 1. Navigate to **Prospective Members > Settings** (`/prospective-members/settings`)
-2. Scroll to the **Report Stage Groups** section
-3. Click **Add Group** to create a grouping (e.g., "Early Stages")
-4. Select which pipeline stages belong to this group (e.g., Application + Interview)
-5. Save
+2. Pick the pipeline, then scroll to the **Report Stage Groups** section
+3. Click **Add Group**. The new group's name is a text field — type it there;
+   there is no separate edit button
+4. Use **+ Add a stage to this group…** to put stages in it. **That dropdown
+   only appears while some stage is still ungrouped**, and it offers only the
+   ungrouped ones, so a stage can never be in two groups at once
+5. **Save**. Nothing is written until you do — adding, renaming and removing
+   all happen locally first
 
-> **Screenshot needed:**
-> _[Screenshot of the ReportStageGroupsEditor showing two configured groups: "Early Stages" containing "Application" and "Interview" stages, and "Final Steps" containing "Background Check" and "Vote" stages. Each group shows the stage count and has edit/delete buttons]_
+Each stage in a group carries its own **Remove**, which returns it to the
+ungrouped pool; the trash icon beside the name removes the whole group.
+
+![The Report Stage Groups editor — three named groups, the stages in each, and the controls that add and remove them](./images/08-72-report-stage-groups.png)
 
 Stage groups with zero prospects are still shown in the report for completeness. Ungrouped stages appear individually.
 
@@ -333,13 +339,28 @@ Connect The Logbook to Salesforce for bidirectional synchronization of members, 
      leave the refresh token empty
 6. Run the readiness check and preview before enabling automatic sync
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Integrations page showing the Salesforce CRM card with connection status (Connected/Disconnected), last sync timestamp, and Connect/Disconnect/Sync Now buttons._
+**Field mappings:**
 
-**Configuring field mappings:**
+Mappings are fixed. Member contacts, training records as Tasks, and events all
+map by a built-in scheme; the sync status payload carries a `field_mappings`
+object, but nothing in the application renders or edits it. What you _can_
+choose is the **sync direction** and which **sync types** run, both on the
+connect dialog.
 
-After connecting, configure how Logbook fields map to Salesforce fields. Default mappings cover member contacts, training records as Tasks, and events. You can customize which fields sync and in which direction.
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Salesforce field mapping configuration showing a table with Logbook fields on the left, Salesforce fields on the right, and sync direction dropdowns (Push/Pull/Both)._
+> **Corrected 2026-08-12.** This said "configure how Logbook fields map to
+> Salesforce fields… you can customize which fields sync and in which
+> direction", and its screenshot placeholder asked for a mapping table with
+> per-field direction dropdowns. There is no such screen. Direction is one
+> setting for the whole integration, not one per field.
+>
+> The other retired placeholder here asked for the Salesforce card in a
+> **connected** state with a last-sync timestamp. Salesforce cannot be
+> connected in a demo department at all — `instance_url` has to both match
+> `*.salesforce.com` and resolve in DNS, and an instance host is per-customer.
+> The reasoning, and why seeding a resolvable stand-in would be worse than
+> leaving this unpictured, is in
+> [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md). There is no last-sync
+> timestamp on the card either way.
 
 **Triggering a sync:**
 
@@ -520,8 +541,11 @@ The Logbook now runs scheduled tasks (shift reminders, notification cleanup, ove
 - Task intervals and enable/disable flags are configured in organization settings
 - Logs appear in the standard backend log output with `[scheduler]` prefix
 
-> **Screenshot needed:**
-> _[Screenshot of the backend container log output showing scheduler task execution lines like "[scheduler] Running shift_reminders... [scheduler] 3 reminders sent"]_
+> **Corrected 2026-08-12.** The screenshot placeholder here asked for the
+> **backend container's log output**. That is a terminal, not a screen this
+> application draws, so there is nothing for the screenshot pipeline to
+> capture. To see these lines, run `docker compose logs -f backend` (or read
+> the process output directly) and filter for the `[scheduler]` prefix.
 
 ### Edge Cases
 
@@ -687,8 +711,12 @@ The following security measures are enforced:
 - **Health endpoint minimized**: `/health` returns only `status` + `ready` (no environment, version, or debug info)
 - **Security headers**: `Referrer-Policy: strict-origin-when-cross-origin`, `X-Permitted-Cross-Domain-Policies: none`
 
-> **Screenshot needed:**
-> _[Screenshot of the security status in the Error Monitor or a dedicated Security Dashboard showing the list of security features with green checkmarks (JWT restriction, file validation, CORS strict, TLS enabled) and any warnings in yellow]_
+> **Corrected 2026-08-12.** There is no Security Dashboard, and the Error
+> Monitor does not show a security-feature checklist — the placeholder here
+> asked for one with green ticks per feature. Nothing in the application
+> reports these settings back to an administrator; the list above is the
+> reference, and each item is verified in the backend test suite rather than
+> on a screen.
 
 > **Edge case:** If your deployment uses a reverse proxy (nginx, Caddy), the `DB_SSL` and `REDIS_SSL` settings refer to the connection between the backend container and the database/Redis container — not the browser-to-server connection. Browser-to-server TLS is handled by the reverse proxy.
 
@@ -1174,8 +1202,11 @@ Dark mode and high-contrast mode have been hardened across the application:
 - **Comprehensive dark variants**: Added `dark:` Tailwind variants across 25+ files for icon badges, stat cards, settings UI, form inputs, and table rows
 - **High-contrast support**: Additional high-contrast CSS variants for accessibility compliance
 
-> **Screenshot needed:**
-> _[Screenshot comparing the same page in light mode and dark mode side-by-side, showing a dropdown or overlay with the opaque background correctly rendering in dark mode without content bleeding through]_
+> **Corrected 2026-08-12.** The retired placeholder asked for a **side-by-side
+> composite** of the same page in light and dark mode. That is two screenshots
+> assembled into one image, which the capture pipeline does not do — each shot
+> is one page in one theme. Switch themes with the theme control in the sidebar
+> to compare.
 
 ## UTC Timezone Consistency (2026-03-16)
 
@@ -1298,8 +1329,17 @@ The equipment check template builder received UX improvements:
 - **Save redirect**: Correctly redirects to template list after saving
 - **Input stability**: Fixed inputs losing focus after each keystroke
 
-> **Screenshot needed:**
-> _[Screenshot of the equipment check template builder showing the redesigned layout with a preview panel on the right showing how the check form will appear to members on mobile]_
+**Preview** is a button in the builder's toolbar, and it opens **over** the
+builder rather than beside it: the check form is drawn inside a phone frame,
+because that is what a crew will be holding. Its inputs work, so you can walk
+the form as a member would, and a banner says so — nothing is submitted and no
+check is created. Close it to go back to editing.
+
+![The template builder's Preview — the check form drawn inside a phone frame, as a crew would see it](./images/08-73-template-builder-preview.png)
+
+> **Corrected 2026-08-12.** This described "a preview panel on the right". The
+> preview is a full-screen overlay, not a side panel, and nothing in the
+> builder renders beside the editor.
 
 ## Time Picker Redesign (2026-03-22)
 
@@ -1386,8 +1426,11 @@ This reduces unnecessary API calls and battery drain on mobile devices.
 
 Dark mode appearance is **unchanged** — only light mode received adjustments.
 
-> **Screenshot needed:**
-> _[Screenshot comparison: left shows a status badge with light red text on white background (low contrast, before fix), right shows the same badge with darker red text on white background (high contrast, after fix)]_
+> **Corrected 2026-08-12.** The retired placeholder asked for a **before and
+> after** comparison of the same badge. The "before" is not in the code any
+> more — that is the point of the fix — so it cannot be photographed from a
+> running build, and a composite of two states is not something the capture
+> pipeline produces.
 
 ### Form Accessibility
 

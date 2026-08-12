@@ -5077,6 +5077,17 @@ class InventoryService:
                         user_id=requester_id,
                         organization_id=organization_id,
                         assigned_by=fulfilled_by,
+                        # A return date makes this a loan, not a permanent
+                        # issue. The pool branch above already honours the date
+                        # by creating a checkout; on this branch both arguments
+                        # were omitted, so a date entered on the fulfil form was
+                        # silently dropped and the item was issued for good.
+                        assignment_type=(
+                            AssignmentType.TEMPORARY
+                            if expected_return_at
+                            else AssignmentType.PERMANENT
+                        ),
+                        expected_return_date=expected_return_at,
                         reason="Equipment request fulfillment",
                     )
                     fulfillment_type = "assignment"

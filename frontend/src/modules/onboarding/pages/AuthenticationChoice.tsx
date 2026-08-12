@@ -52,7 +52,10 @@ const AuthenticationChoice: React.FC = () => {
       } else if (emailPlatform === 'microsoft') {
         setAuthPlatform('microsoft');
       } else {
-        setAuthPlatform('authentik');
+        // Local passwords work immediately. Defaulting fresh/self-hosted
+        // installations to Authentik sent users into a provider that first
+        // requires deploying and configuring another service.
+        setAuthPlatform('local');
       }
     }
   }, [navigate, departmentName, emailPlatform, authPlatform, setAuthPlatform]);
@@ -141,7 +144,7 @@ const AuthenticationChoice: React.FC = () => {
         'Advanced authentication flows',
       ],
       setupInfo: "You'll need to deploy Authentik on your infrastructure and configure an OAuth2/OIDC provider.",
-      recommended: emailPlatform === 'selfhosted' || emailPlatform === 'other',
+      recommended: false,
     },
     {
       id: 'local',
@@ -157,7 +160,7 @@ const AuthenticationChoice: React.FC = () => {
       ],
       setupInfo:
         'Passwords are securely hashed and stored internally. Admins manage user accounts directly in the system.',
-      recommended: false,
+      recommended: emailPlatform === 'selfhosted' || emailPlatform === 'other',
     },
   ];
 

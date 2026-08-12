@@ -447,6 +447,43 @@ check requests were all charged against the budgets and the panel still said
 Verified 2026-08-09 by counting non-test call sites for each store action and
 service method, and by reading the render bodies.
 
+## Finance — Nobody Can Approve Anything (2026-08-12)
+
+`finance.approve` is defined in `app/core/permissions.py`, gates all three
+approval endpoints (`GET /finance/approvals/pending`,
+`POST /finance/approvals/{id}/approve`, `.../deny`), and is granted by **no
+role in the shipped catalogue** — 27 roles, none of them include it.
+
+| Role           | Finance permissions              |
+| -------------- | -------------------------------- |
+| Treasurer      | `finance.view`, `finance.manage` |
+| Fire Chief     | none                             |
+| President      | none                             |
+| Vice President | none                             |
+| IT Manager     | `*`                              |
+
+So the only account that can reach the approval queue is one holding the `*`
+wildcard. And that account is then refused by separation of duties —
+_"You cannot approve your own purchase request. Separation of duties requires
+a second person"_ — for anything it raised itself. In a department using the
+shipped roles, every purchase request, expense report and check request stays
+in `pending_approval` for ever.
+
+**Needs an owner decision, not a patch.** The fix is to grant
+`FINANCE_APPROVE` to whichever roles a department expects to sign off
+spending — Treasurer alone is not enough, because the Treasurer is usually the
+one raising the request and separation of duties would then block them.
+Widening who can authorise money is an authorisation decision and is
+deliberately not being made from a documentation pass.
+
+This is also why **budget detail can never show a filled progress bar**: spend
+and encumbrance accrue on approval, and no approval can happen. That compounds
+the transaction-table stub recorded in the section above — the bar is real code
+that is permanently stuck at 0%, and the table below it is not wired at all.
+
+Found 2026-08-12 while trying to seed a budget with charges for
+`11-05-budget-detail`.
+
 ## Two Migrations Claimed 20260808_0002 — and What It Left Behind (2026-08-09)
 
 Two pull requests merged migrations numbered `20260808_0002`: "drop the
@@ -873,6 +910,24 @@ recorded rather than fixed: the alternative is showing a Flagged view to
 departments that never flag anything. Worth revisiting as "show the Flagged
 view whenever a flagged report exists".
 
+## Screenshot Harness — Camera Viewfinders Cannot Be Photographed (2026-08-12)
+
+Three placeholders asked for a live camera viewfinder with a code being read:
+`MemberIdScannerModal` on a desktop browser (`docs/training/03-scheduling.md`),
+the inventory scan modal mid-batch and `InventoryScanModal` detecting a barcode
+(both `docs/training/05-inventory.md`).
+
+The capture harness runs headless Chromium with no camera device. Chromium's
+fake-device flags can supply a synthetic stream, but it is a rolling test
+pattern, not a scannable code — and each of these shots is specifically of a
+code _being recognised_, which a fake stream cannot produce. Nothing short of a
+real camera in front of a real label satisfies them, so all three are retired
+rather than left open to be re-surveyed each pass.
+
+The scanning features themselves work; this is a limitation of the automation,
+not of the product. If these screens ever have to be documented visually, the
+images will have to be taken by hand.
+
 ## Inventory — Scanning Has No Screen Of Its Own (2026-08-10)
 
 `inventoryService.lookupByCode` (`GET /inventory/lookup`) has exactly one
@@ -1259,6 +1314,205 @@ Two related facts worth carrying:
 - **npm keeps a per-workspace copy of each declared range inside the lock and
   trusts it over the manifest.** When that copy goes stale, `npm ls` reports the
   tree as invalid while `npm ci` still exits 0 — a silent refusal to re-resolve.
+
+## Integrations — No Detail Page, No Error History, No Event Triggers (2026-08-12)
+
+`docs/training/16-integrations.md` described three things around integration
+management that do not exist. All four of its screenshot placeholders are
+retired on this basis.
+
+**There is no integration detail page.** `/integrations` is the only route in
+`modules/integrations/routes.tsx`; integrations are cards on that one page, and
+clicking one does not open anything. The guide said "Click any integration to
+see: last sync timestamp, last error message, consecutive error count, sync
+history".
+
+**Three of those four fields do not exist either.** The `Integration` model
+carries `status` (`available` / `connected` / `error` / `coming_soon`), `config`,
+`encrypted_config`, `enabled`, `contains_phi` and `last_sync_at` — and nothing
+else. There is no error message, no consecutive-error counter and no sync
+history table anywhere in the model or schemas. Nor is there a **Retry Sync**
+control: the string appears nowhere in the frontend.
+
+**Messaging integrations have no event-trigger selection.** The guide told
+administrators to "select which events trigger notifications" and pictured
+checkboxes for New Member, Training Completed, Event Scheduled and Shift Change.
+No such control exists — none of those labels appears in the frontend, and the
+Slack/Discord/Teams connect dialogs collect a webhook URL. There is no **Test
+Connection** button on an integration either (the one in the codebase belongs to
+onboarding's email configuration, a different feature).
+
+Two of the four were unreachable for a second, separate reason, worth keeping
+distinct from the missing UI: the Cal.com **Bookings** panel does exist and does
+work, but it lists bookings fetched live from a real Cal.com account, and the
+Slack placeholder asked for a screenshot of the Slack channel itself. Neither is
+reachable from a demo environment with no third-party accounts connected.
+
+Needs an owner decision on whether integration health monitoring and per-event
+notification routing should be built. This loop does not make that call.
+
+## Inventory — Departure Clearance Is Backend-Only (2026-08-12)
+
+`DepartureClearanceService` is a complete implementation — initiate a clearance
+for a departing member, list clearances, resolve each outstanding item with a
+disposition, complete or close-incomplete — and `api/v1/endpoints/inventory.py`
+exposes it. Nothing in the frontend calls any of it: there is no route, no page,
+no service method, and no reference to "departure" or "clearance" in that sense
+anywhere in `frontend/src`.
+
+`docs/training/05-inventory.md` documented the whole workflow as if it were a
+screen, including a clearance record with per-item disposition dropdowns and
+resolve/complete buttons. That screenshot placeholder is retired and the section
+now says the workflow is API-only.
+
+The property-return report generated when a member is dropped is a separate,
+working feature — see Membership > Property Return Process. It is the clearance
+_record_ that has no interface.
+
+Needs an owner decision on whether to build it. This loop does not make that
+call.
+
+## Events — There Is No Per-Event Analytics Panel (2026-08-12)
+
+`docs/training/02-training.md` described a post-event analytics panel on the
+event detail page, with an attendance-rate pie chart, an average-hours bar, a
+participant count, and a breakdown by apparatus showing skills observed per
+unit. None of it exists.
+
+What does exist, and is easy to mistake for it:
+
+- **`/events/analytics`** (`EventAnalyticsPage`) — a **department-wide**
+  attendance-trends dashboard: summary cards and charts across all events, not
+  one event.
+- **`/events/:id/analytics`** (`AnalyticsDashboardPage`) — per-event, but it is
+  **QR check-in analytics**: total scans, successful and failed check-ins,
+  success rate, time-to-check-in, device breakdown, hourly activity. No hours,
+  no skills observations, no apparatus breakdown.
+
+The event detail page itself has attendance finalization and a printable
+attendance roster, and no analytics section at all. The guide's metrics table
+(attendance rate, average hours, skills observations, apparatus used) was
+narrative from a worked example presented as a description of a real screen; it
+is now marked as such and the screenshot placeholder is retired.
+
+Needs an owner decision on whether the panel should be built. This loop does
+not make that call.
+
+## Inventory — Nothing In The UI Can Choose a Temporary Assignment (2026-08-12)
+
+An item assignment carries an `assignment_type` of `permanent` or `temporary`,
+`assign_item_to_user` accepts both along with an `expected_return_date`, and the
+member-facing equipment lists render a "Permanent Assignments" group and a
+"Due:" date — so the concept is visible throughout. No screen can create one:
+
+- `ItemDetailPage` is the only UI caller of `inventoryService.assignItem`, and
+  it passes no options, so the API default (`permanent`) always applies.
+- `batch_checkout` — the bulk flow the guide pictured issuing six SCBA units —
+  hardcodes `AssignmentType.PERMANENT`.
+
+Fixed in passing, because it was losing data rather than merely missing a
+control: fulfilling an equipment request for an **individually tracked** item
+dropped the expected-return date entirely and issued the item permanently. The
+fulfil form collects that date, and the pool branch of the same function already
+honoured it by creating a checkout. That branch now marks the assignment
+temporary and stores the date; two tests in `test_inventory_gaps.py` pin both
+outcomes.
+
+Still missing is any control letting an officer choose Temporary directly on an
+assign or batch-checkout form, which is what
+`docs/training/02-training.md` described. That placeholder is retired. Needs an
+owner decision on whether the control should exist.
+
+## Elections — The Public Ballot Cannot Be Screenshotted, By Design (2026-08-12)
+
+The public ballot page works; it just cannot be reached by the capture harness,
+and the reason is a security property worth keeping rather than a defect to fix.
+
+`_generate_voting_token` returns the raw token exactly once, to its caller, and
+stores only its SHA-256 (`module-audit ELEC-5`), so database access never yields
+a live credential. The only caller is `send_ballot_emails`, which puts the raw
+token into an email and nothing else — the `send-test-ballot` endpoint returns
+`{success, message}` and no token. The demo stack runs with `EMAIL_ENABLED`
+false and no mail catcher, and the disabled path logs only
+`"Email disabled. Would batch-send N messages."` — not the body.
+
+So there is no supported way to obtain a working token in the demo environment,
+and the ways to manufacture one all mean defeating the hashing. The placeholder
+for the public ballot page in `docs/training/14-elections.md` is retired on that
+basis. Filling it would need a mail catcher wired into `dev_env.sh` plus email
+enabled for the demo org — a harness change, and the right one if this page ever
+has to be documented visually.
+
+## Elections — Proxy Voting Has an Admin Panel But No Ballot Mode (2026-08-12)
+
+`ProxyVotingManagement` exists on the election detail page and configures
+proxies. What does not exist is any way to _vote_ as one: `ElectionBallot` has
+no reference to proxies at all, and the string "Voting as proxy" (or anything
+like it) appears nowhere in the frontend. The guide described a ballot with a
+"Voting as proxy for: …" banner above the standard ballot; there is no such
+banner and no proxy mode on the ballot.
+
+Note this compounds the ballot limitation below — the in-app ballot is the one
+that would need the proxy mode, and it is already the weaker of the two ballots.
+
+Needs an owner decision on whether proxy voting is finished or abandoned. This
+loop does not make that call.
+
+## Elections — The In-App Ballot Only Shows Position Races (2026-08-12)
+
+An election can carry three kinds of ballot item — `officer_election`,
+`general_vote` and `membership_approval` — and the Ballot Builder happily
+creates all three. Members reach a ballot two ways, and the two disagree about
+what is on it:
+
+- **The public token ballot** (`BallotVotingPage`, `/ballot?token=…`, the link
+  sent by email) reads `election.ballot_items` and renders every item, then
+  submits them atomically as `{ballot_item_id, candidate_ids | rankings | …}`.
+- **The in-app Cast Vote tab** (`ElectionBallot`, on the election detail page)
+  never reads `ballot_items` at all. It derives the ballot from
+  `election.positions`, renders the candidates for each, and submits **one
+  position at a time** as `{position, …}`.
+
+So an item with no position — a bylaw amendment, a membership approval —
+is invisible to anyone voting in the app. It is not refused or flagged: the
+ballot simply does not mention it, and the submit button names the one position
+it did find ("Submit Vote for Captain"). A secretary who builds a two-item
+ballot and watches members vote in-app gets a result for one item and silence on
+the other.
+
+Reproducible in the demo data: the seeded "Line Officer Election — 2027 Term"
+has a Captain race and an Article IV quorum amendment, and
+`docs/training/images/04-42-cast-ballot.png` is the in-app ballot showing only
+the former.
+
+This is not a small patch — the in-app component would have to move from the
+position model to the ballot-item model the public page already uses, including
+its submission shape. Needs an owner decision on whether to converge the two
+ballots or retire one of them. This loop does not make that call.
+
+## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
+
+The backend implements department email generation end to end.
+`DepartmentEmailSettings` (`enabled`, `domain`, `format`) is a real field on
+organization settings, `PUT /organizations/{id}/settings` accepts it, and
+`MembershipPipelineService._generate_department_email` uses it when a prospect
+is transferred to membership — including the numeric-suffix collision handling
+(`john.smith2@…`) the guide describes.
+
+What does not exist is anywhere to set it. The frontend references
+`DepartmentEmailSettings` in exactly two places — `types/user.ts` and a type
+annotation in `services/userServices.ts` — and no component renders a toggle, a
+domain field, or a format selector. `docs/training/01-membership.md` sent
+administrators to "Settings > Organization > Department Email", which is not a
+section that exists.
+
+The defaults are `enabled: false`, `domain: ""`, `format: first.last`, so out of
+the box the feature is off and stays off. Turning it on today requires writing
+organization settings through the API. The guide now says so, and its screenshot
+placeholder is retired until a screen exists to photograph.
+
+Needs an owner decision: whether to build the settings section or drop the
+feature. This loop does not make that call.
 
 ## Skills Testing — Offline Support (2026-08-07)
 

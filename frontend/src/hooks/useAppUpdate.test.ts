@@ -300,4 +300,35 @@ describe('useAppUpdate', () => {
     // Still only 1 call because of rate limiting
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('checks immediately after connectivity is restored', async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ buildId: 'test-build-123' }),
+    });
+
+    renderHook(() => useAppUpdate(), { wrapper });
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not make another request merely to remember a deferred build', async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ buildId: 'new-build-789' }),
+    });
+
+    const { result } = renderHook(() => useAppUpdate(), { wrapper });
+    await waitFor(() => expect(result.current.updateAvailable).toBe(true));
+
+    act(() => result.current.dismiss());
+
+    expect(result.current.updateAvailable).toBe(false);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
 });

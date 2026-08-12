@@ -60,6 +60,7 @@ const ApparatusSetup: React.FC = () => {
   const setApparatus = useOnboardingStore((state) => state.setApparatus);
 
   const [rows, setRows] = useState<OnboardingApparatusDraft[]>(savedApparatus);
+  const [invalidRowIds, setInvalidRowIds] = useState<string[]>([]);
   const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
   const { execute, error, canRetry, clearError, isLoading } = useApiRequest();
 
@@ -74,29 +75,36 @@ const ApparatusSetup: React.FC = () => {
     field: K,
     value: OnboardingApparatusDraft[K]
   ) => {
-    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+    const nextRows = rows.map((row) => (row.id === id ? { ...row, [field]: value } : row));
+    setRows(nextRows);
+    setApparatus(nextRows);
+    if (field === 'unitNumber' && typeof value === 'string' && value.trim()) {
+      setInvalidRowIds((prev) => prev.filter((rowId) => rowId !== id));
+    }
   };
 
   const addPosition = (id: string, position: string) => {
     const clean = position.trim().toLowerCase();
     if (!clean) return;
-    setRows((prev) =>
-      prev.map((row) =>
-        row.id === id && !row.positions.includes(clean) ? { ...row, positions: [...row.positions, clean] } : row
-      )
+    const nextRows = rows.map((row) =>
+      row.id === id && !row.positions.includes(clean) ? { ...row, positions: [...row.positions, clean] } : row
     );
+    setRows(nextRows);
+    setApparatus(nextRows);
     setPositionDrafts((prev) => ({ ...prev, [id]: '' }));
   };
 
   const removePosition = (id: string, position: string) => {
-    setRows((prev) =>
-      prev.map((row) =>
-        row.id === id ? { ...row, positions: row.positions.filter((p: string) => p !== position) } : row
-      )
+    const nextRows = rows.map((row) =>
+      row.id === id ? { ...row, positions: row.positions.filter((p: string) => p !== position) } : row
     );
+    setRows(nextRows);
+    setApparatus(nextRows);
   };
 
   const namedRows = rows.filter((row) => row.unitNumber.trim());
+  const rowHasUserData = (row: OnboardingApparatusDraft) =>
+    Boolean(row.name.trim() || row.positions.length > 0 || row.apparatusType !== 'engine' || row.minStaffing !== 1);
 
   const persist = async (apparatusRows: OnboardingApparatusDraft[]) => {
     const { error: apiError } = await execute(
@@ -125,6 +133,12 @@ const ApparatusSetup: React.FC = () => {
 
   const handleContinue = async () => {
     clearError();
+    const incompleteRows = rows.filter((row) => !row.unitNumber.trim() && rowHasUserData(row));
+    if (incompleteRows.length > 0) {
+      setInvalidRowIds(incompleteRows.map((row) => row.id));
+      toast.error('Add a unit number or remove the incomplete apparatus before continuing.');
+      return;
+    }
     setApparatus(namedRows);
 
     if (!(await persist(namedRows))) return;
@@ -179,7 +193,14 @@ const ApparatusSetup: React.FC = () => {
               <p className="text-theme-text-secondary mb-4 text-sm">
                 No apparatus yet. You can add these later from the Apparatus page.
               </p>
-              <button onClick={() => setRows([makeApparatus()])} className="btn-primary inline-flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const nextRows = [makeApparatus()];
+                  setRows(nextRows);
+                  setApparatus(nextRows);
+                }}
+                className="btn-primary inline-flex items-center gap-2"
+              >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add Apparatus
               </button>
@@ -193,7 +214,12 @@ const ApparatusSetup: React.FC = () => {
                       {row.unitNumber.trim() || 'New Apparatus'}
                     </h3>
                     <button
-                      onClick={() => setRows((prev) => prev.filter((r) => r.id !== row.id))}
+                      onClick={() => {
+                        const nextRows = rows.filter((candidate) => candidate.id !== row.id);
+                        setRows(nextRows);
+                        setApparatus(nextRows);
+                        setInvalidRowIds((prev) => prev.filter((rowId) => rowId !== row.id));
+                      }}
                       className="text-theme-text-muted mobile-touch-target transition-colors hover:text-red-500"
                       aria-label={`Remove ${row.unitNumber.trim() || 'apparatus'}`}
                     >
@@ -208,12 +234,19 @@ const ApparatusSetup: React.FC = () => {
                       </label>
                       <input
                         id={`unit-${row.id}`}
-                        className={inputClass}
+                        className={`${inputClass} ${invalidRowIds.includes(row.id) ? 'border-red-500' : ''}`}
                         value={row.unitNumber}
                         onChange={(e) => updateRow(row.id, 'unitNumber', e.target.value)}
                         placeholder="E-1"
                         maxLength={20}
+                        aria-invalid={invalidRowIds.includes(row.id)}
+                        aria-describedby={invalidRowIds.includes(row.id) ? `unit-error-${row.id}` : undefined}
                       />
+                      {invalidRowIds.includes(row.id) && (
+                        <p id={`unit-error-${row.id}`} className="mt-1 text-xs text-red-500">
+                          Unit number is required when other details are entered.
+                        </p>
+                      )}
                     </div>
                     <div className="sm:col-span-2">
                       <label className={labelClass} htmlFor={`aname-${row.id}`}>
@@ -326,7 +359,11 @@ const ApparatusSetup: React.FC = () => {
               ))}
 
               <button
-                onClick={() => setRows((prev) => [...prev, makeApparatus()])}
+                onClick={() => {
+                  const nextRows = [...rows, makeApparatus()];
+                  setRows(nextRows);
+                  setApparatus(nextRows);
+                }}
                 className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target inline-flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-3 transition-colors hover:border-red-500/40"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />

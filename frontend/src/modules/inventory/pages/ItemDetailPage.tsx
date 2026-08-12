@@ -39,7 +39,7 @@ import type {
   StorageAreaResponse,
   Location,
 } from '../types';
-import { getStatusStyle, getConditionColor } from '../types';
+import { getStatusStyle, getStatusLabel, getConditionColor } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
@@ -337,7 +337,7 @@ const ItemDetailPage: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${getStatusStyle(item.status)}`}>
-              {item.status.replace('_', ' ')}
+              {getStatusLabel(item.status)}
             </span>
             <span className={`text-xs font-medium ${getConditionColor(item.condition)}`}>
               {labelFor(item.condition)}
@@ -372,7 +372,7 @@ const ItemDetailPage: React.FC = () => {
           <Field label="Name" value={item.name} />
           <Field label="Category" value={category?.name ?? '--'} />
           <Field label="Tracking" value={item.tracking_type === 'individual' ? 'Individual' : 'Pool'} />
-          <Field label="Status" value={item.status.replace('_', ' ')} />
+          <Field label="Status" value={getStatusLabel(item.status)} />
           <Field label="Condition" value={labelFor(item.condition)} />
           <Field label="Barcode" value={item.barcode || '--'} />
           <Field label="Asset Tag" value={item.asset_tag || '--'} />

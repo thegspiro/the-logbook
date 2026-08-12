@@ -33,6 +33,9 @@ const MIN_CHECK_INTERVAL_MS = 60_000;
 /** Fallback polling interval when no navigation or focus events fire. */
 const POLL_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
+/** Re-prompt after a deferral so a security update is not ignored forever. */
+const UPDATE_REMINDER_MS = 60 * 60_000; // 1 hour
+
 /**
  * Build ID baked into this bundle at compile time.
  * Evaluated lazily (not at module-load) so that test stubs have time
@@ -49,15 +52,15 @@ export interface AppUpdateState {
   updateAvailable: boolean;
   /** Reload the page to apply the new version. */
   applyUpdate: () => void;
-  /** Dismiss the notification (re-shown on next detection). */
+  /** Defer the notification for one hour. */
   dismiss: () => void;
 }
 
 export function useAppUpdate(): AppUpdateState {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const lastCheckRef = useRef(0);
-  const dismissedBuildRef = useRef<string | null>(null);
-  const lastSeenServerBuildRef = useRef<string | null>(null);
+  const deferredBuildRef = useRef<{ buildId: string; until: number } | null>(null);
+  const detectedBuildRef = useRef<string | null>(null);
   const location = useLocation();
 
   const checkForUpdate = useCallback(async () => {
@@ -81,8 +84,10 @@ export function useAppUpdate(): AppUpdateState {
       const data: unknown = await res.json();
       if (typeof data === 'object' && data !== null && 'buildId' in data && typeof data.buildId === 'string') {
         const serverBuildId = (data as { buildId: string }).buildId;
-        lastSeenServerBuildRef.current = serverBuildId;
-        if (serverBuildId !== getCurrentBuildId() && serverBuildId !== dismissedBuildRef.current) {
+        const deferred = deferredBuildRef.current;
+        const isStillDeferred = deferred?.buildId === serverBuildId && Date.now() < deferred.until;
+        if (serverBuildId !== getCurrentBuildId() && !isStillDeferred) {
+          detectedBuildRef.current = serverBuildId;
           setUpdateAvailable(true);
         }
       }
@@ -123,6 +128,17 @@ export function useAppUpdate(): AppUpdateState {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [checkForUpdate]);
 
+  // Check immediately when a device regains connectivity instead of waiting
+  // for the next five-minute poll.
+  useEffect(() => {
+    const handleOnline = () => {
+      lastCheckRef.current = 0;
+      void checkForUpdate();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [checkForUpdate]);
+
   // Periodic fallback
   useEffect(() => {
     const id = setInterval(() => {
@@ -139,9 +155,10 @@ export function useAppUpdate(): AppUpdateState {
 
   const dismiss = useCallback(() => {
     setUpdateAvailable(false);
-    // Remember which build the user dismissed so the banner stays hidden
-    // until yet another deployment produces a different buildId.
-    dismissedBuildRef.current = lastSeenServerBuildRef.current;
+    const buildId = detectedBuildRef.current;
+    if (buildId) {
+      deferredBuildRef.current = { buildId, until: Date.now() + UPDATE_REMINDER_MS };
+    }
   }, []);
 
   return { updateAvailable, applyUpdate, dismiss };

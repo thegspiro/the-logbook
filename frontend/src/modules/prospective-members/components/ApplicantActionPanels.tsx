@@ -24,7 +24,8 @@ import toast from 'react-hot-toast';
 import type { Applicant } from '../types';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
-import { ApplicantStatus } from '../../../constants/enums';
+import { ApplicantStatus, StageType } from '../../../constants/enums';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface ApplicantActionPanelsProps {
   applicant: Applicant;
@@ -34,6 +35,40 @@ interface ApplicantActionPanelsProps {
   onConvert: (applicant: Applicant) => void;
 }
 
+const getStageRequirementHint = (applicant: Applicant): string | null => {
+  const config = applicant.current_stage_config;
+  if (!config || !applicant.current_stage_type) return null;
+
+  switch (applicant.current_stage_type) {
+    case StageType.CHECKLIST: {
+      const count = 'items' in config ? config.items.length : 0;
+      return count > 0 ? `Complete all ${count} checklist item${count === 1 ? '' : 's'} before advancing.` : null;
+    }
+    case StageType.INTERVIEW_REQUIREMENT: {
+      const count = 'required_count' in config ? config.required_count : 1;
+      return `Record ${count} required interview${count === 1 ? '' : 's'} before advancing.`;
+    }
+    case StageType.MULTI_APPROVAL: {
+      const roles = 'required_approvers' in config ? config.required_approvers : [];
+      return roles.length > 0
+        ? `Waiting for approval from: ${roles.map((role) => role.replace(/_/g, ' ')).join(', ')}.`
+        : null;
+    }
+    case StageType.REFERENCE_CHECK: {
+      const count = 'required_count' in config ? config.required_count : 1;
+      return `Complete ${count} reference check${count === 1 ? '' : 's'} before advancing.`;
+    }
+    case StageType.MEDICAL_SCREENING: {
+      const screenings = 'required_screenings' in config ? config.required_screenings : [];
+      return screenings.length > 0
+        ? `Required screenings: ${screenings.map((screening) => screening.replace(/_/g, ' ')).join(', ')}.`
+        : null;
+    }
+    default:
+      return null;
+  }
+};
+
 export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
   applicant,
   isLastStage,
@@ -42,6 +77,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
   onConvert,
 }) => {
   const navigate = useNavigate();
+  const stageRequirementHint = getStageRequirementHint(applicant);
 
   const {
     advanceApplicant,
@@ -51,6 +87,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
     resumeApplicant,
     withdrawApplicant,
     reactivateApplicant,
+    fetchApplicants,
+    fetchApplicant,
     isAdvancing,
     isRegressing,
     isRejecting,
@@ -81,8 +119,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       toast.success('Applicant advanced to next stage');
       setActionNotes('');
       setShowNotesInput(false);
-    } catch {
-      toast.error('Failed to advance applicant');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to advance applicant'));
     }
   };
 
@@ -92,27 +130,21 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       toast.success('Applicant moved back to previous stage');
       setActionNotes('');
       setShowNotesInput(false);
-    } catch {
-      toast.error('Failed to move applicant back');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to move applicant back'));
     }
   };
 
   const handleSkipStage = async () => {
     setIsSkipping(true);
     try {
-      if (applicant.current_stage_id) {
-        await applicantService.completeStep(
-          applicant.id,
-          applicant.current_stage_id,
-          `Stage skipped by coordinator${actionNotes ? `: ${actionNotes}` : ''}`
-        );
-      }
-      await advanceApplicant(applicant.id, 'Stage skipped');
+      await applicantService.skipStep(applicant.id, actionNotes || undefined);
+      await Promise.all([fetchApplicants(), fetchApplicant(applicant.id)]);
       toast.success('Stage skipped');
       setShowSkipConfirm(false);
       setActionNotes('');
-    } catch {
-      toast.error('Failed to skip stage');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to skip stage'));
     } finally {
       setIsSkipping(false);
     }
@@ -125,8 +157,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       setActionNotes('');
       setShowNotesInput(false);
       setShowRejectConfirm(false);
-    } catch {
-      toast.error('Failed to reject applicant');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to reject applicant'));
     }
   };
 
@@ -136,8 +168,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       toast.success('Applicant put on hold');
       setActionNotes('');
       setShowNotesInput(false);
-    } catch {
-      toast.error('Failed to put applicant on hold');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to put applicant on hold'));
     }
   };
 
@@ -145,8 +177,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
     try {
       await resumeApplicant(applicant.id);
       toast.success('Applicant resumed');
-    } catch {
-      toast.error('Failed to resume applicant');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to resume applicant'));
     }
   };
 
@@ -156,8 +188,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       toast.success('Application reactivated');
       setActionNotes('');
       setShowNotesInput(false);
-    } catch {
-      toast.error('Failed to reactivate application');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to reactivate application'));
     }
   };
 
@@ -168,8 +200,8 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       setActionNotes('');
       setShowNotesInput(false);
       setShowWithdrawConfirm(false);
-    } catch {
-      toast.error('Failed to withdraw application');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to withdraw application'));
     }
   };
 
@@ -178,6 +210,12 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       {/* Active Status Actions */}
       {applicant.status === ApplicantStatus.ACTIVE && (
         <div className="border-theme-surface-border space-y-3 border-t p-4">
+          {stageRequirementHint && !isLastStage && (
+            <div className="border-theme-surface-border bg-theme-surface-hover rounded-lg border p-3">
+              <p className="text-theme-text-secondary text-xs font-medium">Before advancing</p>
+              <p className="text-theme-text-muted mt-1 text-xs">{stageRequirementHint}</p>
+            </div>
+          )}
           {/* Notes input */}
           {showNotesInput && (
             <div className="flex items-start gap-2">
@@ -332,15 +370,17 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
               {isHolding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
               <span className="action-label">Hold</span>
             </button>
-            <button
-              onClick={() => setShowSkipConfirm(true)}
-              disabled={isActionInProgress}
-              className="flex items-center gap-1.5 rounded-lg border border-purple-500/30 px-3 py-2 text-sm text-purple-700 transition-colors hover:bg-purple-500/10 disabled:opacity-50 dark:text-purple-400"
-              title="Skip this stage and advance"
-            >
-              {isSkipping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
-              <span className="action-label">Skip</span>
-            </button>
+            {!isLastStage && (
+              <button
+                onClick={() => setShowSkipConfirm(true)}
+                disabled={isActionInProgress}
+                className="flex items-center gap-1.5 rounded-lg border border-purple-500/30 px-3 py-2 text-sm text-purple-700 transition-colors hover:bg-purple-500/10 disabled:opacity-50 dark:text-purple-400"
+                title="Skip this stage and advance"
+              >
+                {isSkipping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
+                <span className="action-label">Skip</span>
+              </button>
+            )}
             <button
               onClick={() => setShowRejectConfirm(true)}
               disabled={isActionInProgress}

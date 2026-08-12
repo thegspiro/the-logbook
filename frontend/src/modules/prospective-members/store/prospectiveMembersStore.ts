@@ -27,11 +27,35 @@ import { KANBAN_PAGE_SIZE } from '../constants';
 
 export type PipelineTab = 'active' | 'inactive' | 'withdrawn';
 
+const VIEW_MODE_STORAGE_KEY = 'prospective-members:view-mode';
+const PIPELINE_STORAGE_KEY = 'prospective-members:pipeline-id';
+
+const readPreference = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const writePreference = (key: string, value: string | null) => {
+  try {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {
+    // Storage may be unavailable in hardened/private browser contexts.
+  }
+};
+
+const storedViewMode = readPreference(VIEW_MODE_STORAGE_KEY);
+const initialViewMode: PipelineViewMode = storedViewMode === 'table' ? 'table' : 'kanban';
+
 interface ProspectiveMembersState {
   // Pipeline data
   pipelines: PipelineListItem[];
   currentPipeline: Pipeline | null;
   pipelineStats: PipelineStats | null;
+  preferredPipelineId: string | null;
 
   // Applicant data
   applicants: ApplicantListItem[];
@@ -148,6 +172,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   pipelines: [],
   currentPipeline: null,
   pipelineStats: null,
+  preferredPipelineId: readPreference(PIPELINE_STORAGE_KEY),
 
   applicants: [],
   currentApplicant: null,
@@ -159,7 +184,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
 
   filters: defaultFilters,
 
-  viewMode: 'kanban',
+  viewMode: initialViewMode,
   activeTab: 'active',
   detailDrawerOpen: false,
 
@@ -214,7 +239,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isLoadingPipeline: true, error: null });
     try {
       const pipeline = await pipelineService.getPipeline(id);
-      set({ currentPipeline: pipeline, isLoadingPipeline: false });
+      writePreference(PIPELINE_STORAGE_KEY, pipeline.id);
+      set({ currentPipeline: pipeline, preferredPipelineId: pipeline.id, isLoadingPipeline: false });
     } catch (error) {
       set({
         error: handleStoreError(error, 'Failed to fetch pipeline'),
@@ -237,7 +263,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   },
 
   setCurrentPipeline: (pipeline) => {
-    set({ currentPipeline: pipeline });
+    writePreference(PIPELINE_STORAGE_KEY, pipeline?.id ?? null);
+    set({ currentPipeline: pipeline, preferredPipelineId: pipeline?.id ?? null });
   },
 
   duplicatePipeline: async (id: string, name: string) => {
@@ -371,6 +398,9 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         error: handleStoreError(error, 'Failed to advance applicant'),
         isAdvancing: false,
       });
+      // Action components own the user-facing toast. Propagate the rejection
+      // so they do not announce success after the API refused a stage gate.
+      throw error;
     }
   },
 
@@ -389,6 +419,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         error: handleStoreError(error, 'Failed to move applicant back'),
         isRegressing: false,
       });
+      throw error;
     }
   },
 
@@ -407,6 +438,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         error: handleStoreError(error, 'Failed to complete step'),
         isAdvancing: false,
       });
+      throw error;
     }
   },
 
@@ -513,6 +545,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         error: handleStoreError(error, 'Failed to reactivate applicant'),
         isReactivating: false,
       });
+      throw error;
     }
   },
 
@@ -734,6 +767,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     // — otherwise the board would render whatever page the table left
     // behind, which is the bug this pairing exists to prevent.
     set({ viewMode: mode, currentPage: 1 });
+    writePreference(VIEW_MODE_STORAGE_KEY, mode);
     void get().fetchApplicants(1);
   },
 

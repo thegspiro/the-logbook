@@ -621,9 +621,14 @@ async def _persist_session_data_to_org(
             raw_config = json.loads(decrypt_data(email_data["config_encrypted"]))
             platform = email_data.get("platform", "other")
 
-            # Map camelCase onboarding keys to snake_case org settings keys
+            # Map camelCase onboarding keys to snake_case org settings keys.
+            # "Other / Skip" records a deliberate configure-later choice with
+            # an empty config — it must persist as disabled, or EmailService
+            # prefers this hollow org record (enabled, no host, no from
+            # address) over the working global SMTP settings and sending
+            # breaks until someone finds the empty config in settings.
             email_settings = {
-                "enabled": True,
+                "enabled": platform != "other" and bool(raw_config),
                 "platform": platform,
                 "smtp_host": raw_config.get("smtpHost"),
                 "smtp_port": int(raw_config.get("smtpPort", 587)),
@@ -1372,7 +1377,10 @@ async def save_email_config(
     session = await validate_session(request, db)
 
     # Validate platform
-    valid_platforms = ["gmail", "microsoft", "selfhosted", "other"]
+    # Keep this list aligned with EmailConfigRequest and the choices rendered
+    # by EmailPlatformChoice. Cloudflare was selectable and testable, but the
+    # save endpoint rejected it, trapping users after they entered credentials.
+    valid_platforms = ["gmail", "microsoft", "selfhosted", "cloudflare", "other"]
     if data.platform not in valid_platforms:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

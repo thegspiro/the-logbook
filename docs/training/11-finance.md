@@ -28,22 +28,22 @@ The Finance module is an optional module that must be enabled by your department
 
 ### Who Uses What
 
-| Role | What They Do |
-|------|-------------|
-| **All members** | Submit purchase requests, expense reports, and check requests; view their own dues status |
-| **Officers with `finance.view`** | View budgets, financial dashboards, and dues management |
-| **Officers with `finance.manage`** | Create and edit budgets, fiscal years, and budget categories; mark payments; manage dues schedules; run exports |
-| **Officers with `finance.approve`** | Approve or deny purchase requests, expense reports, and check requests |
-| **Officers with `finance.configure_approvals`** | Set up and manage approval chains and their steps |
+| Role                                            | What They Do                                                                                                    |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **All members**                                 | Submit purchase requests, expense reports, and check requests; view their own dues status                       |
+| **Officers with `finance.view`**                | View budgets, financial dashboards, and dues management                                                         |
+| **Officers with `finance.manage`**              | Create and edit budgets, fiscal years, and budget categories; mark payments; manage dues schedules; run exports |
+| **Officers with `finance.approve`**             | Approve or deny purchase requests, expense reports, and check requests                                          |
+| **Officers with `finance.configure_approvals`** | Set up and manage approval chains and their steps                                                               |
 
 ### Permissions
 
-| Permission | Description |
-|------------|-------------|
-| `finance.view` | View financial data including budgets, reports, and dues; create and submit your own requests |
-| `finance.manage` | Create and edit budgets, fiscal years, categories; mark payments on requests; manage dues schedules; run QuickBooks exports |
-| `finance.approve` | Approve or deny submitted requests in the approval workflow |
-| `finance.configure_approvals` | Create, edit, and delete approval chains and configure approval steps |
+| Permission                    | Description                                                                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `finance.view`                | View financial data including budgets, reports, and dues; create and submit your own requests                               |
+| `finance.manage`              | Create and edit budgets, fiscal years, categories; mark payments on requests; manage dues schedules; run QuickBooks exports |
+| `finance.approve`             | Approve or deny submitted requests in the approval workflow                                                                 |
+| `finance.configure_approvals` | Create, edit, and delete approval chains and configure approval steps                                                       |
 
 ### Key Concepts
 
@@ -55,24 +55,24 @@ The Finance module is an optional module that must be enabled by your department
 
 ### Navigation
 
-| Route | Description |
-|-------|-------------|
-| `/finance` | Finance Dashboard |
-| `/finance/budgets` | Budget list |
-| `/finance/budgets/:id` | Budget detail |
-| `/finance/settings` | Fiscal years and budget categories |
-| `/finance/settings/approval-chains` | Approval chain builder |
-| `/finance/purchase-requests` | Purchase request list |
-| `/finance/purchase-requests/new` | Create a purchase request |
-| `/finance/purchase-requests/:id` | Purchase request detail |
-| `/finance/purchase-requests/:id/edit` | Edit a draft purchase request |
-| `/finance/expenses` | Expense report list |
-| `/finance/expenses/new` | Create an expense report |
-| `/finance/expenses/:id` | Expense report detail |
-| `/finance/check-requests` | Check request list |
-| `/finance/check-requests/new` | Create a check request |
-| `/finance/check-requests/:id` | Check request detail |
-| `/finance/dues` | Dues management |
+| Route                                 | Description                        |
+| ------------------------------------- | ---------------------------------- |
+| `/finance`                            | Finance Dashboard                  |
+| `/finance/budgets`                    | Budget list                        |
+| `/finance/budgets/:id`                | Budget detail                      |
+| `/finance/settings`                   | Fiscal years and budget categories |
+| `/finance/settings/approval-chains`   | Approval chain builder             |
+| `/finance/purchase-requests`          | Purchase request list              |
+| `/finance/purchase-requests/new`      | Create a purchase request          |
+| `/finance/purchase-requests/:id`      | Purchase request detail            |
+| `/finance/purchase-requests/:id/edit` | Edit a draft purchase request      |
+| `/finance/expenses`                   | Expense report list                |
+| `/finance/expenses/new`               | Create an expense report           |
+| `/finance/expenses/:id`               | Expense report detail              |
+| `/finance/check-requests`             | Check request list                 |
+| `/finance/check-requests/new`         | Create a check request             |
+| `/finance/check-requests/:id`         | Check request detail               |
+| `/finance/dues`                       | Dues management                    |
 
 ---
 
@@ -106,11 +106,11 @@ A fiscal year defines the accounting period for your department. All budgets, pu
 
 ### Fiscal Year Statuses
 
-| Status | Meaning |
-|--------|---------|
-| **Draft** | The fiscal year is being set up. Budgets can be created and edited freely. No requests can be submitted against it yet. |
+| Status     | Meaning                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Draft**  | The fiscal year is being set up. Budgets can be created and edited freely. No requests can be submitted against it yet.                                            |
 | **Active** | The fiscal year is open for business. Requests can be submitted, budgets track spending, and approval workflows run. Only one fiscal year can be active at a time. |
-| **Closed** | The fiscal year is complete. No new requests can be submitted. Existing data is read-only for reporting purposes. |
+| **Closed** | The fiscal year is complete. No new requests can be submitted. Existing data is read-only for reporting purposes.                                                  |
 
 ### Creating a Fiscal Year
 
@@ -145,12 +145,12 @@ Locking transitions the fiscal year to **Closed** status and sets the `isLocked`
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Activating a fiscal year when another is already active | The previously active fiscal year is automatically set to Closed status |
-| Submitting a request with no active fiscal year | The request form will not allow submission -- the fiscal year dropdown will be empty |
-| Editing a locked fiscal year | Not permitted -- the system rejects modifications with "Fiscal year is locked and cannot be modified" |
-| Deleting a fiscal year with existing budgets | Not permitted -- budgets cascade with the fiscal year, but the application blocks deletion of fiscal years that have associated requests |
+| Scenario                                                | Behavior                                                                                                                                 |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Activating a fiscal year when another is already active | The previously active fiscal year is automatically set to Closed status                                                                  |
+| Submitting a request with no active fiscal year         | The request form will not allow submission -- the fiscal year dropdown will be empty                                                     |
+| Editing a locked fiscal year                            | Not permitted -- the system rejects modifications with "Fiscal year is locked and cannot be modified"                                    |
+| Deleting a fiscal year with existing budgets            | Not permitted -- budgets cascade with the fiscal year, but the application blocks deletion of fiscal years that have associated requests |
 
 ---
 
@@ -198,12 +198,12 @@ Rather than deleting a category, you can deactivate it by setting `isActive` to 
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Deleting a category with existing budgets | Not permitted -- reassign or delete the budgets first |
-| Deactivating a category | The category is hidden from new budget creation but existing budgets retain their category assignment |
-| Category with no QB account name | The category can still be used for budgets; export mapping can be configured separately in the QuickBooks Export settings |
-| Self-referential parent | The parent category cannot reference itself -- the `parent_category_id` FK points to `budget_categories.id` with SET NULL on delete |
+| Scenario                                  | Behavior                                                                                                                            |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Deleting a category with existing budgets | Not permitted -- reassign or delete the budgets first                                                                               |
+| Deactivating a category                   | The category is hidden from new budget creation but existing budgets retain their category assignment                               |
+| Category with no QB account name          | The category can still be used for budgets; export mapping can be configured separately in the QuickBooks Export settings           |
+| Self-referential parent                   | The parent category cannot reference itself -- the `parent_category_id` FK points to `budget_categories.id` with SET NULL on delete |
 
 ---
 
@@ -215,12 +215,12 @@ Navigate to **Finance > Budgets** to view and manage department budgets.
 
 A budget is a line item that allocates a specific dollar amount to a category within a fiscal year. Each budget tracks four key financial figures:
 
-| Field | Description |
-|-------|-------------|
-| **Amount Budgeted** | The total amount allocated to this budget line item |
-| **Amount Spent** | The total that has been paid out (from requests marked as Paid or checks marked as Issued) |
-| **Amount Encumbered** | The total reserved by approved but not-yet-paid purchase requests |
-| **Amount Remaining** | `Amount Budgeted - Amount Spent - Amount Encumbered` -- the amount still available for new requests |
+| Field                 | Description                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| **Amount Budgeted**   | The total amount allocated to this budget line item                                                 |
+| **Amount Spent**      | The total that has been paid out (from requests marked as Paid or checks marked as Issued)          |
+| **Amount Encumbered** | The total reserved by approved but not-yet-paid purchase requests                                   |
+| **Amount Remaining**  | `Amount Budgeted - Amount Spent - Amount Encumbered` -- the amount still available for new requests |
 
 All monetary fields use `Numeric(12, 2)` precision (12 digits total, 2 decimal places) and arithmetic uses Python's `Decimal` type internally to avoid floating-point rounding errors.
 
@@ -235,7 +235,14 @@ All monetary fields use `Numeric(12, 2)` precision (12 digits total, 2 decimal p
 7. Optionally add **notes** describing the budget purpose.
 8. Click **Save**.
 
-> **[SCREENSHOT NEEDED]:** _The Create Budget form showing the fiscal year dropdown, category dropdown, amount budgeted input field, station selector, notes textarea, and the Save button._
+> **Corrected 2026-08-12.** Not built. See
+> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
+> which records what exists behind each of these: an API, a store
+> action, or types — but no page and no control that reaches them.
+> The steps above describe the intended design.
+>
+> `financeStore.createBudget` works over a working API; no component calls
+> it, and `BudgetsPage` is read-only with no create control.
 
 ### Viewing Budget Details
 
@@ -246,7 +253,18 @@ Click on any budget in the list to view its detail page at `/finance/budgets/:id
 - List of all purchase requests, expense reports, and check requests charged against this budget
 - Budget utilization percentage
 
-> **[SCREENSHOT NEEDED]:** _A Budget Detail page showing the budget category and amount at the top, a stacked progress bar (green for spent, yellow for encumbered, gray for remaining), and a table of linked transactions below._
+> **Corrected 2026-08-12.** The page and its stacked progress bar are real,
+> but neither half of what this placeholder asks for can be shown.
+>
+> The **transaction table** is an unconditional `<EmptyState>` stub — there is
+> no fetch behind it and no code path that ever displays a row.
+>
+> The **bar is permanently at 0%**. Spend and encumbrance accrue when a
+> purchase request or expense report is approved, and nothing can be approved:
+> `finance.approve` gates all three approval endpoints and no shipped role
+> grants it, while the one account holding `*` is refused by separation of
+> duties for anything it raised. Both are recorded in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#finance--nobody-can-approve-anything-2026-08-12).
 
 ### Budget Summary
 
@@ -262,13 +280,13 @@ The budget summary provides an aggregate view across all budgets in a fiscal yea
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Creating a budget in a closed fiscal year | Not permitted -- fiscal year must be in Draft or Active status |
-| Two budgets for the same category and fiscal year | Permitted -- useful when different stations have separate budgets for the same category. Requests are linked to a specific budget, not just a category |
-| Budget remaining goes negative | The system allows it (does not block approvals) but displays the negative remaining amount as a visual warning. Budget release operations are floored at zero to prevent negative encumbrance |
-| Deleting a budget with linked requests | Not permitted -- the linked requests must be cancelled or reassigned first |
-| Budget summary with no budgets | Returns all zeroes and 0% utilization |
+| Scenario                                          | Behavior                                                                                                                                                                                      |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Creating a budget in a closed fiscal year         | Not permitted -- fiscal year must be in Draft or Active status                                                                                                                                |
+| Two budgets for the same category and fiscal year | Permitted -- useful when different stations have separate budgets for the same category. Requests are linked to a specific budget, not just a category                                        |
+| Budget remaining goes negative                    | The system allows it (does not block approvals) but displays the negative remaining amount as a visual warning. Budget release operations are floored at zero to prevent negative encumbrance |
+| Deleting a budget with linked requests            | Not permitted -- the linked requests must be cancelled or reassigned first                                                                                                                    |
+| Budget summary with no budgets                    | Returns all zeroes and 0% utilization                                                                                                                                                         |
 
 ---
 
@@ -289,7 +307,7 @@ When a member submits a request (purchase request, expense report, or check requ
 3. **Processes steps in order** -- Each step must complete before the next one activates. Notification steps auto-advance after sending.
 4. **Completes the chain** -- When all steps are complete, the request moves to Approved status and the appropriate budget action occurs (e.g., encumbrance for purchase requests).
 
-### Separation of Duties *(2026-08-01)*
+### Separation of Duties _(2026-08-01)_
 
 **You cannot approve a request you raised**, even holding `finance.approve`.
 The system refuses the approval and tells you to route it to another
@@ -316,26 +334,26 @@ check requests). Notes:
 
 When multiple chains could apply to a request, the system selects the most specific match using a point-based scoring system:
 
-| Criterion | Points | Description |
-|-----------|--------|-------------|
-| **Category match** | +4 | The chain is scoped to a specific budget category that matches the request's budget category. If the chain has a category set but it does not match, the chain is skipped entirely. |
-| **Amount range match** | +2 | The chain has min/max amount thresholds and the request amount falls within the range. Chains where the amount falls outside the range are skipped. |
-| **Default chain** | +1 | The chain is marked as `isDefault` for the entity type. |
+| Criterion              | Points | Description                                                                                                                                                                         |
+| ---------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Category match**     | +4     | The chain is scoped to a specific budget category that matches the request's budget category. If the chain has a category set but it does not match, the chain is skipped entirely. |
+| **Amount range match** | +2     | The chain has min/max amount thresholds and the request amount falls within the range. Chains where the amount falls outside the range are skipped.                                 |
+| **Default chain**      | +1     | The chain is marked as `isDefault` for the entity type.                                                                                                                             |
 
 The chain with the highest score wins. If no chain matches at all, the request transitions directly to `PENDING_APPROVAL` status without any approval step records (requiring manual approval).
 
 ### Chain Fields
 
-| Field | Description |
-|-------|-------------|
-| **Name** | A descriptive name for the chain (e.g., "Standard Purchase Approval") |
-| **Description** | Optional notes about when this chain applies |
-| **Applies To** | Which request type this chain governs: `purchase_request`, `expense_report`, or `check_request` |
-| **Min Amount** | The minimum dollar amount for this chain to apply (leave blank for no minimum) |
-| **Max Amount** | The maximum dollar amount for this chain to apply (leave blank for no maximum) |
-| **Budget Category** | Optionally restrict this chain to requests in a specific budget category |
-| **Is Default** | Whether this chain is the default fallback for its entity type |
-| **Is Active** | Whether the chain is currently in use (inactive chains are ignored during resolution) |
+| Field               | Description                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| **Name**            | A descriptive name for the chain (e.g., "Standard Purchase Approval")                           |
+| **Description**     | Optional notes about when this chain applies                                                    |
+| **Applies To**      | Which request type this chain governs: `purchase_request`, `expense_report`, or `check_request` |
+| **Min Amount**      | The minimum dollar amount for this chain to apply (leave blank for no minimum)                  |
+| **Max Amount**      | The maximum dollar amount for this chain to apply (leave blank for no maximum)                  |
+| **Budget Category** | Optionally restrict this chain to requests in a specific budget category                        |
+| **Is Default**      | Whether this chain is the default fallback for its entity type                                  |
+| **Is Active**       | Whether the chain is currently in use (inactive chains are ignored during resolution)           |
 
 ### Creating an Approval Chain
 
@@ -360,19 +378,19 @@ After creating the chain (or during creation), add steps to define the approval 
 3. Set the **step order** (starting from 1) to control the sequence.
 4. Select the **step type**:
 
-| Step Type | Behavior |
-|-----------|----------|
-| **Approval** | The step blocks the workflow until the assigned approver explicitly approves or denies. A denial stops the entire chain and marks the request as Denied. |
+| Step Type        | Behavior                                                                                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Approval**     | The step blocks the workflow until the assigned approver explicitly approves or denies. A denial stops the entire chain and marks the request as Denied. |
 | **Notification** | The step sends a notification to the specified recipient(s) and auto-advances to the next step (status changes to Sent). It does not block the workflow. |
 
 5. Select the **approver type** (determines who receives the approval request or notification):
 
-| Approver Type | Assigns To |
-|---------------|-----------|
-| **Position** | Any member holding a specific position (e.g., "Captain", "Chief"). Enter the position title in the **Approver Value** field. |
-| **Permission** | Any member with a specific permission. Enter the permission string (e.g., `finance.approve`) in the **Approver Value** field. |
-| **Specific User** | A specific named member. Enter the user ID in the **Approver Value** field. |
-| **Email** | An external email address (e.g., an outside accountant or board member). Enter the email address in the **Approver Value** field. The system generates a secure approval token (valid for 7 days) and sends an email with approve/deny links. |
+| Approver Type     | Assigns To                                                                                                                                                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Position**      | Any member holding a specific position (e.g., "Captain", "Chief"). Enter the position title in the **Approver Value** field.                                                                                                                  |
+| **Permission**    | Any member with a specific permission. Enter the permission string (e.g., `finance.approve`) in the **Approver Value** field.                                                                                                                 |
+| **Specific User** | A specific named member. Enter the user ID in the **Approver Value** field.                                                                                                                                                                   |
+| **Email**         | An external email address (e.g., an outside accountant or board member). Enter the email address in the **Approver Value** field. The system generates a secure approval token (valid for 7 days) and sends an email with approve/deny links. |
 
 6. Optionally configure:
    - **Notification Emails** -- Additional email addresses to CC when this step activates.
@@ -382,7 +400,14 @@ After creating the chain (or during creation), add steps to define the approval 
    - **Required** -- Whether this step is mandatory or can be skipped (default: true).
 7. Click **Save Step**.
 
-> **[SCREENSHOT NEEDED]:** _The Add Step form showing step name, step order input, step type toggle (Approval/Notification), approver type dropdown (Position selected), approver value field showing "Captain", self-approval checkbox, auto-approve-under amount field, required checkbox, and Save button._
+> **Corrected 2026-08-12.** Not built. See
+> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
+> which records what exists behind each of these: an API, a store
+> action, or types — but no page and no control that reaches them.
+> The steps above describe the intended design.
+>
+> `ApprovalChainsSettingsPage` renders a chain's steps and offers no way to
+> add, edit or remove one.
 
 ### Previewing Chain Resolution
 
@@ -401,42 +426,45 @@ This helps verify that your chain configuration produces the expected workflow b
 A typical fire department might configure these chains:
 
 **Purchase Requests:**
+
 - "Small Purchases" (under $500): 1 step -- Captain Approval
 - "Standard Purchases" ($500--$5,000): 2 steps -- Captain Approval, then Chief Approval
 - "Large Purchases" (over $5,000): 3 steps -- Captain Approval, Chief Approval, then Board Notification
 - "Training Purchases" (category: Training, any amount): 2 steps -- Training Officer Approval, then Chief Approval
 
 **Expense Reports:**
+
 - Default chain: 2 steps -- Supervisor Approval, then Treasurer Notification
 
 **Check Requests:**
+
 - Default chain: 2 steps -- Treasurer Approval, then Chief Approval
 
 ### Approval Step Statuses
 
 As a request moves through its approval chain, each step has a status:
 
-| Status | Meaning |
-|--------|---------|
-| **Pending** | The step is active and awaiting action from the assigned approver |
-| **Approved** | The approver has approved the request at this step |
-| **Denied** | The approver has denied the request at this step (stops the entire chain) |
-| **Skipped** | The step was skipped (not required or conditions not met) |
-| **Auto-Approved** | The request amount was below the step's `autoApproveUnder` threshold |
-| **Sent** | For notification steps, the notification has been sent and the step auto-advanced |
+| Status            | Meaning                                                                           |
+| ----------------- | --------------------------------------------------------------------------------- |
+| **Pending**       | The step is active and awaiting action from the assigned approver                 |
+| **Approved**      | The approver has approved the request at this step                                |
+| **Denied**        | The approver has denied the request at this step (stops the entire chain)         |
+| **Skipped**       | The step was skipped (not required or conditions not met)                         |
+| **Auto-Approved** | The request amount was below the step's `autoApproveUnder` threshold              |
+| **Sent**          | For notification steps, the notification has been sent and the step auto-advanced |
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| No approval chain matches a submitted request | The request moves to Pending Approval status without step records, requiring manual processing |
-| Approver denies at step 2 of 3 | The entire chain stops. The request is marked Denied with the denial reason. Remaining steps are not processed |
-| Self-approval when `allowSelfApproval` is false | The step appears in pending approvals but the submitter cannot act on their own request -- another approver with the matching role/permission must act |
-| Multiple members hold the "Captain" position | Any one of them can approve the step -- it is a first-come approval |
-| Auto-approve threshold set to $200 on a $150 request | The step is automatically created with status Auto-Approved and the chain advances to the next step |
-| Editing a chain after requests have been submitted | Existing in-flight requests continue using the step records that were created at submission time. The edited chain applies only to newly submitted requests |
-| External email approver (Email type) | The approver receives an email with a secure approval token (valid for 7 days). No Logbook account is required. Expired tokens are rejected |
-| Denial does not release encumbrance | By design -- denial happens during the approval flow (before the request reaches Approved status), so no encumbrance exists to release |
+| Scenario                                             | Behavior                                                                                                                                                    |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No approval chain matches a submitted request        | The request moves to Pending Approval status without step records, requiring manual processing                                                              |
+| Approver denies at step 2 of 3                       | The entire chain stops. The request is marked Denied with the denial reason. Remaining steps are not processed                                              |
+| Self-approval when `allowSelfApproval` is false      | The step appears in pending approvals but the submitter cannot act on their own request -- another approver with the matching role/permission must act      |
+| Multiple members hold the "Captain" position         | Any one of them can approve the step -- it is a first-come approval                                                                                         |
+| Auto-approve threshold set to $200 on a $150 request | The step is automatically created with status Auto-Approved and the chain advances to the next step                                                         |
+| Editing a chain after requests have been submitted   | Existing in-flight requests continue using the step records that were created at submission time. The edited chain applies only to newly submitted requests |
+| External email approver (Email type)                 | The approver receives an email with a secure approval token (valid for 7 days). No Logbook account is required. Expired tokens are rejected                 |
+| Denial does not release encumbrance                  | By design -- denial happens during the approval flow (before the request reaches Approved status), so no encumbrance exists to release                      |
 
 ---
 
@@ -456,17 +484,17 @@ DRAFT --> SUBMITTED --> PENDING_APPROVAL --> APPROVED --> ORDERED --> RECEIVED -
           CANCELLED
 ```
 
-| Status | Description | Budget Impact |
-|--------|-------------|---------------|
-| **Draft** | Request is being prepared by the member. Not yet visible to approvers. | None |
-| **Submitted** | Request has been submitted and is entering the approval chain. | None |
-| **Pending Approval** | Request is waiting for one or more approvers to act. | None |
-| **Approved** | All approval steps are complete. The purchase is authorized. | **Estimated amount is encumbered** (reserved against the budget) |
-| **Ordered** | The item has been ordered from the vendor. | Encumbrance remains |
-| **Received** | The item has been received by the department. | Encumbrance remains |
-| **Paid** | Payment has been made to the vendor. | **Encumbrance is released; actual amount (or estimated if no actual specified) moves to spent** |
-| **Denied** | An approver has denied the request. | None (denial occurs before encumbrance) |
-| **Cancelled** | The requester or an officer has cancelled the request. | **Encumbrance is released** if the request had been approved, ordered, or received |
+| Status               | Description                                                            | Budget Impact                                                                                   |
+| -------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Draft**            | Request is being prepared by the member. Not yet visible to approvers. | None                                                                                            |
+| **Submitted**        | Request has been submitted and is entering the approval chain.         | None                                                                                            |
+| **Pending Approval** | Request is waiting for one or more approvers to act.                   | None                                                                                            |
+| **Approved**         | All approval steps are complete. The purchase is authorized.           | **Estimated amount is encumbered** (reserved against the budget)                                |
+| **Ordered**          | The item has been ordered from the vendor.                             | Encumbrance remains                                                                             |
+| **Received**         | The item has been received by the department.                          | Encumbrance remains                                                                             |
+| **Paid**             | Payment has been made to the vendor.                                   | **Encumbrance is released; actual amount (or estimated if no actual specified) moves to spent** |
+| **Denied**           | An approver has denied the request.                                    | None (denial occurs before encumbrance)                                                         |
+| **Cancelled**        | The requester or an officer has cancelled the request.                 | **Encumbrance is released** if the request had been approved, ordered, or received              |
 
 ### Request Numbers
 
@@ -480,18 +508,18 @@ Purchase request numbers are auto-generated in the format **PR-YYYY-0001**, wher
 2. Click **New Purchase Request** (or go directly to `/finance/purchase-requests/new`).
 3. Fill in the request details:
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| **Title** | Yes | Brief description of what is being purchased (max 300 characters) |
-| **Fiscal Year** | Yes | The fiscal year to charge this purchase against |
-| **Budget** | No | The specific budget line item (helps approvers see remaining balance) |
-| **Estimated Amount** | Yes | The expected total cost (must be greater than zero) |
-| **Vendor** | No | The vendor or supplier name |
-| **Priority** | Yes | Low, Medium (default), High, or Urgent |
-| **Description** | No | Detailed justification for the purchase |
-| **Apparatus** | No | If the purchase is for a specific vehicle |
-| **Facility** | No | If the purchase is for a specific fire station or facility |
-| **Notes** | No | Additional notes for approvers |
+| Field                | Required | Description                                                           |
+| -------------------- | -------- | --------------------------------------------------------------------- |
+| **Title**            | Yes      | Brief description of what is being purchased (max 300 characters)     |
+| **Fiscal Year**      | Yes      | The fiscal year to charge this purchase against                       |
+| **Budget**           | No       | The specific budget line item (helps approvers see remaining balance) |
+| **Estimated Amount** | Yes      | The expected total cost (must be greater than zero)                   |
+| **Vendor**           | No       | The vendor or supplier name                                           |
+| **Priority**         | Yes      | Low, Medium (default), High, or Urgent                                |
+| **Description**      | No       | Detailed justification for the purchase                               |
+| **Apparatus**        | No       | If the purchase is for a specific vehicle                             |
+| **Facility**         | No       | If the purchase is for a specific fire station or facility            |
+| **Notes**            | No       | Additional notes for approvers                                        |
 
 4. Click **Save as Draft** to save without submitting, or click **Submit** to send it into the approval workflow.
 
@@ -537,15 +565,15 @@ Once approved, officers can progress the request through the fulfillment stages:
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Submitting without a budget selected | The request enters the approval workflow but no encumbrance is tracked. Approvers should verify the funding source manually |
-| Actual amount exceeds estimated amount | The budget spent amount reflects the actual amount, which may push the budget into a negative remaining balance |
-| Cancelling an approved request | The encumbered amount is released back to the budget's available balance. The encumbrance release is floored at zero to prevent negative encumbrance values |
-| Marking as paid from Approved status (skipping Ordered and Received) | Permitted -- the system allows direct transition from Approved to Paid |
-| Request with no matching approval chain | The request moves to Pending Approval but has no approval step records. It requires manual intervention |
-| Editing a submitted request | Permitted while in Submitted status (before approval flow begins). Not permitted once in Pending Approval or later |
-| Purchase request linked to an apparatus or facility | The linkage is informational -- it helps officers categorize spending by asset but does not affect the approval or budget logic |
+| Scenario                                                             | Behavior                                                                                                                                                    |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Submitting without a budget selected                                 | The request enters the approval workflow but no encumbrance is tracked. Approvers should verify the funding source manually                                 |
+| Actual amount exceeds estimated amount                               | The budget spent amount reflects the actual amount, which may push the budget into a negative remaining balance                                             |
+| Cancelling an approved request                                       | The encumbered amount is released back to the budget's available balance. The encumbrance release is floored at zero to prevent negative encumbrance values |
+| Marking as paid from Approved status (skipping Ordered and Received) | Permitted -- the system allows direct transition from Approved to Paid                                                                                      |
+| Request with no matching approval chain                              | The request moves to Pending Approval but has no approval step records. It requires manual intervention                                                     |
+| Editing a submitted request                                          | Permitted while in Submitted status (before approval flow begins). Not permitted once in Pending Approval or later                                          |
+| Purchase request linked to an apparatus or facility                  | The linkage is informational -- it helps officers categorize spending by asset but does not affect the approval or budget logic                             |
 
 ---
 
@@ -565,15 +593,15 @@ DRAFT --> SUBMITTED --> PENDING_APPROVAL --> APPROVED --> PAID
           CANCELLED
 ```
 
-| Status | Description |
-|--------|-------------|
-| **Draft** | Report is being prepared. Line items can be added and edited. |
-| **Submitted** | Report has been submitted into the approval chain. |
-| **Pending Approval** | Report is waiting for approver action. |
-| **Approved** | All approval steps are complete. The reimbursement is authorized. |
-| **Paid** | The member has been reimbursed. Payment method is recorded. |
-| **Denied** | An approver has denied the report. |
-| **Cancelled** | The submitter has cancelled the report. |
+| Status               | Description                                                       |
+| -------------------- | ----------------------------------------------------------------- |
+| **Draft**            | Report is being prepared. Line items can be added and edited.     |
+| **Submitted**        | Report has been submitted into the approval chain.                |
+| **Pending Approval** | Report is waiting for approver action.                            |
+| **Approved**         | All approval steps are complete. The reimbursement is authorized. |
+| **Paid**             | The member has been reimbursed. Payment method is recorded.       |
+| **Denied**           | An approver has denied the report.                                |
+| **Cancelled**        | The submitter has cancelled the report.                           |
 
 ### Report Numbers
 
@@ -587,24 +615,24 @@ Expense report numbers are auto-generated in the format **ER-YYYY-0001**, where 
 2. Click **New Expense Report** (or go directly to `/finance/expenses/new`).
 3. Fill in the header:
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| **Title** | Yes | Brief description of the expenses (e.g., "March Training Conference") (max 300 characters) |
-| **Fiscal Year** | Yes | The fiscal year these expenses fall within |
-| **Description** | No | Detailed explanation of the expenses |
-| **Notes** | No | Additional notes for approvers |
+| Field           | Required | Description                                                                                |
+| --------------- | -------- | ------------------------------------------------------------------------------------------ |
+| **Title**       | Yes      | Brief description of the expenses (e.g., "March Training Conference") (max 300 characters) |
+| **Fiscal Year** | Yes      | The fiscal year these expenses fall within                                                 |
+| **Description** | No       | Detailed explanation of the expenses                                                       |
+| **Notes**       | No       | Additional notes for approvers                                                             |
 
 4. Add **line items** for each expense (can be added during creation or separately while in Draft status):
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| **Description** | Yes | What the expense was for (max 500 characters) |
-| **Amount** | Yes | Dollar amount of the expense (must be greater than zero) |
-| **Date Incurred** | Yes | When the expense occurred |
-| **Expense Type** | Yes | Category of expense (default: General; see table below) |
-| **Budget** | No | Which budget to charge this line item against |
-| **Merchant** | No | Where the purchase was made |
-| **Receipt URL** | No | Link to or upload of the receipt |
+| Field             | Required | Description                                              |
+| ----------------- | -------- | -------------------------------------------------------- |
+| **Description**   | Yes      | What the expense was for (max 500 characters)            |
+| **Amount**        | Yes      | Dollar amount of the expense (must be greater than zero) |
+| **Date Incurred** | Yes      | When the expense occurred                                |
+| **Expense Type**  | Yes      | Category of expense (default: General; see table below)  |
+| **Budget**        | No       | Which budget to charge this line item against            |
+| **Merchant**      | No       | Where the purchase was made                              |
+| **Receipt URL**   | No       | Link to or upload of the receipt                         |
 
 5. Click **Save as Draft** or **Submit**. The total amount is automatically calculated as the sum of all line items.
 
@@ -614,20 +642,20 @@ Expense report numbers are auto-generated in the format **ER-YYYY-0001**, where 
 
 Each line item on an expense report has an expense type that classifies the spending:
 
-| Expense Type | Description |
-|-------------|-------------|
-| **General** | General department expenses not covered by other categories |
-| **Uniform Reimbursement** | Member uniform purchases or replacements |
-| **PPE Replacement** | Personal protective equipment replacement |
-| **Boot Allowance** | Boot purchase reimbursement |
-| **Training Reimbursement** | Training course fees, materials, or registration |
-| **Certification Fee** | Professional certification or license renewal fees |
-| **Conference** | Conference registration, materials, or related costs |
-| **Travel** | Travel expenses (fuel, tolls, parking, airfare) |
-| **Meals** | Meal expenses during department business or training |
-| **Mileage** | Personal vehicle mileage reimbursement |
-| **Equipment Purchase** | Equipment purchased by the member for department use |
-| **Other** | Expenses that do not fit other categories |
+| Expense Type               | Description                                                 |
+| -------------------------- | ----------------------------------------------------------- |
+| **General**                | General department expenses not covered by other categories |
+| **Uniform Reimbursement**  | Member uniform purchases or replacements                    |
+| **PPE Replacement**        | Personal protective equipment replacement                   |
+| **Boot Allowance**         | Boot purchase reimbursement                                 |
+| **Training Reimbursement** | Training course fees, materials, or registration            |
+| **Certification Fee**      | Professional certification or license renewal fees          |
+| **Conference**             | Conference registration, materials, or related costs        |
+| **Travel**                 | Travel expenses (fuel, tolls, parking, airfare)             |
+| **Meals**                  | Meal expenses during department business or training        |
+| **Mileage**                | Personal vehicle mileage reimbursement                      |
+| **Equipment Purchase**     | Equipment purchased by the member for department use        |
+| **Other**                  | Expenses that do not fit other categories                   |
 
 ### Submitting an Expense Report
 
@@ -661,15 +689,15 @@ The paid amount is recorded against the associated budgets for each line item th
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Expense report with no line items | Cannot be submitted -- `totalAmount` must be greater than zero |
-| Line items spanning multiple budget categories | Each line item can reference a different budget. The total is the sum of all line items |
-| Adding line items after submission | Not permitted -- the report must be in Draft status to add line items |
-| Editing the report after submission | Only permitted in Draft or Submitted status |
-| Receipt not attached to a line item | The report can still be submitted, but approvers may request receipts before approving |
-| Expense type mismatch with budget category | No validation -- the expense type is informational classification. The budget is determined by the `budgetId` field on the line item |
-| Multiple line items against the same budget | All amounts are summed and added to that budget's `amountSpent` when the report is paid |
+| Scenario                                       | Behavior                                                                                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Expense report with no line items              | Cannot be submitted -- `totalAmount` must be greater than zero                                                                       |
+| Line items spanning multiple budget categories | Each line item can reference a different budget. The total is the sum of all line items                                              |
+| Adding line items after submission             | Not permitted -- the report must be in Draft status to add line items                                                                |
+| Editing the report after submission            | Only permitted in Draft or Submitted status                                                                                          |
+| Receipt not attached to a line item            | The report can still be submitted, but approvers may request receipts before approving                                               |
+| Expense type mismatch with budget category     | No validation -- the expense type is informational classification. The budget is determined by the `budgetId` field on the line item |
+| Multiple line items against the same budget    | All amounts are summed and added to that budget's `amountSpent` when the report is paid                                              |
 
 ---
 
@@ -689,16 +717,16 @@ DRAFT --> SUBMITTED --> PENDING_APPROVAL --> APPROVED --> ISSUED
           CANCELLED
 ```
 
-| Status | Description | Budget Impact |
-|--------|-------------|---------------|
-| **Draft** | Request is being prepared. | None |
-| **Submitted** | Request has entered the approval chain. | None |
-| **Pending Approval** | Request is waiting for approver action. | None |
-| **Approved** | All approval steps are complete. The check can be issued. | None |
-| **Issued** | The check has been written and issued. Check number and date are recorded. | **Amount is added to budget spent** |
-| **Denied** | An approver has denied the request. | None |
-| **Voided** | An issued check has been voided (e.g., lost check, cancelled payment). | **Spent amount is reversed** (subtracted, floored at zero) |
-| **Cancelled** | The requester has cancelled the request before issuance. | None |
+| Status               | Description                                                                | Budget Impact                                              |
+| -------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Draft**            | Request is being prepared.                                                 | None                                                       |
+| **Submitted**        | Request has entered the approval chain.                                    | None                                                       |
+| **Pending Approval** | Request is waiting for approver action.                                    | None                                                       |
+| **Approved**         | All approval steps are complete. The check can be issued.                  | None                                                       |
+| **Issued**           | The check has been written and issued. Check number and date are recorded. | **Amount is added to budget spent**                        |
+| **Denied**           | An approver has denied the request.                                        | None                                                       |
+| **Voided**           | An issued check has been voided (e.g., lost check, cancelled payment).     | **Spent amount is reversed** (subtracted, floored at zero) |
+| **Cancelled**        | The requester has cancelled the request before issuance.                   | None                                                       |
 
 ### Request Numbers
 
@@ -712,16 +740,16 @@ Check request numbers are auto-generated in the format **CK-YYYY-0001**, where Y
 2. Click **New Check Request** (or go directly to `/finance/check-requests/new`).
 3. Fill in the request details:
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| **Payee Name** | Yes | Who the check should be made out to (max 300 characters) |
-| **Amount** | Yes | The check amount (must be greater than zero) |
-| **Fiscal Year** | Yes | The fiscal year to charge against |
-| **Budget** | No | The specific budget line item |
-| **Payee Address** | No | Mailing address for the payee |
-| **Memo** | No | Memo line for the check (max 500 characters) |
-| **Purpose** | No | Internal description of why the check is needed |
-| **Notes** | No | Additional notes for approvers |
+| Field             | Required | Description                                              |
+| ----------------- | -------- | -------------------------------------------------------- |
+| **Payee Name**    | Yes      | Who the check should be made out to (max 300 characters) |
+| **Amount**        | Yes      | The check amount (must be greater than zero)             |
+| **Fiscal Year**   | Yes      | The fiscal year to charge against                        |
+| **Budget**        | No       | The specific budget line item                            |
+| **Payee Address** | No       | Mailing address for the payee                            |
+| **Memo**          | No       | Memo line for the check (max 500 characters)             |
+| **Purpose**       | No       | Internal description of why the check is needed          |
+| **Notes**         | No       | Additional notes for approvers                           |
 
 4. Click **Save as Draft** or **Submit**.
 
@@ -756,14 +784,14 @@ The check status changes to **Voided**. The amount is subtracted from the budget
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Issuing a check without entering a check number | Not permitted -- the `checkNumber` parameter is required for the issue endpoint |
-| Voiding a check | The budget spent amount is reduced by the check amount, floored at zero |
-| Duplicate check numbers | The system does not enforce unique check numbers -- it is the treasurer's responsibility to track physical check stock |
-| Re-issuing a voided check | Create a new check request. The voided request remains as a historical record |
-| Check request with no budget selected | The check can be issued, but no budget tracking occurs for the amount |
-| Editing a check request after submission | Only permitted in Draft or Submitted status |
+| Scenario                                        | Behavior                                                                                                               |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Issuing a check without entering a check number | Not permitted -- the `checkNumber` parameter is required for the issue endpoint                                        |
+| Voiding a check                                 | The budget spent amount is reduced by the check amount, floored at zero                                                |
+| Duplicate check numbers                         | The system does not enforce unique check numbers -- it is the treasurer's responsibility to track physical check stock |
+| Re-issuing a voided check                       | Create a new check request. The voided request remains as a historical record                                          |
+| Check request with no budget selected           | The check can be issued, but no budget tracking occurs for the amount                                                  |
+| Editing a check request after submission        | Only permitted in Draft or Submitted status                                                                            |
 
 ---
 
@@ -780,9 +808,9 @@ Dues management handles the collection of recurring fees from members -- annual 
 > are no **Create Dues Schedule**, **Generate Dues**, **Record Payment**,
 > **Waive** or **Reverse Waiver** buttons on it yet. Every write action
 > described in this chapter exists as an API endpoint (`POST
-> /finance/dues-schedules`, `POST /finance/dues-schedules/{id}/generate`, `PUT
-> /finance/dues/{id}`, `POST /finance/dues/{id}/waive`, `POST
-> /finance/dues/{id}/unwaive`, `GET /finance/dues/{id}/payments`) and behaves
+/finance/dues-schedules`, `POST /finance/dues-schedules/{id}/generate`, `PUT
+/finance/dues/{id}`, `POST /finance/dues/{id}/waive`, `POST
+/finance/dues/{id}/unwaive`, `GET /finance/dues/{id}/payments`) and behaves
 > exactly as described below, but until the management UI ships they have to be
 > driven through the API. The click-paths in this chapter describe the intended
 > UI; treat them as the specification, not as what is on screen today. Tracked
@@ -792,27 +820,27 @@ Dues management handles the collection of recurring fees from members -- annual 
 
 A dues schedule defines the terms of a recurring fee:
 
-| Field | Description |
-|-------|-------------|
-| **Name** | Description of the dues (e.g., "Annual Membership Dues", "Q1 Assessment") (max 200 characters) |
-| **Amount** | The amount each member owes per period (must be greater than zero) |
-| **Frequency** | How often dues are collected (see table below) |
-| **Due Date** | When the current period's payment is due |
-| **Grace Period Days** | Number of days after the due date before the payment is considered overdue (default: 30) |
-| **Late Fee Amount** | Optional fee assessed when payment is overdue (after the grace period) |
-| **Fiscal Year** | Optionally tie the schedule to a specific fiscal year |
+| Field                           | Description                                                                                                                 |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Name**                        | Description of the dues (e.g., "Annual Membership Dues", "Q1 Assessment") (max 200 characters)                              |
+| **Amount**                      | The amount each member owes per period (must be greater than zero)                                                          |
+| **Frequency**                   | How often dues are collected (see table below)                                                                              |
+| **Due Date**                    | When the current period's payment is due                                                                                    |
+| **Grace Period Days**           | Number of days after the due date before the payment is considered overdue (default: 30)                                    |
+| **Late Fee Amount**             | Optional fee assessed when payment is overdue (after the grace period)                                                      |
+| **Fiscal Year**                 | Optionally tie the schedule to a specific fiscal year                                                                       |
 | **Applies to Membership Types** | Optionally restrict dues to specific membership tiers (stored as a JSON array, e.g., only Active members, not Life members) |
-| **Is Active** | Whether the schedule is currently collecting dues |
-| **Notes** | Optional notes about the schedule |
+| **Is Active**                   | Whether the schedule is currently collecting dues                                                                           |
+| **Notes**                       | Optional notes about the schedule                                                                                           |
 
 ### Frequencies
 
-| Frequency | Period |
-|-----------|--------|
-| **Annual** | Once per year |
-| **Semi-Annual** | Twice per year (every 6 months) |
-| **Quarterly** | Four times per year (every 3 months) |
-| **Monthly** | Every month |
+| Frequency       | Period                               |
+| --------------- | ------------------------------------ |
+| **Annual**      | Once per year                        |
+| **Semi-Annual** | Twice per year (every 6 months)      |
+| **Quarterly**   | Four times per year (every 3 months) |
+| **Monthly**     | Every month                          |
 
 ### Creating a Dues Schedule
 
@@ -825,7 +853,13 @@ A dues schedule defines the terms of a recurring fee:
 5. Optionally restrict the schedule to specific **membership types** using the multi-select.
 6. Click **Save**.
 
-> **[SCREENSHOT NEEDED]:** _The Create Dues Schedule form showing name, amount, frequency dropdown (Annual/Semi-Annual/Quarterly/Monthly), due date picker, grace period days input, late fee amount input, membership types multi-select, fiscal year dropdown, notes textarea, and Save button._
+> **Corrected 2026-08-12.** Not built. See
+> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
+> which records what exists behind each of these: an API, a store
+> action, or types — but no page and no control that reaches them.
+> The steps above describe the intended design.
+>
+> `financeStore.createDuesSchedule` exists; no component calls it.
 
 ### Generating Member Dues
 
@@ -841,14 +875,14 @@ After creating a schedule, you need to generate individual dues records for each
 
 ### Member Dues Statuses
 
-| Status | Description |
-|--------|-------------|
-| **Pending** | Payment is expected but not yet received |
-| **Paid** | Full payment has been received (`amountPaid >= amountDue`) |
+| Status      | Description                                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Pending** | Payment is expected but not yet received                                                                           |
+| **Paid**    | Full payment has been received (`amountPaid >= amountDue`)                                                         |
 | **Partial** | A partial payment has been received (`amountPaid > 0` but less than `amountDue`). The remaining balance is tracked |
-| **Overdue** | The due date plus grace period has passed without full payment |
-| **Waived** | The dues have been waived by an officer (e.g., financial hardship, service credit) |
-| **Exempt** | The member is exempt from this dues schedule (e.g., Life members exempt from annual dues) |
+| **Overdue** | The due date plus grace period has passed without full payment                                                     |
+| **Waived**  | The dues have been waived by an officer (e.g., financial hardship, service credit)                                 |
+| **Exempt**  | The member is exempt from this dues schedule (e.g., Life members exempt from annual dues)                          |
 
 ### Recording Payments
 
@@ -932,16 +966,16 @@ your reason for reversing, so both halves of the decision survive.
 
 The dues summary provides an overview of collection status across all members:
 
-| Metric | Description |
-|--------|-------------|
-| **Total Expected** | Sum of all `amountDue` values across all member dues records |
-| **Total Collected** | Sum of all `amountPaid` values |
-| **Total Outstanding** | `Total Expected - Total Collected - Total Waived` |
-| **Total Waived** | Sum of `amountDue` for records with Waived status |
-| **Collection Rate** | `(Total Collected / Total Expected) * 100`, rounded to two decimal places |
-| **Members Paid** | Count of members with Paid status |
-| **Members Overdue** | Count of members with Overdue status |
-| **Members Waived** | Count of members with Waived status |
+| Metric                | Description                                                               |
+| --------------------- | ------------------------------------------------------------------------- |
+| **Total Expected**    | Sum of all `amountDue` values across all member dues records              |
+| **Total Collected**   | Sum of all `amountPaid` values                                            |
+| **Total Outstanding** | `Total Expected - Total Collected - Total Waived`                         |
+| **Total Waived**      | Sum of `amountDue` for records with Waived status                         |
+| **Collection Rate**   | `(Total Collected / Total Expected) * 100`, rounded to two decimal places |
+| **Members Paid**      | Count of members with Paid status                                         |
+| **Members Overdue**   | Count of members with Overdue status                                      |
+| **Members Waived**    | Count of members with Waived status                                       |
 
 The summary can be filtered by a specific dues schedule using the optional `scheduleId` parameter.
 
@@ -949,22 +983,22 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Generating dues when records already exist | The system checks for existing records per member per schedule (idempotency guard). Only members without existing records get new ones |
-| Member joins mid-period | Their dues are not automatically generated. Run Generate Dues again -- the system will only create records for members who do not already have one |
-| Partial payment followed by additional payment | Both are kept as separate entries in the payment history. The amount paid is the sum of them. If the total reaches the amount due, status changes to Paid |
-| The same payment entered twice with the same transaction reference | The second submission is ignored and the record returned unchanged -- the member is not charged twice |
-| Two cash payments of the same amount, neither with a reference | Both are recorded. Without a reference there is nothing to tell a duplicate from a genuine second payment, and dropping one would lose money |
-| A later payment entered without a method or notes | Recorded as-is. Earlier payments keep their own detail; blank fields no longer overwrite them |
-| Payment recorded against waived or exempt dues | Refused with an explanatory error. Reverse the waiver first (see Reversing a Waiver) |
-| Waiver reversed | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is written to the audit log, not discarded |
-| Partial payment followed by waiver | The waiver sets the status to Waived. The amount already paid is not refunded -- this is an administrative decision |
-| Dues schedule with no membership type filter | Dues are generated for all active users in the organization |
-| Changing the dues amount on a schedule | Only affects newly generated records. Existing member dues records retain the original `amountDue` |
-| Member status changes to inactive | Existing dues records are not automatically waived or cancelled. An officer should manually waive them if appropriate |
-| Late fee application | The `lateFeeApplied` field on the member dues record tracks the late fee amount. Late fee logic is managed by the officer updating the record |
-| Dues summary with no records | Returns zeroes for all metrics and 0% collection rate |
+| Scenario                                                           | Behavior                                                                                                                                                  |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generating dues when records already exist                         | The system checks for existing records per member per schedule (idempotency guard). Only members without existing records get new ones                    |
+| Member joins mid-period                                            | Their dues are not automatically generated. Run Generate Dues again -- the system will only create records for members who do not already have one        |
+| Partial payment followed by additional payment                     | Both are kept as separate entries in the payment history. The amount paid is the sum of them. If the total reaches the amount due, status changes to Paid |
+| The same payment entered twice with the same transaction reference | The second submission is ignored and the record returned unchanged -- the member is not charged twice                                                     |
+| Two cash payments of the same amount, neither with a reference     | Both are recorded. Without a reference there is nothing to tell a duplicate from a genuine second payment, and dropping one would lose money              |
+| A later payment entered without a method or notes                  | Recorded as-is. Earlier payments keep their own detail; blank fields no longer overwrite them                                                             |
+| Payment recorded against waived or exempt dues                     | Refused with an explanatory error. Reverse the waiver first (see Reversing a Waiver)                                                                      |
+| Waiver reversed                                                    | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is written to the audit log, not discarded     |
+| Partial payment followed by waiver                                 | The waiver sets the status to Waived. The amount already paid is not refunded -- this is an administrative decision                                       |
+| Dues schedule with no membership type filter                       | Dues are generated for all active users in the organization                                                                                               |
+| Changing the dues amount on a schedule                             | Only affects newly generated records. Existing member dues records retain the original `amountDue`                                                        |
+| Member status changes to inactive                                  | Existing dues records are not automatically waived or cancelled. An officer should manually waive them if appropriate                                     |
+| Late fee application                                               | The `lateFeeApplied` field on the member dues record tracks the late fee amount. Late fee logic is managed by the officer updating the record             |
+| Dues summary with no records                                       | Returns zeroes for all metrics and 0% collection rate                                                                                                     |
 
 ---
 
@@ -987,7 +1021,14 @@ Before exporting, set up mappings between your Logbook budget categories and you
 
 3. Click **Save**.
 
-> **[SCREENSHOT NEEDED]:** _The QuickBooks Export Mapping page showing a table with columns for Internal Category (from Logbook), QB Account Name, QB Account Number, Mapping Type (Expense/Income/Asset), and action buttons. Show several categories mapped (e.g., "Apparatus Maintenance" mapped to "6100 - Vehicle Maintenance")._
+> **Corrected 2026-08-12.** Not built. See
+> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
+> which records what exists behind each of these: an API, a store
+> action, or types — but no page and no control that reaches them.
+> The steps above describe the intended design.
+>
+> `GET/POST/PUT /finance/export/mappings` and the `qbAccountName` types
+> exist; there is no page, no route and no consumer.
 
 > **Hint:** You can also set the QuickBooks account name directly on each budget category (the `qbAccountName` field in Budget Category settings). The export mapping page provides a separate, more granular mapping layer.
 
@@ -1001,18 +1042,19 @@ Before exporting, set up mappings between your Logbook budget categories and you
 
 The CSV includes these columns:
 
-| Column | Description |
-|--------|-------------|
-| **Date** | Transaction date in MM/DD/YYYY format |
-| **Type** | Transaction type: `Bill Pmt` (purchase request), `Check` (check request), or `Expense` (expense report line item) |
-| **Num** | Reference number (request number, check number, or report number) |
-| **Name** | Vendor, payee, or merchant name |
-| **Memo** | Transaction description (title, memo, or line item description) |
-| **Account** | Reserved for account mapping (currently empty in export) |
-| **Debit** | Transaction amount |
-| **Credit** | Reserved (currently empty in export) |
+| Column      | Description                                                                                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Date**    | Transaction date in MM/DD/YYYY format                                                                             |
+| **Type**    | Transaction type: `Bill Pmt` (purchase request), `Check` (check request), or `Expense` (expense report line item) |
+| **Num**     | Reference number (request number, check number, or report number)                                                 |
+| **Name**    | Vendor, payee, or merchant name                                                                                   |
+| **Memo**    | Transaction description (title, memo, or line item description)                                                   |
+| **Account** | Reserved for account mapping (currently empty in export)                                                          |
+| **Debit**   | Transaction amount                                                                                                |
+| **Credit**  | Reserved (currently empty in export)                                                                              |
 
 The export includes:
+
 - **Purchase Requests** with Paid status, filtered by `paidAt` date
 - **Check Requests** with Issued status, filtered by `checkDate`
 - **Expense Reports** with Paid status (one row per line item), filtered by `paidAt` date
@@ -1021,28 +1063,35 @@ The export includes:
 
 Every export is logged with:
 
-| Field | Description |
-|-------|-------------|
-| **Export Type** | The type of data exported |
-| **Date Range** | Start and end dates of the exported period |
-| **Record Count** | Number of transactions included |
-| **File Format** | The output format (CSV or IIF) |
-| **Exported By** | The officer who generated the export |
-| **Exported At** | Timestamp of the export |
+| Field            | Description                                |
+| ---------------- | ------------------------------------------ |
+| **Export Type**  | The type of data exported                  |
+| **Date Range**   | Start and end dates of the exported period |
+| **Record Count** | Number of transactions included            |
+| **File Format**  | The output format (CSV or IIF)             |
+| **Exported By**  | The officer who generated the export       |
+| **Exported At**  | Timestamp of the export                    |
 
-> **[SCREENSHOT NEEDED]:** _The Export Logs page showing a table of past exports with columns for export type, date range, record count, file format, exported by, and timestamp._
+> **Corrected 2026-08-12.** Not built. See
+> [Finance — Five Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#finance--five-guide-sections-with-no-screen-2026-08-09),
+> which records what exists behind each of these: an API, a store
+> action, or types — but no page and no control that reaches them.
+> The steps above describe the intended design.
+>
+> `GET /finance/export/logs` and an `ExportLog` interface exist; there is no
+> page, no route and no consumer.
 
 > **Hint:** Export frequently (monthly or quarterly) rather than waiting for year-end. This makes reconciliation with QuickBooks easier and catches mapping issues early. Each export creates a log entry so you can track what has been exported and when.
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| No transactions in the selected date range | An empty CSV file is generated (headers only, no data rows). An export log is still created with record count 0 |
-| Date range spanning multiple fiscal years | All matching transactions are included regardless of fiscal year boundaries |
-| Expense report with multiple line items | Each line item becomes a separate row in the CSV, all sharing the same report number |
-| Purchase request with actual amount different from estimated | The export uses the actual amount if set, otherwise falls back to the estimated amount |
-| Check request without a check number | The export uses the request number (CK-YYYY-NNNN) as the Num column value |
+| Scenario                                                     | Behavior                                                                                                        |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| No transactions in the selected date range                   | An empty CSV file is generated (headers only, no data rows). An export log is still created with record count 0 |
+| Date range spanning multiple fiscal years                    | All matching transactions are included regardless of fiscal year boundaries                                     |
+| Expense report with multiple line items                      | Each line item becomes a separate row in the CSV, all sharing the same report number                            |
+| Purchase request with actual amount different from estimated | The export uses the actual amount if set, otherwise falls back to the estimated amount                          |
+| Check request without a check number                         | The export uses the request number (CK-YYYY-NNNN) as the Num column value                                       |
 
 ---
 
@@ -1160,27 +1209,27 @@ Before closing the fiscal year:
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| "Cannot see the Finance module" | Finance is an optional module. Your department administrator must enable it in **Settings > Organization > Modules**. |
-| "No fiscal years available when creating a request" | An active fiscal year must exist. Ask an officer with `finance.manage` permission to create and activate a fiscal year in **Finance > Settings**. |
-| "My purchase request was auto-approved with no review" | No approval chain matched your request (based on entity type, amount, and category). An officer with `finance.configure_approvals` permission should set up approval chains in **Finance > Settings > Approval Chains**. Use the Preview tool to verify chain matching. |
-| "I submitted a request but no one received the approval notification" | Verify that the approval chain step has a valid approver. For Position-type steps, at least one member must hold that position. For Permission-type steps, at least one member must have the `finance.approve` permission. |
-| "Budget shows negative remaining amount" | This means approved and paid requests exceed the budgeted amount. The system allows over-budget approvals. Adjust the budget amount or cancel/deny excess requests. |
-| "Cannot edit my purchase request" | Purchase requests can only be edited in **Draft** or **Submitted** status. Once in Pending Approval or later, they cannot be modified. Cancel and re-create if changes are needed. |
-| "Dues show as Overdue immediately" | Check the **due date** and **grace period** on the dues schedule. If the due date plus grace period has already passed, newly generated records may appear overdue. Adjust the schedule settings or due date if needed. |
-| "QuickBooks export is missing some transactions" | The export only includes Purchase Requests with Paid status, Check Requests with Issued status, and Expense Reports with Paid status within the selected date range. Verify the transactions have reached the correct terminal status. Also check that account mappings are configured for all categories. |
-| "Approval chain not matching the expected chain" | Use the **Preview** tool on the Approval Chains settings page to see which chain matches for a given entity type, amount, and category. The most specific match wins -- see [Chain Resolution](#chain-resolution-specificity) for the scoring rules. |
-| "Cannot void an issued check" | Voiding is only permitted for checks with **Issued** status. If the check has already been voided, it cannot be voided again. |
-| "Member dues not generated for a new member" | The **Generate Dues** action only creates records for members who do not already have a record for that schedule. If a member joined after the initial generation, run Generate Dues again -- it will create a record only for that member. |
-| "Cannot delete a budget category" | Categories with existing budgets cannot be deleted. Reassign or delete the associated budgets first, then delete the category. |
-| "Cannot delete an approval chain" | Verify there are no active requests using step records from that chain. Wait for all associated requests to reach a terminal status (Paid, Denied, Cancelled, Voided, Issued) before deleting. |
-| "Encumbered amount not released after denial" | This is expected behavior. Denial happens during the approval flow, before the request reaches Approved status, so no encumbrance was ever created. The budget was never affected. |
-| "Late fee not applied" | Late fees must be manually applied by updating the member dues record. The `lateFeeAmount` on the schedule defines the fee amount, and the `lateFeeApplied` field on the individual record tracks whether it has been applied. |
-| "I need to change the amount on an approved purchase request" | The estimated amount cannot be changed after the request leaves Draft/Submitted status. However, when marking the request as **Paid**, you can enter the **actual amount**, which is what gets recorded against the budget. The difference between estimated (encumbered) and actual (spent) is reconciled automatically. |
-| "External email approver link expired" | External approval tokens are valid for 7 days. If the link has expired, the request must be handled through the system by an internal approver, or the approval chain can be modified to add a new step. |
-| "Payment recorded but status still shows Partial" | Payments are cumulative. The status changes to Paid only when `amountPaid >= amountDue`. Record another payment for the remaining balance to reach the full amount. |
-| "How do I see what I need to approve?" | Navigate to the Finance Dashboard -- your pending approval count is displayed prominently. Click through to see the individual requests awaiting your action. You need the `finance.approve` permission to see and act on pending approvals. |
+| Issue                                                                 | Solution                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Cannot see the Finance module"                                       | Finance is an optional module. Your department administrator must enable it in **Settings > Organization > Modules**.                                                                                                                                                                                                     |
+| "No fiscal years available when creating a request"                   | An active fiscal year must exist. Ask an officer with `finance.manage` permission to create and activate a fiscal year in **Finance > Settings**.                                                                                                                                                                         |
+| "My purchase request was auto-approved with no review"                | No approval chain matched your request (based on entity type, amount, and category). An officer with `finance.configure_approvals` permission should set up approval chains in **Finance > Settings > Approval Chains**. Use the Preview tool to verify chain matching.                                                   |
+| "I submitted a request but no one received the approval notification" | Verify that the approval chain step has a valid approver. For Position-type steps, at least one member must hold that position. For Permission-type steps, at least one member must have the `finance.approve` permission.                                                                                                |
+| "Budget shows negative remaining amount"                              | This means approved and paid requests exceed the budgeted amount. The system allows over-budget approvals. Adjust the budget amount or cancel/deny excess requests.                                                                                                                                                       |
+| "Cannot edit my purchase request"                                     | Purchase requests can only be edited in **Draft** or **Submitted** status. Once in Pending Approval or later, they cannot be modified. Cancel and re-create if changes are needed.                                                                                                                                        |
+| "Dues show as Overdue immediately"                                    | Check the **due date** and **grace period** on the dues schedule. If the due date plus grace period has already passed, newly generated records may appear overdue. Adjust the schedule settings or due date if needed.                                                                                                   |
+| "QuickBooks export is missing some transactions"                      | The export only includes Purchase Requests with Paid status, Check Requests with Issued status, and Expense Reports with Paid status within the selected date range. Verify the transactions have reached the correct terminal status. Also check that account mappings are configured for all categories.                |
+| "Approval chain not matching the expected chain"                      | Use the **Preview** tool on the Approval Chains settings page to see which chain matches for a given entity type, amount, and category. The most specific match wins -- see [Chain Resolution](#chain-resolution-specificity) for the scoring rules.                                                                      |
+| "Cannot void an issued check"                                         | Voiding is only permitted for checks with **Issued** status. If the check has already been voided, it cannot be voided again.                                                                                                                                                                                             |
+| "Member dues not generated for a new member"                          | The **Generate Dues** action only creates records for members who do not already have a record for that schedule. If a member joined after the initial generation, run Generate Dues again -- it will create a record only for that member.                                                                               |
+| "Cannot delete a budget category"                                     | Categories with existing budgets cannot be deleted. Reassign or delete the associated budgets first, then delete the category.                                                                                                                                                                                            |
+| "Cannot delete an approval chain"                                     | Verify there are no active requests using step records from that chain. Wait for all associated requests to reach a terminal status (Paid, Denied, Cancelled, Voided, Issued) before deleting.                                                                                                                            |
+| "Encumbered amount not released after denial"                         | This is expected behavior. Denial happens during the approval flow, before the request reaches Approved status, so no encumbrance was ever created. The budget was never affected.                                                                                                                                        |
+| "Late fee not applied"                                                | Late fees must be manually applied by updating the member dues record. The `lateFeeAmount` on the schedule defines the fee amount, and the `lateFeeApplied` field on the individual record tracks whether it has been applied.                                                                                            |
+| "I need to change the amount on an approved purchase request"         | The estimated amount cannot be changed after the request leaves Draft/Submitted status. However, when marking the request as **Paid**, you can enter the **actual amount**, which is what gets recorded against the budget. The difference between estimated (encumbered) and actual (spent) is reconciled automatically. |
+| "External email approver link expired"                                | External approval tokens are valid for 7 days. If the link has expired, the request must be handled through the system by an internal approver, or the approval chain can be modified to add a new step.                                                                                                                  |
+| "Payment recorded but status still shows Partial"                     | Payments are cumulative. The status changes to Paid only when `amountPaid >= amountDue`. Record another payment for the remaining balance to reach the full amount.                                                                                                                                                       |
+| "How do I see what I need to approve?"                                | Navigate to the Finance Dashboard -- your pending approval count is displayed prominently. Click through to see the individual requests awaiting your action. You need the `finance.approve` permission to see and act on pending approvals.                                                                              |
 
 ---
 

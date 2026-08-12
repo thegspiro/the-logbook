@@ -615,6 +615,11 @@ export function openPipelineSettings() {
 export const isNominatingElection = (election) =>
   (election.status ?? "") === "nominations";
 
+export const isClosedElection = (election) =>
+  (election.status ?? "") === "closed";
+
+export const isOpenElection = (election) => (election.status ?? "") === "open";
+
 export function openElectionTab(tabId, match) {
   return async (page) => {
     await openFirstFromApi(
@@ -3024,6 +3029,106 @@ export const SHOTS = [
     },
   },
   {
+    id: "03-97-shift-reminder-expanded",
+    doc: "03-scheduling.md",
+    line: 1887,
+    anchor:
+      "Screenshot of the notification inbox with a shift reminder expanded to show its crew and checklists",
+    alt: "The notification inbox with a shift reminder expanded — the crew by position, the apparatus checklists, and a View Shift button — between collapsed cards showing only a summary line",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      // 00-22 leaves a card pinned, and a pinned card sorts to the top. Clear
+      // pins so this shot is about the expanded reminder, not that leftover.
+      await page.evaluate(async () => {
+        const listed = await fetch("/api/v1/notifications/my?limit=100", {
+          credentials: "include",
+        });
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        for (const log of ((await listed.json()).logs ?? []).filter(
+          (l) => l.pinned,
+        )) {
+          await fetch(`/api/v1/notifications/my/${log.id}/pin?pinned=false`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+          });
+        }
+      });
+      await page.reload({ waitUntil: "networkidle" });
+
+      const card = page
+        .locator("div.card")
+        .filter({ hasText: "Shift Reminder" })
+        .first();
+      await card
+        .locator('button[aria-expanded="false"]')
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(900);
+    },
+    fullPage: true,
+  },
+  {
+    id: "00-22-notification-card-expanded",
+    doc: "00-getting-started.md",
+    line: 254,
+    anchor:
+      "Screenshot of the notifications inbox showing one card pinned and expanded",
+    alt: "The notifications inbox — a shift assignment pinned and expanded to its details, View Shift button and Unpin control, the rest collapsed to a summary line",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      // Pinning writes to the database, so a re-run would otherwise shoot the
+      // pins left behind by the previous run stacked on top of this one's.
+      // page.request shares the page's cookies, so this is the logged-in member.
+      await page.evaluate(async () => {
+        // /my, not /logs — the latter is the org-wide admin send log, which is
+        // ordered differently and is not what this page reads.
+        const listed = await fetch("/api/v1/notifications/my?limit=100", {
+          credentials: "include",
+        });
+        const logs = (await listed.json()).logs ?? [];
+        // The pin endpoint is state-changing, so it needs the double-submit
+        // header the app's axios interceptor would normally attach.
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        for (const log of logs.filter((l) => l.pinned)) {
+          await fetch(`/api/v1/notifications/my/${log.id}/pin?pinned=false`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+          });
+        }
+      });
+      await page.reload({ waitUntil: "networkidle" });
+
+      // A shift assignment specifically, because it is the case the guide
+      // describes: only notifications carrying an action_url render a CTA, and
+      // this is the one whose CTA is "View Shift".
+      const card = page
+        .locator("div.card")
+        .filter({ hasText: "New Shift Assignment" })
+        .first();
+      // Expand first — the Pin control lives inside the expanded panel, so
+      // there is nothing to click until a card is open.
+      // Scoped to the card, not the page: the sidebar's collapsible nav groups
+      // also carry `aria-expanded`, and there are more of them than there are
+      // notifications — an unscoped `.first()` clicks the navigation.
+      await card
+        .locator('button[aria-expanded="false"]')
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(700);
+      await card.locator('button[title="Pin notification"]').first().click({
+        timeout: 15_000,
+      });
+      // Pinning re-sorts the list to put this card first; give the reorder a
+      // moment before shooting.
+      await page.waitForTimeout(1200);
+    },
+    fullPage: true,
+  },
+  {
     id: "00-04-dashboard-overview",
     // the empty 'My Upcoming Shifts' panel is incidental; the rest of the dashboard is populated
     allowEmptyState: true,
@@ -4775,6 +4880,29 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "10-16-mobile-item-detail",
+    doc: "10-mobile-pwa.md",
+    line: 613,
+    anchor:
+      "Screenshot of an inventory item's detail page on a phone showing its cards stacked",
+    alt: "An inventory item's detail page on a phone — the status and condition badges under the name, with the Basic Info and Location cards stacked",
+    route: "/inventory/items",
+    prepare: openFirstFromApi(
+      "/inventory/items?limit=200",
+      (id) => `/inventory/items/${id}`,
+      "items",
+      // The gas monitor the walkthrough scans. Named rather than taken first
+      // so the shot matches the story around it.
+      (item) => item.name === "Gas Meter",
+    ),
+    // Deliberately not fullPage. The bottom nav is `position: fixed`, and a
+    // full-page capture is stitched from several viewport shots with fixed
+    // elements painted at their document offset — so on a page this long the
+    // nav bar lands across the middle of the image, over real content. One
+    // viewport is also the truer picture of a phone.
+    viewport: { width: 414, height: 1000 },
+  },
+  {
     id: "10-05-mobile-inventory",
     doc: "10-mobile-pwa.md",
     line: 304,
@@ -5023,6 +5151,51 @@ export const SHOTS = [
     },
   },
   {
+    id: "08-73-template-builder-preview",
+    doc: "08-admin-reports.md",
+    line: 1308,
+    anchor:
+      "Screenshot of the equipment check template builder's Preview showing how the check form",
+    alt: "The template builder's Preview — the check form drawn inside a phone frame, as a crew would see it",
+    route: "/scheduling/equipment-check-templates",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/equipment-checks/templates",
+        (id) => `/scheduling/equipment-check-templates/${id}`,
+        "templates",
+        (template) => template.name === "Engine Daily Check",
+      )(page);
+      await clickByName("Preview")(page);
+      await page.waitForSelector("text=Safety Equipment", { timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    // The phone frame itself, not the dimmed page behind it.
+    selector: 'div.fixed.inset-0.z-50 > div',
+    viewport: { width: 1440, height: 1300 },
+  },
+  {
+    id: "08-72-report-stage-groups",
+    doc: "08-admin-reports.md",
+    line: 261,
+    anchor:
+      "Screenshot of the ReportStageGroupsEditor showing the configured groups",
+    alt: "The Report Stage Groups editor — three named groups, the stages in each, and the controls that add and remove them",
+    route: "/prospective-members/settings",
+    prepare: async (page) => {
+      await openPipelineSettings()(page);
+      const heading = page.getByText("Report Stage Groups", { exact: true });
+      await heading.waitFor({ timeout: 15_000 });
+      await heading.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
+    // Clipped to the editor's own card. The settings page is long and the
+    // panel is a small part of it; 15-10 already shows the page whole.
+    // The editor's own root: the heading sits two levels in, and the wrapper
+    // the settings page puts around it is the card with the border.
+    selector: 'div:has(> div > div > h3:text-is("Report Stage Groups"))',
+    viewport: { width: 1440, height: 1200 },
+  },
+  {
     id: "15-10-pipeline-settings",
     doc: "15-prospective-members.md",
     line: 371,
@@ -5044,6 +5217,28 @@ export const SHOTS = [
     alt: "Integrations catalog grid with connection status on each card",
     route: "/integrations",
     fullPage: true,
+  },
+  {
+    id: "16-07-calendar-subscribe",
+    doc: "16-integrations.md",
+    line: 339,
+    anchor:
+      "Screenshot of the Subscribe to my shifts card expanded on My Shifts",
+    alt: "The Subscribe to my shifts card expanded — the member's private feed URL, its copy button and the reset control",
+    // Not on /integrations. The ICS feed is a per-member subscription that
+    // lives on My Shifts; the Integrations catalog only advertises it.
+    route: "/scheduling?tab=my-shifts",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Subscribe to my shifts")(page);
+      // The token is minted on first open, so the URL field does not exist
+      // until that round trip lands.
+      await page.getByLabel("Calendar subscription URL").waitFor({
+        timeout: 20_000,
+      });
+      await page.waitForTimeout(400);
+    },
+    selector: 'div.card:has([aria-label="Calendar subscription URL"])',
   },
 
   // ── 17 Privacy & Data Rights ────────────────────────────────────────
@@ -5712,6 +5907,46 @@ export const SHOTS = [
     alt: "The member picker opened from Assign to Member, with its search field and roster",
     route: "/inventory/admin",
     prepare: clickByName(/Assign to Member/i),
+  },
+  {
+    id: "05-68-equipment-request-states",
+    doc: "05-inventory.md",
+    line: 340,
+    anchor:
+      "Screenshot of the Equipment Requests page showing an approved request with its Fulfill",
+    alt: "Equipment Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge",
+    route: "/inventory/admin/requests",
+    prepare: async (page) => {
+      // The page opens on Pending, which is right for a review queue and wrong
+      // for a picture of the states a request moves through.
+      await page.selectOption("#status-filter", "");
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-67-empty-asset-tag",
+    doc: "05-inventory.md",
+    line: 1597,
+    anchor:
+      "Screenshot of an item detail page showing the barcode field with a generated barcode value",
+    alt: "An item with a barcode but no asset tag — the empty field showing its -- placeholder rather than being hidden",
+    route: "/inventory/items",
+    // The section is about what an *empty* field looks like, so the item has
+    // to be one that has a barcode and no asset tag. `05-56` and `05-61`
+    // deliberately pick the opposite.
+    prepare: openFirstFromApi(
+      "/inventory/items?limit=200",
+      (id) => `/inventory/items/${id}`,
+      "items",
+      (item) =>
+        Boolean(item.barcode ?? item.barcode_value) &&
+        !(item.asset_tag ?? item.assetTag),
+    ),
+    selector: 'div:has(> h3:text("Basic Info"))',
+    // "--" is the subject, and the harness's empty-state check reads a page
+    // full of dashes as a page that failed to load.
+    allowEmptyState: true,
   },
   {
     id: "05-56-item-barcode-value",
@@ -6808,6 +7043,274 @@ export const SHOTS = [
     selector: "aside, nav",
   },
   {
+    id: "09-21-my-skill-test-results",
+    doc: "09-skills-testing.md",
+    line: 693,
+    anchor:
+      "Screenshot of the My Training page's \"Skills Tests\" section showing the member's own results",
+    alt: "The member's own skill test results on My Training — official attempts badged PASS or FAIL with their dates, and a practice attempt badged Practice",
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      // The section is collapsed by default, so it has to be opened before
+      // there is anything to photograph.
+      await page
+        .getByRole("button", { name: /Skills Tests/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(1200);
+      // Clipped to the first handful of rows. The demo member carries fifty-odd
+      // identical passes from other seeding, and the whole section runs to
+      // ~3700px — the recent, varied results are all at the top.
+      await page.evaluate(() => {
+        const heading = [...document.querySelectorAll("button")].find((b) =>
+          b.textContent?.includes("Skills Tests"),
+        );
+        const section = heading?.parentElement;
+        if (section instanceof HTMLElement) {
+          section.style.maxHeight = "320px";
+          section.style.overflow = "hidden";
+        }
+      });
+      await page.waitForTimeout(300);
+    },
+    selector: "div:has(> button:has-text('Skills Tests'))",
+  },
+  {
+    id: "02-105-program-enrollment-progress",
+    doc: "02-training.md",
+    line: 2139,
+    anchor:
+      "Screenshot of a member's program enrollment showing overall progress and the requirements grouped by phase",
+    alt: "A member's program enrollment — overall progress, and every requirement grouped by phase with the locked ones marked",
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/training/programs/enrollments/me",
+        (id) => `/training/my-progress/${id}`,
+        "enrollments",
+      )(page);
+      await page.waitForTimeout(1800);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-99-checklists-resume",
+    doc: "03-scheduling.md",
+    line: 2233,
+    anchor:
+      "Screenshot of My Equipment Checklists with a part-answered check beside a finished one",
+    alt: "My Equipment Checklists — one check part-answered with its progress and a Resume control, one finished, and the untouched ones offering Start Check",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await page.waitForSelector("text=Engine Daily Check", { timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-98-incomplete-check-warning",
+    doc: "03-scheduling.md",
+    line: 2222,
+    anchor:
+      "Screenshot of the confirmation shown when submitting an equipment check with unanswered items",
+    alt: "The confirmation before filing an incomplete equipment check — how many of the items are unanswered, and the choice between going back and submitting anyway",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Unscheduled checklist")(page);
+      await clickByName("Engine Daily Check")(page);
+      await page.waitForSelector("text=Hose Bed", { timeout: 20_000 });
+      // Answer the required compartments and leave the optional one alone.
+      // Submit stays disabled until every *required* item is answered, so the
+      // dialog is only ever about optional kit — nothing-answered can't reach
+      // it. "Pass All" marks a whole compartment, which is why the optional
+      // items are seeded in a compartment of their own.
+      for (const compartment of [
+        "Cab",
+        "Compartment 1 — Driver Front",
+        "Hose Bed",
+      ]) {
+        await page
+          .getByRole("button", {
+            name: `Mark all items in ${compartment} as passed`,
+          })
+          .click({ timeout: 15_000 });
+        await page.waitForTimeout(200);
+      }
+      await page
+        .getByRole("button", { name: /Submit Report|Save Offline/ })
+        .click({ timeout: 15_000 });
+      await page.waitForSelector("text=Submit an incomplete check?", {
+        timeout: 15_000,
+      });
+      // The compartments collapse as they are answered, so the page behind is
+      // still animating when the dialog opens — long enough for the transitions
+      // to finish, or the crop catches half-drawn text under the panel.
+      await page.waitForTimeout(1500);
+    },
+    // The panel, not the full-screen overlay that carries role="dialog".
+    selector: "div[role='dialog'] div.bg-theme-surface-modal.relative",
+  },
+  {
+    id: "05-71-impact-planner-replacement",
+    doc: "05-inventory.md",
+    line: 1968,
+    anchor:
+      "Screenshot of the Impacted Members table with replacement-aware analysis on",
+    alt: "The Impact Planner's Impacted Members table with replacement-aware analysis on — each member badged Has item, Replace or Needs item against the chosen category",
+    route: "/inventory/admin/impact-planner",
+    prepare: async (page) => {
+      // The badge column only renders once a related category is chosen, and
+      // "Replace" only appears when worn/expired items are counted too.
+      const category = page.getByLabel("Related category");
+      await category.waitFor({ timeout: 15_000 });
+      // Structural PPE specifically: it is the category the seeder puts a worn
+      // bunker coat in, and without an unserviceable holding the "Replace"
+      // badge — the whole point of this shot — never appears.
+      const value = await category.evaluate((el) => {
+        const option = [...el.options].find((o) =>
+          o.label.includes("Structural PPE"),
+        );
+        return option?.value ?? "";
+      });
+      if (!value) throw new Error("no Structural PPE category to analyse against");
+      await category.selectOption(value);
+      await page
+        .getByText("Count worn or expired items as needing replacement")
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Analyze Impact" })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(2500);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-70-inventory-table-mobile",
+    doc: "05-inventory.md",
+    line: 1830,
+    anchor:
+      "Screenshot of the inventory table on a phone, each row stacked into a card",
+    alt: "The inventory items table on a phone — each row stacked into a card with the field name on the left and its value on the right",
+    route: "/inventory/items",
+    viewport: "mobile",
+    // Cropped to the first few stacked rows. Not fullPage: the cards are one
+    // per item, so a full-page phone capture of the whole inventory came out
+    // 18,000px tall and illegible. Not a plain viewport shot either — eight
+    // filter selects sit above the table on a phone and push every card below
+    // the fold, so the screenful that fits contains no card at all.
+    prepare: async (page) => {
+      // Two responsive tables render on this page; the items table is first.
+      const table = page.locator("table.rwd-table").first();
+      await table.waitFor({ timeout: 15_000 });
+      // Clip to roughly three rows; the whole table is far taller than a phone.
+      await page.evaluate(() => {
+        const el = document.querySelector("table.rwd-table");
+        if (el instanceof HTMLElement) {
+          el.style.maxHeight = "760px";
+          el.style.overflow = "hidden";
+          el.style.display = "block";
+        }
+      });
+      await page.waitForTimeout(300);
+    },
+    selector: "table.rwd-table >> nth=0",
+  },
+  {
+    id: "05-69-label-print-page",
+    doc: "05-inventory.md",
+    line: 1761,
+    anchor:
+      "Screenshot of the label print page (any module) showing the label size choices",
+    alt: "The inventory label print page — the nine label size choices with Rollo/Thermal 2x1 selected, copies per item, extra-detail toggles, and a preview of the three barcode labels",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // The page renders from ?ids= and shows "No items specified" without it,
+      // so the ids have to be picked up before navigating.
+      const ids = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/inventory/items?limit=3", {
+          credentials: "include",
+        });
+        if (!response.ok) return [];
+        const body = await response.json();
+        const rows = Array.isArray(body) ? body : (body.items ?? []);
+        return rows.map((item) => item.id).filter(Boolean);
+      });
+      if (!ids.length) {
+        throw new Error("no inventory items to print labels for");
+      }
+      await page.goto(
+        new URL(
+          `/inventory/print-labels?ids=${ids.join(",")}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      // The format, printer and copies controls live behind Settings, which
+      // starts collapsed — the page otherwise shows only the preview.
+      // Exact match: a loose /settings/i also matches the sidebar's
+      // "Organization Settings" nav group, which comes first in the DOM and
+      // just expands the navigation instead.
+      await page
+        .getByRole("button", { name: "Settings", exact: true })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
+    id: "14-20-runoff-chain",
+    doc: "14-elections.md",
+    line: 601,
+    anchor:
+      "Screenshot of the Runoff Chain timeline showing the original election",
+    alt: "The Multi-Stage Election Chain on a Fire Chief election — Original, Runoff 1 and Runoff 2 as linked nodes with their status and vote counts, the current round ringed",
+    route: "/elections",
+    prepare: openFirstFromApi(
+      "/elections?limit=50",
+      (id) => `/elections/${id}`,
+      "elections",
+      // The root of the seeded chain: RunoffChain walks up to the root anyway,
+      // but starting there is what puts the ring on "Original".
+      (election) =>
+        (election.title ?? "") === "Fire Chief Election — 2027 Term",
+    ),
+    selector: "div:has(> div > h3:text-is('Multi-Stage Election Chain'))",
+  },
+  {
+    id: "04-42-cast-ballot",
+    doc: "04-events-meetings.md",
+    line: 609,
+    anchor:
+      "Screenshot of the Cast Vote tab on an open election showing the position, its candidates with their statements",
+    alt: "The Cast Vote tab on an open election — the Captain race with its two candidates and their statements, and the per-position submit button beneath them",
+    route: "/elections",
+    // The member's own view, not an officer's: the ballot is what a voter sees.
+    auth: "member",
+    prepare: openElectionTab("voting", isOpenElection),
+    fullPage: true,
+  },
+  {
+    id: "01-36-membership-number-field",
+    doc: "01-membership.md",
+    line: 1043,
+    anchor:
+      "Screenshot of the Department Information section on a member's admin edit page showing the auto-generated Membership Number",
+    alt: "The Department Information block on the admin member edit page — the auto-generated Membership Number alongside Rank and Station, all editable",
+    route: "/members",
+    prepare: openFirstFromApi(
+      "/users?limit=1",
+      (id) => `/members/admin/edit/${id}`,
+      "users",
+    ),
+    // Cropped to the block rather than the whole form: 01-07 already shows the
+    // full page, and the point here is the one field.
+    selector: "div:has(> h2:text-is('Department Information'))",
+  },
+  {
     id: "01-07-admin-member-edit",
     doc: "01-membership.md",
     line: 195,
@@ -7242,6 +7745,69 @@ export const SHOTS = [
     // cast yet" — accurate for an election still taking nominations, and
     // nothing to do with the tab this shot is of.
     allowEmptyState: true,
+  },
+  {
+    id: "14-19-forensics-report",
+    doc: "14-elections.md",
+    line: 639,
+    anchor:
+      "Screenshot of the Forensics & Integrity panel showing the integrity check verdict",
+    alt: "The Forensics & Integrity panel — the signature check verdict over the ballot box, with the deleted-vote and anomaly sections beneath",
+    route: "/elections",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=20",
+        (id) => `/elections/${id}`,
+        "elections",
+        isClosedElection,
+      )(page);
+      // The panel is a collapsed accordion and fetches its report on first
+      // open, so it has to be expanded before there is anything to shoot.
+      await clickByName("Forensics & Integrity")(page);
+      // The integrity check is a separate, deliberate action — the section
+      // renders its verdict only once somebody has asked for one.
+      await clickByName("Run Check")(page);
+      await page.waitForSelector("text=valid signatures", { timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: 'div.mt-6:has(> button span:text-is("Forensics & Integrity"))',
+    viewport: { width: 1440, height: 1400 },
+    // "No votes have been voided." is the *point* — a clean election is what
+    // this panel should say, and the placeholder asks for the soft-deleted
+    // section empty. Nothing here is waiting on seed data.
+    allowEmptyState: true,
+  },
+  {
+    id: "14-17-election-results",
+    doc: "14-elections.md",
+    line: 524,
+    anchor:
+      "Screenshot of the election results page showing a position with candidate vote counts",
+    alt: "A closed election's results — vote counts per candidate, the winner, and turnout against the eligible roster",
+    route: "/elections",
+    prepare: openElectionTab("results", isClosedElection),
+    fullPage: true,
+  },
+  {
+    id: "14-18-paper-batches",
+    doc: "14-elections.md",
+    line: 449,
+    anchor: "Screenshot of the Paper Batches panel showing a",
+    alt: "The Paper Batches panel — a recorded in-room tally, who recorded it, and the officer attestations that confirmed it",
+    route: "/elections",
+    // Not a tab: the panel sits in the detail page's body, above the tab
+    // strip, and appears whenever the election has at least one batch.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=20",
+        (id) => `/elections/${id}`,
+        "elections",
+        isClosedElection,
+      )(page);
+      await page.getByText("Paper-Ballot Batches").waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: 'div:has(> h3:text-is("Paper-Ballot Batches"))',
   },
   {
     id: "14-06-candidate-form",
@@ -7987,6 +8553,25 @@ export const SHOTS = [
     allowEmptyState: true,
     viewport: { width: 1440, height: 1250 },
     fullPage: false,
+  },
+  {
+    id: "04-35-minutes-linked-elections",
+    doc: "04-events-meetings.md",
+    line: 1357,
+    anchor:
+      "Screenshot of a meeting minutes detail page showing a Linked Elections section",
+    alt: "The Linked Elections card on a minutes record — the election held at that meeting, with its type, position and status",
+    route: "/minutes",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records",
+        (id) => `/minutes/${id}`,
+        "minutes",
+      )(page);
+      await page.getByText("Linked Elections").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: 'div:has(> h3:text-is("Linked Elections"))',
   },
   {
     id: "04-12-linked-elections",

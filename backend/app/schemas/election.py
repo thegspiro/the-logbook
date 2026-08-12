@@ -1327,15 +1327,25 @@ class NonVotersResponse(BaseModel):
 
 
 class VoteIntegrityResponse(BaseModel):
-    """Response for vote integrity check"""
+    """Response for vote integrity check.
+
+    These names are the ones `ElectionService.verify_vote_integrity` produces
+    and the ones the frontend's `VoteIntegrityResult` reads. The model
+    previously required an entirely different vocabulary — `election_title`,
+    `total_votes_checked`, `valid_votes`, `invalid_votes`, `chain_valid` —
+    none of which the service returns, so every call to `/integrity` failed
+    response validation and the Forensics panel's integrity check was a 500.
+    """
 
     election_id: str
-    election_title: str
-    total_votes_checked: int
-    valid_votes: int
-    invalid_votes: int
-    chain_valid: bool
-    details: Optional[List[Dict[str, Any]]] = None
+    total_votes: int
+    valid_signatures: int
+    unsigned_votes: int
+    tampered_votes: int
+    tampered_vote_ids: List[str] = Field(default_factory=list)
+    chain_verified: bool
+    chain_break_at: Optional[str] = None
+    integrity_status: str
     error: Optional[str] = None
 
 

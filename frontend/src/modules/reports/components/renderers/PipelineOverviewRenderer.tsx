@@ -41,6 +41,35 @@ export const PipelineOverviewRenderer: React.FC<Props> = ({ data }) => {
     { key: 'days_in_pipeline', header: 'Days in Pipeline' },
   ];
 
+  const yearlyColumns = [
+    { key: 'year', header: 'Application Year' },
+    { key: 'applicants', header: 'Applicants' },
+    {
+      key: 'applicant_growth_percent',
+      header: 'YoY Growth',
+      render: (v: unknown) => (typeof v === 'number' ? `${v > 0 ? '+' : ''}${v}%` : '—'),
+    },
+    { key: 'converted', header: 'Converted' },
+    { key: 'rejected', header: 'Rejected' },
+    {
+      key: 'conversion_rate',
+      header: 'Decision Conversion',
+      render: (v: unknown) => `${toDisplayString(v)}%`,
+    },
+    { key: 'avg_days_to_convert', header: 'Avg Days' },
+  ];
+
+  const referralColumns = [
+    { key: 'source', header: 'Referral Source' },
+    { key: 'applicants', header: 'Applicants' },
+    { key: 'converted', header: 'Converted' },
+    {
+      key: 'conversion_rate',
+      header: 'Applicant Conversion',
+      render: (v: unknown) => `${toDisplayString(v)}%`,
+    },
+  ];
+
   return (
     <div>
       {/* Pipeline name */}
@@ -59,7 +88,30 @@ export const PipelineOverviewRenderer: React.FC<Props> = ({ data }) => {
         <StatCard label="Withdrawn" value={data.withdrawn_count} />
         <StatCard label="On Hold" value={data.on_hold_count} />
         <StatCard label="Avg Days to Convert" value={data.avg_days_to_convert} />
+        <StatCard label="Decision Conversion" value={`${data.conversion_rate}%`} />
       </div>
+
+      {data.yearly_trends.length > 0 && (
+        <div className="mb-6">
+          <h4 className="text-theme-text-primary mb-2 text-sm font-semibold">Year-over-Year Trends</h4>
+          <ReportTable
+            rows={data.yearly_trends as unknown as Array<Record<string, unknown>>}
+            columns={yearlyColumns}
+            emptyMessage="No annual trend data available."
+          />
+        </div>
+      )}
+
+      {data.referral_sources.length > 0 && (
+        <div className="mb-6">
+          <h4 className="text-theme-text-primary mb-2 text-sm font-semibold">Applicant Sources</h4>
+          <ReportTable
+            rows={data.referral_sources as unknown as Array<Record<string, unknown>>}
+            columns={referralColumns}
+            emptyMessage="No referral-source data available."
+          />
+        </div>
+      )}
 
       {/* Stage groups table */}
       {data.groups.length > 0 && (
