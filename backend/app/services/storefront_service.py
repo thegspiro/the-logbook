@@ -1684,6 +1684,8 @@ class StorefrontService:
             raise ValueError("Order not found")
         if order.status == StoreOrderStatus.CANCELLED:
             raise ValueError("A cancelled order cannot take a payment")
+        if order.payment_status == StorePaymentStatus.WAIVED:
+            raise ValueError("A waived order cannot take a payment")
 
         applied = _money(amount)
         if applied <= 0:
@@ -2400,7 +2402,10 @@ class StorefrontService:
         if window_ids is not None:
             filters.append(StoreOrder.window_id.in_([str(w) for w in window_ids]))
 
-        balance = StoreOrder.total - StoreOrder.amount_paid
+        balance = case(
+            (StoreOrder.payment_status == StorePaymentStatus.WAIVED, paid),
+            else_=StoreOrder.total - StoreOrder.amount_paid,
+        )
         result = await self.db.execute(
             select(
                 StoreOrder.window_id,
@@ -2844,6 +2849,8 @@ class StorefrontService:
         self, order: StoreOrder, settings: StoreSettings
     ) -> Optional[Dict[str, Any]]:
         """Where the member should send the balance, with a prefilled link."""
+        if _is_settled(order):
+            return None
         balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
         if balance <= 0:
             return None
