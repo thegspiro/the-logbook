@@ -63,6 +63,24 @@ export const DEMO_MEMBER_CREDENTIALS = {
 };
 
 /**
+ * The one account enrolled in TOTP, used to photograph the login page's
+ * authentication-code step.
+ *
+ * Signing in as this account deliberately does *not* complete: it stops at the
+ * code step, which is the shot. Never give it to `auth:` — it cannot produce a
+ * session.
+ *
+ * Must match TWO_FACTOR_USERNAME in seed_demo_data.py. It was hard-coded here
+ * once and drifted the moment the seeder moved the enrolment to a different
+ * member, which failed as a bare capture timeout with nothing pointing at the
+ * cause.
+ */
+export const DEMO_TWO_FACTOR_CREDENTIALS = {
+  username: "whalloway",
+  password: "DemoMember!2026",
+};
+
+/**
  * Click a control by its visible label.
  *
  * Matches buttons, tabs and links, because which of the three a given tab strip
@@ -3060,8 +3078,14 @@ export const SHOTS = [
       // page in exactly the state the guide is describing. `signIn` cannot be
       // reused: it waits to leave /login, which is precisely what a 2FA
       // account does not do.
-      await page.getByLabel(/username|email/i).first().fill("rduarte");
-      await page.getByLabel(/password/i).first().fill("DemoMember!2026");
+      await page
+        .getByLabel(/username|email/i)
+        .first()
+        .fill(DEMO_TWO_FACTOR_CREDENTIALS.username);
+      await page
+        .getByLabel(/password/i)
+        .first()
+        .fill(DEMO_TWO_FACTOR_CREDENTIALS.password);
       await page
         .getByRole("button", { name: /sign in|log ?in/i })
         .first()
