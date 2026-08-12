@@ -860,6 +860,19 @@
   top: calc(4rem + env(safe-area-inset-top));
 }
 
+@utility mobile-navigation-drawer {
+  /* The fixed header already carries department branding on phones. Keep the
+     full navigation below it instead of repeating the logo and letting the
+     bottom bar cover its utility actions. */
+  @media (max-width: 767px) {
+    top: calc(env(safe-area-inset-top) + 4rem);
+    bottom: var(--bottom-nav-height, 0px);
+    height: auto;
+    max-width: min(20rem, 88vw);
+    padding-top: 0;
+  }
+}
+
 /* Theme CSS Custom Properties */
 :root {
   /* Background gradient */

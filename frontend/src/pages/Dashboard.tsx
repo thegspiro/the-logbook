@@ -528,7 +528,7 @@ const Dashboard: React.FC = () => {
           ? 'Loading dashboard content...'
           : 'Dashboard content loaded.'}
       </div>
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
         {/* "Now" Header — answers: what's next, what needs me, what's expiring */}
         {(() => {
           const firstName = currentUser?.first_name?.trim();
@@ -541,10 +541,6 @@ const Dashboard: React.FC = () => {
             ? new Date(`${nextShift.shift_date}T${nextShift.start_time || '00:00'}`).getTime()
             : Infinity;
           const showShiftFirst = nextShiftStart < nextEventStart;
-          // Cert urgency: expired or expiring within 60 days.
-          const urgentCerts = myCerts.filter(
-            (c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= 60)
-          );
           const overdueActionItems = adminSummary?.overdue_action_items ?? 0;
           return (
             <div className="mb-6 sm:mb-8">
@@ -559,10 +555,12 @@ const Dashboard: React.FC = () => {
                   },
                   tz
                 )}
-                {' · '}
-                {departmentName}
+                <span className="hidden sm:inline">{' · ' + departmentName}</span>
               </p>
-              <div className="flex flex-wrap gap-2 text-xs sm:text-sm" aria-label="At a glance">
+              <div
+                className="-mx-4 flex snap-x snap-mandatory scrollbar-thin gap-2 overflow-x-auto px-4 pb-1 text-xs sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 sm:text-sm [&>*]:shrink-0 [&>*]:snap-start"
+                aria-label="At a glance"
+              >
                 {showShiftFirst && nextShift ? (
                   <button
                     onClick={() => void navigate('/scheduling')}
@@ -591,18 +589,6 @@ const Dashboard: React.FC = () => {
                       <span>Nothing scheduled</span>
                     </span>
                   )
-                )}
-                {urgentCerts.length > 0 && (
-                  <button
-                    onClick={() => void navigate('/training/my-training')}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-red-700 transition-colors hover:bg-red-500/20 max-md:min-h-[44px] dark:text-red-300"
-                  >
-                    <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>
-                      {urgentCerts.length} cert{urgentCerts.length === 1 ? '' : 's'}{' '}
-                      {urgentCerts.some((c) => c.is_expired) ? 'expired' : 'expiring'}
-                    </span>
-                  </button>
                 )}
                 {unreadCount > 0 && (
                   <button
@@ -667,15 +653,17 @@ const Dashboard: React.FC = () => {
         {/* Fat primary action: Log Training — most-used action, top placement */}
         <button
           onClick={() => void navigate('/training/submit')}
-          className="group mb-6 flex w-full items-center gap-4 rounded-xl bg-gradient-to-br from-red-600 to-red-700 p-5 text-left text-white shadow-md transition-all hover:from-red-700 hover:to-red-800 hover:shadow-lg focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-hidden active:from-red-800 active:to-red-900 sm:mb-8 sm:p-6"
+          className="group mb-6 flex w-full items-center gap-3 rounded-xl bg-gradient-to-br from-red-600 to-red-700 p-4 text-left text-white shadow-md transition-all hover:from-red-700 hover:to-red-800 hover:shadow-lg focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-hidden active:from-red-800 active:to-red-900 sm:mb-8 sm:gap-4 sm:p-6"
           aria-label="Log a training session"
         >
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white/15 group-hover:bg-white/20 sm:h-16 sm:w-16">
-            <Plus className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={2.5} aria-hidden="true" />
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/15 group-hover:bg-white/20 sm:h-16 sm:w-16 sm:rounded-xl">
+            <Plus className="h-6 w-6 sm:h-8 sm:w-8" strokeWidth={2.5} aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-lg leading-tight font-bold sm:text-xl">Log Training</div>
-            <div className="mt-0.5 text-sm text-red-100">Record a drill or session — pick course, hours, done.</div>
+            <div className="mt-0.5 hidden text-sm text-red-100 sm:block">
+              Record a drill or session — pick course, hours, done.
+            </div>
           </div>
           <ChevronRight
             className="h-6 w-6 shrink-0 opacity-80 transition-transform group-hover:translate-x-0.5"
