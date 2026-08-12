@@ -7,6 +7,7 @@ import {
   setupGlobalErrorHandlers,
   flushQueuedReports,
   pendingReportCount,
+  sanitizePath,
   scrubSensitive,
 } from './errorReporting';
 
@@ -389,6 +390,22 @@ describe('reportApiError', () => {
     expect(sentBody()['context']).toMatchObject({ path: '/users' });
   });
 
+  it('redacts bearer tokens embedded in public workflow paths', async () => {
+    const token = 'FINTOK_0123456789abcdefghijklmnopqrstuvwxyz';
+    reportApiError(
+      axiosError({
+        status: 500,
+        config: { url: `/finance/approvals/${token}/approve`, method: 'post' },
+      })
+    );
+    await settle();
+
+    expect(JSON.stringify(sentBody())).not.toContain(token);
+    expect(sentBody()['context']).toMatchObject({
+      path: '/finance/approvals/[REDACTED]/approve',
+    });
+  });
+
   it('reports an error only once even if handled twice', async () => {
     const error = axiosError({ status: 500 });
 
@@ -397,6 +414,20 @@ describe('reportApiError', () => {
     await settle();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sanitizePath', () => {
+  it.each([
+    ['/event-requests/status/request-secret/cancel', '/event-requests/status/[REDACTED]/cancel'],
+    ['/application-status/application-secret', '/application-status/[REDACTED]'],
+    ['/calendar/feed-secret.ics', '/calendar/[REDACTED].ics'],
+  ])('redacts tokenized path %s', (path, expected) => {
+    expect(sanitizePath(path)).toBe(expected);
+  });
+
+  it('leaves ordinary resource paths intact', () => {
+    expect(sanitizePath('/api/v1/events/42')).toBe('/api/v1/events/42');
   });
 });
 

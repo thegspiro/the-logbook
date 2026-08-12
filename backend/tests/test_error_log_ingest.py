@@ -37,6 +37,14 @@ def db():
 
 
 class TestIngestRateLimit:
+    def test_tokenized_context_paths_are_redacted_at_ingest(self):
+        token = "FINTOK_0123456789abcdefghijklmnopqrstuvwxyz"
+
+        data = ErrorLogCreate(context={"path": f"/finance/approvals/{token}/approve"})
+
+        assert token not in data.context["path"]
+        assert data.context["path"] == "/finance/approvals/[REDACTED]/approve"
+
     async def test_a_report_is_stored_when_under_the_limit(self, db, current_user):
         with patch(
             "app.api.v1.endpoints.error_logs.is_rate_limited",

@@ -188,6 +188,15 @@ export function scrubSensitive(text: string): string {
   return SCRUB_PATTERNS.reduce((scrubbed, [pattern, replacement]) => scrubbed.replace(pattern, replacement), text);
 }
 
+/** Remove bearer-style public workflow tokens embedded in URL paths. */
+export function sanitizePath(path: string): string {
+  return path
+    .replace(/(\/finance\/approvals\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/event-requests\/status\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/application-status\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/calendar\/)[^/?#]+(?=\.ics(?:[/\s?#]|$))/gi, '$1[REDACTED]');
+}
+
 // ---------------------------------------------------------------------------
 // Throttling
 // ---------------------------------------------------------------------------
@@ -470,20 +479,24 @@ export function reportError(report: ErrorReport): void {
   // The path is part of the dedupe key so the same status failing on two
   // different endpoints is two distinct reports.
   const rawPath = report.context?.['path'];
-  const contextPath = typeof rawPath === 'string' ? rawPath : '';
+  const contextPath = typeof rawPath === 'string' ? sanitizePath(rawPath) : '';
   const key = `${errorType}|${errorMessage}|${contextPath}`;
 
   const mapping = getErrorMapping(errorType, errorMessage);
+  const context: Record<string, unknown> = {
+    source: 'frontend',
+    page: sanitizePath(window.location.pathname),
+    ...report.context,
+  };
+  if (typeof context['path'] === 'string') context['path'] = sanitizePath(context['path']);
+  if (typeof context['page'] === 'string') context['page'] = sanitizePath(context['page']);
+
   const payload: ErrorLogPayload = {
     error_type: errorType,
     error_message: errorMessage,
     user_message: scrubSensitive(report.userMessage || mapping.userMessage),
     troubleshooting_steps: report.troubleshootingSteps || mapping.troubleshootingSteps,
-    context: {
-      source: 'frontend',
-      page: window.location.pathname,
-      ...report.context,
-    },
+    context,
     event_id: report.eventId,
   };
 
@@ -564,7 +577,7 @@ function requestPath(error: AxiosError): string {
   const url = error.config?.url ?? '';
   const baseURL = error.config?.baseURL ?? '';
   const full = url.startsWith('http') || url.startsWith('/') ? url : `${baseURL}${url}`;
-  return full.split('?')[0] ?? '';
+  return sanitizePath(full.split('?')[0] ?? '');
 }
 
 /**
