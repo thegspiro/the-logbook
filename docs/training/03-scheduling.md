@@ -191,18 +191,30 @@ Officers can edit shift start and end times, apparatus assignment, color, notes,
 
 Attendance is recorded for each shift to track who was present and for how long.
 
-**Recording Attendance:**
+**Recording Attendance:** members check themselves in and out. Open the shift
+from the calendar; **Check In** sits under your own assignment on the detail
+panel, and once you have used it the button becomes **Check Out** with your
+arrival time beside it. The system calculates **duration in minutes**
+automatically from the two.
 
-1. Open the shift from the calendar.
-2. In the detail panel, use the attendance section to:
-   - **Check In** a member (records the check-in time)
-   - **Check Out** a member (records the check-out time)
-   - **Manually set times** for retroactive recording
+There are three places that attendance then shows up, and none of them is a
+table you can edit:
 
-The system calculates **duration in minutes** automatically from check-in and check-out times.
+| Where                                          | What it shows                                                                                                                                               |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The **crew board**, on each member's row       | A badge — `In 07:02` while they are on shift, `12h worked` once they are out. Hover for both times                                                          |
+| The **Readiness** line at the top of the panel | `1/1 present`                                                                                                                                               |
+| **Before you close this shift**, at close-out  | `1 of 1 checked in, 1 checked out`, plus a warning naming anyone who never checked in (pictured under [Shift Finalization](#shift-finalization-2026-03-28)) |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the attendance section within a shift detail panel, showing a table of members with check-in time, check-out time, duration, and edit buttons]_
+> **Corrected 2026-08-12.** This previously described an attendance section
+> where an officer could **Check In** and **Check Out** other members and
+> **manually set times for retroactive recording**, and its screenshot
+> placeholder asked for a per-member table with edit buttons. None of that is
+> in the application. The buttons act on the signed-in member's own record
+> only, and while the API can amend one (`PATCH /scheduling/attendance/{id}`)
+> nothing in the frontend calls it. The nearest thing to retroactive recording
+> is **Add hours for members who didn't check in**, which appears in the
+> close-out checklist and takes a number of hours rather than times.
 
 ### Post-Shift Validation
 
@@ -262,12 +274,23 @@ Open it from **Request Time Off** on the My Shifts tab. Submitted requests, and 
 
 ## Shift Swap Requests
 
-Members can request to swap shifts with another member:
+A swap starts from the shift you are giving up, not from a blank form:
 
-1. Navigate to the **Requests** tab.
-2. Click **Request Swap**.
-3. Select the shift you want to swap and the shift you are offering.
-4. The system notifies the other member and the officer.
+1. Go to **My Shifts** and stay on **Upcoming** — the **Swap** button is only on
+   shifts that have not happened yet.
+2. Click **Swap** on the shift you want covered. The dialog names that shift in
+   its subtitle; there is nothing to pick, because it is the one you clicked.
+3. Choose a **Swap Type**:
+   - **Open Swap** — any member can pick it up. This is the default.
+   - **Specific Shift** — you want a particular shift in return. Pick it from
+     the list of everything scheduled from today onward, each entry showing its
+     day, times and apparatus.
+4. Give a **Reason**, then **Submit Request**.
+
+![The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field](./images/03-67-swap-request-dialog.png)
+
+The request then appears under **Requests > Swap Requests**, where you can
+follow or cancel it.
 
 **Swap Workflow:**
 
@@ -276,8 +299,13 @@ Members can request to swap shifts with another member:
 3. An officer reviews and approves the swap.
 4. Assignments are updated automatically.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the swap request form showing the "Your Shift" and "Requested Shift" selectors, and a list of active swap requests with status indicators]_
+> **Corrected 2026-08-12.** The steps above previously said to open the
+> **Requests** tab and click **Request Swap**, then "select the shift you want
+> to swap and the shift you are offering". The Requests tab has no such button
+> — it only lists requests already made — and the offered shift is never
+> chosen, since the dialog is opened from it. The retired screenshot
+> placeholder asked for "Your Shift" and "Requested Shift" selectors, neither
+> of which exists.
 
 ---
 
@@ -1023,11 +1051,17 @@ now two paths:
 2. **For checklists you already have.** A bulk pass proposes a catalog item for
    every unlinked position on the template. Read down the list once and apply it.
 
-> **Screenshot needed:**
-> _[Screenshot of the template builder's quick-add bar with a partial search term typed and a dropdown of three catalog matches below it, each showing the item name and its tracking type, plus the "create in inventory" option at the bottom]_
+![The template builder's quick-add bar, its catalog matches listed beneath and the create-in-inventory option under them](./images/03-69-catalog-quick-add.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the bulk inventory-match dialog listing six unlinked positions with proposed catalog items, two pre-selected with an "exact" badge and the rest showing "strong"/"weak" confidence chips left unselected, with the linked/unlinked coverage count in the header]_
+Reach the bulk pass from the template builder's toolbar: the button reads
+**_linked_ / _linkable_** and turns amber while anything is unlinked.
+
+![The bulk inventory-match dialog — coverage in the header, exact matches pre-selected, a close match left for the reader to decide](./images/03-68-inventory-match-dialog.png)
+
+Positions the catalog has nothing like are gathered into one dashed panel at the
+bottom — "_N_ items have nothing like them in inventory" — rather than listed as
+failures. Add them to inventory, or leave them as plain checklist lines if they
+are not stock.
 
 **Only exact name matches are pre-selected.** A close match is deliberately never
 pre-selected: "Oxygen Mask" scores high against both the adult and the pediatric
@@ -1857,11 +1891,16 @@ The scheduling page now supports `?tab=` query parameters for direct navigation 
 | `?tab=open-shifts`      | Open Shifts         |
 | `?tab=requests`         | Requests            |
 | `?tab=equipment-checks` | Equipment Checks    |
+| `?tab=shift-reports`    | Shift Reports       |
 
 Shift notifications automatically deep-link to the correct tab. For example, clicking a shift assignment notification opens the scheduling page with My Shifts selected and the shift highlighted.
 
-> **Screenshot needed:**
-> _[Screenshot of the browser URL bar showing `/scheduling?tab=equipment-checks` and the Equipment Checks tab selected on the scheduling page]_
+> **Corrected 2026-08-12.** `?tab=shift-reports` was missing from the table
+> above; the page has six tabs, not five. The screenshot placeholder here asked
+> for the **browser URL bar** alongside the selected tab — nothing the
+> application draws, and so nothing a screenshot of it can show. The tab it
+> lands on is already pictured under
+> [Standalone Equipment Checks](#standalone-equipment-checks) directly below.
 
 ### Standalone Equipment Checks
 

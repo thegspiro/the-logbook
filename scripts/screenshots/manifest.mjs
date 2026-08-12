@@ -4848,6 +4848,97 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "03-69-catalog-quick-add",
+    doc: "03-scheduling.md",
+    line: 1055,
+    anchor:
+      "Screenshot of the template builder's quick-add bar with a partial search term typed",
+    alt: "The template builder's quick-add bar, its catalog matches listed beneath and the create-in-inventory option under them",
+    route: "/scheduling/equipment-check-templates",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/equipment-checks/templates",
+        (id) => `/scheduling/equipment-check-templates/${id}`,
+        "templates",
+        (template) => template.name === "Engine Daily Check",
+      )(page);
+      const search = page
+        .getByPlaceholder("Search inventory or type a new item name…")
+        .first();
+      await search.waitFor({ timeout: 20_000 });
+      // Typed, not filled: the search is debounced off change events, and a
+      // programmatic value set fires none of them.
+      await search.click();
+      await search.type("SCBA", { delay: 80 });
+      // "SCBA" matches two catalog items and is nobody's exact name, so both
+      // halves of the dropdown are on screen — the matches and the offer to
+      // create what was typed.
+      await page.waitForSelector("text=SCBA Spare Cylinder", { timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    // The dropdown is absolutely positioned and overflows the compartment, so
+    // clip generously around the bar rather than to it.
+    viewport: { width: 1440, height: 1100 },
+  },
+  {
+    id: "03-68-inventory-match-dialog",
+    doc: "03-scheduling.md",
+    line: 1058,
+    anchor:
+      "Screenshot of the bulk inventory-match dialog listing the unlinked positions",
+    alt: "The bulk inventory-match dialog — coverage in the header, exact matches pre-selected, a close match left for the reader to decide",
+    // Engine Daily Check is the seeded template written before the catalog link
+    // existed: nine positions, none of them linked. Medic 3 is mostly linked
+    // already and would open this dialog on three rows.
+    route: "/scheduling/equipment-check-templates",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/equipment-checks/templates",
+        (id) => `/scheduling/equipment-check-templates/${id}`,
+        "templates",
+        (template) => template.name === "Engine Daily Check",
+      )(page);
+      // The coverage button carries the count, so match on the link icon's
+      // own title rather than a label that changes with the data.
+      await page.click('button[title*="not linked to inventory"]', {
+        timeout: 20_000,
+      });
+      await page.waitForSelector("text=exact name matches are selected for you", {
+        timeout: 20_000,
+      });
+    },
+    selector: '[role="dialog"]',
+    viewport: { width: 1440, height: 1200 },
+  },
+  {
+    id: "03-67-swap-request-dialog",
+    doc: "03-scheduling.md",
+    line: 291,
+    anchor:
+      "Screenshot of the Request Shift Swap dialog with Specific Shift chosen",
+    alt: "The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field",
+    route: "/scheduling?tab=my-shifts",
+    prepare: async (page) => {
+      // The Swap button only exists on the Upcoming view, which is the
+      // default; one per assignment, so take the first.
+      await clickByName("Swap")(page);
+      await page.waitForSelector("#swap-reason", { timeout: 15_000 });
+      // Open Swap is the default and hides the picker. The picker is half of
+      // what this dialog is about, so pick the other branch — and give the
+      // shift list, fetched when the dialog opened, a moment to arrive so the
+      // select is not photographed reading "Loading shifts...".
+      await clickByName("Specific Shift")(page);
+      await page.waitForFunction(
+        () => {
+          const select = document.querySelector("#swap-target-shift");
+          return !!select && select.options.length > 0 && select.value !== "pick";
+        },
+        { timeout: 15_000 },
+      );
+    },
+    selector: '[role="dialog"] > div',
+  },
+  {
     id: "03-05-open-shifts",
     doc: "03-scheduling.md",
     line: 102,

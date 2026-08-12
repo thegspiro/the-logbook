@@ -2659,10 +2659,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ref={sortableRef}
         style={sortableStyle}
         {...(sortableAttributes ?? {})}
-        className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border"
+        /* Deliberately not `overflow-hidden`: the quick-add bar is the last
+           thing in the body and its results dropdown is absolutely positioned
+           below it, so a clip here cut the first result in half and hid the
+           rest whatever z-index it carried. Every child sits on the same
+           surface colour as the card, so the rounded corners stay clean
+           without one — the header just rounds its own top corners. */
+        className="border-theme-surface-border bg-theme-surface rounded-lg border"
       >
         {/* Compartment header */}
-        <div className="bg-theme-surface flex items-center gap-1.5 px-2 py-3 sm:gap-2 sm:px-4">
+        <div className="bg-theme-surface flex items-center gap-1.5 rounded-t-lg px-2 py-3 sm:gap-2 sm:px-4">
           <button
             type="button"
             className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
