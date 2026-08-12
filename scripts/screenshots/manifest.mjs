@@ -5023,6 +5023,51 @@ export const SHOTS = [
     },
   },
   {
+    id: "08-73-template-builder-preview",
+    doc: "08-admin-reports.md",
+    line: 1308,
+    anchor:
+      "Screenshot of the equipment check template builder's Preview showing how the check form",
+    alt: "The template builder's Preview — the check form drawn inside a phone frame, as a crew would see it",
+    route: "/scheduling/equipment-check-templates",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/equipment-checks/templates",
+        (id) => `/scheduling/equipment-check-templates/${id}`,
+        "templates",
+        (template) => template.name === "Engine Daily Check",
+      )(page);
+      await clickByName("Preview")(page);
+      await page.waitForSelector("text=Safety Equipment", { timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    // The phone frame itself, not the dimmed page behind it.
+    selector: 'div.fixed.inset-0.z-50 > div',
+    viewport: { width: 1440, height: 1300 },
+  },
+  {
+    id: "08-72-report-stage-groups",
+    doc: "08-admin-reports.md",
+    line: 261,
+    anchor:
+      "Screenshot of the ReportStageGroupsEditor showing the configured groups",
+    alt: "The Report Stage Groups editor — three named groups, the stages in each, and the controls that add and remove them",
+    route: "/prospective-members/settings",
+    prepare: async (page) => {
+      await openPipelineSettings()(page);
+      const heading = page.getByText("Report Stage Groups", { exact: true });
+      await heading.waitFor({ timeout: 15_000 });
+      await heading.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
+    // Clipped to the editor's own card. The settings page is long and the
+    // panel is a small part of it; 15-10 already shows the page whole.
+    // The editor's own root: the heading sits two levels in, and the wrapper
+    // the settings page puts around it is the card with the border.
+    selector: 'div:has(> div > div > h3:text-is("Report Stage Groups"))',
+    viewport: { width: 1440, height: 1200 },
+  },
+  {
     id: "15-10-pipeline-settings",
     doc: "15-prospective-members.md",
     line: 371,

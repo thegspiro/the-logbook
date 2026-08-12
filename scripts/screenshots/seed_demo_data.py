@@ -7444,10 +7444,50 @@ class Seeder:
                     f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
                 )
         self._enable_public_status(pipelines)
+        self._seed_report_stage_groups(pipelines)
         self._seed_election_packages(prospects)
         self._link_prospect_events(prospects)
         self._upload_prospect_documents(prospects)
         return {"pipelines": pipelines, "prospects": prospects}
+
+    # Consolidated reporting buckets, in pipeline order. Named by what the
+    # stages have in common rather than by stage count, because the Pipeline
+    # Overview report prints these names and "Group 1" tells a chief nothing.
+    REPORT_STAGE_GROUPS = [
+        ("Early Stages", ["Application Received", "Application Review"]),
+        ("Assessment", ["Interview", "Background & Medical"]),
+        ("Final Steps", ["Membership Vote", "Onboarding"]),
+    ]
+
+    def _seed_report_stage_groups(self, pipelines: list[dict]) -> None:
+        """Group the pipeline's stages for the Pipeline Overview report.
+
+        Without these the report lists every stage individually and the
+        Report Stage Groups editor is an empty panel with one Add Group
+        button — which documents neither what a group is nor that ungrouped
+        stages still appear on their own.
+        """
+        for pipeline in pipelines:
+            pipeline_id = pick(pipeline, "id")
+            if not pipeline_id:
+                continue
+            detail = self.api.get(f"/prospective-members/pipelines/{pipeline_id}")
+            if detail.get("report_stage_groups"):
+                continue
+            # The pipeline detail calls them "steps"; the editor and the report
+            # call them stages. Same rows.
+            by_name = {s.get("name"): s.get("id") for s in detail.get("steps", [])}
+            groups = []
+            for name, stage_names in self.REPORT_STAGE_GROUPS:
+                step_ids = [by_name[s] for s in stage_names if s in by_name]
+                if step_ids:
+                    groups.append({"name": name, "step_ids": step_ids})
+            if not groups:
+                continue
+            self.api.patch(
+                f"/prospective-members/pipelines/{pipeline_id}/report-settings",
+                {"report_stage_groups": groups},
+            )
 
     # The paperwork an applicant hands in, by document type. Two of them, so
     # the drawer shows a list rather than one row that could be mistaken for
