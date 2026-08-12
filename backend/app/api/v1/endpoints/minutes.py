@@ -7,7 +7,7 @@ motions, action items, and full-text search.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,8 +58,8 @@ async def list_minutes(
     meeting_type: str | None = None,
     status_filter: str | None = None,
     search: str | None = None,
-    skip: int = 0,
-    limit: int = 50,  # max 100 enforced below
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("minutes.view")),
 ):
@@ -81,7 +81,7 @@ async def list_minutes(
         status=status_filter,
         search=search,
         skip=skip,
-        limit=min(limit, 100),
+        limit=limit,
         restricted=not can_manage,
     )
 
@@ -135,7 +135,7 @@ async def get_minutes_stats(
 @router.get("/search", response_model=list[MinutesSearchResult])
 async def search_minutes(
     q: str,
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("minutes.view")),
 ):
@@ -158,7 +158,7 @@ async def search_minutes(
     return await service.search_minutes(
         organization_id=current_user.organization_id,
         query=q.strip(),
-        limit=min(limit, 50),
+        limit=limit,
         restricted=not can_manage,
     )
 

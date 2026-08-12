@@ -4,6 +4,7 @@ import { errorTracker, type ErrorLog } from '../services/errorTracking';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
+import toast from 'react-hot-toast';
 
 import { useConfirm } from '../contexts/ConfirmContext';
 /**
@@ -37,34 +38,45 @@ const ErrorMonitoringPage: React.FC = () => {
     recentErrors: ErrorLog[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadErrors = useCallback(async () => {
-    const [errorList, errorStats] = await Promise.all([
-      errorTracker.getErrors(filter !== 'all' ? { error_type: filter } : undefined),
-      errorTracker.getErrorStats(),
-    ]);
-    setErrors(errorList);
-    setStats(errorStats);
-    setLoading(false);
+    try {
+      const [errorList, errorStats] = await Promise.all([
+        errorTracker.getErrors(filter !== 'all' ? { error_type: filter } : undefined),
+        errorTracker.getErrorStats(),
+      ]);
+      setErrors(errorList);
+      setStats(errorStats);
+      setLoadError(null);
+    } catch {
+      setLoadError('Failed to load error monitoring data');
+    } finally {
+      setLoading(false);
+    }
   }, [filter]);
 
   useEffect(() => {
     void loadErrors();
     const interval = setInterval(() => {
-      void loadErrors();
+      if (!document.hidden) void loadErrors();
     }, 10000);
     return () => clearInterval(interval);
   }, [loadErrors]);
 
   const exportErrors = async () => {
-    const dataStr = await errorTracker.exportErrors();
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `error-log-${getTodayLocalDate(tz)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      const dataStr = await errorTracker.exportErrors();
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `error-log-${getTodayLocalDate(tz)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to export error logs');
+    }
   };
 
   const clearAllErrors = async () => {
@@ -76,9 +88,13 @@ const ErrorMonitoringPage: React.FC = () => {
         cancelLabel: 'Keep them',
       })
     ) {
-      await errorTracker.clearErrors();
-      setErrors([]);
-      setStats(null);
+      try {
+        await errorTracker.clearErrors();
+        setErrors([]);
+        setStats(null);
+      } catch {
+        toast.error('Failed to clear error logs');
+      }
     }
   };
 
@@ -86,6 +102,17 @@ const ErrorMonitoringPage: React.FC = () => {
     return (
       <div className="mx-auto max-w-7xl p-6">
         <div className="text-theme-text-secondary">Loading error data...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-7xl p-6 text-center">
+        <p className="mb-4 text-red-700 dark:text-red-400">{loadError}</p>
+        <button type="button" className="btn-primary" onClick={() => void loadErrors()}>
+          Retry
+        </button>
       </div>
     );
   }

@@ -32,6 +32,7 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.core.audit import log_audit_event
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.utils import generate_uuid, safe_error_detail, sanitize_error_message
 from app.core.websocket_manager import ws_manager
@@ -159,8 +160,12 @@ from app.services.inventory_service import InventoryService
 from app.services.label_service import LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
+from app.utils.upload_limits import read_upload_limited
+from app.utils.websocket_origin import is_websocket_origin_allowed
 
 router = APIRouter()
+
+MAX_INVENTORY_CSV_BYTES = 10 * 1024 * 1024
 
 
 async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
@@ -1060,11 +1065,16 @@ async def import_items_csv(
         )
 
     try:
-        raw = await file.read()
+        raw = await read_upload_limited(file, MAX_INVENTORY_CSV_BYTES)
         try:
             content = raw.decode("utf-8-sig")
         except UnicodeDecodeError:
             content = raw.decode("latin-1")
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="CSV file exceeds the 10MB limit.",
+        )
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -4270,6 +4280,19 @@ async def inventory_websocket(
              item_checked_out, item_checked_in, batch_checkout, batch_return,
              pool_issued, pool_returned, item_retired, write_off_reviewed
     """
+    allowed_origins = settings.ALLOWED_ORIGINS
+    if isinstance(allowed_origins, str):
+        allowed_origins = [
+            origin.strip() for origin in allowed_origins.split(",") if origin.strip()
+        ]
+    if not is_websocket_origin_allowed(
+        websocket.headers.get("origin"),
+        websocket.headers.get("host"),
+        allowed_origins,
+    ):
+        await websocket.close(code=1008, reason="Origin not allowed")
+        return
+
     # Accept the WebSocket upgrade first so that close codes are delivered
     # to the client.  Without accept(), Starlette sends a bare HTTP 403
     # which the browser surfaces as a generic error (no close code).

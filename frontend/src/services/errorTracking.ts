@@ -97,12 +97,8 @@ class ErrorTrackingService {
    * Get all logged errors (from backend)
    */
   async getErrors(params?: { error_type?: string; event_id?: string }): Promise<ErrorLog[]> {
-    try {
-      const result = await errorLogsService.getErrors({ ...params, limit: 100 });
-      return result.errors.map(mapApiError);
-    } catch {
-      return [];
-    }
+    const result = await errorLogsService.getErrors({ ...params, limit: 100 });
+    return result.errors.map(mapApiError);
   }
 
   /**
@@ -116,38 +112,26 @@ class ErrorTrackingService {
    * Get error statistics (from backend)
    */
   async getErrorStats(): Promise<{ total: number; byType: Record<string, number>; recentErrors: ErrorLog[] }> {
-    try {
-      const stats: ErrorLogStats = await errorLogsService.getStats();
-      return {
-        total: stats.total,
-        byType: stats.by_type,
-        recentErrors: stats.recent_errors.map(mapApiError),
-      };
-    } catch {
-      return { total: 0, byType: {}, recentErrors: [] };
-    }
+    const stats: ErrorLogStats = await errorLogsService.getStats();
+    return {
+      total: stats.total,
+      byType: stats.by_type,
+      recentErrors: stats.recent_errors.map(mapApiError),
+    };
   }
 
   /**
    * Clear all errors (via backend)
    */
   async clearErrors(): Promise<void> {
-    try {
-      await errorLogsService.clearErrors();
-    } catch {
-      // Silently fail
-    }
+    await errorLogsService.clearErrors();
   }
 
   /**
    * Export errors for analysis (from backend)
    */
   async exportErrors(params?: { event_id?: string }): Promise<string> {
-    try {
-      return await errorLogsService.exportErrors(params);
-    } catch {
-      return JSON.stringify([], null, 2);
-    }
+    return errorLogsService.exportErrors(params);
   }
 }
 
