@@ -114,7 +114,7 @@ class AuthService:
         # one organization row it non-deterministically scoped login to an
         # arbitrary org and rejected valid users with the generic "incorrect
         # password" (and could flip between restarts). Prefer the canonical org
-        # but never let an org mismatch hide an otherwise-valid account.
+        # but never let an active org mismatch hide an otherwise-valid account.
         canonical_org = (
             await self.db.execute(
                 select(Organization)
@@ -128,8 +128,10 @@ class AuthService:
             (
                 await self.db.execute(
                     select(User)
+                    .join(Organization, User.organization_id == Organization.id)
                     .where((User.username == username) | (User.email == username))
                     .where(User.deleted_at.is_(None))
+                    .where(Organization.active.is_(True))
                     .order_by(User.created_at.asc())
                     .options(selectinload(User.roles))
                 )
@@ -149,8 +151,8 @@ class AuthService:
                     ),
                     None,
                 )
-            # Single-org fallback: never hide a valid account behind an org
-            # mismatch — use the earliest-created match.
+            # Single-org fallback: never hide a valid account in another active
+            # org behind an org mismatch — use the earliest-created match.
             user = user or candidates[0]
             if len(candidates) > 1:
                 logger.warning(
