@@ -65,6 +65,113 @@ its own pass.
 
 ---
 
+## Flagged by the 2026-08-11 → 08-12 changes
+
+Three things landed that reach the scripts: **saved ballot templates**, a
+**security batch** (MFA on OAuth logins, strict refresh rotation, the audit
+legacy-hash boundary, an account-reset privilege ceiling), and the
+**production compose file now failing closed on transport TLS**. Plus one
+purely visual change with wide reach: the **mobile hamburger moved to the
+left edge** of the header on every signed-in page.
+
+### 03 — IT Manager / System Admin
+
+**Section: the `SECURITY_REQUIRE_TLS` beat (~35:00, script lines 595–610)** ·
+**Wrong.**
+
+The callout — *"Defaults to false so upgrading can't refuse to boot your
+instance"* — is no longer true for the stack this series installs.
+`docker-compose.prod.yml` now defaults `SECURITY_REQUIRE_TLS` to **true**, so
+an upgrade of the documented production stack running the bundled plaintext
+MySQL/Redis **will** refuse to start until the operator either configures
+`DB_SSL`/`REDIS_SSL` or writes an explicit `SECURITY_REQUIRE_TLS=false` into
+`.env`. The *application* default is still `false` — the compose file is what
+changed — but the narration is delivered over that compose file, so as
+recorded it would promise the opposite of what the viewer experiences.
+Rewrite the beat as: "the production compose ships fail-closed; here is the
+decision it is forcing you to make, and here is how to say 'cleartext, on
+purpose' if that is genuinely your situation."
+
+**Consider adding, same chapter:** two 20-second beats for upgraders.
+`AUDIT_LOG_LEGACY_MAX_ID` — an upgraded install sets it once to the last
+pre-HMAC audit row, or the old rows fail integrity verification (new installs
+leave it at 0 and never think about it). And the **account-reset ceiling**:
+a `members.manage` holder can no longer reset the password or MFA of an
+account holding permissions they lack, which changes who in the department
+can "just fix" the chief's locked-out account — the answer is now "someone at
+or above that permission level."
+
+### 01 — Installing The Logbook
+
+**Section: the production compose steps (lines ~310, ~408)** · **Incomplete.**
+
+A fresh install following the script verbatim now meets the fail-closed TLS
+default the moment it brings up `docker-compose.prod.yml`. Add one beat where
+the stack first starts: the app will refuse to boot with the bundled
+plaintext database unless you either set up TLS or set
+`SECURITY_REQUIRE_TLS=false` explicitly — and saying `false` out loud on
+camera should come with the one-sentence caveat about networks you don't
+control.
+
+### 12 — Elections Deep Dive
+
+**Section: `BALLOT ITEMS & TEMPLATES` (8:00 – 9:00)** · **Incomplete.**
+
+The template popover now has a second tier above the built-in items: **"Your
+saved ballots"** — whole ballots the department saved from previous
+elections. This is the feature the annual-officer-election audience actually
+wants: build the slate once, click **Save as Template**, and next year apply
+it instead of rebuilding. Two things worth saying on camera, because they are
+the two questions a secretary will ask: applying one **replaces** the current
+ballot (it confirms twice for that reason), and a template carries the
+ballot's *structure only* — never candidates, voters, votes, or attendance,
+so last year's nominees do not haunt this year's ballot. Budget ~45 seconds;
+it also makes a natural short ("Never rebuild your officer ballot again").
+
+**Section: `CLOSING — INCLUDING EARLY` (26:30 – 27:30)** · **B-roll only.**
+The close confirmation is now an in-app dialog whose buttons read **Close
+election** / **Keep it open** — any capture of the old browser popup is
+stale, and the narration ("confirm") still holds.
+
+**Section: `PAPER BALLOTS, ATTESTATION` (43:00 – 49:00)** · **No change —
+recorded here because the narration got *truer*.** The line "No unverified
+paper ever slides into a certified total" was written before 2026-08-12,
+when a pending batch — excluded from published results — could still steer
+**runoff advancement** and **membership-package outcomes** at close. That
+gap is fixed; the claim as scripted is now accurate in full. Take it as
+written.
+
+**Optional aside, `THE ELIGIBILITY ROSTER` (14:00 – 15:30):** the roster is
+now linkable — `/elections/<id>?tab=eligibility` — worth ten seconds when
+the narration says "send this to your co-officer."
+
+### 06 — The Member Experience
+
+**Section: login (2:00 – 2:30)** · **Incomplete, one sentence.** The script
+already says a 2FA department prompts for the authenticator code after the
+password. Add: **this now includes signing in with Google or Microsoft** —
+SSO users get the same code screen after the provider hands them back, and
+that screen is expected, not an error. (Before 2026-08-12, OAuth sign-ins
+skipped the second factor entirely — do not describe the old behaviour.)
+
+**All phone B-roll, this script and every other:** the header ☰ button now
+sits at the **top-left**, next to the department name, instead of the far
+right. Any phone screen-capture that includes the top bar and was shot
+before 2026-08-12 shows the old layout. Same batching advice as the email
+B-roll note below: shoot phone-header B-roll last, and re-shoot it as a set.
+
+### 02, 04, 05, 07, 09–11, 13–16
+
+**Checked against the 24-hour diff — no corrections required.** Script 07's
+minutes-deletion moments and any delete/confirm interactions across the
+series are now in-app dialogs (B-roll formality only; no scripted narration
+describes a browser popup). Script 05/16's officer flows are unaffected by
+the undated-training fix — no script narrates approving a dateless record
+against a freshness-windowed requirement, which is the only path that
+changed. Script 02's OAuth module description remains accurate.
+
+---
+
 ## Flagged by the 2026-08-10 → 08-11 changes
 
 Two branches landed on 2026-08-10 that reach the scripts: the **email template

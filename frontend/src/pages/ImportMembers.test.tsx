@@ -700,6 +700,18 @@ describe('ImportMembers', () => {
       expect(lines).toHaveLength(2);
     });
 
+    it('neutralizes spreadsheet formulas in rejected rows', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email\n=1+1,+cmd,-2,@SUM(A1),not-an-email');
+      await screen.findByText('Download Error Report');
+
+      const report = await captureDownload(async () => {
+        await userEvent.setup().click(screen.getByText('Download Error Report'));
+      });
+
+      expect(report.split('\r\n')[1]).toMatch(/,'=1\+1,'\+cmd,'-2,'@SUM\(A1\),not-an-email$/);
+    });
+
     it('carries a shifted row through verbatim so it can be re-quoted', async () => {
       renderWithRouter(<ImportMembers />);
       await uploadCsv('firstName,lastName,street,email\nJohn,Doe,123 Main St, Apt 4,john@example.com');

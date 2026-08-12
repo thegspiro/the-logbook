@@ -5,8 +5,9 @@ import {
   reportApiError,
   resetErrorReportingState,
   setupGlobalErrorHandlers,
-  flushQueuedReports,
+  clearQueuedReports,
   pendingReportCount,
+  sanitizePath,
   scrubSensitive,
 } from './errorReporting';
 
@@ -253,55 +254,35 @@ describe('delivery', () => {
     expect(pendingReportCount()).toBe(0);
   });
 
-  it('holds a report whose session lapsed mid-flight, rather than losing it', async () => {
+  it('discards reports when the session lapses mid-flight', async () => {
     vi.useFakeTimers();
     mockFetch.mockImplementation(() => Promise.resolve({ ok: false, status: 401 } as Response));
 
     reportError({ errorType: 'API_SERVER_ERROR', errorMessage: 'HTTP 500' });
     await vi.runAllTimersAsync();
 
-    expect(pendingReportCount()).toBe(1);
-
-    // ...and it goes out on the next login flush.
-    mockFetch.mockImplementation(ok);
-    flushQueuedReports();
-    await vi.runAllTimersAsync();
-
     expect(pendingReportCount()).toBe(0);
   });
 
-  it('holds reports raised before sign-in instead of dropping them', async () => {
+  it('does not retain reports raised before sign-in', async () => {
     localStorage.removeItem('has_session');
 
     reportError({ errorType: 'API_SERVER_ERROR', errorMessage: 'login failed' });
     await settle();
 
     expect(mockFetch).not.toHaveBeenCalled();
-    expect(pendingReportCount()).toBe(1);
+    expect(pendingReportCount()).toBe(0);
   });
 
-  it('delivers held reports once a session exists', async () => {
-    localStorage.removeItem('has_session');
-    reportError({ errorType: 'API_SERVER_ERROR', errorMessage: 'login failed' });
-    await settle();
-
-    localStorage.setItem('has_session', '1');
-    flushQueuedReports();
+  it('clears queued reports at an authentication boundary', async () => {
+    mockFetch.mockRejectedValue(new Error('offline'));
+    reportError({ errorType: 'API_SERVER_ERROR', errorMessage: 'old session failure' });
     await settle();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(sentBody()['error_message']).toBe('login failed');
-  });
-
-  it('bounds the held queue so a long offline session cannot grow it forever', async () => {
-    localStorage.removeItem('has_session');
-
-    for (let i = 0; i < 80; i += 1) {
-      reportError({ errorType: 'API_SERVER_ERROR', errorMessage: `failure ${i}` });
-    }
-    await settle();
-
-    expect(pendingReportCount()).toBeLessThanOrEqual(50);
+    expect(pendingReportCount()).toBe(1);
+    clearQueuedReports();
+    expect(pendingReportCount()).toBe(0);
   });
 });
 
@@ -389,6 +370,22 @@ describe('reportApiError', () => {
     expect(sentBody()['context']).toMatchObject({ path: '/users' });
   });
 
+  it('redacts bearer tokens embedded in public workflow paths', async () => {
+    const token = 'FINTOK_0123456789abcdefghijklmnopqrstuvwxyz';
+    reportApiError(
+      axiosError({
+        status: 500,
+        config: { url: `/finance/approvals/${token}/approve`, method: 'post' },
+      })
+    );
+    await settle();
+
+    expect(JSON.stringify(sentBody())).not.toContain(token);
+    expect(sentBody()['context']).toMatchObject({
+      path: '/finance/approvals/[REDACTED]/approve',
+    });
+  });
+
   it('reports an error only once even if handled twice', async () => {
     const error = axiosError({ status: 500 });
 
@@ -397,6 +394,20 @@ describe('reportApiError', () => {
     await settle();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sanitizePath', () => {
+  it.each([
+    ['/event-requests/status/request-secret/cancel', '/event-requests/status/[REDACTED]/cancel'],
+    ['/application-status/application-secret', '/application-status/[REDACTED]'],
+    ['/calendar/feed-secret.ics', '/calendar/[REDACTED].ics'],
+  ])('redacts tokenized path %s', (path, expected) => {
+    expect(sanitizePath(path)).toBe(expected);
+  });
+
+  it('leaves ordinary resource paths intact', () => {
+    expect(sanitizePath('/api/v1/events/42')).toBe('/api/v1/events/42');
   });
 });
 

@@ -18,6 +18,7 @@ import { toAppError, getErrorMessage } from '../utils/errorHandling';
 import { clearCache } from '../utils/apiCache';
 import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import type { PurgeResult } from '../utils/purgeLocalMemberData';
+import { clearQueuedReports } from '../services/errorReporting';
 
 /** Number of failed attempts before client-side lockout kicks in. */
 const LOGIN_LOCKOUT_THRESHOLD = 5;
@@ -337,6 +338,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // cache key carries no user identity, so a stale entry would otherwise be
       // served to the next user who logs in on the same tab without a reload.
       clearCache();
+      clearQueuedReports();
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');

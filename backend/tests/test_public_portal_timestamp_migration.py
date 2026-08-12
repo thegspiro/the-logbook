@@ -10,6 +10,10 @@ MIGRATION = (
     Path(__file__).resolve().parents[1]
     / "alembic/versions/20260805_0004_public_portal_timestamps_to_datetime.py"
 )
+REPAIR_MIGRATION = (
+    Path(__file__).resolve().parents[1]
+    / "alembic/versions/20260812_0004_fail_closed_public_portal_api_keys.py"
+)
 
 
 def test_api_key_expiration_offsets_are_converted_and_fail_closed(monkeypatch):
@@ -39,8 +43,32 @@ def test_api_key_expiration_offsets_are_converted_and_fail_closed(monkeypatch):
     ]
 
     assert "CONVERT_TZ" in expiry_statements[0]
+    assert "COALESCE" in expiry_statements[0]
     assert "RIGHT(`expires_at`, 6)" in expiry_statements[0]
     assert any(
         "SET `expires_at` = UTC_TIMESTAMP(6)" in sql for sql in expiry_statements
     )
     assert not any("SET `expires_at` = NULL" in sql for sql in expiry_statements)
+
+
+def test_repair_expires_existing_null_api_keys(monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        "repair_api_key_expiry", REPAIR_MIGRATION
+    )
+    migration = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(migration)
+
+    inspector = Mock()
+    inspector.get_table_names.return_value = ["public_portal_api_keys"]
+    inspector.get_columns.return_value = [{"name": "expires_at"}]
+    monkeypatch.setattr(migration.sa, "inspect", lambda bind: inspector)
+    monkeypatch.setattr(migration.op, "get_bind", Mock())
+    execute = Mock()
+    monkeypatch.setattr(migration.op, "execute", execute)
+
+    migration.upgrade()
+
+    statement = str(execute.call_args.args[0])
+    assert "SET expires_at = UTC_TIMESTAMP(6)" in statement
+    assert "WHERE expires_at IS NULL" in statement

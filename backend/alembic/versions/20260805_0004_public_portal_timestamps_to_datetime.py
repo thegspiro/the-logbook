@@ -88,9 +88,10 @@ def upgrade() -> None:
         op.execute(
             sa.text(
                 f"UPDATE `{table}` "
-                f"SET `{column}` = DATE_FORMAT(CONVERT_TZ("
+                f"SET `{column}` = COALESCE(DATE_FORMAT(CONVERT_TZ("
                 f"  REPLACE(LEFT(`{column}`, CHAR_LENGTH(`{column}`) - 6), 'T', ' '), "
-                f"  RIGHT(`{column}`, 6), '+00:00'), '%Y-%m-%d %H:%i:%s.%f') "
+                f"  RIGHT(`{column}`, 6), '+00:00'), '%Y-%m-%d %H:%i:%s.%f'), "
+                f"  `{column}`) "
                 f"WHERE `{column}` REGEXP "
                 f"'[+-]((0[0-9]|1[0-3]):[0-5][0-9]|14:00)$'"
             )
