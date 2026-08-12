@@ -1,15 +1,15 @@
 """restore active prospect email uniqueness
 
-Revision ID: 20260812_0002
-Revises: 20260812_0001
+Revision ID: 20260812_0003
+Revises: 20260812_0002
 Create Date: 2026-08-12 00:00:00.000000
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260812_0002"
-down_revision = "20260812_0001"
+revision = "20260812_0003"
+down_revision = "20260812_0002"
 branch_labels = None
 depends_on = None
 
