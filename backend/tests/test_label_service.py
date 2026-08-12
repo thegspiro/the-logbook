@@ -163,6 +163,34 @@ class TestRenderer:
         with pytest.raises(ValueError, match="custom_width"):
             render_labels([LabelSpec(name="x", barcode_value="y")], "custom")
 
+    @pytest.mark.parametrize(
+        ("width", "height"),
+        [(0.49, 1), (8.01, 1), (1, 0.49), (1, 11.01)],
+    )
+    def test_custom_rejects_unprintable_dimensions(self, width, height):
+        with pytest.raises(ValueError, match="custom label dimensions"):
+            render_labels(
+                [LabelSpec(name="x", barcode_value="y")],
+                "custom",
+                custom_width=width,
+                custom_height=height,
+            )
+
+    def test_rejects_empty_or_unencodable_barcode(self):
+        with pytest.raises(ValueError, match="Code128-compatible"):
+            render_labels([LabelSpec(name="x", barcode_value="火火")], "letter")
+
+    def test_rejects_partially_unencodable_barcode_instead_of_truncating(self):
+        with pytest.raises(ValueError, match="Code128-compatible"):
+            render_labels([LabelSpec(name="x", barcode_value="INV-12火")], "letter")
+
+    def test_rejects_barcode_too_long_for_selected_label(self):
+        with pytest.raises(ValueError, match="too long for the selected label size"):
+            render_labels(
+                [LabelSpec(name="Long barcode", barcode_value="X" * 255)],
+                "thermal_1x1",
+            )
+
     def test_unknown_format_raises(self):
         with pytest.raises(ValueError, match="Unknown label format"):
             render_labels([LabelSpec(name="x", barcode_value="y")], "bogus")

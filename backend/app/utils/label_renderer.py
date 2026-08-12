@@ -17,8 +17,33 @@ _MIN_BAR_WIDTH_INCH = 0.0075
 
 
 def sanitize_barcode_value(raw: str) -> str:
-    """Strip non-ASCII characters that Code128 cannot encode."""
-    return "".join(ch for ch in raw if ord(ch) < 128)
+    """Normalize a Code128 value without changing its identity.
+
+    Returning an empty string for any non-ASCII input prevents a label from
+    encoding only part of a stored identifier, which would not scan back to
+    the originating record.
+    """
+    value = raw.strip()
+    return value if value and all(ord(ch) < 128 for ch in value) else ""
+
+
+def _fit_code128(
+    code128, value: str, initial_width: float, max_width: float, bar_height: float
+):
+    """Build a barcode without shrinking modules below the scanner-safe floor."""
+    from reportlab.lib.units import inch
+
+    minimum_width = _MIN_BAR_WIDTH_INCH * inch
+    bar_width = max(initial_width, minimum_width)
+    barcode = code128.Code128(value, barWidth=bar_width, barHeight=bar_height)
+    while barcode.width > max_width and bar_width > minimum_width:
+        bar_width = max(minimum_width, bar_width - 0.001 * inch)
+        barcode = code128.Code128(value, barWidth=bar_width, barHeight=bar_height)
+    if barcode.width > max_width:
+        raise ValueError(
+            f"Barcode value {value!r} is too long for the selected label size"
+        )
+    return barcode
 
 
 # Supported label formats. ``type`` is "sheet" (Avery grid) or "thermal"
@@ -115,10 +140,23 @@ def render_labels(
 
     Raises ValueError on an unknown format or missing custom dimensions.
     """
+    if not specs:
+        raise ValueError("At least one label is required")
+    for spec in specs:
+        if not sanitize_barcode_value(str(spec.barcode_value).strip()):
+            raise ValueError(
+                f"Label {spec.name!r} has no Code128-compatible barcode value"
+            )
+
     if label_format == "custom":
-        if not custom_width or not custom_height:
+        if custom_width is None or custom_height is None:
             raise ValueError(
                 "custom_width and custom_height are required for custom format"
+            )
+        if not 0.5 <= custom_width <= 8 or not 0.5 <= custom_height <= 11:
+            raise ValueError(
+                "custom label dimensions must be 0.5-8 inches wide and "
+                "0.5-11 inches high"
             )
         rotate = auto_rotate if auto_rotate is not None else True
         return _render_thermal(specs, custom_width, custom_height, rotate)
@@ -198,18 +236,10 @@ def _render_sheet(specs: list) -> BytesIO:
         quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
         bar_height = 0.35 * inch
         bar_width_unit = 0.008 * inch
-        barcode_obj = code128.Code128(
-            barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-        )
         max_barcode_width = usable_w - 2 * quiet_zone
-        while (
-            barcode_obj.width > max_barcode_width
-            and bar_width_unit > _MIN_BAR_WIDTH_INCH * inch
-        ):
-            bar_width_unit -= 0.001 * inch
-            barcode_obj = code128.Code128(
-                barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-            )
+        barcode_obj = _fit_code128(
+            code128, barcode_value, bar_width_unit, max_barcode_width, bar_height
+        )
         barcode_x = x + (label_w - barcode_obj.width) / 2
         barcode_obj.drawOn(c, barcode_x, y + padding + 8)
 
@@ -257,8 +287,6 @@ def _render_thermal(
             c.rotate(90)
 
         quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
-        min_bar = _MIN_BAR_WIDTH_INCH * inch
-
         self_w = content_w - 2 * padding
         self_h = content_h - 2 * padding
 
@@ -277,14 +305,9 @@ def _render_thermal(
 
         max_barcode_width = self_w * 0.9 - 2 * quiet_zone
 
-        barcode_obj = code128.Code128(
-            barcode_value, barWidth=bar_width_unit, barHeight=bar_height
+        barcode_obj = _fit_code128(
+            code128, barcode_value, bar_width_unit, max_barcode_width, bar_height
         )
-        while barcode_obj.width > max_barcode_width and bar_width_unit > min_bar:
-            bar_width_unit -= 0.001 * inch
-            barcode_obj = code128.Code128(
-                barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-            )
 
         y_cursor = content_h - padding
 

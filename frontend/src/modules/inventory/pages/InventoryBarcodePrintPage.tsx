@@ -271,18 +271,26 @@ function buildCustomPreset(widthIn: number, heightIn: number): LabelPreset {
   };
 }
 
-/** Code128 supports ASCII 0-127. Strip anything outside that range. */
-function sanitizeForCode128(raw: string): string {
+/** Code128 supports ASCII 0-127. Return null rather than changing identifiers. */
+function normalizeForCode128(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
   // eslint-disable-next-line no-control-regex
-  return raw.replace(/[^\x00-\x7F]/g, '');
+  return /^[\x00-\x7F]+$/.test(trimmed) ? trimmed : null;
 }
 
 /** Gets a printable barcode value for an item, using the same fallback chain as the backend */
 function getBarcodeValue(item: InventoryItem): string | null {
-  const value = item.barcode || item.asset_tag || item.serial_number || item.id?.slice(0, 12);
-  if (!value || value.trim().length === 0) return null;
-  const sanitized = sanitizeForCode128(value.trim());
-  return sanitized.length > 0 ? sanitized : null;
+  // Never strip characters from an identifier: the printed value must still
+  // match a value the scanner lookup can find. Fall back only to identifiers
+  // that are themselves stored and searchable.
+  const candidates = [item.barcode, item.asset_tag, item.serial_number];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const normalized = normalizeForCode128(candidate);
+    if (normalized) return normalized;
+  }
+  return null;
 }
 
 // ── Single barcode label ────────────────────────────────────────
@@ -505,6 +513,9 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
   const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
   const isThermal = preset.columns === 1;
+  // The label API accepts at most 500 records per PDF. Keep the copies control
+  // inside that batch limit while retaining the existing per-item cap of 50.
+  const maxCopies = Math.max(1, Math.min(50, Math.floor(500 / Math.max(items.length, 1))));
 
   const fetchItems = useCallback(async () => {
     const idsParam = searchParams.get('ids');
@@ -517,6 +528,11 @@ const InventoryBarcodePrintPage: React.FC = () => {
     const ids = idsParam.split(',').filter(Boolean);
     if (ids.length === 0) {
       setError('No valid item IDs provided.');
+      setLoading(false);
+      return;
+    }
+    if (ids.length > 500) {
+      setError('A maximum of 500 inventory items can be printed in one batch. Select fewer items and try again.');
       setLoading(false);
       return;
     }
@@ -656,7 +672,9 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
     // On phones/tablets the hidden-iframe print pipeline is unreliable (mobile
     // Safari prints blank), so hand off to the server-generated PDF instead.
-    if (prefersPdfOverBrowserPrint()) {
+    // Do the same for legacy items without a printable stored identifier: the
+    // PDF path assigns and persists a canonical barcode before it is printed.
+    if (prefersPdfOverBrowserPrint() || itemsWithoutBarcodes.length > 0) {
       void handleDownloadPdf();
       return;
     }
@@ -667,8 +685,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
     const svgs = container.querySelectorAll('.barcode-label svg');
     const emptyCount = Array.from(svgs).filter((svg) => !svg.innerHTML || svg.innerHTML.trim().length < 20).length;
-    if (emptyCount > 0 && emptyCount === svgs.length) {
-      toast.error('No barcodes rendered. Check that items have barcode, asset tag, or serial number values.');
+    if (svgs.length === 0 || emptyCount > 0) {
+      toast.error('One or more barcodes did not render. Download the PDF instead to avoid printing blank labels.');
       return;
     }
 
@@ -772,9 +790,13 @@ const InventoryBarcodePrintPage: React.FC = () => {
     if (items.length === 0) return;
     setDownloadingPdf(true);
     try {
+      // Preserve the on-screen copy count in the server-rendered PDF. This is
+      // also the print path used by phones and tablets, so sending each id only
+      // once would silently issue fewer labels than the preview promises.
+      const itemIds = Array.from({ length: copies }, () => items.map((item) => item.id)).flat();
       // preset.id matches backend LABEL_FORMATS keys directly ('custom' too).
       const { blob, autoPopulated } = await inventoryService.generateBarcodeLabels(
-        items.map((i) => i.id),
+        itemIds,
         preset.id,
         isCustom ? customW : undefined,
         isCustom ? customH : undefined,
@@ -1142,9 +1164,9 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   id="label-copies"
                   type="number"
                   min={1}
-                  max={50}
+                  max={maxCopies}
                   value={copies}
-                  onChange={(e) => setCopies(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                  onChange={(e) => setCopies(Math.max(1, Math.min(maxCopies, parseInt(e.target.value) || 1)))}
                   className="form-input w-24"
                 />
               </div>

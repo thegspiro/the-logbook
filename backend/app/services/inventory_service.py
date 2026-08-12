@@ -65,7 +65,7 @@ from app.models.user import (
     user_positions,
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
-from app.utils.label_renderer import LabelSpec, render_labels
+from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_value
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 
@@ -2893,7 +2893,7 @@ class InventoryService:
         auto_populated = 0
         if persist:
             for item in items:
-                if not item.barcode:
+                if not item.barcode or not sanitize_barcode_value(item.barcode):
                     item.barcode = await self._next_sequential_barcode(
                         item.organization_id
                     )
@@ -2901,12 +2901,20 @@ class InventoryService:
             if auto_populated > 0:
                 await self.db.commit()
 
+        def printable_value(item) -> str:
+            """Resolve the first non-empty Code128-compatible identifier."""
+            candidates = (item.barcode, item.asset_tag, item.serial_number)
+            for candidate in candidates:
+                if candidate:
+                    value = sanitize_barcode_value(str(candidate))
+                    if value:
+                        return value
+            raise ValueError(f"Item {item.id} has no printable barcode identifier")
+
         specs = [
             LabelSpec(
                 name=item.name,
-                barcode_value=(
-                    item.barcode or item.asset_tag or item.serial_number or item.id[:12]
-                ),
+                barcode_value=printable_value(item),
                 asset_tag=item.asset_tag,
                 serial_number=item.serial_number,
                 extra=_build_extra_lines(item, extra_lines) or None,
