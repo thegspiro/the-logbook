@@ -346,31 +346,9 @@ class AuthService:
             session = result.scalar_one_or_none()
 
             if not session:
-                # The current refresh token doesn't match. Before assuming theft,
-                # check the short rotation grace window: a token that was JUST
-                # rotated away is still accepted briefly, so two concurrent
-                # legitimate refreshes (multi-tab / app boot / retry) don't
-                # falsely trip replay detection and log the user out everywhere.
-                now = datetime.now(timezone.utc)
-                grace_result = await self.db.execute(
-                    select(UserSession).where(
-                        UserSession.previous_refresh_token == refresh_token
-                    )
-                )
-                grace_session = grace_result.scalar_one_or_none()
-                grace_expiry = (
-                    grace_session.previous_refresh_expires_at if grace_session else None
-                )
-                if grace_expiry and grace_expiry.tzinfo is None:
-                    grace_expiry = grace_expiry.replace(tzinfo=timezone.utc)
-
-                if grace_session and grace_expiry and grace_expiry > now:
-                    # Concurrent-refresh race, not theft: hand back the already-
-                    # rotated current tokens without rotating again or revoking.
-                    return grace_session.token, grace_session.refresh_token
-
-                # Not the current token and not within the grace window ⇒ this is
-                # a genuinely stale/replayed token. Revoke all sessions.
+                # A token that no longer matches is a replay. Never return the
+                # current token pair to a caller presenting a previous token:
+                # that would let a token thief take over the rotated session.
                 logger.warning(
                     f"Refresh token replay detected for user {user_id}. "
                     "Revoking all sessions."
@@ -399,14 +377,10 @@ class AuthService:
             new_access_token = create_access_token(token_data)
             new_refresh_token = create_refresh_token(token_data)
 
-            # Rotate: update the session with the new tokens. Keep the
-            # just-rotated token as previous_refresh_token for a short grace
-            # window so a racing concurrent refresh is accepted rather than
-            # treated as replay (see the not-found branch above).
-            session.previous_refresh_token = refresh_token
-            session.previous_refresh_expires_at = datetime.now(
-                timezone.utc
-            ) + timedelta(seconds=settings.REFRESH_ROTATION_GRACE_SECONDS)
+            # Rotate and immediately invalidate the token that was just used.
+            # Clear legacy grace data so it cannot be used by older code paths.
+            session.previous_refresh_token = None
+            session.previous_refresh_expires_at = None
             session.token = new_access_token
             session.refresh_token = new_refresh_token
             session.expires_at = datetime.now(timezone.utc) + timedelta(
