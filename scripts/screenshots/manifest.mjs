@@ -1867,6 +1867,46 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "04-43-create-election",
+    doc: "04-events-meetings.md",
+    line: 649,
+    anchor: "Screenshot of the election creation form showing the title",
+    alt: "The Create New Election dialog — title, description, voting window, and the victory-condition and runoff settings",
+    route: "/elections",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Create Election$/ })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 20_000 });
+      await dialog.getByLabel(/^Title/).fill("Fall 2026 Officer Election");
+      await dialog
+        .getByLabel(/^Description/)
+        .fill(
+          "Annual officer election held at the November business meeting. " +
+            "Polls open at the call to order and close before adjournment.",
+        );
+      // The labelled control is the date half of DateTimeQuarterHour — a
+      // native `type=date` input — so it takes a plain date, not a
+      // datetime-local value. The time is three separate selects beside it.
+      // Filling the start date also reveals the quick-duration row beneath the
+      // end date, which is part of what this shot is for.
+      await dialog.getByLabel(/^Start Date & Time/).fill("2026-11-10");
+      await dialog.getByLabel(/^End Date & Time/).fill("2026-11-10");
+      // Blur so the last field is not left with a focus ring and a selected
+      // date segment, which reads as a half-finished edit.
+      await dialog.getByLabel(/^Title/).click();
+      await page.waitForTimeout(600);
+    },
+    selector: '[role="dialog"]',
+    // "No linked meeting" is the Linked Meeting select's default option, which
+    // is in the DOM on every new election — the field is optional and the
+    // guide's steps do not ask for it to be set.
+    allowEmptyState: true,
+    fullPage: false,
+  },
+  {
     id: "04-38-rolling-recurrence",
     doc: "04-events-meetings.md",
     line: 1136,
@@ -7295,6 +7335,63 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     fullPage: true,
+  },
+  {
+    id: "14-21-save-ballot-template",
+    doc: "14-elections.md",
+    line: 144,
+    anchor: "The Ballot Builder with the **Save as Template**",
+    alt: "The Save as Template form open in the Ballot Builder — the Template name field, the configuration-only note, and the Save Template / Cancel buttons",
+    route: "/elections",
+    prepare: async (page) => {
+      // A draft election, because Save as Template is hidden on a closed one
+      // and the guide's steps say to build the ballot on a draft.
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => (election.status ?? "") === "draft",
+      )(page);
+      const save = page.getByRole("button", { name: /^Save as Template$/ });
+      await save.waitFor({ timeout: 20_000 });
+      await save.click();
+      const name = page.locator("#saved-ballot-template-name");
+      await name.waitFor({ timeout: 10_000 });
+      await name.fill("Annual officer election");
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> div > h3:text-is('Ballot Items (1)'))",
+  },
+  {
+    id: "14-22-ballot-template-picker",
+    doc: "14-elections.md",
+    line: 159,
+    anchor: 'The template picker showing the "Your saved',
+    alt: 'The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates',
+    route: "/elections",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        (election) => (election.status ?? "") === "draft",
+      )(page);
+      const use = page.getByRole("button", { name: /^Use Template$/ });
+      await use.waitFor({ timeout: 20_000 });
+      await use.click();
+      // Clicking the saved template arms the two-step confirm rather than
+      // applying it — which is the state the guide is describing.
+      // Scoped to the popover and taken first: the built-in "Officer
+      // Election" template below also matches a loose name regex.
+      const popover = page.locator("div:has(> h4:text-is('Select a Template'))");
+      const saved = popover
+        .getByRole("button", { name: /Annual officer election/ })
+        .first();
+      await saved.waitFor({ timeout: 10_000 });
+      await saved.click();
+      await page.waitForTimeout(500);
+    },
+    selector: "div:has(> h4:text-is('Select a Template'))",
   },
   {
     id: "14-20-runoff-chain",

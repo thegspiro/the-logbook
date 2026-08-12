@@ -138,13 +138,12 @@ and apply it to next year's election:
 > ballot **structure only**: items, positions, voting methods, victory
 > conditions, write-in settings, eligibility types. It never carries
 > candidates, voters, votes, tokens, or attendance — the builder says exactly
-> this under the name field, and the server enforces it. Applying last year's
-> template gives you last year's *questions*, with nobody pre-nominated.
+> this under the name field, and the stored shape has nowhere to put them, so
+> they cannot survive the round trip even if something tries to send them.
+> Applying last year's template gives you last year's _questions_, with nobody
+> pre-nominated.
 
-> **[SCREENSHOT NEEDED]:** _The Ballot Builder with the **Save as Template**
-> form open — the "Template name" field, the "Saves ballot configuration
-> only—never candidates, voters, votes, or attendance" helper text, and the
-> Save Template / Cancel buttons._
+![The Save as Template form open in the Ballot Builder — the Template name field, the configuration-only note, and the Save Template / Cancel buttons](./images/14-21-save-ballot-template.png)
 
 ### Applying one
 
@@ -156,21 +155,18 @@ and apply it to next year's election:
    ballot, which is why it asks twice
 4. Add this year's candidates to the applied items
 
-> **[SCREENSHOT NEEDED]:** _The template picker showing the "Your saved
-> ballots" section with one saved template ("Annual officer election · 4 items
-> · replaces current ballot") above the built-in template grid, with the
-> two-step Replace / Cancel confirmation armed._
+![The ballot template picker — a saved "Annual officer election" under Your saved ballots with its Replace / Cancel confirmation armed, above the built-in templates](./images/14-22-ballot-template-picker.png)
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario                                                    | Behavior                                                                                                                                                             |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Two templates named "Annual Officers" and "annual officers" | Rejected — names are unique per department **case-insensitively** (409 "A ballot template with this name already exists"). The saved name keeps your original casing |
-| Applying a template over a ballot you were editing | The current ballot is **replaced**, not merged — the two-step confirm exists because of this |
-| The member who saved a template leaves the department | The template survives — it belongs to the organization, not its author |
-| Deleting a template used by past elections | Safe — elections hold their own copy of their ballot; a template is only a starting point |
-| Applying the same template to two elections | Each application mints fresh ballot-item ids, so the two ballots never share identifiers |
-| A template from another department | Invisible — templates are organization-scoped; list and delete both 404 across org lines |
+| Applying a template over a ballot you were editing          | The current ballot is **replaced**, not merged — the two-step confirm exists because of this                                                                         |
+| The member who saved a template leaves the department       | The template survives — it belongs to the organization, not its author                                                                                               |
+| Deleting a template used by past elections                  | Safe — elections hold their own copy of their ballot; a template is only a starting point                                                                            |
+| Applying the same template to two elections                 | Each application mints fresh ballot-item ids, so the two ballots never share identifiers                                                                             |
+| A template from another department                          | Invisible — templates are organization-scoped; list and delete both 404 across org lines                                                                             |
 
 ---
 
@@ -525,15 +521,15 @@ photographed after the close carries its trail and no buttons.
 
 ### Edge Cases
 
-| Scenario                                           | Behavior                                                                                   |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Typo: 40 votes entered for a 4-vote race           | Rejected by the plausibility guard; over-count checkbox appears only after the guard fires |
-| Recorder clicks Attest on their own batch          | Rejected — attestation requires a _different_ officer                                      |
-| Setting changed from 2 to 0 after batches recorded | Existing pending batches still require their snapshotted 2 attestations                    |
+| Scenario                                           | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Typo: 40 votes entered for a 4-vote race           | Rejected by the plausibility guard; over-count checkbox appears only after the guard fires                                                                                                                                                                                                                                                                                                                                    |
+| Recorder clicks Attest on their own batch          | Rejected — attestation requires a _different_ officer                                                                                                                                                                                                                                                                                                                                                                         |
+| Setting changed from 2 to 0 after batches recorded | Existing pending batches still require their snapshotted 2 attestations                                                                                                                                                                                                                                                                                                                                                       |
 | Election closed with a batch still pending         | Batch excluded from certified results; warning audit event written. _(2026-08-12)_ The exclusion now also covers the close path's own arithmetic: a pending batch's votes cannot decide which candidates advance to a **runoff** and cannot flip a **membership-approval** package to elected/not elected. Before this fix an unattested batch was invisible in the published results yet still counted in those two outcomes |
-| A batch reaches Confirmed before close             | Its votes count everywhere — results, runoff advancement, and package outcomes. Exclusion applies only while the batch is Pending (or, via its votes' soft-delete, Voided) |
-| Mis-keyed batch already attested                   | Void the batch (reason required) and re-record                                             |
-| Attestation requirement set to 0                   | Batches confirm immediately on recording (not recommended)                                 |
+| A batch reaches Confirmed before close             | Its votes count everywhere — results, runoff advancement, and package outcomes. Exclusion applies only while the batch is Pending (or, via its votes' soft-delete, Voided)                                                                                                                                                                                                                                                    |
+| Mis-keyed batch already attested                   | Void the batch (reason required) and re-record                                                                                                                                                                                                                                                                                                                                                                                |
+| Attestation requirement set to 0                   | Batches confirm immediately on recording (not recommended)                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
 
