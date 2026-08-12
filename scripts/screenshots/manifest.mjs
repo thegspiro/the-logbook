@@ -7043,6 +7043,79 @@ export const SHOTS = [
     selector: "aside, nav",
   },
   {
+    id: "05-70-inventory-table-mobile",
+    doc: "05-inventory.md",
+    line: 1830,
+    anchor:
+      "Screenshot of the inventory table on a phone, each row stacked into a card",
+    alt: "The inventory items table on a phone — each row stacked into a card with the field name on the left and its value on the right",
+    route: "/inventory/items",
+    viewport: "mobile",
+    // Cropped to the first few stacked rows. Not fullPage: the cards are one
+    // per item, so a full-page phone capture of the whole inventory came out
+    // 18,000px tall and illegible. Not a plain viewport shot either — eight
+    // filter selects sit above the table on a phone and push every card below
+    // the fold, so the screenful that fits contains no card at all.
+    prepare: async (page) => {
+      // Two responsive tables render on this page; the items table is first.
+      const table = page.locator("table.rwd-table").first();
+      await table.waitFor({ timeout: 15_000 });
+      // Clip to roughly three rows; the whole table is far taller than a phone.
+      await page.evaluate(() => {
+        const el = document.querySelector("table.rwd-table");
+        if (el instanceof HTMLElement) {
+          el.style.maxHeight = "760px";
+          el.style.overflow = "hidden";
+          el.style.display = "block";
+        }
+      });
+      await page.waitForTimeout(300);
+    },
+    selector: "table.rwd-table >> nth=0",
+  },
+  {
+    id: "05-69-label-print-page",
+    doc: "05-inventory.md",
+    line: 1761,
+    anchor:
+      "Screenshot of the label print page (any module) showing the label size choices",
+    alt: "The inventory label print page — the nine label size choices with Rollo/Thermal 2x1 selected, copies per item, extra-detail toggles, and a preview of the three barcode labels",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // The page renders from ?ids= and shows "No items specified" without it,
+      // so the ids have to be picked up before navigating.
+      const ids = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/inventory/items?limit=3", {
+          credentials: "include",
+        });
+        if (!response.ok) return [];
+        const body = await response.json();
+        const rows = Array.isArray(body) ? body : (body.items ?? []);
+        return rows.map((item) => item.id).filter(Boolean);
+      });
+      if (!ids.length) {
+        throw new Error("no inventory items to print labels for");
+      }
+      await page.goto(
+        new URL(
+          `/inventory/print-labels?ids=${ids.join(",")}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      // The format, printer and copies controls live behind Settings, which
+      // starts collapsed — the page otherwise shows only the preview.
+      // Exact match: a loose /settings/i also matches the sidebar's
+      // "Organization Settings" nav group, which comes first in the DOM and
+      // just expands the navigation instead.
+      await page
+        .getByRole("button", { name: "Settings", exact: true })
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    fullPage: true,
+  },
+  {
     id: "14-20-runoff-chain",
     doc: "14-elections.md",
     line: 601,

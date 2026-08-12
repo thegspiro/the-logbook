@@ -1749,16 +1749,32 @@ The system remembers your chosen **printer/size per position and per module**:
 
 ### Label Formats
 
-| Format       | Size         | Use Case                   |
-| ------------ | ------------ | -------------------------- |
-| Dymo 30252   | 1.125×3.5"   | Address labels             |
-| Dymo 30256   | 2.3125×4"    | Shipping labels            |
-| Dymo 30334   | 1.25×2.25"   | Multi-purpose labels       |
-| Rollo 4×6    | 4×6"         | Thermal shipping labels    |
-| Letter sheet | 8.5×11"      | Standard printer, 2×5 grid |
-| Custom       | User-defined | 0.5-8" wide × 0.5-11" tall |
+Nine choices, picked as cards rather than from a dropdown. Dymo 30252 is the
+default.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the label print page (any module) showing the label format dropdown, printer preference selector, copies per record field, and a preview of the generated label._
+| Format              | Size         | Use Case                   |
+| ------------------- | ------------ | -------------------------- |
+| Dymo 30252          | 1.125×3.5"   | Standard address label     |
+| Dymo 30256          | 2.3125×4"    | Shipping label             |
+| Dymo 30334          | 2.25×1.25"   | Multi-purpose label        |
+| Dymo 30336          | 1×2.125"     | Small multipurpose label   |
+| Rollo 4×6           | 4×6"         | Shipping label             |
+| Rollo / Thermal 2×1 | 2×1"         | Small thermal label        |
+| Thermal 1×1         | 1×1"         | Square asset tag           |
+| Letter Paper (Grid) | 8.5×11"      | 30 per page (Avery 5160)   |
+| Custom size         | User-defined | 0.5-8" wide × 0.5-11" tall |
+
+> **Corrected 2026-08-12.** This table previously listed six formats and
+> described the letter sheet as a 2×5 grid. There are nine, and the letter
+> sheet is Avery 5160 at 30 labels per page.
+
+Choosing a **thermal** size (the Rollo and Thermal entries) also reveals a
+**Label Orientation** control and a **Download Test Label** button, for
+checking alignment on a roll-fed printer before committing a batch. Below the
+size you can set **copies per item** and tick which extra details to print
+under the barcode — Location, Category, Condition.
+
+![The inventory label print page — the nine label size choices with Rollo/Thermal 2x1 selected, copies per item, extra-detail toggles, and a preview of the three barcode labels](./images/05-69-label-print-page.png)
 
 ### Edge Cases
 
@@ -1809,9 +1825,26 @@ Several inventory admin pages have been **collapsed from separate desktop and mo
 | ReorderRequestsPage      | Separate renders           | Single responsive table |
 | InventoryMaintenancePage | Separate renders           | Single responsive table |
 
-Each `<td>` uses a `data-label` attribute to display the field name on mobile. Cells without `data-label` (checkboxes, action buttons) are hidden in mobile view.
+Each `<td>` uses a `data-label` attribute to display the field name on mobile.
+A cell with **no** `data-label` at all is hidden in the stacked view.
 
-> **[SCREENSHOT NEEDED]:** _Side-by-side comparison of an inventory table on desktop (standard horizontal table) and mobile (stacked card format with field labels on the left, values on the right)._
+Two refinements are worth knowing, because both look like mistakes and are not
+_(clarified 2026-08-12)_:
+
+- **A cell can opt back in with an empty label.** The selection checkbox and
+  the Edit/Retire buttons carry `data-label=""`, so they still appear on a
+  phone — just without a field name against them. They are not hidden.
+- **Columns hidden on desktop can reappear on the phone.** Manufacturer, Serial
+  #, Asset Tag, Barcode and Cost are marked `hidden`, which keeps them out of
+  the desktop table where width is scarce; the stacked-card rules override that,
+  so they come back as rows on mobile where there is vertical room. This is why
+  the phone card below lists more fields than the desktop table shows, not
+  fewer.
+
+The desktop form of this table is pictured at the top of this guide under
+[Inventory Items](#inventory-items). Below is the same table on a phone.
+
+![The inventory items table on a phone — each row stacked into a card with the field name on the left and its value on the right](./images/05-70-inventory-table-mobile.png)
 
 ---
 
