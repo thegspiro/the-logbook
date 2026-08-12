@@ -9,7 +9,7 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**383 of 476 placeholders filled** (93 remaining).
+**384 of 473 placeholders filled** (89 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
@@ -29,8 +29,8 @@ regenerated wholesale, so that audit cannot live here.
 | [13-medical-screening.md](./13-medical-screening.md) | 6 | 4 |
 | [14-elections.md](./14-elections.md) | 7 | 8 |
 | [15-prospective-members.md](./15-prospective-members.md) | 15 | 0 |
-| [16-integrations.md](./16-integrations.md) | 4 | 8 |
+| [16-integrations.md](./16-integrations.md) | 5 | 4 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 2 | 0 |
 | [18-storefront.md](./18-storefront.md) | 4 | 1 |
-| **Total** | **383** | **93** |
+| **Total** | **384** | **89** |
 

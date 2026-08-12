@@ -4769,6 +4769,28 @@ export const SHOTS = [
     route: "/integrations",
     fullPage: true,
   },
+  {
+    id: "16-07-calendar-subscribe",
+    doc: "16-integrations.md",
+    line: 339,
+    anchor:
+      "Screenshot of the Subscribe to my shifts card expanded on My Shifts",
+    alt: "The Subscribe to my shifts card expanded — the member's private feed URL, its copy button and the reset control",
+    // Not on /integrations. The ICS feed is a per-member subscription that
+    // lives on My Shifts; the Integrations catalog only advertises it.
+    route: "/scheduling?tab=my-shifts",
+    auth: "member",
+    prepare: async (page) => {
+      await clickByName("Subscribe to my shifts")(page);
+      // The token is minted on first open, so the URL field does not exist
+      // until that round trip lands.
+      await page.getByLabel("Calendar subscription URL").waitFor({
+        timeout: 20_000,
+      });
+      await page.waitForTimeout(400);
+    },
+    selector: 'div.card:has([aria-label="Calendar subscription URL"])',
+  },
 
   // ── 17 Privacy & Data Rights ────────────────────────────────────────
   {
