@@ -50,6 +50,33 @@ def block_end(lines: list[str], start: int) -> int:
     return end
 
 
+def block_start(lines: list[str], start: int) -> int:
+    """Index of the first line to replace, absorbing a dangling separator.
+
+    A placeholder written as the last paragraph of a longer note sits below a
+    bare ``>`` that separates it from the prose above. That separator belongs
+    to the note, not the placeholder, so ``block_end`` never sees it — and
+    swapping the placeholder for an image left the note ending on an empty
+    quoted line.
+    """
+    if start > 0 and lines[start - 1].strip() == ">":
+        return start - 1
+    return start
+
+
+def separated(lines: list[str], start: int, replacement: str) -> list[str]:
+    """The replacement, preceded by a blank line if it would otherwise fuse.
+
+    An image left directly under a blockquote's last prose line is a *lazy
+    continuation* of that paragraph in CommonMark — it renders inside the quote
+    rather than after it. The bare ``>`` that used to sit there was what kept
+    them apart, so removing it means putting a real blank line in its place.
+    """
+    if start > 0 and lines[start - 1].startswith(">"):
+        return ["", replacement]
+    return [replacement]
+
+
 def normalize(text: str) -> str:
     """Collapse whitespace and case so anchors survive re-wrapping."""
     return " ".join(text.lower().split())
@@ -151,7 +178,8 @@ def main() -> int:
                 skipped.append(f"{doc}:{shot['line']}: no placeholder ({shot['id']})")
                 continue
             replacement = f"![{shot['alt']}](./images/{shot['file']})"
-            lines[index : block_end(lines, index)] = [replacement]
+            start = block_start(lines, index)
+            lines[start : block_end(lines, index)] = separated(lines, start, replacement)
             applied += 1
         if not args.dry_run:
             path.write_text("\n".join(lines) + "\n")

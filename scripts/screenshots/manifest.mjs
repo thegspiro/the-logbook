@@ -3046,6 +3046,32 @@ export const SHOTS = [
     auth: "anonymous",
   },
   {
+    id: "00-23-login-two-factor",
+    doc: "00-getting-started.md",
+    line: 98,
+    anchor: "The login page showing the two-factor",
+    alt: "The login page's two-factor step — the 6-digit code field and the Use a recovery code link",
+    route: "/login",
+    auth: "anonymous",
+    prepare: async (page) => {
+      // The code step is one render branch keyed on `mfaRequired`, reached the
+      // same way whether the first factor was a password or a returning OAuth
+      // sign-in — so a password sign-in as the enrolled demo member puts the
+      // page in exactly the state the guide is describing. `signIn` cannot be
+      // reused: it waits to leave /login, which is precisely what a 2FA
+      // account does not do.
+      await page.getByLabel(/username|email/i).first().fill("rduarte");
+      await page.getByLabel(/password/i).first().fill("DemoMember!2026");
+      await page
+        .getByRole("button", { name: /sign in|log ?in/i })
+        .first()
+        .click();
+      const code = page.locator("#mfa-code");
+      await code.waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
     id: "00-21-login-sso-options",
     doc: "00-getting-started.md",
     line: 85,
@@ -4841,6 +4867,19 @@ export const SHOTS = [
         waitUntil: "domcontentloaded",
       });
     },
+  },
+  {
+    id: "10-13-mobile-header-menu",
+    doc: "10-mobile-pwa.md",
+    line: 140,
+    anchor: "Re-shoot of the phone header showing the ☰ button",
+    alt: "Phone header with the menu button at the left edge and the department name beside it",
+    route: "/dashboard",
+    viewport: "mobile",
+    // Clipped to the header: the placeholder is about where one button sits,
+    // and a whole-phone shot buries it above a screen of dashboard.
+    selector: 'header[role="banner"].md\\:hidden',
+    allowEmptyState: true,
   },
   {
     id: "10-12-mobile-bottom-nav",

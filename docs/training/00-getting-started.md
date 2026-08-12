@@ -94,11 +94,8 @@ If your administrator has enabled single sign-on, the login page shows **Google*
 > not a substitute for your second factor; you are not signed in until the code
 > is accepted. The challenge expires after 5 minutes — past that, start the
 > sign-in again.
->
-> **[SCREENSHOT NEEDED]:** _The login page showing the two-factor
-> authentication code step immediately after returning from a Google sign-in —
-> the code field and "Use a recovery code" link visible, so a member knows this
-> screen is expected and not an error._
+
+![The login page's two-factor step — the 6-digit code field and the Use a recovery code link](./images/00-23-login-two-factor.png)
 
 > **Troubleshooting:** If your account is not recognized you are returned to the login page with a message such as "No account matches that Google email. Contact your administrator for access." Other messages cover an account from a domain that is not allowed, an account already linked to a different user, or an unverified email address. In every case, contact your administrator.
 

@@ -18,9 +18,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
+import struct
+import time as time_module
 import sys
 import urllib.error
 import urllib.request
@@ -173,6 +178,25 @@ NOW = datetime.now(timezone.utc)
 
 def iso(dt: datetime) -> str:
     return dt.replace(microsecond=0).isoformat()
+
+
+def totp_now(secret: str, digits: int = 6, period: int = 30) -> str:
+    """The current TOTP code for a base32 *secret* (RFC 6238, SHA-1).
+
+    Hand-rolled rather than imported: this script is stdlib-only so the README's
+    plain `python scripts/screenshots/seed_demo_data.py` works without the
+    backend's virtualenv, and pyotp — which the backend does depend on — is not
+    installed system-wide.
+    """
+    # Base32 secrets are conventionally unpadded; b32decode insists on padding.
+    padded = secret.upper() + "=" * (-len(secret) % 8)
+    key = base64.b32decode(padded)
+    counter = int(time_module.time()) // period
+    digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    # Dynamic truncation: the low nibble of the last byte picks the offset.
+    offset = digest[-1] & 0x0F
+    code = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    return str(code % (10**digits)).zfill(digits)
 
 
 class ApiError(RuntimeError):
@@ -808,7 +832,59 @@ class Seeder:
             )
             created.append(record)
         self._fill_in_the_administrator(created)
+        self._enable_two_factor_for_one_member(created)
         return created
+
+    # Not the administrator and not DEMO_MEMBER_USERNAME: those two are the
+    # accounts every capture signs in as, and a session that has to clear a
+    # TOTP prompt first would break all of them.
+    TWO_FACTOR_USERNAME = "rduarte"
+
+    def _enable_two_factor_for_one_member(self, members: list[dict]) -> None:
+        """Enrol one member in TOTP.
+
+        With nobody enrolled, two things cannot be pictured: the login page's
+        authentication-code step, and the **Reset MFA** action on the members
+        admin page, which only renders for a user who has it on.
+        """
+        target = next(
+            (m for m in members if pick(m, "username") == self.TWO_FACTOR_USERNAME),
+            None,
+        )
+        if not target:
+            return
+
+        # Read the flag as the administrator, not through the member's own
+        # /auth/mfa/status: once MFA is on, a password sign-in stops short of a
+        # session and every call it makes answers 401 — so the check that is
+        # supposed to make this step idempotent is the first thing that breaks.
+        # It has to be /users/with-roles specifically; the plain /users list
+        # does not carry mfa_enabled.
+        enrolled = any(
+            pick(row, "username") == self.TWO_FACTOR_USERNAME
+            and pick(row, "mfa_enabled")
+            for row in items(self.api.get("/users/with-roles"), "users")
+        )
+        if enrolled:
+            return
+
+        session = Api(self.base_url)
+        try:
+            session.login_as(self.TWO_FACTOR_USERNAME, DEMO_MEMBER_PASSWORD)
+        except ApiError as exc:
+            self.blocked.append(f"two-factor: sign in as member: {exc}")
+            return
+
+        try:
+            secret = session.post("/auth/mfa/setup")["secret"]
+            # Enrolment is only complete once a real code is verified — there
+            # is no endpoint that flips the flag directly, by design.
+            session.post(
+                "/auth/mfa/verify-setup",
+                {"code": totp_now(secret)},
+            )
+        except ApiError as exc:
+            self.blocked.append(f"two-factor: enrol {self.TWO_FACTOR_USERNAME}: {exc}")
 
     def _fill_in_the_administrator(self, members: list[dict]) -> None:
         """Give the demo administrator the contact details everyone else has.
