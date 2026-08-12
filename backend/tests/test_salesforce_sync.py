@@ -683,7 +683,7 @@ async def test_apply_inbound_unmatched_creates_nothing():
 
 
 async def test_apply_inbound_ignores_non_whitelisted_and_identity_fields():
-    user = make_user(email="old@dept.org")
+    user = make_user(email="old@dept.org", rank="firefighter")
     service = make_inbound_service(results=[user])
     action = await service.apply_inbound_contact(
         {
@@ -691,12 +691,14 @@ async def test_apply_inbound_ignores_non_whitelisted_and_identity_fields():
             "email": "new@dept.org",  # identity — must not change
             "membership_number": "999",  # not whitelisted
             "status": "inactive",  # not whitelisted
+            "rank": "fire_chief",  # authorization — must not change
             "phone": "555-7777",  # whitelisted
         }
     )
     assert action == "updated"
     assert user.phone == "555-7777"
     assert user.email == "old@dept.org"
+    assert user.rank == "firefighter"
     assert not hasattr(user, "status") or user.status != "inactive"
 
 
