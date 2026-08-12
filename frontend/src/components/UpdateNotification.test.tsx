@@ -52,7 +52,7 @@ describe('UpdateNotification', () => {
     render(<UpdateNotification />);
 
     const user = userEvent.setup();
-    await user.click(screen.getByLabelText('Dismiss update notification'));
+    await user.click(screen.getByLabelText('Remind me about this update later'));
 
     expect(mockDismiss).toHaveBeenCalledTimes(1);
   });
