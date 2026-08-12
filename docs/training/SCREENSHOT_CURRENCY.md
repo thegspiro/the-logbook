@@ -168,6 +168,26 @@ and `last_sync_at` are written by a real sync, so the card reads "Connection
 not verified" and "Last Sync: Never", which the guide's prose now explains
 rather than contradicts.
 
+### Salesforce cannot be connected in a demo department, and that is correct
+
+The Salesforce Sync panel is real and worth a picture, but it renders only for
+an integration whose status is `connected`, and `POST
+/integrations/{id}/connect` will not grant that. `instance_url` must match
+`^https://[a-zA-Z0-9\-\.]+\.salesforce\.com$` **and** resolve in DNS — the SSRF
+guard calls `getaddrinfo` on it. A Salesforce instance host is per-customer
+(`oakvillefd.my.salesforce.com`), so the demo department's does not exist and
+never will.
+
+**Deliberately not worked around.** The hosts that do resolve —
+`login.salesforce.com`, `test.salesforce.com`, `na1.salesforce.com` — are login
+and pod hosts, not any department's instance, and seeding one would put a URL
+in the demo database that is wrong in a way a reader could copy. That is a
+different case from `seed_external_provider`, where the vendor's real API host
+_is_ the value every customer uses.
+
+The section's prose has been corrected against the code instead, so the guide
+describes the panel accurately without a picture of it.
+
 ### A seed gap that wasn't — the quantity checklist was reachable all along
 
 **Withdrawn 2026-08-12, the day after it was written.** This section claimed

@@ -23,6 +23,21 @@ export const NATIVE_BARCODE_FORMATS = ['code_128', 'code_39', 'ean_13', 'ean_8',
 export const HAS_BARCODE_DETECTOR = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
 /**
+ * Open a video-only stream while asking mobile browsers for the rear camera.
+ *
+ * `ideal` is intentional: an exact `environment` constraint rejects on
+ * laptops and older devices that do have a usable camera but do not expose a
+ * facing mode. It also avoids retrying permission and hardware failures with a
+ * second request, which can hide the useful DOMException from the UI.
+ */
+export function acquirePreferredCameraStream(): Promise<MediaStream> {
+  return navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' } },
+    audio: false,
+  });
+}
+
+/**
  * Returns a user-facing reason string when the camera cannot be used, or null
  * when it should be available. The common mobile failure is an insecure origin
  * (plain HTTP over a LAN IP): browsers only expose `navigator.mediaDevices` in
@@ -57,7 +72,11 @@ export function getCameraUnavailableReason(): string | null {
  * different fixes, and only one of them is worth going to browser settings for.
  */
 export function describeCameraError(error: unknown): string {
-  const name = error instanceof Error ? error.name : '';
+  // Browser media APIs reject with DOMException. Some WebViews and test DOM
+  // implementations do not put DOMException on the same prototype chain as
+  // Error, so read its standard `name` field structurally.
+  const name =
+    typeof error === 'object' && error !== null && 'name' in error && typeof error.name === 'string' ? error.name : '';
   switch (name) {
     case 'NotAllowedError':
     case 'SecurityError':

@@ -74,6 +74,20 @@ fi
 UNRAID_IP=$(hostname -I | awk '{print $1}')
 print_info "Detected Unraid IP: $UNRAID_IP"
 
+# Detect the compose command. Unraid's Compose Manager plugin provides
+# Docker Compose v2 as the `docker compose` subcommand; older installs used
+# the standalone `docker-compose` binary (EOL). Support whichever is present.
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE="docker-compose"
+else
+    print_error "Neither 'docker compose' nor 'docker-compose' is available."
+    print_error "Install the Docker Compose Manager plugin from Unraid Community Applications (Apps tab), then re-run this script."
+    exit 1
+fi
+print_info "Using compose command: $COMPOSE"
+
 # ============================================
 # Installation Type
 # ============================================
@@ -277,6 +291,20 @@ VERSION=1.0.0
 ENVIRONMENT=production
 DEBUG=false
 
+# ---- Security posture -----------------------------------------------------
+# The production startup gate requires SECURITY_ENFORCE_HTTPS=true to boot.
+SECURITY_ENFORCE_HTTPS=true
+# LAN-TRIAL ESCAPE HATCH: in production the app marks auth cookies Secure,
+# which browsers refuse to send over plain http:// — so logins would fail at
+# http://${UNRAID_IP}:7880. COOKIE_SECURE=false below allows cookie auth over
+# plain HTTP so you can trial the app on a trusted LAN.
+#
+# BEFORE REAL USE: front the app with an HTTPS reverse proxy (Swag, Nginx
+# Proxy Manager), point ALLOWED_ORIGINS at your https:// origin, and DELETE
+# the COOKIE_SECURE line — session cookies over cleartext HTTP are exposed to
+# anyone on the network path. See docs/deployment/unraid.md.
+COOKIE_SECURE=false
+
 # Ports
 FRONTEND_PORT=7880
 BACKEND_PORT=7881
@@ -295,10 +323,10 @@ EMAIL_ENABLED=false
 STORAGE_TYPE=local
 MAX_FILE_SIZE=52428800
 
-# Backup Configuration
-BACKUP_ENABLED=true
-BACKUP_SCHEDULE=0 2 * * *
+# Backup Configuration (consumed by the backup sidecar service)
+BACKUP_TIME=02:00
 BACKUP_RETENTION_DAYS=30
+VERIFY_EVERY_N_BACKUPS=7
 
 # Modules are enabled per organization at runtime (organization settings →
 # enabled_modules); there are no MODULE_*_ENABLED deployment flags.
@@ -352,10 +380,10 @@ start_services() {
 
     # Build and start
     print_info "Building application containers..."
-    docker-compose build --no-cache
+    $COMPOSE build --no-cache
 
     print_info "Starting services..."
-    docker-compose up -d
+    $COMPOSE up -d
 
     print_success "Services started!"
 }
@@ -375,7 +403,7 @@ verify_deployment() {
 
     # Check container status
     print_info "Checking container status..."
-    docker-compose ps
+    $COMPOSE ps
 
     # Check if containers are healthy
     if docker ps | grep -q "logbook-frontend.*Up"; then
@@ -425,15 +453,15 @@ display_summary() {
     echo ""
     echo -e "${BLUE}Access Information:${NC}"
     echo -e "  Frontend:  ${GREEN}http://${UNRAID_IP}:7880${NC}"
-    echo -e "  Backend:   ${GREEN}http://${UNRAID_IP}:7881${NC}"
-    echo -e "  API Docs:  ${GREEN}http://${UNRAID_IP}:7881/docs${NC}"
+    echo -e "  Backend:   ${GREEN}http://${UNRAID_IP}:7881/health${NC}"
+    echo "  (API docs are disabled in production; enabling them blocks startup)"
     echo ""
     echo -e "${BLUE}Useful Commands:${NC}"
-    echo "  View logs:       cd $INSTALL_DIR && docker-compose logs -f"
-    echo "  Restart:         cd $INSTALL_DIR && docker-compose restart"
-    echo "  Stop:            cd $INSTALL_DIR && docker-compose down"
-    echo "  Start:           cd $INSTALL_DIR && docker-compose up -d"
-    echo "  Rebuild:         cd $INSTALL_DIR && docker-compose build --no-cache && docker-compose up -d"
+    echo "  View logs:       cd $INSTALL_DIR && $COMPOSE logs -f"
+    echo "  Restart:         cd $INSTALL_DIR && $COMPOSE restart"
+    echo "  Stop:            cd $INSTALL_DIR && $COMPOSE down"
+    echo "  Start:           cd $INSTALL_DIR && $COMPOSE up -d"
+    echo "  Rebuild:         cd $INSTALL_DIR && $COMPOSE build --no-cache && $COMPOSE up -d"
     echo ""
     echo -e "${BLUE}Configuration:${NC}"
     echo "  Install Dir:     $INSTALL_DIR"
@@ -444,6 +472,14 @@ display_summary() {
     echo "  1. Open http://${UNRAID_IP}:7880 in your browser"
     echo "  2. Complete the onboarding wizard"
     echo "  3. Configure your organization settings"
+    echo ""
+    echo -e "${YELLOW}⚠ SECURITY — LAN trial mode:${NC}"
+    echo "  This install allows logins over plain HTTP (COOKIE_SECURE=false in"
+    echo "  .env) so you can trial the app on a trusted LAN. Before real use,"
+    echo "  put an HTTPS reverse proxy in front (Swag / Nginx Proxy Manager),"
+    echo "  point ALLOWED_ORIGINS at your https:// origin, and remove the"
+    echo "  COOKIE_SECURE line from $INSTALL_DIR/.env."
+    echo "  Guide: docs/deployment/unraid.md (HTTPS with Reverse Proxy)"
     echo ""
     echo -e "${BLUE}Support:${NC}"
     echo "  Documentation:   $INSTALL_DIR/README.md"
@@ -465,11 +501,11 @@ uninstall_application() {
     echo ""
     read -p "Choose option [1-2]: " UNINSTALL_TYPE
 
-    # Stop and remove containers via docker-compose if available
+    # Stop and remove containers via compose if available
     if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
-        print_info "Stopping all services via docker-compose..."
+        print_info "Stopping all services via compose..."
         cd "$INSTALL_DIR"
-        docker-compose down --remove-orphans 2>/dev/null || true
+        $COMPOSE down --remove-orphans 2>/dev/null || true
         print_success "Docker Compose stack stopped and removed"
     fi
 

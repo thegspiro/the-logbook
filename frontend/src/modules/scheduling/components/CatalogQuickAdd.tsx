@@ -217,7 +217,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   return (
     <div className="relative" ref={containerRef}>
       <div className="flex items-center gap-2">
-        <div className="border-theme-surface-border bg-theme-surface flex min-w-0 flex-1 items-center gap-2 rounded-md border px-3 py-2">
+        <div className="border-theme-surface-border bg-theme-surface focus-within:ring-theme-focus-ring flex min-w-0 flex-1 items-center gap-2 rounded-md border px-3 py-2 focus-within:ring-2">
           <Search className="text-theme-text-muted h-4 w-4 shrink-0" />
           <input
             type="text"

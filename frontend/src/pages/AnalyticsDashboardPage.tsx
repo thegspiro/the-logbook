@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { analyticsService, type QRCodeMetrics } from '../services/analytics';
 import { useTimezone } from '../hooks/useTimezone';
@@ -18,39 +18,29 @@ const AnalyticsDashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadMetrics = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = eventId
+        ? await analyticsService.getEventMetrics(eventId)
+        : await analyticsService.getOverallMetrics();
+      setMetrics(data);
+      setError(null);
+    } catch {
+      setError('Failed to load analytics data');
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId]);
+
   useEffect(() => {
-    let cancelled = false;
-
-    const loadMetrics = async () => {
-      try {
-        const data = eventId
-          ? await analyticsService.getEventMetrics(eventId)
-          : await analyticsService.getOverallMetrics();
-        if (!cancelled) {
-          setMetrics(data);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setError('Failed to load analytics data');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
     void loadMetrics();
     const interval = setInterval(() => {
-      void loadMetrics();
+      if (!document.hidden) void loadMetrics();
     }, 10000); // Refresh every 10 seconds
 
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [eventId]);
+    return () => clearInterval(interval);
+  }, [loadMetrics]);
 
   const exportData = async () => {
     const dataStr = await analyticsService.exportAnalytics(eventId);
@@ -78,8 +68,7 @@ const AnalyticsDashboardPage: React.FC = () => {
           <p className="mb-4 text-red-700 dark:text-red-400">{error || 'No analytics data available'}</p>
           <button
             onClick={() => {
-              setLoading(true);
-              setError(null);
+              void loadMetrics();
             }}
             className="btn-primary rounded-md text-sm font-medium"
           >

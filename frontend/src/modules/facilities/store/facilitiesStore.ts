@@ -26,6 +26,7 @@ interface DashboardStats {
   operationalCount: number;
   overdueMaintenanceCount: number;
   upcomingInspections: Inspection[];
+  upcomingInspectionCount: number;
   overdueMaintenanceRecords: MaintenanceRecord[];
   recentActivity: MaintenanceRecord[];
 }
@@ -123,13 +124,12 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
   loadDashboardStats: async () => {
     set({ isLoadingDashboard: true });
     try {
-      const [facilities, maintenance, inspections] = await Promise.all([
+      const [facilities, maintenance, inspections, counts] = await Promise.all([
         facilitiesService.getFacilities({ is_archived: false }),
         facilitiesService.getMaintenanceRecords({}),
         facilitiesService.getInspections({}),
+        facilitiesService.getDashboardCounts(),
       ]);
-
-      const operationalCount = facilities.filter((f) => f.statusRecord?.isOperational !== false).length;
 
       const now = new Date();
       const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -155,10 +155,11 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
       set({
         facilities,
         dashboardStats: {
-          totalFacilities: facilities.length,
-          operationalCount,
-          overdueMaintenanceCount: overdueMaintenanceRecords.length,
+          totalFacilities: counts.totalFacilities,
+          operationalCount: counts.operationalFacilities,
+          overdueMaintenanceCount: counts.overdueMaintenance,
           upcomingInspections,
+          upcomingInspectionCount: counts.upcomingInspections,
           overdueMaintenanceRecords,
           recentActivity,
         },

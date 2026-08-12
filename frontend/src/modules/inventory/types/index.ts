@@ -225,6 +225,18 @@ export function getStatusStyle(status: string): string {
   return found?.color ?? 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
 }
 
+/**
+ * Get the display label for an item status.
+ *
+ * `STATUS_OPTIONS` has carried these labels all along; the pages that showed a
+ * status without them printed the stored value — "available", "checked out",
+ * "in maintenance" — beside a properly-cased Condition and Tracking, so one
+ * field in a row of three read as unfinished.
+ */
+export function getStatusLabel(status: string): string {
+  return STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status.replace(/_/g, ' ');
+}
+
 /** Get the text color class for an item condition */
 export function getConditionColor(condition: string): string {
   switch (condition) {

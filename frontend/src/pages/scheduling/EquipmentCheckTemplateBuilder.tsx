@@ -2146,7 +2146,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <input
               ref={inlineInputRef}
               type="text"
-              className="text-theme-text-primary min-w-0 flex-1 border-b border-blue-400 bg-transparent px-1 text-sm font-medium outline-none"
+              className="text-theme-text-primary focus:ring-theme-focus-ring min-w-0 flex-1 rounded-sm border-b border-blue-400 bg-transparent px-1 text-sm font-medium outline-none focus:ring-2"
               value={inlineEditValue}
               onChange={(e) => setInlineEditValue(e.target.value)}
               onBlur={() => commitInlineEdit(compIdx, itemIdx)}
@@ -2605,7 +2605,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
             <input
               type="text"
-              className="text-theme-text-primary placeholder:text-theme-text-muted min-w-0 flex-1 border-none bg-transparent text-sm font-bold outline-none placeholder:font-normal"
+              className="text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring min-w-0 flex-1 rounded-sm border-none bg-transparent text-sm font-bold outline-none placeholder:font-normal focus:ring-2"
               placeholder="Section heading..."
               value={comp.name}
               onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}

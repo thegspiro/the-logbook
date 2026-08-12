@@ -152,8 +152,23 @@ describe('InventoryItemsPage', () => {
     renderWithRouter(<InventoryItemsPage />);
     await screen.findAllByText('Spare Gloves');
 
-    expect(screen.getAllByText('5 / 8').length).toBeGreaterThan(0);
+    // `quantity` is already net of what is out on issue, so 8 on hand with 3
+    // issued is 11 owned — not 5 on hand, which subtracted the issued units a
+    // second time.
+    expect(screen.getAllByText('8 / 11').length).toBeGreaterThan(0);
     expect(screen.queryByText('in-date lots')).not.toBeInTheDocument();
+  });
+
+  it('never reports a negative on-hand for a fully-issued pool item', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ name: 'Nitrile Gloves', tracking_type: 'pool', quantity: 0, quantity_issued: 1 })],
+      total: 1,
+    });
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findAllByText('Nitrile Gloves');
+
+    expect(screen.getAllByText('0 / 1').length).toBeGreaterThan(0);
+    expect(screen.queryByText('-1 / 0')).not.toBeInTheDocument();
   });
 
   it('opens the receive-stock modal', async () => {

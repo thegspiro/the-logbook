@@ -45,6 +45,7 @@ from app.services.email_template_service import (
     EmailTemplateService,
 )
 from app.services.officer_service import OfficerService
+from app.utils.mime_validation import detect_mime_type
 from app.utils.org_scoping import assert_in_org
 
 router = APIRouter()
@@ -526,23 +527,25 @@ async def upload_attachment(
         "application/x-zip-compressed",
     }
     try:
-        import magic
-
-        detected_mime = magic.from_buffer(contents[:2048], mime=True)
-        if detected_mime not in ALLOWED_EMAIL_MIME_TYPES:
-            logger.warning(
-                "Email attachment rejected: detected MIME '{}' "
-                "(claimed: '{}') for file '{}'",
-                detected_mime,
-                file.content_type,
-                file.filename,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File content type '{detected_mime}' is not allowed.",
-            )
-    except ImportError:
-        pass  # magic library optional — fall back to extension check only
+        detected_mime = detect_mime_type(contents)
+    except RuntimeError:
+        logger.error("Email attachment validation unavailable: libmagic missing")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Attachment validation is temporarily unavailable.",
+        )
+    if detected_mime not in ALLOWED_EMAIL_MIME_TYPES:
+        logger.warning(
+            "Email attachment rejected: detected MIME '{}' "
+            "(claimed: '{}') for file '{}'",
+            detected_mime,
+            file.content_type,
+            file.filename,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File content type '{detected_mime}' is not allowed.",
+        )
 
     # Store file with UUID name (prevents path traversal)
     attachment_dir = os.path.join(

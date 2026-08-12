@@ -10,10 +10,11 @@ from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
+from app.utils.external_url import validate_external_http_url
 
 _response_config = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
@@ -204,6 +205,10 @@ class GrantOpportunityBase(BaseModel):
     eligibility_criteria: Optional[str] = None
     application_url: Optional[str] = Field(None, max_length=500)
     program_url: Optional[str] = Field(None, max_length=500)
+
+    _validate_urls = field_validator("application_url", "program_url", mode="before")(
+        validate_external_http_url
+    )
     match_required: bool = False
     match_percentage: Optional[Decimal] = Field(None, ge=0, le=100)
     match_description: Optional[str] = Field(None, max_length=500)
@@ -235,6 +240,10 @@ class GrantOpportunityUpdate(BaseModel):
     eligibility_criteria: Optional[str] = None
     application_url: Optional[str] = Field(None, max_length=500)
     program_url: Optional[str] = Field(None, max_length=500)
+
+    _validate_urls = field_validator("application_url", "program_url", mode="before")(
+        validate_external_http_url
+    )
     match_required: Optional[bool] = None
     match_percentage: Optional[Decimal] = Field(None, ge=0, le=100)
     match_description: Optional[str] = Field(None, max_length=500)
@@ -445,6 +454,10 @@ class GrantExpenditureBase(BaseModel):
     vendor: Optional[str] = Field(None, max_length=255)
     invoice_number: Optional[str] = Field(None, max_length=100)
     receipt_url: Optional[str] = Field(None, max_length=500)
+
+    _validate_receipt_url = field_validator("receipt_url", mode="before")(
+        validate_external_http_url
+    )
     payment_method: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = None
 
@@ -467,6 +480,10 @@ class GrantExpenditureUpdate(BaseModel):
     vendor: Optional[str] = Field(None, max_length=255)
     invoice_number: Optional[str] = Field(None, max_length=100)
     receipt_url: Optional[str] = Field(None, max_length=500)
+
+    _validate_receipt_url = field_validator("receipt_url", mode="before")(
+        validate_external_http_url
+    )
     payment_method: Optional[str] = Field(None, max_length=100)
     budget_item_id: Optional[UUID] = None
     notes: Optional[str] = None
@@ -505,6 +522,9 @@ class GrantComplianceTaskBase(BaseModel):
     reminder_days_before: int = Field(default=14, ge=0)
     report_template: Optional[str] = None
     submission_url: Optional[str] = Field(None, max_length=500)
+    _validate_submission_url = field_validator("submission_url", mode="before")(
+        validate_external_http_url
+    )
     notes: Optional[str] = None
 
 
@@ -529,6 +549,9 @@ class GrantComplianceTaskUpdate(BaseModel):
     reminder_days_before: Optional[int] = Field(None, ge=0)
     report_template: Optional[str] = None
     submission_url: Optional[str] = Field(None, max_length=500)
+    _validate_submission_url = field_validator("submission_url", mode="before")(
+        validate_external_http_url
+    )
     assigned_to: Optional[UUID] = None
     notes: Optional[str] = None
 
@@ -605,6 +628,9 @@ class CampaignBase(BaseModel):
     end_date: Optional[date] = None
     public_page_enabled: bool = False
     hero_image_url: Optional[str] = Field(None, max_length=500)
+    _validate_hero_image_url = field_validator("hero_image_url", mode="before")(
+        validate_external_http_url
+    )
     thank_you_message: Optional[str] = None
     allow_anonymous: bool = True
     minimum_donation: Optional[Decimal] = Field(None, ge=0)
@@ -629,6 +655,9 @@ class CampaignUpdate(BaseModel):
     status: Optional[CampaignStatusLiteral] = None
     public_page_enabled: Optional[bool] = None
     hero_image_url: Optional[str] = Field(None, max_length=500)
+    _validate_hero_image_url = field_validator("hero_image_url", mode="before")(
+        validate_external_http_url
+    )
     thank_you_message: Optional[str] = None
     allow_anonymous: Optional[bool] = None
     minimum_donation: Optional[Decimal] = Field(None, ge=0)
@@ -875,6 +904,9 @@ class FundraisingEventBase(BaseModel):
     max_attendees: Optional[int] = Field(None, ge=0)
     revenue_goal: Optional[Decimal] = Field(None, ge=0)
     registration_url: Optional[str] = Field(None, max_length=500)
+    _validate_registration_url = field_validator("registration_url", mode="before")(
+        validate_external_http_url
+    )
     sponsors: Optional[List[Dict[str, Any]]] = None
     notes: Optional[str] = None
 
@@ -900,6 +932,9 @@ class FundraisingEventUpdate(BaseModel):
     max_attendees: Optional[int] = Field(None, ge=0)
     revenue_goal: Optional[Decimal] = Field(None, ge=0)
     registration_url: Optional[str] = Field(None, max_length=500)
+    _validate_registration_url = field_validator("registration_url", mode="before")(
+        validate_external_http_url
+    )
     sponsors: Optional[List[Dict[str, Any]]] = None
     notes: Optional[str] = None
     status: Optional[FundraisingEventStatusLiteral] = None

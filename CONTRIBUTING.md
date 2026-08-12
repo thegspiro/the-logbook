@@ -1,5 +1,9 @@
 # Contributing to The Logbook
 
+> **Canonical source.** A copy of this guide is published to the GitHub Wiki
+> from [`wiki/Contributing.md`](wiki/Contributing.md). The two are not synced
+> automatically — if you change this file, update the wiki page too.
+
 First off, thank you for considering contributing to The Logbook! It's people like you that make this platform a great tool for fire departments and emergency services worldwide.
 
 ## Table of Contents
@@ -184,7 +188,7 @@ docstring is a welcome drive-by.
 
 ### Python (Backend)
 
-- Use Python 3.11+ features where appropriate
+- Use Python 3.13+ features where appropriate
 - Use type hints for function signatures
 - Use `async`/`await` for all database operations (SQLAlchemy async)
 - Use `catch (err: unknown)` pattern — never use bare `except:` or `except Exception`

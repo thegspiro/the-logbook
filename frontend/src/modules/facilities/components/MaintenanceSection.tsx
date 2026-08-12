@@ -23,9 +23,10 @@ import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 
 interface Props {
   facilityId: string;
+  canManage: boolean;
 }
 
-export default function MaintenanceSection({ facilityId }: Props) {
+export default function MaintenanceSection({ facilityId, canManage }: Props) {
   const tz = useTimezone();
   const {
     records: filtered,
@@ -54,12 +55,14 @@ export default function MaintenanceSection({ facilityId }: Props) {
     <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
       <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
         <h2 className="text-theme-text-primary text-sm font-semibold">Maintenance Records</h2>
-        <button
-          onClick={() => openCreate()}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
-        >
-          <Plus className="h-3.5 w-3.5" /> New Record
-        </button>
+        {canManage && (
+          <button
+            onClick={() => openCreate()}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+          >
+            <Plus className="h-3.5 w-3.5" /> New Record
+          </button>
+        )}
       </div>
 
       <div className="space-y-4 p-5">
@@ -160,45 +163,47 @@ export default function MaintenanceSection({ facilityId }: Props) {
                     {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                  {!record.isCompleted && (
+                {canManage && (
+                  <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    {!record.isCompleted && (
+                      <button
+                        onClick={() => {
+                          void handleComplete(record);
+                        }}
+                        title="Mark completed"
+                        aria-label="Mark completed"
+                        className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-500/10"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openEdit(record)}
+                      title="Edit"
+                      aria-label="Edit record"
+                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                     <button
                       onClick={() => {
-                        void handleComplete(record);
+                        void handleDelete(record);
                       }}
-                      title="Mark completed"
-                      aria-label="Mark completed"
-                      className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-500/10"
+                      title="Delete"
+                      aria-label="Delete record"
+                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
                     >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <X className="h-3.5 w-3.5" />
                     </button>
-                  )}
-                  <button
-                    onClick={() => openEdit(record)}
-                    title="Edit"
-                    aria-label="Edit record"
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      void handleDelete(record);
-                    }}
-                    title="Delete"
-                    aria-label="Delete record"
-                    className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {showModal && (
+      {canManage && showModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"

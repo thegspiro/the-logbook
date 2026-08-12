@@ -63,7 +63,6 @@ function makeProspectResponse(stepProgress: BackendStepProgressResponse[]): Back
     status: 'active',
     metadata: null,
     form_submission_id: null,
-    status_token: null,
     transferred_user_id: null,
     transferred_at: null,
     created_at: '2026-01-01T00:00:00Z',
@@ -75,6 +74,33 @@ function makeProspectResponse(stepProgress: BackendStepProgressResponse[]): Back
 }
 
 describe('mapProspectToApplicant', () => {
+  it('preserves current-stage requirements for advance guidance', () => {
+    const response = makeProspectResponse([]);
+    response.current_step = {
+      id: 'step-1',
+      pipeline_id: 'pipeline-1',
+      name: 'Committee Interviews',
+      description: null,
+      step_type: 'interview_requirement',
+      action_type: null,
+      is_first_step: true,
+      is_final_step: false,
+      sort_order: 0,
+      email_template_id: null,
+      required: true,
+      config: { required_count: 2 },
+      inactivity_timeout_days: null,
+      notify_prospect_on_completion: false,
+      public_visible: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    const applicant = mapProspectToApplicant(response);
+
+    expect(applicant.current_stage_config).toEqual({ required_count: 2 });
+  });
+
   it('excludes PENDING steps from stage_history', () => {
     const stepProgress = [
       makeStepProgress({ id: 'sp-1', step_id: 'step-1', status: StepProgressStatus.IN_PROGRESS }),

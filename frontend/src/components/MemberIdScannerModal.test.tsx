@@ -123,7 +123,12 @@ describe('MemberIdScannerModal', () => {
       expect(mockGetCameras).toHaveBeenCalledWith();
     });
     await waitFor(() => {
-      expect(mockStart).toHaveBeenCalledWith('cam-1', expect.any(Object), expect.any(Function), expect.any(Function));
+      expect(mockStart).toHaveBeenCalledWith(
+        { facingMode: { ideal: 'environment' } },
+        expect.any(Object),
+        expect.any(Function),
+        expect.any(Function)
+      );
     });
   });
 
@@ -156,5 +161,26 @@ describe('MemberIdScannerModal', () => {
       // reaches the screen.
       expect(screen.getByText(/No camera was found on this device/i)).toBeInTheDocument();
     });
+  });
+
+  it('releases the camera when the modal closes during startup', async () => {
+    let finishStart: (() => void) | undefined;
+    mockStart.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishStart = resolve;
+        })
+    );
+
+    const { rerender } = render(<MemberIdScannerModal {...defaultProps} />);
+    await waitFor(() =>
+      expect(mockStart).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), expect.anything())
+    );
+
+    rerender(<MemberIdScannerModal {...defaultProps} isOpen={false} />);
+    finishStart?.();
+
+    await waitFor(() => expect(mockStop).toHaveBeenCalledWith());
+    expect(screen.queryByText('Scan Member ID')).not.toBeInTheDocument();
   });
 });

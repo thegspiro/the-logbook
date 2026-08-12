@@ -860,18 +860,16 @@ async def create_prospect(
     )
     archived_matches = [m for m in matches if m["status"] == "archived"]
     if archived_matches:
-        match = archived_matches[0]
-        # MP-7: return a plain-string message rather than a structured body
-        # carrying the archived member's internal user_id / reactivate URL.
-        # The client never consumed those fields, and this mirrors the sibling
-        # /check-existing endpoint's deliberate PII minimization.
+        # MP-7: match details can contain an email the caller did not submit
+        # when the service matched by name. Keep the create response aligned
+        # with /check-existing's deliberately minimized projection: the caller
+        # needs to know what workflow to use, not the archived member's PII.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"A previously archived member matches this prospect: "
-                f"{match['name']} ({match['email']}). Consider reactivating "
-                f"their account from the archived members list instead of "
-                f"creating a new prospect."
+                "A previously archived member matches this prospect. Consider "
+                "reactivating their account from the archived members list "
+                "instead of creating a new prospect."
             ),
         )
 
@@ -997,6 +995,34 @@ async def complete_step(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not prospect:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
+    return prospect
+
+
+@router.post("/prospects/{prospect_id}/skip-step", response_model=ProspectResponse)
+async def skip_step(
+    prospect_id: UUID,
+    data: AdvanceProspectRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("prospective_members.manage")),
+):
+    """Explicitly bypass the current stage and record who skipped it."""
+    service = MembershipPipelineService(db)
+    try:
+        prospect = await service.skip_current_step(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            skipped_by=current_user.id,
+            notes=data.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(exc),
+        ) from exc
     if not prospect:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
@@ -1224,6 +1250,18 @@ async def transfer_prospect(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
     if not result.get("success"):
+        if result.get("existing_member_match"):
+            # The service needs the match internally to choose the duplicate
+            # workflow, but the HTTP boundary must not echo its PII. This also
+            # covers name-only matches whose stored email was never supplied
+            # by the caller.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "An existing member matches this prospect. Review the "
+                    "existing members list instead of creating a duplicate."
+                ),
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("message")
         )

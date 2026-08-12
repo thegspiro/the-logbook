@@ -21,6 +21,7 @@ import { publicStatusService } from '../services/api';
 import type { CurrentStageAction } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { isSafeExternalUrl } from '../../../utils/safeUrl';
 
 interface StatusData {
   first_name: string;
@@ -33,9 +34,6 @@ interface StatusData {
   applied_at?: string | undefined;
   current_stage_action?: CurrentStageAction | undefined;
 }
-
-/** Only render links we can trust as external https(s) navigations. */
-const isSafeHttpUrl = (url: string): boolean => /^https?:\/\//i.test(url);
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   active: {
@@ -158,7 +156,7 @@ export const ApplicationStatusPage: React.FC = () => {
                   {data.current_stage_action.message && (
                     <p className="text-theme-text-muted mt-0.5 text-xs">{data.current_stage_action.message}</p>
                   )}
-                  {data.current_stage_action.url && isSafeHttpUrl(data.current_stage_action.url) && (
+                  {data.current_stage_action.url && isSafeExternalUrl(data.current_stage_action.url) && (
                     <a
                       href={data.current_stage_action.url}
                       target="_blank"

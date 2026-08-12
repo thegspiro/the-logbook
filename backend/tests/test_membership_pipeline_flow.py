@@ -455,6 +455,60 @@ class TestProspectProgression:
 
         assert advanced is not None
         assert str(advanced.current_step_id) == str(steps[1].id)
+        departed_progress = next(
+            p for p in advanced.step_progress if str(p.step_id) == str(steps[0].id)
+        )
+        departed_status = (
+            departed_progress.status.value
+            if hasattr(departed_progress.status, "value")
+            else departed_progress.status
+        )
+        assert departed_status == "completed"
+
+    async def test_skip_bypasses_only_the_current_stage(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await self._make_pipeline_with_steps(svc, org_id, 3)
+        steps[0].step_type = "checklist"
+        steps[0].config = {
+            "items": [{"id": "background", "label": "Background check"}],
+            "require_all": True,
+        }
+        await db_session.commit()
+
+        prospect = await svc.create_prospect(
+            organization_id=org_id,
+            data={
+                "first_name": "Skip",
+                "last_name": "Test",
+                "email": "skip-stage@example.com",
+                "pipeline_id": pipeline.id,
+            },
+            created_by=admin_id,
+        )
+
+        with pytest.raises(ValueError, match="checklist items"):
+            await svc.advance_prospect(
+                prospect.id, org_id, admin_id, notes="Not actually complete"
+            )
+
+        skipped = await svc.skip_current_step(
+            prospect.id, org_id, admin_id, notes="Coordinator override"
+        )
+        assert skipped is not None
+        assert str(skipped.current_step_id) == str(steps[1].id)
+        progress = next(
+            p for p in skipped.step_progress if str(p.step_id) == str(steps[0].id)
+        )
+        progress_status = (
+            progress.status.value
+            if hasattr(progress.status, "value")
+            else progress.status
+        )
+        assert progress_status == "skipped"
+        assert progress.action_result == {"skipped": True}
 
     async def test_complete_all_steps(
         self, db_session: AsyncSession, setup_org_and_admin

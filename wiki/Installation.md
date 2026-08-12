@@ -135,13 +135,13 @@ openssl rand -base64 32  # Copy to DB_PASSWORD
 nano .env
 
 # Start services
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 ```
 
-> **Note:** The bare `docker-compose up -d` above runs the **development**
+> **Note:** The bare `docker compose up -d` above runs the **development**
 > configuration. For a production deployment, layer the production override
 > (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`) or
 > pin `COMPOSE_FILE` — see [Production Deployment](#production-deployment) below.
@@ -490,7 +490,7 @@ _(2026-07-31)_
 Manual backup:
 
 ```bash
-docker-compose exec backend /app/scripts/backup.sh
+./scripts/backup.sh   # host-side script, run from the install directory
 ```
 
 ### 4. Security Hardening
@@ -517,17 +517,17 @@ curl http://localhost:3001/health
 curl -I http://localhost:3000
 
 # Database connection
-docker-compose exec db mysql -u logbook_user -p -e "SELECT 1"
+docker compose exec db mysql -u logbook_user -p -e "SELECT 1"
 
 # Redis connection
-docker-compose exec redis redis-cli ping
+docker compose exec redis redis-cli ping
 ```
 
 ### Container Status
 
 ```bash
 # All containers should be "Up" and "healthy"
-docker-compose ps
+docker compose ps
 
 # Expected output:
 # logbook-frontend    Up (healthy)
@@ -540,8 +540,8 @@ docker-compose ps
 
 ```bash
 # Check for errors
-docker-compose logs --tail=50 backend
-docker-compose logs --tail=50 frontend
+docker compose logs --tail=50 backend
+docker compose logs --tail=50 frontend
 
 # Expected: No ERROR or CRITICAL messages
 ```
@@ -567,8 +567,8 @@ FRONTEND_PORT=8080
 BACKEND_PORT=8081
 
 # Restart
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 **Permission denied:**
@@ -583,10 +583,10 @@ chmod -R 755 .
 
 ```bash
 # Check database is running
-docker-compose ps db
+docker compose ps db
 
 # View database logs
-docker-compose logs db
+docker compose logs db
 
 # Verify credentials in .env match
 ```
@@ -601,22 +601,22 @@ docker-compose logs db
 cd the-logbook
 
 # Stop services
-docker-compose down
+docker compose down
 
 # Backup first!
-docker-compose exec backend /app/scripts/backup.sh
+./scripts/backup.sh   # host-side script, run from the install directory
 
 # Pull latest code
 git pull
 
 # Rebuild containers
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # Start services
-docker-compose up -d
+docker compose up -d
 
 # Run migrations
-docker-compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade head
 ```
 
 ### Unraid Updates
@@ -635,10 +635,10 @@ cd /mnt/user/appdata/the-logbook/unraid
 
 ```bash
 # Stop and remove containers
-docker-compose down
+docker compose down
 
 # Remove volumes (WARNING: deletes all data!)
-docker-compose down -v
+docker compose down -v
 
 # Remove images
 docker rmi the-logbook-frontend:local

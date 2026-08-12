@@ -1,5 +1,9 @@
 # Role-Based Access Control (RBAC) System
 
+> **Canonical source.** A condensed copy of this document is published to the
+> GitHub Wiki from [`wiki/Role-System.md`](wiki/Role-System.md). The two are
+> not synced automatically — if you change this file, update the wiki page too.
+
 This document describes the comprehensive Role-Based Access Control system implemented in The Logbook.
 
 ## Overview

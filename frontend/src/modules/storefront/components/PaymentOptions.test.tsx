@@ -75,6 +75,18 @@ describe('PaymentOptions', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
+  it('does not render executable payment URLs returned by the API', () => {
+    render(
+      <PaymentOptions
+        instructions={instructions({ options: [option({ paymentUrl: 'javascript:alert(1)' })] })}
+        amount={45}
+      />
+    );
+
+    expect(screen.getByText('Venmo')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
   it('only asks for the reference when the link will not carry it', () => {
     render(
       <PaymentOptions

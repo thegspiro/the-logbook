@@ -45,37 +45,49 @@ The integrations page shows:
 
 ### Currently Available
 
-| Category       | Integration                   | Description                                                               |
-| -------------- | ----------------------------- | ------------------------------------------------------------------------- |
-| **Calendar**   | Google Calendar               | Two-way event sync                                                        |
-| **Calendar**   | Microsoft Outlook             | Calendar and contact sync                                                 |
-| **Calendar**   | iCalendar (ICS)               | Subscribe to filtered ICS feed URLs                                       |
-| **Messaging**  | Slack                         | Event alerts, training reminders, custom channels                         |
-| **Messaging**  | Discord                       | Webhook notifications, event reminders                                    |
-| **Messaging**  | Microsoft Teams               | Adaptive Cards, channel notifications                                     |
-| **CRM**        | Salesforce                    | Contact sync, donor management, bidirectional                             |
-| **Documents**  | Documenso                     | Send documents for e-signature (open-source DocuSign alternative)         |
-| **Scheduling** | Cal.com                       | Self-scheduling links and booking sync (open-source Calendly alternative) |
-| **Payments**   | PayPal                        | Match incoming store payments to department store orders automatically    |
-| **Data**       | CSV Import/Export             | Member import, training/inventory export                                  |
-| **Data**       | Generic Webhooks              | HMAC-signed event notifications to any URL                                |
-| **Safety**     | NWS Weather Alerts            | Tornado, flood, fire weather alerts (free)                                |
-| **Reporting**  | Generic ePCR Import           | CSV or NEMSIS XML from any ePCR vendor                                    |
-| **Reporting**  | NEMSIS Response Module Export | NEMSIS 3.5 format for state EMS reporting                                 |
-| **Reporting**  | NFIRS Export                  | NFIRS 5.0 format for state fire marshal                                   |
+| Category       | Integration        | Description                                                               |
+| -------------- | ------------------ | ------------------------------------------------------------------------- |
+| **Calendar**   | Google Calendar    | Two-way event sync                                                        |
+| **Calendar**   | Microsoft Outlook  | Calendar and contact sync                                                 |
+| **Calendar**   | iCalendar (ICS)    | Advertises the per-member shift feed; no configuration screen of its own  |
+| **Messaging**  | Slack              | Event alerts, training reminders, custom channels                         |
+| **Messaging**  | Discord            | Webhook notifications, event reminders                                    |
+| **Messaging**  | Microsoft Teams    | Adaptive Cards, channel notifications                                     |
+| **CRM**        | Salesforce         | Contact sync, donor management, bidirectional                             |
+| **Documents**  | Documenso          | Send documents for e-signature (open-source DocuSign alternative)         |
+| **Scheduling** | Cal.com            | Self-scheduling links and booking sync (open-source Calendly alternative) |
+| **Payments**   | PayPal             | Match incoming store payments to department store orders automatically    |
+| **Data**       | Generic Webhooks   | HMAC-signed event notifications to any URL                                |
+| **Safety**     | NWS Weather Alerts | Tornado, flood, fire weather alerts (free)                                |
 
 ### Coming Soon
 
-| Integration         | Description                       |
-| ------------------- | --------------------------------- |
-| WhatsApp            | Notifications and group messages  |
-| Active911           | Dispatch alerts and mapping       |
-| PulsePoint          | CPR alerts and AED locations      |
-| ImageTrend ePCR     | ePCR sync and run reports         |
-| ESO Solutions       | ePCR data exchange                |
-| NREMT Certification | Certification status verification |
-| Google Maps         | Hydrant mapping and pre-plans     |
-| Zapier              | Connect to 5,000+ apps            |
+These carry a **Coming Soon** badge and no **Connect** button; the API refuses
+`connect` on them outright.
+
+| Integration                   | Description                       |
+| ----------------------------- | --------------------------------- |
+| Active911                     | Dispatch alerts and mapping       |
+| CSV Import/Export             | Member import, training export    |
+| ESO Solutions                 | ePCR data exchange                |
+| FirstWatch                    | Dispatch analytics                |
+| Generic ePCR Import           | CSV or NEMSIS XML from any vendor |
+| Google Maps                   | Hydrant mapping and pre-plans     |
+| ImageTrend                    | ePCR sync and run reports         |
+| NEMSIS Response Module Export | NEMSIS 3.5 for state EMS          |
+| NFIRS Export                  | NFIRS 5.0 for state fire marshal  |
+| NREMT Verification            | Certification status verification |
+| PulsePoint                    | CPR alerts and AED locations      |
+| WhatsApp Business             | Notifications and group messages  |
+| Zapier                        | Connect to 5,000+ apps            |
+
+> **Corrected 2026-08-12.** Both tables were checked against the shipped
+> catalog and five entries moved. **CSV Import/Export**, **Generic ePCR
+> Import**, **NEMSIS Response Module Export** and **NFIRS Export** were listed
+> as currently available and are `coming_soon`; **FirstWatch** was missing
+> altogether. The Coming Soon table also named "NREMT Certification" and
+> "ImageTrend ePCR", which are **NREMT Verification** and **ImageTrend** on the
+> card.
 
 ---
 
@@ -136,12 +148,23 @@ IDs.
 
 ### How to Sync
 
-1. Navigate to the connected Salesforce integration
-2. Click the sync action you want (e.g., "Push Members")
-3. The system syncs data and reports success/failure counts
-4. Check the **Status** tab for sync history and any errors
+1. Open **Sync** on the connected Salesforce card. A **Salesforce Sync** panel
+   opens below the catalog, in two columns:
+   - **Push to Salesforce** — _Members → Contacts_, _Training Records → Tasks_,
+     _Events → Salesforce Events_
+   - **Pull from Salesforce** — _Contacts → Members_. This one matches against
+     members you already have (by id, then email) and updates their details;
+     it never creates or deletes a member, and it needs the sync direction set
+     to Pull or Bidirectional
+2. Click the action you want. The result is reported as a toast with its
+   success and failure counts
+3. Below the two columns, a **readiness** check and a **dry-run preview** let
+   you see what a push would do before running one
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Salesforce integration detail page showing the connection status (green), last sync timestamp, sync action buttons (Push Members, Push Training, Push Events, Pull Contacts), and recent sync history table._
+> **Corrected 2026-08-12.** There is no **Status** tab, no last-sync timestamp
+> and no sync-history table anywhere in this panel — the retired screenshot
+> placeholder asked for all three. A run's counts appear once, in the toast.
+> The buttons are also named by what they map, not "Push Members".
 
 ### Field Mappings
 
@@ -231,7 +254,11 @@ Add this URL as a Cal.com webhook subscribed to the **BOOKING_CREATED** event, u
 
 Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** option — switch it from _Manual_ to _Cal.com_ and paste your booking link. Applicants then see a **Schedule** button on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the connected Cal.com card with the "Bookings" button, and the Bookings panel below listing upcoming interviews with attendee, time, and status._
+> **No screenshot of this _(2026-08-12)_.** The Bookings panel is real and
+> works, but it lists bookings fetched live from your Cal.com account — there is
+> nothing to photograph without a connected one, and our documentation
+> environment has no third-party accounts. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
 
 ---
 
@@ -329,15 +356,27 @@ Sync with Outlook/Exchange calendars:
 
 ### iCalendar (ICS) Feed
 
-Generate subscribe-able ICS feed URLs:
+The feed is **per member and private**, and it is not set up from this page.
+Each member opens **Subscribe to my shifts** at the top of
+**Scheduling > My Shifts**:
 
-1. Enable the ICS integration
-2. Copy the generated feed URL
+1. Opening the card mints that member's own feed token on first use
+2. Copy the link, or select the field and copy it by hand
 3. Subscribe in any calendar app (Google, Apple, Outlook)
-4. The feed auto-updates as events change
-5. Filtered feeds available (e.g., only training events, only your shifts)
+4. The feed auto-updates as shifts change
+5. **Reset link** issues a new token, which immediately kills the old URL —
+   the way to revoke a link that has been shared or leaked
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the iCalendar configuration showing generated feed URLs for different filters (All Events, Training Only, My Shifts) with copy buttons._
+![The Subscribe to my shifts card expanded — the member's private feed URL, its copy button and the reset control](./images/16-07-calendar-subscribe.png)
+
+> **Corrected 2026-08-12.** This section described enabling "the ICS
+> integration" on the Integrations page and copying **filtered feed URLs** —
+> All Events, Training Only, My Shifts. There is one feed and it carries
+> shifts: `GET /api/v1/calendar/{token}.ics`, served publicly and identified
+> only by the token, with no filter parameter. The iCalendar entry in the
+> integrations catalog advertises the feature but has no configuration screen
+> behind it. Because the link is unauthenticated, treat it as a password: the
+> card says so, and **Reset link** is there for when it gets out.
 
 ---
 
@@ -347,15 +386,13 @@ Generate subscribe-able ICS feed URLs:
 
 1. Create an incoming webhook in your Slack workspace settings
 2. Paste the webhook URL in the integration configuration
-3. Select which events trigger notifications (new members, training completed, events scheduled)
-4. Messages appear in your configured Slack channel
+3. Messages appear in your configured Slack channel
 
 ### Discord
 
 1. Create a webhook in your Discord server settings
 2. Paste the webhook URL
-3. Configure event triggers
-4. Notifications appear as bot messages in your channel
+3. Notifications appear as bot messages in your channel
 
 ### Microsoft Teams
 
@@ -363,7 +400,14 @@ Generate subscribe-able ICS feed URLs:
 2. Paste the webhook URL
 3. Notifications appear as Adaptive Cards with action buttons
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the messaging integration configuration showing the webhook URL field, event trigger checkboxes (New Member, Training Completed, Event Scheduled, Shift Change), and a test notification button._
+> **You cannot choose which events post _(2026-08-12)_.** Earlier versions of
+> this guide had a step for selecting event triggers and described checkboxes
+> for New Member, Training Completed, Event Scheduled and Shift Change. There is
+> no such control — a messaging integration collects a webhook URL and nothing
+> more — and there is no Test Connection button on an integration. The Slack
+> connect dialog is pictured under
+> [Connecting an Integration](#connecting-an-integration). See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
 
 ---
 
@@ -388,6 +432,20 @@ The **NWS Weather Alerts** integration pulls tornado, flood, and fire weather wa
 ---
 
 ## EMS & Fire Reporting
+
+> **Not built yet — corrected 2026-08-12.** All three integrations in this
+> section (**Generic ePCR Import**, **NEMSIS Response Module Export**, **NFIRS
+> Export**) ship in the catalog with status `coming_soon`. Their cards carry a
+> **Coming Soon** badge and no **Connect** button, and the API refuses them
+> outright — `POST /integrations/{id}/connect` returns _"This integration is
+> not yet available"_. There is no configuration screen behind any of them.
+>
+> The steps below describe the intended design, not current behaviour. The
+> NFIRS screenshot placeholder has been removed rather than left standing for a
+> screen that does not exist; the same applies to the state-code, FDID and
+> date-range fields it named. The other `coming_soon` entries in the catalog are
+> Active911, CSV Import/Export, ESO Solutions, FirstWatch, Google Maps,
+> ImageTrend, NREMT Verification, PulsePoint, WhatsApp Business and Zapier.
 
 ### Generic ePCR Import
 
@@ -418,8 +476,6 @@ Export incident data in NFIRS 5.0 format for state fire marshal reporting:
 2. Select the reporting period
 3. Generate the NFIRS export file
 4. Submit to your state fire marshal office
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of the NFIRS Export configuration showing state code dropdown, FDID field, date range selector, and Generate Export button._
 
 ---
 
@@ -485,14 +541,15 @@ The integrations dashboard shows health status for each connected integration:
 | **Gray dot**        | Not connected — available to configure               |
 | **Red X**           | Connection lost — credentials may have expired       |
 
-Click any integration to see:
-
-- Last sync timestamp
-- Last error message (if any)
-- Consecutive error count
-- Sync history
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of an integration detail page showing a yellow warning status, the error message "Salesforce API rate limit exceeded", consecutive error count (2), and a "Retry Sync" button._
+> **There is no integration detail page _(2026-08-12)_.** This section used to
+> say you could click an integration to see its last sync timestamp, last error
+> message, consecutive error count and sync history. `/integrations` is the only
+> page — the integrations are cards on it, and clicking one does not open
+> anything further. Of those four figures only the **last sync timestamp** is
+> recorded at all; there is no error message, error counter or sync history in
+> the data model, and no **Retry Sync** control anywhere. What you get is the
+> status on the card itself. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#integrations--no-detail-page-no-error-history-no-event-triggers-2026-08-12).
 
 ---
 
@@ -546,7 +603,12 @@ That afternoon, Lt. Santos creates a training event "Q3 Hazmat Refresher" → a 
 > Location: Station 1 Training Bay
 > RSVP by July 10
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Slack integration configuration page showing the webhook URL field, event trigger checkboxes, and the Test Connection button. Below, show the Slack channel with a sample notification message._
+> **No screenshot here _(2026-08-12)_.** The Slack connect dialog and its
+> webhook URL field are already pictured under
+> [Connecting an Integration](#connecting-an-integration); the event-trigger
+> checkboxes and Test Connection button this asked for do not exist. The other
+> half — the Slack channel showing a delivered message — is outside the
+> application and cannot be captured from our documentation environment.
 
 ### Part 2: Connecting Google Calendar (Monday Afternoon)
 
@@ -562,19 +624,25 @@ That afternoon, Lt. Santos creates a training event "Q3 Hazmat Refresher" → a 
 
 Members who subscribe to the "Oakville FD — Events" Google Calendar now see department events alongside their personal calendar.
 
-### Part 3: Setting Up ICS Feed for Shifts (Optional)
+### Part 3: Telling Members About the Shift Feed (Optional)
 
-Steve also sets up an ICS feed so members can subscribe to their personal shift schedule:
+There is nothing for Steve to set up here. The ICS feed is minted per member,
+on demand, the first time each of them opens **Subscribe to my shifts** on
+**My Shifts** — so what Steve sends round is an instruction, not a URL:
 
-1. Enables the **iCalendar (ICS)** integration
-2. The system generates feed URLs:
-   - All Events: `https://app.thelogbook.io/api/v1/calendar/ics/events?token=abc123`
-   - My Shifts: `https://app.thelogbook.io/api/v1/calendar/ics/my-shifts?token=abc123`
-   - Training Only: `https://app.thelogbook.io/api/v1/calendar/ics/training?token=abc123`
-3. Steve shares the "My Shifts" feed URL with members
-4. Members subscribe in their calendar app → shifts appear as events
+> Open Scheduling → My Shifts, click **Subscribe to my shifts**, copy the link,
+> and add it in your calendar app. It is yours alone — don't forward it. If you
+> ever do, click **Reset link** and the old one stops working.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the ICS Feed configuration showing three generated feed URLs with Copy buttons, and a phone showing a calendar app with department shifts displayed._
+Pictured under [iCalendar (ICS) Feed](#icalendar-ics-feed) above.
+
+> **Corrected 2026-08-12.** This step had Steve enabling the integration and
+> the system generating three shared feed URLs — All Events, My Shifts and
+> Training Only — for him to distribute. No such screen or URLs exist: there is
+> one per-member feed, carrying shifts, at `/api/v1/calendar/{token}.ics`, and
+> an officer never sees another member's. The retired screenshot placeholder
+> also asked for a phone photographed showing a third-party calendar app, which
+> is not a screen this application draws.
 
 ### Part 4: Monitoring Health (Ongoing)
 

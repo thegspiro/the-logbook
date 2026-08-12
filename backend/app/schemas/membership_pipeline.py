@@ -243,6 +243,8 @@ class PipelineStatsResponse(BaseModel):
     pipeline_id: UUID
     total_prospects: int = 0
     active_count: int = 0
+    on_hold_count: int = 0
+    inactive_count: int = 0
     approved_count: int = 0
     rejected_count: int = 0
     withdrawn_count: int = 0
@@ -367,7 +369,6 @@ class ProspectResponse(ProspectBase):
     status: str
     metadata_: Optional[Dict[str, Any]] = Field(None, serialization_alias="metadata")
     form_submission_id: Optional[UUID] = None
-    status_token: Optional[str] = None
     transferred_user_id: Optional[UUID] = None
     transferred_at: Optional[datetime] = None
     created_at: datetime
