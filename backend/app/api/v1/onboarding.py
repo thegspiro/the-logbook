@@ -621,9 +621,14 @@ async def _persist_session_data_to_org(
             raw_config = json.loads(decrypt_data(email_data["config_encrypted"]))
             platform = email_data.get("platform", "other")
 
-            # Map camelCase onboarding keys to snake_case org settings keys
+            # Map camelCase onboarding keys to snake_case org settings keys.
+            # "Other / Skip" records a deliberate configure-later choice with
+            # an empty config — it must persist as disabled, or EmailService
+            # prefers this hollow org record (enabled, no host, no from
+            # address) over the working global SMTP settings and sending
+            # breaks until someone finds the empty config in settings.
             email_settings = {
-                "enabled": True,
+                "enabled": platform != "other" and bool(raw_config),
                 "platform": platform,
                 "smtp_host": raw_config.get("smtpHost"),
                 "smtp_port": int(raw_config.get("smtpPort", 587)),

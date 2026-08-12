@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
+import { apiClient } from '../services/api-client';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useApiRequest, useUnsavedChanges, useFormChanged } from '../hooks';
@@ -408,11 +409,31 @@ const OrganizationSetup: React.FC = () => {
   // the name/logo restored; submitting then failed with "already created" and
   // could not update the record. Keep the user on the first editable step
   // until a dedicated organization-update endpoint exists.
+  //
+  // The persisted name alone is not proof of creation: it lives in
+  // localStorage, which outlives a reset database and (from older frontends)
+  // was written before the create request resolved. Redirecting on it alone
+  // permanently locked such users out of the only creation form, so confirm
+  // with the server — /onboarding/status reports organization_name only once
+  // the organization row exists — and drop the stale name when it disagrees.
   useEffect(() => {
-    if (departmentName && hasSession && !sessionLoading) {
-      void navigate('/onboarding/stations', { replace: true });
-    }
-  }, [departmentName, hasSession, navigate, sessionLoading]);
+    if (!departmentName || !hasSession || sessionLoading) return;
+    let cancelled = false;
+    void (async () => {
+      const response = await apiClient.getStatus();
+      if (cancelled) return;
+      const status = response.data as { organization_name?: string | null } | undefined;
+      if (!status) return; // status unreachable: keep the form usable
+      if (status.organization_name) {
+        void navigate('/onboarding/stations', { replace: true });
+      } else {
+        setDepartmentName('');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [departmentName, hasSession, navigate, sessionLoading, setDepartmentName]);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
