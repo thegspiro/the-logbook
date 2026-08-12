@@ -114,6 +114,17 @@ Click on any shift to open the **Shift Detail Panel** with full information, att
 
 ![Shift detail panel with the crew roster and shift information](./images/03-02-shift-detail-panel.png)
 
+The panel opens with a **Readiness** line that answers the two questions an
+officer actually has — how many of the assigned crew are present, and whether
+the shift is staffed to its minimum ("1/1 present · 1/3 staffed —
+understaffed"). Any outstanding start-of-shift checks are named on the same
+line. Below it the crew board is headed by the rig it belongs to, and each open
+seat is listed by position rather than counted.
+
+A legend above the calendar says what its shift-block icons mean: **fully
+crewed**, **short-staffed**, **positions filled of the minimum**, and
+**apparatus unit**.
+
 ---
 
 ## My Shifts
@@ -180,18 +191,30 @@ Officers can edit shift start and end times, apparatus assignment, color, notes,
 
 Attendance is recorded for each shift to track who was present and for how long.
 
-**Recording Attendance:**
+**Recording Attendance:** members check themselves in and out. Open the shift
+from the calendar; **Check In** sits under your own assignment on the detail
+panel, and once you have used it the button becomes **Check Out** with your
+arrival time beside it. The system calculates **duration in minutes**
+automatically from the two.
 
-1. Open the shift from the calendar.
-2. In the detail panel, use the attendance section to:
-   - **Check In** a member (records the check-in time)
-   - **Check Out** a member (records the check-out time)
-   - **Manually set times** for retroactive recording
+There are three places that attendance then shows up, and none of them is a
+table you can edit:
 
-The system calculates **duration in minutes** automatically from check-in and check-out times.
+| Where                                          | What it shows                                                                                                                                               |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The **crew board**, on each member's row       | A badge — `In 07:02` while they are on shift, `12h worked` once they are out. Hover for both times                                                          |
+| The **Readiness** line at the top of the panel | `1/1 present`                                                                                                                                               |
+| **Before you close this shift**, at close-out  | `1 of 1 checked in, 1 checked out`, plus a warning naming anyone who never checked in (pictured under [Shift Finalization](#shift-finalization-2026-03-28)) |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the attendance section within a shift detail panel, showing a table of members with check-in time, check-out time, duration, and edit buttons]_
+> **Corrected 2026-08-12.** This previously described an attendance section
+> where an officer could **Check In** and **Check Out** other members and
+> **manually set times for retroactive recording**, and its screenshot
+> placeholder asked for a per-member table with edit buttons. None of that is
+> in the application. The buttons act on the signed-in member's own record
+> only, and while the API can amend one (`PATCH /scheduling/attendance/{id}`)
+> nothing in the frontend calls it. The nearest thing to retroactive recording
+> is **Add hours for members who didn't check in**, which appears in the
+> close-out checklist and takes a number of hours rather than times.
 
 ### Post-Shift Validation
 
@@ -251,12 +274,23 @@ Open it from **Request Time Off** on the My Shifts tab. Submitted requests, and 
 
 ## Shift Swap Requests
 
-Members can request to swap shifts with another member:
+A swap starts from the shift you are giving up, not from a blank form:
 
-1. Navigate to the **Requests** tab.
-2. Click **Request Swap**.
-3. Select the shift you want to swap and the shift you are offering.
-4. The system notifies the other member and the officer.
+1. Go to **My Shifts** and stay on **Upcoming** — the **Swap** button is only on
+   shifts that have not happened yet.
+2. Click **Swap** on the shift you want covered. The dialog names that shift in
+   its subtitle; there is nothing to pick, because it is the one you clicked.
+3. Choose a **Swap Type**:
+   - **Open Swap** — any member can pick it up. This is the default.
+   - **Specific Shift** — you want a particular shift in return. Pick it from
+     the list of everything scheduled from today onward, each entry showing its
+     day, times and apparatus.
+4. Give a **Reason**, then **Submit Request**.
+
+![The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field](./images/03-67-swap-request-dialog.png)
+
+The request then appears under **Requests > Swap Requests**, where you can
+follow or cancel it.
 
 **Swap Workflow:**
 
@@ -265,8 +299,13 @@ Members can request to swap shifts with another member:
 3. An officer reviews and approves the swap.
 4. Assignments are updated automatically.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the swap request form showing the "Your Shift" and "Requested Shift" selectors, and a list of active swap requests with status indicators]_
+> **Corrected 2026-08-12.** The steps above previously said to open the
+> **Requests** tab and click **Request Swap**, then "select the shift you want
+> to swap and the shift you are offering". The Requests tab has no such button
+> — it only lists requests already made — and the offered shift is never
+> chosen, since the dialog is opened from it. The retired screenshot
+> placeholder asked for "Your Shift" and "Requested Shift" selectors, neither
+> of which exists.
 
 ---
 
@@ -678,13 +717,24 @@ When generating shifts from a platoon pattern:
 
 ### Hold-Over Roster
 
-When a shift has a gap (member on leave or open position), the **Shift Detail Panel** shows a **hold-over roster** of available members:
+This is the **platoon** roster, and it appears on a narrower set of shifts than
+the name suggests. The Shift Detail Panel renders it only when **platoons are
+enabled** for the department _and_ the shift belongs to a platoon — a gap alone
+does not bring it up. Where it does appear it lists that platoon's members:
 
 - Same organization, not on leave, not already assigned that day
 - One-click **Assign** button next to each available member
 - Designed for supervisors who need to fill gaps or hold over members
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Detail Panel for a shift with one vacant position, showing the hold-over roster panel below the crew list with available members and "Assign" buttons._
+On a department that does not run platoons, the way to fill a gap is the crew
+board's **Assign** button on the open seat, or **Assign Member** beneath it —
+both pictured under
+[Permission Model](#permission-model).
+
+> **Screenshot held back.** Picturing this needs a department with platoons
+> enabled and shifts generated from a platoon pattern, which the demo
+> department does not run. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
 
 ### Platoon Badge on Shifts
 
@@ -785,20 +835,26 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 
 #### For Members: Submitting Equipment Checks
 
-During a shift, members see pending equipment checks on their dashboard or via **Scheduling > My Checklists**.
+During a shift, members see pending equipment checks on their dashboard or on **My Equipment Checklists**, which is the Equipment Checks tab of Scheduling as a member sees it.
 
-1. Open the checklist for your current shift
+1. Open the checklist for your current shift. **You do not need one** —
+   **Unscheduled checklist**, at the top of the page, offers every active
+   template and starts a check with no shift attached.
 2. Work through each compartment and item:
    - **Pass/Fail**: Tap pass or fail
    - **Quantity**: Enter the count
    - **Level**: Enter the level reading
    - **Date/Lot**: Verify expiration date and lot number
    - **Reading**: Enter the reading value
-3. Optionally attach photos to any item (up to 3 per item)
+3. Optionally attach photos to any item (up to 3 per item). The button is
+   inside the item's note panel — tap **Note** first, then **Add photo**.
 4. Submit the completed check
 
-> **Screenshot needed:**
-> _[Screenshot of the equipment check form on a mobile device showing a compartment heading, several check items with pass/fail toggle buttons, a quantity field, and the photo attachment button]_
+Every item also offers **Not on truck**, and a pass/fail item adds **Out of
+service** — a rig that has the tool but cannot use it is not the same as one
+that never had it.
+
+![Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below](./images/03-72-check-item-controls.png)
 
 > **Fixed 2026-08-08.** Submitting a check used to return a server error on
 > **any shift with an apparatus assigned** — so in practice, on any real shift.
@@ -870,8 +926,23 @@ any member with `equipment_check.submit` — the default member position — bec
 recording what you just used is crew work, and putting it behind an officer
 permission is the thing that leaves the bracket empty until morning.
 
-> **Screenshot needed:**
-> _[Screenshot of the Apparatus Inventory page on a phone with an engine selected, showing two compartments expanded — one position at full count in green, one short with an amber count, and one showing a lots-aboard chip with two dates]_
+![Apparatus Inventory on a phone — counted positions with what is aboard against par, the short ones called out](./images/03-95-apparatus-inventory.png)
+
+The header counts the truck three ways: **how many positions are tracked**, how
+many **need restock**, and how many are **expiring**. A position at par states
+its count plainly — "2 of 2 Box aboard" — and a position under it carries an
+amber **Short** badge and prints its count in amber too — "18 of 24 Box aboard"
+— so the two are told apart at a glance rather than by shade alone.
+
+The lot number beside a position is **the lot the date belongs to**, not the
+last one swapped aboard. On a position carrying several lots those are
+different lots, and the one that matters is the one expiring soonest.
+
+> **A tracked position comes from a checklist bound to _that_ apparatus.** A
+> template that applies to every engine — bound by apparatus **type** — supplies
+> checklists for shifts but stocks no particular truck, and a rig with only
+> type-bound templates shows an empty inventory. If a truck you expect to see
+> here is bare, that is why.
 
 Each position offers up to five actions, and they mean different things:
 
@@ -883,8 +954,12 @@ Each position offers up to five actions, and they mean different things:
 | **Flag** | Damaged, contaminated, missing or recalled — **on a counted position, where − already records use.** It is the honest way to say "this needs attention" without pretending a unit was consumed |
 | **Lots** | Opens the lots aboard. A position carrying lots opens them **instead of** offering a stepper — two units with two dates cannot be moved by one plus or minus                                   |
 
-> **Screenshot needed:**
-> _[Screenshot of the lots sheet open over the Apparatus Inventory page on a phone, showing two lots for one position with different expiration dates, each with its own count field and a Remove control, and the sheet sitting clear of the bottom tab bar]_
+![The lots-aboard sheet on a phone — two lots on one position, each with its own count and expiry](./images/03-96-lots-aboard-sheet.png)
+
+The sheet lists lots **soonest to expire first**, which is both the order a crew
+should draw from and the order a reported use comes off. **Correct** fixes a
+miscounted or mistyped lot; **Remove** takes it off the truck entirely. A lot
+drawn down to nothing disappears on its own — it is no longer aboard.
 
 **Headers and free-text lines do not appear here.** They are checklist
 scaffolding — "Check all seals", "Officer's compartment" — not things anyone
@@ -905,11 +980,13 @@ and the officer plans the week around which one each row is.
 | Filter     | All · Needs restock · Used or short · Expired |
 | Sort       | Soonest expiry · By apparatus                 |
 
-Three summary pills sit above the list: how many rows need attention, how many
-have ready stock behind them, and how many need ordering.
+Two summary pills sit above the list — how many rows need attention, and how
+many have ready stock behind them. A third, in red, appears **only when
+something has no ready stock to draw on**: `N need restock`. A department whose
+shelves cover every row never sees it, and that absence is the answer to "is
+there anything I have to order this week".
 
-> **Screenshot needed:**
-> _[Screenshot of the Expiring on Apparatus page with the three summary pills visible, the 30/60/90 window selector, and at least four rows: one expiring with ready stock, one expired and struck through, one flagged "needs restock" from a crew report, and one short of its target showing "2/4"]_
+![Expiring on Apparatus: the summary pills, the 30/60/90 window, and three rows — one expiring, one reported used, one short of par](./images/03-59-supply-worklist.png)
 
 **Expired shelf stock is struck through and cannot be swapped.** Offering it
 would put expired supplies in service and fail the item on the very next check,
@@ -923,8 +1000,7 @@ report carries who raised it, when, and an optional note, and it appears on the
 supply worklist beside the expiring items — to a supply officer, "expires
 Thursday" and "the crew used it last night" are the same job.
 
-> **Screenshot needed:**
-> _[Screenshot of the "report used" sheet on a phone showing the quantity stepper, the optional note field, and the confirm button, with the position's name and current count visible above it]_
+![The report-used sheet: quantity stepper, optional note, and the position's current count](./images/03-60-report-used-sheet.png)
 
 **A report is settled only when the truck is back at its target.** Two of four
 back is still a truck short two, and clearing the flag there would close the gap
@@ -980,11 +1056,17 @@ now two paths:
 2. **For checklists you already have.** A bulk pass proposes a catalog item for
    every unlinked position on the template. Read down the list once and apply it.
 
-> **Screenshot needed:**
-> _[Screenshot of the template builder's quick-add bar with a partial search term typed and a dropdown of three catalog matches below it, each showing the item name and its tracking type, plus the "create in inventory" option at the bottom]_
+![The template builder's quick-add bar, its catalog matches listed beneath and the create-in-inventory option under them](./images/03-69-catalog-quick-add.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the bulk inventory-match dialog listing six unlinked positions with proposed catalog items, two pre-selected with an "exact" badge and the rest showing "strong"/"weak" confidence chips left unselected, with the linked/unlinked coverage count in the header]_
+Reach the bulk pass from the template builder's toolbar: the button reads
+**_linked_ / _linkable_** and turns amber while anything is unlinked.
+
+![The bulk inventory-match dialog — coverage in the header, exact matches pre-selected, a close match left for the reader to decide](./images/03-68-inventory-match-dialog.png)
+
+Positions the catalog has nothing like are gathered into one dashed panel at the
+bottom — "_N_ items have nothing like them in inventory" — rather than listed as
+failures. Add them to inventory, or leave them as plain checklist lines if they
+are not stock.
 
 **Only exact name matches are pre-selected.** A close match is deliberately never
 pre-selected: "Oxygen Mask" scores high against both the adult and the pediatric
@@ -1012,8 +1094,7 @@ A line at the top of the form says once that counts have been carried over, and
 is what confirms a number you agree with — the same single tap, without a
 "carried over" label printed sixty times.
 
-> **Screenshot needed:**
-> _[Screenshot of the equipment check form on a phone showing the carry-over banner at the top, a compartment with three quantity items reading "4/4 Each", "2/4 Box" and "1/1 Each", none of them yet marked pass or fail, and the progress counter in the header]_
+![The check form's carry-over banner above a compartment of quantity items, each reading against par with its unit and none yet marked](./images/03-70-check-form-carryover.png)
 
 #### Confirm Counts vs. Set All to Par
 
@@ -1033,8 +1114,11 @@ already at par is untouched by the warning and stays one tap.
 Status still comes from the number, so confirming eighteen of twenty-four files a
 **failure** rather than quietly passing it.
 
-> **Screenshot needed:**
-> _[Screenshot of the "Set All to Par" confirmation dialog naming two items whose counts would be raised (e.g. "Gauze 4x4 — 18 → 24") with Cancel and Set to Par buttons]_
+The confirmation names each item and the size of the claim — `18 → 24` — and
+its buttons say what they do rather than restating the feature: **Keep the
+counts** or **Yes, they are full**.
+
+![The Set All to Par confirmation, naming each item it would raise and by how much](./images/03-71-set-all-to-par-confirm.png)
 
 #### Working from the item instead of the truck
 
@@ -1081,12 +1165,18 @@ already says.
 
 After a shift ends, officers finalize the shift to lock in data and trigger training pipeline integration.
 
-#### How to Finalize a Shift
+#### How to Close Out a Shift
 
 1. Open the **Shift Detail Panel** for a past, un-finalized shift
-2. Click **"Finalize Shift"** — a pre-finalization checklist modal appears
+2. Click **Close out shift** — a checklist headed **Before you close this
+   shift** opens in the panel
 
-![The pre-finalization checklist with attendance hours, call count, pass-down notes and the Finalize Shift button](./images/03-45-finalize-checklist.png)
+> **The control is named "Close out shift", not "Finalize".** `is_finalized` is
+> still the flag underneath, and this guide and the API both use the word, but
+> the button names the thing an officer does at the end of a shift rather than
+> the column it sets.
+
+![The close-out checklist with the equipment-check block, attendance, call count, pass-down notes and the Close out shift button](./images/03-45-finalize-checklist.png)
 
 3. The checklist validates:
    - **End-of-shift equipment checks** — outstanding checks are called out,
@@ -1096,7 +1186,9 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
      and lets the officer proceed; with it on, finalizing needs a
      logged override reason
    - Attendance summary and call count shown for reference
-4. Click **Finalize** to confirm
+   - A staffing line when the shift ran under its minimum ("Ran understaffed —
+     1 of 4 positions filled")
+4. Click **Close out shift** to confirm
 
 #### What Happens on Finalization
 
@@ -1110,24 +1202,24 @@ After a shift ends, officers finalize the shift to lock in data and trigger trai
 
 After finalization, a green badge shows "Shift finalized on [date]" with a
 **Reopen** link beside it, and the pass-down note entered at close-out is
-shown underneath. The Finalize control is gone, but the crew roster keeps its
+shown underneath. The close-out control is gone, but the crew roster keeps its
 remove buttons — reopening is what unlocks the shift, not the badge alone.
 
 ![A finalized shift showing the green finalized badge with its date, the Reopen link and the pass-down note](./images/03-46-finalized-badge.png)
 
 #### Shift Finalization Edge Cases
 
-| Scenario                                 | Behavior                                                                   |
-| ---------------------------------------- | -------------------------------------------------------------------------- |
-| End-of-shift equipment checks incomplete | Finalization blocked; Finalize button disabled with tooltip explaining why |
-| Start-of-shift checks incomplete         | Does not block finalization                                                |
-| Shift has not ended yet                  | Finalize button not shown for future/in-progress shifts                    |
-| Already finalized shift                  | Finalize button replaced with finalized badge                              |
-| Editing a finalized shift                | Blocked — edit controls hidden after finalization                          |
-| Deleting a finalized shift               | Blocked — returns "Cannot delete a finalized shift" error                  |
-| Deleting a shift with completion reports | Blocked — returns "Cannot delete a shift with completion reports" error    |
-| Draft creation fails for one trainee     | Error logged; remaining trainees still get draft reports                   |
-| Attendee with no active enrollment       | No draft created for that attendee                                         |
+| Scenario                                 | Behavior                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------- |
+| End-of-shift equipment checks incomplete | Close-out blocked; the confirm button is disabled, with the reason above it |
+| Start-of-shift checks incomplete         | Does not block close-out                                                    |
+| Shift has not ended yet                  | Close-out button not shown for future/in-progress shifts                    |
+| Already finalized shift                  | Close-out button replaced with finalized badge                              |
+| Editing a finalized shift                | Blocked — edit controls hidden after finalization                           |
+| Deleting a finalized shift               | Blocked — returns "Cannot delete a finalized shift" error                   |
+| Deleting a shift with completion reports | Blocked — returns "Cannot delete a shift with completion reports" error     |
+| Draft creation fails for one trainee     | Error logged; remaining trainees still get draft reports                    |
+| Attendee with no active enrollment       | No draft created for that attendee                                          |
 
 ### Shift Reports Settings _(2026-04-04)_
 
@@ -1293,8 +1385,15 @@ A user with `scheduling.assign` but not `scheduling.manage` can assign members t
 
 Self-signup (the Sign Up button on open shifts) requires no special permission — all authenticated members can sign up for shifts they are eligible for.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel showing the assignment controls (Assign Member dropdown, position change, remove button) visible to a user with scheduling.assign permission, and the Edit/Delete shift buttons visible only to a user with scheduling.manage permission]_
+The shift detail panel below is what somebody holding **both** permissions sees,
+which is the usual case for a shift officer. The two sets are easy to tell apart
+once you know where to look: `scheduling.assign` owns everything on the crew
+board — the pencil beside a member's position, the ⊗ that removes them, the
+**Assign** button on an open seat and **Assign Member** underneath — while
+`scheduling.manage` owns only the pencil and bin in the panel's own header.
+Drop either permission and that group of controls simply is not rendered.
+
+![A shift's crew board with its per-member controls, an open seat, and the Edit and Delete buttons in the header](./images/03-57-shift-assignment-controls.png)
 
 ### Calls/Incidents Section
 
@@ -1394,29 +1493,47 @@ These edge cases describe system behavior during shift assignment, time-off appr
 
 When filing shift completion reports, officers can now assign a **1-5 numeric score** to each observed skill. This score is separate from the "demonstrated" checkbox and provides a quantitative assessment of the trainee's proficiency.
 
-| Score | Label      | Color             |
-| ----- | ---------- | ----------------- |
-| 1     | Needs work | Violet (muted)    |
-| 2     | Developing | Violet (muted)    |
-| 3     | Competent  | Violet (standard) |
-| 4     | Proficient | Violet (standard) |
-| 5     | Excellent  | Violet (bright)   |
+| Score | Default label | Colour            |
+| ----- | ------------- | ----------------- |
+| 1     | Needs work    | Violet (muted)    |
+| 2     | Developing    | Violet (muted)    |
+| 3     | Competent     | Violet (standard) |
+| 4     | Proficient    | Violet (standard) |
+| 5     | Excellent     | Violet (bright)   |
 
-Scores appear as interactive buttons on the report form (with tooltip labels) and as inline text in read-only views. Scores flow through to `SkillCheckoff` records and the competency score history in the Training module.
+Those are the defaults. A department that has set **Rating Scale Labels** in
+Scheduling > Settings > Shift Reports sees its own wording everywhere the scale
+appears — the screenshots in this guide come from a department ending its scale
+at "Exemplary".
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form's skills section showing 3-4 skills, each with a row of 5 violet score buttons (1-5), the "demonstrated" checkbox, and a comment field. One skill should have score 4 selected (highlighted), another score 2._
+There is no separate "demonstrated" tick: **selecting the skill is** the record
+that it was demonstrated, and the score row appears underneath once you have.
+Clicking a selected score again clears it, so a skill can be marked observed
+without being scored. The buttons themselves are numbered, not labelled — the
+label for the score you picked appears beside the row, and hovering a button
+shows its label as a tooltip.
+
+The skills section is pictured under
+[Score Labels](#score-labels).
+
+**Where the scores go.** They are stored on the report and shown in every
+read-only view of it. They are _intended_ to flow through to `SkillCheckoff`
+records and the competency score history in the Training module, and the code to
+do it is there — but it matches skill names against `SkillEvaluation` records,
+and nothing in the application creates one. See
+[Skill Linkage Status in Settings](#skill-linkage-status-in-settings).
 
 ### Batch Review
 
 Officers with `training.manage` permission can now review multiple shift reports at once:
 
-1. Navigate to the **Pending Review** or **Flagged** view in the Shift Reports tab
-2. Check individual report cards using the checkbox on each card, or use the **select-all** toggle
-3. Click **"Approve Selected"** or **"Flag Selected"** at the top of the list
-4. In the batch review modal, optionally add **reviewer notes** (applied to all selected reports)
-5. Confirm the action — the system processes up to 100 reports and returns a count of successfully reviewed vs. failed
+1. Open the **Review Queue** or **Flagged** view in the Shift Reports tab
+2. Tick the checkbox on each report you want, or use **Select all (N)** in the bar above the list
+3. The bar then reports how many are selected and offers **Approve Selected** and, in the Review Queue, **Flag Selected**. Neither button carries the count — that is the "N selected" text beside them
+4. Type a comment in the field that appears under the bar. It is applied to every selected report, and it is **required** to flag — flagging without one fails with a message rather than sending unexplained flags to trainees. Approving with one is optional
+5. Click the action. There is no confirmation step and no modal: the reports are reviewed and a toast reports how many
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Pending Review view with 5 report cards visible, 3 checked with checkboxes, the select-all toggle shown, and "Approve Selected (3)" / "Flag Selected (3)" buttons visible at the top._
+![The Review Queue with several reports selected and the batch approve and flag actions above them](./images/03-61-review-queue-batch.png)
 
 > **Hint:** Batch review does not support per-report field redaction. For reports requiring individual redaction, review them one at a time using the standard review modal.
 
@@ -1424,11 +1541,15 @@ Officers with `training.manage` permission can now review multiple shift reports
 
 Reports that reviewers flag for follow-up are now accessible from a dedicated **Flagged** tab in the Shift Reports section:
 
-- View all flagged reports with their reviewer notes and flag date
-- **Re-review** flagged reports — approve them to move to the Approved state, or add additional notes
+- Every flagged report, each collapsed card carrying the red **Flagged** badge, the officer who filed it and the reviewer who flagged it
+- Open a card and the reason is underneath the report itself, in **Reviewer Comment — Flagged**, followed by a **Review History** listing every pass the report has been through with its date and its note
+- **Re-Review Report**, at the foot of the opened card, reopens the review modal — approve to move it to Approved, or flag it again with a new note
 - When a flagged report is approved, deferred pipeline progress is triggered if the report has an enrollment linkage
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Flagged tab showing 2-3 flagged report cards with red "Flagged" badges, reviewer notes visible, and a "Re-review" button on each card._
+The reason and the re-review action are in the opened card, not on the
+collapsed one: a list of flagged reports tells you _which_, not _why_.
+
+![The Flagged view — two reports, one expanded to its reviewer's reason and Re-Review Report button](./images/03-62-flagged-queue.png)
 
 ### Trainee & Officer Names on Report Cards
 
@@ -1455,28 +1576,42 @@ The review modal now displays the **complete report** so reviewers have full con
 - Trainee comments (if acknowledged)
 - Requirements progressed (if enrollment linked)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the review modal showing the full report content in the top section (hours, rating, narrative, skills with scores) and the review controls (Approve/Flag buttons, reviewer notes textarea) in the bottom section._
+Beneath the report are the **Redact Fields** tick-boxes — clear any field before
+approving and the trainee never sees it — a **Reviewer Comment** box labelled as
+visible to the filing officer and not to the trainee, and the three actions:
+**Cancel**, **Flag for Revision** and **Approve**. Flagging requires a comment;
+approving does not. The modal is taller than a screen, so the report content
+scrolls above the controls rather than sitting beside them.
+
+![The review modal scrolled to its foot — the redaction choices, the reviewer comment box, and Flag for Revision and Approve](./images/03-65-review-modal-full.png)
 
 ### Skill Linkage Status in Settings
 
 The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now shows whether each apparatus-type skill matches a formal `SkillEvaluation` record in the Training module:
 
-- **Green tag** with checkmark: Skill name matches a SkillEvaluation — scores will track competency, create checkoffs, and progress pipeline requirements
-- **Amber tag** with warning: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
-- A **legend** at the bottom of the skills section explains the color coding
+- **Green tag**: Skill name matches a SkillEvaluation — scores will track competency, create checkoffs, and progress pipeline requirements
+- **Amber tag**: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
+- A **legend** below the skills explains the two colours. It appears only once the department has at least one SkillEvaluation on file — with none, there is nothing for the colours to mean
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports settings panel's apparatus skills section (e.g., "Engine" expanded) showing 4 skills with green tags ("Pump operations" ✓, "Hose deployment" ✓) and 2 with amber tags ("Ladder placement" ⚠, "Custom skill" ⚠), plus the explanatory legend below._
+> **Every tag reads amber today.** Nothing in the application creates a
+> `SkillEvaluation`: the table is read by this indicator and by the checkoff
+> writer, and written by neither, so the only way a department acquires one is
+> to be provisioned from a department template that already had some. Scores
+> entered on shift reports are therefore recorded on the report and go no
+> further. Tracked in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md); the screenshot is held back
+> until there is a mixed state to picture rather than a column of amber.
 
 ### Edge Cases
 
-| Scenario                                   | Behavior                                                    |
-| ------------------------------------------ | ----------------------------------------------------------- |
-| Skill score outside 1-5 range via API      | Rejected by Pydantic `Field(ge=1, le=5)` with 422 error     |
-| Batch review with >100 report IDs          | Rejected by `max_length=100` constraint                     |
-| Batch review with mix of valid/invalid IDs | Valid reports processed; `failed` count returned separately |
-| Flagged report re-approved                 | Triggers deferred pipeline progress if enrollment linked    |
-| Skill name matching for linkage            | Case-sensitive exact match against `SkillEvaluation.name`   |
-| No SkillEvaluation records in org          | All apparatus-type skills show amber "unlinked" tags        |
+| Scenario                                   | Behavior                                                                                                                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Skill score outside 1-5 range via API      | Rejected by Pydantic `Field(ge=1, le=5)` with 422 error                                                                                         |
+| Batch review with >100 report IDs          | Rejected by `max_length=100` constraint                                                                                                         |
+| Batch review with mix of valid/invalid IDs | Valid reports processed; `failed` count returned separately                                                                                     |
+| Flagged report re-approved                 | Triggers deferred pipeline progress if enrollment linked                                                                                        |
+| Skill name matching for linkage            | Case-insensitive exact match against `SkillEvaluation.name` — "Pump Operations" and "pump operations" are the same skill, but "Pump ops" is not |
+| No SkillEvaluation records in org          | All apparatus-type skills show amber "unlinked" tags, and the legend is not rendered                                                            |
 
 ---
 
@@ -1526,15 +1661,25 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 
 The shift assignment UI previously required the `scheduling.manage_assignments` permission, which was more restrictive than intended. As of 2026-03-22, users with the broader `scheduling.manage` permission can assign members to shifts.
 
-> **Screenshot needed:**
-> _[Screenshot of the ShiftDetailPanel showing the "Add Assignment" button visible for a user with `scheduling.manage` permission, with the member dropdown and position selector]_
+There is no button called "Add Assignment": the control is **Assign Member**,
+beneath the crew board on a rig with riding positions, or **Assign** in the
+Crew Roster heading on one without. Either opens the same form, which asks for
+the position first and defaults it to the first open seat.
+
+The member list is not filtered by who is qualified for that seat — it excludes
+only members who are unavailable for the shift at all (on leave, or already
+committed to a conflicting one). Put somebody in a driver's seat without the
+EVOC level the apparatus requires and the assignment is still created; what you
+get is a warning toast afterwards, alongside any overtime warning. The list is
+long on a large roster, so the search box above it filters by name.
+
+![The Assign Member form on a shift, with its position and member pickers](./images/03-58-assign-member-form.png)
 
 ### Open Shifts Self-Signup Fix
 
 The self-signup button visibility on the Open Shifts tab had a fallback permission issue where non-admin members couldn't see the Sign Up button even when their rank was eligible. This has been corrected.
 
-> **Screenshot needed:**
-> _[Screenshot of the Open Shifts tab showing shift cards with visible "Sign Up" buttons for an eligible non-admin member]_
+![The Open Shifts tab as an ordinary member sees it, each card carrying its own Sign Up button](./images/03-59-open-shifts-signup.png)
 
 ### Dashboard Shift Display
 
@@ -1545,8 +1690,14 @@ The "My Upcoming Shifts" section on the dashboard now correctly filters out:
 
 Only pending and confirmed assignments appear.
 
-> **Screenshot needed:**
-> _[Screenshot of the Dashboard "My Upcoming Shifts" section showing only pending (yellow badge) and confirmed (green badge) shifts, with no declined or cancelled entries]_
+The panel does not distinguish the two: there is no status badge on a dashboard
+row, only the date, the hours and the shift officer. Which of your shifts are
+still awaiting your confirmation is a question for **My Shifts**, where each
+card carries its badge and the bulk Confirm All / Decline All bar sits above
+them. What the dashboard promises is narrower — that everything listed is a
+shift you are still on.
+
+![The dashboard's My Upcoming Shifts panel, listing only shifts the member is still on](./images/03-60-dashboard-my-shifts.png)
 
 ### Desktop Camera Scanning
 
@@ -1747,11 +1898,16 @@ The scheduling page now supports `?tab=` query parameters for direct navigation 
 | `?tab=open-shifts`      | Open Shifts         |
 | `?tab=requests`         | Requests            |
 | `?tab=equipment-checks` | Equipment Checks    |
+| `?tab=shift-reports`    | Shift Reports       |
 
 Shift notifications automatically deep-link to the correct tab. For example, clicking a shift assignment notification opens the scheduling page with My Shifts selected and the shift highlighted.
 
-> **Screenshot needed:**
-> _[Screenshot of the browser URL bar showing `/scheduling?tab=equipment-checks` and the Equipment Checks tab selected on the scheduling page]_
+> **Corrected 2026-08-12.** `?tab=shift-reports` was missing from the table
+> above; the page has six tabs, not five. The screenshot placeholder here asked
+> for the **browser URL bar** alongside the selected tab — nothing the
+> application draws, and so nothing a screenshot of it can show. The tab it
+> lands on is already pictured under
+> [Standalone Equipment Checks](#standalone-equipment-checks) directly below.
 
 ### Standalone Equipment Checks
 
@@ -1770,10 +1926,15 @@ The equipment check form has been redesigned from a tabbed compartment view to a
 
 - All compartments are displayed inline with clear section headers
 - Sub-compartments are merged under their parent compartment heading
-- Section headers (items with `is_header: true`) appear as bold black labels for visual grouping — they have no pass/fail controls and are not scored
+- Section headers appear as bold labels for visual grouping — they have no pass/fail controls, and neither the compartment's `n/m checked` nor the header's progress counter includes them
 
-> **Screenshot needed:**
-> _[Screenshot of the flat equipment check form on a mobile device showing a compartment header ("Cab Interior"), a section header in bold ("Safety Equipment"), and several check items below with pass/fail buttons and quantity fields]_
+> **Corrected 2026-08-12.** A section header was described as "items with
+> `is_header: true`". `is_header` is a **compartment**-level flag; on an item it
+> is write-only — the item response schema does not carry it, and the check form
+> switches on `check_type: "header"`. Set that, not `is_header`, when building a
+> template through the API.
+
+![The flat check form on a phone — a compartment heading, a bold section header beneath it, and the items it groups](./images/03-73-flat-check-form-header.png)
 
 ### Text Check Type
 
@@ -1866,50 +2027,79 @@ The shift report creation flow has been completely redesigned. Instead of creati
 
 ### How It Works
 
-1. Navigate to **Shift Reports** and click **New Report**
-2. **Select a shift** from the dropdown — the system loads all crew members assigned to that shift
-3. Fill in **shared data** once: hours on shift, calls responded, and call types. These values apply to all crew members
-4. For each **trainee** on the crew, expand their evaluation panel to add:
-   - Performance rating (1-5)
-   - Skills observed with individual 1-5 scores
-   - Tasks performed
+1. Go to **Shift Reports** and click **New**
+2. **Pick a shift.** The picker is a scrollable list of cards for the last fortnight, each naming the rig, the date, and how many members, calls and hours it carried — not a dropdown. Choosing one loads the crew and fills the shared fields from the shift itself
+3. Check the **shared data**: hours on shift, calls responded and call types come from the shift and apply to everybody on it. Hours is the one required field. There is also an **Overall Shift Narrative** for observations about the shift rather than about a person
+4. Each **trainee** on the crew has an **Evaluate** control that opens their panel:
+   - Individual remarks
+   - Performance rating, on the department's labelled scale
    - Areas of strength and areas for improvement
-   - Officer narrative
-5. **Non-trainees** (members without active training program enrollments) appear in the crew list but only receive hours/calls credit — no evaluation section is shown for them
-6. Click **Submit All** to create reports for all crew members in a single batch
+   - Skills observed, each with a 1-5 score
+   - Tasks performed
+5. **Non-trainees** (members with no active training-programme enrolment) appear in the crew list with a remarks box and nothing else — they receive hours and calls credit, and no evaluation
+6. Untick anybody who was not actually on the shift; the button counts what is left. **Submit Reports (N)** files them all, or **Save as Draft** keeps them in the Drafts view
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the batch report creation form showing: (1) the shift selector dropdown at top with a selected shift, (2) the shared data section with hours, calls, and call type fields, (3) the crew list below with two trainees expanded showing evaluation fields and one non-trainee showing only hours/calls credit._
+![The batch shift-report form — shared hours and calls, the whole crew, and one trainee's evaluation open](./images/03-63-batch-report-form.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the submission confirmation showing "Created 5 reports, skipped 1" result after a batch submission._
+Submitting reports a count in a toast: how many were created. Crew who already
+have a report for that shift are skipped rather than duplicated, and the skipped
+count comes back from the API — though the toast shows only the number created.
 
 ### Task Defaults Pre-Population
 
-When the selected shift is linked to an apparatus type (e.g., Engine, Ladder, Ambulance), the **Add Task** dialog pre-populates from the apparatus-type task mapping configured in **Scheduling > Settings > Shift Reports**. After selecting a task, the defaults remain visible for reference.
+There is no Add Task dialog. **+ Add**, at the right of the Tasks Performed
+heading, appends a task row with its name already filled in from the
+apparatus-type task mapping configured in **Scheduling > Settings > Shift
+Reports** — the first entry for that rig class that is not already on the
+report. Add a second and you get the next one down. The name is an ordinary text
+field, so overwriting it is how you record something the mapping does not list;
+nothing is offered as a separate "custom" option.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Add Task dialog showing pre-populated tasks from the engine apparatus type mapping (e.g., "Pump test", "Hose load inventory") with an "Add Custom" option at the bottom._
+The same mapping drives the **Skills Observed** list: a ladder crew is asked
+about aerial placement and forcible entry, a medic crew about patient assessment
+and airway management. Where a rig class has no mapping the department-wide
+defaults are used instead.
+
+The pre-filled row is visible at the foot of the evaluation panel in the
+screenshot above — "Aerial inspection", the first task in this department's
+ladder mapping.
+
+> **This did not work before 2026-08-10.** The form keys both lists on the
+> shift's apparatus type, which the API computed but the shift response schema
+> did not carry, so the value reached the browser as undefined on every shift in
+> every department. Both lists silently fell back to the department-wide
+> defaults and **+ Add** appended a blank row. Configuring the mappings had no
+> visible effect. Pull latest.
 
 ### Score Labels
 
-The 1-5 skill score buttons now display descriptive label text inline next to each button:
+Selecting a skill reveals a **Score:** row of five numbered buttons beneath it.
+The buttons are numbered rather than labelled — the label for the score you pick
+appears beside the row, and hovering a button shows its label as a tooltip. The
+wording is the department's own if it has set Rating Scale Labels, and the
+defaults otherwise:
 
-| Score | Label      |
-| ----- | ---------- |
-| 1     | Needs work |
-| 2     | Developing |
-| 3     | Competent  |
-| 4     | Proficient |
-| 5     | Excellent  |
+| Score | Default label |
+| ----- | ------------- |
+| 1     | Needs work    |
+| 2     | Developing    |
+| 3     | Competent     |
+| 4     | Proficient    |
+| 5     | Excellent     |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the skills section in the evaluation panel showing three skills with 1-5 score buttons, each button labeled with its descriptive text (e.g., "3 — Competent" highlighted for "Pump Operations")._
+![Skills Observed — three skills scored 1-5, each showing the department's label for the score chosen](./images/03-64-skill-score-buttons.png)
 
 ### Review Workflow Improvements
 
 - **Require reason when flagging**: When flagging a report, the modal now requires entering a reason before submission. The "Flag" button is disabled until text is entered. This ensures trainees always receive feedback when a report is flagged
-- **Reviewer name displayed**: Report cards show the reviewer's full name next to the review status badge (e.g., "Approved by Lt. Davis")
-- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-review" action in all view modes — not just in the dedicated Flagged tab
+- **Reviewer name displayed**: Report cards carry "Reviewed by _Name_" in the metadata row beneath the trainee's name, beside the hours, calls and rating
+- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-Review Report" action in all view modes — not just in the dedicated Flagged tab. Both are inside the opened card
 - **Actual server error messages**: Toast notifications now display the server's error message instead of generic text like "Failed to submit", improving troubleshooting
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of a flagged report card showing the orange "Flagged" badge, the reviewer name, the reason text, and the "Re-review" button._
+The card is pictured under
+[Flagged Reports View](#flagged-reports-view). The badge is red rather than
+orange; orange is the ageing indicator that appears beside it once a report has
+sat unreviewed for three days.
 
 ### Edge Cases
 
@@ -1967,26 +2157,38 @@ A new **print-formatted page** renders shift completion reports for paper output
 
 ### What's Included on the Printed Report
 
-- **Header**: Department name and logo
-- **Shift information**: Date, start/end time, apparatus, station
-- **Personnel**: Trainee name and rank, filing officer name and rank
-- **Performance data**: Hours on shift, calls responded, call types, performance rating with label
+- **Header**: "Shift Completion Report", the report's id, the date it was filed,
+  and its review status. The sheet is not branded — no department name and no
+  logo; the department's identity is on the covering paperwork, not here
+- **Shift information**: The shift date. Start and end times, apparatus and
+  station are not printed
+- **Personnel**: The member and the filing officer, by name. Ranks are not
+  printed
+- **Performance data**: Hours on shift, calls responded, call types, and the
+  rating as a bare "3 / 5" — the descriptive label is not printed alongside it
 - **Assessment**: Areas of strength, areas for improvement, officer narrative
-- **Skills observed**: Each skill with its 1-5 score and descriptive label
-- **Tasks performed**: Each task with description
-- **Reviewer information** (if reviewed): Reviewer name, review date, review status
-- **Signature lines**: Spaces for officer and trainee signatures at the bottom
+- **Skills observed**: A table of skill, score out of five, and the officer's
+  comment on each
+- **Tasks performed**: A table of task and description
+- **Reviewer information** (if reviewed): "Reviewed by _Name_ on _date_" beneath
+  the signature block
+- **Signature lines**: One for the filing officer and one for the member, the
+  latter headed "Member Acknowledgment" and marked pending until they
+  acknowledge the report in the app
 
 The page is formatted for **letter-size (8.5" × 11")** printing and automatically opens the browser's print dialog after loading.
 
 ### How to Print a Report
 
-1. Navigate to **Shift Reports** and find the report you want to print
-2. Click the **Print** button on the report card
-3. The print page opens in a new tab with the formatted report
-4. Your browser's print dialog opens automatically — select your printer and print
+1. Go to **Shift Reports** and find the report you want to print
+2. Open its card and click **Print Report**, at the foot of the opened card —
+   there is no print control on the collapsed one
+3. The print page opens with the formatted sheet
+4. Your browser's print dialog opens by itself a moment later — choose your
+   printer and print. The application's navigation is on screen around the
+   sheet but is dropped from the printed page
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the print-formatted shift report showing the letter-size layout with department branding header, structured sections, and signature lines at the bottom._
+![The print layout of a shift report — its sections, the skills and tasks tables, and the two signature lines](./images/03-66-print-report.png)
 
 ### Edge Cases
 
@@ -2012,12 +2214,12 @@ This prevents accidental submission of partially completed checks while still al
 
 Previously, if you started an equipment check but couldn't finish it, the check was stuck in an incomplete state. Now:
 
-1. Navigate to **Scheduling > My Checklists**
-2. In-progress checks show a **"Resume"** button alongside the completion percentage (e.g., "Resume — 65% complete")
-3. Click Resume to open the check form with previously answered items pre-filled
-4. Complete the remaining unanswered items and submit
+1. Open the **Equipment Checks** tab — as a member it is headed **My Equipment Checklists**
+2. Each row shows the rig, whether it is a start- or end-of-shift check, the date, and how many of its items are answered. An untouched one reads **Not Started** with a **Start Check** button; a part-answered one shows its progress and offers **Resume**
+3. Resume opens the form with the answered items already filled in
+4. Complete what is left and submit
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the My Checklists page showing two checklists: one completed (green checkmark) and one in-progress with "Resume — 65% complete" button and a progress bar._
+> **[SCREENSHOT NEEDED]:** _Screenshot of My Equipment Checklists with a finished check beside a part-answered one showing its progress and a Resume button._
 
 ### Edge Cases
 
@@ -2074,7 +2276,7 @@ Open a shift while it's active and you'll see a **readiness** strip at the top:
 Departments can require end-of-shift equipment checks to be complete before a
 shift is finalized. Turn it on in **Scheduling → Settings → Close-out rules**.
 
-- When it's on, the **Finalize** button is blocked while any end-of-shift check
+- When it's on, the **Close out shift** button is blocked while any end-of-shift check
   is outstanding. An officer can still **finalize with an override** by checking
   the box and entering a reason — the override is recorded in the audit log.
 - When it's off (the default), you can finalize freely, but you'll see a tip

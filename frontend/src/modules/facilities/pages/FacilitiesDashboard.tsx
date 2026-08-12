@@ -92,12 +92,12 @@ export default function FacilitiesDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-theme-text-primary text-3xl font-bold">Facilities</h1>
+          <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Facilities</h1>
           <p className="text-theme-text-secondary mt-1">Manage stations, buildings, maintenance, and inspections</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {facilities.length > 0 && (
             <button
               onClick={() => void navigate(`/facilities/print-labels?ids=${facilities.map((f) => f.id).join(',')}`)}

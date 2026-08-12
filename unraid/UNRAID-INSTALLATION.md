@@ -2,6 +2,15 @@
 
 Complete guide for installing The Logbook on Unraid using Community Applications.
 
+> **Status: the Community Applications listing is not yet published** —
+> searching "The Logbook" in the Apps tab will not find it yet. This guide
+> documents the CA template install path for when the listing is live (the
+> template ships in this directory as [the-logbook.xml](./the-logbook.xml);
+> maintainers, see [COMMUNITY-APP-SUBMISSION.md](./COMMUNITY-APP-SUBMISSION.md)).
+> **To install today, use the Docker Compose path:**
+> [QUICK-START.md](./QUICK-START.md) for the fast version or
+> [docs/deployment/unraid.md](../docs/deployment/unraid.md) for the full guide.
+
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
@@ -178,7 +187,7 @@ networks:
 
    ```bash
    cd /mnt/user/appdata/the-logbook
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. Use these settings in The Logbook template:
@@ -705,15 +714,19 @@ backup without its era's keys cannot decrypt encrypted fields. _(2026-07-31)_
 
 ### Manual Backup
 
+`backup.sh` is a host-side script (it is not shipped inside the container
+image) — run it from a clone of the repository on the Unraid host:
+
 ```bash
 # Create backup
-docker exec TheLogbook /app/scripts/backup.sh
+cd /mnt/user/appdata/the-logbook && ./scripts/backup.sh
 
 # List backups
 ls -lh /mnt/user/backups/the-logbook/
 
 # Restore backup
-docker exec -it TheLogbook /app/scripts/backup.sh --restore /backups/logbook_backup_20260120_020000.tar.gz
+cd /mnt/user/appdata/the-logbook && \
+  ./scripts/backup.sh --restore /mnt/user/backups/the-logbook/logbook_backup_20260120_020000.tar.gz
 ```
 
 ### Cloud Backup Integration
@@ -749,9 +762,10 @@ AZURE_STORAGE_CONTAINER=logbook-backups
 
 3. **Test Restores:**
    ```bash
-   # Test restore monthly
-   docker exec -it TheLogbook /app/scripts/backup.sh --list
-   docker exec -it TheLogbook /app/scripts/backup.sh --restore /backups/latest_backup.tar.gz
+   # Test restore monthly (host-side, from the repository clone)
+   cd /mnt/user/appdata/the-logbook
+   ./scripts/backup.sh --list
+   ./scripts/backup.sh --restore /mnt/user/backups/the-logbook/logbook_backup_TIMESTAMP.tar.gz
    ```
 
 ---
@@ -795,7 +809,7 @@ docker restart TheLogbook
 1. **Backup First:**
 
    ```bash
-   docker exec TheLogbook /app/scripts/backup.sh
+   cd /mnt/user/appdata/the-logbook && ./scripts/backup.sh
    ```
 
 2. **Check Release Notes:**

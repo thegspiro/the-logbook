@@ -677,7 +677,7 @@ const StorageAreasPage: React.FC = () => {
               placeholder="Optional description"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="sa-type" className={labelClass}>
                 Storage Type

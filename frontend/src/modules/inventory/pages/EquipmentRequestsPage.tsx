@@ -145,9 +145,9 @@ const EquipmentRequestsPage: React.FC = () => {
           Back to Admin
         </Link>
 
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-purple-600 p-2">
+            <div className="shrink-0 rounded-lg bg-purple-600 p-2">
               <ClipboardList className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -159,7 +159,7 @@ const EquipmentRequestsPage: React.FC = () => {
             onClick={() => {
               void loadRequests();
             }}
-            className="btn-secondary btn-md"
+            className="btn-secondary btn-md shrink-0 self-start sm:self-auto"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -204,7 +204,7 @@ const EquipmentRequestsPage: React.FC = () => {
               <div key={req.id} className="card-secondary p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center gap-2">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
                       <h3 className="text-theme-text-primary text-sm font-semibold">{req.item_name}</h3>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_BADGES[req.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}
@@ -257,7 +257,10 @@ const EquipmentRequestsPage: React.FC = () => {
         )}
 
         {!loading && total > 0 && (
-          <nav className="mt-6 flex items-center justify-between gap-4" aria-label="Equipment request pagination">
+          <nav
+            className="mt-6 flex flex-col items-center justify-between gap-4 sm:flex-row"
+            aria-label="Equipment request pagination"
+          >
             <p className="text-theme-text-muted text-sm">
               Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total}
             </p>
@@ -417,7 +420,7 @@ const EquipmentRequestsPage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label htmlFor="fulfill-qty" className="text-theme-text-primary mb-1 block text-sm font-medium">
                     Quantity

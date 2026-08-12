@@ -80,7 +80,7 @@ const TestCard: React.FC<{
       }}
       className="bg-theme-surface border-theme-surface-border w-full cursor-pointer rounded-lg border p-4 text-left transition-colors hover:border-red-500/50"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
         {selectable && (
           // Stops the row's own click handler: ticking a box must not also open
           // the scorecard underneath it.
@@ -94,7 +94,7 @@ const TestCard: React.FC<{
           />
         )}
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center gap-2">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
             <p className="text-theme-text-primary truncate font-medium">{test.template_name}</p>
             <StatusBadge status={test.status} />
             {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
@@ -113,7 +113,7 @@ const TestCard: React.FC<{
             Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}
           </p>
         </div>
-        <div className="ml-4 flex shrink-0 items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-3 pl-4">
           <div className="text-right">
             {test.overall_score != null && (
               <p className="text-theme-text-primary text-lg font-bold">{Math.round(test.overall_score)}%</p>

@@ -6,6 +6,7 @@ Endpoints for user authentication, registration, and session management.
 
 import copy
 import secrets
+from urllib.parse import urlencode
 
 from fastapi import (
     APIRouter,
@@ -336,6 +337,28 @@ async def _finish_oauth_login(
     db: AsyncSession, user: User, request: Request, provider: str
 ) -> RedirectResponse:
     """Issue session cookies, audit the login, and redirect into the SPA."""
+    if user.mfa_enabled:
+        # OAuth verifies only the primary credential.  Hand the SPA the same
+        # short-lived challenge used by password login, without creating a
+        # session, so application MFA cannot be bypassed through an IdP.
+        await log_audit_event(
+            db=db,
+            event_type="oauth_mfa_challenge",
+            event_category="authentication",
+            severity="info",
+            event_data={"provider": provider, "email": user.email},
+            user_id=str(user.id),
+            username=user.username,
+            ip_address=get_client_ip(request),
+        )
+        fragment = urlencode({"mfa_token": create_mfa_pending_token(str(user.id))})
+        response = RedirectResponse(
+            url=f"{settings.OAUTH_SUCCESS_REDIRECT}#{fragment}",
+            status_code=status.HTTP_302_FOUND,
+        )
+        response.delete_cookie(_OAUTH_STATE_COOKIE, path=_OAUTH_STATE_PATH)
+        return response
+
     service = AuthService(db)
     access_token, refresh_token = await service.create_user_tokens(
         user=user,

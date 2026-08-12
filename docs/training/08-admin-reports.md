@@ -324,9 +324,14 @@ Connect The Logbook to Salesforce for bidirectional synchronization of members, 
 
 1. Navigate to **Integrations** and find the **Salesforce CRM** card
 2. Click **Connect**
-3. Enter your Salesforce **Instance URL** (e.g., `https://yourorg.salesforce.com`)
+3. Enter your Salesforce **My Domain Instance URL** (e.g., `https://yourorg.my.salesforce.com`)
 4. Enter your Salesforce **Client ID** and **Client Secret** (from a Salesforce Connected App)
-5. The system tests the connection and, on success, saves the integration
+5. Choose one authentication method:
+   - Click **Connect with Salesforce** for interactive authorization; or
+   - For unattended sync, enable **OAuth 2.0 Client Credentials Flow** on the
+     Connected App, select a dedicated least-privilege **Run As** user, and
+     leave the refresh token empty
+6. Run the readiness check and preview before enabling automatic sync
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Integrations page showing the Salesforce CRM card with connection status (Connected/Disconnected), last sync timestamp, and Connect/Disconnect/Sync Now buttons._
 
@@ -351,9 +356,15 @@ To receive real-time updates from Salesforce:
 
 **Edge Cases:**
 
-- If Salesforce rate limits are hit during a bulk sync, the system pauses and retries with exponential backoff
-- If a member is deleted in Logbook but exists in Salesforce, the behavior depends on your conflict resolution setting
-- OAuth tokens auto-refresh when expired; no manual re-authentication needed
+- Rate-limited requests retry up to three times using Salesforce's
+  `Retry-After` value or bounded exponential backoff
+- A failed later page of a paginated Salesforce query fails the pull rather
+  than applying partial results
+- There is no configurable conflict-resolution policy; `push`, `pull`, or
+  `both` determines which side is allowed to write, and the permitted write
+  that runs last wins
+- Access tokens renew automatically. Client-credentials connections request a
+  new short-lived token without storing the Run As user's password
 
 ---
 
@@ -466,9 +477,6 @@ Scheduled tasks run automatically on a schedule:
 | **Clean Up Sessions**                 | Remove expired login sessions                                                        |
 | **Process Scheduled Emails**          | Send pending pipeline automated emails (polls every 60 seconds) _(added 2026-03-13)_ |
 | **Generate Compliance Reports**       | Auto-generate scheduled compliance reports _(added 2026-03-13)_                      |
-
-> **Screenshot placeholder:**
-> _[Screenshot of the Scheduled Tasks page showing a list of tasks with name, frequency, last run time, next run time, and enabled toggle switches]_
 
 **Not yet built:** there is no **Administration > Scheduled Tasks** page. The
 tasks above are real and do run — see the in-process runner below — but the
@@ -991,15 +999,26 @@ The Medical Screening module tracks health screenings, physicals, drug tests, an
 
 ### Compliance Dashboard
 
-The compliance dashboard shows:
+The **Compliance** tab lists screenings **expiring within 60 days**, soonest
+first — each row naming the member, the requirement, the days remaining and the
+date. Rows inside 30 days are marked in red; the rest are amber. There is no
+separate overdue section: an expired screening sorts to the top of the same
+list, which is where it needs to be read.
 
-- Overall compliance rate by screening type
-- Members with expiring screenings (configurable: 30/60/90 days)
-- Overdue screenings requiring immediate attention
-- Drill-down to individual member compliance details
+Above the tabs, on every tab, sits a count of screenings **expiring within 30
+days** — the shorter horizon, because that is the one worth interrupting
+someone about.
 
-> **Screenshot needed:**
-> _[Screenshot of the ComplianceDashboard showing compliance rate cards for each screening type, a list of expiring screenings with member names and dates, and an overdue screenings alert section]_
+![The medical-screening Compliance tab: the 60-day list, soonest first, under the 30-day count](./images/08-68-compliance-dashboard.png)
+
+> **The tab is addressable.** `/medical-screening?tab=compliance` opens straight
+> onto it, so a link to the compliance list can be sent to a colleague, and the
+> Back button works after a tab change.
+
+Per-screening-type compliance **rates**, and drill-down to an individual
+member's record, are not on this tab. Rates and thresholds are configured under
+**Training → Compliance Configuration** (below); an individual's screenings are
+on the **Records** tab, filtered by member.
 
 ### Edge Cases
 
@@ -1041,8 +1060,27 @@ Profiles allow different compliance standards for different groups:
    - **Threshold overrides** — optionally set different thresholds for this group
 3. Set **priority** — when a member matches multiple profiles, the highest-priority profile applies
 
-> **Screenshot needed:**
-> _[Screenshot of the ComplianceRequirementsConfigPage showing the threshold configuration section at the top, a list of compliance profiles with name, targeted groups, and threshold values, and an "Add Profile" button]_
+![The Profiles tab: each profile with the groups it targets and the requirements it demands](./images/08-70-compliance-profiles.png)
+
+> **Profiles are refused until the thresholds have been saved once.** The tab
+> says so — "Save the compliance thresholds first before creating profiles" —
+> and the trap is that the Thresholds tab _looks_ configured before that save:
+> the numbers it shows are the code's defaults, not a stored row. Open
+> Thresholds, press **Save Configuration**, then come back.
+
+> **Requirements are picked by name, and names repeat.** A department running
+> the same requirement under several programs has several entries with the same
+> name, and the picker shows only the name — so which one a profile got is not
+> recoverable from the screen. Rename the duplicates if that matters to you.
+
+![Compliance requirements configuration: the Thresholds tab, with its status preview and reminder schedule](./images/08-69-compliance-requirements-config.png)
+
+The page carries **four tabs** — Thresholds, Profiles, Auto Reports and Report
+History — so the thresholds and the profile list are separate screens rather
+than one page scrolled. The **Status Preview** strip under the threshold fields
+restates the three bands in the numbers just entered ("Compliant: ≥ 100% · At
+Risk: 75% – 99% · Non-Compliant: < 75%"), which is the quickest way to check a
+change means what was intended before saving it.
 
 ### Automated Reporting
 
@@ -1058,8 +1096,25 @@ Profiles allow different compliance standards for different groups:
 3. Optionally check **Send via email**
 4. The report shows overall compliance rates, per-member status, and trends
 
-> **Screenshot needed:**
-> _[Screenshot of the report generation dialog showing report type selector, send via email checkbox, additional recipients field, and a preview of a generated compliance report with member status table]_
+![Generating a compliance report, and the history it lands in](./images/08-71-compliance-report-history.png)
+
+The form takes a **type**, a **year**, a **month** and an **Email report**
+switch; the additional-recipients field appears once that switch is on.
+Generated reports land in the **Report History** list beneath it, each row
+carrying its period, when it was generated, how long it took, and the headline
+compliance figure.
+
+> **Monthly and annual currently produce the same figures.** A monthly report is
+> generated from the whole year and then labelled with the month — the period
+> label, the stored month and the history row are right, the numbers behind them
+> are the year's. Read a monthly report as a year-to-date one until this is
+> resolved; it is recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+> **0% compliant is not necessarily a fault.** With the compliant threshold at
+> 100% — the default — a member missing one requirement out of the department's
+> whole set counts as non-compliant, so a department that has not tuned its
+> thresholds or built profiles will read 0%. The **At-Risk** band is what
+> separates "nearly there" from "nowhere near".
 
 ---
 
@@ -1512,14 +1567,27 @@ has switches for the contact block and the address block.
 4. Mark one as the department default.
 5. Save.
 
-> **Screenshot needed:**
-> _[Screenshot of the Footers tab showing the three seeded footers in a list with the Internal one marked as default, one expanded to show its lines, the contact/address toggles, and the "N templates use this" count beside each]_
+![The Footers tab: the seeded library, the default marked, and a per-footer usage count](./images/08-64-email-footers-tab.png)
 
 To point a specific template at a specific footer, open that template and choose
-its footer in the editor.
+its footer in the **Closes with** selector. The hint under the control is the
+chosen footer's own description, so the three can be told apart without opening
+the Footers tab.
 
-> **Screenshot needed:**
-> _[Screenshot of the email template editor with the footer selector visible, set to "Public", and the preview pane below showing that footer rendered at the bottom of the message]_
+![The template editor's Closes with selector, set to the Public footer, with that footer's own description under it](./images/08-65-template-footer-selector.png)
+
+> **A template only shows a footer if its body asks for one.** The closing block
+> is delivered as the `{{footer_html}}` variable, so a body that does not contain
+> it renders without a footer no matter what **Closes with** is set to — and the
+> screen gives no sign of that. Most shipped bodies include the variable, but a
+> department that has customised a template, or whose database predates this
+> release, will have bodies that do not: re-seeding never touches a template that
+> already exists by name. If a chosen footer is not appearing, open the body and
+> check for `{{footer_html}}` before looking anywhere else. See
+> `docs/KNOWN_LIMITATIONS.md`.
+
+**Edit and Preview are alternate views of the same panel**, not two halves of one
+screen — choosing a footer and seeing it rendered are two steps, not one.
 
 ### Things worth knowing before you delete one
 
@@ -1555,8 +1623,12 @@ line**:
 | `{{organization_fax}}`                                            | Still expected on official correspondence by some agencies                                                                                                                                  |
 | `{{organization_description}}` `{{organization_type}}`            | Completeness                                                                                                                                                                                |
 
-> **Screenshot needed:**
-> _[Screenshot of the template editor's variable palette expanded on the Organization group, showing the new identifier, tax ID, county and founded-year variables alongside the existing name/phone/address ones]_
+![The Available Variables palette expanded, the organization variables among the rest](./images/08-66-template-variable-palette.png)
+
+The palette is **one flat list per template**, not a set of collapsible groups —
+the organization variables sit among the rest, in the order above. Officer
+signature variables are the exception, and have a panel of their own beneath it
+because they apply to every template rather than to this one.
 
 > **Addresses outside the US keep their last line.** The address composer read
 > every column except country, so a Canadian department's address lost its
@@ -1597,8 +1669,13 @@ They now have real template rows with documented variables and sample data.
 > stylesheet**, so future improvements reach you automatically. Templates whose
 > CSS you _did_ edit are left exactly as they are.
 
-> **Screenshot needed:**
-> _[Screenshot of the email preview pane showing the new white-card-on-grey design — rounded header band, a details table, and the footer — so departments can see what their outgoing mail now looks like]_
+![The rendered preview: the white card on grey, its header band and details table](./images/08-67-email-preview-design.png)
+
+Pictured with **Shift Assignment**, whose body carries `{{footer_html}}` — the
+closing block sits below the details table, off the bottom of this frame. The
+**Sample data** selector above the message swaps in a real member's details, and
+the two small icons beside **Refresh** switch the preview between desktop and
+phone width.
 
 ---
 

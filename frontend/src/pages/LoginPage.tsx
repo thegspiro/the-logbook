@@ -279,8 +279,15 @@ export const LoginPage: React.FC = () => {
       <main
         className="from-theme-bg-from via-theme-bg-via to-theme-bg-to relative flex min-h-screen items-center justify-center bg-linear-to-br px-4 py-12 sm:px-6 lg:px-8"
         id="main-content"
+        tabIndex={-1}
       >
-        <div className="border-theme-accent-red inline-block h-12 w-12 animate-spin rounded-full border-t-4 border-b-4"></div>
+        <div role="status" aria-live="polite">
+          <div
+            className="border-theme-accent-red inline-block h-12 w-12 animate-spin rounded-full border-t-4 border-b-4"
+            aria-hidden="true"
+          />
+          <span className="sr-only">Loading sign-in</span>
+        </div>
       </main>
     );
   }
@@ -290,6 +297,7 @@ export const LoginPage: React.FC = () => {
       <main
         className="from-theme-bg-from via-theme-bg-via to-theme-bg-to relative flex min-h-screen items-center justify-center bg-linear-to-br px-4 py-12 pb-24 sm:px-6 lg:px-8"
         id="main-content"
+        tabIndex={-1}
       >
         <div className="w-full max-w-md space-y-8">
           <div>
@@ -386,6 +394,7 @@ export const LoginPage: React.FC = () => {
     <main
       className="from-theme-bg-from via-theme-bg-via to-theme-bg-to relative flex min-h-screen items-center justify-center bg-linear-to-br px-4 py-12 pb-24 sm:px-6 lg:px-8"
       id="main-content"
+      tabIndex={-1}
     >
       <div className="w-full max-w-md space-y-8">
         <div>

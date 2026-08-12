@@ -103,7 +103,7 @@ export default function FacilityDetailPage() {
     <div className="space-y-0">
       <Breadcrumbs />
       {/* Top Bar */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => void navigate('/facilities')}
@@ -127,7 +127,7 @@ export default function FacilityDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Status & Type badges */}
           {facility.facilityType && (
             <span className="bg-theme-surface-hover text-theme-text-muted rounded-full px-2.5 py-1 text-xs">
@@ -176,9 +176,9 @@ export default function FacilityDetailPage() {
       </div>
 
       {/* Main Layout: Sidebar + Content */}
-      <div className="flex gap-6">
+      <div className="flex flex-col gap-6 sm:flex-row">
         {/* Sidebar Navigation */}
-        <nav className="w-56 shrink-0" aria-label="Facility sections">
+        <nav className="w-full shrink-0 sm:w-56" aria-label="Facility sections">
           <div className="bg-theme-surface-modal border-theme-surface-border sticky top-6 rounded-xl border p-2">
             {FACILITY_DETAIL_SECTIONS.map((section) => {
               const Icon = section.icon;

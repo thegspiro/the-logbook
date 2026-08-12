@@ -367,6 +367,7 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 - [Proxmox Deployment](docs/deployment/proxmox.md) — LXC and VM
 - [Synology NAS Deployment](docs/deployment/synology.md) — Docker on Synology DS+/XS+
 - [Unraid Quick Start](unraid/QUICK-START.md) — One-command Unraid setup
+- [Unraid Setup Guide](docs/deployment/unraid.md) — Full Unraid install, configuration, HTTPS, backups, and updating
 - [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) — Docker image management
 
 ### Modules & Features

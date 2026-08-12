@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { AlertCircle } from 'lucide-react';
+import { formatTimeOfDay } from '../../../utils/dateFormatting';
 import { resolveTemplatePositions } from '../services/api';
 import type { ShiftTemplateRecord } from '../services/api';
 
@@ -50,7 +51,8 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({ te
               <div className="min-w-0">
                 <p className="text-theme-text-primary truncate text-sm font-medium">{t.name}</p>
                 <p className="text-theme-text-muted text-xs">
-                  {t.start_time_of_day} - {t.end_time_of_day} / {t.duration_hours}h / min {t.min_staffing}
+                  {formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)} / {t.duration_hours}h /
+                  min crew {t.min_staffing}
                 </p>
                 {(() => {
                   const slots = resolveTemplatePositions(t.positions);

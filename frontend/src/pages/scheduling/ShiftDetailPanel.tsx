@@ -12,7 +12,7 @@
  * via a searchable member dropdown.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import {
   X,
@@ -49,7 +49,14 @@ import type { Assignment } from '../../types/scheduling';
 import type { ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
+import {
+  calendarDaysBetween,
+  formatCalendarDate,
+  formatTime,
+  getTodayLocalDate,
+  formatDateCustom,
+  localToUTC,
+} from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
@@ -184,6 +191,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const [showFinalizeChecklist, setShowFinalizeChecklist] = useState(false);
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [showBulkAssign, setShowBulkAssign] = useState(false);
+
+  /**
+   * The assign form renders at the foot of a drawer that is usually taller than
+   * the window, so pressing Assign appeared to do nothing at all: the form was
+   * there, several screens down, with nothing to say so. Bring it into view.
+   */
+  const assignFormRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!showAssignForm && !showBulkAssign) return;
+    const node = assignFormRef.current;
+    if (!node) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [showAssignForm, showBulkAssign]);
 
   // Signup state
   const [signupPosition, setSignupPosition] = useState('');
@@ -489,6 +509,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     setMemberSearch('');
     setShowBulkAssign(false);
     setShowAssignForm(true);
+    window.setTimeout(() => assignFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
 
   const openBulkAssign = () => {
@@ -634,6 +655,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   };
 
   const handleFinalize = async () => {
+    if (overrideBlocked) return;
     setPendingFlag('finalizing', true);
     try {
       const entries = Object.entries(manualHours)
@@ -644,6 +666,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         opts.override_incomplete_checks = true;
         if (overrideReason.trim()) opts.override_reason = overrideReason.trim();
       }
+
       if (passDownNotes.trim()) opts.pass_down_notes = passDownNotes.trim();
       const updated = await schedulingService.finalizeShift(shift.id, entries.length > 0 ? entries : undefined, opts);
       setShift(updated);
@@ -690,6 +713,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     return endOfShiftChecks.filter((c) => c.isCompleted);
   }, [endOfShiftChecks]);
 
+  /**
+   * Whether the close-out is barred by outstanding end-of-shift checks.
+   *
+   * The panel tells an officer that overriding records a reason, so an empty box
+   * cannot be allowed to pass: `handleFinalize` would drop `override_reason` and
+   * the audit event would record `null` — the checks bypassed with none of the
+   * accountability the screen promised.
+   */
+  const overrideBlocked =
+    requireEndOfShiftChecks && hasIncompleteEquipmentChecks && (!overrideChecks || overrideReason.trim().length === 0);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -703,6 +737,29 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shift.shift_date < getTodayLocalDate(tz);
+
+  /**
+   * Has the shift begun? Nobody can be present for a shift eight days out, so
+   * "0/2 present" on one read as an alarm rather than as a fact not yet
+   * knowable. Attendance is shown once this is true — or as soon as anybody has
+   * actually checked in, because the check-in window opens before the shift
+   * does (two hours by default, up to 24 via `checkin_opens_hours_before`), and
+   * a real arrival must never be hidden.
+   */
+  const hasStarted = useMemo(() => {
+    const today = getTodayLocalDate(tz);
+    if (shift.shift_date < today) return true;
+    if (shift.shift_date > today) return false;
+    if (!shift.start_time) return true;
+    if (shift.start_time.includes('T')) {
+      const start = new Date(shift.start_time);
+      return isNaN(start.getTime()) || start.getTime() <= Date.now();
+    }
+    // A bare "HH:MM" is a wall-clock time on the shift's own date, so compare
+    // it against the clock in the department's timezone, not the browser's.
+    return shift.start_time <= toTimeValue(new Date().toISOString());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shift.shift_date, shift.start_time, tz]);
 
   // Only active (assigned/confirmed) assignments fill crew board slots and
   // count toward staffing.  Declined, cancelled, and no-show members should
@@ -911,7 +968,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 </span>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            {/* Four bare glyphs, two of them destructive, on a panel that is
+                mostly used on a phone — where there is no hover to reveal a
+                title. Each action that changes the shift says what it does; the
+                close ✕ is the one glyph that needs no gloss. */}
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
               {canManage && !isPast && !shift.is_finalized && !isCancelled && (
                 <>
                   <button
@@ -929,27 +990,27 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       });
                       setIsEditing(!isEditing);
                     }}
-                    className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-500"
-                    aria-label="Edit shift"
+                    className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-500"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                    Edit
                   </button>
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                    aria-label="Delete shift"
+                    className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-red-500/10 hover:text-red-500"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    Delete
                   </button>
                 </>
               )}
               {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (
                 <button
                   onClick={() => setShowCancelConfirm(true)}
-                  className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-amber-500/10 hover:text-amber-500"
-                  aria-label="Cancel shift"
+                  className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-amber-500/10 hover:text-amber-500"
                 >
-                  <XCircle className="h-4 w-4" />
+                  <XCircle className="h-4 w-4" aria-hidden="true" />
+                  Cancel shift
                 </button>
               )}
               {/* Hidden while the checklist is open: this button and the one at
@@ -978,18 +1039,40 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
         <div className="space-y-5 p-4 sm:space-y-6 sm:p-6">
           {/* Handoff from the previous crew on this apparatus */}
-          {handoff?.pass_down_notes && (
-            <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
-              <p className="mb-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
-                Handoff from previous shift{handoff.shift_date ? ` (${handoff.shift_date})` : ''}
-              </p>
-              <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{handoff.pass_down_notes}</p>
-            </div>
-          )}
+          {/* The date arrived raw ("2026-08-01") two lines under "Wednesday,
+              August 12, 2026", eleven days stale, with nothing marking it as
+              old — so a note left by a crew a week and a half ago read as
+              yesterday's. Written out, and told how long ago it was.
+              Measured against the shift on screen rather than against today:
+              the endpoint returns the last shift before *this* one, so an
+              archived shift would otherwise call its own handoff months old. */}
+          {handoff?.pass_down_notes &&
+            (() => {
+              const age = calendarDaysBetween(handoff.shift_date, shift.shift_date);
+              const ageWords = age === null || age >= 0 ? null : age === -1 ? 'yesterday' : `${Math.abs(age)} days ago`;
+              return (
+                <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
+                  <p className="mb-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                    Handoff from the previous shift
+                    {handoff.shift_date
+                      ? ` — ${formatCalendarDate(handoff.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}`
+                      : ''}
+                    {ageWords ? ` (${ageWords})` : ''}
+                  </p>
+                  {age !== null && age <= -3 && (
+                    <p className="mb-1 text-[11px] text-sky-700/80 dark:text-sky-300/80">
+                      This is the most recent pass-down on this apparatus, not a note from the last crew on duty.
+                    </p>
+                  )}
+                  <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{handoff.pass_down_notes}</p>
+                </div>
+              );
+            })()}
 
           {/* Readiness — present vs assigned, staffing, outstanding start checks */}
           {!shift.is_finalized &&
             !isCancelled &&
+            !(!isPast && shift.shift_date > getTodayLocalDate(tz)) &&
             activeAssignments.length > 0 &&
             (() => {
               const checkedInIds = new Set(allAttendance.filter((a) => a.checked_in_at).map((a) => a.user_id));
@@ -1002,16 +1085,23 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               return (
                 <div className="bg-theme-surface border-theme-surface-border flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2 text-xs">
                   <span className="text-theme-text-secondary font-semibold">Readiness</span>
-                  <span className="text-theme-text-primary">
-                    {presentCount}/{activeAssignments.length} present
-                  </span>
+                  {/* Two counts with different denominators — "0/2 present" beside
+                      "2/3 staffed" — read as though the screen contradicted
+                      itself. Each names its own subject now, in the wording the
+                      close-out checklist already uses. */}
+                  {(hasStarted || presentCount > 0) && (
+                    <span className="text-theme-text-primary">
+                      {presentCount} of {activeAssignments.length} crew checked in
+                    </span>
+                  )}
                   {target > 0 && (
                     <span
                       className={
                         understaffed ? 'font-medium text-amber-600 dark:text-amber-400' : 'text-theme-text-muted'
                       }
                     >
-                      {activeAssignments.length}/{target} staffed{understaffed ? ' — understaffed' : ''}
+                      {activeAssignments.length} of {target} positions filled
+                      {understaffed ? ' — running short' : ''}
                     </span>
                   )}
                   {outstandingStartChecks > 0 && (
@@ -1114,28 +1204,56 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 <CheckCircle2 className="h-4 w-4 text-green-600" /> Before you close this shift
               </h4>
 
-              <div className="space-y-2 text-sm">
-                {/* Equipment checks — blocks if incomplete */}
-                {hasIncompleteEquipmentChecks ? (
+              {/* Green and amber were equally passable, so an officer had no way
+                  to tell a row that stops the close-out from one that is merely
+                  recorded against the shift — which trains people to ignore
+                  both. Two headed groups instead, and the pending-checks row
+                  only claims to block when enforcement is actually on. */}
+              {hasIncompleteEquipmentChecks && requireEndOfShiftChecks && (
+                <div className="space-y-2 text-sm">
+                  <p className="text-[11px] font-semibold tracking-wide text-red-700 uppercase dark:text-red-400">
+                    Must be resolved first
+                  </p>
                   <div className="flex items-start gap-2 rounded-md border border-red-500/20 bg-red-500/10 p-2">
-                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
                     <div>
                       <span className="font-medium text-red-700 dark:text-red-400">
-                        End-of-shift equipment checks incomplete
+                        Must fix before close-out: end-of-shift equipment checks incomplete
                       </span>
                       <p className="mt-0.5 text-xs text-red-600 dark:text-red-300">
                         {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
-                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. These
-                        must be completed before you can close the shift.
+                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. Complete
+                        them, or override below with a reason that goes on the record.
                       </p>
                     </div>
                   </div>
-                ) : endOfShiftChecks.length > 0 ? (
+                </div>
+              )}
+
+              <div className="space-y-2 text-sm">
+                <p className="text-theme-text-muted text-[11px] font-semibold tracking-wide uppercase">
+                  Noted on the record
+                </p>
+                {hasIncompleteEquipmentChecks && !requireEndOfShiftChecks ? (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                    <div>
+                      <span className="font-medium text-amber-700 dark:text-amber-400">
+                        End-of-shift equipment checks incomplete
+                      </span>
+                      <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
+                        {endOfShiftChecks.filter((c) => !c.isCompleted).length} end-of-shift checklist
+                        {endOfShiftChecks.filter((c) => !c.isCompleted).length !== 1 ? 's' : ''} still pending. The
+                        shift will close with them outstanding.
+                      </p>
+                    </div>
+                  </div>
+                ) : endOfShiftChecks.length > 0 && !hasIncompleteEquipmentChecks ? (
                   <div className="flex items-center gap-2 rounded-md border border-green-500/20 bg-green-500/10 p-2">
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
                     <span className="text-green-700 dark:text-green-400">
                       {completedEquipmentChecks.length} equipment check
-                      {completedEquipmentChecks.length !== 1 ? 's' : ''} completed
+                      {completedEquipmentChecks.length === 1 ? '' : 's'} completed
                     </span>
                   </div>
                 ) : null}
@@ -1245,7 +1363,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                       <span className="text-amber-700 dark:text-amber-400">
-                        Ran understaffed — {activeAssignments.length} of {target} positions filled.
+                        Recorded warning (does not block close-out): ran understaffed — {activeAssignments.length} of{' '}
+                        {target} positions filled.
                       </span>
                     </div>
                   );
@@ -1280,13 +1399,21 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     Finalize anyway, with equipment checks outstanding
                   </label>
                   {overrideChecks && (
-                    <input
-                      type="text"
-                      value={overrideReason}
-                      onChange={(e) => setOverrideReason(e.target.value)}
-                      placeholder="Reason for override (logged)"
-                      className={inputCls}
-                    />
+                    <>
+                      <input
+                        type="text"
+                        value={overrideReason}
+                        onChange={(e) => setOverrideReason(e.target.value)}
+                        placeholder="Why are the checks outstanding?"
+                        aria-label="Reason for closing out with checks outstanding"
+                        className={inputCls}
+                      />
+                      {overrideReason.trim().length === 0 && (
+                        <p className="text-xs text-red-600 dark:text-red-300">
+                          A reason is required — it goes on the shift&apos;s record.
+                        </p>
+                      )}
+                    </>
                   )}
                   {!overrideChecks && (
                     <p className="text-xs text-red-600 dark:text-red-300">
@@ -1325,9 +1452,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   onClick={() => {
                     void handleFinalize();
                   }}
-                  disabled={
-                    pending.finalizing || (requireEndOfShiftChecks && hasIncompleteEquipmentChecks && !overrideChecks)
-                  }
+                  disabled={pending.finalizing || overrideBlocked}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
                 >
                   {pending.finalizing ? (
@@ -1418,7 +1543,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   className={inputCls}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Start Time</label>
                   <TimeQuarterHour
@@ -1642,10 +1767,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   </span>
                 )}
               </div>
+              {/* "Positions from B-5 + shift customizations" described how the
+                  list was computed, which is not a fact the crew needs. Name the
+                  rig, and say plainly when this shift departs from it. */}
               {shift.apparatus_id && (
                 <p className="text-theme-text-muted mb-2 text-[10px]">
-                  Positions from {shift.apparatus_unit_number ?? 'apparatus'}
-                  {shift.positions && shift.positions.length > 0 ? ' + shift customizations' : ''}
+                  Crew positions for {shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
+                  {shift.positions && shift.positions.length > 0 ? ', adjusted for this shift' : ''}
                 </p>
               )}
               <div className="space-y-2">
@@ -1711,7 +1839,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     onClick={() => setShowAssignForm(!showAssignForm)}
                     className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
                   >
-                    <UserPlus className="h-3.5 w-3.5" /> Assign
+                    <UserPlus className="h-3.5 w-3.5" aria-hidden="true" /> Assign someone
                   </button>
                 )}
               </div>
@@ -1725,7 +1853,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <Users className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
                   <p className="text-theme-text-muted text-sm">No crew assigned yet</p>
                   <p className="text-theme-text-muted mt-1 text-xs">
-                    {canAssign ? 'Use the Assign button above to add members.' : 'Sign up below to join this shift.'}
+                    {canAssign
+                      ? 'Use "Assign someone" above to add another member, or sign yourself up below.'
+                      : 'Sign yourself up below to join this shift.'}
                   </p>
                 </div>
               ) : (
@@ -1743,7 +1873,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     onClick={() => setShowAssignForm(true)}
                     className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
                   >
-                    <UserPlus className="h-3.5 w-3.5" /> Assign Member
+                    <UserPlus className="h-3.5 w-3.5" aria-hidden="true" /> Assign someone
                   </button>
                   {openPositions.length > 1 && (
                     <button
@@ -1756,8 +1886,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 </div>
               )}
               {showAssignForm && (
-                <div className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4">
-                  <h4 className="text-theme-text-primary text-sm font-medium">Assign Member</h4>
+                <div
+                  ref={assignFormRef}
+                  className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4"
+                >
+                  <h4 className="text-theme-text-primary text-sm font-medium">Assign someone to this shift</h4>
                   {/* Step 1: Position selection */}
                   <div>
                     <label
@@ -1910,9 +2043,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               )}
               {/* Bulk Assignment Panel */}
               {showBulkAssign && (
-                <div className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4">
+                <div
+                  ref={assignFormRef}
+                  className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4"
+                >
                   <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
-                    <Users className="h-4 w-4" /> Fill Open Positions
+                    <Users className="h-4 w-4" aria-hidden="true" /> Fill Open Positions
                   </h4>
                   <p className="text-theme-text-muted text-xs">Select a member for each open position.</p>
                   <div className="space-y-2">
@@ -1970,7 +2106,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           {!hasApparatusPositions && !isPast && !isUserAssigned && (
             <div className="rounded-lg border border-dashed border-violet-500/30 bg-violet-500/5 p-4">
               <h3 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
-                <UserPlus className="h-4 w-4 text-violet-500" /> Sign Up for This Shift
+                <UserPlus className="h-4 w-4 text-violet-500" aria-hidden="true" /> Sign yourself up for this shift
               </h3>
               <div className="flex items-center gap-2">
                 <select
@@ -1991,8 +2127,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   disabled={pending.signingUp}
                   className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
                 >
-                  {pending.signingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                  Sign Up
+                  {pending.signingUp ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  Sign myself up
                 </button>
               </div>
             </div>
@@ -2152,7 +2292,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             </div>
           )}
 
-          {/* Calls / Runs logged during this shift */}
+          {/* Calls logged during this shift */}
           <div className="pt-1">
             <ShiftCallsSection
               shiftId={shift.id}

@@ -200,9 +200,9 @@ const InventoryMaintenancePage: React.FC = () => {
       </Link>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-orange-500/10 p-2">
+          <div className="shrink-0 rounded-lg bg-orange-500/10 p-2">
             <Wrench className="h-6 w-6 text-orange-600 dark:text-orange-400" />
           </div>
           <div>
@@ -214,7 +214,7 @@ const InventoryMaintenancePage: React.FC = () => {
         </div>
         <button
           onClick={() => void loadData()}
-          className="btn-secondary btn-md flex items-center gap-2"
+          className="btn-secondary btn-md flex shrink-0 items-center gap-2 self-start sm:self-auto"
           disabled={isLoading}
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
@@ -253,7 +253,7 @@ const InventoryMaintenancePage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-theme-surface-border flex items-center border-b">
+      <div className="tab-scroll">
         <button onClick={() => setActiveTab('due')} className={tabCls(activeTab === 'due')}>
           Due Items ({allDueItems.length})
         </button>
@@ -366,7 +366,7 @@ const InventoryMaintenancePage: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-theme-text-primary text-sm font-medium">
               {selectedItem.name} — {history.length} record{history.length !== 1 ? 's' : ''}
             </h3>
@@ -475,7 +475,7 @@ const InventoryMaintenancePage: React.FC = () => {
               placeholder="Describe the maintenance performed..."
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -498,7 +498,7 @@ const InventoryMaintenancePage: React.FC = () => {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <fieldset>
                 <legend className={labelCls}>Result (for inspections)</legend>
@@ -549,7 +549,7 @@ const InventoryMaintenancePage: React.FC = () => {
               className={inputCls}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={labelCls}>Cost ($)</label>
               <input

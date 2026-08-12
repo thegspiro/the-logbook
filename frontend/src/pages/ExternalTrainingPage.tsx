@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { formatDateTime } from '../utils/dateFormatting';
 import {
   Link2,
@@ -25,13 +26,15 @@ import {
   Edit2,
   PlayCircle,
 } from 'lucide-react';
-import { externalTrainingService } from '../services/api';
+import { Tooltip } from '../components/ux';
+import { externalTrainingService, trainingService } from '../services/api';
 import type {
   ExternalTrainingProvider,
   ExternalTrainingProviderCreate,
   ExternalProviderType,
   ExternalCategoryMapping,
   ExternalUserMapping,
+  TrainingCategory,
 } from '../types/training';
 
 type TabView = 'providers' | 'imports' | 'mappings';
@@ -377,7 +380,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
               )}
             </div>
 
-            <div className="border-theme-surface-border flex justify-between border-t pt-4">
+            <div className="border-theme-surface-border flex flex-wrap justify-between gap-2 border-t pt-4">
               <button
                 type="button"
                 onClick={() => setStep('type')}
@@ -464,8 +467,18 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
             <p className="text-theme-text-muted text-sm">{getProviderTypeLabel()}</p>
           </div>
         </div>
+        {/* Two independent facts sit side by side here: whether the connection
+            has been proved to work, and whether the provider is switched on.
+            The first was conveyed by icon colour alone, so a sighted reader saw
+            an unexplained amber triangle next to the word "Active" and had no
+            way to tell which of the two it referred to. The label is the icon's
+            accessible name and its tooltip. */}
         <div className="flex items-center gap-2">
-          <span aria-label={getStatusLabel()}>{getStatusIcon()}</span>
+          <Tooltip content={getStatusLabel()}>
+            <span aria-label={getStatusLabel()} className="flex">
+              {getStatusIcon()}
+            </span>
+          </Tooltip>
           <span
             className={`text-sm ${provider.active ? 'text-green-700 dark:text-green-400' : 'text-theme-text-muted'}`}
           >
@@ -831,17 +844,23 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
   const [activeTab, setActiveTab] = useState<'categories' | 'users'>('categories');
   const [categoryMappings, setCategoryMappings] = useState<ExternalCategoryMapping[]>([]);
   const [userMappings, setUserMappings] = useState<ExternalUserMapping[]>([]);
+  // The internal categories an external one can be pointed at. Without them the
+  // Map Category button had nothing to offer and did nothing at all.
+  const [internalCategories, setInternalCategories] = useState<TrainingCategory[]>([]);
+  const [savingMappingId, setSavingMappingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadMappings = useCallback(async () => {
     setLoading(true);
     try {
-      const [categories, users] = await Promise.all([
+      const [categories, users, internal] = await Promise.all([
         externalTrainingService.getCategoryMappings(providerId),
         externalTrainingService.getUserMappings(providerId),
+        trainingService.getCategories(),
       ]);
       setCategoryMappings(categories);
       setUserMappings(users);
+      setInternalCategories(internal);
     } catch (_err) {
       // Error silently handled - mappings modal will show empty state
     } finally {
@@ -854,6 +873,28 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
       void loadMappings();
     }
   }, [isOpen, providerId, loadMappings]);
+
+  const mapCategory = async (mapping: ExternalCategoryMapping, internalCategoryId: string) => {
+    setSavingMappingId(mapping.id);
+    try {
+      const updated = await externalTrainingService.updateCategoryMapping(providerId, mapping.id, {
+        internal_category_id: internalCategoryId,
+        is_mapped: Boolean(internalCategoryId),
+      });
+      setCategoryMappings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      toast.success(
+        internalCategoryId
+          ? `"${mapping.external_category_name}" now imports as ${
+              internalCategories.find((c) => c.id === internalCategoryId)?.name ?? 'the chosen category'
+            }`
+          : `"${mapping.external_category_name}" is unmapped again`
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save the category mapping'));
+    } finally {
+      setSavingMappingId(null);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -927,7 +968,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                         : 'border-yellow-500/30 bg-yellow-500/10'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-theme-text-primary font-medium">{mapping.external_category_name}</p>
                         <p className="text-theme-text-muted text-xs">
@@ -935,18 +976,30 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                           {mapping.external_category_code && ` | Code: ${mapping.external_category_code}`}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {mapping.is_mapped ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {mapping.is_mapped && (
                           <span className="flex items-center gap-1 text-sm text-green-700 dark:text-green-400">
                             <CheckCircle className="h-4 w-4" aria-hidden="true" />
                             Mapped
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
-                        ) : (
-                          <button className="rounded-sm bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700">
-                            Map Category
-                          </button>
                         )}
+                        <select
+                          value={mapping.internal_category_id ?? ''}
+                          disabled={savingMappingId === mapping.id}
+                          onChange={(e) => {
+                            void mapCategory(mapping, e.target.value);
+                          }}
+                          aria-label={`Internal category for ${mapping.external_category_name}`}
+                          className="form-input-sm w-full sm:w-56"
+                        >
+                          <option value="">Not mapped</option>
+                          {internalCategories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -1011,6 +1064,9 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
 };
 
 const ExternalTrainingPage: React.FC = () => {
+  // Never window.confirm: a browser that suppresses it returns false, which is
+  // indistinguishable from the officer pressing Cancel.
+  const { confirm } = useConfirm();
   const [activeTab, setActiveTab] = useState<TabView>('providers');
   const [providers, setProviders] = useState<ExternalTrainingProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1096,9 +1152,15 @@ const ExternalTrainingPage: React.FC = () => {
   };
 
   const handleDelete = async (providerId: string) => {
-    if (!confirm('Are you sure you want to delete this provider? This will also remove all imported records.')) {
-      return;
-    }
+    const agreed = await confirm({
+      title: 'Delete this integration?',
+      message:
+        'Every training record imported through it is removed with it. Records logged in The Logbook directly are untouched.',
+      confirmLabel: 'Delete integration',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!agreed) return;
     try {
       await externalTrainingService.deleteProvider(providerId);
       await loadProviders();
@@ -1121,14 +1183,17 @@ const ExternalTrainingPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="p-6">
         {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold">External Training Integrations</h1>
             <p className="text-theme-text-muted mt-1">
               Connect external training platforms to automatically sync completed training records
             </p>
           </div>
-          <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
+          >
             <Plus className="h-5 w-5" aria-hidden="true" />
             Add Provider
           </button>

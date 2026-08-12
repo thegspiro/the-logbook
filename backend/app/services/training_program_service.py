@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -893,6 +893,7 @@ class TrainingProgramService:
                         phase_id=phase_id,
                         requirement_id=str(req_input.requirement_id),
                         is_required=req_input.is_required,
+                        is_prerequisite=getattr(req_input, "is_prerequisite", False),
                         sort_order=req_input.sort_order or idx,
                         owns_requirement=False,
                     )
@@ -941,6 +942,7 @@ class TrainingProgramService:
                     phase_id=phase_id,
                     requirement_id=requirement.id,
                     is_required=req_input.is_required,
+                    is_prerequisite=getattr(req_input, "is_prerequisite", False),
                     sort_order=req_input.sort_order or idx,
                     # The requirement was created just above for this program,
                     # so unlinking it may clean it up.
@@ -996,7 +998,38 @@ class TrainingProgramService:
             query = query.where(TrainingProgram.is_template == is_template)
 
         result = await self.db.execute(query.order_by(TrainingProgram.name))
-        return result.scalars().all()
+        programs = list(result.scalars().all())
+        await self._attach_enrolled_counts(programs)
+        return programs
+
+    async def _attach_enrolled_counts(self, programs: List[TrainingProgram]) -> None:
+        """Stamp `enrolled_count` on each programme in the list.
+
+        The programme cards report how many members are on each pipeline. The
+        count was never sent, and the card rendered a hardcoded zero — so every
+        pipeline read "0 enrolled" however many members were working through
+        it. One grouped count for the whole page rather than a query per card.
+
+        Withdrawn enrollments are excluded: the number answers "how many people
+        am I running through this", not "how many ever started".
+        """
+        if not programs:
+            return
+
+        counts = await self.db.execute(
+            select(
+                ProgramEnrollment.program_id,
+                func.count(ProgramEnrollment.id),
+            )
+            .where(
+                ProgramEnrollment.program_id.in_([p.id for p in programs]),
+                ProgramEnrollment.status != EnrollmentStatus.WITHDRAWN,
+            )
+            .group_by(ProgramEnrollment.program_id)
+        )
+        by_program = {str(pid): total for pid, total in counts.all()}
+        for program in programs:
+            program.enrolled_count = by_program.get(str(program.id), 0)
 
     # ==================== Program Phase Methods ====================
 
@@ -2380,6 +2413,14 @@ class TrainingProgramService:
                     None,
                     "Only a training officer can check off a checklist step",
                 )
+            if (
+                updates.progress_notes is not None
+                and "checklist_done" in updates.progress_notes
+            ):
+                return (
+                    None,
+                    "Only a training officer can update checklist progress notes",
+                )
             if updates.test_score is not None:
                 return None, "Only a training officer can record a test score"
             if updates.progress_value is not None:
@@ -2974,8 +3015,9 @@ class TrainingProgramService:
         pre-flight validator and the apply itself so both judge eligibility the
         same way. Returns (row, None) or (None, error_message).
 
-        ``completed_on`` is the training's completion date, checked against the
-        requirement's freshness window when both are present."""
+        ``completed_on`` is the training's completion date. A requirement with a
+        freshness window rejects a missing date because freshness cannot be
+        verified."""
         enrollment_result = await self.db.execute(
             select(ProgramEnrollment)
             .join(TrainingProgram)
@@ -3008,11 +3050,17 @@ class TrainingProgramService:
         # A requirement with a freshness window rejects an old completion even
         # on an explicit officer sign-off: "CPR within the last 180 days" is the
         # point of the requirement, so crediting a three-year-old record would
-        # quietly defeat it. Callers that have no date to check pass None.
-        if completed_on is not None:
-            _, requirement = row
-            cutoff = recency_cutoff(requirement, date.today())
-            if cutoff is not None and completed_on < cutoff:
+        # quietly defeat it. An undated completion must fail closed when a
+        # window is configured because its freshness cannot be verified.
+        _, requirement = row
+        cutoff = recency_cutoff(requirement, date.today())
+        if cutoff is not None:
+            if completed_on is None:
+                return None, (
+                    "That training has no completion date, so it can't be credited "
+                    f"toward this requirement's {requirement.recency_days}-day window."
+                )
+            if completed_on < cutoff:
                 return None, (
                     f"That training was completed on {completed_on.isoformat()}, "
                     f"outside this requirement's {requirement.recency_days}-day "
@@ -3060,10 +3108,10 @@ class TrainingProgramService:
         test) are marked complete. Runs through ``update_requirement_progress`` so
         percentage, auto-completion, rollup, and phase advancement all fire.
 
-        It is, however, gated by the requirement's freshness window when
-        ``completed_on`` is supplied — an officer may waive delivery method, but
-        not the "must be within the last N days" rule that defines the
-        requirement.
+        It is, however, gated by the requirement's freshness window. An officer
+        may waive delivery method, but not the "must be within the last N days"
+        rule that defines the requirement; an undated completion therefore
+        cannot satisfy a freshness window.
 
         Returns ``(applied, error_message)``.
         """

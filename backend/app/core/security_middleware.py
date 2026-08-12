@@ -481,7 +481,9 @@ class SecurityHeadersMiddleware:
         (b"x-frame-options", b"DENY"),
         (b"x-xss-protection", b"1; mode=block"),
         (b"referrer-policy", b"strict-origin-when-cross-origin"),
-        (b"permissions-policy", b"geolocation=(), microphone=(), camera=()"),
+        # Camera scanners are a first-party platform feature. ``self`` keeps
+        # camera access unavailable to embedded third-party origins.
+        (b"permissions-policy", b"geolocation=(), microphone=(), camera=(self)"),
         (
             b"content-security-policy",
             b"default-src 'self'; "

@@ -291,7 +291,15 @@ class CheckItemResultSubmit(BaseModel):
     compartment_name: str = Field(..., max_length=200)
     item_name: str = Field(..., max_length=200)
     check_type: Optional[str] = Field(None, max_length=30)
-    status: str = Field(..., pattern=r"^(pass|fail|not_checked)$")
+    # "not_applicable" is a real answer, not a fault: a tool legitimately off
+    # the truck used to have to be filed as a failure, and the compliance
+    # reports counted it as one. It counts as answered in
+    # _compute_check_status and never toward the failure count.
+    # "out_of_service" also counts as answered, but does count as a failure —
+    # the item was looked at and found unusable.
+    status: str = Field(
+        ..., pattern=r"^(pass|fail|not_applicable|out_of_service|not_checked)$"
+    )
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
@@ -301,14 +309,13 @@ class CheckItemResultSubmit(BaseModel):
     lot_number: Optional[str] = Field(None, max_length=100)
     serial_found: Optional[str] = Field(None, max_length=100)
     lot_found: Optional[str] = Field(None, max_length=100)
-    # Expiration read off a unit replaced during this check. Written back onto
-    # the template item alongside lot_found so the truck's record reflects the
-    # unit actually on it.
+    # Expiration read off a unit replaced during this check. This is retained
+    # as check evidence; authoritative template dates change through inventory
+    # lot swaps rather than ordinary check submissions.
     expiration_found: Optional[date] = None
     photo_urls: Optional[List[str]] = None
-    # Advisory only: the server recomputes expiry from the template item (or
-    # expiration_found) so a client cannot pass an expired item by asserting it
-    # is fine. Kept for checks submitted without a template item to resolve.
+    # Advisory only: the server recomputes expiry from the template item so a
+    # client cannot pass an expired item by asserting it is fine.
     is_expired: bool = False
     expiration_date: Optional[date] = None
     notes: Optional[str] = None
@@ -561,7 +568,11 @@ class ItemTrendEntry(BaseModel):
     period: str
     pass_count: int = 0
     fail_count: int = 0
+    not_applicable_count: int = 0
     not_checked_count: int = 0
+    # Answered "not on truck". Counted apart from not_checked_count: one is a
+    # crew's answer, the other is nobody having looked.
+    not_applicable_count: int = 0
 
 
 class ItemTrendResponse(BaseModel):

@@ -59,7 +59,7 @@ const SECTIONS: {
 }[] = [
   {
     key: 'feature-toggles',
-    label: 'Feature Toggles',
+    label: "What's turned on",
     icon: SlidersHorizontal,
     description: 'Enable/disable shift reports and training',
   },

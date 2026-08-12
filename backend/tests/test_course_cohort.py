@@ -12,10 +12,11 @@ DB is mocked; no MySQL.
 
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
+from app.api.v1.endpoints import course_cohorts as cohort_endpoints
 from app.models.event import EventRSVP
 from app.models.training import (
     CohortClassStatus,
@@ -62,6 +63,7 @@ def _scalars(items):
 def _rows(items):
     r = MagicMock()
     r.all.return_value = items
+    r.one.return_value = items[0] if items else None
     return r
 
 
@@ -162,6 +164,104 @@ def _cohort_class(cohort, sequence, start=None, event_id="evt-1", **kw):
 def _session_stub(event_id="evt-1"):
     """Stand-in for the TrainingSession that create_training_session returns."""
     return MagicMock(id=str(uuid4()), event_id=event_id)
+
+
+class TestCohortDetailPrivacy:
+    async def test_member_endpoint_requests_peer_safe_detail(self):
+        service = MagicMock()
+        service.is_roster_member = AsyncMock(return_value=True)
+        current_user = MagicMock(id=uuid4(), organization_id=ORG)
+
+        with (
+            patch.object(cohort_endpoints, "CourseCohortService", return_value=service),
+            patch.object(cohort_endpoints, "user_has_permission", return_value=False),
+            patch.object(
+                cohort_endpoints, "_build_detail", new=AsyncMock(return_value="detail")
+            ) as build_detail,
+        ):
+            result = await cohort_endpoints.get_cohort(
+                cohort_id=uuid4(), db=MagicMock(), current_user=current_user
+            )
+
+        assert result == "detail"
+        assert build_detail.await_args.kwargs["include_member_data"] is False
+
+    async def test_officer_endpoint_requests_full_detail(self):
+        service = MagicMock()
+        service.is_roster_member = AsyncMock()
+        current_user = MagicMock(id=uuid4(), organization_id=ORG)
+
+        with (
+            patch.object(cohort_endpoints, "CourseCohortService", return_value=service),
+            patch.object(cohort_endpoints, "user_has_permission", return_value=True),
+            patch.object(
+                cohort_endpoints, "_build_detail", new=AsyncMock(return_value="detail")
+            ) as build_detail,
+        ):
+            result = await cohort_endpoints.get_cohort(
+                cohort_id=uuid4(), db=MagicMock(), current_user=current_user
+            )
+
+        assert result == "detail"
+        service.is_roster_member.assert_not_awaited()
+        assert build_detail.await_args.kwargs["include_member_data"] is True
+
+    async def test_member_detail_does_not_query_or_return_roster(self):
+        course = _course()
+        cohort = _cohort(course.id)
+        cohort_class = _cohort_class(cohort, 1, event_id=None)
+        db = RecordingSession(
+            [
+                _one(cohort),
+                _one(course),
+                _rows([(cohort_class, None)]),
+                _rows([(1, cohort_class.scheduled_start)]),
+            ]
+        )
+
+        detail = await CourseCohortService(db).get_cohort_detail(UUID(cohort.id), ORG)
+
+        assert detail["members"] == []
+        assert detail["member_count"] == 0
+        assert detail["classes"][0]["rsvp_count"] is None
+        assert detail["classes"][0]["checked_in_count"] is None
+        assert len(db.statements) == 4
+
+    async def test_officer_detail_returns_org_scoped_roster(self):
+        course = _course()
+        cohort = _cohort(course.id)
+        cohort_class = _cohort_class(cohort, 1, event_id=None)
+        member = CourseCohortMember(
+            id=str(uuid4()),
+            organization_id=str(ORG),
+            cohort_id=cohort.id,
+            user_id=str(uuid4()),
+            status=CohortMemberStatus.ACTIVE,
+        )
+        user = MagicMock(
+            first_name="Alex", last_name="Rivera", email="alex@example.org"
+        )
+        enrollment = MagicMock(progress_percentage=40)
+        db = RecordingSession(
+            [
+                _one(cohort),
+                _one(course),
+                _rows([(cohort_class, None)]),
+                _rows([(member, user, enrollment)]),
+                _rows([(1, cohort_class.scheduled_start)]),
+                _scalar(1),
+            ]
+        )
+
+        detail = await CourseCohortService(db).get_cohort_detail(
+            UUID(cohort.id), ORG, include_member_data=True
+        )
+
+        assert detail["members"][0]["full_name"] == "Alex Rivera"
+        roster_query = str(db.statements[3])
+        assert "users.organization_id" in roster_query
+        assert "program_enrollments.organization_id" in roster_query
+        assert "course_cohort_members.organization_id" in roster_query
 
 
 def _patch_session_service(sessions=None, error=None):

@@ -21,7 +21,7 @@ import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
 import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from '../components/ux/ScanSuccessFlash';
 import { isMemberIdPayload } from '../types/scanner';
-import { QR_SCAN_CONFIG } from '../constants/camera';
+import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
 
 export const MemberScanPage: React.FC = () => {
   const navigate = useNavigate();
@@ -98,7 +98,7 @@ export const MemberScanPage: React.FC = () => {
       setError(null);
       await startScanner();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Camera access denied. Please allow camera permissions in your browser settings.'));
+      setError(describeCameraError(err));
     }
   }, [startScanner]);
 

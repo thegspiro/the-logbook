@@ -217,8 +217,7 @@ Each class shows the gap since the one before it — **"Next day"**, **"2 days l
 
 Generating creates **one training event per class**, each with a linked training session. Students see the classes on their calendar, sign in and out with the QR code as usual, and the hours flow into their program.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the cohort wizard on the Preview step, showing a numbered list of computed class dates with a quarter-hour date/time picker on each row, an amber warning on one class reading "Moved from 2026-09-12 to 2026-09-14 — 2026-09-12 is a weekend", and a row of suggested holiday blackout dates above]_
+![The cohort wizard's Preview step — computed class dates, a weekend-move warning, and the holidays offered as blackout dates](./images/02-104-cohort-preview-step.png)
 
 ### Running a Cohort
 
@@ -329,19 +328,30 @@ Navigate to **Training > Programs** and click **Create Program** to open the pip
 
 **Required Permission:** `training.manage`
 
-1. Open the program and select the **Enrollments** tab.
-2. Click **Enroll Members** to open the searchable **member picker**.
-3. Search by name and either select a **single** member, or select **multiple** members for a **bulk** enrollment.
-4. Confirm to enroll.
+1. Open the program and click **Enroll**, in the header beside Edit and Duplicate.
+2. Search by name or membership number, and click a member to select them. Each
+   selection appears as a removable chip above the search box, and the button at
+   the foot counts them — **Enroll 3 Members**.
+3. Optionally set a **Target Completion Date**, which applies to everyone in the
+   batch.
+4. Click the button to enrol them.
 
-**Bulk enrollment checks each member first.** The system **skips** any member who:
+**The eligibility check happens before you enrol, not after.** The picker counts
+what it found — "18 of 22 eligible" — and **Show eligible only**, on by default,
+hides the rest. Turn it off and the members who cannot be enrolled are listed
+with the reason on the row and an **Enrolled** badge, and they cannot be
+selected. A member is ineligible when they:
 
-- has **not met the program's prerequisites**, or
-- is already enrolled in a program that **does not allow concurrent enrollment**.
+- have **not met the program's prerequisites**,
+- are already enrolled in a program that **does not allow concurrent
+  enrollment**, or
+- are already on this program.
 
-After a bulk enroll, a summary reports who was enrolled and, for each member who was skipped, **the reason**. Correct the underlying issue (complete the prerequisite, or finish/cancel the conflicting enrollment) and re-run the enrollment for those members.
+So there is no after-the-fact summary of who was skipped and why: you can see it
+before you commit. Correct the underlying issue — complete the prerequisite, or
+finish or cancel the conflicting enrollment — and the member becomes selectable.
 
-> **[SCREENSHOT NEEDED]:** _The Enrollments tab with the member picker open, several members selected for bulk enrollment, and a results summary listing enrolled members alongside skipped members with reasons (e.g., "Prerequisite not met", "Already enrolled in a program that disallows concurrent enrollment")._
+![The Enroll Members picker — members selected, the ineligible listed with their reason, and the button counting the selection](./images/02-96-bulk-enroll-picker.png)
 
 ### Tracking a Member's Progress
 
@@ -357,7 +367,15 @@ Completing any requirement — of **any** type — counts toward the member's **
 
 > **Only officers can complete or credit a requirement.** Setting a numeric value (hours/shifts/calls/courses), recording a test score, or marking a requirement complete/verified/waived requires `training.manage`. A member viewing their own progress can mark a requirement **in progress**, but to get credit they submit their training for review — they can't set their own requirement to 100%.
 
-> **[SCREENSHOT NEEDED]:** _A member's enrollment progress detail showing requirements grouped by phase, each with a status control (Complete / In Progress / Reopen), an officer "Verify" action, and inputs for logging hours, shifts, calls, or courses._
+The controls on each requirement are **In progress**, **Mark complete**,
+**Reopen** and **Reset** — Reopen appears once the requirement is complete, and
+Reset on anything that has been started at all. There is no separate Verify
+button: a requirement an officer marks complete is verified in the same act, and
+picks up its **Verified** badge from that. A value-based requirement — hours,
+shifts, calls, courses — also carries its own input and **Save**, so the count
+can be credited without completing the requirement outright.
+
+![The officer's view of a member's pipeline progress, with the controls that credit and verify each requirement](./images/02-94-officer-progress-detail.png)
 
 ### Working Through a Checklist Requirement _(2026-08-09)_
 
@@ -388,9 +406,12 @@ could read 100% complete while the background check was still outstanding. So th
 member is told **"+2 more steps your officer records"** rather than being shown a
 denominator that does not match what is on their screen.
 
-> **[SCREENSHOT NEEDED]:** _The requirement editor's checklist steps editor
-> showing several steps with the eye toggle, one step toggled to officer-only
-> (eye closed) with its greyed-out treatment._
+An officer-only step is not dimmed — it is **marked in amber, with the eye
+struck through**, and it sits in the list exactly where it was. The step is
+still yours to edit, rename and reorder; the toggle changes only who can read
+it.
+
+![The requirement editor's checklist steps — each with its own eye toggle, one switched to officer-only](./images/02-100-checklist-steps-editor.png)
 
 #### Edge cases
 
@@ -405,13 +426,15 @@ denominator that does not match what is on their screen.
 For a **knowledge test** requirement, the officer records the result:
 
 1. Open the member's progress detail and find the knowledge-test requirement.
-2. Enter either a **Pass/Fail** result or a **score percentage**.
+2. Type the **score percentage** and click **Record**. There is no Pass/Fail
+   control: pass and fail are derived from the score, and the field's own label
+   tells you the threshold — "Test score (%) · pass ≥ 70%".
 3. The system compares the score to the requirement's **passing score** (default **70%**). A score at or above the passing score is a **pass**, and a pass **completes the requirement**.
-4. Each entry counts against the requirement's **maximum attempts**. The current count is shown as **"Attempts: X / N"**. Once the maximum is reached, no further attempts can be recorded.
+4. Each entry counts against the requirement's **maximum attempts**. The current count is shown as **"Attempts: X / N"**, and the most recent result as **"Last score: 86% (pass)"**. Once the maximum is reached the field and the Record button are disabled, and the count is annotated "no attempts remaining".
 
 > **Note:** Knowledge-test scoring is **officer-entered** today. A member-facing, online test-taking feature is planned for a future release.
 
-> **[SCREENSHOT NEEDED]:** _The knowledge-test entry panel showing the Pass/Fail toggle and score percentage field, the passing score (70%), and the "Attempts: 1 / 3" counter._
+![A knowledge-test requirement — the last score with its pass, the attempts used, and the score field that records the next](./images/02-95-knowledge-test-entry.png)
 
 ### Phases & Advancing
 
@@ -422,7 +445,14 @@ A **phase completes** when all of its required items are done. What happens next
 
 When a member advances, both the **member** and their **mentor(s)** are notified.
 
-> **[SCREENSHOT NEEDED]:** _A member's progress detail showing a completed phase marked ready to advance, with an officer-only "Advance to next phase" button because the phase requires approval._
+**Advance to next phase** is not conjured by the approval setting: it sits at the
+top of every phased member's progress detail, beside **Start new cycle**, for any
+officer who can manage training. What the approval setting decides is whether
+advancement _also_ happens on its own when the phase completes. The button is
+disabled only on the last phase, where it reads **Final phase reached**.
+
+The control is pictured in the reopen shot below — the same header, on an
+enrollment that also happens to have expired.
 
 #### Phase prerequisites _(2026-08-09)_
 
@@ -457,18 +487,28 @@ that is what force is for.
 
 Inside a phase — or inside the program-level list, for a program with no phases —
 a requirement can be flagged **prerequisite**. The rest of the requirements in
-that same scope are then **locked** until it is done. Toggle the flag per
-requirement on the pipeline detail page.
+that same scope are then **locked** until it is done.
+
+The flag is a chip on each requirement row of the pipeline detail page, and it
+is a toggle: it reads **Any order** until you click it, and **Do this first**
+afterwards. Every other requirement in the phase keeps its own chip, so the
+phase says at a glance which single item gates it — there is no separate
+prerequisites screen to consult.
+
+![A phase on the pipeline detail page — one requirement chipped 'Do this first', the rest 'Any order'](./images/02-98-requirement-prerequisite.png)
 
 - An officer trying to sign off a locked requirement is **refused, with the
   blocking requirement named**.
 - The member sees the step **greyed out with the same wording** rather than hidden
   — a step you cannot see yet is indistinguishable from a step that does not
-  exist.
+  exist. This greying is on the member's own progression view, not on the
+  pipeline page above: what the officer sees there is the chip.
 
-> **[SCREENSHOT NEEDED]:** _The pipeline detail page showing a requirement with
-> its "prerequisite" toggle on, and the sibling requirements beneath it rendered
-> greyed-out with the "locked until … is complete" note._
+![A member's progression view — the gated requirement greyed out and reading 'Locked until you finish Hose Deployment'](./images/02-99-member-locked-requirement.png)
+
+A requirement the member has **already finished** is never greyed, whatever the
+gate says — the lock holds back work not yet done, and does not retract credit
+already given.
 
 **Edge cases**
 
@@ -489,8 +529,13 @@ An enrollment past its target completion date now moves to **Expired**.
 - It happens **the moment anyone opens the enrollment**, and again in a **daily
   sweep** for the ones nobody opens.
 - Both the **member** and the **training officers** are told.
-- Officers can now **filter for expired enrollments**, which was impossible while
-  the status was never written.
+- Officers can **filter the Enrollments tab by status**, expired among them
+  _(2026-08-11)_. The list endpoint had taken a status since the day the status
+  was first written, but nothing on the tab asked for one, so finding the
+  enrollments that had run out meant reading every row. Filtering to a status
+  nobody holds says so, and offers **Show all statuses** back — it does not
+  invite you to enroll somebody, which is what the "no members enrolled"
+  message would have said.
 
 #### Reopening an expired enrollment
 
@@ -504,9 +549,11 @@ out of time.
   finished the work while expired comes back marked complete rather than waiting
   for the next edit to notice.
 
-> **[SCREENSHOT NEEDED]:** _An officer's Enrollments tab filtered to Expired,
-> showing an expired enrollment row with the Reopen action, and the reopen dialog
-> with its optional new target completion date._
+There is no separate reopen dialog: opening the member's progress from the
+Enrollments tab puts the whole thing at the top of that panel — how far they got
+before the deadline passed, the optional new deadline, and the button.
+
+![An expired enrollment opened by an officer — the deadline it ran past, and the reopen control with its optional new date](./images/02-101-expired-enrollment-reopen.png)
 
 #### Deadline reminders, per program _(2026-08-09)_
 
@@ -543,13 +590,22 @@ From **Training > My Training**, find your program under **Active Program Enroll
 - Your **next milestones**
 - **Every requirement grouped by phase**, with each requirement's completion status
 
-> **[SCREENSHOT NEEDED]:** _The member's full progress view showing the phase timeline with a "You are here" marker on the current phase, an overall progress bar, time remaining, upcoming milestones, and requirements listed under each phase._
+![A member's full pipeline progress — the current phase marked You are here, with milestones and every requirement](./images/02-93-member-full-progress.png)
 
-### Attendance Warning for an Unreached Phase
+### Attending a session for a phase you have not reached
 
-If you RSVP to — or check into — a **training session tied to a phase you have not reached yet**, the system shows a **warning** that the session belongs to a later phase. You can choose to **proceed anyway** if you still want to attend.
+A training session can be **tied to a phase** of a program, and that tie is what
+credits your attendance to the right requirement.
 
-> **[SCREENSHOT NEEDED]:** _The attendance warning dialog shown when a member RSVPs to a session for a phase they have not reached, with "Proceed anyway" and "Cancel" options._
+**Nothing warns you, and nothing stops you, if the session belongs to a phase
+ahead of the one you are in.** You can RSVP and attend, and the hours are
+recorded. This is deliberate to the extent that attending early is rarely
+wrong — a recruit sitting in on a later drill loses nothing — but it does mean
+the session list is not filtered to what you are ready for, and an officer
+planning a phase-specific session should say so in its description.
+
+> A dialog offering **Proceed anyway** was described here before 2026-08-11. It
+> was never built; see `docs/KNOWN_LIMITATIONS.md`.
 
 ---
 
@@ -748,7 +804,7 @@ Both actions require `training.manage` and are recorded in the audit log.
 
 **Required Permission:** `training.manage`
 
-When you finalize a training session, what happens next depends on the **Require instructor confirmation** checkbox set when the session was created (Step 3 of **Training > Create Session**):
+When you finalize a training session, what happens next depends on the **Require instructor confirmation** checkbox set when the session was created. It is on the third step of the create form, headed **Settings**, under _Attendance & Completion Settings_ — the form is a tab of **Training Admin > Records > Sessions**, and `/training/sessions/new` redirects there:
 
 - **Unchecked (default)** — Finalizing the session **immediately completes** every attendee's training record. No separate approval step and no confirmation email are sent.
 - **Checked** — The session stays **pending** after you finalize it. The records are not completed until an officer confirms via the approval notification that is emailed to the department's training officers.
@@ -757,7 +813,7 @@ When you finalize a training session, what happens next depends on the **Require
 2. If **Require instructor confirmation** was off, the attendees' records are marked complete right away.
 3. If it was on, the session remains pending until an officer opens the emailed confirmation and approves it.
 
-> **[SCREENSHOT NEEDED]:** _The Create Training Session form (Step 3) showing the "Require instructor confirmation" checkbox with its helper text "Training records will be marked as 'pending' until instructor confirms completion."_
+![Step 3 of the Create Session form — the settings, with Require instructor confirmation among them](./images/02-91-session-confirmation-toggle.png)
 
 > **Hint:** Leave **Require instructor confirmation** off for routine drills you want completed the moment you finalize them. Turn it on only when a second officer must sign off before records count.
 
@@ -822,7 +878,7 @@ Each training requirement can override the department default. When adding or ed
 - **Count the current (in-progress) month** — Always includes this month for this requirement.
 - **Stop at the end of the previous month** — Excludes the in-progress month — useful for drills held late in the month so members aren't flagged early.
 
-> **[SCREENSHOT NEEDED]:** _The requirement add/edit form showing the "Evaluation Period" dropdown with the three options (use department default / count current month / stop at previous month)._
+![The Evaluation Period selector on a requirement, with the note on what it changes](./images/02-92-requirement-evaluation-period.png)
 
 > **Hint:** This setting only affects requirement compliance windows, proration, and overdue checks. Certifications that are **expiring soon** are always flagged using the real current date, regardless of the Evaluation Period setting.
 
@@ -974,18 +1030,33 @@ Before filing shift reports, officers should **finalize the shift**. This create
 
 ### Auto-Population from Shift Data
 
-When creating or completing a shift report, the system can auto-populate data from shift records:
+The form is **shift-first**: you pick the shift, and it fills itself in from
+what the shift already knows.
 
-1. Select a **shift date** and **trainee** in the report form
-2. The system calls the **shift preview** endpoint to pull:
-   - **Hours on shift** from ShiftAttendance duration
-   - **Calls responded** from ShiftCall records where the trainee is in `responding_members`
-   - **Call types** from the incident types of matching ShiftCall records
-3. Auto-populated fields display an **(auto)** badge in the form
-4. Officers can edit all auto-populated values before submitting
-5. The `data_sources` field tracks which fields were auto-populated vs manually entered for audit purposes
+1. Go to **Shift Scheduling → Shift Reports → + New** and pick a shift from the
+   list of the last fortnight — each row names the apparatus, the date, and how
+   many members and calls it carried.
+2. **Hours on Shift** and **Calls Responded** arrive filled from the shift, and
+   the **crew arrives with it**, each member tagged with the position they rode
+   and — where they are enrolled in a pipeline — the pipeline they are a trainee
+   on.
+3. Everything is editable before you file. The tick box beside each member
+   controls who a report is filed for; **Evaluate** opens the rating and
+   narrative fields for a trainee.
+4. The `data_sources` field records which values were carried over and which
+   the officer typed, for audit.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form showing auto-populated hours and calls fields with the (auto) badge, plus the performance rating stars and narrative text areas below._
+![A shift completion report — the hours and calls carried over from the shift, its crew listed, and the buttons that file the batch](./images/02-102-shift-report-crew-form.png)
+
+> **There is no "(auto)" badge.** The carried-over values are ordinary editable
+> fields; nothing marks them apart on screen. What tells them apart afterwards
+> is `data_sources` on the filed report.
+
+> **Hours are the shift's, not the crew's** _(2026-08-11)_. Until then the form
+> pre-filled each member's hours from the shift's **total crew hours**, so a
+> three-person twelve-hour shift offered to credit every rider with 35.6 hours —
+> and those hours feed requirement progress and the state reports built on it.
+> Check the figure on any report filed before that date.
 
 ### Draft Reports and Review Workflow _(2026-03-28)_
 
@@ -1021,7 +1092,7 @@ The shift report system supports a multi-stage review workflow:
 
 **For Trainees:**
 
-- Navigate to **My Reports** to see approved reports
+- Navigate to **About me** to see approved reports
 - Click **Acknowledge** to confirm you have reviewed the report
 - Add optional **comments** during acknowledgment
 - View personal statistics: total hours, calls, average rating, and monthly breakdown
@@ -1034,7 +1105,7 @@ The shift report system supports a multi-stage review workflow:
 
 ### Officer Analytics Dashboard _(2026-03-29)_
 
-The analytics sit at the top of the **Filed by Me** view — there is no separate
+The analytics sit at the top of the **Written by me** view — there is no separate
 dashboard view to switch to. They cover the whole department, not only the
 reports you filed:
 
@@ -1047,7 +1118,7 @@ reports you filed:
 
 ### Trainee Statistics Dashboard _(2026-03-29)_
 
-Trainees see a personal stats card at the top of their My Reports view:
+Trainees see a personal stats card at the top of their **About me** view:
 
 - **Total reports** received
 - **Total hours** logged across all reports
@@ -1119,24 +1190,33 @@ If no mapping exists for the shift's apparatus type, the system falls back to th
 
 Officers can save incomplete shift completion reports as drafts:
 
-1. Begin filling in the report form
+1. Begin filling in the report form — the two buttons sit together at its foot,
+   **Save as Draft** outlined and **Submit Report** filled (carrying the count
+   when the crew is more than one: **Submit Reports (3)**)
 2. Click **Save as Draft** instead of Submit
 3. The report is saved with `review_status: "draft"` — no pipeline progress is triggered
 4. Return to the **Drafts** view in the Shift Reports tab to see all saved drafts
-5. Click **Edit** on a draft to complete it
+5. Open a draft — the chevron on its right expands it in place — to finish and
+   file it. **Submit All Drafts** files the lot at once, and files **your own**
+   drafts only
 6. On final submission, the report transitions to `approved` or `pending_review`, and deferred pipeline progress is applied
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form showing the two action buttons at the bottom: "Save as Draft" (outlined/secondary) and "Submit Report" (primary/filled), with the form partially completed._
+![The Drafts view — each draft with its shift date, trainee, hours and calls, and the control that opens it to finish](./images/02-103-shift-report-drafts.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Drafts view in ShiftReportsTab showing a list of saved draft reports with shift date, trainee name, auto-populated hours/calls, and an "Edit" button to complete each draft._
+Drafts are also **created for you**: finalizing a shift raises one per trainee
+on it, which is why the view can have rows in it before you have saved anything.
 
-### Auto-Filter Trainee List _(2026-04-04)_
+### The crew comes from the shift _(2026-04-04)_
 
-When filing a shift report and linking it to a specific shift, the trainee dropdown automatically filters to show only members who were assigned to that shift. This prevents accidentally filing a report for someone who wasn't on duty.
+The form has no trainee dropdown to filter. Picking the shift loads **its crew**
+— the members who were on it — each with their position, and you tick the ones a
+report is for. There is nothing to filter because there is nothing but the shift's
+own members on screen; the "Filtered to shift members" badge described here
+before 2026-08-11 never existed.
 
-For ad-hoc reports (no shift selected), the full member list is shown.
-
-> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form showing the trainee dropdown with a smaller filtered list (only 4-5 names) when a shift is selected, with a note or badge saying "Filtered to shift members"._
+A report **not** tied to a shift is filed from **Manual Shift Report Entry**
+(above), which searches the whole member directory precisely because there is no
+shift to draw a crew from.
 
 ### Edge Cases
 
@@ -1178,35 +1258,53 @@ For departments that do not use the Scheduling module, The Logbook provides a st
 
 ### Filing a Manual Shift Report
 
-1. Navigate to **Training Admin > Shift Reports** and click **Manual Entry**, or go directly to `/training/log-shift`
-2. Select the **shift date** and enter **start time** and **end time** (handles midnight crossover for overnight shifts)
-3. Optionally select an **apparatus** — this auto-populates relevant skills and tasks for the evaluation
-4. The system auto-calculates **hours** from the start/end times
-5. Enter **calls responded** count and select **call types** from the tag selector
-6. Add a **shift narrative** (overall shift assessment)
-7. Search and select **crew members** from the member directory (checkbox list)
-8. For each crew member who needs an evaluation, expand their section and add:
-   - Performance rating (1-5 star scale)
-   - Areas of strength
+1. Go to **Training Admin → Records → Shift Reports**, open the **New Report**
+   tab and click **Log Shift Report**, or go straight to `/training/log-shift`.
+   (With the Scheduling module enabled that tab points at Shift Scheduling
+   instead, which is the flow the rest of this section describes.)
+2. Choose the **apparatus**. It is **required unless an administrator turns that
+   off** — see the settings below — and the list is the department's own units,
+   each labelled with its unit number and type.
+3. Enter the **start date and time** and the **end date and time**. An overnight
+   shift is entered as what it is: you set the end date to the following day,
+   rather than the page inferring a crossover from the clock.
+4. The **shift duration** is worked out from those four fields and shown beneath
+   them.
+5. Enter **calls responded** and pick **call types** from the tag row.
+6. Add an **overall shift narrative**.
+7. **Search for each crew member and click them to add them.** A member you add
+   arrives ticked; the tick box controls who a report is filed for, and the **✕**
+   removes the member from the list entirely.
+8. For each crew member who needs one, click **Evaluate** to open their section:
+   - Performance rating (1–5 stars)
+   - Strengths
    - Areas for improvement
-   - Individual remarks
-9. Click **Submit Report** or **Save as Draft**
+   - Remarks
+9. Click **Save as Draft** or **Submit Report** — the submit button counts the
+   selection when it is more than one, e.g. **Submit Reports (2)**.
 
 ![Manual Shift Report page with date, apparatus, and hours entry](./images/02-38-manual-shift-report.png)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the apparatus selector on the manual entry form, showing the dropdown with apparatus types and the auto-populated skills section below it._
+![The manual shift report form — an apparatus chosen from the department's units, the shift's start and end, and the duration the page works out from them](./images/02-97-manual-entry-apparatus.png)
+
+> **The apparatus does not bring skills or tasks with it.** This page files
+> hours, calls and a written evaluation; the skills and tasks checklist belongs
+> to the shift-linked report form covered above, which reads the apparatus from
+> the scheduled shift. What the manual form does with your choice is record it at
+> the head of the shift narrative — "Apparatus: Brush 5 (B-5)" — so the report
+> says which unit the crew was on.
 
 ### Admin Configuration
 
 Administrators can configure manual shift entry via the **ManualEntrySettingsPanel** on the Training Admin page:
 
-| Setting                 | Description                                                        |
-| ----------------------- | ------------------------------------------------------------------ |
-| **Enable Manual Entry** | Toggle the feature on/off for the department                       |
-| **Require Apparatus**   | Make apparatus selection mandatory on the manual form              |
-| **Allowed Apparatus**   | Restrict which apparatus types are available (leave empty for all) |
-| **Default Start Time**  | Pre-fill the start time field (e.g., "07:00")                      |
-| **Default Duration**    | Pre-fill the shift duration, auto-calculating the end time         |
+| Setting                 | Description                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| **Enable Manual Entry** | Toggle the feature on/off for the department                                              |
+| **Require Apparatus**   | Make apparatus selection mandatory on the manual form                                     |
+| **Allowed Apparatus**   | Tick the individual units the form offers — not types (leave all unticked for every unit) |
+| **Default Start Time**  | Pre-fill the start time field (e.g., "07:00")                                             |
+| **Default Duration**    | Pre-fill the shift duration, auto-calculating the end time                                |
 
 **Everything except the enable checkbox is hidden while the feature is off**,
 which is how it ships — the apparatus rules and the shift defaults appear only
@@ -1217,10 +1315,11 @@ single unticked checkbox is the feature disabled, not a broken page.
 
 ### Edge Cases
 
-- **Manual report for a date with a scheduled shift**: A warning is shown, but the officer can proceed — manual and scheduled reports are independent
-- **Apparatus type with no skill/task mappings**: Form shows empty skills/tasks sections; officer can manually add entries
-- **Zero-hour shift (same start/end time)**: Validation prevents submission; minimum 15-minute shift duration required
-- **Midnight crossover**: If end time is earlier than start time, the system assumes the shift crosses midnight and calculates hours accordingly (e.g., 19:00 to 07:00 = 12 hours)
+- **Manual report for a date with a scheduled shift**: Nothing stops you and nothing warns you — the manual form does not consult the schedule. Manual and scheduled reports are independent, so a shift reported both ways is credited twice
+- **A shift that ends before it starts**: The duration reads zero and submission is refused with "End time must be after start time". There is no minimum length beyond that, and no maximum until the backend's 48-hour ceiling
+- **Overnight shift**: Set the **end date** to the next day — 19:00 on the 11th to 07:00 on the 12th is 12 hours. The page does not infer a crossover from the times alone, so leaving the end date on the start date is what produces the zero above
+- **A default duration that runs past midnight**: If an administrator sets a 07:00 start and a 24-hour default, the form opens with the end date already on the following day _(2026-08-11)_
+- **A future shift date**: Rejected by the API — a report cannot be filed for a shift that has not happened
 
 ---
 
@@ -1266,8 +1365,18 @@ Supported integrations:
 - User mapping (link external user accounts to Logbook members)
 - Sync logs and import history
 
-> **Screenshot placeholder:**
-> _[Screenshot of the External Training Integrations page showing a connected provider with sync status, last sync date, and a list of recent imports]_
+The page has three tabs. **Providers** is one card per provider, giving its
+name and platform, whether it is active, when it last synced, and its auto-sync
+interval — with **Test**, **Fetch Categories**, **Sync Now** and **Mappings**
+along the bottom. **Import Queue** and **All Mappings** are what a sync fills;
+both stay empty until one has run.
+
+The icon beside Active/Inactive is a **separate** fact: it reports whether the
+credentials have been proved to work. A newly saved provider carries an amber
+triangle reading _Connection not verified_ — it is active, it has simply never
+been tested. Press **Test** to turn it green.
+
+![The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions](./images/02-42-external-integrations.png)
 
 ### Vector Solutions Enhancements _(2026-04-11)_
 
@@ -1278,7 +1387,21 @@ The Vector Solutions integration now includes:
 - **Improved type mapping**: Course types from Vector Solutions now correctly map to internal training types during import, preserving certification data and expiration dates
 - **Auto-sync scheduling**: After initial setup, syncs can be triggered manually or run on a scheduled basis via the background task system
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Vector Solutions category mapping table showing external VS categories on the left, internal training categories on the right with dropdown selectors, and a "Fetch Categories" button at the top. Show at least one mapped and one unmapped category._
+**Where the mappings live:** open the provider's **Mappings** button, which
+gives you a **Categories** tab and a **Users** tab, each counting what is still
+unmapped — "Categories (7 unmapped)". A category is one card per external
+category: its name, its external id and code, and a **dropdown of your own
+training categories**. Picking one saves immediately; setting it back to **Not
+mapped** unmaps it. Cards still unmapped are outlined in amber, and a mapped one
+carries a green **Mapped** — with **(auto)** when the sync matched it for you.
+
+> **The dropdown replaced a dead button** _(2026-08-11)_. Until then an unmapped
+> category showed a **Map Category** button with nothing behind it: clicking it
+> did nothing, and the only way to map a category was to call the API by hand.
+
+_No screenshot: the mapping list is populated by a sync against a live Vector
+Solutions account, so picturing it would mean inventing an external provider's
+data. See `docs/KNOWN_LIMITATIONS.md`._
 
 **Edge Cases:**
 
@@ -1334,13 +1457,15 @@ Officers can share training programs between departments:
 **Importing a Program:**
 
 1. Navigate to **Training > Programs**
-2. Click **Import Program**
-3. Upload the JSON package file
-4. The system validates the package structure and reports any conflicts
-5. Review the import preview showing what will be created
-6. Confirm the import
+2. Click **Import** and choose the JSON package file
+3. The package is imported **as soon as you choose the file** — a toast names
+   the program that was created, or says what was wrong with the file
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the import preview showing the program name, number of phases, requirements, and milestones that will be created, with a "Confirm Import" button._
+**There is no preview and no confirmation step.** A file that is not a program
+export is rejected before anything is created ("Invalid import format — missing
+'program' key"), so a mis-clicked file is not destructive, but a package that
+_is_ valid is imported without asking twice. Import into a scratch department
+first if you want to see what a package contains before it lands in yours.
 
 **Edge Cases:**
 
@@ -1356,13 +1481,18 @@ Officers can share training programs between departments:
 
 Navigate to **Training Admin > Import History** to import historical training records from a CSV file.
 
-1. Upload your CSV file with historical training data.
-2. The system **parses and previews** the data.
-3. Review the preview for any validation errors.
-4. Confirm the import.
+1. **Choose how members are matched** — by membership number (the default, and
+   the more reliable) or by email address. This is picked _before_ the upload:
+   a file keyed the other way is refused outright, with a message naming the
+   column it expected and the columns it found.
+2. Upload your CSV file with historical training data.
+3. **Map the course names** in the file to courses in your library, or let each
+   one create a new course.
+4. Review the **preview** — how many rows will import, how many members matched,
+   and any that did not, with filters for each state.
+5. Confirm the import.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the historical import page showing the file upload area, a parsed data preview table, and a confirmation button]_
+![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
 
 ---
 
@@ -1380,10 +1510,7 @@ A competency matrix is a per-position definition: a name, the position it applie
 - **Proficient**
 - **Expert**
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Competency Matrix showing a heat-map grid with member names on rows, competency areas on columns, and color-coded cells. Include the filter bar at the top for filtering by station, rank, or competency category]_
-
-**Not yet built:** the department-wide member-by-competency heat-map — one row per member, one column per competency area, with a station/rank filter bar. The tab today shows only the matrix definitions; a member's own levels are readable through the API (`/training/competency/me` and `/training/competency/members/{id}`) but have no screen. The placeholder above stays open until that view exists.
+**Not yet built:** the department-wide member-by-competency heat-map — one row per member, one column per competency area, with a station/rank filter bar. The tab today shows only the matrix definitions; a member's own levels are readable through the API (`/training/competency/me` and `/training/competency/members/{id}`) but have no screen.
 
 ### Edge Cases
 
@@ -1414,17 +1541,23 @@ Navigate to **Training Admin > Advanced > Recertification** to configure recerti
 
 ![Recertification pathways with renewal type, window and grace period](./images/02-68-recertification-pathways.png)
 
-### Member View
+### Where A Member Sees Their Own Renewal Tasks
 
-Members can view their upcoming recertification tasks at **Training > My Training** in the recertification section. Each task shows:
+**Active Renewal Tasks** appears on this same Recertification section, under
+the pathway list, once **Generate Tasks** has found something for **you**. The
+list is scoped to the signed-in account, so it is your own renewals it shows,
+not the department's — an officer looking here sees their tasks and no one
+else's. Each row gives the pathway, the expiration date it is racing, and a
+progress bar.
 
-- The certification requiring renewal
-- Days until expiration
-- Required renewal steps and their completion status
-- Links to relevant courses or submission forms
-
-> **Screenshot placeholder:**
-> _[Screenshot of the member's My Training page showing the recertification section with a certification expiring in 45 days, renewal tasks with checkmarks for completed steps, and a progress indicator]_
+> **Corrected 2026-08-12.** This previously said members could see their
+> recertification tasks at **Training > My Training** in a "recertification
+> section", listing days-until-expiration, per-step checkmarks and links
+> through to courses. My Training has no such section, and no screen anywhere
+> breaks a renewal into steps. The endpoint behind the list
+> (`GET /training/recertification/tasks/me`) is read by the admin
+> Recertification section and nowhere else, so a member without
+> `training.manage` cannot reach their own renewal tasks at all.
 
 ### Edge Cases
 
@@ -1838,18 +1971,37 @@ none of it.
 
 ![The Training Category dropdown on the submission form, listing the organization's categories](./images/02-84-record-category-field.png)
 
-### Virginia NCCR Recertification Standards
+### NCCR Recertification Standards
 
-Virginia's National Continued Competency Requirements (NCCR) recertification standards have been added to the compliance tracking system. These define:
+The National Continued Competency Requirements (NCCR) model ships as **four
+importable registries** — one per NREMT provider level, so a department imports
+only what it staffs:
 
-- Required training categories for recertification
-- Hour minimums per category
-- Recertification cycle periods
+| Registry      | Covers                                |
+| ------------- | ------------------------------------- |
+| **EMR**       | Emergency Medical Responder           |
+| **EMT**       | Emergency Medical Technician          |
+| **AEMT**      | Advanced Emergency Medical Technician |
+| **Paramedic** | Paramedic                             |
 
-The compliance dashboard shows progress toward NCCR requirements with category breakdowns.
+Import them the same way as NFPA and Pro Board — from the **Requirements** tab
+of **Training > Programs**, in the **Import from Registry** panel, which offers
+each registry as its own button and then lets you tick the individual
+requirements you want. Each registry names its NCCR topic areas (Airway,
+Cardiology, Trauma, Medical, Operations) and splits its hours into the
+national, local and individual components the model defines.
 
-> **Screenshot needed:**
-> _[Screenshot of the compliance dashboard showing a Virginia NCCR progress card with category bars (Fire: 12/16 hours, EMS: 8/8 hours, Hazmat: 2/4 hours) and an overall progress percentage]_
+> **Corrected 2026-08-12.** This section previously described a
+> **Virginia**-specific NCCR standard and claimed "the compliance dashboard
+> shows progress toward NCCR requirements with category breakdowns" with a
+> per-category progress card. Neither is in the product. The registries are
+> national NREMT ones with no state variant, and nothing in the application
+> renders an NCCR card: the only per-category hours endpoint,
+> `GET /training/category-hours/{user_id}`, has no caller in the frontend at
+> all. Its screenshot placeholder has been removed rather than left standing
+> for a screen that was never built. Category minimums are tracked the ordinary
+> way — as requirements with an evaluation period — and shown on the compliance
+> matrix.
 
 ### EVOC Certification Levels
 

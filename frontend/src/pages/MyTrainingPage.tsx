@@ -590,10 +590,10 @@ const MyTrainingPage: React.FC = () => {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
-              <GraduationCap className="h-8 w-8 text-red-500" />
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+              <GraduationCap className="h-8 w-8 shrink-0 text-red-500" />
               <span>My Training</span>
             </h1>
             <p className="text-theme-text-muted mt-1">
@@ -614,7 +614,7 @@ const MyTrainingPage: React.FC = () => {
 
       {/* Tabs (only show settings tab for officers) */}
       {isOfficer && (
-        <div className="mb-6 flex space-x-2">
+        <div className="hscroll mb-6 flex gap-2">
           <button
             onClick={() => setActiveTab('overview')}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${

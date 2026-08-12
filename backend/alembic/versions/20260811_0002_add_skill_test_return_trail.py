@@ -11,8 +11,8 @@ These columns back a third transition: the officer sends the submission back to
 its examiner. No void is spent, the marks stay for the examiner to correct, and
 nothing has yet been claimed about the candidate.
 
-Revision ID: 20260811_0001
-Revises: 20260810_0008
+Revision ID: 20260811_0002
+Revises: 20260811_0001
 Create Date: 2026-08-11 09:00:00.000000
 
 """
@@ -21,8 +21,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260811_0001"
-down_revision = "20260810_0008"
+revision = "20260811_0002"
+down_revision = "20260811_0001"
 branch_labels = None
 depends_on = None
 

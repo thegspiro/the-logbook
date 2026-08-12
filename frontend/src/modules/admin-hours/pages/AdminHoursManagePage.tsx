@@ -63,7 +63,7 @@ const AdminHoursManagePage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="bg-theme-surface mb-6 flex gap-1 rounded-lg p-1">
+      <div className="bg-theme-surface hscroll mb-6 flex gap-1 rounded-lg p-1">
         {TAB_KEYS.map((tab) => (
           <button
             key={tab}
