@@ -234,7 +234,10 @@ async def test_verify_detects_tail_truncation(monkeypatch):
     result = await logger.verify_integrity(_VerifyDB(logs, checkpoint))
 
     assert result["verified"] is False
-    assert any("tail truncated" in e.get("error", "") for e in result["errors"])
+    tail_error = next(
+        e for e in result["errors"] if "tail truncated" in e.get("error", "")
+    )
+    assert tail_error["log_id"] == 2
 
 
 async def test_verify_passes_when_checkpoint_within_chain(monkeypatch):

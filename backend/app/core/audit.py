@@ -421,6 +421,7 @@ class AuditLogger:
                 results["verified"] = False
                 results["errors"].append(
                     {
+                        "log_id": current_max_id,
                         "error": (
                             "Chain tail truncated - checkpoint attests entries "
                             f"up to id {latest_cp.last_log_id} but the chain now "
