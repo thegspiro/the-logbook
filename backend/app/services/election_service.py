@@ -6727,7 +6727,11 @@ Best regards,
             .where(Vote.voter_hash == voting_token.voter_hash)
             .where(Vote.is_test == voting_token.is_test)
             .where(Vote.deleted_at.is_(None))
-            .where(Vote.position == position if position else Vote.position.is_(None))
+            .where(
+                Vote.position == effective_position
+                if effective_position
+                else Vote.position.is_(None)
+            )
         )
         position_votes = existing_votes_result.scalars().all()
 
@@ -6735,7 +6739,7 @@ Best regards,
             if any(v.vote_rank == vote_rank for v in position_votes):
                 return None, (
                     f"You have already cast a rank-{vote_rank} vote"
-                    + (f" for {position}" if position else "")
+                    + (f" for {effective_position}" if effective_position else "")
                 )
             if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
                 return None, "You have already ranked this candidate"
@@ -6747,10 +6751,10 @@ Best regards,
             if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
                 return None, "You have already voted for this candidate"
             if len(position_votes) >= max_votes:
-                if position:
+                if effective_position:
                     if max_votes == 1:
-                        return None, f"You have already voted for {position}"
-                    return None, f"Maximum votes for {position} reached"
+                        return None, f"You have already voted for {effective_position}"
+                    return None, f"Maximum votes for {effective_position} reached"
                 if max_votes == 1:
                     return None, "You have already voted"
                 return None, "Maximum votes for this election reached"
@@ -6770,7 +6774,7 @@ Best regards,
             candidate_id=candidate_id,
             voter_id=None,  # Anonymous - not stored
             voter_hash=voting_token.voter_hash,
-            position=position,
+            position=effective_position,
             vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
@@ -6779,7 +6783,7 @@ Best regards,
             vote_dedup_hash=self._compute_vote_dedup_hash(
                 election.id,
                 dedup_voter,
-                position,
+                effective_position,
                 discriminator=self._dedup_discriminator(
                     election, candidate_id, vote_rank
                 ),
