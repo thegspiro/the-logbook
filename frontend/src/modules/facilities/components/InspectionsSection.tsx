@@ -24,9 +24,10 @@ import { formatDate } from '../../../utils/dateFormatting';
 
 interface Props {
   facilityId: string;
+  canManage: boolean;
 }
 
-export default function InspectionsSection({ facilityId }: Props) {
+export default function InspectionsSection({ facilityId, canManage }: Props) {
   const tz = useTimezone();
   const {
     inspections: filtered,
@@ -53,12 +54,14 @@ export default function InspectionsSection({ facilityId }: Props) {
     <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
       <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
         <h2 className="text-theme-text-primary text-sm font-semibold">Inspections</h2>
-        <button
-          onClick={() => openCreate()}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
-        >
-          <Plus className="h-3.5 w-3.5" /> New Inspection
-        </button>
+        {canManage && (
+          <button
+            onClick={() => openCreate()}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+          >
+            <Plus className="h-3.5 w-3.5" /> New Inspection
+          </button>
+        )}
       </div>
 
       <div className="space-y-4 p-5">
@@ -163,33 +166,35 @@ export default function InspectionsSection({ facilityId }: Props) {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                  <button
-                    onClick={() => openEdit(insp)}
-                    title="Edit"
-                    aria-label="Edit inspection"
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      void handleDelete(insp);
-                    }}
-                    title="Delete"
-                    aria-label="Delete inspection"
-                    className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                {canManage && (
+                  <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    <button
+                      onClick={() => openEdit(insp)}
+                      title="Edit"
+                      aria-label="Edit inspection"
+                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        void handleDelete(insp);
+                      }}
+                      title="Delete"
+                      aria-label="Delete inspection"
+                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {showModal && (
+      {canManage && showModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"

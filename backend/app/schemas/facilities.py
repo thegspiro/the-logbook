@@ -20,6 +20,17 @@ _response_config = ConfigDict(
 )
 
 
+class FacilityDashboardCounts(BaseModel):
+    """Unpaginated organization-wide counts used by the Facilities dashboard."""
+
+    total_facilities: int
+    operational_facilities: int
+    overdue_maintenance: int
+    upcoming_inspections: int
+
+    model_config = _response_config
+
+
 # =============================================================================
 # Schema Enums (mirror model enums for API layer)
 # =============================================================================

@@ -12,6 +12,7 @@ const mockGetFacility = vi.fn();
 const mockGetMaintenanceRecords = vi.fn();
 const mockGetMaintenanceTypes = vi.fn();
 const mockGetInspections = vi.fn();
+const mockGetDashboardCounts = vi.fn();
 
 vi.mock('../services/api', () => ({
   facilitiesService: {
@@ -23,6 +24,7 @@ vi.mock('../services/api', () => ({
     getMaintenanceRecords: (...args: unknown[]) => mockGetMaintenanceRecords(...args) as unknown,
     getMaintenanceTypes: (...args: unknown[]) => mockGetMaintenanceTypes(...args) as unknown,
     getInspections: (...args: unknown[]) => mockGetInspections(...args) as unknown,
+    getDashboardCounts: (...args: unknown[]) => mockGetDashboardCounts(...args) as unknown,
     archiveFacility: vi.fn().mockResolvedValue({}),
     restoreFacility: vi.fn().mockResolvedValue({}),
     getRooms: vi.fn().mockResolvedValue([]),
@@ -34,6 +36,7 @@ vi.mock('../services/api', () => ({
 // Must import after mocks
 import FacilitiesDashboard from '../modules/facilities/pages/FacilitiesDashboard';
 import { useFacilitiesStore } from '../modules/facilities/store/facilitiesStore';
+import { useAuthStore } from '../stores/authStore';
 
 const mockFacilities = [
   {
@@ -106,12 +109,22 @@ describe('FacilitiesDashboard', () => {
       showArchived: false,
       searchQuery: '',
     });
+    useAuthStore.setState({
+      user: { permissions: ['facilities.view', 'facilities.create', 'facilities.manage'] } as never,
+      isAuthenticated: true,
+    });
     mockGetFacilities.mockResolvedValue(mockFacilities);
     mockGetTypes.mockResolvedValue(mockTypes);
     mockGetStatuses.mockResolvedValue(mockStatuses);
     mockGetMaintenanceTypes.mockResolvedValue([]);
     mockGetMaintenanceRecords.mockResolvedValue([]);
     mockGetInspections.mockResolvedValue([]);
+    mockGetDashboardCounts.mockResolvedValue({
+      totalFacilities: 2,
+      operationalFacilities: 2,
+      overdueMaintenance: 0,
+      upcomingInspections: 0,
+    });
     mockGetFacility.mockResolvedValue(mockFacilities[0]);
   });
 
@@ -173,6 +186,14 @@ describe('FacilitiesDashboard', () => {
     expect(screen.getByPlaceholderText('e.g., Station 1')).toBeInTheDocument();
   });
 
+  it('hides create controls from view-only users', async () => {
+    useAuthStore.setState({ user: { permissions: ['facilities.view'] } as never });
+    renderPage();
+
+    expect(await screen.findByText('Station 1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add Facility' })).not.toBeInTheDocument();
+  });
+
   it('creates a facility when form is submitted', async () => {
     const user = userEvent.setup();
     mockCreateFacility.mockResolvedValue({ id: '3', name: 'Station 3' });
@@ -215,6 +236,22 @@ describe('FacilitiesDashboard', () => {
 
     await waitFor(() => {
       expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
+    });
+  });
+
+  it('searches facilities through the API', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByText('Station 1')).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: 'Search facilities' }), 'spring');
+
+    await waitFor(() => {
+      expect(mockGetFacilities).toHaveBeenCalledWith({
+        is_archived: false,
+        search: 'spring',
+        limit: 100,
+      });
     });
   });
 

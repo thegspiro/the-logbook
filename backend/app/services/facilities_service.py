@@ -4,7 +4,7 @@ Facilities Service
 Business logic for facility/building management.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
 from loguru import logger
@@ -618,6 +618,49 @@ class FacilitiesService:
         items = list(result.scalars().all())
 
         return items, total
+
+    async def get_dashboard_counts(self, organization_id: str) -> dict[str, int]:
+        """Return true organization-wide counts, independent of list pagination."""
+        org_id = str(organization_id)
+        today = date.today()
+        upcoming_cutoff = today + timedelta(days=30)
+
+        total = await self.db.scalar(
+            select(func.count(Facility.id)).where(
+                Facility.organization_id == org_id,
+                Facility.is_archived.is_(False),
+            )
+        )
+        operational = await self.db.scalar(
+            select(func.count(Facility.id))
+            .join(FacilityStatus, Facility.status_id == FacilityStatus.id)
+            .where(
+                Facility.organization_id == org_id,
+                Facility.is_archived.is_(False),
+                FacilityStatus.is_operational.is_(True),
+            )
+        )
+        overdue = await self.db.scalar(
+            select(func.count(FacilityMaintenance.id)).where(
+                FacilityMaintenance.organization_id == org_id,
+                FacilityMaintenance.is_overdue.is_(True),
+                FacilityMaintenance.is_completed.is_(False),
+            )
+        )
+        upcoming = await self.db.scalar(
+            select(func.count(FacilityInspection.id)).where(
+                FacilityInspection.organization_id == org_id,
+                FacilityInspection.next_inspection_date >= today,
+                FacilityInspection.next_inspection_date <= upcoming_cutoff,
+            )
+        )
+
+        return {
+            "total_facilities": int(total or 0),
+            "operational_facilities": int(operational or 0),
+            "overdue_maintenance": int(overdue or 0),
+            "upcoming_inspections": int(upcoming or 0),
+        }
 
     async def get_facility(
         self,
