@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.storefront import StoreOrderStatus
+from app.models.storefront import StoreOrderStatus, StorePaymentStatus
 from app.services.finance_service import FinanceService
 from app.services.storefront_service import StorefrontService
 
@@ -81,6 +81,10 @@ class TestStorefrontDisbursementSoD:
             id="o1",
             user_id="u1",
             status=StoreOrderStatus.AWAITING_PAYMENT,
+            # _is_settled short-circuits on PAID/WAIVED before looking at the
+            # balance, so the stub must carry the reconciliation state a real
+            # StoreOrder always has.
+            payment_status=StorePaymentStatus.UNPAID,
             total=Decimal("45.00"),
             amount_paid=Decimal("0.00"),
             payment_method=None,
