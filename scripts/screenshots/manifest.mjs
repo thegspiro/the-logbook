@@ -615,6 +615,9 @@ export function openPipelineSettings() {
 export const isNominatingElection = (election) =>
   (election.status ?? "") === "nominations";
 
+export const isClosedElection = (election) =>
+  (election.status ?? "") === "closed";
+
 export function openElectionTab(tabId, match) {
   return async (page) => {
     await openFirstFromApi(
@@ -7349,6 +7352,38 @@ export const SHOTS = [
     // cast yet" — accurate for an election still taking nominations, and
     // nothing to do with the tab this shot is of.
     allowEmptyState: true,
+  },
+  {
+    id: "14-17-election-results",
+    doc: "14-elections.md",
+    line: 524,
+    anchor:
+      "Screenshot of the election results page showing a position with candidate vote counts",
+    alt: "A closed election's results — vote counts per candidate, the winner, and turnout against the eligible roster",
+    route: "/elections",
+    prepare: openElectionTab("results", isClosedElection),
+    fullPage: true,
+  },
+  {
+    id: "14-18-paper-batches",
+    doc: "14-elections.md",
+    line: 449,
+    anchor: "Screenshot of the Paper Batches panel showing a",
+    alt: "The Paper Batches panel — a recorded in-room tally, who recorded it, and the officer attestations that confirmed it",
+    route: "/elections",
+    // Not a tab: the panel sits in the detail page's body, above the tab
+    // strip, and appears whenever the election has at least one batch.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=20",
+        (id) => `/elections/${id}`,
+        "elections",
+        isClosedElection,
+      )(page);
+      await page.getByText("Paper-Ballot Batches").waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    selector: 'div:has(> h3:text-is("Paper-Ballot Batches"))',
   },
   {
     id: "14-06-candidate-form",

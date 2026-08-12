@@ -7232,7 +7232,180 @@ class Seeder:
             )
         self._link_elections_to_meetings(elections)
         self._seed_nominations(elections)
+        self._seed_closed_election(elections)
         return elections
+
+    # Who attests the paper tally. Neither may be a candidate, and neither may
+    # be the officer who recorded the batch — the API enforces both.
+    ELECTION_ATTESTERS = [("okittredge", "Secretary"), ("smarchetti", "Vice President")]
+
+    CLOSED_ELECTION_TITLE = "Assistant Chief Special Election"
+
+    def _seed_closed_election(self, elections: list[dict]) -> None:
+        """A finished election, so results and forensics have something to show.
+
+        The other two seeded elections are a draft and one taking nominations,
+        which between them cover the front half of the lifecycle and leave
+        every results-side screen — the tally, turnout, the certified result,
+        the integrity report — permanently empty.
+
+        Votes are recorded as a **paper batch** rather than cast one at a time.
+        Casting electronically needs a separate authenticated session per
+        voter, and a volunteer department voting in the room on paper is the
+        commoner case anyway. It also gives the Paper Batches panel a batch.
+
+        Order matters and the API enforces it: a batch can only be recorded
+        while voting is open, attestations can only be added while voting is
+        open, and an unattested batch does not count in results. Recording,
+        attesting and closing therefore all happen before the election is
+        closed — not after.
+        """
+        if any(pick(e, "title") == self.CLOSED_ELECTION_TITLE for e in elections):
+            return
+
+        members = items(self.api.get("/users?limit=100"), "users")
+        by_name = {
+            f"{pick(m, 'first_name', 'firstName')} "
+            f"{pick(m, 'last_name', 'lastName')}": pick(m, "id")
+            for m in members
+        }
+
+        opened = NOW - timedelta(days=2)
+        election = self.api.post(
+            "/elections",
+            {
+                "title": self.CLOSED_ELECTION_TITLE,
+                "description": (
+                    "Special election to fill the Assistant Chief vacancy — "
+                    "conducted at the July business meeting."
+                ),
+                "election_type": "position",
+                "positions": ["Assistant Chief"],
+                "ballot_items": [
+                    {
+                        "id": "item-1",
+                        "type": "officer_election",
+                        "title": "Assistant Chief",
+                        "description": "Vote for Assistant Chief.",
+                        "position": "Assistant Chief",
+                        "vote_type": "candidate_selection",
+                        "voting_method": "simple_majority",
+                    }
+                ],
+                # The open call refuses an election whose end date has already
+                # passed, so the window has to still be live at the moment it
+                # opens. It is closed by hand a few lines below.
+                "start_date": iso(opened),
+                "end_date": iso(NOW + timedelta(days=1)),
+                "anonymous_voting": True,
+                "allow_write_ins": True,
+                "results_visible_immediately": True,
+                "voting_method": "simple_majority",
+                "victory_condition": "most_votes",
+                "quorum_type": "percentage",
+                "quorum_value": 50,
+            },
+        )
+        election_id = pick(election, "id")
+        if not election_id:
+            return
+
+        candidates = []
+        for name, statement in self.CLOSED_ELECTION_CANDIDATES:
+            candidates.append(
+                self.api.post(
+                    f"/elections/{election_id}/candidates",
+                    {
+                        "election_id": election_id,
+                        "name": name,
+                        "position": "Assistant Chief",
+                        "user_id": by_name.get(name),
+                        "statement": statement,
+                    },
+                )
+            )
+        if len(candidates) < 2:
+            return
+
+        try:
+            self.api.post(f"/elections/{election_id}/open")
+            self.api.post(
+                f"/elections/{election_id}/manual-ballots",
+                {
+                    # Under the eligible-voter count, or the plausibility check
+                    # rejects the batch — 22 members are eligible.
+                    "entries": [
+                        {"candidate_id": pick(candidates[0], "id"), "count": 12},
+                        {"candidate_id": pick(candidates[1], "id"), "count": 7},
+                    ],
+                    "notes": (
+                        "In-room paper tally, July business meeting. Counted by "
+                        "the Secretary, witnessed by the Chief."
+                    ),
+                },
+            )
+            batches = items(
+                self.api.get(f"/elections/{election_id}/manual-ballots"), "batches"
+            )
+            batch_id = pick(batches[0], "batch_id", "id") if batches else None
+            if batch_id:
+                self._attest_ballot_batch(election_id, batch_id)
+            self.api.post(f"/elections/{election_id}/close")
+        except ApiError as exc:
+            self.blocked.append(f"closed election: {exc}")
+            return
+        elections.append(self.api.get(f"/elections/{election_id}"))
+
+    # Two candidates, so the result is a margin rather than a coronation.
+    CLOSED_ELECTION_CANDIDATES = [
+        (
+            "Priya Raman",
+            "Twelve years on Engine 1, six of them as a company officer.",
+        ),
+        (
+            "Marcus Bell",
+            "Training officer since 2022; wrote the current recruit syllabus.",
+        ),
+    ]
+
+    def _attest_ballot_batch(self, election_id: str, batch_id: str) -> None:
+        """Have two officers attest a paper batch so its votes count.
+
+        Until the required attestations are in, the batch sits `pending` and
+        results read zero — which is the control working, and a useless screen
+        to document. The roster ships every member with only the base `Member`
+        role, so the two attesters are granted the corporate offices a
+        volunteer department actually elects; `elections.manage` rides on
+        those, not on operational rank.
+        """
+        roles = self.api.get("/roles")
+        role_ids = {
+            pick(r, "name"): pick(r, "id")
+            for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+        }
+        users = items(self.api.get("/users?limit=100"), "users")
+        user_ids = {pick(u, "username"): pick(u, "id") for u in users}
+
+        for username, role_name in self.ELECTION_ATTESTERS:
+            user_id = user_ids.get(username)
+            role_id = role_ids.get(role_name)
+            if not user_id or not role_id:
+                continue
+            try:
+                self.api.post(f"/users/{user_id}/roles/{role_id}", {})
+            except ApiError as exc:
+                # Already held is fine; anything else is worth surfacing.
+                if exc.code not in (400, 409):
+                    raise
+            officer = Api(self.base_url)
+            officer.login_as(username, DEMO_MEMBER_PASSWORD)
+            try:
+                officer.post(
+                    f"/elections/{election_id}/manual-ballots/{batch_id}/attest",
+                    {},
+                )
+            except ApiError as exc:
+                self.blocked.append(f"ballot attestation ({username}): {exc}")
 
     def _link_elections_to_meetings(self, elections: list[dict]) -> None:
         """Attach each election to the meeting it is conducted at.
