@@ -7354,6 +7354,37 @@ export const SHOTS = [
     allowEmptyState: true,
   },
   {
+    id: "14-19-forensics-report",
+    doc: "14-elections.md",
+    line: 639,
+    anchor:
+      "Screenshot of the Forensics & Integrity panel showing the integrity check verdict",
+    alt: "The Forensics & Integrity panel — the signature check verdict over the ballot box, with the deleted-vote and anomaly sections beneath",
+    route: "/elections",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=20",
+        (id) => `/elections/${id}`,
+        "elections",
+        isClosedElection,
+      )(page);
+      // The panel is a collapsed accordion and fetches its report on first
+      // open, so it has to be expanded before there is anything to shoot.
+      await clickByName("Forensics & Integrity")(page);
+      // The integrity check is a separate, deliberate action — the section
+      // renders its verdict only once somebody has asked for one.
+      await clickByName("Run Check")(page);
+      await page.waitForSelector("text=valid signatures", { timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: 'div.mt-6:has(> button span:text-is("Forensics & Integrity"))',
+    viewport: { width: 1440, height: 1400 },
+    // "No votes have been voided." is the *point* — a clean election is what
+    // this panel should say, and the placeholder asks for the soft-deleted
+    // section empty. Nothing here is waiting on seed data.
+    allowEmptyState: true,
+  },
+  {
     id: "14-17-election-results",
     doc: "14-elections.md",
     line: 524,

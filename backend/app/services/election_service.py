@@ -1636,7 +1636,12 @@ class ElectionService:
 
         audit_records = [
             {
-                "id": entry.id,
+                # `AuditLog.id` is a BigInteger; every id on this response —
+                # and in the frontend's `ForensicsReport` type — is a string.
+                # Passing the raw int failed response validation, so the whole
+                # forensics report 500'd for any election with an audit trail,
+                # which is every election that has ever been touched.
+                "id": str(entry.id),
                 "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
                 "event_type": entry.event_type,
                 "severity": entry.severity.value if entry.severity else None,

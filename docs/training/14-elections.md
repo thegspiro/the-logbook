@@ -636,7 +636,19 @@ Access the **Forensics** tab on the election detail page for:
 
 > **Privacy note:** for anonymous elections, per-vote IP and user-agent data is **erased when the election closes** (at the same moment the anonymity salt is destroyed). Run any IP-based investigation while voting is open — after close that data no longer exists, by design. Voting tokens are also stored only as SHA-256 hashes, so database access never reveals usable ballot links.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Forensics report showing an integrity check summary ("142 votes verified, 0 anomalies"), a soft-deleted votes section (empty), and a voting timeline chart._
+The panel is a collapsed accordion at the bottom of the election page, and the
+integrity check inside it runs only when you press **Run Check** — it is a
+deliberate act, not something computed on every page load.
+
+![The Forensics & Integrity panel — the signature check verdict over the ballot box, with the deleted-vote and anomaly sections beneath](./images/14-19-forensics-report.png)
+
+> **Fixed 2026-08-12.** Neither half of this panel worked. `GET /forensics`
+> and `GET /integrity` both returned 500s from response validation — the
+> forensics report because `AuditLog.id` is an integer where the schema
+> declared a string, so any election with an audit trail (that is, any
+> election) failed; the integrity check because its response model described
+> an entirely different set of fields from the ones the service returns and
+> the UI reads.
 
 ### Edge Cases
 
