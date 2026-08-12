@@ -1517,6 +1517,36 @@ position model to the ballot-item model the public page already uses, including
 its submission shape. Needs an owner decision on whether to converge the two
 ballots or retire one of them. This loop does not make that call.
 
+## Training — The Student View of a Cohort Has No Frontend (2026-08-12)
+
+The API implements it. `GET /training/cohorts/{id}` served to a member on the
+roster returns the class timeline in full and `members: []` — the roster,
+classmates and per-member progress withheld exactly as intended — and
+`GET /training/cohorts/mine` lists the cohorts that member is on. A member who
+is _not_ on the roster gets a 404 rather than confirmation the cohort exists.
+
+None of it is reachable from the application:
+
+- `/training/cohorts/:cohortId` is wrapped in
+  `<ProtectedRoute requiredPermission="training.manage">`, so a member who
+  types the URL gets **Access Denied**, not the reduced view.
+- `getMyCohorts()` exists in `trainingServices.ts` and has **no caller**
+  anywhere in `frontend/src` — nothing fetches a member's own cohorts.
+- Nothing links a member to a cohort. The only navigations to the detail route
+  are from `CohortsPage`, which is itself officer-gated.
+- `CohortDetailPage` has no member branch. Reached with `members: []` it would
+  render a **Roster (0)** tab rather than omitting the tab.
+
+So the access restriction is real and enforced server-side, but the screen the
+restriction was designed for was never built. `docs/training/02-training.md`
+described the member's view as something a member can open today; that
+paragraph has been corrected, and its screenshot placeholder retired.
+
+Finishing it means deciding who may open a cohort page and building the
+member's half of `CohortDetailPage` — a permissions decision plus a feature,
+not a correctness fix. This loop does not widen route guards, so it needs an
+owner.
+
 ## Elections — Saved Ballot Templates Accept Fields They Then Discard (2026-08-12)
 
 `POST /elections/templates/saved-ballots` answers **201** to a ballot item

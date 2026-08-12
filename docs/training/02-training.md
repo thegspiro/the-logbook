@@ -237,21 +237,25 @@ status, credit hours, instructor, how many members are signed up, and an
 
 The **Roster** tab lists each member with their progress through the pipeline, a link to their full progression, and a **Remove** action.
 
-> **What a student sees is different** _(2026-08-12)_. A member on the roster
-> can open their own cohort (also via **My Training**), but they get the
-> schedule only: the class timeline with dates, times and statuses. They do
-> **not** see the roster, classmates' names or emails, anyone's progress
-> percentage, who withdrew, officer notes, or per-class attendance counts —
-> those render only for officers (`training.manage` / `training.view_all`).
-> Previously a student's view included all of it; if your recruits could see
-> each other's progress before, that was this, and it is closed. A member who
-> is *not* on the roster gets "Cohort not found" rather than confirmation the
-> cohort exists.
+> **Students cannot open a cohort at all yet** _(2026-08-12)_. Cohort pages are
+> officer-only. A member who follows a cohort link, or types the URL, gets
+> **Access Denied** — there is no student view of a cohort in the application
+> today.
 >
-> **[SCREENSHOT NEEDED]:** _A cohort detail page as a roster **member** sees
-> it — class timeline populated, no Roster tab / member list, attendance
-> counts absent — captioned against the officer view pictured below so the
-> difference is the subject of the shot._
+> What was closed is the **data**, not a screen. Asked for a cohort on behalf
+> of a member on its roster, the API now returns the class timeline alone and
+> withholds the roster, classmates' names and emails, anyone's progress
+> percentage, who withdrew, officer notes and per-class attendance counts;
+> those are served only to officers (`training.manage` / `training.view_all`).
+> A member who is _not_ on the roster is told the cohort does not exist rather
+> than that they may not see it. If your recruits could read each other's
+> progress before, that route is shut.
+>
+> The member-facing screen those rules were written for has not been built —
+> see
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#training--the-student-view-of-a-cohort-has-no-frontend-2026-08-12).
+> Until it is, tell recruits their schedule through the class events on their
+> calendar, which they can already see.
 
 > **Reschedule** and **Cancel class** are the two icon buttons at the right of
 > each row. **Create missing events** only appears while some class has no
