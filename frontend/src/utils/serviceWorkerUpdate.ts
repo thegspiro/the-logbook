@@ -24,6 +24,33 @@
 const ACTIVATE_TIMEOUT_MS = 4_000;
 
 /**
+ * Register the service worker. Owned here — vite-plugin-pwa's injected
+ * register script is disabled in vite.config.ts — because registration must
+ * pass `updateViaCache: 'none'`: with the default ('imports'), scripts pulled
+ * in via importScripts (push-sw.js) are fetched THROUGH the HTTP cache during
+ * update checks, so devices that cached push-sw.js under an earlier
+ * long-lived Cache-Control header would keep importing the stale copy until
+ * that cache entry expired. Server-side header fixes cannot reach a cache
+ * entry the browser never revalidates; bypassing the cache here can.
+ */
+export function registerServiceWorker(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+
+  const doRegister = () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => {
+      // Registration failure leaves this load uncontrolled — the next page
+      // load retries.
+    });
+  };
+
+  if (document.readyState === 'complete') {
+    doRegister();
+  } else {
+    window.addEventListener('load', doRegister, { once: true });
+  }
+}
+
+/**
  * Ask the browser to re-fetch `/sw.js` and install any new version, without
  * waiting for the result. Deliberately has no triggers or rate limiting of
  * its own: it rides useAppUpdate's version checks, which already fire on
