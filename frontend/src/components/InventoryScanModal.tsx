@@ -36,6 +36,7 @@ import {
   BARCODE_SCAN_CONFIG,
   INVENTORY_BARCODE_FORMATS,
   NATIVE_BARCODE_FORMATS,
+  acquirePreferredCameraStream,
   describeCameraError,
   getCameraUnavailableReason,
 } from '../constants/camera';
@@ -63,6 +64,8 @@ type ResultItem = {
   error?: string;
 };
 
+type ActiveScanner = 'native' | 'html5' | null;
+
 interface InventoryScanModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -88,6 +91,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
   const [manualCode, setManualCode] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
+  const [activeScanner, setActiveScanner] = useState<ActiveScanner>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -112,6 +116,12 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const handleCodeScannedRef = useRef<(code: string) => void>(() => {});
+  // Invalidates native camera acquisition when the modal closes or a newer
+  // start/stop action supersedes a pending permission prompt.
+  const cameraLifecycleRef = useRef(0);
+  const resumeNativeCameraRef = useRef(false);
+  const isOpenRef = useRef(isOpen);
+  isOpenRef.current = isOpen;
 
   // ── Camera scanning ──────────────────────────────────────────
 
@@ -168,6 +178,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   }, []);
 
   const stopCamera = useCallback(() => {
+    cameraLifecycleRef.current += 1;
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
@@ -176,19 +187,22 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
-    if (!nativeDetectorReady) {
-      void stopHtml5Scanner();
-    }
+    // Always stop the fallback scanner too. BarcodeDetector support is
+    // discovered asynchronously and may become ready after html5-qrcode has
+    // already started; keying cleanup off the latest support state would then
+    // leave the original camera stream running.
+    void stopHtml5Scanner();
     setNativeFlashlightSupported(false);
     setNativeFlashlightOn(false);
     setCameraActive(false);
-  }, [stopHtml5Scanner, nativeDetectorReady]);
+    setActiveScanner(null);
+  }, [stopHtml5Scanner]);
 
   // Unified flashlight controls that dispatch to whichever scanning path is
   // active. The html5-qrcode path is driven by the hook; the native
   // BarcodeDetector path controls the raw MediaStreamTrack directly.
-  const flashlightSupported = nativeDetectorReady ? nativeFlashlightSupported : html5FlashlightSupported;
-  const flashlightOn = nativeDetectorReady ? nativeFlashlightOn : html5FlashlightOn;
+  const flashlightSupported = activeScanner === 'native' ? nativeFlashlightSupported : html5FlashlightSupported;
+  const flashlightOn = activeScanner === 'native' ? nativeFlashlightOn : html5FlashlightOn;
 
   const toggleNativeFlashlight = useCallback(async () => {
     const track = streamRef.current?.getVideoTracks()[0];
@@ -203,23 +217,11 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   }, []);
 
   const toggleFlashlight = useCallback(() => {
-    return nativeDetectorReady ? toggleNativeFlashlight() : toggleHtml5Flashlight();
-  }, [nativeDetectorReady, toggleNativeFlashlight, toggleHtml5Flashlight]);
-
-  /** Request a camera stream, trying rear first then falling back to front. */
-  const acquireCameraStream = async (): Promise<MediaStream> => {
-    try {
-      return await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
-    } catch {
-      return await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
-      });
-    }
-  };
+    return activeScanner === 'native' ? toggleNativeFlashlight() : toggleHtml5Flashlight();
+  }, [activeScanner, toggleNativeFlashlight, toggleHtml5Flashlight]);
 
   const startCamera = useCallback(async () => {
+    const lifecycle = ++cameraLifecycleRef.current;
     // Actionable message on insecure origins (HTTP LAN) where the camera APIs
     // are absent, instead of a misleading "permission denied".
     const unavailable = getCameraUnavailableReason();
@@ -231,7 +233,14 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
     if (nativeDetectorReady) {
       try {
-        const stream = await acquireCameraStream();
+        const stream = await acquirePreferredCameraStream();
+        // getUserMedia can settle after the modal was closed (most commonly
+        // when a mobile permission prompt was still open). Never attach that
+        // late stream to an unmounted preview.
+        if (lifecycle !== cameraLifecycleRef.current || !isOpenRef.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
         streamRef.current = stream;
         setNativeFlashlightSupported(trackSupportsFlashlight(stream.getVideoTracks()[0]));
 
@@ -239,21 +248,37 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           formats: nativeFormatsRef.current,
         });
 
+        setActiveScanner('native');
         setCameraActive(true);
       } catch (err: unknown) {
+        // A stream can be acquired successfully before detector setup fails.
+        // Release it here rather than leaving the mobile camera indicator on
+        // while the UI reports that scanning did not start.
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        detectorRef.current = null;
+        if (lifecycle !== cameraLifecycleRef.current || !isOpenRef.current) return;
         setLookupError(describeCameraError(err));
         setCameraActive(false);
+        setActiveScanner(null);
       }
     } else {
       try {
         await startHtml5Scanner();
+        if (lifecycle !== cameraLifecycleRef.current || !isOpenRef.current) {
+          await stopHtml5Scanner();
+          return;
+        }
+        setActiveScanner('html5');
         setCameraActive(true);
       } catch (err: unknown) {
+        if (lifecycle !== cameraLifecycleRef.current || !isOpenRef.current) return;
         setLookupError(describeCameraError(err));
         setCameraActive(false);
+        setActiveScanner(null);
       }
     }
-  }, [startHtml5Scanner, nativeDetectorReady]);
+  }, [startHtml5Scanner, stopHtml5Scanner, nativeDetectorReady]);
 
   // Once cameraActive flips to true the <video> element mounts.
   // Wire the stream to it and start the barcode-polling interval.
@@ -297,9 +322,28 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     };
   }, [cameraActive]);
 
+  // The raw BarcodeDetector path does not get the visibility handling supplied
+  // by useHtml5Scanner. Release it while a phone is locked/backgrounded and
+  // reacquire it on return; iOS otherwise commonly resumes to a frozen frame.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && activeScanner === 'native') {
+        resumeNativeCameraRef.current = true;
+        stopCamera();
+      } else if (document.visibilityState === 'visible' && resumeNativeCameraRef.current && isOpenRef.current) {
+        resumeNativeCameraRef.current = false;
+        void startCamera();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [activeScanner, startCamera, stopCamera]);
+
   // Cleanup camera on unmount or close
   useEffect(() => {
     if (!isOpen) {
+      resumeNativeCameraRef.current = false;
       stopCamera();
       setScannedItems([]);
       setManualCode('');
@@ -760,7 +804,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               </div>
 
               {/* Camera preview: native video for BarcodeDetector, div for html5-qrcode */}
-              {nativeDetectorReady ? (
+              {activeScanner === 'native' ? (
                 <div className={`relative overflow-hidden rounded-lg bg-black ${cameraActive ? '' : 'hidden'}`}>
                   <video ref={videoRef} className="h-48 w-full object-cover" playsInline muted />
                   <div className="pointer-events-none absolute inset-0 border-2 border-red-500/50" />

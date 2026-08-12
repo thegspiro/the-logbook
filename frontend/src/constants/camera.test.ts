@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { describeCameraError, getCameraUnavailableReason } from './camera';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { acquirePreferredCameraStream, describeCameraError, getCameraUnavailableReason } from './camera';
 
 describe('getCameraUnavailableReason', () => {
   const original = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
@@ -64,8 +64,53 @@ describe('describeCameraError', () => {
     );
   });
 
+  it('handles a DOMException that is not on the Error prototype chain', () => {
+    const exceptionLike = Object.create(null) as { name: string; message: string };
+    exceptionLike.name = 'NotReadableError';
+    exceptionLike.message = 'Could not start source';
+    expect(describeCameraError(exceptionLike)).toMatch(/in use by another app/);
+  });
+
   it('falls back to something actionable for an unrecognised failure', () => {
     expect(describeCameraError(new Error('boom'))).toMatch(/could not be started/);
     expect(describeCameraError('not an error at all')).toMatch(/could not be started/);
+  });
+});
+
+describe('acquirePreferredCameraStream', () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+
+  afterEach(() => {
+    if (original) Object.defineProperty(navigator, 'mediaDevices', original);
+  });
+
+  it('requests a video-only stream and prefers the rear mobile camera', async () => {
+    const stream = {} as MediaStream;
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+
+    await expect(acquirePreferredCameraStream()).resolves.toBe(stream);
+    expect(getUserMedia).toHaveBeenCalledExactlyOnceWith({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false,
+    });
+  });
+
+  it('preserves the original camera error without making a front-camera retry', async () => {
+    const permissionError = new DOMException('Permission denied', 'NotAllowedError');
+    const getUserMedia = vi.fn().mockRejectedValue(permissionError);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+
+    await expect(acquirePreferredCameraStream()).rejects.toBe(permissionError);
+    expect(getUserMedia).toHaveBeenCalledExactlyOnceWith({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false,
+    });
   });
 });
