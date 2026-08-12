@@ -13,8 +13,8 @@
  *    ones that break their own delivery: a network outage kills the report
  *    about the network outage, and a member who hits an error and immediately
  *    closes the tab takes the evidence with them. Reports are therefore
- *    queued, retried with backoff, held across a logged-out gap, and flushed
- *    with `keepalive` when the page goes away.
+ *    queued, retried with backoff, and flushed with `keepalive` when the page
+ *    goes away. Queues never cross an authentication boundary.
  * 2. **Don't lie about volume.** Throttling is necessary — a broken poll loop
  *    produces the same error hundreds of times a minute — but a suppressed
  *    error that leaves no trace reads as an error that didn't happen.
@@ -109,18 +109,31 @@ let droppedByQueueOverflow = 0;
 let draining = false;
 let emittingSummary = false;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let queueGeneration = 0;
 
 /** Test seam: clears all throttling and delivery state. */
 export function resetErrorReportingState(): void {
+  clearQueuedReports();
+  draining = false;
+}
+
+/**
+ * Discard all report data at an authentication boundary.
+ *
+ * The backend attributes a report from the cookie used at delivery time, so
+ * retaining payloads across logout, session expiry, or login could disclose a
+ * previous user's errors to the next user's organization on a shared browser.
+ */
+export function clearQueuedReports(): void {
   lastReportedAt.clear();
   suppressedCounts.clear();
   suppressedSamples.clear();
   queue.length = 0;
+  queueGeneration += 1;
   windowStartedAt = 0;
   reportsInWindow = 0;
   droppedByRateLimit = 0;
   droppedByQueueOverflow = 0;
-  draining = false;
   emittingSummary = false;
   if (retryTimer) {
     clearTimeout(retryTimer);
@@ -141,7 +154,7 @@ function getCookie(name: string): string | null {
 /**
  * The log endpoint requires an authenticated session (an error log row is
  * org-scoped and has nowhere to go without one). Reports raised while signed
- * out are held rather than posted, and delivered once a session exists.
+ * out must not be retained for a future, potentially different session.
  */
 function hasSession(): boolean {
   try {
@@ -304,6 +317,7 @@ function flushSuppressionSummary(): void {
 // ---------------------------------------------------------------------------
 
 function enqueue(payload: ErrorLogPayload): void {
+  if (!hasSession()) return;
   if (queue.length >= MAX_QUEUE_LENGTH) {
     queue.shift();
     droppedByQueueOverflow += 1;
@@ -332,9 +346,8 @@ type DeliveryOutcome = 'sent' | 'retry' | 'hold' | 'drop';
  * What to do about a response the server gave us.
  *
  * A 5xx means the server failed to store the report — worth retrying. A 401
- * means the session lapsed between queueing and sending, which is not the
- * report's fault: it is held for the post-login flush rather than thrown away,
- * since a session expiring mid-session is exactly when odd failures cluster.
+ * means the session lapsed between queueing and sending. The queued data must
+ * be discarded because a later login may belong to another user or tenant.
  * Every other 4xx is the server refusing this specific report — 429 says stop,
  * 422 says the payload is malformed — and retrying those only burns the queue.
  */
@@ -376,11 +389,10 @@ function scheduleRetry(attempts: number): void {
  */
 async function drain(): Promise<void> {
   if (draining) return;
-  // Held, not dropped: reports raised before sign-in are delivered by
-  // flushQueuedReports() once a session exists.
   if (!hasSession()) return;
 
   draining = true;
+  const generation = queueGeneration;
   try {
     while (queue.length > 0) {
       const item = queue[0];
@@ -389,9 +401,12 @@ async function drain(): Promise<void> {
       item.attempts += 1;
       const outcome = await deliver(item);
 
+      // An auth boundary cleared this generation while delivery was in flight.
+      // Never let its completion remove or otherwise mutate a new user's queue.
+      if (generation !== queueGeneration) return;
+
       if (outcome === 'hold') {
-        // Session lapsed; flushQueuedReports() resumes after the next login.
-        item.attempts -= 1;
+        clearQueuedReports();
         return;
       }
       if (outcome === 'sent' || outcome === 'drop') {
@@ -410,19 +425,10 @@ async function drain(): Promise<void> {
     }
   } finally {
     draining = false;
+    // If an auth-boundary clear happened during the request, reports from the
+    // new generation may have arrived while the old drain still held the lock.
+    if (generation !== queueGeneration && queue.length > 0 && hasSession()) void drain();
   }
-}
-
-/**
- * Deliver anything queued while signed out.
- *
- * Called after a successful login. Errors on the login screen itself — a
- * failed password reset, a 500 from the auth endpoint — are exactly the ones
- * an administrator is asked about, and they are raised before any session
- * exists to attribute them to.
- */
-export function flushQueuedReports(): void {
-  void drain();
 }
 
 /**
