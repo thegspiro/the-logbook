@@ -11,6 +11,7 @@ Integration tests for the elections enhancement batch:
   - printable-ballot and certified-results PDF builders
 """
 
+import json
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -177,6 +178,20 @@ class TestCloneElection(EnhancementSetup):
         source_id = await self._insert_election(
             db_session, org_id, user1_id, positions='["Chief", "Captain"]'
         )
+        ballot_items = [
+            {
+                "id": "chief_vote",
+                "type": "officer_election",
+                "title": "Elect the Chief",
+                "vote_type": "candidate_selection",
+                "eligible_voter_types": ["operational"],
+            }
+        ]
+        await db_session.execute(
+            text("UPDATE elections SET ballot_items = :items WHERE id = :id"),
+            {"items": json.dumps(ballot_items), "id": source_id},
+        )
+        await db_session.flush()
         await self._insert_candidate(db_session, source_id, "Casey Chief")
         svc = ElectionService(db_session)
 
@@ -193,6 +208,8 @@ class TestCloneElection(EnhancementSetup):
         assert clone.status == ElectionStatus.DRAFT
         assert clone.title == "Officer Election 2027"
         assert clone.positions == ["Chief", "Captain"]
+        assert clone.ballot_items == ballot_items
+        assert clone.ballot_items is not ballot_items
         assert clone.tie_policy == "co_winners"
 
         source_salt = (

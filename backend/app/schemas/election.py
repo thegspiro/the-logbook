@@ -4,6 +4,7 @@ Election Pydantic Schemas
 Request and response schemas for election-related endpoints.
 """
 
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -44,17 +45,25 @@ def _validate_choice(value, valid_set, label):
 class BallotItem(BaseModel):
     """Schema for a ballot item with voter eligibility rules"""
 
-    id: str = Field(..., description="Unique identifier for this ballot item")
+    id: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Unique, stable identifier for this ballot item",
+    )
     type: str = Field(
         ..., description="Type: membership_approval, officer_election, general_vote"
     )
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=10_000)
     position: Optional[str] = Field(
-        None, description="Position name for officer elections"
+        None, max_length=200, description="Position name for officer elections"
     )
     eligible_voter_types: List[str] = Field(
-        default=["all"],
+        default_factory=lambda: ["all"],
+        min_length=1,
+        max_length=50,
         description=(
             "Voter eligibility category based on membership_type. "
             "'all' = everyone, 'operational' = active members, "
@@ -69,7 +78,7 @@ class BallotItem(BaseModel):
         default="approval", description="approval, candidate_selection"
     )
     required_for_approval: Optional[int] = Field(
-        None, description="Number of yes votes required"
+        None, ge=1, description="Number of yes votes required"
     )
     require_attendance: bool = Field(
         default=False,
@@ -113,6 +122,48 @@ class BallotItem(BaseModel):
             )
         return v
 
+    @field_validator("victory_condition")
+    @classmethod
+    def validate_victory_condition(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_choice(v, VALID_VICTORY_CONDITIONS, "victory condition")
+
+    @field_validator("voting_method")
+    @classmethod
+    def validate_voting_method(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_choice(v, VALID_VOTING_METHODS, "voting method")
+
+    @field_validator("eligible_voter_types")
+    @classmethod
+    def validate_eligible_voter_types(cls, values: List[str]) -> List[str]:
+        """Keep eligibility rules deterministic and safe to persist as JSON."""
+        cleaned = []
+        for value in values:
+            value = value.strip()
+            if (
+                not value
+                or len(value) > 100
+                or not re.fullmatch(r"[A-Za-z0-9_-]+", value)
+            ):
+                raise ValueError(
+                    "Voter types must be 1-100 letters, numbers, '_' or '-'"
+                )
+            if value not in cleaned:
+                cleaned.append(value)
+        if "all" in cleaned and len(cleaned) > 1:
+            raise ValueError("'all' cannot be combined with other voter types")
+        return cleaned
+
+    @model_validator(mode="after")
+    def validate_victory_override(self):
+        if (
+            self.victory_condition == "supermajority"
+            and self.victory_percentage is None
+        ):
+            raise ValueError(
+                "victory_percentage is required for a supermajority ballot item"
+            )
+        return self
+
 
 class PositionEligibility(BaseModel):
     """Schema for position-specific voter eligibility"""
@@ -132,13 +183,17 @@ class ElectionBase(BaseModel):
     """Base election schema"""
 
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=50_000)
     election_type: str = Field(default="general", max_length=50)
     positions: Optional[List[str]] = Field(
-        default=None, description="List of positions to vote for"
+        default=None,
+        max_length=100,
+        description="List of positions to vote for",
     )
     ballot_items: Optional[List[BallotItem]] = Field(
-        default=None, description="Structured ballot items with per-item eligibility"
+        default=None,
+        max_length=250,
+        description="Structured ballot items with per-item eligibility",
     )
     position_eligibility: Optional[Dict[str, PositionEligibility]] = Field(
         default=None, description="Eligibility rules per position"
@@ -207,7 +262,6 @@ class ElectionBase(BaseModel):
     quorum_value: Optional[int] = Field(
         default=None,
         ge=1,
-        le=100,
         description="Quorum value (percentage or count depending on quorum_type)",
     )
 
@@ -266,6 +320,43 @@ class ElectionBase(BaseModel):
     def validate_runoff_type(cls, v: str) -> str:
         return _validate_choice(v, VALID_RUNOFF_TYPES, "runoff type")
 
+    @field_validator("positions")
+    @classmethod
+    def validate_positions(cls, values: Optional[List[str]]) -> Optional[List[str]]:
+        if values is None:
+            return None
+        cleaned = [value.strip() for value in values]
+        if any(not value or len(value) > 200 for value in cleaned):
+            raise ValueError("Positions must be between 1 and 200 characters")
+        if len({value.casefold() for value in cleaned}) != len(cleaned):
+            raise ValueError("Position names must be unique")
+        return cleaned
+
+    @field_validator("ballot_items")
+    @classmethod
+    def validate_unique_ballot_item_ids(
+        cls, values: Optional[List[BallotItem]]
+    ) -> Optional[List[BallotItem]]:
+        if values is not None:
+            ids = [item.id for item in values]
+            if len(set(ids)) != len(ids):
+                raise ValueError("Ballot item IDs must be unique")
+        return values
+
+    @model_validator(mode="after")
+    def validate_election_configuration(self):
+        if self.end_date <= self.start_date:
+            raise ValueError("End date must be after start date")
+        if self.quorum_type != "none" and self.quorum_value is None:
+            raise ValueError("quorum_value is required when quorum is enabled")
+        if (
+            self.quorum_type == "percentage"
+            and self.quorum_value
+            and self.quorum_value > 100
+        ):
+            raise ValueError("Percentage quorum cannot exceed 100")
+        return self
+
 
 class ElectionCreate(ElectionBase):
     """Schema for creating a new election"""
@@ -281,10 +372,10 @@ class ElectionUpdate(BaseModel):
     """
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=50_000)
     election_type: Optional[str] = Field(None, max_length=50)
-    positions: Optional[List[str]] = None
-    ballot_items: Optional[List[BallotItem]] = None
+    positions: Optional[List[str]] = Field(default=None, max_length=100)
+    ballot_items: Optional[List[BallotItem]] = Field(default=None, max_length=250)
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
@@ -304,7 +395,7 @@ class ElectionUpdate(BaseModel):
     runoff_type: Optional[str] = None
     max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
     quorum_type: Optional[str] = None
-    quorum_value: Optional[int] = Field(None, ge=1, le=100)
+    quorum_value: Optional[int] = Field(None, ge=1)
     auto_open: Optional[bool] = None
     reminder_hours_before_close: Optional[int] = Field(None, ge=1, le=720)
     nomination_deadline: Optional[datetime] = None
@@ -334,6 +425,29 @@ class ElectionUpdate(BaseModel):
     @classmethod
     def validate_runoff_type(cls, v: Optional[str]) -> Optional[str]:
         return _validate_choice(v, VALID_RUNOFF_TYPES, "runoff type")
+
+    @field_validator("positions")
+    @classmethod
+    def validate_positions(cls, values: Optional[List[str]]) -> Optional[List[str]]:
+        if values is None:
+            return None
+        cleaned = [value.strip() for value in values]
+        if any(not value or len(value) > 200 for value in cleaned):
+            raise ValueError("Positions must be between 1 and 200 characters")
+        if len({value.casefold() for value in cleaned}) != len(cleaned):
+            raise ValueError("Position names must be unique")
+        return cleaned
+
+    @field_validator("ballot_items")
+    @classmethod
+    def validate_unique_ballot_item_ids(
+        cls, values: Optional[List[BallotItem]]
+    ) -> Optional[List[BallotItem]]:
+        if values is not None:
+            ids = [item.id for item in values]
+            if len(set(ids)) != len(ids):
+                raise ValueError("Ballot item IDs must be unique")
+        return values
 
 
 class ElectionResponse(UTCResponseBase):
@@ -971,6 +1085,43 @@ class BallotTemplatesResponse(BaseModel):
     """Response containing available ballot templates"""
 
     templates: List[BallotTemplate]
+
+
+class SavedBallotTemplateCreate(BaseModel):
+    """Persisted ballot definition that can be reused by the organization."""
+
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=2_000)
+    ballot_items: List[BallotItem] = Field(..., min_length=1, max_length=250)
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Template name cannot be blank")
+        return value
+
+    @field_validator("ballot_items")
+    @classmethod
+    def unique_item_ids(cls, values: List[BallotItem]) -> List[BallotItem]:
+        ids = [item.id for item in values]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Ballot item IDs must be unique")
+        return values
+
+
+class SavedBallotTemplateResponse(UTCResponseBase):
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    ballot_items: List[BallotItem]
+    created_by: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Ballot Submission Schemas (Token-Based)

@@ -3453,6 +3453,10 @@ class ElectionService:
             description=source.description,
             election_type=source.election_type,
             positions=copy.deepcopy(source.positions),
+            # Ballot items are the core of a reusable ballot.  Copy the JSON
+            # structure deeply so a later edit to the clone cannot mutate a
+            # mutable source value held by the ORM session.
+            ballot_items=copy.deepcopy(source.ballot_items),
             position_eligibility=copy.deepcopy(source.position_eligibility),
             start_date=start_date,
             end_date=end_date,
